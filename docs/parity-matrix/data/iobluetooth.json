@@ -60,29 +60,29 @@
       "feature": "RFCOMM channels",
       "apple": "IOBluetoothRFCOMMChannel, IOBluetoothRFCOMMChannelDelegate",
       "bifrost": "springboard/core/src/rfcomm_frame.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-iobluetooth, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No RFCOMM code. Needed for serial-style profiles."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (w3-iobluetooth, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No RFCOMM code. Needed for serial-style profiles."
     },
     {
       "feature": "SDP service records and data elements",
       "apple": "IOBluetoothSDPServiceRecord, IOBluetoothSDPDataElement, IOBluetoothSDPUUID, IOBluetoothSDPServiceAttribute",
       "bifrost": "springboard/core/src/sdp_element.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-iobluetooth, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDP PSM is used only as the link target in springboard/src/bare/bluetooth.rs:894. No SDP queries or records."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (w3-iobluetooth, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDP PSM is used only as the link target in springboard/src/bare/bluetooth.rs:894. No SDP queries or records."
     },
     {
       "feature": "OBEX sessions and file transfer",
       "apple": "OBEXSession, OBEXFileTransferServices, OBEX.h functions",
       "bifrost": "springboard/core/src/obex_packet.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-iobluetooth, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No OBEX code. Object exchange over Bluetooth is absent."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 4 (w4-iobluetooth, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No OBEX code. Object exchange over Bluetooth is absent."
     },
     {
       "feature": "Hands-free profile (audio gateway and device)",
       "apple": "IOBluetoothHandsFree, IOBluetoothHandsFreeAudioGateway, IOBluetoothHandsFreeDevice and their delegates",
       "bifrost": "springboard/ui/src/hfp.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-04, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No call control or hands-free profile. The audio route in media/route.rs covers playback only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-04, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No call control or hands-free profile. The audio route in media/route.rs covers playback only."
     },
     {
       "feature": "HID device handling (ignore, counts)",
@@ -102,8 +102,8 @@
       "feature": "Address and utility helpers",
       "apple": "IOBluetoothNSStringFromDeviceAddress, IOBluetoothNSStringToDeviceAddress, IOBluetoothGetUniqueFileNameAndPath",
       "bifrost": "springboard/core/src/bt_address.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-iobluetooth, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Conversion helpers exist inside the shell crate. Not an SDK API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-iobluetooth, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Conversion helpers exist inside the shell crate. Not an SDK API."
     },
     {
       "feature": "Low-level HCI structures and commands",

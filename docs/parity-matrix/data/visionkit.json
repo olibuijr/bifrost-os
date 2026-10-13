@@ -18,22 +18,22 @@
       "feature": "Live text scanning through the camera",
       "apple": "DataScannerViewController (text), RecognizedItem (text items)",
       "bifrost": "springboard/ui/src/analysis.rs, springboard/ui/src/docscan.rs, springboard/ui/src/scan.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No text recognition (OCR) code exists in the repo. The triage search for ocr, tesseract and live text returned nothing."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 19 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No text recognition (OCR) code exists in the repo. The triage search for ocr, tesseract and live text returned nothing."
     },
     {
       "feature": "Text recognition and selection in images",
       "apple": "ImageAnalyzer, ImageAnalysis, ImageAnalysisInteraction, ImageAnalysisOverlayView (text selection, copy)",
       "bifrost": "springboard/ui/src/analysis.rs, springboard/ui/src/docscan.rs, springboard/ui/src/scan.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Images cannot be analysed for text. Photos and Notes have no text-in-image selection."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 19 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Images cannot be analysed for text. Photos and Notes have no text-in-image selection."
     },
     {
       "feature": "Data detectors in recognized image text",
       "apple": "ImageAnalysisInteraction (data detectors: URLs, phone numbers, dates, tracking numbers)",
       "bifrost": "springboard/ui/src/detect.rs (find), springboard/apps/notes-desktop (TextArea::set_detect_links)",
-      "status": "partial",
-      "note": "Detection works on plain text only: links, dates, street addresses and phone numbers, with no transit information and no image text. Notes taps open links; Contacts does not use it."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Detection works on plain text only: links, dates, street addresses and phone numbers, with no transit information and no image text. Notes taps open links; Contacts does not use it."
     },
     {
       "feature": "Subject lifting and background removal",
@@ -53,8 +53,8 @@
       "feature": "Document scanning through the camera",
       "apple": "VNDocumentCameraViewController, VNDocumentCameraViewControllerDelegate, VNDocumentCameraScan",
       "bifrost": "springboard/ui/src/analysis.rs, springboard/ui/src/docscan.rs, springboard/ui/src/scan.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Camera app takes photos, a timer and QR scans. It has no page-by-page document mode and no edge detection; the JPEG path is springboard/src/shell/camera/jpeg.rs."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 19 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Camera app takes photos, a timer and QR scans. It has no page-by-page document mode and no edge detection; the JPEG path is springboard/src/shell/camera/jpeg.rs."
     },
     {
       "feature": "Stabilised camera region of interest",
@@ -67,8 +67,8 @@
       "feature": "Image analysis overlay and delegate callbacks",
       "apple": "ImageAnalysisOverlayView, ImageAnalysisOverlayViewDelegate, ImageAnalysisInteractionDelegate",
       "bifrost": "springboard/ui/src/analysis.rs, springboard/ui/src/docscan.rs, springboard/ui/src/scan.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No overlay view for images in the SDK. Views are in springboard/sdk/src/view/."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 19 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No overlay view for images in the SDK. Views are in springboard/sdk/src/view/."
     }
   ],
   "gaps": [

@@ -18,8 +18,8 @@
       "feature": "Remote call targets and invocation encoding",
       "apple": "RemoteCallTarget, RemoteCallArgument, DistributedTargetInvocationEncoder, DistributedTargetInvocationDecoder, DistributedTargetInvocationResultHandler",
       "bifrost": "springboard/sdk/src/control.rs (handle_line, handle_line_ex, encode)",
-      "status": "partial",
-      "note": "JSON-RPC method dispatch with method names and JSON params exists; no typed invocation encoder/decoder, no target identifiers, no result-handler protocol"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. JSON-RPC method dispatch with method names and JSON params exists; no typed invocation encoder/decoder, no target identifiers, no result-handler protocol"
     },
     {
       "feature": "Cross-process broadcast messages",
@@ -32,15 +32,15 @@
       "feature": "Remote call errors",
       "apple": "DistributedActorCodingError, DistributedActorSystemError, ExecuteDistributedTargetError",
       "bifrost": "springboard/sdk/src/control.rs (RpcError, METHOD_NOT_FOUND, INVALID_PARAMS, INTERNAL_ERROR, TIMEOUT)",
-      "status": "partial",
-      "note": "JSON-RPC error codes cover method, params and timeout failures; no coding error type for typed arguments"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. JSON-RPC error codes cover method, params and timeout failures; no coding error type for typed arguments"
     },
     {
       "feature": "Local testing actor system",
       "apple": "LocalTestingDistributedActorSystem and its ActorID, Address, invocation encoder/decoder types",
       "bifrost": "springboard/sdk/src/distributed.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an in-process RPC test double for control methods would be the equivalent; none exists"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an in-process RPC test double for control methods would be the equivalent; none exists"
     },
     {
       "feature": "Agent and tool access to running apps",

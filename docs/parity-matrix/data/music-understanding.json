@@ -11,8 +11,8 @@
       "feature": "Analysis session (create, analyze, cancel)",
       "apple": "MusicUnderstandingSession: init(asset:), init(audioProvider:), analyze(), analyze(for:), cancel()",
       "bifrost": "springboard/sdk/src/music_understanding.rs, springboard/ui/src/music.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no session object or analysis entry point in springboard/sdk/src/ or springboard/ui/src/"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no session object or analysis entry point in springboard/sdk/src/ or springboard/ui/src/"
     },
     {
       "feature": "Audio input (file asset and buffer stream)",
@@ -25,15 +25,15 @@
       "feature": "Rhythm (beats, bars, BPM)",
       "apple": "RhythmResult: beats, bars, beatsPerMinute",
       "bifrost": "springboard/sdk/src/music_understanding.rs, springboard/ui/src/music.rs; wired: springboard/apps/music-desktop/src/music/tempo.rs (bpm_of, label); springboard/apps/music-desktop/src/music.rs (start_tempo, draw_song_rows)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. tempo is only stored and used for playback sync; there is no beat or onset detection on audio Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. tempo is only stored and used for playback sync; there is no beat or onset detection on audio Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Key (musical key over time)",
       "apple": "KeyResult, AnalysisType.key",
       "bifrost": "springboard/ui/src/music.rs (analyze_key, springboard/sdk/src/music_understanding.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-music-understanding, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. compose.rs works on symbolic notes, not audio; no pitch-class analysis of audio"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 21 tests. Wave 5 (w5-music-understanding, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. compose.rs works on symbolic notes, not audio; no pitch-class analysis of audio"
     },
     {
       "feature": "Loudness (integrated, momentary, short-term, peak)",
@@ -46,15 +46,15 @@
       "feature": "Pace",
       "apple": "PaceResult, AnalysisType.pace",
       "bifrost": "springboard/ui/src/music.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no pace or tempo-change analysis"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 21 tests. Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no pace or tempo-change analysis"
     },
     {
       "feature": "Structure (sections, segments, phrases)",
       "apple": "StructureResult, AnalysisType.structure",
       "bifrost": "springboard/ui/src/music.rs (segment_frames, springboard/sdk/src/music_understanding.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-music-understanding, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the name Section is a project scene, not detected song structure"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 21 tests. Wave 5 (w5-music-understanding, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the name Section is a project scene, not detected song structure"
     },
     {
       "feature": "Instrument activity",
@@ -67,15 +67,15 @@
       "feature": "Result and support types (TimedValue, RangedValue, errors)",
       "apple": "MusicUnderstandingSession.TimedValue, RangedValue, SessionResult, MusicUnderstandingError",
       "bifrost": "springboard/sdk/src/music_understanding.rs, springboard/ui/src/music.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no equivalent result types; the closest is the private lab Metrics struct at springboard/apps/daw/src/lab.rs:63"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no equivalent result types; the closest is the private lab Metrics struct at springboard/apps/daw/src/lab.rs:63"
     },
     {
       "feature": "Cancellation and partial delivery",
       "apple": "cancel(), loudnessResults async sequence",
       "bifrost": "springboard/sdk/src/music_understanding.rs, springboard/ui/src/music.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no cancellable analysis job or result stream in the SDK"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no cancellable analysis job or result stream in the SDK"
     }
   ],
   "gaps": [

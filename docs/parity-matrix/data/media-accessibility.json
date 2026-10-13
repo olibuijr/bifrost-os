@@ -11,36 +11,36 @@
       "feature": "Caption appearance settings (font, colours, opacity, edge style, window, display type)",
       "apple": "MACaptionAppearanceCopyFontDescriptorForStyle, MACaptionAppearanceCopyForegroundColor, MACaptionAppearanceCopyBackgroundColor, MACaptionAppearanceCopyWindowColor, MACaptionAppearanceGetDisplayType, MACaptionAppearanceSetDisplayType",
       "bifrost": "springboard/ui/src/captions.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-15, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No caption preference store in springboard/src/shell/accessibility/mod.rs or springboard/src/shell/options.rs; no caption settings page in springboard/src/shell/pages.rs."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-15, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No caption preference store in springboard/src/shell/accessibility/mod.rs or springboard/src/shell/options.rs; no caption settings page in springboard/src/shell/pages.rs."
     },
     {
       "feature": "Caption language selection and profiles",
       "apple": "MACaptionAppearanceAddSelectedLanguage, MACaptionAppearanceCopySelectedLanguages, MACaptionAppearanceCopyProfileIDs, MACaptionAppearanceSetActiveProfileID",
       "bifrost": "springboard/ui/src/captions.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-15, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No language stack or profile API. The Options keys in springboard/src/shell/options.rs have no caption entry."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-15, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No language stack or profile API. The Options keys in springboard/src/shell/options.rs have no caption entry."
     },
     {
       "feature": "Caption change notification and display reporting",
       "apple": "kMACaptionAppearanceSettingsChangedNotification, MACaptionAppearanceDidDisplayCaptions",
       "bifrost": "springboard/ui/src/captions.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-15, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No caption-specific notification is posted. The generic notification centre does not carry this event."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-15, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No caption-specific notification is posted. The generic notification centre does not carry this event."
     },
     {
       "feature": "Subtitle and caption tracks in playback",
       "apple": "MAMediaCharacteristicTranscribesSpokenDialogForAccessibility, MAMediaCharacteristicDescribesMusicAndSoundForAccessibility (track characteristics)",
       "bifrost": "springboard/ui/src/media_selection.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The WebM parser drops subtitle tracks; its test asserts 'subtitle track dropped'. The MP4 path (springboard/src/media/mp4.rs, Kind: Video, Audio) has no text track either. No caption rendering exists."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The WebM parser drops subtitle tracks; its test asserts 'subtitle track dropped'. The MP4 path (springboard/src/media/mp4.rs, Kind: Video, Audio) has no text track either. No caption rendering exists."
     },
     {
       "feature": "Audible media selection (described video, audio description preference)",
       "apple": "MAAudibleMediaCopyPreferredCharacteristics, MAMediaCharacteristicDescribesVideoForAccessibility, kMAAudibleMediaSettingsChangedNotification",
       "bifrost": "springboard/ui/src/media_selection.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No preference is read or exposed. The player in springboard/src/media/player.rs selects audio tracks without any accessibility characteristic."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No preference is read or exposed. The player in springboard/src/media/player.rs selects audio tracks without any accessibility characteristic."
     },
     {
       "feature": "Flashing lights detection and dimming",
@@ -60,8 +60,8 @@
       "feature": "Image accessibility captions (metadata)",
       "apple": "MAImageCaptioningCopyCaption, MAImageCaptioningSetCaption, MAImageCaptioningCopyMetadataTagPath",
       "bifrost": "springboard/core/src/imgmeta.rs (caption)",
-      "status": "partial",
-      "note": "Wave 3 (theme-06, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code reads or writes an image caption in image metadata. springboard/src/shell/md.rs only renders markdown image lines."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (theme-06, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code reads or writes an image caption in image metadata. springboard/src/shell/md.rs only renders markdown image lines."
     }
   ],
   "gaps": [

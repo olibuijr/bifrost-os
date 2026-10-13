@@ -67,22 +67,22 @@
       "feature": "System sounds and alert playback (Audio Services)",
       "apple": "AudioServicesPlaySystemSound, AudioServicesCreateSystemSoundID",
       "bifrost": "springboard/sdk/src/system_sound.rs (SystemSounds",
-      "status": "partial",
-      "note": "Wave 3 (theme-31, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system-sound or alert API. A search for sound effect and beep terms in springboard/src found nothing."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (theme-31, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system-sound or alert API. A search for sound effect and beep terms in springboard/src found nothing."
     },
     {
       "feature": "Scheduled file regions and slices (ScheduledAudioFileRegion)",
       "apple": "ScheduledAudioFileRegion, ScheduledAudioSlice",
       "bifrost": "springboard/ui/src/scheduled_region.rs (FileRegion",
-      "status": "partial",
-      "note": "Wave 4 (theme-16, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No scheduled playback of file regions. The service plays whole tracks."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-16, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No scheduled playback of file regions. The service plays whole tracks."
     },
     {
       "feature": "Voice I/O (Audio Unit Voice I/O, echo cancellation)",
       "apple": "Audio Unit Voice I/O",
       "bifrost": "springboard/ui/src/echo_cancel.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-audio-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Capture has no echo cancellation or voice processing stage."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-audio-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Capture has no echo cancellation or voice processing stage."
     },
     {
       "feature": "Spatial audio (spatial mixer, head tracking, AUHeadTrackingBinauralRenderer)",

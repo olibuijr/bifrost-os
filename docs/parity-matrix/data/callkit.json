@@ -11,8 +11,8 @@
       "feature": "Provider and configuration",
       "apple": "CXProvider, CXProviderDelegate, CXProviderConfiguration",
       "bifrost": "springboard/ui/src/call.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no call provider registration"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no call provider registration"
     },
     {
       "feature": "Incoming call UI",
@@ -25,29 +25,29 @@
       "feature": "Outgoing calls",
       "apple": "CXCallController, CXTransaction, CXStartCallAction",
       "bifrost": "springboard/ui/src/call.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-15, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no start-call request path"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 5 (theme-15, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no start-call request path"
     },
     {
       "feature": "Call actions",
       "apple": "End, DTMF, group, hold, mute, translate actions",
       "bifrost": "springboard/ui/src/call.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. audio devices exist in springboard/audiod/src/ but no call state"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. audio devices exist in springboard/audiod/src/ but no call state"
     },
     {
       "feature": "Call observation",
       "apple": "CXCall, CXCallObserver, CXHandle",
       "bifrost": "springboard/ui/src/call.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no list of active calls for apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no list of active calls for apps"
     },
     {
       "feature": "Caller ID and blocking",
       "apple": "CXCallDirectoryProvider, Manager, ExtensionContext",
       "bifrost": "springboard/ui/src/call_directory.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-18, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no call directory extension"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-18, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no call directory extension"
     },
     {
       "feature": "Default calling app",

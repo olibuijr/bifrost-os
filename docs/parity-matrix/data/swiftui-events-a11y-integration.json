@@ -11,15 +11,15 @@
       "feature": "Gestures (tap, drag, magnify, rotate, long press)",
       "apple": "Gesture, TapGesture, DragGesture, MagnifyGesture",
       "bifrost": "springboard/ui/src/gesture.rs",
-      "status": "partial",
-      "note": "recognizer models, but no composable modifier API (simultaneous/sequenced)"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. recognizer models, but no composable modifier API (simultaneous/sequenced)"
     },
     {
       "feature": "Input events (keyboard shortcuts, hover, key press)",
       "apple": "keyboardShortcut, onKeyPress, onHover",
       "bifrost": "springboard/ui/src/keys.rs, springboard/ui/src/responder.rs",
-      "status": "partial",
-      "note": "shortcuts and responder chain exist; no Touch Bar (n/a)"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. shortcuts and responder chain exist; no Touch Bar (n/a)"
     },
     {
       "feature": "Clipboard",
@@ -39,8 +39,8 @@
       "feature": "Focus",
       "apple": "FocusState, focusable, focusedValue, focusSection",
       "bifrost": "springboard/ui/src/focus.rs",
-      "status": "partial",
-      "note": "focus ring model; no focused-value scene propagation"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. focus ring model; no focused-value scene propagation"
     },
     {
       "feature": "System events (open URL, user activity)",
@@ -60,29 +60,29 @@
       "feature": "Accessible appearance",
       "apple": "accessibilityReduceMotion, Increase contrast, differentiateWithoutColor",
       "bifrost": "springboard/ui/src/accessible_look.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. light/dark exist; no reduce-motion or contrast environment flags found"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. light/dark exist; no reduce-motion or contrast environment flags found"
     },
     {
       "feature": "Accessible controls",
       "apple": "accessibilityAction, accessibilityAdjustableAction",
       "bifrost": "springboard/ui/src/ax.rs",
-      "status": "partial",
-      "note": "press, set value, focus only; no custom actions"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 25 tests. press, set value, focus only; no custom actions"
     },
     {
       "feature": "Accessible descriptions",
       "apple": "accessibilityLabel, accessibilityHint, accessibilityValue",
       "bifrost": "springboard/ui/src/ax.rs",
-      "status": "partial",
-      "note": "label and value; no label/title/help split or announcements"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 25 tests. label and value; no label/title/help split or announcements"
     },
     {
       "feature": "Accessible navigation (rotors)",
       "apple": "accessibilityRotor, accessibilityLinkedGroup",
       "bifrost": "springboard/ui/src/chart_ax.rs (ChartDescriptor::step)",
-      "status": "partial",
-      "note": "Wave 2 (theme-31, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. documented as no rotor equivalent"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-31, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. documented as no rotor equivalent"
     },
     {
       "feature": "AppKit integration",

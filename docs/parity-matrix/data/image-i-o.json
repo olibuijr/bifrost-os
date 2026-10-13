@@ -25,8 +25,8 @@
       "feature": "Format coverage (GIF, HEIC, WebP, TIFF, TGA, DNG, RAW)",
       "apple": "Image I/O supported type list (Image Properties, format-specific property keys)",
       "bifrost": "springboard/core/src/imgprobe.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-image-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only PNG and JPEG are decoded or written. GIF, WebP, HEIC, TIFF, TGA and RAW are recognised by name in the browser or the Files type table only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-image-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only PNG and JPEG are decoded or written. GIF, WebP, HEIC, TIFF, TGA and RAW are recognised by name in the browser or the Files type table only."
     },
     {
       "feature": "Downsampled and thumbnail decode",
@@ -74,15 +74,15 @@
       "feature": "XMP, IPTC and 8BIM metadata",
       "apple": "CGImageMetadata, CGMutableImageMetadata, CGImageMetadataTag, IPTC Dictionary Keys",
       "bifrost": "springboard/core/src/imgmeta.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-06, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No XMP or IPTC parser or writer in springboard/."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (theme-06, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No XMP or IPTC parser or writer in springboard/."
     },
     {
       "feature": "Animated GIF and APNG frames",
       "apple": "CGAnimateImageAtURLWithBlock, CGAnimateImageDataWithBlock, kCGImageAnimationDelayTime",
       "bifrost": "springboard/core/src/gifframes.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-image-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No frame iteration or delay API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-image-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No frame iteration or delay API."
     },
     {
       "feature": "Colour profiles and HDR gain maps",
@@ -109,8 +109,8 @@
       "feature": "Image file types for the type system",
       "apple": "UTType for image types (public.png, public.jpeg)",
       "bifrost": "springboard/ui/src/uttype.rs (type_for_extension, conforms), springboard/src/files/fs.rs:49 (kind_of: PNG and JPEG are Image)",
-      "status": "partial",
-      "note": "UTType for images is in the SDK as controls::uttype. Only PNG and JPEG count as images; other formats are not image types."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. UTType for images is in the SDK as controls::uttype. Only PNG and JPEG count as images; other formats are not image types."
     },
     {
       "feature": "Image data in drag and drop",

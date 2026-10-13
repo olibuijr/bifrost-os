@@ -18,15 +18,15 @@
       "feature": "Connections (NWConnection) to a remote endpoint",
       "apple": "NWConnection, NWEndpoint, NWParameters",
       "bifrost": "springboard/core/src/net_connection.rs, springboard/sdk/src/network_connection.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell-internal TCP and TLS only. No SDK API for apps to open a raw connection, set endpoints or send and receive messages"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell-internal TCP and TLS only. No SDK API for apps to open a raw connection, set endpoints or send and receive messages"
     },
     {
       "feature": "Listeners for incoming connections",
       "apple": "NWListener",
       "bifrost": "springboard/core/src/net_connection.rs (Listener), springboard/sdk/src/network_connection.rs, springboard/sdk/src/network_listener.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Used by the shell for nearby share and control. Apps can now listen: sdk network_listener::Listener binds TCP or UDP with std::net (port 0, state handler, newConnectionLimit, poll-driven handlers, cancel) and builds a Bonjour ServiceAdvertiser from its Service; host unit tests only, TLS listeners refused, not yet checked on Midget"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Used by the shell for nearby share and control. Apps can now listen: sdk network_listener::Listener binds TCP or UDP with std::net (port 0, state handler, newConnectionLimit, poll-driven handlers, cancel) and builds a Bonjour ServiceAdvertiser from its Service; host unit tests only, TLS listeners refused, not yet checked on Midget"
     },
     {
       "feature": "Service discovery on the local network",
@@ -53,8 +53,8 @@
       "feature": "TCP, UDP and IP protocol options",
       "apple": "NWProtocolTCP, NWProtocolUDP, NWProtocolIP",
       "bifrost": "springboard/core/src/net_connection.rs (Parameters, springboard/sdk/src/network_connection.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Socket options are set in the shell. Apps have no protocol stack configuration"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Socket options are set in the shell. Apps have no protocol stack configuration"
     },
     {
       "feature": "TLS and security options",
@@ -67,22 +67,22 @@
       "feature": "QUIC, WebSocket and custom framers",
       "apple": "NWProtocolQUIC, NWProtocolWebSocket, NWProtocolFramer, NWMessage and NWFramer",
       "bifrost": "springboard/core/src/websocket.rs, springboard/sdk/src/websocket.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-network, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No QUIC or WebSocket code in the repo. No protocol framer API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 4 (w4-network, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No QUIC or WebSocket code in the repo. No protocol framer API"
     },
     {
       "feature": "Network path monitoring",
       "apple": "NWPathMonitor, NWPath, NWInterface",
       "bifrost": "springboard/core/src/net_path.rs, springboard/sdk/src/network_path.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-network, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. netd publishes Wi-Fi status to the shell over BIFROST_SERVICE_SOCK. Apps get no reachability or interface callback. bifrost_app::workspace and bifrost_app::process_info have no network state"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-network, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. netd publishes Wi-Fi status to the shell over BIFROST_SERVICE_SOCK. Apps get no reachability or interface callback. bifrost_app::workspace and bifrost_app::process_info have no network state"
     },
     {
       "feature": "Network errors",
       "apple": "NWError",
       "bifrost": "springboard/sdk/src/url.rs (URLError)",
-      "status": "partial",
-      "note": "URLError covers a few codes (CannotConnect and others). No NWError POSIX or DNS error domains"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. URLError covers a few codes (CannotConnect and others). No NWError POSIX or DNS error domains"
     },
     {
       "feature": "Network debugging and diagnostics",

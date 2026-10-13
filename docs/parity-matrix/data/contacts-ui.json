@@ -25,8 +25,8 @@
       "feature": "Contact picker (popover and modal)",
       "apple": "CNContactPickerViewController, CNContactPicker",
       "bifrost": "springboard/ui/src/contact_picker.rs (wired: Add People picker in springboard/apps/contacts-desktop/src/contacts.rs, Picker at line 1063, via bifrost_app::controls::contact_picker)",
-      "status": "partial",
-      "note": "The picker model is wired into the Contacts app. An app cannot ask the user to choose a contact and receive the result: no SDK picker returns a choice, and the share picker only lists apps. Not yet tested on the VM or Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. The picker model is wired into the Contacts app. An app cannot ask the user to choose a contact and receive the result: no SDK picker returns a choice, and the share picker only lists apps. Not yet tested on the VM or Midget."
     },
     {
       "feature": "Contact search and store access",
@@ -46,8 +46,8 @@
       "feature": "Contact access button (limited access)",
       "apple": "ContactAccessButton (SwiftUI)",
       "bifrost": "springboard/ui/src/contact_access.rs (Status::Limited, picked set); springboard/sdk/src/contacts.rs (access, decode_picked)",
-      "status": "partial",
-      "note": "The limited state and its picked set exist in the model and the service, so an app can see that it has a limited grant. No button or sheet draws it yet, so the person cannot change a limited grant from the app."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. The limited state and its picked set exist in the model and the service, so an app can see that it has a limited grant. No button or sheet draws it yet, so the person cannot change a limited grant from the app."
     }
   ],
   "gaps": [

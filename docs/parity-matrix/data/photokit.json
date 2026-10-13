@@ -53,8 +53,8 @@
       "feature": "Asset resources and creating assets",
       "apple": "PHAssetResource, PHAssetCreationRequest, PHAssetResourceCreationOptions, PHAssetResourceManager",
       "bifrost": "springboard/ui/src/photo_request.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Edits save as copies inside the Photos app. There is no create-asset request for apps and no resource manager. Apps write files into ~/Pictures themselves."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Edits save as copies inside the Photos app. There is no create-asset request for apps and no resource manager. Apps write files into ~/Pictures themselves."
     },
     {
       "feature": "Editing a photo (rotate, crop, brightness, contrast, filters)",
@@ -81,15 +81,15 @@
       "feature": "Live Photos",
       "apple": "PHLivePhoto, PHLivePhotoView, PHLivePhotoRequestOptions, Displaying Live Photos",
       "bifrost": "springboard/ui/src/photo_media.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The library reads still JPEG files only. No paired still and movie handling and no playback."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The library reads still JPEG files only. No paired still and movie handling and no playback."
     },
     {
       "feature": "Video assets",
       "apple": "PHAsset video media type, PHVideoRequestOptions, AVAsset delivery",
       "bifrost": "springboard/ui/src/photo_media.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No video assets in the Photos app. Media playback is a separate app (springboard/src/media/)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No video assets in the Photos app. Media playback is a separate app (springboard/src/media/)."
     },
     {
       "feature": "Slideshow",
@@ -109,8 +109,8 @@
       "feature": "Change observation of the library",
       "apple": "PHPhotoLibraryChangeObserver, PHPhotoLibraryPersistentChangesObserver, PHChange",
       "bifrost": "springboard/ui/src/photo_changes.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No photo-library change callbacks for apps. Apps can watch folders but get no asset-level diffs."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No photo-library change callbacks for apps. Apps can watch folders but get no asset-level diffs."
     },
     {
       "feature": "Background upload of asset resources",
@@ -130,8 +130,8 @@
       "feature": "Enhanced privacy and limited library access",
       "apple": "Delivering an Enhanced Privacy Experience in Your Photos App; PHPickerFilter scope",
       "bifrost": "springboard/ui/src/photo_access.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps can read ~/Pictures without a prompt through the springboard library module. No per-asset grants are issued."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps can read ~/Pictures without a prompt through the springboard library module. No per-asset grants are issued."
     }
   ],
   "gaps": [

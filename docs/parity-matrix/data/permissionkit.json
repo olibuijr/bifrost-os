@@ -25,8 +25,8 @@
       "feature": "Significant app update topic",
       "apple": "SignificantAppUpdateTopic",
       "bifrost": "springboard/core/src/permission_request.rs, springboard/sdk/src/permission_kit.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-permissionkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell can allow or block an app and grant a time-limit ignore for 15 minutes or the rest of the day. Parent approval of app updates is not implemented, and apps cannot request it."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-permissionkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell can allow or block an app and grant a time-limit ignore for 15 minutes or the rest of the day. Parent approval of app updates is not implemented, and apps cannot request it."
     },
     {
       "feature": "Communication topic and handle (CommunicationTopic, CommunicationHandle)",
@@ -46,8 +46,8 @@
       "feature": "Permission button UI (PermissionButton)",
       "apple": "PermissionButton",
       "bifrost": "springboard/ui/src/permission_question.rs, springboard/sdk/src/permission_kit.rs",
-      "status": "partial",
-      "note": "Wave 6 (b01, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The shield offers Ignore Limit, guarded by the Screen Time passcode, but it is a shell-only cover. No SDK button presents a parent request."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 16 tests. Wave 6 (b01, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The shield offers Ignore Limit, guarded by the Screen Time passcode, but it is a shell-only cover. No SDK button presents a parent request."
     },
     {
       "feature": "Question topic protocol (QuestionTopic)",

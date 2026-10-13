@@ -67,36 +67,36 @@
       "feature": "Paragraph styles and tab stops",
       "apple": "CTParagraphStyle, CTTextTab, kCTParagraphStyleAttributeName",
       "bifrost": "springboard/ui/src/typeset.rs (ParagraphStyle, tab_advance)",
-      "status": "partial",
-      "note": "Only line wrapping and head, middle and tail truncation. No alignment, indents, spacing, tab stops or line-height settings on attributed strings."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 21 tests. Only line wrapping and head, middle and tail truncation. No alignment, indents, spacing, tab stops or line-height settings on attributed strings."
     },
     {
       "feature": "Line breaking and truncation",
       "apple": "CTTypesetterSuggestLineBreak, CTLineCreateTruncatedLine",
       "bifrost": "springboard/ui/src/typeset.rs (frame wrapping, truncated_line, Truncation)",
-      "status": "partial",
-      "note": "Greedy word wrap and binary-search truncation against a caller-supplied measure function. No grapheme or script-aware break rules beyond whitespace. Browser layout has its own wrapper in springboard/src/shell/browser/layout2/text.rs."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 21 tests. Greedy word wrap and binary-search truncation against a caller-supplied measure function. No grapheme or script-aware break rules beyond whitespace. Browser layout has its own wrapper in springboard/src/shell/browser/layout2/text.rs."
     },
     {
       "feature": "Line and run layout objects (typesetter, framesetter, line, run, frame)",
       "apple": "CTTypesetter, CTFramesetter, CTFrame, CTLine, CTRun",
       "bifrost": "springboard/ui/src/textlayout.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-03, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No layout object exposed to apps and no glyph run or line geometry query. RichTextView::draw wraps styled runs into a Surface, and the text buffer handles editing. Caret and hit-testing are not in draw."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 3 tests. Wave 5 (theme-03, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No layout object exposed to apps and no glyph run or line geometry query. RichTextView::draw wraps styled runs into a Surface, and the text buffer handles editing. Caret and hit-testing are not in draw."
     },
     {
       "feature": "Writing direction and bidirectional text",
       "apple": "kCTWritingDirectionAttributeName, CTRun writing direction",
       "bifrost": "springboard/ui/src/bidi.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-32, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No bidi algorithm and no right-to-left layout in the text path."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Wave 2 (theme-32, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No bidi algorithm and no right-to-left layout in the text path."
     },
     {
       "feature": "Vertical text and horizontal-in-vertical",
       "apple": "kCTVerticalFormsAttributeName, kCTHorizontalInVerticalFormsAttributeName",
       "bifrost": "springboard/ui/src/vertical_text.rs (layout_column",
-      "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No vertical layout."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No vertical layout."
     },
     {
       "feature": "Ruby annotations",
@@ -109,8 +109,8 @@
       "feature": "Run delegates and embedded attachments",
       "apple": "CTRunDelegate, CTAdaptiveImageProviding",
       "bifrost": "springboard/ui/src/run_delegate.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-24, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No way to place an image or view inside styled text."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 4 (theme-24, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No way to place an image or view inside styled text."
     },
     {
       "feature": "Font family substitution, system designs and cascade lists",

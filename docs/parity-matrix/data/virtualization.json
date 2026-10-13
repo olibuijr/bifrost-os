@@ -25,15 +25,15 @@
       "feature": "Running Linux guests from an app",
       "apple": "VZVirtualMachineConfiguration, Running Linux in a Virtual Machine, Creating and Running a Linux Virtual Machine",
       "bifrost": "springboard/core/src/guest_vm.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Arch guest harness is dev-only shell tooling with hardcoded QEMU args; no SDK type or system service lets an app create, start, pause or resume a guest"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Arch guest harness is dev-only shell tooling with hardcoded QEMU args; no SDK type or system service lets an app create, start, pause or resume a guest"
     },
     {
       "feature": "VM runtime (start, pause, resume, state)",
       "apple": "VZVirtualMachine",
       "bifrost": "springboard/core/src/guest_vm.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. tools/arch-vm.sh start/stop/status drive QEMU from the shell; no in-process object model"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. tools/arch-vm.sh start/stop/status drive QEMU from the shell; no in-process object model"
     },
     {
       "feature": "Displaying a guest in a window",
@@ -67,15 +67,15 @@
       "feature": "Shared directories",
       "apple": "Shared directories (VirtioFS)",
       "bifrost": "springboard/core/src/guest_vm.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The file portal (docs/file-portal-design.md) covers host-to-app grants, not guest shares"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The file portal (docs/file-portal-design.md) covers host-to-app grants, not guest shares"
     },
     {
       "feature": "Clipboard sharing",
       "apple": "Clipboard sharing (SPICE agent)",
       "bifrost": "springboard/core/src/guest_clipboard.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The pasteboard SDK does not bridge to a guest"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The pasteboard SDK does not bridge to a guest"
     },
     {
       "feature": "Keyboard and pointing devices",
@@ -102,8 +102,8 @@
       "feature": "Randomization",
       "apple": "Randomization (entropy device)",
       "bifrost": "springboard/core/src/guest_vm.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The dev harness inherits a default entropy device from QEMU; nothing is configured"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The dev harness inherits a default entropy device from QEMU; nothing is configured"
     },
     {
       "feature": "Serial ports and consoles",
@@ -116,8 +116,8 @@
       "feature": "Sockets",
       "apple": "Sockets (VZVirtioSocketDevice)",
       "bifrost": "springboard/core/src/guest_vm.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The dev harness reaches the guest over ssh port forwarding instead"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The dev harness reaches the guest over ssh port forwarding instead"
     },
     {
       "feature": "USB devices",
@@ -137,15 +137,15 @@
       "feature": "Custom Virtio drivers",
       "apple": "Custom Virtio drivers",
       "bifrost": "springboard/core/src/virtio.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No BifrOSt guest driver code exists"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (theme-22, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No BifrOSt guest driver code exists"
     },
     {
       "feature": "Errors and enumerations",
       "apple": "VZError, VZErrorDomain, caching, disk sync and auxiliary storage enums",
       "bifrost": "springboard/core/src/guest_vm.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. tools/arch-vm.sh reports failures through shell exit codes only"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. tools/arch-vm.sh reports failures through shell exit codes only"
     }
   ],
   "gaps": [

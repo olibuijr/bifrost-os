@@ -60,15 +60,15 @@
       "feature": "Menus and commands",
       "apple": "https://developer.apple.com/documentation/swiftui/menus-and-commands",
       "bifrost": "springboard/ui/src/menu.rs",
-      "status": "partial",
-      "note": "menu model exists; no Commands builder"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. menu model exists; no Commands builder"
     },
     {
       "feature": "Shapes",
       "apple": "https://developer.apple.com/documentation/swiftui/shapes",
       "bifrost": "springboard/ui/src/shape.rs, springboard/ui/src/stack.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no Shape protocol or Path trim/stroke API for apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no Shape protocol or Path trim/stroke API for apps"
     },
     {
       "feature": "Drawing and graphics (effects, Canvas)",
@@ -95,22 +95,22 @@
       "feature": "Custom layout (Layout protocol)",
       "apple": "https://developer.apple.com/documentation/swiftui/custom-layout",
       "bifrost": "springboard/ui/src/layout_protocol.rs; wired: springboard/ui/src/layout_protocol.rs (FlowLayout) via Arrange in springboard/apps/freeform-desktop/src/freeform.rs",
-      "status": "partial",
-      "note": "Wave 6 (b15, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. constraint solver exists, no Layout protocol or AnyLayout transitions Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 6 (b15, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. constraint solver exists, no Layout protocol or AnyLayout transitions Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Lists",
       "apple": "https://developer.apple.com/documentation/swiftui/lists",
       "bifrost": "springboard/ui/src/sidebar.rs, springboard/ui/src/collection.rs, springboard/ui/src/diff.rs",
-      "status": "partial",
-      "note": "source list, card grid, diffable snapshots; no generic List with swipe actions or edit mode"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. source list, card grid, diffable snapshots; no generic List with swipe actions or edit mode"
     },
     {
       "feature": "Tables",
       "apple": "https://developer.apple.com/documentation/swiftui/tables",
       "bifrost": "springboard/ui/src/table.rs",
-      "status": "partial",
-      "note": "columns, sort descriptors, header hits; no TableColumn builder"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. columns, sort descriptors, header hits; no TableColumn builder"
     },
     {
       "feature": "View groupings (Form, Group, ControlGroup, split)",

@@ -18,29 +18,29 @@
       "feature": "Change notification on value change",
       "apple": "Observable protocol, ObservationRegistrar",
       "bifrost": "springboard/sdk/src/observable.rs (Observable::set, update, subscribe, sink); springboard/ui/src/observe.rs (Observable<T>::set, subscribe(old, new))",
-      "status": "partial",
-      "note": "Notifies only when the value differs (PartialEq) in the UI-model copy; the SDK copy notifies on every set. A set made from inside a subscriber is queued and delivered after the running change, in order (fixed in SDK, was dropped). Cancelling another subscriber during a change is now durable. UI-model copy (ui/src/observe.rs) is unchanged: its subscribers receive old and new values only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Notifies only when the value differs (PartialEq) in the UI-model copy; the SDK copy notifies on every set. A set made from inside a subscriber is queued and delivered after the running change, in order (fixed in SDK, was dropped). Cancelling another subscriber during a change is now durable. UI-model copy (ui/src/observe.rs) is unchanged: its subscribers receive old and new values only."
     },
     {
       "feature": "Automatic dependency tracking",
       "apple": "withObservationTracking(_:onChange:), withObservationTracking(options:_:onChange:)",
       "bifrost": "springboard/sdk/src/observable.rs (with_observation_tracking, Observable::get records reads)",
-      "status": "partial",
-      "note": "with_observation_tracking(apply, on_change) records each Observable read by get() inside apply and calls on_change once when one changes; the tracking then ends. Apple's withObservationTracking returns only the closure value and also covers options, and its onChange runs before the change; here on_change runs after the change, and reads inside on_change are not tracked. Only the SDK Observable is tracked; the UI-model copy is not."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. with_observation_tracking(apply, on_change) records each Observable read by get() inside apply and calls on_change once when one changes; the tracking then ends. Apple's withObservationTracking returns only the closure value and also covers options, and its onChange runs before the change; here on_change runs after the change, and reads inside on_change are not tracked. Only the SDK Observable is tracked; the UI-model copy is not."
     },
     {
       "feature": "Async change sequence",
       "apple": "Observations, withContinuousObservation(options:apply:)",
       "bifrost": "springboard/sdk/src/observable.rs (Observable::observations, Observations::try_next, pending_len)",
-      "status": "partial",
-      "note": "Pull-based sequence of the changes after the call, oldest first; dropping it stops recording. It is the synchronous counterpart of Apple's Observations: it has no suspension, no AsyncSequence conformance and no withContinuousObservation(options:apply:)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Pull-based sequence of the changes after the call, oldest first; dropping it stops recording. It is the synchronous counterpart of Apple's Observations: it has no suspension, no AsyncSequence conformance and no withContinuousObservation(options:apply:)."
     },
     {
       "feature": "Observation tracking options and tokens",
       "apple": "ObservationTracking, ObservationTracking.Options, ObservationTracking.Token, ObservationTracking.Event",
       "bifrost": "springboard/sdk/src/observable.rs (Subscription, Cancellables)",
-      "status": "partial",
-      "note": "Subscription cancels on drop (AnyCancellable). No event or options types for tracking."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Subscription cancels on drop (AnyCancellable). No event or options types for tracking."
     },
     {
       "feature": "Ignore or track individual properties",
@@ -53,8 +53,8 @@
       "feature": "Notifications from system state",
       "apple": "Observation Registrar for model state (manual)",
       "bifrost": "springboard/sdk/src/process_info.rs (observe_thermal_state, observe_low_power_mode); docs/bifrost-ui.md:1214 (NotificationCenter add_observer, post); docs/bifrost-ui.md:1542 (workspace observe)",
-      "status": "partial",
-      "note": "Observer-style subscriptions exist for system events (NotificationCenter, workspace, thermal state, Low Power Mode). They are not Observation's property-level tracking."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 4 tests. Observer-style subscriptions exist for system events (NotificationCenter, workspace, thermal state, Low Power Mode). They are not Observation's property-level tracking."
     }
   ],
   "gaps": [

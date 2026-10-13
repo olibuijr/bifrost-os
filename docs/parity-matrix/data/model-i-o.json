@@ -25,15 +25,15 @@
       "feature": "Mesh and vertex buffers",
       "apple": "MDLMesh, MDLSubmesh, MDLSubmeshTopology, MDLVertexDescriptor, MDLVertexAttribute, MDLVertexAttributeData, MDLVertexBufferLayout",
       "bifrost": "springboard/ui/src/vertex_descriptor.rs (with springboard/ui/src/mesh.rs)",
-      "status": "partial",
-      "note": "Wave 2 (theme-09, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the GPU vertex code only draws 2D triangles, no mesh type, index buffer or attribute layout is exposed to apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 19 tests. Wave 2 (theme-09, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the GPU vertex code only draws 2D triangles, no mesh type, index buffer or attribute layout is exposed to apps"
     },
     {
       "feature": "Mesh buffer allocation and mapping",
       "apple": "MDLMeshBuffer, MDLMeshBufferAllocator, MDLMeshBufferData, MDLMeshBufferMap, MDLMeshBufferZone",
       "bifrost": "springboard/ui/src/mesh.rs (BufferStore",
-      "status": "partial",
-      "note": "Wave 5 (theme-20, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-facing buffer allocator"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Wave 5 (theme-20, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-facing buffer allocator"
     },
     {
       "feature": "Materials and shading models",
@@ -46,8 +46,8 @@
       "feature": "Textures as 3D material inputs",
       "apple": "MDLTexture, MDLURLTexture, MDLTextureSampler, MDLTextureFilter, procedural textures (checkerboard, noise, sky cube, normal map)",
       "bifrost": "springboard/ui/src/procedural_texture.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-model-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. images decode, but there are no samplers, mip filters or procedural generators"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-model-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. images decode, but there are no samplers, mip filters or procedural generators"
     },
     {
       "feature": "Lights",
@@ -67,29 +67,29 @@
       "feature": "File format import and export",
       "apple": "MDLComponent, MDLObjectContainerComponent, MDLTransformComponent; formats OBJ, PLY, STL, USD, Alembic",
       "bifrost": "springboard/ui/src/mesh_file.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-model-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. grep for .obj, .stl, .usd, .ply, .fbx, .glb in springboard/ and docs/ found nothing"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 5 (w5-model-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. grep for .obj, .stl, .usd, .ply, .fbx, .glb in springboard/ and docs/ found nothing"
     },
     {
       "feature": "Skeletal animation and animated values",
       "apple": "MDLAnimatedScalar, MDLAnimatedVector3, MDLAnimatedQuaternion, MDLSkeleton, MDLJointAnimation, MDLPackedJointAnimation",
       "bifrost": "springboard/ui/src/animated_values.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-model-i-o, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no keyframes, joints or quaternions"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-model-i-o, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no keyframes, joints or quaternions"
     },
     {
       "feature": "Mesh processing and baking",
       "apple": "subdivision surfaces, ambient occlusion baking, light probe placement (MDLProbePlacement), normal map generation",
       "bifrost": "springboard/ui/src/mesh_process.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-model-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no offline or runtime mesh processing"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-model-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no offline or runtime mesh processing"
     },
     {
       "feature": "Volumetric representation",
       "apple": "MDLVoxelArray, MDLVoxelIndex, MDLVoxelIndexExtent",
       "bifrost": "springboard/ui/src/voxel_array.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-model-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no voxel type anywhere in the repo"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 4 (w4-model-i-o, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no voxel type anywhere in the repo"
     },
     {
       "feature": "Sharing buffers with the GPU framework",

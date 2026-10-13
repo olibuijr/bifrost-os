@@ -53,29 +53,29 @@
       "feature": "Playback transport and now-playing state (app client)",
       "apple": "AudioHardwareDevice properties as seen by clients",
       "bifrost": "springboard/src/svc.rs (audio::Client), springboard/proto/src/svc.rs (Cmd, Evt, Snapshot), springboard/apps/music-desktop/src/music/engine.rs",
-      "status": "partial",
-      "note": "Apps get a socket client that keeps the latest snapshot and reconnects after a service restart. It is a media-player API, not a device API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 2 tests. Apps get a socket client that keeps the latest snapshot and reconnects after a service restart. It is a media-player API, not a device API."
     },
     {
       "feature": "Property change notifications",
       "apple": "AudioHardwareObject.addPropertyListener, PropertyListenerDelegate",
       "bifrost": "springboard/src/svc.rs (Client subscribes and pumps events), springboard/proto/src/svc.rs (Evt); wired: springboard/apps/voicememos-desktop/src/main.rs (service_event); src/voicememos.rs (devices_changed, set_input); existing wiring, unchanged",
-      "status": "partial",
-      "note": "Clients receive state events from the service. Device properties such as default device or sample rate changes are not published. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 2 tests. Clients receive state events from the service. Device properties such as default device or sample rate changes are not published. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Volume and mute controls",
       "apple": "AudioHardwareControl (volume, mute, gain), AudioObjectPropertyVolume",
       "bifrost": "springboard/ui/src/volume_control.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-core-audio, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Volume is set through the audio service and the mixer. The SDK exposes no per-device volume control API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 5 (w5-core-audio, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Volume is set through the audio service and the mixer. The SDK exposes no per-device volume control API."
     },
     {
       "feature": "Output routing (speaker or headphones)",
       "apple": "AudioObjectProperty default output device selection",
       "bifrost": "springboard/ui/src/default_device.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-core-audio, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Route state and per-route volume are kept in the system layer. The sound server does the real routing, and apps cannot choose a device."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 5 (w5-core-audio, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Route state and per-route volume are kept in the system layer. The sound server does the real routing, and apps cannot choose a device."
     },
     {
       "feature": "Microphone capture",

@@ -67,8 +67,8 @@
       "feature": "iCloud / ubiquitous data",
       "apple": "iCloud document storage and key-value sync",
       "bifrost": "springboard/ui/src/ubiquitous_store.rs (key-value part only",
-      "status": "partial",
-      "note": "Wave 3 (theme-01, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Cloud sync lives in ~/Projects/bifrost-cloud (outside this repo); no SDK API for apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 3 (theme-01, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Cloud sync lives in ~/Projects/bifrost-cloud (outside this repo); no SDK API for apps"
     },
     {
       "feature": "State restoration",
@@ -88,15 +88,15 @@
       "feature": "Cocoa Bindings",
       "apple": "NSObjectController, NSArrayController, KVC/KVO bindings",
       "bifrost": "springboard/sdk/src/observable.rs",
-      "status": "partial",
-      "note": "Observable<T> gives Combine-style value streams; no controllers or declarative model-to-view bindings"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Observable<T> gives Combine-style value streams; no controllers or declarative model-to-view bindings"
     },
     {
       "feature": "Resource management (nib, storyboard, bundle)",
       "apple": "NSNib, NSStoryboard, NSBundle resource loading",
       "bifrost": "springboard/sdk/src/bundle_resources.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps build UI in Rust code; no declarative UI file format or bundle resource loader found in the SDK"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps build UI in Rust code; no declarative UI file format or bundle resource loader found in the SDK"
     },
     {
       "feature": "App extensions",

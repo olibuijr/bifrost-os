@@ -25,15 +25,15 @@
       "feature": "Accessibility text (AXText, attributed strings, text markers)",
       "apple": "AXTextAttributedString.h, AXTextMarker, AXTextMarkerRange, AXValue.h",
       "bifrost": "springboard/ui/src/text_marker.rs, springboard/sdk/src/attributed.rs (ax_runs)",
-      "status": "partial",
-      "note": "Wave 3 (theme-24, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No selected-text, visible-range, text-marker or caret events reach the accessibility bridge; rich text is not exposed as attributed strings."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (theme-24, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No selected-text, visible-range, text-marker or caret events reach the accessibility bridge; rich text is not exposed as attributed strings."
     },
     {
       "feature": "Accessibility announcements and actions",
       "apple": "AXNotification, NSAccessibilityAnnouncementRequested, custom actions",
       "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/geometry.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No live-region announcements, no custom actions beyond press, and SetValue and Focus reach only apps that override ax_set."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 37 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No live-region announcements, no custom actions beyond press, and SetValue and Focus reach only apps that override ax_set."
     },
     {
       "feature": "Universal Access (zoom focus)",
@@ -53,8 +53,8 @@
       "feature": "Print dialog plug-ins (PDEPlugIn, PDEPanel)",
       "apple": "PDEPlugIn, PDEPanel, PDEPlugInCallbackProtocol",
       "bifrost": "springboard/sdk/src/print_panel.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-11, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No print panel plug-in mechanism; the print sheet is not shell-drawn yet."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-11, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No print panel plug-in mechanism; the print sheet is not shell-drawn yet."
     },
     {
       "feature": "ColorSync Manager (profiles, transforms, CMM)",
@@ -67,8 +67,8 @@
       "feature": "Speech Synthesis Manager",
       "apple": "NewSpeechChannel, CountVoices, SetSpeechRate, SpeechBusy",
       "bifrost": "springboard/ui/src/speech.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No speech synthesis channel or voice API. Screen-reader output goes through Orca on AT-SPI, not through an SDK call."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No speech synthesis channel or voice API. Screen-reader output goes through Orca on AT-SPI, not through an SDK call."
     },
     {
       "feature": "Apple Event Manager (AEDesc, Apple Event dispatch)",
@@ -81,8 +81,8 @@
       "feature": "HIShape (region geometry)",
       "apple": "HIShape, HIMutableShape",
       "bifrost": "springboard/ui/src/ax.rs, springboard/ui/src/geometry.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The geometry module has rectangles and points; no shape or region type with boolean operations or hit testing for shapes."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 37 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The geometry module has rectangles and points; no shape or region type with boolean operations or hit testing for shapes."
     },
     {
       "feature": "Translation (Translation Services)",

@@ -18,29 +18,29 @@
       "feature": "Player queues",
       "apple": "MPMusicPlayerControllerQueue, MPMusicPlayerControllerMutableQueue, MPMusicPlayerApplicationController, queue descriptors",
       "bifrost": "springboard/src/media/queue.rs, springboard/apps/music-desktop/src/music.rs (queue_add, play next/last); wired: springboard/apps/music-desktop/src/music/upnext.rs (clear_upcoming); springboard/apps/music-desktop/src/music.rs (queue_clear, Target::QClear, draw_queue)",
-      "status": "partial",
-      "note": "one queue per speaker (last PlayQueue wins), play next and play last exist in the queue module; no immutable queue or descriptor types exposed to the SDK Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. one queue per speaker (last PlayQueue wins), play next and play last exist in the queue module; no immutable queue or descriptor types exposed to the SDK Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Media library synchronization",
       "apple": "MPMediaLibrary",
       "bifrost": "springboard/ui/src/media_changes.rs (MediaLibrary)",
-      "status": "partial",
-      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. library scan lives in the Music app; no SDK API reports library state or change events"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. library scan lives in the Music app; no SDK API reports library state or change events"
     },
     {
       "feature": "Media item queries and filters",
       "apple": "MPMediaQuery, MPMediaQuerySection, MPMediaPropertyPredicate, MPMediaPredicate",
       "bifrost": "springboard/ui/src/media_query.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-12, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. browse filters are private to the Music app; apps cannot query the media library"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-12, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. browse filters are private to the Music app; apps cannot query the media library"
     },
     {
       "feature": "Media items, collections and playlists",
       "apple": "MPMediaItem, MPMediaItemCollection, MPMediaPlaylist, MPMediaPlaylistCreationMetadata, MPMediaEntity",
       "bifrost": "springboard/ui/src/media_playlist.rs (Playlist)",
-      "status": "partial",
-      "note": "Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. playlists exist only inside the Music app; no SDK item model"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 4 (w4-media-player, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. playlists exist only inside the Music app; no SDK item model"
     },
     {
       "feature": "Item artwork and animated artwork",
@@ -88,22 +88,22 @@
       "feature": "Playback mode: repeat and shuffle",
       "apple": "MPChangeRepeatModeCommand, MPChangeShuffleModeCommand, MPRepeatType, MPShuffleType",
       "bifrost": "springboard/src/svc.rs (SetShuffle, SetRepeat, Repeat, Live), springboard/src/media/queue.rs; wired: springboard/apps/music-desktop/src/music/upnext.rs (set_shuffle, shuffled order kept through a clear)",
-      "status": "partial",
-      "note": "repeat and shuffle modes exist on the service; apps reach them through the audio client only Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. repeat and shuffle modes exist on the service; apps reach them through the audio client only Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Playback rate and language options",
       "apple": "MPChangePlaybackRateCommand, MPNowPlayingInfoLanguageOption, MPNowPlayingInfoLanguageOptionGroup",
       "bifrost": "springboard/ui/src/remote_command.rs (PlaybackRateCommand; wired: springboard/apps/podcasts-desktop/src/podcasts.rs speed menu (rate part only)",
-      "status": "partial",
-      "note": "Wave 3 (w3-media-player, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no playback rate control and no subtitle or audio language options for Now Playing Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Wave 3 (w3-media-player, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no playback rate control and no subtitle or audio language options for Now Playing Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Feedback and rating",
       "apple": "MPFeedbackCommand, MPRatingCommand and their events",
       "bifrost": "springboard/ui/src/media_feedback.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. favourites exist only inside the Music app; no feedback or rating commands for the system"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. favourites exist only inside the Music app; no feedback or rating commands for the system"
     },
     {
       "feature": "Now Playing sessions and focus",

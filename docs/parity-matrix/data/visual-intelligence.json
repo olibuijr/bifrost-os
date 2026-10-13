@@ -11,15 +11,15 @@
       "feature": "Visual search integration with the system camera and screenshots",
       "apple": "Visual Intelligence framework; Integrating your app with visual intelligence (article)",
       "bifrost": "springboard/sdk/src/visual_search.rs, springboard/ui/src/visual_search.rs",
-      "status": "partial",
-      "note": "Wave 2 (visual-intelligence, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system pass of camera or screenshot content to apps and no app return path for matches. The camera has a QR scanner only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 2 (visual-intelligence, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system pass of camera or screenshot content to apps and no app return path for matches. The camera has a QR scanner only."
     },
     {
       "feature": "SemanticContentDescriptor (scene labels, pixel buffer for apps)",
       "apple": "SemanticContentDescriptor (labels, pixelBuffer)",
       "bifrost": "springboard/ui/src/visual_search.rs (Scene)",
-      "status": "partial",
-      "note": "Wave 2 (visual-intelligence, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Scene labels come from Apple Intelligence classification, which is n/a. A BifrOSt version would need a local classifier and an app-facing type; neither exists."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (visual-intelligence, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Scene labels come from Apple Intelligence classification, which is n/a. A BifrOSt version would need a local classifier and an app-facing type; neither exists."
     },
     {
       "feature": "Adopting App Intents to support system experiences",
@@ -53,8 +53,8 @@
       "feature": "Camera or screenshot object selection feeding a search",
       "apple": "Visual Intelligence camera search button; screenshot object selection",
       "bifrost": "springboard/ui/src/visual_search.rs (Scene::crop",
-      "status": "partial",
-      "note": "Wave 2 (visual-intelligence, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The camera takes photos and reads QR codes. No object selection in screenshots and no search action on a frame."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (visual-intelligence, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The camera takes photos and reads QR codes. No object selection in screenshots and no search action on a frame."
     }
   ],
   "gaps": [

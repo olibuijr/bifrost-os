@@ -11,15 +11,15 @@
       "feature": "Account store (ACAccountStore)",
       "apple": "ACAccountStore: accounts, account(withIdentifier:), accounts(with:), saveAccount, removeAccount, requestAccessToAccounts",
       "bifrost": "springboard/sdk/src/accounts.rs (AccountStore::open, shared_path, reload, observe_did_change)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3) made the pure model; sprint1/3-accounts makes it persistent: AccountStore::open(shared_path()) keeps accounts.ini in the user's data directory, written atomically through bifrost_core::fsutil::write_atomic; every change runs against the file's current contents, reload() picks up another handle's changes, and observe_did_change fires for each change (ACAccountStoreDidChange). Credentials are not written to the file. Not yet wired into the apps or the shell, and not yet tested on the VM or Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 26 tests. Wave 1 (parity/integration 0d0412c3) made the pure model; sprint1/3-accounts makes it persistent: AccountStore::open(shared_path()) keeps accounts.ini in the user's data directory, written atomically through bifrost_core::fsutil::write_atomic; every change runs against the file's current contents, reload() picks up another handle's changes, and observe_did_change fires for each change (ACAccountStoreDidChange). Credentials are not written to the file. Not yet wired into the apps or the shell, and not yet tested on the VM or Midget."
     },
     {
       "feature": "Account objects (ACAccount)",
       "apple": "ACAccount: identifier, username, userFullName, accountDescription, accountType, credential",
       "bifrost": "springboard/sdk/src/accounts.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The OS knows the local user name, uid, gid and home. No app-facing SDK API exposes it, and it is not a registry of third-party accounts."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 26 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The OS knows the local user name, uid, gid and home. No app-facing SDK API exposes it, and it is not a registry of third-party accounts."
     },
     {
       "feature": "Credentials (ACAccountCredential, OAuth tokens)",
@@ -32,15 +32,15 @@
       "feature": "Account types and access grants (ACAccountType)",
       "apple": "ACAccountType: identifier, accountTypeDescription, accessGranted; accountType(withAccountTypeIdentifier:)",
       "bifrost": "springboard/sdk/src/accounts.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests. The access grant (accessGranted) persists in accounts.ini, so a grant survives a restart. There is still no user prompt that grants access to a type of account, and the manifest permission binds only keychain access. Not yet wired into apps or the shell, not yet tested on the VM or Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 26 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests. The access grant (accessGranted) persists in accounts.ini, so a grant survives a restart. There is still no user prompt that grants access to a type of account, and the manifest permission binds only keychain access. Not yet wired into apps or the shell, not yet tested on the VM or Midget."
     },
     {
       "feature": "Credential renewal (renewCredentials)",
       "apple": "ACAccountStore renewCredentials(for:completion:), ACAccountCredentialRenewResult",
       "bifrost": "springboard/sdk/src/accounts.rs (AccountStore::renew_credentials)",
-      "status": "partial",
-      "note": "Wave 5 (theme-06, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token refresh path. Apps refresh tokens themselves through springboard/sdk/src/url.rs (URLSession) if needed."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 26 tests. Wave 5 (theme-06, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token refresh path. Apps refresh tokens themselves through springboard/sdk/src/url.rs (URLSession) if needed."
     },
     {
       "feature": "Sign-in and account creation prompts",
@@ -53,8 +53,8 @@
       "feature": "Secure secret storage used for credentials",
       "apple": "Keychain items as the backing store of account credentials (Accounts keeps them in its database)",
       "bifrost": "springboard/src/keychain.rs (per-app encrypted store), springboard/proto/src/lib.rs (KeychainOp)",
-      "status": "partial",
-      "note": "Per-app, encrypted with a master key on the same disk. No access groups, so apps cannot share credentials, and no user-presence protection."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 16 tests. Per-app, encrypted with a master key on the same disk. No access groups, so apps cannot share credentials, and no user-presence protection."
     },
     {
       "feature": "BifrOSt account sign-in (cloud)",
@@ -67,8 +67,8 @@
       "feature": "Errors (ACErrorCode, ACErrorDomain)",
       "apple": "ACErrorCode and ACErrorDomain",
       "bifrost": "springboard/sdk/src/accounts.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Accounts error domain. Keychain errors are mirrored from Apple's Security codes, not from Accounts."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 26 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Accounts error domain. Keychain errors are mirrored from Apple's Security codes, not from Accounts."
     }
   ],
   "gaps": [

@@ -18,8 +18,8 @@
       "feature": "Advertising a service (MCNearbyServiceAdvertiser)",
       "apple": "MCNearbyServiceAdvertiser, MCNearbyServiceAdvertiserDelegate",
       "bifrost": "springboard/sdk/src/nearby_service.rs (ServiceType)",
-      "status": "partial",
-      "note": "Wave 5 (w5-multipeer-connectivity, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The beacon carries a device name, a TCP port and a fingerprint of the shared secret. It is not per-app and apps cannot publish their own service. round 75, host only: SDK path; not wired into the shell."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 4 tests. Wave 5 (w5-multipeer-connectivity, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The beacon carries a device name, a TCP port and a fingerprint of the shared secret. It is not per-app and apps cannot publish their own service. round 75, host only: SDK path; not wired into the shell."
     },
     {
       "feature": "Advertiser and browser UI (MCAdvertiserAssistant, MCBrowserViewController)",
@@ -39,15 +39,15 @@
       "feature": "Sessions and invitations (MCSession, invite and accept)",
       "apple": "MCSession, MCSessionDelegate, invitation handler",
       "bifrost": "springboard/sdk/src/peer_mesh.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only a one-file Offer exists, answered by the user. There is no session object, no multi-peer connection state, and no connected or disconnected callbacks."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only a one-file Offer exists, answered by the user. There is no session object, no multi-peer connection state, and no connected or disconnected callbacks."
     },
     {
       "feature": "Message-based data (send Data to peers)",
       "apple": "MCSession.send(_:toPeers:with:), MCSessionSendDataMode",
       "bifrost": "springboard/sdk/src/peer_mesh.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. send_bytes sends a one-shot named payload from the shell. Apps have no send API and no reliable or unreliable mode."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. send_bytes sends a one-shot named payload from the shell. Apps have no send API and no reliable or unreliable mode."
     },
     {
       "feature": "Streaming and resource (file) transfer",
@@ -60,8 +60,8 @@
       "feature": "Encryption preference (MCEncryptionPreference)",
       "apple": "MCEncryptionPreference, MCSession encryption",
       "bifrost": "springboard/sdk/src/encryption_preference.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-09, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The header carries an HMAC keyed by the secret, and the body is streamed in plaintext. No TLS or session encryption exists. The default secret is the constant \"nearby\". round 75, host only: body still plaintext."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (theme-09, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The header carries an HMAC keyed by the secret, and the body is streamed in plaintext. No TLS or session encryption exists. The default secret is the constant \"nearby\". round 75, host only: body still plaintext."
     },
     {
       "feature": "Background behaviour (stop and resume on background)",
@@ -81,8 +81,8 @@
       "feature": "Session limits (kMCSessionMaximumNumberOfPeers)",
       "apple": "kMCSessionMaximumNumberOfPeers, kMCSessionMinimumNumberOfPeers",
       "bifrost": "springboard/sdk/src/peer_mesh.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No session exists, so there is no peer limit."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No session exists, so there is no peer limit."
     }
   ],
   "gaps": [

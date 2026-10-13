@@ -32,43 +32,43 @@
       "feature": "Insertion menu for markup elements",
       "apple": "MarkupEditViewController (iOS, iPadOS, visionOS), MarkupToolbarViewController (macOS)",
       "bifrost": "springboard/ui/src/markup.rs (Insertion, springboard/sdk/src/markup.rs (MarkupCanvas::insert)",
-      "status": "partial",
-      "note": "Wave 4 (w4-paperkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Freeform toolbar offers drawing tools only. No menu inserts shapes, text, images or links into a canvas."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 4 (w4-paperkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Freeform toolbar offers drawing tools only. No menu inserts shapes, text, images or links into a canvas."
     },
     {
       "feature": "Shapes and text boxes",
       "apple": "ShapeMarkup, ShapeConfiguration",
       "bifrost": "springboard/ui/src/markup.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Marks are rasterised stamps. Nothing is stored as a shape or text object that can be selected or restyled."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Marks are rasterised stamps. Nothing is stored as a shape or text object that can be selected or restyled."
     },
     {
       "feature": "Images placed on the canvas",
       "apple": "ImageMarkup",
       "bifrost": "springboard/ui/src/markup.rs (ImageMarkup), springboard/sdk/src/markup.rs (MarkupCanvas::insert_element)",
-      "status": "partial",
-      "note": "Wave 4 (w4-paperkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The captured screenshot is the only image; no app can place its own image element."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 4 (w4-paperkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The captured screenshot is the only image; no app can place its own image element."
     },
     {
       "feature": "Links and loupe magnifier",
       "apple": "LinkMarkup, LoupeMarkup, MarkupInteractions",
       "bifrost": "springboard/ui/src/markup.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No tappable link element and no magnifier element in the markup canvas."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No tappable link element and no magnifier element in the markup canvas."
     },
     {
       "feature": "Markup data model and persistence",
       "apple": "PaperMarkup, MarkupOrderedSet, MarkupID",
       "bifrost": "springboard/ui/src/markup.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Strokes are discarded after save. No editable, reloadable data model and no element IDs."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Strokes are discarded after save. No editable, reloadable data model and no element IDs."
     },
     {
       "feature": "Feature set and rendering options",
       "apple": "FeatureSet, RenderingOptions, background views, HDR",
       "bifrost": "springboard/ui/src/markup.rs (FeatureSet), springboard/sdk/src/markup.rs (MarkupCanvas::new",
-      "status": "partial",
-      "note": "Wave 4 (w4-paperkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing switch for tools, colours or rendering."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 4 (w4-paperkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing switch for tools, colours or rendering."
     },
     {
       "feature": "Adornments over markup",
@@ -81,8 +81,8 @@
       "feature": "Auto-resizing of markup",
       "apple": "MarkupAutoresizing",
       "bifrost": "springboard/ui/src/markup.rs (Autoresizing, springboard/sdk/src/markup.rs (MarkupCanvas::set_size)",
-      "status": "partial",
-      "note": "Wave 4 (w4-paperkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Canvas size follows the window or capture. No resize policy for markup content."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 4 (w4-paperkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Canvas size follows the window or capture. No resize policy for markup content."
     },
     {
       "feature": "Markup errors",

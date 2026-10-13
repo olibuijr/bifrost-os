@@ -32,29 +32,29 @@
       "feature": "Compression session (encoding)",
       "apple": "VTCompressionSessionCreate, VTCompressionSessionEncodeFrame, output callback, PrepareToEncodeFrames, CompleteFrames",
       "bifrost": "springboard/sdk/src/video_compression.rs (CompressionSession)",
-      "status": "partial",
-      "note": "Midget check pending. Lossless intra-only (one PNG per frame, springboard::pngenc); H.264/HEVC encoders do not exist and fail with CouldNotFindVideoEncoder; no frame reordering."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Midget check pending. Lossless intra-only (one PNG per frame, springboard::pngenc); H.264/HEVC encoders do not exist and fail with CouldNotFindVideoEncoder; no frame reordering."
     },
     {
       "feature": "Encoder list and property query",
       "apple": "VTCopyVideoEncoderList, VTCopySupportedPropertyDictionaryForEncoder, Video Encoder List Keys",
       "bifrost": "springboard/ui/src/video_session.rs (Catalogue",
-      "status": "partial",
-      "note": "Wave 4 (theme-16, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. depends on the encode gap"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-16, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. depends on the encode gap"
     },
     {
       "feature": "Session properties",
       "apple": "VTSessionSetProperty, VTSessionCopyProperty, VTSessionCopySupportedPropertyDictionary",
       "bifrost": "springboard/ui/src/video_session.rs (PropertySet)",
-      "status": "partial",
-      "note": "Wave 4 (theme-16, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. libavcodec options are set internally in ffmpeg.rs with no property API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-16, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. libavcodec options are set internally in ffmpeg.rs with no property API"
     },
     {
       "feature": "Multi-pass encoding (frame silo, multipass storage)",
       "apple": "VTFrameSiloCreate, VTMultiPassStorageCreate, VTCompressionSessionBeginPass / EndPass",
       "bifrost": "springboard/sdk/src/video_compression.rs (FrameSilo, MultiPassStorage, begin_pass/end_pass)",
-      "status": "partial",
-      "note": "Midget check pending. Storage records encoded sizes only; two passes; no rate control uses them yet."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Midget check pending. Storage records encoded sizes only; two passes; no rate control uses them yet."
     },
     {
       "feature": "Pixel transfer (format conversion and scaling)",
@@ -88,8 +88,8 @@
       "feature": "Frame processing (super resolution, frame interpolation, optical flow, noise filter, motion blur)",
       "apple": "VTFrameProcessor, VTSuperResolutionScalerConfiguration, VTFrameRateConversionConfiguration, VTMotionBlurConfiguration, VTOpticalFlowConfiguration, VTTemporalNoiseFilterConfiguration",
       "bifrost": "springboard/sdk/src/video_compression.rs (FrameProcessorSession, FrameProcessor, SuperResolutionScaler)",
-      "status": "partial",
-      "note": "Midget check pending. Only nearest-neighbour super resolution; no frame interpolation, optical flow, noise filter or motion blur."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Midget check pending. Only nearest-neighbour super resolution; no frame interpolation, optical flow, noise filter or motion blur."
     },
     {
       "feature": "Motion estimation",
@@ -116,8 +116,8 @@
       "feature": "Error codes",
       "apple": "Error Code Constants (kVT...Err)",
       "bifrost": "springboard/src/media/hwdec/ffmpeg.rs (io::Error results)",
-      "status": "partial",
-      "note": "errors surface as io::Error, not VT status codes"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 4 tests. errors surface as io::Error, not VT status codes"
     }
   ],
   "gaps": [

@@ -11,8 +11,8 @@
       "feature": "Log store (read historical entries)",
       "apple": "OSLogStore, OSLogStore.Scope",
       "bifrost": "springboard/core/src/log.rs (LogStore::current_process, LogStore::local, LogStore::system, LogStore::entries); wired: springboard/apps/console-desktop/src/console.rs (Saved Searches sidebar section, open_saved, keep_search, drop_search); model.rs (SavedSearch, save_search, remove_search)",
-      "status": "partial",
-      "note": "current_process reads an in-memory ring of 2000 entries; local() needs kind = \"system-app\" and the log-store entitlement; no Apple scope enum type Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. current_process reads an in-memory ring of 2000 entries; local() needs kind = \"system-app\" and the log-store entitlement; no Apple scope enum type Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Log entries (OSLogEntryLog)",
@@ -32,22 +32,22 @@
       "feature": "Live streaming of entries",
       "apple": "OSLogStore.entries(...) polled or streamed in Console and Instruments",
       "bifrost": "springboard/core/src/log.rs (LogStore::stream, blocking, run on a thread); wired: springboard/apps/console-desktop/src/console.rs (drain applies the search to each arriving message)",
-      "status": "partial",
-      "note": "journald follow via journalctl for system scope; in-process stream polls the ring every 200 ms Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. journald follow via journalctl for system scope; in-process stream polls the ring every 200 ms Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Predicate queries",
       "apple": "NSPredicate over subsystem, category, process, level, composedMessage",
       "bifrost": "springboard/core/src/log.rs (Query, Query::parse_predicate, Query::matches); wired: springboard/core/src/log.rs (Query); springboard/apps/console-desktop/src/model.rs (Query::parse with level: and message: tokens)",
-      "status": "partial",
-      "note": "subset: ==, >=, CONTAINS joined by AND; subsystem, category, process, level, message, last, limit Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. subset: ==, >=, CONTAINS joined by AND; subsystem, category, process, level, message, last, limit Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Privacy of dynamic values",
       "apple": "Message interpolation with privacy: .public and .private, redacted in logs",
       "bifrost": "springboard/core/src/log.rs (private, redact); springboard/sdk/src/log.rs",
-      "status": "partial",
-      "note": "privacy is per subsystem (private = true in the registry), not per value; no per-argument masks"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. privacy is per subsystem (private = true in the registry), not per value; no per-argument masks"
     },
     {
       "feature": "Subsystem and category registry",
@@ -81,43 +81,43 @@
       "feature": "Activity entries (OSLogEntryActivity)",
       "apple": "OSLogEntryActivity, os_activity",
       "bifrost": "springboard/core/src/log_entries.rs (Activity",
-      "status": "partial",
-      "note": "Wave 2 (theme-38, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no activity events in the log model"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-38, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no activity events in the log model"
     },
     {
       "feature": "Signpost entries and OSSignposter",
       "apple": "OSLogEntrySignpost, OSSignposter, interval begin and end",
       "bifrost": "springboard/sdk/src/signpost.rs (logs to the unified log",
-      "status": "partial",
-      "note": "Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no signposter; the milestone lists it for phase 3 only; the bifrost-ui.md gaps section says so explicitly"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no signposter; the milestone lists it for phase 3 only; the bifrost-ui.md gaps section says so explicitly"
     },
     {
       "feature": "Boundary entries (OSLogEntryBoundary)",
       "apple": "OSLogEntryBoundary",
       "bifrost": "springboard/core/src/log_entries.rs (Boundary",
-      "status": "partial",
-      "note": "Wave 2 (theme-38, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no partition metadata between entry sequences"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-38, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no partition metadata between entry sequences"
     },
     {
       "feature": "Enumerator and persistent positions",
       "apple": "OSLogEnumerator, OSLogPosition, OSLogStore.getEntries(at:)",
       "bifrost": "springboard/core/src/log_cursor.rs (Position",
-      "status": "partial",
-      "note": "Wave 2 (theme-38, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no lazy enumerator and no position tokens; docs/bifrost-ui.md states this gap"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-38, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no lazy enumerator and no position tokens; docs/bifrost-ui.md states this gap"
     },
     {
       "feature": "Payload entries with format strings",
       "apple": "OSLogEntryWithPayload, OSLogMessageComponent",
       "bifrost": "springboard/core/src/log_entries.rs (Payload",
-      "status": "partial",
-      "note": "Wave 2 (theme-38, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no format specifiers or message components; the whole value is marked private or public"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-38, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no format specifiers or message components; the whole value is marked private or public"
     },
     {
       "feature": "Process metadata on entries",
       "apple": "OSLogEntryFromProcess (sender, process image, pid)",
       "bifrost": "springboard/core/src/log.rs (LogEntry.process, LogEntry.pid)",
-      "status": "partial",
-      "note": "process name and pid only; no sender image or library metadata"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. process name and pid only; no sender image or library metadata"
     }
   ],
   "gaps": [

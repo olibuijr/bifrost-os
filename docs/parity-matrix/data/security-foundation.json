@@ -11,8 +11,8 @@
       "feature": "SFAuthorization object and rights (obtain(withRights:flags:environment:authorizedRights:), obtain(withRight:flags:), authorizationRef())",
       "apple": "SFAuthorization, authorization(), init(flags:rights:environment:), obtain(withRights:...), obtain(withRight:flags:), authorizationRef()",
       "bifrost": "springboard/ui/src/access_control.rs (RightStore::obtain), springboard/sdk/src/authorization.rs (Authorization::obtain)",
-      "status": "partial",
-      "note": "Wave 5 (w5-security-foundation, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an app cannot ask the shell to authorize or preauthorize a named right for a privileged operation"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 24 tests. Wave 5 (w5-security-foundation, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an app cannot ask the shell to authorize or preauthorize a named right for a privileged operation"
     },
     {
       "feature": "Per-app permission enforcement (restrict features by manifest permission)",
@@ -25,15 +25,15 @@
       "feature": "Credential invalidation (invalidateCredentials())",
       "apple": "SFAuthorization.invalidateCredentials()",
       "bifrost": "springboard/ui/src/access_control.rs (RightStore::invalidate_credentials), springboard/sdk/src/authorization.rs (Authorization::invalidate_credentials)",
-      "status": "partial",
-      "note": "Wave 5 (w5-security-foundation, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no concept of cached authorization credentials to drop"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 24 tests. Wave 5 (w5-security-foundation, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no concept of cached authorization credentials to drop"
     },
     {
       "feature": "Authorization environment and flags (init(flags:rights:environment:), authorization(with:rights:environment:))",
       "apple": "SFAuthorization initializers and option flags",
       "bifrost": "springboard/ui/src/access_control.rs (ObtainFlags",
-      "status": "partial",
-      "note": "Wave 5 (w5-security-foundation, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no rights or environment parameters exist in any SDK call"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 24 tests. Wave 5 (w5-security-foundation, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no rights or environment parameters exist in any SDK call"
     },
     {
       "feature": "Secret storage gated by an app permission",

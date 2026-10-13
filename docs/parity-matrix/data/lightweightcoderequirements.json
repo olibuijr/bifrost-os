@@ -11,36 +11,36 @@
       "feature": "Checking code requirements for running processes",
       "apple": "SecTaskValidateForRequirement(task:requirement:), ProcessCodeRequirement, ProcessConstraint, anyOf, allOf",
       "bifrost": "springboard/core/src/codereq.rs; wired: springboard/core/src/codereq.rs (adapter springboard/apps/console-desktop/src/identity.rs)",
-      "status": "partial",
-      "note": "Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No check of a running process's signed identity. Peer identity is not checked either (no SO_PEERCRED use in the app host files). Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No check of a running process's signed identity. Peer identity is not checked either (no SO_PEERCRED use in the app host files). Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Checking code requirements for launching processes",
       "apple": "LaunchCodeRequirement, launchRequirement, SecCodeCheckValidityWithProcessRequirement(code:flags:requirement:)",
       "bifrost": "springboard/core/src/codereq.rs (not wired into springboard/src/bare/app_policy.rs)",
-      "status": "partial",
-      "note": "Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell launches only installed packages, using the app ID it assigned and the installed manifest, inside bubblewrap. Launch fails if identity or permission validation fails. The check uses manifest data, not a code signature, and apps get no SDK API for it."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell launches only installed packages, using the app ID it assigned and the installed manifest, inside bubblewrap. Launch fails if identity or permission validation fails. The check uses manifest data, not a code signature, and apps get no SDK API for it."
     },
     {
       "feature": "Checking code requirements for code files on disk",
       "apple": "OnDiskCodeRequirement, SecCodeCheckValidityWithOnDiskRequirement, SecStaticCodeCheckValidityWithOnDiskRequirement, ValidationResult",
       "bifrost": "springboard/core/src/codereq.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Downloaded updates are checked by SHA-256 against the manifest. The module header says there is no client-side manifest signature, so nothing ties the hash to a trusted signer."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Downloaded updates are checked by SHA-256 against the manifest. The module header says there is no client-side manifest signature, so nothing ties the hash to a trusted signer."
     },
     {
       "feature": "Signing identity constraints",
       "apple": "TeamIdentifier, TeamIdentifierMatchesCurrentProcess, SigningIdentifier, CodeDirectoryHash, InfoPlistHash",
       "bifrost": "springboard/core/src/codereq.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No team, signing or code-directory identity concept exists. App identity is the app ID assigned at install."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No team, signing or code-directory identity concept exists. App identity is the app ID assigned at install."
     },
     {
       "feature": "Signing flags and validation category",
       "apple": "ProcessCodeSigningFlags, OnDiskCodeSigningFlags, ValidationCategory",
       "bifrost": "springboard/core/src/codereq.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code-signing flags or validation categories are read or enforced."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code-signing flags or validation categories are read or enforced."
     },
     {
       "feature": "Entitlements queries",
@@ -60,8 +60,8 @@
       "feature": "Requirement-building operators and errors",
       "apple": "allOf(requirement:), anyOf(requirement:), ConstraintError, ProcessConstraintBuilder, LaunchConstraintBuilder, OnDiskConstraintBuilder",
       "bifrost": "springboard/core/src/codereq.rs (Constraint, Scope, ConstraintError)",
-      "status": "partial",
-      "note": "Wave 6 (b18, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. There is no requirement DSL or constraint builder. Apps have no way to express identity tests."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 6 (b18, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. There is no requirement DSL or constraint builder. Apps have no way to express identity tests."
     }
   ],
   "gaps": [

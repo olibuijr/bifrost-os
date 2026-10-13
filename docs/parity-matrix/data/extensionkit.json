@@ -18,29 +18,29 @@
       "feature": "Extension scenes (AppExtensionScene, PrimitiveAppExtensionScene, AppExtensionSceneBuilder)",
       "apple": "AppExtensionScene, PrimitiveAppExtensionScene, AppExtensionSceneBuilder",
       "bifrost": "springboard/ui/src/extensions.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No scene type an extension can publish for a host to render."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No scene type an extension can publish for a host to render."
     },
     {
       "feature": "Extension scene configuration",
       "apple": "AppExtensionSceneConfiguration",
       "bifrost": "springboard/ui/src/extensions.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No extension configuration object."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No extension configuration object."
     },
     {
       "feature": "Host view controller for remote extension views",
       "apple": "EXHostViewController",
       "bifrost": "springboard/ui/src/extensions.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. ControllerHost does not isolate or load another app's view."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. ControllerHost does not isolate or load another app's view."
     },
     {
       "feature": "Enable and disable extensions UI",
       "apple": "EXAppExtensionBrowserViewController; Displaying the app extensions available to your app (article)",
       "bifrost": "springboard/ui/src/extensions.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No user-facing list to approve, enable or disable extensions for an app."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No user-facing list to approve, enable or disable extensions for an app."
     },
     {
       "feature": "Share targets provided by other apps",
@@ -53,8 +53,8 @@
       "feature": "Actions declared by apps for other surfaces",
       "apple": "App Intents (separate from ExtensionKit; listed for context)",
       "bifrost": "springboard/sdk/src/intents.rs (App::intents, perform_intent over the control socket)",
-      "status": "partial",
-      "note": "Apps declare typed actions and entities, but the shell does not host any extension UI for them."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Apps declare typed actions and entities, but the shell does not host any extension UI for them."
     },
     {
       "feature": "Process isolation for third-party app code",

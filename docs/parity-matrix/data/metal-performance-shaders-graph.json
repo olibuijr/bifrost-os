@@ -11,36 +11,36 @@
       "feature": "Graph construction (MPSGraph, MPSGraphTensor, MPSGraphOperation)",
       "apple": "MPSGraph, MPSGraphTensor, MPSGraphOperation, MPSGraphObject",
       "bifrost": "springboard/ui/src/graph.rs, springboard/ui/src/nn.rs, springboard/ui/src/tensor.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no symbolic tensor graph type anywhere in springboard/sdk or springboard/ui"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 33 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no symbolic tensor graph type anywhere in springboard/sdk or springboard/ui"
     },
     {
       "feature": "Tensor types and data (MPSGraphType, MPSGraphShapedType, MPSGraphTensorData)",
       "apple": "MPSGraphType, MPSGraphShapedType, MPSGraphTensorData",
       "bifrost": "springboard/ui/src/graph.rs, springboard/ui/src/nn.rs, springboard/ui/src/tensor.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. image types exist (springboard/render/src/imgdec, the GPU texture id in springboard/src/gpu/mod.rs) but no shaped tensor type"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 33 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. image types exist (springboard/render/src/imgdec, the GPU texture id in springboard/src/gpu/mod.rs) but no shaped tensor type"
     },
     {
       "feature": "Compilation and executables (MPSGraphCompilationDescriptor, MPSGraphExecutable, serialization)",
       "apple": "MPSGraphCompilationDescriptor, MPSGraphExecutable, MPSGraphExecutableSerializationDescriptor, MPSGraphOptimization",
       "bifrost": "springboard/ui/src/graph.rs, springboard/ui/src/nn.rs, springboard/ui/src/tensor.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no graph compiler or serialized executable format"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 33 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no graph compiler or serialized executable format"
     },
     {
       "feature": "Convolution, pooling and RNN operators (Convolution2D/3D, Pooling, LSTM, GRU)",
       "apple": "MPSGraphConvolution2DOpDescriptor, MPSGraphConvolution3DOpDescriptor, MPSGraphPooling2DOpDescriptor, MPSGraphLSTMDescriptor, MPSGraphGRUDescriptor",
       "bifrost": "springboard/ui/src/graph.rs, springboard/ui/src/nn.rs, springboard/ui/src/tensor.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no neural-network operators; springboard/src/gpu/shaders.rs holds only rendering shaders"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 33 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no neural-network operators; springboard/src/gpu/shaders.rs holds only rendering shaders"
     },
     {
       "feature": "FFT and random operations (MPSGraphFFTDescriptor, MPSGraphRandomOpDescriptor)",
       "apple": "MPSGraphFFTDescriptor, MPSGraphRandomOpDescriptor, MPSGraphFFTScalingMode, MPSGraphRandomDistribution",
       "bifrost": "springboard/ui/src/graph.rs, springboard/ui/src/nn.rs, springboard/ui/src/tensor.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no FFT or GPU random number API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 33 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no FFT or GPU random number API"
     },
     {
       "feature": "Execution and scheduling (MPSGraphExecutionDescriptor, completion and scheduled handlers, shared-event stages)",
@@ -67,8 +67,8 @@
       "feature": "Fast math and reduced precision (MPSGraphReducedPrecisionFastMath)",
       "apple": "MPSGraphReducedPrecisionFastMath",
       "bifrost": "springboard/ui/src/graph.rs (Options",
-      "status": "partial",
-      "note": "Wave 2 (theme-26, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no reduced precision compute path"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (theme-26, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no reduced precision compute path"
     }
   ],
   "gaps": [

@@ -32,8 +32,8 @@
       "feature": "Effect properties",
       "apple": "GLKEffectProperty, Fog, Light, Texture, Material, Transform",
       "bifrost": "springboard/ui/src/linalg.rs, springboard/ui/src/mesh.rs, springboard/ui/src/shading.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no effect configuration objects"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 34 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no effect configuration objects"
     },
     {
       "feature": "Blur and glass materials",
@@ -53,15 +53,15 @@
       "feature": "Mesh data",
       "apple": "GLKMesh, GLKMeshBuffer, GLKMeshBufferAllocator, GLKSubmesh (deprecated on macOS 10.14)",
       "bifrost": "springboard/ui/src/linalg.rs, springboard/ui/src/mesh.rs, springboard/ui/src/shading.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no 3D mesh or buffer types in the SDK"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 34 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no 3D mesh or buffer types in the SDK"
     },
     {
       "feature": "Math: matrices, vectors, quaternions",
       "apple": "GLKMatrix3, GLKMatrix4, GLKVector2/3/4, GLKQuaternion, GLKMatrixStack",
       "bifrost": "springboard/ui/src/linalg.rs, springboard/ui/src/mesh.rs, springboard/ui/src/shading.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. only a 2D affine type inside the browser engine; no 3D vector, matrix or quaternion API for apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 34 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. only a 2D affine type inside the browser engine; no 3D vector, matrix or quaternion API for apps"
     },
     {
       "feature": "Rendering on macOS requirements",

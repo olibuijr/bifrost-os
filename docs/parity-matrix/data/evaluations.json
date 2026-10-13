@@ -11,43 +11,43 @@
       "feature": "Evaluation definition and run",
       "apple": "Evaluation (protocol)",
       "bifrost": "springboard/ui/src/evaluation.rs; wired: springboard/ui/src/evaluation.rs (used by springboard/apps/assistant-desktop/src/safety.rs run_evaluation, view.rs Diagnostics)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Assistant runs the model but has no way to define a suite and run it against samples. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Assistant runs the model but has no way to define a suite and run it against samples. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Datasets and sample generation",
       "apple": "ModelSample, Loader, SampleGenerator",
       "bifrost": "springboard/ui/src/evaluation.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No dataset type, loader or synthetic sample generator exists in the repo."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No dataset type, loader or synthetic sample generator exists in the repo."
     },
     {
       "feature": "Metrics, evaluators and aggregation",
       "apple": "Metric, Evaluator, MetricsAggregator",
       "bifrost": "springboard/ui/src/evaluation.rs; wired: springboard/ui/src/evaluation.rs (used by springboard/apps/assistant-desktop/src/safety.rs report_lines)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No pass/fail or scored metric type; the calculator's springboard/apps/calculator-desktop/src/eval.rs is an expression parser, not an evaluation harness. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No pass/fail or scored metric type; the calculator's springboard/apps/calculator-desktop/src/eval.rs is an expression parser, not an evaluation harness. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Result tables and columns",
       "apple": "EvaluationResult, ResultColumn, inputColumn, responseColumn, expectedColumn",
       "bifrost": "springboard/ui/src/evaluation.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No typed result table for model responses."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No typed result table for model responses."
     },
     {
       "feature": "Model-judge evaluators",
       "apple": "ModelJudgeEvaluator, ModelJudgePrompt, ScoreDimension",
       "bifrost": "springboard/ui/src/evaluation.rs; wired: springboard/ui/src/evaluation.rs (used by springboard/apps/assistant-desktop/src/safety.rs judge_call, JUDGE_TEMPLATE)",
-      "status": "partial",
-      "note": "Wave 6 (b01, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No LLM-as-judge scoring anywhere in docs/ or tools/. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Wave 6 (b01, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No LLM-as-judge scoring anywhere in docs/ or tools/. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Tool-call trajectory evaluation",
       "apple": "ToolCallEvaluator, TrajectoryExpectation, ArgumentMatcher",
       "bifrost": "springboard/ui/src/evaluation.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The bench script has an evaluation dict for VM boot checks (service active, home reached), not tool-call trajectories."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The bench script has an evaluation dict for VM boot checks (service active, home reached), not tool-call trajectories."
     },
     {
       "feature": "Swift Testing integration (evaluation traits)",

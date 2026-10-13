@@ -18,15 +18,15 @@
       "feature": "Block buffers",
       "apple": "CMBlockBuffer, CMBlockBufferCreateWithMemoryBlock, CMBlockBufferCreateContiguous (https://developer.apple.com/documentation/coremedia/cmblockbuffer-api)",
       "bifrost": "springboard/ui/src/media_block.rs (BlockBuffer)",
-      "status": "partial",
-      "note": "Wave 4 (theme-06, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No general block-buffer type. The DMA buffer trait covers only GPU-shared picture memory, not CPU-side sample storage."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-06, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No general block-buffer type. The DMA buffer trait covers only GPU-shared picture memory, not CPU-side sample storage."
     },
     {
       "feature": "Format descriptions",
       "apple": "CMFormatDescription, CMVideoFormatDescription, CMAudioFormatDescription (https://developer.apple.com/documentation/coremedia/cmformatdescription)",
       "bifrost": "springboard/src/media/mp4.rs:17 (Codec); springboard/src/media/mod.rs:101 (Codec); springboard/src/media/mod.rs:226 (VideoDecoder::configure takes codec and raw avcC/hvcC extradata)",
-      "status": "partial",
-      "note": "Codec identity and parameter-set bytes are passed around as enum plus raw bytes. No format description object with dimensions, pixel aspect ratio, clean aperture or audio stream description."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Codec identity and parameter-set bytes are passed around as enum plus raw bytes. No format description object with dimensions, pixel aspect ratio, clean aperture or audio stream description."
     },
     {
       "feature": "Time representation",
@@ -39,22 +39,22 @@
       "feature": "Reference clocks and timebases",
       "apple": "CMClock, CMAudioClock, CMTimebase (rate, anchor time, timers, time-jump notifications) (https://developer.apple.com/documentation/coremedia/cmclock)",
       "bifrost": "springboard/ui/src/media_timebase.rs (Timebase",
-      "status": "partial",
-      "note": "Wave 5 (w5-core-media, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio thread owns the playback clock and the audio service publishes position. No timebase with rate and effective rate, no timers on a timeline, no host-time conversion, no genlock or device-drift queries."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-core-media, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio thread owns the playback clock and the audio service publishes position. No timebase with rate and effective rate, no timers on a timeline, no host-time conversion, no genlock or device-drift queries."
     },
     {
       "feature": "Buffer queues",
       "apple": "CMBufferQueue (enqueue, dequeue, triggers, timestamp bounds), CMSimpleQueue (https://developer.apple.com/documentation/coremedia/cmbufferqueue)",
       "bifrost": "springboard/src/media/queue.rs; springboard/src/media/demux/mse.rs:59 (Queue, sorted by dts with a cursor)",
-      "status": "partial",
-      "note": "Internal queues for the pipeline and for an MSE-style source buffer. No triggers, no data-ready gating, no validation handler, and not exposed as an SDK type."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 39 tests. Internal queues for the pipeline and for an MSE-style source buffer. No triggers, no data-ready gating, no validation handler, and not exposed as an SDK type."
     },
     {
       "feature": "Memory pool",
       "apple": "CMMemoryPool (https://developer.apple.com/documentation/coremedia/cmmemorypool)",
       "bifrost": "springboard/ui/src/media_block.rs (MemoryPool)",
-      "status": "partial",
-      "note": "Wave 4 (theme-06, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No pooled allocator for large media blocks. Frames are allocated per picture."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-06, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No pooled allocator for large media blocks. Frames are allocated per picture."
     },
     {
       "feature": "Video decoding and picture hand-off (image buffers)",
@@ -95,8 +95,8 @@
       "feature": "Text markup for legible media",
       "apple": "CMTextMarkup attribute keys (font, style, colour, layout) (https://developer.apple.com/documentation/coremedia/cmtextmarkup)",
       "bifrost": "springboard/ui/src/text_markup.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-core-media, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No caption or subtitle styling model was found. springboard/src/media/demux/webm.rs was not inspected for subtitle track handling."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-core-media, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No caption or subtitle styling model was found. springboard/src/media/demux/webm.rs was not inspected for subtitle track handling."
     },
     {
       "feature": "Stereo, projection and camera intrinsics",
@@ -109,8 +109,8 @@
       "feature": "Sample attachments and notifications",
       "apple": "CMAttachment, CMSampleBufferGetSampleAttachmentsArray, Sample Buffer Notifications (https://developer.apple.com/documentation/coremedia/cmattachment)",
       "bifrost": "springboard/ui/src/sample_attach.rs (SampleAttachments",
-      "status": "partial",
-      "note": "Wave 4 (theme-06, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No per-sample attachments such as not-sync or dropped-frame reasons. Pipeline errors go through Result values, not notifications."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-06, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No per-sample attachments such as not-sync or dropped-frame reasons. Pipeline errors go through Result values, not notifications."
     }
   ],
   "gaps": [

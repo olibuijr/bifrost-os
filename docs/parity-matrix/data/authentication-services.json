@@ -11,8 +11,8 @@
       "feature": "Authorization requests (controller, results)",
       "apple": "ASAuthorizationController, ASAuthorizationResult, AuthorizationController (SwiftUI)",
       "bifrost": "springboard/ui/src/authorization_request.rs; springboard/sdk/src/sign_in.rs over springboard/ui/src/authorization_request.rs",
-      "status": "partial",
-      "note": "Wave 6 (b20, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no request/controller abstraction for sign-in providers; the desktop login screen is shell-internal round 75, host only: SDK path; no sign-in sheet."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 6 (b20, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no request/controller abstraction for sign-in providers; the desktop login screen is shell-internal round 75, host only: SDK path; no sign-in sheet."
     },
     {
       "feature": "Sign in with Apple",
@@ -39,8 +39,8 @@
       "feature": "Web authentication sessions",
       "apple": "ASWebAuthenticationSession, WebAuthenticationSession (SwiftUI), ASWebAuthenticationSessionWebBrowserSessionManager, ASWebAuthenticationSessionWebBrowserSupportCapabilities",
       "bifrost": "springboard/core/src/auth_session.rs (WebSession; springboard/sdk/src/sign_in.rs over springboard/core/src/auth_session.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-05, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no API that opens an auth page in a separate sandboxed session and returns the callback URL to the app; the WebView SDK has no callback-scheme handoff. The deildu app signs in by posting its own form (springboard/src/deildu/auth.rs), which is not reusable round 75, host only: SDK path; no browser sheet."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (theme-05, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no API that opens an auth page in a separate sandboxed session and returns the callback URL to the app; the WebView SDK has no callback-scheme handoff. The deildu app signs in by posting its own form (springboard/src/deildu/auth.rs), which is not reusable round 75, host only: SDK path; no browser sheet."
     },
     {
       "feature": "Single sign-on in a web browser app",
@@ -53,15 +53,15 @@
       "feature": "AutoFill credential provider",
       "apple": "ASCredentialProviderViewController, AutoFill Credential Provider entitlement, ASCredentialDataManager, ASCredentialUpdater",
       "bifrost": "springboard/ui/src/credential_identity.rs; springboard/sdk/src/sign_in.rs over springboard/ui/src/credential_identity.rs",
-      "status": "partial",
-      "note": "Wave 6 (b20, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no system-wide AutoFill; the browser has no password fill round 75, host only: SDK path; no system AutoFill."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 6 (b20, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no system-wide AutoFill; the browser has no password fill round 75, host only: SDK path; no system AutoFill."
     },
     {
       "feature": "One-time passcodes",
       "apple": "ASDeliveredVerificationCodesManager, ASOneTimeCodeCredentialIdentity, ASVerificationCode",
       "bifrost": "springboard/ui/src/one_time_code.rs; springboard/sdk/src/sign_in.rs over springboard/ui/src/one_time_code.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-28, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SMS or message code capture and no code suggestion round 75, host only: SDK path; no message reader."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (theme-28, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SMS or message code capture and no code suggestion round 75, host only: SDK path; no message reader."
     },
     {
       "feature": "Credential import and export",

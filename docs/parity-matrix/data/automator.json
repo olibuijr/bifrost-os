@@ -11,15 +11,15 @@
       "feature": "Action bundles (loadable actions)",
       "apple": "AMAction, AMBundleAction, AMBundleAction.parameters, AMAction.run(withInput:)",
       "bifrost": "springboard/sdk/src/intents.rs (Intent, Param, IntentResult); springboard/sdk/src/lib.rs:221 (App::intents, App::perform_intent)",
-      "status": "partial",
-      "note": "Apps declare typed intents in code and manifest.toml [[intent]] tables and serve them over the control socket. There is no bundle format, no install location scan (Automator loads /System/Library/Automator, /Library/Automator, ~/Library/Automator) and no view for action parameters."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Apps declare typed intents in code and manifest.toml [[intent]] tables and serve them over the control socket. There is no bundle format, no install location scan (Automator loads /System/Library/Automator, /Library/Automator, ~/Library/Automator) and no view for action parameters."
     },
     {
       "feature": "Shell script actions",
       "apple": "AMShellScriptAction (inputFieldSeparator, outputFieldSeparator, remapLineEndings)",
       "bifrost": "springboard/core/src/script_io.rs, springboard/ui/src/workflow.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK API runs a shell script as a workflow step. The control socket (springboard/sdk/src/control.rs) is for calling apps, not for scripted steps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK API runs a shell script as a workflow step. The control socket (springboard/sdk/src/control.rs) is for calling apps, not for scripted steps."
     },
     {
       "feature": "Workflow model (ordered actions and input/output)",
@@ -32,8 +32,8 @@
       "feature": "Running a workflow",
       "apple": "AMWorkflow.run(at:withInput:), AMWorkspace.runWorkflow(atPath:withInput:), AMWorkflowController.run/pause/step/stop/reset",
       "bifrost": "springboard/core/src/script_io.rs, springboard/ui/src/workflow.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. run_all only queues actions into a list and shows a toast. main.rs logs them as unavailable. Nothing executes Wi-Fi, Do Not Disturb, brightness, screenshot, timer or open-app actions, and there is no pause, step or stop."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. run_all only queues actions into a list and shows a toast. main.rs logs them as unavailable. Nothing executes Wi-Fi, Do Not Disturb, brightness, screenshot, timer or open-app actions, and there is no pause, step or stop."
     },
     {
       "feature": "Workflow editor view",
@@ -53,8 +53,8 @@
       "feature": "Workflow errors",
       "apple": "AMError, AMAutomatorErrorDomain, AMActionErrorKey, AMAction.finishRunningWithError(_:)",
       "bifrost": "springboard/sdk/src/intents.rs (RpcError and failed())",
-      "status": "partial",
-      "note": "Intent calls return JSON-RPC errors. There is no workflow-level error domain and no way to stop a multi-step run on a failed step, because multi-step runs do not exist."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Intent calls return JSON-RPC errors. There is no workflow-level error domain and no way to stop a multi-step run on a failed step, because multi-step runs do not exist."
     },
     {
       "feature": "AppleScript actions (deprecated)",

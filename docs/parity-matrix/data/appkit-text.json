@@ -39,36 +39,36 @@
       "feature": "Text Display: data detectors",
       "apple": "NSDataDetector via text checking types",
       "bifrost": "springboard/ui/src/detect.rs; wired: springboard/apps/calendar-desktop/src/calendar/notes.rs (uses springboard/ui/src/detect.rs Kind::Address; editor row FillAddress in src/calendar.rs); wired: springboard/apps/calendar-desktop/src/calendar/notes.rs (address, phone) over springboard/ui/src/detect.rs",
-      "status": "partial",
-      "note": "link, date and phone detection only as documented in bifrost-ui.md Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. link, date and phone detection only as documented in bifrost-ui.md Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Text Display: line breaking and truncation",
       "apple": "NSLineBreakMode, NSParagraphStyle",
       "bifrost": "springboard/ui/src/typeset.rs",
-      "status": "partial",
-      "note": "head, middle, tail truncation and wrapping; no tab stops, indents or hyphenation"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 21 tests. head, middle, tail truncation and wrapping; no tab stops, indents or hyphenation"
     },
     {
       "feature": "TextKit: storage, layout manager, containers",
       "apple": "NSTextStorage, NSLayoutManager, NSTextContainer, NSTextLayoutManager",
       "bifrost": "springboard/ui/src/textlayout.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-03, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no glyph-level layout API for apps; layout is per widget"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 3 tests. Wave 5 (theme-03, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no glyph-level layout API for apps; layout is per widget"
     },
     {
       "feature": "TextKit: custom layout, text attachments, text lists, find bar",
       "apple": "NSTextAttachment, NSTextList, NSTextFinder",
       "bifrost": "springboard/ui/src/textfind.rs, springboard/ui/src/textlist.rs; wired: springboard/apps/notes-desktop/src/notes/mod.rs (start_replacing, replace_one, replace_all, draw_replacing); springboard/apps/notes-desktop/src/notes/parity.rs (find_ranges, replace_ranges)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Fonts: font panel",
       "apple": "NSFontManager, NSFontPanel",
       "bifrost": "springboard/ui/src/panels.rs (FontPanel)",
-      "status": "partial",
-      "note": "family, style and size only; no collections, effects or typography panes"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. family, style and size only; no collections, effects or typography panes"
     },
     {
       "feature": "Fonts: font rendering engine",
@@ -88,8 +88,8 @@
       "feature": "Writing Tools",
       "apple": "NSWritingToolsCoordinator, writingToolsBehavior",
       "bifrost": "springboard/ui/src/writing_assist.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-14, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Assistant app exists but gives text views no rewrite or proofread hook"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-14, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Assistant app exists but gives text views no rewrite or proofread hook"
     }
   ],
   "gaps": [

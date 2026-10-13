@@ -11,64 +11,64 @@
       "feature": "Numbers, Data, and Basic Values",
       "apple": "NSNumber, Data, Decimal, UUID, NSValue, CGRect-like geometry (https://developer.apple.com/documentation/foundation/numbers-data-and-basic-values)",
       "bifrost": "springboard/ui/src/geometry.rs (Rect, EdgeInsets); springboard/sdk/src/value_types.rs (Uuid: uuidString, FromStr, Ord/Hash, Codable); springboard/sdk/src/decimal.rs (Decimal, RoundingMode); Rust std types for numbers and bytes",
-      "status": "partial",
-      "note": "geometry, UUID and Decimal (exact arithmetic, NSDecimalRound modes, locale parsing, Codable) exist; no NSNumber or NSValue wrappers and no NSDecimalNumber object; needs a Midget check for parity"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. geometry, UUID and Decimal (exact arithmetic, NSDecimalRound modes, locale parsing, Codable) exist; no NSNumber or NSValue wrappers and no NSDecimalNumber object; needs a Midget check for parity"
     },
     {
       "feature": "Strings and Text",
       "apple": "NSString, NSRegularExpression, NSLinguisticTagger, NaturalLanguage-style analysis",
       "bifrost": "springboard/ui/src/text.rs (editing ranges), springboard/sdk/src/attributed.rs, springboard/ui/src/detect.rs (data detectors), springboard/sdk/src/spellcheck.rs (word ranges), springboard/ui/src/fuzzy.rs",
-      "status": "partial",
-      "note": "range editing, rich text, detectors and spellcheck exist; no regular expression API and no linguistic tagging for apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 67 tests. range editing, rich text, detectors and spellcheck exist; no regular expression API and no linguistic tagging for apps"
     },
     {
       "feature": "Collections",
       "apple": "NSArray, NSDictionary, NSSet, NSOrderedSet, IndexSet, NSCountedSet",
       "bifrost": "springboard/ui/src/diff.rs (ordered collection diff); Rust std Vec, HashMap, HashSet",
-      "status": "partial",
-      "note": "std collections cover the basics; no IndexSet, counted or ordered set types, and no key-value coding"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. std collections cover the basics; no IndexSet, counted or ordered set types, and no key-value coding"
     },
     {
       "feature": "Dates and Times",
       "apple": "Date, Calendar, DateComponents, TimeZone, DateInterval",
       "bifrost": "springboard/ui/src/calendar.rs (Gregorian Date, days_in_month, is_leap, weekday math); springboard/sdk/src/locale.rs (explicit tz_offset in DateFormatter)",
-      "status": "partial",
-      "note": "Gregorian only, no DateInterval; time zones are the 'Time zones' row; docs/bifrost-ui.md 'Locale and localization' lists these gaps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Gregorian only, no DateInterval; time zones are the 'Time zones' row; docs/bifrost-ui.md 'Locale and localization' lists these gaps"
     },
     {
       "feature": "Time zones",
       "apple": "TimeZone: init(identifier:), current, autoupdatingCurrent, secondsFromGMT(for:), abbreviation(for:), isDaylightSavingTime(for:), nextDaylightSavingTimeTransition(after:), knownTimeZoneIdentifiers, localizedName(for:locale:), systemTimeZoneDidChange notification",
       "bifrost": "springboard/sdk/src/time_zone.rs (TimeZone, NameStyle, SYSTEM_TIME_ZONE_DID_CHANGE); reads springboard/src/bare/timezone.rs (TZif files and POSIX rules from the system tz database)",
-      "status": "partial",
-      "note": "Gregorian instants only; localizedName gives English names for abbreviations in a built-in table and other locales get English too; nothing publishes the zone-change notification yet; World Clock still uses shell clock::tz city rules and the apps have not moved to TimeZone; not yet checked on Midget"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Gregorian instants only; localizedName gives English names for abbreviations in a built-in table and other locales get English too; nothing publishes the zone-change notification yet; World Clock still uses shell clock::tz city rules and the apps have not moved to TimeZone; not yet checked on Midget"
     },
     {
       "feature": "Units and Measurement",
       "apple": "Measurement, Unit, UnitLength, UnitMass, UnitTemperature, conversions",
       "bifrost": "springboard/sdk/src/locale.rs (Measurement, Unit, converted); wired: springboard/apps/calculator-desktop/src/convert.rs (Convert mode, Measurement via bifrost_app::locale); unchanged in this wave",
-      "status": "partial",
-      "note": "length, mass and temperature only; no other dimensions, no user-defined units Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. length, mass and temperature only; no other dimensions, no user-defined units Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Data Formatting",
       "apple": "NumberFormatter, DateFormatter, RelativeDateTimeFormatter, ByteCountFormatter, MeasurementFormatter, ListFormatter",
       "bifrost": "springboard/sdk/src/locale.rs (NumberFormatter, DateFormatter, relative_date_time, byte_count, measurement, list); springboard/ui/src/format.rs (English-only shell formatters); wired: springboard/apps/calculator-desktop/src/tape.rs (paper tape, results via the locale-aware format::localize) and src/calc.rs copy_tape / Copy Tape button; wired: springboard/apps/calculator-desktop/src/tape.rs (render, statistics_lines use format::localize and format::display)",
-      "status": "partial",
-      "note": "en and is only; no stringsdict plurals, no duration, person-name, interval or ISO8601 formatters; shell code still uses English-only format.rs Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. en and is only; no stringsdict plurals, no duration, person-name, interval or ISO8601 formatters; shell code still uses English-only format.rs Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Filters and Sorting",
       "apple": "NSPredicate, NSExpression, NSSortDescriptor, Predicate macro",
       "bifrost": "springboard/ui/src/table.rs (SortDescriptor, sort_rows)",
-      "status": "partial",
-      "note": "sort descriptors for tables exist; no predicate or expression engine"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. sort descriptors for tables exist; no predicate or expression engine"
     },
     {
       "feature": "Locale and localization (supporting the fundamentals)",
       "apple": "Locale, Bundle localized strings",
       "bifrost": "springboard/sdk/src/locale.rs (Locale, Bundle, localized)",
-      "status": "partial",
-      "note": "reads .strings tables; en and is built in"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. reads .strings tables; en and is built in"
     },
     {
       "feature": "Codable, archives of basic values",
@@ -81,15 +81,15 @@
       "feature": "ProgressManager, ProgressReporter, Subprogress",
       "apple": "Progress reporting types listed on the landing page",
       "bifrost": "springboard/core/src/progress.rs, springboard/ui/src/indexset.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no general progress tree type"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no general progress tree type"
     },
     {
       "feature": "NSPredicateValidating",
       "apple": "protocol listed on the landing page",
       "bifrost": "springboard/sdk/src/predicate_validating.rs (PredicateValidating, ValidationPolicy, PredicateVisitor)",
-      "status": "partial",
-      "note": "Validation of a predicate tree against allowed keys and operators; no predicate parser or evaluator yet. Host unit tests only, not yet checked on Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Validation of a predicate tree against allowed keys and operators; no predicate parser or evaluator yet. Host unit tests only, not yet checked on Midget."
     }
   ],
   "gaps": [

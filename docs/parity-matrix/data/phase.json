@@ -32,29 +32,29 @@
       "feature": "Spatial sources and listener",
       "apple": "PHASESource, PHASEListener, PHASEObject",
       "bifrost": "springboard/ui/src/sound_space.rs (Listener",
-      "status": "partial",
-      "note": "Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no 3D position or orientation for sound; route.rs only switches outputs"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no 3D position or orientation for sound; route.rs only switches outputs"
     },
     {
       "feature": "Occluders, shapes and materials",
       "apple": "PHASEOccluder, PHASEShape, PHASEShape.Element, PHASEMaterial, PHASEMaterialPreset",
       "bifrost": "springboard/ui/src/sound_space.rs (Occluder",
-      "status": "partial",
-      "note": "Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no geometry-based acoustics"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no geometry-based acoustics"
     },
     {
       "feature": "Spatial mixing and reverb",
       "apple": "PHASESpatialMixerDefinition, PHASESpatialPipeline, PHASEReverbPreset, PHASEMedium",
       "bifrost": "springboard/ui/src/sound_room.rs (Medium",
-      "status": "partial",
-      "note": "Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no environmental effects API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no environmental effects API"
     },
     {
       "feature": "Distance models and directivity",
       "apple": "PHASEGeometricSpreadingDistanceModelParameters, PHASEEnvelopeDistanceModelParameters, PHASECardioidDirectivityModelParameters, PHASEConeDirectivityModelParameters",
       "bifrost": "springboard/ui/src/sound_distance.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-phase, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. volume is set per route and per player only (springboard/src/media/volume.rs)"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (w3-phase, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. volume is set per route and per player only (springboard/src/media/volume.rs)"
     },
     {
       "feature": "Mixers and layering",
@@ -67,22 +67,22 @@
       "feature": "Sound event nodes (switch, random, blend, container)",
       "apple": "PHASESoundEventNodeDefinition, PHASESwitchNodeDefinition, PHASERandomNodeDefinition, PHASEBlendNodeDefinition, PHASEContainerNodeDefinition, PHASESoundEvent",
       "bifrost": "springboard/ui/src/sound_event.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. playback is a flat track queue (springboard/src/media/queue.rs); no event tree"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. playback is a flat track queue (springboard/src/media/queue.rs); no event tree"
     },
     {
       "feature": "Runtime parameters and envelopes",
       "apple": "PHASEMetaParameter, PHASENumberMetaParameter, PHASEStringMetaParameter, PHASEMappedMetaParameterDefinition, PHASEEnvelope, PHASEEnvelopeSegment, PHASECurveType",
       "bifrost": "springboard/ui/src/sound_envelope.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-phase, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no API to change in-flight audio parameters over time"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (w3-phase, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no API to change in-flight audio parameters over time"
     },
     {
       "feature": "Groups and ducking",
       "apple": "PHASEGroup, PHASEGroupPreset, PHASEDucker",
       "bifrost": "springboard/ui/src/sound_group.rs (Group",
-      "status": "partial",
-      "note": "Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the sound server mixes streams; apps cannot share parameters or duck competing sounds"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-25, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the sound server mixes streams; apps cannot share parameters or duck competing sounds"
     },
     {
       "feature": "Loudness normalization and calibration",

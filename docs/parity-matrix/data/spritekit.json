@@ -53,36 +53,36 @@
       "feature": "Node constraints",
       "apple": "SKConstraint, SKReachConstraints",
       "bifrost": "springboard/ui/src/node_constraint.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the solver constrains layout variables, not a node's position or rotation; no inverse kinematics"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the solver constrains layout variables, not a node's position or rotation; no inverse kinematics"
     },
     {
       "feature": "Physics simulation",
       "apple": "SKPhysicsWorld, SKPhysicsBody, SKPhysicsContact, SKPhysicsContactDelegate, SKFieldNode",
       "bifrost": "springboard/ui/src/physics.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-spritekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the only physics is list fling deceleration and rubber-banding; no rigid bodies, gravity, collisions or contact callbacks"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Wave 3 (w3-spritekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the only physics is list fling deceleration and rubber-banding; no rigid bodies, gravity, collisions or contact callbacks"
     },
     {
       "feature": "Physics joints",
       "apple": "SKPhysicsJoint, SKPhysicsJointPin, SKPhysicsJointSpring, SKPhysicsJointSliding, SKPhysicsJointLimit, SKPhysicsJointFixed",
       "bifrost": "springboard/ui/src/physics.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no joint solver"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no joint solver"
     },
     {
       "feature": "Particle emitters",
       "apple": "SKEmitterNode, SKParticleRenderOrder",
       "bifrost": "springboard/ui/src/emitter.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-spritekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no particle system in the SDK or the renderer"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-spritekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no particle system in the SDK or the renderer"
     },
     {
       "feature": "Tile maps",
       "apple": "SKTileMapNode, SKTileSet, SKTileGroup, SKTileDefinition, SKTileGroupRule",
       "bifrost": "springboard/ui/src/tilemap.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-spritekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no tile map or auto-tiling rules"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-spritekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no tile map or auto-tiling rules"
     },
     {
       "feature": "Custom shaders and uniforms",
@@ -102,8 +102,8 @@
       "feature": "Warp geometry",
       "apple": "SKWarpGeometry, SKWarpGeometryGrid, SKWarpable",
       "bifrost": "springboard/ui/src/warp.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mesh deformation API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-spritekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mesh deformation API"
     },
     {
       "feature": "Environmental nodes (audio, light)",

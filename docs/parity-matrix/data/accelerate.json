@@ -11,15 +11,15 @@
       "feature": "vDSP vector arithmetic and stride operations",
       "apple": "vDSP (vector-vector and vector-scalar operations, strided access, interpolation, decimation)",
       "bifrost": "springboard/ui/src/vector_ops.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-36, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No public vector arithmetic API. The only resampler is private to the AAC decoder."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-36, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No public vector arithmetic API. The only resampler is private to the AAC decoder."
     },
     {
       "feature": "FFT, DFT and DCT",
       "apple": "vDSP Fourier transforms, Discrete Cosine transforms, fast Fourier transforms",
       "bifrost": "springboard/ui/src/fourier.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The FFT is app-local to the DAW convolver. No SDK transform API and no DCT."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The FFT is app-local to the DAW convolver. No SDK transform API and no DCT."
     },
     {
       "feature": "Convolution and morphology",
@@ -67,15 +67,15 @@
       "feature": "Linear algebra (BLAS, LAPACK, sparse solvers)",
       "apple": "BLAS, LAPACK, Sparse Solvers, Solving systems of linear equations",
       "bifrost": "springboard/ui/src/lu.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-36, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No matrix solver or BLAS-style routines. The constraint solver serves layout only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (theme-36, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No matrix solver or BLAS-style routines. The constraint solver serves layout only."
     },
     {
       "feature": "Vectors, matrices, quaternions and simd",
       "apple": "Working with Vectors, Matrices and Quaternions; simd; vForce",
       "bifrost": "springboard/ui/src/linalg.rs, springboard/ui/src/vector_ops.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-36, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No public small-vector or quaternion types. vForce-style vector transcendental functions are missing."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Wave 2 (theme-36, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No public small-vector or quaternion types. vForce-style vector transcendental functions are missing."
     },
     {
       "feature": "Neural networks",
@@ -102,8 +102,8 @@
       "feature": "Numerical quadrature",
       "apple": "Quadrature (definite integration over finite or infinite intervals)",
       "bifrost": "springboard/ui/src/quadrature.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-36, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No numerical integration routines."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-36, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No numerical integration routines."
     }
   ],
   "gaps": [

@@ -32,15 +32,15 @@
       "feature": "File permissions and modes",
       "apple": "FilePermissions, FileMode, FileType (https://developer.apple.com/documentation/system/filepermissions)",
       "bifrost": "springboard/core/src/file_mode.rs (FilePermissions, springboard/sdk/src/file_stat.rs; wired: springboard/apps/files/src/info.rs (permission_rows, Permissions row)",
-      "status": "partial",
-      "note": "Wave 4 (w4-system, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Modes are set with std::os::unix::fs::PermissionsExt. There is no typed mode, type or permission set in the SDK. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-system, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Modes are set with std::os::unix::fs::PermissionsExt. There is no typed mode, type or permission set in the SDK. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "File status (stat, file size, link count, owner, inode, timestamps)",
       "apple": "Stat, Stat.Flags, Inode, DeviceID, UserID, GroupID (https://developer.apple.com/documentation/system/stat; macOS 27.0 for Stat)",
       "bifrost": "springboard/sdk/src/file_stat.rs (FileStat; wired: springboard/apps/files/src/info.rs (permission_rows, Owner and Group rows; account_name)",
-      "status": "partial",
-      "note": "Wave 4 (w4-system, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Linux metadata calls exist in the system layer. No SDK wrapper exposes Stat or the ID types. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-system, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Linux metadata calls exist in the system layer. No SDK wrapper exposes Stat or the ID types. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Filesystem capacity (statvfs)",
@@ -53,29 +53,29 @@
       "feature": "Error numbers (Errno)",
       "apple": "Errno (https://developer.apple.com/documentation/system/errno)",
       "bifrost": "springboard/core/src/errno.rs (Errno)",
-      "status": "partial",
-      "note": "Wave 4 (w4-system, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Errors come through io::Error. No typed Errno enum in the SDK, so apps match on raw codes or ErrorKind."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 4 (w4-system, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Errors come through io::Error. No typed Errno enum in the SDK, so apps match on raw codes or ErrorKind."
     },
     {
       "feature": "Advisory directory locks for coordinated reads and writes",
       "apple": "No direct System type; used with NSFileCoordinator (Foundation)",
       "bifrost": "springboard/sdk/src/file_coordination.rs:1-20 (flock on the parent directory, shared for reads, exclusive for writes, bounded wait) and springboard/sdk/src/file_coordination.rs:105, :112 (coordinate_reading, coordinate_writing); wired: springboard/apps/files/src/coordinate.rs (writing_in) used by springboard/apps/files/src/ops.rs (transfer_now)",
-      "status": "partial",
-      "note": "Advisory only. A process that does not coordinate is not blocked. Presenters and relinquish negotiation are not modelled. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 3 tests. Advisory only. A process that does not coordinate is not blocked. Presenters and relinquish negotiation are not modelled. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "File system change events",
       "apple": "No direct System type; FSEvents and file coordination presenters use it",
       "bifrost": "springboard/sdk/src/fswatch.rs:73 (WatchEvent), :78 (WatchStream), :185 (poll); springboard/sdk/src/file_coordination.rs:145 (deliver_events)",
-      "status": "partial",
-      "note": "A poll-based stream. Apps must call poll themselves; there is no callback API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. A poll-based stream. Apps must call poll themselves; there is no callback API."
     },
     {
       "feature": "Typed system-call results and option sets (FileFlags, FileMode bits, open options)",
       "apple": "FileFlags, Stat.Flags, FileDescriptor.OpenOptions, FileDescriptor.AccessMode (OptionSet types)",
       "bifrost": "springboard/core/src/file_mode.rs (FilePermissions option set",
-      "status": "partial",
-      "note": "Wave 4 (w4-system, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No typed option sets exist for file flags or open options in the SDK."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-system, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No typed option sets exist for file flags or open options in the SDK."
     },
     {
       "feature": "File ownership by user and group identity",

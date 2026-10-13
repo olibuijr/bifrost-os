@@ -11,36 +11,36 @@
       "feature": "Loading and running a model",
       "apple": "MLModel, MLModelAsset, MLModelError",
       "bifrost": "springboard/ui/src/ml_model.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-core-ml, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK API loads a compiled model or runs a prediction"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-core-ml, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK API loads a compiled model or runs a prediction"
     },
     {
       "feature": "Model inputs and outputs",
       "apple": "MLFeatureValue, MLSendableFeatureValue, MLFeatureProvider, MLDictionaryFeatureProvider, MLBatchProvider, MLArrayBatchProvider",
       "bifrost": "springboard/ui/src/compute.rs, springboard/ui/src/features.rs, springboard/ui/src/tensor.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no typed feature or batch provider types"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 17 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no typed feature or batch provider types"
     },
     {
       "feature": "Tensors",
       "apple": "MLTensor, MLTensorScalar, MLTensorRangeExpression, pointwiseMin/pointwiseMax",
       "bifrost": "springboard/ui/src/compute.rs, springboard/ui/src/features.rs, springboard/ui/src/tensor.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no multi-dimensional numeric array type in the SDK"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 17 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no multi-dimensional numeric array type in the SDK"
     },
     {
       "feature": "Compute devices and compute policy",
       "apple": "MLComputeDevice, MLCPUComputeDevice, MLGPUComputeDevice, MLNeuralEngineComputeDevice, MLComputePlan, MLComputePolicy",
       "bifrost": "springboard/ui/src/compute.rs, springboard/ui/src/features.rs, springboard/ui/src/tensor.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the GPU code draws the screen; no compute device selection is exposed to apps, and there is no Neural Engine on this platform"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 17 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the GPU code draws the screen; no compute device selection is exposed to apps, and there is no Neural Engine on this platform"
     },
     {
       "feature": "Stateful models",
       "apple": "MLState, MLStateConstraint",
       "bifrost": "springboard/ui/src/ml_state.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-core-ml, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no state buffers for recurrent models"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-core-ml, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no state buffers for recurrent models"
     },
     {
       "feature": "On-device model updates",
@@ -53,8 +53,8 @@
       "feature": "Downloading and compiling a model at runtime",
       "apple": "Downloading and Compiling a Model on the User's Device, MLModelCollection",
       "bifrost": "springboard/ui/src/model_assets.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-13, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. model deployment is an Apple service; BifrOSt would need its own model distribution"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-13, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. model deployment is an Apple service; BifrOSt would need its own model distribution"
     },
     {
       "feature": "Model encryption",

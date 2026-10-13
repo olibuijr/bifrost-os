@@ -95,8 +95,8 @@
       "feature": "Live Activities (ActivityConfiguration, DynamicIsland, ActivityKit)",
       "apple": "ActivityKit, ActivityConfiguration, DynamicIsland, Displaying live data with Live Activities",
       "bifrost": "springboard/ui/src/live_activity.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-01, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock-screen now-playing strip is shell-owned. No app can publish a live activity. process_info activities only keep the system awake and are unrelated to ActivityKit."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 4 (theme-01, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock-screen now-playing strip is shell-owned. No app can publish a live activity. process_info activities only keep the system awake and are unrelated to ActivityKit."
     },
     {
       "feature": "Controls (ControlWidgetButton, ControlWidgetToggle, StaticControlConfiguration, ControlCenter)",

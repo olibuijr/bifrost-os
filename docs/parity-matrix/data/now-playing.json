@@ -39,8 +39,8 @@
       "feature": "Artwork (Artwork, ArtworkRepresentation, AnimatedArtwork)",
       "apple": "Artwork, ArtworkRepresentation, AnimatedArtwork",
       "bifrost": "springboard/ui/src/media_artwork.rs, springboard/sdk/src/now_playing.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock card has an artwork slot, but no artwork crosses the audio service and no size or animated representation is offered to apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-now-playing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock card has an artwork slot, but no artwork crosses the audio service and no size or animated representation is offered to apps."
     },
     {
       "feature": "Play, pause, stop and toggle commands",
@@ -60,8 +60,8 @@
       "feature": "Skip forward and backward by interval",
       "apple": "skipForward(preferredIntervals:_:), skipBackward(preferredIntervals:_:)",
       "bifrost": "springboard/ui/src/skip_interval.rs; wired: springboard/apps/podcasts-desktop/src/transport.rs (skip_target_ms, BACK_SKIP_S 15, FORWARD_SKIP_S 30) used by src/podcasts.rs buttons, keys and remote skip commands",
-      "status": "partial",
-      "note": "Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock card and Control Center only offer track skips. The floating player widget takes skip symbols from the app, but nothing sends an interval skip to the service. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The lock card and Control Center only offer track skips. The floating player widget takes skip symbols from the app, but nothing sends an interval skip to the service. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Seek to position and scrubbing",
@@ -74,22 +74,22 @@
       "feature": "Playback rate",
       "apple": "changePlaybackRate(supported:_:)",
       "bifrost": "springboard/ui/src/playback_rate.rs; wired: springboard/apps/podcasts-desktop/src/podcasts.rs (speed menu) and src/transport.rs (RATES, rate_index)",
-      "status": "partial",
-      "note": "Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service has no playback-rate command or field in its snapshot. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-now-playing, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service has no playback-rate command or field in its snapshot. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Repeat and shuffle modes",
       "apple": "changeRepeatMode(current:supported:_:), changeShuffleMode(current:supported:_:), MediaCommand.RepeatMode, MediaCommand.ShuffleMode",
       "bifrost": "springboard/proto/src/svc.rs (Cmd::SetShuffle, Cmd::SetRepeat, enum Repeat Off/All/One, Snapshot.shuffle and repeat)",
-      "status": "partial",
-      "note": "The service stores and changes both modes. The lock card and Control Center do not expose a shuffle or repeat control, so the system surface cannot change them."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. The service stores and changes both modes. The lock card and Control Center do not expose a shuffle or repeat control, so the system surface cannot change them."
     },
     {
       "feature": "Feedback commands (like, dislike)",
       "apple": "feedback(title:shortTitle:status:_:), MediaCommand.FeedbackStatus",
       "bifrost": "springboard/ui/src/media_feedback.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No feedback command exists in the service or the shell cards."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No feedback command exists in the service or the shell cards."
     },
     {
       "feature": "Playback state snapshot",

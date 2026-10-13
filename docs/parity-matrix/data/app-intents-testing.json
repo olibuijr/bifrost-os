@@ -11,8 +11,8 @@
       "feature": "Running an intent out-of-process in tests",
       "apple": "AnyAppIntent.run(), IntentDefinitions",
       "bifrost": "springboard/sdk/src/intents.rs (pub fn dispatch, line 293; unit test dispatch_lists_performs_and_queries, line 508)",
-      "status": "partial",
-      "note": "Rust tests can call dispatch() on the app with JSON params; there is no test-session wrapper and the app runs in-process, not out-of-process"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Rust tests can call dispatch() on the app with JSON params; there is no test-session wrapper and the app runs in-process, not out-of-process"
     },
     {
       "feature": "Intent catalog (IntentDefinitions)",
@@ -25,22 +25,22 @@
       "feature": "Entity queries (suggested, by id, by string)",
       "apple": "EntityQuery, AnyEntityQuery, entities(for:), suggestedEntities",
       "bifrost": "springboard/sdk/src/intents.rs (EntityQuery enum line 238, parse_entity_query line 268, entity.query in dispatch)",
-      "status": "partial",
-      "note": "Query variants Suggested, Ids and String exist; no AnyEntityQuery wrapper"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Query variants Suggested, Ids and String exist; no AnyEntityQuery wrapper"
     },
     {
       "feature": "Typed intent results (ResolvedIntentResult)",
       "apple": "ResolvedIntentResult, ValueKeyPath, dynamicMember subscripts",
       "bifrost": "springboard/sdk/src/intents.rs (IntentResult, line 246; to_json line 262)",
-      "status": "partial",
-      "note": "Results are {value, dialog} JSON; tests read fields by string, not by key path"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Results are {value, dialog} JSON; tests read fields by string, not by key path"
     },
     {
       "feature": "Value query results (ResolvedValueQueryResult)",
       "apple": "ResolvedValueQueryResult, DynamicPropertyPathCollection, IntentValueQueryDefinition",
       "bifrost": "springboard/ui/src/value_query.rs; wired: springboard/ui/src/value_query.rs (ValueQueryResult; used by springboard/apps/shortcuts-desktop/src/automation.rs picker and entities)",
-      "status": "partial",
-      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No intent value query concept; entity.query returns a flat list of {id, title, subtitle, type} Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No intent value query concept; entity.query returns a flat list of {id, title, subtitle, type} Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Entity annotation and onscreen context",
@@ -53,22 +53,22 @@
       "feature": "Type-erased intent and entity wrappers",
       "apple": "AnyAppIntent, AnyAppEntity, AnyTransientAppEntity",
       "bifrost": "springboard/sdk/src/intents.rs (untyped Json values; Entity struct line 208)",
-      "status": "partial",
-      "note": "Everything is serde-style Json already; no named wrappers, and exported(as:) has no equivalent"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Everything is serde-style Json already; no named wrappers, and exported(as:) has no equivalent"
     },
     {
       "feature": "Enums and transient entities",
       "apple": "AnyAppEnum, AnyTransientAppEntity, AppEnumDefinition, TransientAppEntityDefinition",
       "bifrost": "springboard/sdk/src/intents.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Parameter types cover String, Int, Bool, Date, Url and Entity; no enum parameter type and no transient entities"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Parameter types cover String, Int, Bool, Date, Url and Entity; no enum parameter type and no transient entities"
     },
     {
       "feature": "Dynamic property paths",
       "apple": "DynamicPropertyPath, IntentValuePropertiesCallable",
       "bifrost": "springboard/sdk/src/intents.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Tests address parameters by JSON key (str_param, params.get)"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Tests address parameters by JSON key (str_param, params.get)"
     },
     {
       "feature": "Spotlight and Siri verification",

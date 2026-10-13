@@ -11,15 +11,15 @@
       "feature": "Library entry point (MLMediaLibrary)",
       "apple": "MLMediaLibrary, load keys MLMediaLoadFoldersKey, MLMediaLoadIncludeSourcesKey, MLMediaLoadExcludeSourcesKey",
       "bifrost": "springboard/ui/src/media_sources.rs (LoadOptions::from_keys); wired: springboard/apps/music-desktop/src/music/library.rs (library_load_options, plan, find_files_except) using LoadOptions::from_keys",
-      "status": "partial",
-      "note": "Wave 6 (b13, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no shared entry point; each app picks its own roots, and there is no include/exclude source filter Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b13, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no shared entry point; each app picks its own roots, and there is no include/exclude source filter Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Media sources (MLMediaSource)",
       "apple": "MLMediaSource, MLMediaSourceType, source identifiers (iTunes, Photos, Movies folder, app-defined folders)",
       "bifrost": "springboard/ui/src/media_sources.rs; wired: springboard/apps/music-desktop/src/music/library.rs (plan, child_folders): the root and each folder directly inside it are sources",
-      "status": "partial",
-      "note": "Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no source abstraction; files come from plain folder scans Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (theme-03, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no source abstraction; files come from plain folder scans Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Media groups (MLMediaGroup)",

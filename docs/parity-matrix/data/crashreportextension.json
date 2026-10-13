@@ -11,8 +11,8 @@
       "feature": "Crash reporter extension point (CrashReporterExtension, processCrashReport(process:))",
       "apple": "CrashReporterExtension protocol, processCrashReport(process:), com.apple.crash-reporter.extension extension point",
       "bifrost": "springboard/sdk/src/crash_report.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-14, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app extension mechanism lets an app's own code run when another app crashes. Apple's handler runs out of process; BifrOSt has no equivalent hook."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-14, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app extension mechanism lets an app's own code run when another app crashes. Apple's handler runs out of process; BifrOSt has no equivalent hook."
     },
     {
       "feature": "Crash reason (CrashedProcess.reason, CrashReason)",
@@ -25,8 +25,8 @@
       "feature": "Binary images and symbolication (binaryImages, symbolicateAddress(es), SymbolicatedFrame)",
       "apple": "CrashedProcess.binaryImages, BinaryImageInfo, symbolicateAddress(_:), symbolicateAddresses(_:), symbolAddress(imageName:symbolName:)",
       "bifrost": "springboard/sdk/src/crash_report.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-14, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Symbolication is done by hand (coredumpctl and gdb, per the diagnose-crash skill). No SDK call maps addresses to symbols inside another process."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-14, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Symbolication is done by hand (coredumpctl and gdb, per the diagnose-crash skill). No SDK call maps addresses to symbols inside another process."
     },
     {
       "feature": "Corpse port (corpsePort, read-only Mach port)",

@@ -11,8 +11,8 @@
       "feature": "Create an empty disk image (RAW)",
       "apple": "DiskImage.init(creating:), RAWCreationConfiguration, DiskImage.CreationConfiguration",
       "bifrost": "springboard/core/src/disk_image.rs (RawCreation",
-      "status": "partial",
-      "note": "Wave 3 (w3-diskimagekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK type creates an image file of a given size and block size."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 17 tests. Wave 3 (w3-diskimagekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK type creates an image file of a given size and block size."
     },
     {
       "feature": "Create an ASIF sparse image",
@@ -25,8 +25,8 @@
       "feature": "Open an existing disk image",
       "apple": "DiskImage.init(opening:), OpenConfiguration, OpenConfigurationProtocol, OpenConfiguration.Mode",
       "bifrost": "springboard/core/src/disk_image.rs (DiskImage::open_raw)",
-      "status": "partial",
-      "note": "Wave 3 (w3-diskimagekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Opening an image as a block device needs a loop device or a userspace mount through the system layer, and apps get no API for it."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 17 tests. Wave 3 (w3-diskimagekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Opening an image as a block device needs a loop device or a userspace mount through the system layer, and apps get no API for it."
     },
     {
       "feature": "Stacked disk images and layers",
@@ -39,20 +39,20 @@
       "feature": "Block size and format values",
       "apple": "DiskImage.Format, DiskImage.BlockSize, DiskImage.LayerType",
       "bifrost": "springboard/core/src/disk_image.rs (BlockSize",
-      "status": "partial",
-      "note": "Wave 3 (w3-diskimagekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No types for image format or block size exist in the SDK."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 17 tests. Wave 3 (w3-diskimagekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No types for image format or block size exist in the SDK."
     },
     {
       "feature": "Truncate or extend an image",
       "apple": "DiskImage truncate and extend, as described on the framework overview page",
       "bifrost": "springboard/core/src/disk_image.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing resize call. The filesystem inside the image is not resized."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 17 tests. Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing resize call. The filesystem inside the image is not resized."
     },
     {
       "feature": "Inspect image properties",
       "apple": "DiskImage properties (framework overview page)",
-      "bifrost": "springboard/ui/src/disk_image.rs (inspect, ImageProperties); wired: springboard/apps/files/src/info.rs (disk_image_rows, image_rows)",
+      "bifrost": "springboard/core/src/disk_image.rs (inspect, ImageProperties); wired: springboard/apps/files/src/info.rs (disk_image_rows, image_rows)",
       "status": "partial",
       "note": "Wave 6 (b17, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No image metadata API. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
@@ -60,15 +60,15 @@
       "feature": "Virtualization integration",
       "apple": "Passing an image or stack to the Virtualization framework as VM storage",
       "bifrost": "springboard/core/src/guest_vm.rs, springboard/core/src/disk_image.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing VM storage API. The test VMs are developer tooling only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 26 tests. Wave 3 (theme-29, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing VM storage API. The test VMs are developer tooling only."
     },
     {
       "feature": "Error types",
       "apple": "IncompatibleStackingError, InvalidBlockCountError, CorruptedImageError, UnsupportedFormatError",
       "bifrost": "springboard/core/src/disk_image.rs (ImageError)",
-      "status": "partial",
-      "note": "Wave 5 (theme-21, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on the create, open and stack APIs above."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 17 tests. Wave 5 (theme-21, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on the create, open and stack APIs above."
     }
   ],
   "gaps": [

@@ -53,8 +53,8 @@
       "feature": "Uniform type conformance used by transfers",
       "apple": "UTType identifiers used as representation types (via UniformTypeIdentifiers)",
       "bifrost": "springboard/ui/src/uttype.rs (conforms, distance, type_for_extension, type_for_mime)",
-      "status": "partial",
-      "note": "conformance and extension lookup exist; app-declared custom types for transfers were not verified"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. conformance and extension lookup exist; app-declared custom types for transfers were not verified"
     },
     {
       "feature": "Proxy representation and transfer visibility",

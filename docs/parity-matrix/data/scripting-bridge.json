@@ -25,36 +25,36 @@
       "feature": "Scripting class mapping from a dictionary (sdef) to generated proxies",
       "apple": "SBApplication class(forScriptingClass:); sdef-generated classes",
       "bifrost": "springboard/ui/src/scripting.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No machine-readable dictionary and no generated client classes. Each app lists its methods at runtime (app.methods)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No machine-readable dictionary and no generated client classes. Each app lists its methods at runtime (app.methods)."
     },
     {
       "feature": "Properties and elements (get, set, property(withCode:), elementArray(withCode:))",
       "apple": "SBObject property(withCode:), property(with:code:), elementArray(withCode:), setTo(_:), get()",
       "bifrost": "springboard/sdk/src/control.rs (method dispatch via handle(method, params)); springboard/apps/notes-desktop/CHANGELOG.md (notes.list, notes.get)",
-      "status": "partial",
-      "note": "Apps expose named read methods, such as notes.list and notes.get. Nothing here sets properties. No generic object graph exists, and no property code is addressed through a shared model."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Apps expose named read methods, such as notes.list and notes.get. Nothing here sets properties. No generic object graph exists, and no property code is addressed through a shared model."
     },
     {
       "feature": "Element arrays with lookup by name, id or index, and per-element filtering",
       "apple": "SBElementArray object(withName:), object(withID:), object(atLocation:), array(byApplying:)",
       "bifrost": "springboard/sdk/src/intents.rs (EntityQuery: entity.query with suggested, ids or string)",
-      "status": "partial",
-      "note": "Typed entity queries cover ids and text search through App::entities. There is no generic array type and no per-element message mapping."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Typed entity queries cover ids and text search through App::entities. There is no generic array type and no per-element message mapping."
     },
     {
       "feature": "Error reporting per object and per application (lastError, eventDidFail delegate)",
       "apple": "SBObject lastError(); SBApplicationDelegate eventDidFail(_:withError:)",
       "bifrost": "springboard/sdk/src/control.rs (RpcError::new, with_reason, JSON-RPC error reply in handle_line)",
-      "status": "partial",
-      "note": "Callers get a typed error code, message and reason for each call. The last-error state and the failure callback are not offered, so a caller cannot ask an object for its last error."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Callers get a typed error code, message and reason for each call. The last-error state and the failure callback are not offered, so a caller cannot ask an object for its last error."
     },
     {
       "feature": "Reply timeout and asynchronous replies",
       "apple": "SBApplication timeout, sendMode",
       "bifrost": "springboard/sdk/src/control.rs (pending(token, timeout_ms), complete(token, result))",
-      "status": "partial",
-      "note": "A handler can defer its reply and set a timeout on the pending call. There is no per-app send mode setting and no equivalent of the Apple event send modes."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. A handler can defer its reply and set a timeout on the pending call. There is no per-app send mode setting and no equivalent of the Apple event send modes."
     },
     {
       "feature": "Apple event transport (AEDesc, OSA, AppleScript)",

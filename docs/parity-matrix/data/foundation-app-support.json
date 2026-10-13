@@ -1,63 +1,63 @@
 {
- "framework": "Foundation (App Support)",
- "doc": "https://developer.apple.com/documentation/foundation",
- "macos_since": "10.0",
- "status": "partial",
- "bifrost": "springboard/sdk/src/notification.rs, process_info.rs, locale.rs, intents.rs, control.rs, runtime.rs, springboard/ui/src/progress.rs, springboard/sdk/src/error.rs",
- "summary": "Notifications, process activity tracking, localized bundles and App Intents have SDK counterparts. A progress tree (unit counts, child shares, cancel and pause) and an error type with domain, code, user info and recovery text now exist. Progress shared across processes, error recovery attempters and XPC-style app extensions have no general API; apps use the control socket RPC instead.",
- "rea_evidence": "ev_63b0f1e52f23b2c8ab863af9b25e2447a76fb1b6f5bf6197613cd873163f9f3e",
- "features": [
-  {
-   "feature": "Task Management (ProcessInfo activities, sudden termination, thermal state, user activities)",
-   "apple": "ProcessInfo, NSUserActivity, Progress, ProgressManager",
-   "bifrost": "springboard/sdk/src/process_info.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/runtime.rs; springboard/ui/src/progress.rs",
-   "status": "partial",
-   "note": "Activity tracker, sudden termination and thermal state exist. Progress is a tree of unit counts with child shares, fraction, finish, cancel, pause and resume that reach children with cancellation, pausing and resuming handlers, addChild, and current/becomeCurrent/resignCurrent (bifrost_ui::progress, reached as bifrost_app::controls::progress). No ProgressManager, no publishing progress to other processes, no Handoff.",
-   "rea_evidence": "ev_e2ff5d55d77a4e9024c3fe26224756e2a348cab8ef8b4488a19a55f20b160e51"
-  },
-  {
-   "feature": "Resources (Bundle, localized strings)",
-   "apple": "Bundle, NSLocalizedString, NSBundleResourceRequest",
-   "bifrost": "springboard/sdk/src/locale.rs",
-   "status": "partial",
-   "note": "Bundle::load and localized! cover strings (en, is). No on-demand resource requests or general bundle resource lookup API documented."
-  },
-  {
-   "feature": "Notifications (NotificationCenter, DistributedNotificationCenter)",
-   "apple": "NotificationCenter, DistributedNotificationCenter, NotificationQueue",
-   "bifrost": "springboard/sdk/src/notification.rs",
-   "status": "partial",
-   "note": "add_observer/post with sender object and cross-app distributed posts through the shell; user info is string-only; no NotificationQueue coalescing."
-  },
-  {
-   "feature": "App Extension Support",
-   "apple": "NSExtensionContext, NSExtensionItem, NSItemProvider",
-   "bifrost": "springboard/sdk/src/share.rs",
-   "status": "partial",
-   "note": "Share and Spotlight/intents hooks exist between apps and shell; no generic extension host or item provider API."
-  },
-  {
-   "feature": "Errors and Exceptions",
-   "apple": "NSError, NSException, error domains",
-   "bifrost": "springboard/sdk/src/error.rs (AppError); springboard/sdk/src/url.rs (URLError, mapped by From)",
-   "status": "partial",
-   "note": "AppError carries domain, code, user info, localized description, failure reason, recovery suggestion and options, help anchor and underlying errors. No per-domain user info providers and no recovery attempter; each module keeps its own error enum.",
-   "rea_evidence": "ev_15a72d7495a8d097e8b6e4d6d85a93832977186208cea4b1ce8576b64804c164"
-  },
-  {
-   "feature": "Scripting Support",
-   "apple": "NSAppleScript, NSScriptCommand, NSUserScriptTask, scripting suites",
-   "bifrost": "springboard/sdk/src/control.rs; docs/agent-api.md",
-   "status": "partial",
-   "note": "JSON-RPC control sockets let scripts and agents drive apps (bifrost pc control). No scripting dictionaries, AppleScript engine or user script tasks."
-  }
- ],
- "gaps": [
-  "ProgressManager and publishing progress to other processes; value observation of progress for views",
-  "Per-domain error user info providers and a recovery attempter that runs the chosen option",
-  "NSUserActivity Handoff between devices",
-  "Generic app extension host and NSItemProvider",
-  "Scripting dictionaries / AppleScript-like automation",
-  "NotificationQueue coalescing and typed notification payloads"
- ]
+  "framework": "Foundation (App Support)",
+  "doc": "https://developer.apple.com/documentation/foundation",
+  "macos_since": "10.0",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/notification.rs, process_info.rs, locale.rs, intents.rs, control.rs, runtime.rs, springboard/ui/src/progress.rs, springboard/sdk/src/error.rs",
+  "summary": "Notifications, process activity tracking, localized bundles and App Intents have SDK counterparts. A progress tree (unit counts, child shares, cancel and pause) and an error type with domain, code, user info and recovery text now exist. Progress shared across processes, error recovery attempters and XPC-style app extensions have no general API; apps use the control socket RPC instead.",
+  "rea_evidence": "ev_63b0f1e52f23b2c8ab863af9b25e2447a76fb1b6f5bf6197613cd873163f9f3e",
+  "features": [
+    {
+      "feature": "Task Management (ProcessInfo activities, sudden termination, thermal state, user activities)",
+      "apple": "ProcessInfo, NSUserActivity, Progress, ProgressManager",
+      "bifrost": "springboard/sdk/src/process_info.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/runtime.rs; springboard/ui/src/progress.rs",
+      "status": "partial",
+      "note": "Activity tracker, sudden termination and thermal state exist. Progress is a tree of unit counts with child shares, fraction, finish, cancel, pause and resume that reach children with cancellation, pausing and resuming handlers, addChild, and current/becomeCurrent/resignCurrent (bifrost_ui::progress, reached as bifrost_app::controls::progress). No ProgressManager, no publishing progress to other processes, no Handoff.",
+      "rea_evidence": "ev_e2ff5d55d77a4e9024c3fe26224756e2a348cab8ef8b4488a19a55f20b160e51"
+    },
+    {
+      "feature": "Resources (Bundle, localized strings)",
+      "apple": "Bundle, NSLocalizedString, NSBundleResourceRequest",
+      "bifrost": "springboard/sdk/src/locale.rs",
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Bundle::load and localized! cover strings (en, is). No on-demand resource requests or general bundle resource lookup API documented."
+    },
+    {
+      "feature": "Notifications (NotificationCenter, DistributedNotificationCenter)",
+      "apple": "NotificationCenter, DistributedNotificationCenter, NotificationQueue",
+      "bifrost": "springboard/sdk/src/notification.rs",
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. add_observer/post with sender object and cross-app distributed posts through the shell; user info is string-only; no NotificationQueue coalescing."
+    },
+    {
+      "feature": "App Extension Support",
+      "apple": "NSExtensionContext, NSExtensionItem, NSItemProvider",
+      "bifrost": "springboard/sdk/src/share.rs",
+      "status": "partial",
+      "note": "Share and Spotlight/intents hooks exist between apps and shell; no generic extension host or item provider API."
+    },
+    {
+      "feature": "Errors and Exceptions",
+      "apple": "NSError, NSException, error domains",
+      "bifrost": "springboard/sdk/src/error.rs (AppError); springboard/sdk/src/url.rs (URLError, mapped by From)",
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 21 tests. AppError carries domain, code, user info, localized description, failure reason, recovery suggestion and options, help anchor and underlying errors. No per-domain user info providers and no recovery attempter; each module keeps its own error enum.",
+      "rea_evidence": "ev_15a72d7495a8d097e8b6e4d6d85a93832977186208cea4b1ce8576b64804c164"
+    },
+    {
+      "feature": "Scripting Support",
+      "apple": "NSAppleScript, NSScriptCommand, NSUserScriptTask, scripting suites",
+      "bifrost": "springboard/sdk/src/control.rs; docs/agent-api.md",
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. JSON-RPC control sockets let scripts and agents drive apps (bifrost pc control). No scripting dictionaries, AppleScript engine or user script tasks."
+    }
+  ],
+  "gaps": [
+    "ProgressManager and publishing progress to other processes; value observation of progress for views",
+    "Per-domain error user info providers and a recovery attempter that runs the chosen option",
+    "NSUserActivity Handoff between devices",
+    "Generic app extension host and NSItemProvider",
+    "Scripting dictionaries / AppleScript-like automation",
+    "NotificationQueue coalescing and typed notification payloads"
+  ]
 }

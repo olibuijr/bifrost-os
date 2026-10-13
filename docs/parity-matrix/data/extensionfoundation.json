@@ -18,29 +18,29 @@
       "feature": "Building an extension (AppExtension, AppExtensionConfiguration, ConnectionHandler)",
       "apple": "Declare extension content and handle incoming XPC connections",
       "bifrost": "springboard/sdk/src/peer_session.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Control socket serves the app's own methods; no extension bundle type or connection handler"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Control socket serves the app's own methods; no extension bundle type or connection handler"
     },
     {
       "feature": "Discovering extensions (AppExtensionIdentity)",
       "apple": "Find available extensions matching a host's extension points",
       "bifrost": "springboard/core/src/extension_process.rs, springboard/sdk/src/extension.rs, springboard/ui/src/extension.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md notes no share-sheet extensions installed by apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md notes no share-sheet extensions installed by apps"
     },
     {
       "feature": "Launching and managing extension processes (AppExtensionProcess)",
       "apple": "Host launches extension in a separate process",
       "bifrost": "springboard/core/src/extension_process.rs, springboard/sdk/src/extension.rs, springboard/ui/src/extension.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell launches sandboxed app processes (bubblewrap, cgroups); only for whole apps, not host-requested extensions"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Shell launches sandboxed app processes (bubblewrap, cgroups); only for whole apps, not host-requested extensions"
     },
     {
       "feature": "Extension-point management (AppExtensionPoint, ExtensionPointDefining)",
       "apple": "Declare host extension points and bind extensions to them",
       "bifrost": "springboard/core/src/extension_process.rs, springboard/sdk/src/extension.rs, springboard/ui/src/extension.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No third-party extension points; intents and share are fixed system channels"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No third-party extension points; intents and share are fixed system channels"
     }
   ],
   "gaps": [

@@ -18,8 +18,8 @@
       "feature": "Command queue and work submission",
       "apple": "MTLCommandQueue, MTLCommandBuffer",
       "bifrost": "springboard/ui/src/command_buffer.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-metal, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. submission is internal to the compositor; no app command buffers"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-metal, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. submission is internal to the compositor; no app command buffers"
     },
     {
       "feature": "Drawables and onscreen presentation",
@@ -39,15 +39,15 @@
       "feature": "Shader functions and libraries",
       "apple": "MTLLibrary, MTLFunction, Metal Shading Language",
       "bifrost": "springboard/ui/src/shader_library.rs",
-      "status": "partial",
-      "note": "Wave 6 (b10, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no app-supplied shaders, no shader compilation API; shaders are fixed in the compositor"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 6 (b10, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no app-supplied shaders, no shader compilation API; shaders are fixed in the compositor"
     },
     {
       "feature": "Buffers and textures",
       "apple": "MTLBuffer, MTLTexture, MTLTextureDescriptor",
       "bifrost": "springboard/ui/src/texture_descriptor.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-metal, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. textures are compositor-internal; no app resource creation or upload API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-metal, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. textures are compositor-internal; no app resource creation or upload API"
     },
     {
       "feature": "Resource synchronization and buffer reuse",
@@ -60,22 +60,22 @@
       "feature": "Compute passes",
       "apple": "MTLComputeCommandEncoder, compute pipelines",
       "bifrost": "springboard/ui/src/compute_dispatch.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-metal, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no compute path; BifrOSt raster renderer is CPU (docs/wayland-desktop.md)"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-metal, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no compute path; BifrOSt raster renderer is CPU (docs/wayland-desktop.md)"
     },
     {
       "feature": "Blit passes and copies",
       "apple": "MTLBlitCommandEncoder",
       "bifrost": "springboard/ui/src/blit.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-09, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-facing buffer to texture copy"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-09, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-facing buffer to texture copy"
     },
     {
       "feature": "Indirect command encoding and ray tracing",
       "apple": "MTLIndirectCommandBuffer, MTLAccelerationStructure",
       "bifrost": "springboard/ui/src/indirect_command.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-metal, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. not present in the compositor or the SDK"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-metal, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. not present in the compositor or the SDK"
     },
     {
       "feature": "Machine learning passes",
@@ -109,8 +109,8 @@
       "feature": "GPU profiling, counters and frame capture",
       "apple": "MTLCaptureManager, GPU counter sample buffers",
       "bifrost": "springboard/ui/src/counter_sample.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-metal, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no GPU timing or capture for apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-metal, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no GPU timing or capture for apps"
     },
     {
       "feature": "Simulator and alternative render paths",

@@ -11,64 +11,64 @@
       "feature": "Entities and components",
       "apple": "GKEntity, GKComponent, GKComponentSystem",
       "bifrost": "springboard/ui/src/ecs.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No entity-component runtime in springboard/sdk/src/ or springboard/ui/src/. Apps hold their own state structs (for example springboard/apps/games-desktop/src/games.rs)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No entity-component runtime in springboard/sdk/src/ or springboard/ui/src/. Apps hold their own state structs (for example springboard/apps/games-desktop/src/games.rs)."
     },
     {
       "feature": "State machines",
       "apple": "GKStateMachine, GKState",
       "bifrost": "springboard/core/src/random.rs, springboard/ui/src/grid_graph.rs, springboard/ui/src/state_machine.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. State machines are hand-written per subsystem. No reusable SDK state machine with enter, exit and transition rules."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. State machines are hand-written per subsystem. No reusable SDK state machine with enter, exit and transition rules."
     },
     {
       "feature": "Spatial partitioning",
       "apple": "GKQuadtree, GKOctree, GKRTree (and their node types)",
       "bifrost": "springboard/ui/src/quadtree.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-gameplaykit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No quadtree, octree or R-tree in springboard/ui/src/ or springboard/sdk/src/. Hit testing is per-view."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-gameplaykit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No quadtree, octree or R-tree in springboard/ui/src/ or springboard/sdk/src/. Hit testing is per-view."
     },
     {
       "feature": "Strategists (turn-based AI)",
       "apple": "GKStrategist, GKMinmaxStrategist, GKMonteCarloStrategist, GKGameModel",
       "bifrost": "springboard/ui/src/strategist.rs; wired: springboard/apps/games-desktop/src/tictactoe.rs (uses springboard/ui/src/strategist.rs)",
-      "status": "partial",
-      "note": "Wave 5 (theme-14, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No minimax or Monte Carlo search. The Games app (springboard/apps/games-desktop/src/games.rs) has no opponent AI. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 5 (theme-14, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No minimax or Monte Carlo search. The Games app (springboard/apps/games-desktop/src/games.rs) has no opponent AI. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Decision trees and rule systems",
       "apple": "GKDecisionTree, GKDecisionNode, GKRuleSystem, GKRule, GKNSPredicateRule",
       "bifrost": "springboard/ui/src/decision.rs, springboard/ui/src/rules.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No rule engine or decision tree. Predicate logic is written inline per app."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-07, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No rule engine or decision tree. Predicate logic is written inline per app."
     },
     {
       "feature": "Pathfinding and navigation graphs",
       "apple": "GKGraph, GKGridGraph, GKObstacleGraph, GKMeshGraph, GKGraphNode and subclasses",
       "bifrost": "springboard/core/src/random.rs, springboard/ui/src/grid_graph.rs, springboard/ui/src/state_machine.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No graph or route search API. springboard/ui/src/constraint.rs is Cassowary layout, not navigation."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No graph or route search API. springboard/ui/src/constraint.rs is Cassowary layout, not navigation."
     },
     {
       "feature": "Agents, goals and behaviors",
       "apple": "GKAgent2D, GKAgent3D, GKGoal, GKBehavior, GKCompositeBehavior, GKPath, GKAgentDelegate",
       "bifrost": "springboard/ui/src/agents.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-22, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No steering or agent movement code in the SDK or the UI crate. Motion code in springboard/render/src/motion.rs is for shell animation, not agents."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 2 (theme-22, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No steering or agent movement code in the SDK or the UI crate. Motion code in springboard/render/src/motion.rs is for shell animation, not agents."
     },
     {
       "feature": "Obstacles",
       "apple": "GKObstacle, GKCircleObstacle, GKSphereObstacle, GKPolygonObstacle",
       "bifrost": "springboard/ui/src/obstacle.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-07, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No obstacle primitives. Depends on the pathfinding and agent rows."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-07, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No obstacle primitives. Depends on the pathfinding and agent rows."
     },
     {
       "feature": "Procedural noise",
       "apple": "GKNoise, GKNoiseMap, GKPerlinNoiseSource, GKVoronoiNoiseSource and other noise sources",
       "bifrost": "springboard/ui/src/noise.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-gameplaykit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No coherent noise (Perlin, Voronoi, billow, ridged) in the SDK, the UI crate or the render crate. The only noise is an inline hash in kb_clicks.rs and a shader dither in springboard/src/gpu/wl.rs:280."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-gameplaykit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No coherent noise (Perlin, Voronoi, billow, ridged) in the SDK, the UI crate or the render crate. The only noise is an inline hash in kb_clicks.rs and a shader dither in springboard/src/gpu/wl.rs:280."
     },
     {
       "feature": "Randomization",

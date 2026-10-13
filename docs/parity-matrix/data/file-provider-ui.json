@@ -11,29 +11,29 @@
       "feature": "Context-menu actions in the document browser",
       "apple": "Adding Actions to the Context Menu (article), File Provider extension actions shown in the system file browser",
       "bifrost": "springboard/ui/src/actionrequest.rs, springboard/ui/src/fileaction.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. apps can show a context menu in their own windows, but cannot add actions to the Files app's browser or to another app's items"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 19 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. apps can show a context menu in their own windows, but cannot add actions to the Files app's browser or to another app's items"
     },
     {
       "feature": "Action extension view controller",
       "apple": "FPUIActionExtensionViewController (prepare(forAction:itemIdentifiers:), prepare(forError:), extensionContext)",
       "bifrost": "springboard/ui/src/actionrequest.rs, springboard/sdk/src/extension.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-16, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. there is no extension process that the shell hosts to show a custom UI for a selected action; the open and save panel is shell code and cannot be extended by apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-16, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. there is no extension process that the shell hosts to show a custom UI for a selected action; the open and save panel is shell code and cannot be extended by apps"
     },
     {
       "feature": "Action extension context: complete or cancel",
       "apple": "FPUIActionExtensionContext (completeRequest(), cancelRequest(withError:), domainIdentifier)",
       "bifrost": "springboard/ui/src/actionrequest.rs, springboard/ui/src/fileaction.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no request object that an extension completes or cancels; grants only carry an open file descriptor"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 19 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no request object that an extension completes or cancels; grants only carry an open file descriptor"
     },
     {
       "feature": "Action identifiers",
       "apple": "FPUIActionIdentifier",
       "bifrost": "springboard/proto/src/lib.rs:812 (CONTEXT_MENU tag and ContextItem ids); springboard/sdk/src/runtime.rs:27 (ContextAction(u32))",
-      "status": "partial",
-      "note": "app-local numeric ids for menu items exist, but no typed system action identifiers and no registry of actions across apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 34 tests. app-local numeric ids for menu items exist, but no typed system action identifiers and no registry of actions across apps"
     },
     {
       "feature": "Error codes and error domain",
@@ -53,8 +53,8 @@
       "feature": "Files app operations (context menu, first-party)",
       "apple": "Not part of File Provider UI; the system Files browser's own actions",
       "bifrost": "springboard/src/files/fs.rs (operations the context menu offers, tested on a temp dir); springboard/apps/files/CHANGELOG.md 1.1.0 (Copy, Cut, Paste, Rename, Duplicate, Move to Recently Deleted)",
-      "status": "partial",
-      "note": "a fixed first-party set, not a surface that third-party extensions can extend; included as the nearest existing counterpart"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. a fixed first-party set, not a surface that third-party extensions can extend; included as the nearest existing counterpart"
     },
     {
       "feature": "Provider domains and file provider storage",

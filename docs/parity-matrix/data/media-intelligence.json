@@ -11,22 +11,22 @@
       "feature": "Face grouping in images (FaceGroupAnalyzer, MediaIntelligenceImageAsset)",
       "apple": "FaceGroupAnalyzer, MediaIntelligenceImageAsset; query faces by asset, entity or face ID",
       "bifrost": "springboard/ui/src/face_group.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-media-intelligence, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No face detector and no person clustering in springboard/sdk/src or springboard/apps. The photocraft app is an upstream release (springboard/apps/photocraft-desktop/upstream.toml points at storytold/photocraft on GitHub); its source is not in this repo, so its internals cannot be checked here."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-media-intelligence, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No face detector and no person clustering in springboard/sdk/src or springboard/apps. The photocraft app is an upstream release (springboard/apps/photocraft-desktop/upstream.toml points at storytold/photocraft on GitHub); its source is not in this repo, so its internals cannot be checked here."
     },
     {
       "feature": "Best moment and highlight segments in video (VideoAnalyzer, HighlightAnalysisRequest)",
       "apple": "VideoAnalyzer, MediaIntelligenceVideoAsset, HighlightAnalysisRequest",
       "bifrost": "springboard/ui/src/highlight_rank.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-media-intelligence, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The media stack (springboard/src/media/) decodes and plays video but has no engagement or highlight scoring. filmcraft is also an upstream release (springboard/apps/filmcraft-desktop/upstream.toml), so its code is not checked here."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-media-intelligence, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The media stack (springboard/src/media/) decodes and plays video but has no engagement or highlight scoring. filmcraft is also an upstream release (springboard/apps/filmcraft-desktop/upstream.toml), so its code is not checked here."
     },
     {
       "feature": "Keyframe selection for video theme (KeyFrameAnalysisRequest)",
       "apple": "KeyFrameAnalysisRequest",
       "bifrost": "springboard/ui/src/keyframe_pick.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-media-intelligence, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The demuxer exposes container sync samples for seeking, which is not the same as choosing a representative frame by content analysis. No representative-frame API exists in the SDK."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-media-intelligence, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The demuxer exposes container sync samples for seeking, which is not the same as choosing a representative frame by content analysis. No representative-frame API exists in the SDK."
     },
     {
       "feature": "On-device ML analysis runtime (shared by all requests)",

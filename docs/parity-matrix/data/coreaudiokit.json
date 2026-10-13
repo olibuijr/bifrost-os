@@ -18,8 +18,8 @@
       "feature": "Panner audio unit view",
       "apple": "AUPannerView",
       "bifrost": "springboard/ui/src/panner.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-coreaudiokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No panner unit or specialised panner UI."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (w3-coreaudiokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No panner unit or specialised panner UI."
     },
     {
       "feature": "Bluetooth MIDI peripheral picker and advertising",

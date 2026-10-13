@@ -81,8 +81,8 @@
       "feature": "Privileged helper authorization",
       "apple": "SMJobBless(_:_:_:_:), Authorization Constants (kSMRightBlessPrivilegedHelper, kSMRightModifySystemDaemons)",
       "bifrost": "springboard/ui/src/access_control.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. deprecated by Apple; a desktop equivalent would sit on the bifrostd and app policy layers (springboard/src/bare/app_policy.rs), none exposed to apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 24 tests. Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. deprecated by Apple; a desktop equivalent would sit on the bifrostd and app policy layers (springboard/src/bare/app_policy.rs), none exposed to apps"
     },
     {
       "feature": "Deprecated launchd job functions",

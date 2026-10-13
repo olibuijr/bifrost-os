@@ -11,22 +11,22 @@
       "feature": "Integrating on-device models",
       "apple": "AIModel, AIModelAsset (Core AI landing page, Essentials)",
       "bifrost": "springboard/ui/src/model_assets.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-13, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No model loading or inference path in springboard/sdk/src/ or springboard/src/. Cloud calls only: springboard/apps/daw/src/ai.rs (Anthropic Messages API, key from the opencode auth store)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-13, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No model loading or inference path in springboard/sdk/src/ or springboard/src/. Cloud calls only: springboard/apps/daw/src/ai.rs (Anthropic Messages API, key from the opencode auth store)."
     },
     {
       "feature": "Inference functions and values",
       "apple": "InferenceFunction, InferenceFunctionDescriptor, InferenceValue",
       "bifrost": "springboard/sdk/src/inference.rs, springboard/sdk/src/ndarray.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing in the repo describes a typed model signature."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing in the repo describes a typed model signature."
     },
     {
       "feature": "Multidimensional arrays",
       "apple": "NDArray, NDArrayDescriptor",
       "bifrost": "springboard/sdk/src/inference.rs, springboard/sdk/src/ndarray.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No tensor or shape type in springboard/sdk/src/ or springboard/ui/src/. Image buffers are decoded by springboard/render/src/imgdec.rs, which has no shape or scalar-type model."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No tensor or shape type in springboard/sdk/src/ or springboard/ui/src/. Image buffers are decoded by springboard/render/src/imgdec.rs, which has no shape or scalar-type model."
     },
     {
       "feature": "Image input descriptors",
@@ -39,8 +39,8 @@
       "feature": "Compute streams",
       "apple": "ComputeStream",
       "bifrost": "springboard/ui/src/work_stream.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-13, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The GPU presenter in springboard/src/gpu/ serves rendering only, and no SDK type exposes asynchronous compute work."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-13, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The GPU presenter in springboard/src/gpu/ serves rendering only, and no SDK type exposes asynchronous compute work."
     },
     {
       "feature": "Background inference",
@@ -60,8 +60,8 @@
       "feature": "Model cache and specialization",
       "apple": "AIModelCache, managing model specialization and caching",
       "bifrost": "springboard/ui/src/model_specialization.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-13, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK has a generic cache at springboard/sdk/src/ (see docs/bifrost-ui.md, cache), but nothing stores specialized model artifacts."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-13, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK has a generic cache at springboard/sdk/src/ (see docs/bifrost-ui.md, cache), but nothing stores specialized model artifacts."
     },
     {
       "feature": "Ahead-of-time model compilation",
@@ -74,8 +74,8 @@
       "feature": "Model debugging and profiling",
       "apple": "Debug gauge, Instruments, Core AI Debugger",
       "bifrost": "springboard/core/src/log.rs (unified logging), bifrost pc log",
-      "status": "partial",
-      "note": "General logging and performance tooling exist (tools/bench.py). Nothing traces inference or tensor values."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. General logging and performance tooling exist (tools/bench.py). Nothing traces inference or tensor values."
     },
     {
       "feature": "On-device text prediction",

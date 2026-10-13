@@ -11,8 +11,8 @@
       "feature": "Reachability of hosts and addresses",
       "apple": "SCNetworkReachabilityCreateWithName, SCNetworkReachabilityCreateWithAddress, SCNetworkReachabilityGetFlags, SCNetworkReachabilitySetCallback",
       "bifrost": "springboard/src/net/wifi.rs (Status: state, ip, router); no host-reachability probe found",
-      "status": "partial",
-      "note": "The daemon reports link and address state only. No API tests whether a named host is reachable, and apps have no client for the state either."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. The daemon reports link and address state only. No API tests whether a named host is reachable, and apps have no client for the state either."
     },
     {
       "feature": "Change notifications for network state",
@@ -32,8 +32,8 @@
       "feature": "Wi-Fi status, scan, join and saved networks",
       "apple": "SCNetworkConfiguration (SCNetworkService for Wi-Fi), CoreWLAN-style status through SCNetworkInterface",
       "bifrost": "springboard/sdk/src/wifi_status.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-system-configuration, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. netd exposes Scan, Join, Select, Forget, SetAutoJoin, Move and Enable. The SDK client for it is planned, not built (springboard/docs/services.md, Network service and its migration list)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 5 (w5-system-configuration, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. netd exposes Scan, Join, Select, Forget, SetAutoJoin, Move and Enable. The SDK client for it is planned, not built (springboard/docs/services.md, Network service and its migration list)."
     },
     {
       "feature": "Wired link and address",
@@ -53,36 +53,36 @@
       "feature": "Network services, sets and locations",
       "apple": "SCNetworkServiceCreate, SCNetworkSetCreate, SCNetworkSetSetCurrent, SCNetworkSetSetServiceOrder, SCNetworkServiceCopyAll",
       "bifrost": "springboard/core/src/network_sets.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-system-configuration, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The system has one active Wi-Fi configuration and one wired link. There is no concept of multiple sets or ordered services."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-system-configuration, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The system has one active Wi-Fi configuration and one wired link. There is no concept of multiple sets or ordered services."
     },
     {
       "feature": "Preferences session for system configuration",
       "apple": "SCPreferencesCreate, SCPreferencesGetValue, SCPreferencesSetValue, SCPreferencesCommitChanges, SCPreferencesApplyChanges, SCPreferencesSetCallback",
       "bifrost": "springboard/core/src/pref_session.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-10, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. app defaults are per-app. No system-wide, locked, committed configuration store is exposed to apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 5 (theme-10, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. app defaults are per-app. No system-wide, locked, committed configuration store is exposed to apps."
     },
     {
       "feature": "Computer name and local host name",
       "apple": "SCPreferencesSetComputerName, SCPreferencesSetLocalHostName, SCDynamicStoreCopyComputerName, SCDynamicStoreCopyLocalHostName",
       "bifrost": "springboard/core/src/host_name.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-system-configuration, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Not searched beyond the index. No accessor for the host name was found."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-system-configuration, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Not searched beyond the index. No accessor for the host name was found."
     },
     {
       "feature": "Network connections (start, stop, status) for VPN and PPP",
       "apple": "SCNetworkConnectionCreateWithServiceID, SCNetworkConnectionStart, SCNetworkConnectionStop, SCNetworkConnectionGetStatus",
       "bifrost": "springboard/core/src/tunnel.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No VPN or dial-up connection type exists in springboard/src/net/."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No VPN or dial-up connection type exists in springboard/src/net/."
     },
     {
       "feature": "Proxy settings",
       "apple": "SCDynamicStoreCopyProxies, SCDynamicStoreKeyCreateProxies",
       "bifrost": "springboard/core/src/proxy.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system proxy setting was found in springboard/src/net/ or the Network page."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No system proxy setting was found in springboard/src/net/ or the Network page."
     },
     {
       "feature": "Ethernet bond and VLAN interfaces",
@@ -95,8 +95,8 @@
       "feature": "Console user and session information",
       "apple": "SCDynamicStoreCopyConsoleUser",
       "bifrost": "springboard/core/src/console_user.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-17, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The login shell exists but no session-user accessor is exposed to apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (theme-17, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The login shell exists but no session-user accessor is exposed to apps."
     },
     {
       "feature": "Error reporting for calls",

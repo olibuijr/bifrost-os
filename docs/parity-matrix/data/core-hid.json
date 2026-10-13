@@ -11,22 +11,22 @@
       "feature": "Device discovery (HIDDeviceManager, DeviceMatchingCriteria)",
       "apple": "HIDDeviceManager, HIDDeviceManager.DeviceMatchingCriteria",
       "bifrost": "springboard/ui/src/hid_match.rs, springboard/sdk/src/hid_devices.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-core-hid, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Discovery runs inside the shell only. No SDK API lists devices for an app; springboard/sdk/src has no HID or device module."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-core-hid, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Discovery runs inside the shell only. No SDK API lists devices for an app; springboard/sdk/src has no HID or device module."
     },
     {
       "feature": "Device classification by capability",
       "apple": "HIDDeviceTransport, HIDDeviceLocalizationCode, usage pages (HIDUsage)",
       "bifrost": "springboard/ui/src/hid_match.rs (Usage::role",
-      "status": "partial",
-      "note": "Wave 5 (w5-core-hid, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Roles covers touchscreen, pointer, touchpad, keyboard, power and lid from evdev bits. There are no HID usage pages and no transport or localization codes."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-core-hid, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Roles covers touchscreen, pointer, touchpad, keyboard, power and lid from evdev bits. There are no HID usage pages and no transport or localization codes."
     },
     {
       "feature": "Report descriptor elements and collections",
       "apple": "HIDElement, HIDElementCollection, HIDReportID, HIDReportType",
       "bifrost": "springboard/ui/src/hid_report.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-18, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. BifrOSt never parses a HID report descriptor. It consumes the kernel's evdev translation."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-18, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. BifrOSt never parses a HID report descriptor. It consumes the kernel's evdev translation."
     },
     {
       "feature": "Reading element values and input reports",
@@ -39,8 +39,8 @@
       "feature": "Sending output reports to a device",
       "apple": "HIDDeviceClient (set report, for example an LED)",
       "bifrost": "springboard/ui/src/hid_report.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-18, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Devices are read-only. Nothing sets LEDs, force feedback or feature reports."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-18, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Devices are read-only. Nothing sets LEDs, force feedback or feature reports."
     },
     {
       "feature": "Exclusive device ownership",
@@ -60,8 +60,8 @@
       "feature": "Discovery from the command line",
       "apple": "Discovering HID devices from Terminal (article)",
       "bifrost": "none; the shell's control port (springboard/src/bare/control.rs) exposes state, not device lists",
-      "status": "partial",
-      "note": "A diagnostic dump of input devices exists only through the system layer and the observe tool. No documented command lists devices and their roles for a user."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. A diagnostic dump of input devices exists only through the system layer and the observe tool. No documented command lists devices and their roles for a user."
     }
   ],
   "gaps": [

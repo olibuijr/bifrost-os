@@ -32,29 +32,29 @@
       "feature": "Custom records on a service (AddRecord, UpdateRecord, RemoveRecord, RegisterRecord)",
       "apple": "DNSServiceAddRecord, DNSServiceUpdateRecord, DNSServiceRemoveRecord, DNSServiceRegisterRecord",
       "bifrost": "springboard/core/src/dnssd.rs (Record",
-      "status": "partial",
-      "note": "Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No DNS resource record sets are built or published."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No DNS resource record sets are built or published."
     },
     {
       "feature": "Query arbitrary DNS records (DNSServiceQueryRecord)",
       "apple": "DNSServiceQueryRecord, DNSServiceQueryRecordReply",
       "bifrost": "springboard/core/src/dnssd.rs (query",
-      "status": "partial",
-      "note": "Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The UDP resolver is private to the tracker HTTP client and is not exposed to apps. It does not run mDNS or multicast queries."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The UDP resolver is private to the tracker HTTP client and is not exposed to apps. It does not run mDNS or multicast queries."
     },
     {
       "feature": "Resolve hostnames to IPv4 and IPv6 (DNSServiceGetAddrInfo)",
       "apple": "DNSServiceGetAddrInfo, DNSServiceGetAddrInfoReply",
       "bifrost": "springboard/core/src/dnssd.rs (resolve_addresses",
-      "status": "partial",
-      "note": "Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing address lookup. The private resolver is used only for HTTPS fetches."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing address lookup. The private resolver is used only for HTTPS fetches."
     },
     {
       "feature": "TXT record construction and parsing (TXTRecordCreate, TXTRecordSetValue, TXTRecordGetValuePtr and the rest)",
       "apple": "TXTRecordRef, TXTRecordCreate, TXTRecordSetValue, TXTRecordGetValuePtr, TXTRecordGetItemAtIndex",
       "bifrost": "springboard/core/src/txt_record.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-19, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The beacon uses its own fixed binary layout and has no TXT key/value encoding."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-19, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The beacon uses its own fixed binary layout and has no TXT key/value encoding."
     },
     {
       "feature": "Connection and reference lifecycle (DNSServiceRef, ProcessResult, RefSockFD, SetDispatchQueue, RefDeallocate)",
@@ -67,29 +67,29 @@
       "feature": "NAT port mapping (DNSServiceNATPortMappingCreate)",
       "apple": "DNSServiceNATPortMappingCreate, DNSServiceNATPortMappingReply",
       "bifrost": "springboard/core/src/natpmp.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-02, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Searched for NAT-PMP, PCP, UPnP and IGD in springboard/src, springboard/netd and springboard/sdk/src: no hits."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 5 (theme-02, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Searched for NAT-PMP, PCP, UPnP and IGD in springboard/src, springboard/netd and springboard/sdk/src: no hits."
     },
     {
       "feature": "Enumerate recommended domains (DNSServiceEnumerateDomains)",
       "apple": "DNSServiceEnumerateDomains, DNSServiceDomainEnumReply",
       "bifrost": "springboard/core/src/dnssd.rs (DomainEnumeration)",
-      "status": "partial",
-      "note": "Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No domain browsing or registration-domain lookup."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No domain browsing or registration-domain lookup."
     },
     {
       "feature": "Error codes, flags and interface indices (kDNSServiceErr_*, kDNSServiceFlags*, kDNSServiceInterfaceIndex*)",
       "apple": "DNSServiceErrorType, DNSServiceFlags, DNSServiceProtocol, kDNSServiceInterfaceIndexAny and related constants",
       "bifrost": "springboard/core/src/dnssd.rs (DnsServiceError",
-      "status": "partial",
-      "note": "Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The beacon uses its own error results and no DNS-SD flags or interface indices are exposed."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The beacon uses its own error results and no DNS-SD flags or interface indices are exposed."
     },
     {
       "feature": "Multicast DNS and DNS-SD wire protocol on port 5353",
       "apple": "dnssd C API over mDNSResponder (RFC 6762, RFC 6763 wire format)",
       "bifrost": "springboard/core/src/dnssd.rs (Message::encode",
-      "status": "partial",
-      "note": "Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code sends or parses mDNS packets or DNS-SD PTR, SRV and TXT records. The share beacon interoperates only with BifrOSt peers."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-23, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code sends or parses mDNS packets or DNS-SD PTR, SRV and TXT records. The share beacon interoperates only with BifrOSt peers."
     }
   ],
   "gaps": [

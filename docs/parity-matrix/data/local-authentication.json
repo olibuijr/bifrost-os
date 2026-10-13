@@ -11,8 +11,8 @@
       "feature": "Biometric policy evaluation (LAContext, evaluatePolicy)",
       "apple": "LAContext, kLAPolicyDeviceOwnerAuthenticationWithBiometrics",
       "bifrost": "springboard/core/src/biometry.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Touch ID, Face ID or fingerprint support in the shell or SDK. Grep for fprint, fprintd, howdy and biometric returns nothing except the keychain doc's gap note (docs/bifrost-ui.md around line 410). LAPolicy.deviceOwnerAuthenticationWithBiometrics returns biometryNotAvailable from LAContext; biometry stays a gap."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Touch ID, Face ID or fingerprint support in the shell or SDK. Grep for fprint, fprintd, howdy and biometric returns nothing except the keychain doc's gap note (docs/bifrost-ui.md around line 410). LAPolicy.deviceOwnerAuthenticationWithBiometrics returns biometryNotAvailable from LAContext; biometry stays a gap."
     },
     {
       "feature": "Device-owner password or passcode authentication for apps",
@@ -32,29 +32,29 @@
       "feature": "Keychain items protected by user presence or biometrics",
       "apple": "SecAccessControl, kSecAttrAccessControl (Accessing Keychain Items with Face ID or Touch ID)",
       "bifrost": "springboard/ui/src/access_control.rs (Constraint",
-      "status": "partial",
-      "note": "Wave 2 (theme-01, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Items are readable whenever the shell runs. There is no access control class and no prompt before reading a secret (docs/bifrost-ui.md, Keychain section, parity gaps)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 24 tests. Wave 2 (theme-01, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Items are readable whenever the shell runs. There is no access control class and no prompt before reading a secret (docs/bifrost-ui.md, Keychain section, parity gaps)."
     },
     {
       "feature": "Persisted rights and secrets (LARight, LAPersistedRight, LASecret, LARightStore)",
       "apple": "LARight, LARightStore, LAPersistedRight, LASecret",
       "bifrost": "springboard/ui/src/access_control.rs (RightStore",
-      "status": "partial",
-      "note": "Wave 2 (theme-01, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No right or requirement model exists. The keychain stores only generic passwords keyed by (service, account)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 24 tests. Wave 2 (theme-01, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No right or requirement model exists. The keychain stores only generic passwords keyed by (service, account)."
     },
     {
       "feature": "Authentication requirements and biometry fallback (LAAuthenticationRequirement, LABiometryFallbackRequirement)",
       "apple": "LAAuthenticationRequirement, LABiometryFallbackRequirement",
       "bifrost": "springboard/core/src/biometry.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No requirement objects or fallback chain. The only fallback is the password path at login."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No requirement objects or fallback chain. The only fallback is the password path at login."
     },
     {
       "feature": "Key pairs gated by authentication (LAPublicKey, LAPrivateKey)",
       "apple": "LAPublicKey, LAPrivateKey",
       "bifrost": "springboard/ui/src/access_control.rs (KeyPairPolicy)",
-      "status": "partial",
-      "note": "Wave 3 (theme-10, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The keychain has no keys or certificates (only kSecClassGenericPassword). No Secure Enclave equivalent is present; the master key is a file on disk (springboard/src/keychain.rs, module comment)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 24 tests. Wave 3 (theme-10, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The keychain has no keys or certificates (only kSecClassGenericPassword). No Secure Enclave equivalent is present; the master key is a file on disk (springboard/src/keychain.rs, module comment)."
     },
     {
       "feature": "Authentication errors (LAError, LAErrorDomain)",
@@ -67,8 +67,8 @@
       "feature": "Biometry type and device state (LADomainState, LAEnvironment, kLABiometryType*)",
       "apple": "LADomainState, LADomainStateBiometry, LAEnvironment, kLABiometryTypeNone/TouchID/FaceID/OpticID",
       "bifrost": "springboard/core/src/biometry.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API reports whether biometrics or a passcode are enrolled, or which biometry type exists. Apps cannot choose a policy from device capability."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API reports whether biometrics or a passcode are enrolled, or which biometry type exists. Apps cannot choose a policy from device capability."
     },
     {
       "feature": "Companion device authentication (Apple Watch, Vision Pro)",

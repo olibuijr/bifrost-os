@@ -60,15 +60,15 @@
       "feature": "DOM node snapshot",
       "apple": "WKDOMNodeSnapshot",
       "bifrost": "springboard/ui/src/dom_snapshot.rs; wired: springboard/ui/src/dom_snapshot.rs (consumed by springboard/apps/browser/src/reader.rs)",
-      "status": "partial",
-      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no DOM tree snapshot object; dev_eval can read DOM state through script only Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no DOM tree snapshot object; dev_eval can read DOM state through script only Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Contextual menus",
       "apple": "WKContextMenuElementInfo",
       "bifrost": "springboard/ui/src/context_element.rs",
-      "status": "partial",
-      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no right click or context menu; the engine path does not expose link info"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no right click or context menu; the engine path does not expose link info"
     },
     {
       "feature": "Web UI delegate (alerts, file panels, new windows, window features)",
@@ -95,8 +95,8 @@
       "feature": "Web extensions",
       "apple": "WKWebExtension, WKWebExtensionController, WKWebExtensionContext and related delegates",
       "bifrost": "springboard/ui/src/match_pattern.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-18, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no extension manifest loading or runtime; out of scope for a first-party desktop unless the browser needs it"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-18, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no extension manifest loading or runtime; out of scope for a first-party desktop unless the browser needs it"
     },
     {
       "feature": "WebKit for SwiftUI",

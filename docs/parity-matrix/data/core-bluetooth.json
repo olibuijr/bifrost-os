@@ -11,29 +11,29 @@
       "feature": "Central manager state and power",
       "apple": "CBCentralManager, CBManager, CBCentralManagerState (deprecated), CBManagerState",
       "bifrost": "springboard/sdk/src/central.rs (ManagerState",
-      "status": "partial",
-      "note": "Wave 5 (w5-core-bluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. State exists in the shell and drives the Settings toggle; no SDK type reports it to an app. Authorization state has no counterpart."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (w5-core-bluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. State exists in the shell and drives the Settings toggle; no SDK type reports it to an app. Authorization state has no counterpart."
     },
     {
       "feature": "Scanning for peripherals",
       "apple": "CBCentralManager.scanForPeripherals(withServices:options:), stopScan(), isScanning",
       "bifrost": "springboard/sdk/src/central.rs (ScanOptions",
-      "status": "partial",
-      "note": "Wave 5 (w5-core-bluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Scan runs for the shell's Settings list only. No service-UUID filter and no per-app scan API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (w5-core-bluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Scan runs for the shell's Settings list only. No service-UUID filter and no per-app scan API."
     },
     {
       "feature": "Discovered peripheral and advertisement data",
       "apple": "CBPeripheral, CBPeer, didDiscover peripheral advertisementData RSSI",
       "bifrost": "springboard/ui/src/advertising.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-core-bluetooth, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Name, RSSI and audio-service flag are parsed in the shell. Manufacturer data and service UUIDs from advertisements are not exposed."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-core-bluetooth, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Name, RSSI and audio-service flag are parsed in the shell. Manufacturer data and service UUIDs from advertisements are not exposed."
     },
     {
       "feature": "Connecting and disconnecting peripherals",
       "apple": "CBCentralManager.connect(_:options:), cancelPeripheralConnection(_:)",
       "bifrost": "springboard/sdk/src/central.rs (Link",
-      "status": "partial",
-      "note": "Wave 5 (w5-core-bluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Connect is a mgmt command for the system link. It is not a per-app GATT connection."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (w5-core-bluetooth, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Connect is a mgmt command for the system link. It is not a per-app GATT connection."
     },
     {
       "feature": "Pairing, bonding and forgetting devices",
@@ -60,22 +60,22 @@
       "feature": "Peripheral role: advertising and local GATT server",
       "apple": "CBPeripheralManager, CBPeripheralManagerDelegate, CBMutableService, CBMutableCharacteristic, CBMutableDescriptor, CBATTRequest",
       "bifrost": "springboard/ui/src/peripheral.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-05, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code advertises services or answers ATT requests."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 4 (theme-05, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code advertises services or answers ATT requests."
     },
     {
       "feature": "Central role: GATT client (services, characteristics, descriptors)",
       "apple": "CBPeripheral, CBPeripheralDelegate, CBService, CBCharacteristic, CBDescriptor, read, write, notify",
       "bifrost": "springboard/ui/src/gatt.rs (GattClient)",
-      "status": "partial",
-      "note": "Wave 2 (theme-05, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The mgmt socket manages links and keys only. It does not discover GATT attributes or read and write values."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-05, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The mgmt socket manages links and keys only. It does not discover GATT attributes or read and write values."
     },
     {
       "feature": "UUIDs and attribute permissions",
       "apple": "CBUUID, CBAttribute, CBAttributePermissions",
       "bifrost": "springboard/ui/src/gatt.rs (Uuid",
-      "status": "partial",
-      "note": "Wave 2 (theme-05, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No CBUUID type in the SDK. Only the audio UUID check exists, and it is internal."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-05, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No CBUUID type in the SDK. Only the audio UUID check exists, and it is internal."
     },
     {
       "feature": "ATT and Core Bluetooth errors",

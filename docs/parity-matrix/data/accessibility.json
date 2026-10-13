@@ -88,36 +88,36 @@
       "feature": "Switch Control",
       "apple": "Switch Control (AccessibilityTechnology.switchControl)",
       "bifrost": "springboard/ui/src/switch_scan.rs",
-      "status": "partial",
-      "note": "Wave 2 (accessibility, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No switch scanning code found in springboard/ (search for switch control and dwell returned nothing). round 75, host only: scan model (Scanner), not yet wired to the shell."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (accessibility, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No switch scanning code found in springboard/ (search for switch control and dwell returned nothing). round 75, host only: scan model (Scanner), not yet wired to the shell."
     },
     {
       "feature": "Voice Control",
       "apple": "Voice Control (AccessibilityTechnology.voiceControl)",
       "bifrost": "springboard/ui/src/voice_commands.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-15, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No voice command code found in springboard/."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-15, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No voice command code found in springboard/."
     },
     {
       "feature": "Accessibility Inspector",
       "apple": "Accessibility Inspector developer tool",
       "bifrost": "springboard/ui/src/ax_audit.rs",
-      "status": "partial",
-      "note": "Wave 2 (accessibility, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The element map in ui/src/ax.rs serves agents, not developers. No app-facing inspector shows an app's accessibility tree. The Web Inspector in springboard/apps/browser/src/inspector.rs covers web content only. round 75, host only: audit checks (Audit::run), pure model."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (accessibility, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The element map in ui/src/ax.rs serves agents, not developers. No app-facing inspector shows an app's accessibility tree. The Web Inspector in springboard/apps/browser/src/inspector.rs covers web content only. round 75, host only: audit checks (Audit::run), pure model."
     },
     {
       "feature": "Braille displays and Braille translation",
       "apple": "Braille displays, AXBrailleTranslator",
       "bifrost": "springboard/ui/src/braille.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-24, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Braille source code found; the only hits are generated build output under springboard/target."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-24, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Braille source code found; the only hits are generated build output under springboard/target."
     },
     {
       "feature": "Audio graphs and hearing device support",
       "apple": "Audio graphs, hearing device support",
       "bifrost": "springboard/ui/src/chart_ax.rs (ChartDescriptor::audio_graph)",
-      "status": "partial",
-      "note": "Wave 2 (theme-31, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No audio graph or hearing aid API found in this pass."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-31, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No audio graph or hearing aid API found in this pass."
     }
   ],
   "gaps": [

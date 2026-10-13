@@ -11,29 +11,29 @@
       "feature": "Format readers (MEFormatReader, MEFormatReaderExtension, MEByteSource)",
       "apple": "MEFormatReader, MEFormatReaderExtension, MEFormatReaderInstantiationOptions, MEFileInfo, MEByteSource",
       "bifrost": "springboard/src/media/demux/mod.rs (Pure-Rust demuxers: mp4.rs, webm.rs, mse.rs); springboard/src/media/mp4.rs",
-      "status": "partial",
-      "note": "Demuxers for MP4/fMP4 and WebM are built in. No app-facing extension point, no out-of-process reader, no byte-source abstraction, no sidecar file handling."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 17 tests. Demuxers for MP4/fMP4 and WebM are built in. No app-facing extension point, no out-of-process reader, no byte-source abstraction, no sidecar file handling."
     },
     {
       "feature": "Track readers and sample cursors (METrackReader, METrackInfo, MESampleCursor)",
       "apple": "METrackReader, METrackInfo, MESampleCursor, MESampleLocation, MESampleCursorChunk, MEEstimatedSampleLocation, MEHEVCDependencyInfo",
       "bifrost": "springboard/src/media/demux/mod.rs (Sample, TrackKind, CodecId, TrackInfo), springboard/core/src/mediaext.rs",
-      "status": "partial",
-      "note": "Tracks and samples are parsed internally with microsecond times. No public sample cursor for seeking and stepping; the cursor API is not exposed to apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Tracks and samples are parsed internally with microsecond times. No public sample cursor for seeking and stepping; the cursor API is not exposed to apps."
     },
     {
       "feature": "Video decoders (MEVideoDecoder, MEVideoDecoderExtension, MEDecodeFrameOptions)",
       "apple": "MEVideoDecoder, MEVideoDecoderExtension, MEDecodeFrameOptions, MEVideoDecoderPixelBufferManager",
       "bifrost": "springboard/src/media/mod.rs (VideoDecoder trait, default_decoder); springboard/src/media/hwdec/ffmpeg.rs (libavcodec via dlopen, VA-API hwaccel)",
-      "status": "partial",
-      "note": "The VideoDecoder trait is an internal seam with one implementation (libavcodec, VA-API when available). Apps cannot register a decoder for a codec type. No per-frame decode options."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. The VideoDecoder trait is an internal seam with one implementation (libavcodec, VA-API when available). Apps cannot register a decoder for a codec type. No per-frame decode options."
     },
     {
       "feature": "Video decoder registration by codec type (kMEVideoDecoderCodecInfoKey and related property-list keys)",
       "apple": "kMEVideoDecoderClassImplementationIDKey, kMEVideoDecoderCodecTypeKey, kMEVideoDecoderCodecInfoKey, kMEVideoDecoderExtensionPointName",
       "bifrost": "springboard/core/src/mediaext.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-mediaextension, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No property-list or manifest mechanism that declares a decoder for a four-character codec type. Codec choice is a closed enum in the desktop binary."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-mediaextension, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No property-list or manifest mechanism that declares a decoder for a four-character codec type. Codec choice is a closed enum in the desktop binary."
     },
     {
       "feature": "RAW processors (MERAWProcessor, MERAWProcessorExtension, MERAWProcessingParameter)",
@@ -53,8 +53,8 @@
       "feature": "Errors (MEError, MediaExtensionErrorDomain)",
       "apple": "MEError, MEError.Code, MediaExtensionErrorDomain",
       "bifrost": "springboard/src/media/demux/mod.rs (DemuxError), springboard/src/media/mod.rs (Error enum)",
-      "status": "partial",
-      "note": "Internal error enums exist for demux and playback. They do not map to MediaExtension's error domain and codes, and no app receives them through a public error type."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Internal error enums exist for demux and playback. They do not map to MediaExtension's error domain and codes, and no app receives them through a public error type."
     }
   ],
   "gaps": [

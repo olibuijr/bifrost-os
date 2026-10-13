@@ -11,8 +11,8 @@
       "feature": "Library entry point and loading (ITLibrary, reloadData, unloadData, apiVersion)",
       "apple": "ITLibrary, init(apiVersion:options:), reloadData(), unloadData()",
       "bifrost": "springboard/ui/src/media_changes.rs (MediaLibrary::unload, is_loaded); apiVersion not modelled",
-      "status": "partial",
-      "note": "Wave 6 (b13, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Scanning and building the library happens inside the Music app binary. No SDK type or control method exposes it to other apps (springboard/sdk/src/control.rs is a generic RPC socket)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b13, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Scanning and building the library happens inside the Music app binary. No SDK type or control method exposes it to other apps (springboard/sdk/src/control.rs is a generic RPC socket)."
     },
     {
       "feature": "Media items (tracks)",
@@ -32,8 +32,8 @@
       "feature": "Playlists",
       "apple": "ITLibPlaylist: name, items, kind, parentID, isPrimary, distinguishedKind",
       "bifrost": "springboard/apps/music-desktop/src/music/playlists.rs (Playlists, .m3u files)",
-      "status": "partial",
-      "note": "User playlists are plain .m3u files, one song path per line, owned by the Music app. No distinguished kinds (master, folders), no parent IDs, no read path for other apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 4 tests. User playlists are plain .m3u files, one song path per line, owned by the Music app. No distinguished kinds (master, folders), no parent IDs, no read path for other apps."
     },
     {
       "feature": "Artwork",
@@ -46,8 +46,8 @@
       "feature": "Change notification (DidChangeLibraryMessage)",
       "apple": "DidChangeLibraryMessage",
       "bifrost": "springboard/ui/src/media_changes.rs (MediaLibrary::observe); no SDK publication to other apps; wired: springboard/apps/music-desktop/src/music.rs (MediaLibrary::observe); no publication to other apps",
-      "status": "partial",
-      "note": "Wave 6 (b13, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The Music app still polls its folders (docs/bifrost-ui.md states it should migrate to fswatch). No library-change message is published to other apps. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b13, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The Music app still polls its folders (docs/bifrost-ui.md states it should migrate to fswatch). No library-change message is published to other apps. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Video media info (ITLibMediaItemVideoInfo)",

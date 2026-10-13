@@ -11,99 +11,99 @@
       "feature": "Chart view and content builder",
       "apple": "Chart, ChartContent, ChartContentBuilder, Plot (https://developer.apple.com/documentation/charts)",
       "bifrost": "springboard/ui/src/chart_content.rs; wired: springboard/apps/weather-desktop/src/insights.rs (temperature_plot, temperature_line) drawn in weather.rs draw_main_with",
-      "status": "partial",
-      "note": "Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no declarative chart container; apps would hand-draw every bar and label Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no declarative chart container; apps would hand-draw every bar and label Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Bar marks",
       "apple": "BarMark, BarPlot",
       "bifrost": "springboard/ui/src/chart_content.rs (Mark::Bar), springboard/ui/src/chart_vector.rs (bar_plot)",
-      "status": "partial",
-      "note": "Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. bars are drawn only inside the Screen Time page; no app API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. bars are drawn only inside the Screen Time page; no app API"
     },
     {
       "feature": "Line and area marks",
       "apple": "LineMark, AreaMark, LinePlot, AreaPlot, InterpolationMethod",
       "bifrost": "springboard/ui/src/chart_marks.rs (line_path; wired: springboard/apps/weather-desktop/src/insights.rs area_columns; src/weather.rs draw_main_with TEMPERATURE card (area fill under the hourly line)",
-      "status": "partial",
-      "note": "Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. battery graph draws bins, not lines or areas (springboard/src/shell/battery.rs) Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. battery graph draws bins, not lines or areas (springboard/src/shell/battery.rs) Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Point, rectangle and rule marks",
       "apple": "PointMark, RectangleMark, RuleMark, PointPlot, RectanglePlot, RulePlot",
       "bifrost": "springboard/ui/src/chart_marks.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no scatter, range or reference-line drawing in the SDK"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no scatter, range or reference-line drawing in the SDK"
     },
     {
       "feature": "Sector marks (pie and donut)",
       "apple": "SectorMark, SectorPlot",
       "bifrost": "springboard/ui/src/chart.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no pie or donut drawing in springboard/sdk/src or springboard/ui/src"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no pie or donut drawing in springboard/sdk/src or springboard/ui/src"
     },
     {
       "feature": "Vectorized plots for large data",
       "apple": "VectorizedChartContent, AreaPlot, LinePlot, PointPlot, RectanglePlot, RulePlot, BarPlot, SectorPlot",
       "bifrost": "springboard/ui/src/chart_vector.rs (decimate",
-      "status": "partial",
-      "note": "Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no batched plot path; both shell charts take small fixed arrays"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no batched plot path; both shell charts take small fixed arrays"
     },
     {
       "feature": "Scales, domains and ranges",
       "apple": "ScaleType, ScaleDomain, AutomaticScaleDomain, ScaleRange, PositionScaleRange, PlotDimensionScaleRange",
       "bifrost": "springboard/ui/src/chart.rs; wired: springboard/apps/weather-desktop/src/insights.rs (temperature_scale, chart::axis_ticks)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the domain is hard-coded per chart; no automatic domain inference and no log or sqrt scale Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the domain is hard-coded per chart; no automatic domain inference and no log or sqrt scale Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Axes and axis marks",
       "apple": "AxisMarks, AxisMark, AxisTick, AxisGridLine, AxisValueLabel, AxisValue, AxisContentBuilder",
       "bifrost": "springboard/ui/src/chart.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. axis labels are fixed in the shell (0, 6, 12, 18 h or weekday names); no grid lines or tick API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. axis labels are fixed in the shell (0, 6, 12, 18 h or weekday names); no grid lines or tick API"
     },
     {
       "feature": "Data bins",
       "apple": "NumberBins, DateBins, ChartBinRange",
       "bifrost": "springboard/ui/src/chart.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. binning is written for the battery graph only, not reusable"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. binning is written for the battery graph only, not reusable"
     },
     {
       "feature": "Annotations",
       "apple": "AnnotationContext, AnnotationPosition, AnnotationOverflowResolution",
       "bifrost": "springboard/ui/src/chart_marks.rs (place_annotation)",
-      "status": "partial",
-      "note": "Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no value callouts or labels attached to marks"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no value callouts or labels attached to marks"
     },
     {
       "feature": "Chart proxy and plot area access",
       "apple": "ChartProxy, ChartPlotContent",
       "bifrost": "springboard/ui/src/chart_marks.rs (Plot)",
-      "status": "partial",
-      "note": "Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no way to map a pointer position to a data value, so no hover or selection on charts"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no way to map a pointer position to a data value, so no hover or selection on charts"
     },
     {
       "feature": "Scrolling charts",
       "apple": "ChartScrollTargetBehavior, ChartScrollTargetBehaviorContext",
       "bifrost": "springboard/ui/src/chart_scroll.rs (ValueAligned)",
-      "status": "partial",
-      "note": "Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the scroll view (springboard/sdk/src/view/scroll.rs) has no chart snap behaviour"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 4 (w4-swift-charts, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the scroll view (springboard/sdk/src/view/scroll.rs) has no chart snap behaviour"
     },
     {
       "feature": "3D charts and surface plots",
       "apple": "Chart3D, Chart3DContent, Chart3DContentBuilder, SurfacePlot, Chart3DSurfaceStyle (macOS 26.0)",
       "bifrost": "springboard/ui/src/chart_surface.rs",
-      "status": "partial",
-      "note": "Wave 6 (b07, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no 3D chart or surface renderer in springboard/render/src"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b07, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no 3D chart or surface renderer in springboard/render/src"
     },
     {
       "feature": "Accessibility and localization of charts",
       "apple": "Chart accessibility and localization (Swift Charts landing page)",
       "bifrost": "springboard/ui/src/chart_ax.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-31, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no chart-level accessibility summary, audio graph or chart-specific labels; the shell bars have no accessible values"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-31, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no chart-level accessibility summary, audio graph or chart-specific labels; the shell bars have no accessible values"
     }
   ],
   "gaps": [

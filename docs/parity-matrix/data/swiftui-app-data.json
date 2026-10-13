@@ -46,22 +46,22 @@
       "feature": "Documents",
       "apple": "DocumentGroup, FileDocument, ReferenceFileDocument",
       "bifrost": "springboard/sdk/src/document.rs, springboard/sdk/src/file_coordination.rs",
-      "status": "partial",
-      "note": "NSDocument-style API with file grants; no declarative DocumentGroup or versioned-document UI"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. NSDocument-style API with file grants; no declarative DocumentGroup or versioned-document UI"
     },
     {
       "feature": "Navigation",
       "apple": "NavigationStack, NavigationSplitView, NavigationPath, TabView",
       "bifrost": "springboard/ui/src/nav.rs, springboard/ui/src/split.rs, springboard/ui/src/sidebar.rs",
-      "status": "partial",
-      "note": "Push/pop stack, split view, sidebar models; no value-based destinations or NavigationPath"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. Push/pop stack, split view, sidebar models; no value-based destinations or NavigationPath"
     },
     {
       "feature": "Modal presentations",
       "apple": "sheet, alert, confirmationDialog, popover, fullScreenCover",
       "bifrost": "springboard/ui/src/sheet.rs, springboard/ui/src/nav.rs",
-      "status": "partial",
-      "note": "Sheets and alerts exist; popover and confirmation dialog not confirmed as separate APIs"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Sheets and alerts exist; popover and confirmation dialog not confirmed as separate APIs"
     },
     {
       "feature": "Toolbars",
@@ -88,22 +88,22 @@
       "feature": "Model data",
       "apple": "State, Binding, Observable, ObservableObject, Bindable",
       "bifrost": "springboard/sdk/src/observable.rs, springboard/ui/src/observe.rs",
-      "status": "partial",
-      "note": "Observable values with subscribers; no automatic view invalidation from dependency tracking"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Observable values with subscribers; no automatic view invalidation from dependency tracking"
     },
     {
       "feature": "Environment values",
       "apple": "Environment, EnvironmentObject, EnvironmentValues",
       "bifrost": "springboard/ui/src/environment.rs, springboard/ui/src/nav.rs, springboard/ui/src/preferences.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Appearance and locale are readable globals; no view-hierarchy environment propagation"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 28 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Appearance and locale are readable globals; no view-hierarchy environment propagation"
     },
     {
       "feature": "Preferences",
       "apple": "PreferenceKey, onPreferenceChange, anchor preferences",
       "bifrost": "springboard/ui/src/environment.rs, springboard/ui/src/nav.rs, springboard/ui/src/preferences.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No child-to-parent preference channel; layout is computed by the app"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 28 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No child-to-parent preference channel; layout is computed by the app"
     },
     {
       "feature": "Persistent storage",

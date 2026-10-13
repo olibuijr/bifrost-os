@@ -11,22 +11,22 @@
       "feature": "Tip protocol (title, message, image, actions)",
       "apple": "Tip (protocol), Tips.Action, Tips.Option",
       "bifrost": "springboard/ui/src/tips.rs",
-      "status": "partial",
-      "note": "Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No tip type, and no code or docs mention tips. The Help menu exists at springboard/src/shell/desktop_bar.rs:119 but holds no tip content."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No tip type, and no code or docs mention tips. The Help menu exists at springboard/src/shell/desktop_bar.rs:119 but holds no tip content."
     },
     {
       "feature": "Display rules and events",
       "apple": "Tips.Rule, Tips.Parameter, Tips.Event",
       "bifrost": "springboard/ui/src/tips.rs",
-      "status": "partial",
-      "note": "Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No rule engine that counts events or parameter changes to decide when a hint is eligible."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No rule engine that counts events or parameter changes to decide when a hint is eligible."
     },
     {
       "feature": "Inline tip view and style",
       "apple": "TipView, tipViewStyle(_:), TipViewStyle, MiniTipViewStyle",
       "bifrost": "springboard/ui/src/tips.rs (TipView, TipViewStyle); wired: springboard/ui/src/tips.rs (TipView, TipViewStyle::Mini) via springboard/apps/freeform-desktop/src/freeform.rs; wired: springboard/apps/reminders-desktop/src/app.rs (AlertHint, TipView, TipViewStyle::Mini); view.rs (draw_tip); main.rs (tip_store)",
-      "status": "partial",
-      "note": "Wave 6 (b07, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No inline tip container or style hook. Grouped cards exist in widgets.rs but nothing is a tip. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 6 (b07, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No inline tip container or style hook. Grouped cards exist in widgets.rs but nothing is a tip. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Popover tip",
@@ -39,15 +39,15 @@
       "feature": "Tip groups",
       "apple": "TipGroup",
       "bifrost": "springboard/ui/src/tips.rs",
-      "status": "partial",
-      "note": "Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No ordered or first-eligible presentation of several hints."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No ordered or first-eligible presentation of several hints."
     },
     {
       "feature": "Configuration and datastore",
       "apple": "Tips.configure(_:), Tips.datastoreLocation(_:), Tips.displayFrequency(_:)",
       "bifrost": "springboard/sdk/src/defaults.rs (per-app typed preferences written to <app data>/defaults.txt)",
-      "status": "partial",
-      "note": "Per-app persistent typed key-value storage exists, so tip state could be stored there. There is no configure call, no display frequency limit and no tip-specific store."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Per-app persistent typed key-value storage exists, so tip state could be stored there. There is no configure call, no display frequency limit and no tip-specific store."
     },
     {
       "feature": "CloudKit sync of tip state",
@@ -74,8 +74,8 @@
       "feature": "Testing hooks (show, hide, reset tips)",
       "apple": "Tips.showAllTipsForTesting(), showTipsForTesting(_:), hideAllTipsForTesting(), hideTipsForTesting(_:), resetDatastore()",
       "bifrost": "springboard/ui/src/tips.rs",
-      "status": "partial",
-      "note": "Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The headless test window can drive any view, but there is no tip registry to force-show or reset."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (tipkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The headless test window can drive any view, but there is no tip registry to force-show or reset."
     }
   ],
   "gaps": [

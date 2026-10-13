@@ -25,15 +25,15 @@
       "feature": "Sizing the view with a control size",
       "apple": "LAAuthenticationView.init(context:controlSize:), controlSize",
       "bifrost": "springboard/core/src/auth_session.rs (ControlSize)",
-      "status": "partial",
-      "note": "Wave 3 (theme-05, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. depends on the view above"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (theme-05, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. depends on the view above"
     },
     {
       "feature": "Presentation context data type",
       "apple": "LAPresentationContext",
       "bifrost": "springboard/core/src/auth_session.rs (PresentationContext)",
-      "status": "partial",
-      "note": "Wave 3 (theme-05, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no Apple-style presentation context for auth UI"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (theme-05, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no Apple-style presentation context for auth UI"
     },
     {
       "feature": "Custom authentication UI around the system check",

@@ -11,22 +11,22 @@
       "feature": "SHA-2 hashing (SHA256, SHA384, SHA512, HashFunction)",
       "apple": "SHA256, SHA384, SHA512, HashFunction",
       "bifrost": "springboard/core/src/sha512.rs (digest512, springboard/core/src/sha256.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-apple-cryptokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. SHA-256 only, in the shell's core crate; no SDK type, no SHA-384 or SHA-512, no HashFunction protocol"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-apple-cryptokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. SHA-256 only, in the shell's core crate; no SDK type, no SHA-384 or SHA-512, no HashFunction protocol"
     },
     {
       "feature": "SHA-3 hashing",
       "apple": "SHA3_256, SHA3_384, SHA3_512 (and digest types)",
       "bifrost": "springboard/core/src/sha3.rs (sha3_256",
-      "status": "partial",
-      "note": "Wave 4 (w4-apple-cryptokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SHA-3 implementation in springboard/"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-apple-cryptokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SHA-3 implementation in springboard/"
     },
     {
       "feature": "HMAC message authentication",
       "apple": "HMAC, SymmetricKey, SymmetricKeySize",
       "bifrost": "springboard/core/src/hkdf.rs (hmac_sha256)",
-      "status": "partial",
-      "note": "Wave 4 (w4-apple-cryptokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. HMAC-SHA256 is private to the keychain module; no SymmetricKey type and no HMAC API for apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-apple-cryptokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. HMAC-SHA256 is private to the keychain module; no SymmetricKey type and no HMAC API for apps"
     },
     {
       "feature": "ChaCha20-Poly1305 (ChaChaPoly)",
@@ -39,29 +39,29 @@
       "feature": "AES ciphers (AES.GCM)",
       "apple": "AES",
       "bifrost": "springboard/core/src/aes_gcm.rs (bifrost_core::aes_gcm)",
-      "status": "partial",
-      "note": "Wave 6 (b16, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no AES in springboard/; the noVNC JavaScript under springboard/apps/remote is a web client and not used by apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 6 (b16, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no AES in springboard/; the noVNC JavaScript under springboard/apps/remote is a web client and not used by apps"
     },
     {
       "feature": "Per-app key derivation (HKDF)",
       "apple": "HKDF",
       "bifrost": "springboard/src/keychain.rs:292 (fn derive)",
-      "status": "partial",
-      "note": "derives per-app subkeys with HMAC from a master key; this is an ad hoc construction, not HKDF, and is not exposed to apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 16 tests. derives per-app subkeys with HMAC from a master key; this is an ad hoc construction, not HKDF, and is not exposed to apps"
     },
     {
       "feature": "Public-key signatures (Curve25519 Ed25519, P256, P384, P521)",
       "apple": "Curve25519, P256, P384, P521",
       "bifrost": "springboard/ui/src/ed25519.rs",
-      "status": "partial",
-      "note": "Curve25519.Signing (Ed25519, RFC 8032) done as a pure model with host unit tests: PrivateKey, PublicKey, CryptoKitError; not yet tested on Midget. P256, P384 and P521 are still missing"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Curve25519.Signing (Ed25519, RFC 8032) done as a pure model with host unit tests: PrivateKey, PublicKey, CryptoKitError; not yet tested on Midget. P256, P384 and P521 are still missing"
     },
     {
       "feature": "Key agreement (X25519, SharedSecret)",
       "apple": "Curve25519, SharedSecret",
       "bifrost": "springboard/ui/src/x25519.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-03, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no Diffie-Hellman or X25519 in springboard/"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-03, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no Diffie-Hellman or X25519 in springboard/"
     },
     {
       "feature": "Hybrid public key encryption (HPKE)",
@@ -95,8 +95,8 @@
       "feature": "Legacy insecure algorithms (Insecure: MD5, SHA-1)",
       "apple": "Insecure",
       "bifrost": "springboard/core/src/md5.rs, springboard/core/src/sha1.rs, springboard/sdk/src/digest.rs (insecure)",
-      "status": "partial",
-      "note": "Wave 5 (w5-apple-cryptokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell has no MD5 or SHA-1; only the noVNC web client has MD5"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 5 (w5-apple-cryptokit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the shell has no MD5 or SHA-1; only the noVNC web client has MD5"
     },
     {
       "feature": "Export compliance declaration",

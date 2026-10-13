@@ -11,8 +11,8 @@
       "feature": "Model classes and schema (@Model, Attribute, Unique, Index, Transient)",
       "apple": "Model(), Attribute(_:originalName:hashModifier:), Unique, Index, Transient",
       "bifrost": "springboard/ui/src/model_schema.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-swiftdata, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no declarative model macro, no schema, no uniqueness or index constraints; apps write their own struct and file format"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 5 (w5-swiftdata, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no declarative model macro, no schema, no uniqueness or index constraints; apps write their own struct and file format"
     },
     {
       "feature": "Model container and model context (fetch, insert, delete, save)",
@@ -25,36 +25,36 @@
       "feature": "Relationships between models (delete rules, inverses, model count limits)",
       "apple": "Relationship(_:deleteRule:minimumModelCount:maximumModelCount:originalName:inverse:hashModifier:)",
       "bifrost": "springboard/ui/src/history.rs, springboard/ui/src/model_store.rs, springboard/ui/src/relations.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no object graph; apps store ids in their own files"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 21 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no object graph; apps store ids in their own files"
     },
     {
       "feature": "Predicate and descriptor queries, sorting, sections (Query, FetchDescriptor)",
       "apple": "Query(), FetchDescriptor, ResultsSection, SectionedResults",
       "bifrost": "springboard/ui/src/table.rs (sort_rows, multi-key sort, click_header); springboard/core/src/log.rs (Query for the unified log, predicate parsing); wired: springboard/apps/reminders-desktop/src/model.rs (Smart::predicate, Smart::matches); smart lists only",
-      "status": "partial",
-      "note": "sorting and filtering exist for in-memory table rows and for log entries only; no predicate engine over persistent models and no live-updating query Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. sorting and filtering exist for in-memory table rows and for log entries only; no predicate engine over persistent models and no live-updating query Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Live results observation (ResultsObserver, Query updates animate views)",
       "apple": "ResultsObserver, Query (SwiftUI updates)",
       "bifrost": "springboard/ui/src/observe.rs (Observable, only changes notify); springboard/sdk/src/observable.rs (Observable<T>, sink, map)",
-      "status": "partial",
-      "note": "value observation exists; no observer over a fetched collection of records"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 2 tests. value observation exists; no observer over a fetched collection of records"
     },
     {
       "feature": "Undo and redo of data changes",
       "apple": "Reverting data changes using the undo manager (ModelContext undo manager)",
       "bifrost": "springboard/ui/src/undo.rs (NativeUndoManager-style grouped commands, redo stack, typing coalescing); springboard/apps/calendar-desktop/src/calendar.rs (undo_delete); wired: springboard/apps/reminders-desktop/src/app.rs (commit_named, step_history)",
-      "status": "partial",
-      "note": "undo works on app state the app mutates with inverse closures; nothing records store changes automatically Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. undo works on app state the app mutates with inverse closures; nothing records store changes automatically Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Persistence of document-based data (autosave, recents, restore)",
       "apple": "ModelDocument, Building a document-based app using SwiftData",
       "bifrost": "springboard/sdk/src/document.rs (NSDocument parity, autosave of untitled documents, recents, restore)",
-      "status": "partial",
-      "note": "documents are files the app serialises itself; there is no model-based document type"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 20 tests. documents are files the app serialises itself; there is no model-based document type"
     },
     {
       "feature": "App state restoration across launches",
@@ -67,22 +67,22 @@
       "feature": "Data store abstraction (DataStore, DefaultStore, custom stores, batching)",
       "apple": "DataStore, DataStoreBatching, DefaultStore",
       "bifrost": "springboard/ui/src/data_store.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-swiftdata, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no pluggable store interface; coordination covers files between processes, not records"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-swiftdata, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no pluggable store interface; coordination covers files between processes, not records"
     },
     {
       "feature": "Change history and history observers (remote change tracking)",
       "apple": "HistoryDescriptor, HistoryObserver, HistoryTransaction, HistoryChange",
       "bifrost": "springboard/ui/src/history.rs, springboard/ui/src/model_store.rs, springboard/ui/src/relations.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. file-level change events only; no transaction history or tokens for records"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 21 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. file-level change events only; no transaction history or tokens for records"
     },
     {
       "feature": "Model actors and concurrency isolation (ModelActor, serial model executor)",
       "apple": "ModelActor, DefaultSerialModelExecutor, SerialModelExecutor",
       "bifrost": "springboard/sdk/src/dispatch.rs (serial queues); docs/bifrost-ui.md line 1107 (a serial store queue instead of a thread)",
-      "status": "partial",
-      "note": "serial queues exist, but no actor-isolated model access"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. serial queues exist, but no actor-isolated model access"
     },
     {
       "feature": "Sync of model data across a person's devices (iCloud)",
@@ -95,8 +95,8 @@
       "feature": "Errors (SwiftDataError, DataStoreError)",
       "apple": "SwiftDataError, DataStoreError",
       "bifrost": "springboard/sdk/src/defaults.rs and springboard/sdk/src/file_coordination.rs (Result-based errors such as CoordinationError::Timeout)",
-      "status": "partial",
-      "note": "error types exist per subsystem; no store error taxonomy"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 16 tests. error types exist per subsystem; no store error taxonomy"
     }
   ],
   "gaps": [

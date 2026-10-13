@@ -11,8 +11,8 @@
       "feature": "Onboarding a Matter device (setup code, QR payload parsing)",
       "apple": "MTROnboardingPayloadParser, MTRQRCodeSetupPayloadParser, MTROptionalQRCodeInfo",
       "bifrost": "springboard/core/src/matter.rs (parse_qr, base38_decode, parse_manual_code, passcode_is_valid); springboard/core/src/matter.rs (setup payloads)",
-      "status": "partial",
-      "note": "Setup payload decoding is in core: the QR code (MT: and Base38, 88-bit payload) and the 11 and 21 digit manual pairing code with its Verhoeff check digit. Nothing feeds it from a camera or a BLE scan yet, so the onboarding flow does not start. round 75, host only: setup payload parsing."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Setup payload decoding is in core: the QR code (MT: and Base38, 88-bit payload) and the 11 and 21 digit manual pairing code with its Verhoeff check digit. Nothing feeds it from a camera or a BLE scan yet, so the onboarding flow does not start. round 75, host only: setup payload parsing."
     },
     {
       "feature": "Controller initialization (fabric, certificates, storage)",
@@ -32,22 +32,22 @@
       "feature": "Accessory control (attribute read/write, command invoke, subscriptions)",
       "apple": "MTRDevice, MTRReadParams, MTRWriteParams, MTRSubscribeParams, MTRAttributePath, MTRCommandPath",
       "bifrost": "springboard/core/src/matter_interaction.rs",
-      "status": "partial",
-      "note": "Wave 6 (b05, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No client for the Matter interaction model and no SDK API for accessories."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 6 (b05, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No client for the Matter interaction model and no SDK API for accessories."
     },
     {
       "feature": "Clusters (typed On/Off, Level Control, Switch and others)",
       "apple": "MTRBaseClusterLevelControl, MTRBaseClusterApplicationLauncher and about 200 more cluster classes",
       "bifrost": "none; springboard/core/src/matter_cluster.rs",
-      "status": "partial",
-      "note": "No cluster model of any kind. The control centre toggles in springboard/src/shell/control_center.rs are local system settings, not accessories. round 75, host only: cluster model; was gap."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. No cluster model of any kind. The control centre toggles in springboard/src/shell/control_center.rs are local system settings, not accessories. round 75, host only: cluster model; was gap."
     },
     {
       "feature": "Local network discovery of accessories (DNS-SD and mDNS)",
       "apple": "Commissioned accessories are found over the local network by the controller (framework-internal)",
       "bifrost": "springboard/core/src/matter.rs (service_kind, commissionable_from_txt, operational_from_instance); the transport is still springboard/src/net/share.rs; springboard/core/src/matter.rs (commissionable and operational discovery)",
-      "status": "partial",
-      "note": "Parses the _matterc._udp and _matter._tcp instance names and the commissionable TXT keys (D, VP, CM, DN, PH). There is no mDNS responder or querier, and apps cannot browse services. round 75, host only: discovery model, no live mDNS listener."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Parses the _matterc._udp and _matter._tcp instance names and the commissionable TXT keys (D, VP, CM, DN, PH). There is no mDNS responder or querier, and apps cannot browse services. round 75, host only: discovery model, no live mDNS listener."
     }
   ],
   "gaps": [

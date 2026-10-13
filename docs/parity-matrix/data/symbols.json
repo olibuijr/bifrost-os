@@ -25,8 +25,8 @@
       "feature": "Appear, disappear and scale effects",
       "apple": "appear, disappear, scale (AppearSymbolEffect, DisappearSymbolEffect, ScaleSymbolEffect)",
       "bifrost": "springboard/ui/src/symbol_effect.rs, springboard/sdk/src/glyphs.rs (glyph_effect)",
-      "status": "partial",
-      "note": "Wave 2 (symbols, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK type or call applies a symbol effect to a glyph; glyphs are drawn once per frame with no per-layer state"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (symbols, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no SDK type or call applies a symbol effect to a glyph; glyphs are drawn once per frame with no per-layer state"
     },
     {
       "feature": "Bounce and pulse effects",
@@ -46,22 +46,22 @@
       "feature": "Content transitions (replace, automatic)",
       "apple": "replace, automatic (ReplaceSymbolEffect, AutomaticSymbolEffect, ContentTransitionSymbolEffect)",
       "bifrost": "springboard/ui/src/symbol_effect.rs (replace_poses",
-      "status": "partial",
-      "note": "Wave 2 (symbols, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an app swapping one glyph for another gets a plain redraw, not a per-layer replace animation; implicit animation cannot tell a glyph change apart from any other opacity change"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (symbols, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an app swapping one glyph for another gets a plain redraw, not a per-layer replace animation; implicit animation cannot tell a glyph change apart from any other opacity change"
     },
     {
       "feature": "Discrete and indefinite effect protocols and options",
       "apple": "SymbolEffect, DiscreteSymbolEffect, IndefiniteSymbolEffect, TransitionSymbolEffect, SymbolEffectOptions",
       "bifrost": "springboard/ui/src/symbol_effect.rs (SymbolEffect",
-      "status": "partial",
-      "note": "Wave 2 (symbols, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no effect trait, no repeat or speed options, and no way to start or stop a looping effect on a glyph"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (symbols, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no effect trait, no repeat or speed options, and no way to start or stop a looping effect on a glyph"
     },
     {
       "feature": "Breathe, rotate, wiggle, draw-on and draw-off effects",
       "apple": "BreatheSymbolEffect, RotateSymbolEffect, WiggleSymbolEffect, DrawOnSymbolEffect, DrawOffSymbolEffect",
       "bifrost": "springboard/ui/src/symbol_effect.rs (breathe",
-      "status": "partial",
-      "note": "Wave 2 (symbols, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. glyphs.rs draws each line in one pass; there is no stroke-progress state, so draw-on and draw-off cannot be done without a new renderer path"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (symbols, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. glyphs.rs draws each line in one pass; there is no stroke-progress state, so draw-on and draw-off cannot be done without a new renderer path"
     },
     {
       "feature": "Symbol weights, scales and rendering modes",

@@ -32,15 +32,15 @@
       "feature": "Additional data capture (depth, metadata, synchronizer)",
       "apple": "AVCaptureDepthDataOutput, AVCaptureMetadataOutput, AVCaptureDataOutputSynchronizer",
       "bifrost": "springboard/ui/src/capture_sync.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only an in-app QR scanner; no depth, face or barcode metadata outputs, no synchronizer"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only an in-app QR scanner; no depth, face or barcode metadata outputs, no synchronizer"
     },
     {
       "feature": "Camera/microphone permission",
       "apple": "AVCaptureDevice.authorizationStatus, requestAccess",
       "bifrost": "springboard/ui/src/capture_access.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-avfoundation-capture-audio, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Sandbox doc lists a portal for devices as future work; no per-app camera or microphone prompt"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 4 (w4-avfoundation-capture-audio, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Sandbox doc lists a portal for devices as future work; no per-app camera or microphone prompt"
     },
     {
       "feature": "Audio playback",
@@ -74,8 +74,8 @@
       "feature": "Speech synthesis",
       "apple": "AVSpeechSynthesizer, AVSpeechUtterance, AVSpeechSynthesisVoice",
       "bifrost": "springboard/core/src/meter.rs, springboard/ui/src/speech.rs; wired: springboard/apps/books-desktop/src/books/narrate.rs (same Narration model)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No text-to-speech engine or SDK API found in the repo; relevant for accessibility (VoiceOver counterpart) Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No text-to-speech engine or SDK API found in the repo; relevant for accessibility (VoiceOver counterpart) Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Audio settings keys",

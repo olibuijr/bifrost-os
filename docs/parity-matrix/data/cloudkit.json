@@ -11,29 +11,29 @@
       "feature": "Containers and databases (public, private, shared)",
       "apple": "CKContainer, CKDatabase",
       "bifrost": "springboard/ui/src/record_store.rs (Database",
-      "status": "partial",
-      "note": "Wave 2 (cloudkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no per-app container or database scopes"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (cloudkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no per-app container or database scopes"
     },
     {
       "feature": "Schemas, record zones and records",
       "apple": "CKRecord, CKRecordZone, CKRecord.Reference, schema language",
       "bifrost": "springboard/ui/src/record_store.rs (Record",
-      "status": "partial",
-      "note": "Wave 2 (cloudkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. server stores two fixed object types, not app-defined records"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (cloudkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. server stores two fixed object types, not app-defined records"
     },
     {
       "feature": "Assets",
       "apple": "CKAsset",
       "bifrost": "springboard/ui/src/record_asset.rs (AssetStore",
-      "status": "partial",
-      "note": "Wave 2 (cloudkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no file attachment to synced records"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (cloudkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no file attachment to synced records"
     },
     {
       "feature": "Sync engine, change tokens, subscriptions",
       "apple": "CKSyncEngine, remote records, subscriptions",
       "bifrost": "springboard/ui/src/record_sync.rs (SyncEngine), springboard/ui/src/record_store.rs (changes_since)",
-      "status": "partial",
-      "note": "Wave 2 (cloudkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no change tokens, push or incremental fetch for apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 16 tests. Wave 2 (cloudkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no change tokens, push or incremental fetch for apps"
     },
     {
       "feature": "Conflict handling",
@@ -46,8 +46,8 @@
       "feature": "Shared records",
       "apple": "CKShare, share operations",
       "bifrost": "springboard/ui/src/record_share.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-cloudkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no multi-user record sharing"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 5 (w5-cloudkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no multi-user record sharing"
     },
     {
       "feature": "User discovery and identity",
@@ -60,8 +60,8 @@
       "feature": "Web auth tokens",
       "apple": "CKFetchWebAuthTokenOperation",
       "bifrost": "springboard/ui/src/web_service_token.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-cloudkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app token API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 5 (w5-cloudkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app token API"
     },
     {
       "feature": "Privacy: encryption and data export/delete",
@@ -74,8 +74,8 @@
       "feature": "Errors",
       "apple": "CKError, CKError.Code",
       "bifrost": "springboard/ui/src/record_sync.rs (ErrorCode",
-      "status": "partial",
-      "note": "Wave 2 (cloudkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no sync error type"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (cloudkit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no sync error type"
     },
     {
       "feature": "Local key-value storage (complementary)",

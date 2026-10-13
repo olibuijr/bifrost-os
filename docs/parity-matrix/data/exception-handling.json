@@ -18,29 +18,29 @@
       "feature": "Exception handling mask (which exceptions are monitored)",
       "apple": "exceptionHandlingMask, setExceptionHandlingMask(_:), logging and handling constants",
       "bifrost": "springboard/core/src/exception_policy.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Rust has no exception types; the closest knob would be a panic policy (abort or unwind), not provided"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Rust has no exception types; the closest knob would be a panic policy (abort or unwind), not provided"
     },
     {
       "feature": "Halt-for-debugger mask (system hang constants)",
       "apple": "exceptionHangingMask, setExceptionHangingMask(_:)",
       "bifrost": "springboard/core/src/exception_policy.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No debugger-halt hook on panic; coredumps are captured by systemd-coredump instead"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No debugger-halt hook on panic; coredumps are captured by systemd-coredump instead"
     },
     {
       "feature": "Delegate approval per exception",
       "apple": "NSExceptionHandlerDelegate: exceptionHandler(_:shouldHandle:mask:), exceptionHandler(_:shouldLogException:mask:)",
       "bifrost": "springboard/core/src/exception_policy.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The panic hook chains to the previous hook with no per-panic delegate decision"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The panic hook chains to the previous hook with no per-panic delegate decision"
     },
     {
       "feature": "Default handler singleton and delegate accessors",
       "apple": "NSExceptionHandler.default(), delegate(), setDelegate(_:)",
       "bifrost": "springboard/core/src/exception_policy.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing singleton; apps cannot install a panic hook through the SDK"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No app-facing singleton; apps cannot install a panic hook through the SDK"
     },
     {
       "feature": "Panic isolation for background work",

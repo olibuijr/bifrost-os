@@ -11,36 +11,36 @@
       "feature": "Preference pane class (NSPreferencePane)",
       "apple": "NSPreferencePane, init(bundle:), bundle, mainNibName",
       "bifrost": "springboard/ui/src/pane.rs (PaneHooks",
-      "status": "partial",
-      "note": "Wave 3 (theme-08, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets an app or bundle supply a pane; Settings builds every page from its own PageId enum (springboard/src/shell/pages.rs)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-08, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets an app or bundle supply a pane; Settings builds every page from its own PageId enum (springboard/src/shell/pages.rs)."
     },
     {
       "feature": "Loading the main view",
       "apple": "loadMainView(), assignMainView(), mainViewDidLoad(), mainView",
       "bifrost": "springboard/ui/src/pane.rs (PaneHooks::load_main_view",
-      "status": "partial",
-      "note": "Wave 3 (theme-08, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Pages are built in code from specs; no nib or view load hook for external panes."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-08, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Pages are built in code from specs; no nib or view load hook for external panes."
     },
     {
       "feature": "Selecting and deselecting panes",
       "apple": "willSelect, didSelect, willUnselect, didUnselect, shouldUnselect, reply(toShouldUnselect:)",
       "bifrost": "springboard/ui/src/pane.rs (PaneHost",
-      "status": "partial",
-      "note": "Wave 2 (preference-panes, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Settings switches pages internally; no unselect veto is exposed to a pane."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 2 (preference-panes, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Settings switches pages internally; no unselect veto is exposed to a pane."
     },
     {
       "feature": "Pane notifications",
       "apple": "NSPreferencePrefPaneIsAvailable, NSPreferencePaneDoUnselect, NSPreferencePaneCancelUnselect, NSPreferencePaneSwitchToPane, NSPreferencePaneUpdateHelpMenu",
       "bifrost": "springboard/ui/src/pane.rs (PaneNotice)",
-      "status": "partial",
-      "note": "Wave 2 (preference-panes, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Code search for a pane notification or event bus found no equivalent; the Settings app is the only consumer of its pages."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 2 (preference-panes, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Code search for a pane notification or event bus found no equivalent; the Settings app is the only consumer of its pages."
     },
     {
       "feature": "Keyboard focus chain in a pane",
       "apple": "firstKeyView, initialKeyView, lastKeyView, autoSaveTextFields",
       "bifrost": "springboard/ui/src/focus.rs (next, nearest)",
-      "status": "partial",
-      "note": "Focus traversal exists as a pure model (next/nearest over Focusable items), but there is no per-pane initial or last key view and no autosave of text fields on pane change."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Focus traversal exists as a pure model (next/nearest over Focusable items), but there is no per-pane initial or last key view and no autosave of text fields on pane change."
     },
     {
       "feature": "Help menu entries from a pane",
@@ -67,8 +67,8 @@
       "feature": "Pane bundle format and Info.plist keys",
       "apple": "Preference pane bundle, NSPrefPaneHelpMenu* keys in the bundle property list",
       "bifrost": "springboard/ui/src/pane.rs (parse_manifest",
-      "status": "partial",
-      "note": "Wave 3 (theme-08, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No pane bundle format or plist-based pane registration exists; apps are registered through the app bundle and manifest.toml instead."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-08, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No pane bundle format or plist-based pane registration exists; apps are registered through the app bundle and manifest.toml instead."
     }
   ],
   "gaps": [

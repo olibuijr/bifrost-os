@@ -25,8 +25,8 @@
       "feature": "Media play and pause in notifications",
       "apple": "mediaPlayPauseButtonType, mediaPlayPauseButtonFrame, mediaPlayPauseButtonTintColor, mediaPlay(), mediaPause()",
       "bifrost": "springboard/ui/src/notifmedia.rs; springboard/sdk/src/usernotif.rs (media) over springboard/ui/src/notifmedia.rs",
-      "status": "partial",
-      "note": "Wave 2 (user-notifications-ui, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no media button API on notification cards; the Music and Podcasts apps have their own playback controls but not in notifications round 75, host only: SDK path; shell does not draw the button yet."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (user-notifications-ui, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no media button API on notification cards; the Music and Podcasts apps have their own playback controls but not in notifications round 75, host only: SDK path; shell does not draw the button yet."
     },
     {
       "feature": "Delivering notifications to the notification UI",

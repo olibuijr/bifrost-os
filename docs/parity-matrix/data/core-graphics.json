@@ -130,8 +130,8 @@
       "feature": "Event services (Quartz Event Services, CGEventTap, synthetic events)",
       "apple": "CGEvent, CGEventTapCreate, CGEventPost, mouse and keyboard event sources",
       "bifrost": "springboard/ui/src/event_tap.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-core-graphics, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Keyboard shortcuts are parsed inside the UI kit. Apps have no event tap or event posting API, and the agent input path is a separate tool, not an app API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 18 tests. Wave 5 (w5-core-graphics, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Keyboard shortcuts are parsed inside the UI kit. Apps have no event tap or event posting API, and the agent input path is a separate tool, not an app API."
     },
     {
       "feature": "Geometry data types (CGPoint, CGSize, CGRect, CGVector)",

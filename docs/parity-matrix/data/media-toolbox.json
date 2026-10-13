@@ -18,8 +18,8 @@
       "feature": "Professional video format reader registration",
       "apple": "MTRegisterProfessionalVideoWorkflowFormatReaders",
       "bifrost": "springboard/ui/src/format_readers.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-media-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Demuxers are fixed in code (mp4, webm, symphonia-based readers). No runtime registration point exists."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-media-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Demuxers are fixed in code (mp4, webm, symphonia-based readers). No runtime registration point exists."
     },
     {
       "feature": "Video decoder seam",
@@ -39,8 +39,8 @@
       "feature": "Localized media type and subtype names",
       "apple": "MTCopyLocalizedNameForMediaType, MTCopyLocalizedNameForMediaSubType",
       "bifrost": "springboard/ui/src/media_type_names.rs; wired: springboard/ui/src/media_type_names.rs (via springboard/apps/podcasts-desktop/src/info.rs)",
-      "status": "partial",
-      "note": "Wave 5 (w5-media-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Codec kinds exist as an enum, but no localized display names are produced. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 5 (w5-media-toolbox, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Codec kinds exist as an enum, but no localized display names are produced. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     }
   ],
   "gaps": [

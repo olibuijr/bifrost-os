@@ -32,8 +32,8 @@
       "feature": "Privacy manifest: data collection and required-reason API declarations",
       "apple": "Privacy manifest files: App Privacy Configuration, collected data types, required reason APIs",
       "bifrost": "springboard/ui/src/privacy.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No file describes the data an app collects or the reason it uses a required-reason API. springboard/core/src/log.rs has a <private> redaction marker for log values; it is not a manifest declaration."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No file describes the data an app collects or the reason it uses a required-reason API. springboard/core/src/log.rs has a <private> redaction marker for log values; it is not a manifest declaration."
     },
     {
       "feature": "Placing content in a bundle (package layout)",
@@ -53,8 +53,8 @@
       "feature": "Localized bundle resources (Bundle.main, Localizable.strings)",
       "apple": "Bundle, NSLocalizedString, <lang>.lproj/Localizable.strings",
       "bifrost": "springboard/sdk/src/locale.rs (Bundle::load, set_main_bundle, localized!)",
-      "status": "partial",
-      "note": "Reads <app>/<lang>.lproj/Localizable.strings with en fallback, as documented in docs/bifrost-ui.md. Built-in formatting data covers en and is only. No asset catalogs, storyboards or nib-style resources."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Reads <app>/<lang>.lproj/Localizable.strings with en fallback, as documented in docs/bifrost-ui.md. Built-in formatting data covers en and is only. No asset catalogs, storyboards or nib-style resources."
     },
     {
       "feature": "URL schemes and document types declared by the app",

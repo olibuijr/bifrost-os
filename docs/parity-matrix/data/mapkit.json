@@ -18,15 +18,15 @@
       "feature": "Map camera and region",
       "apple": "MKCoordinateRegion, MKCoordinateSpan, MKMapCamera, MapCameraPosition",
       "bifrost": "springboard/ui/src/geo.rs; wired: springboard/apps/weather-desktop/src/insights.rs (map_view at MAP_ZOOM, grid); springboard/ui/src/geo.rs (CoordinateRegion, MapCamera, MapCameraPosition)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. a coordinate pair exists; no region, span or camera type Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. round 75, host only: camera and region model, no SDK map view."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. a coordinate pair exists; no region, span or camera type Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. round 75, host only: camera and region model, no SDK map view."
     },
     {
       "feature": "Annotations, markers and overlays",
       "apple": "MKAnnotation views, MapPolygon, MapPolyline, MapCircle, Marker, Annotation",
       "bifrost": "springboard/ui/src/mapshape.rs (Polygon",
-      "status": "partial",
-      "note": "Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. nothing draws pins, shapes or callouts on a map"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. nothing draws pins, shapes or callouts on a map"
     },
     {
       "feature": "Forward geocoding (place name to coordinate)",
@@ -39,8 +39,8 @@
       "feature": "Reverse geocoding (coordinate to address)",
       "apple": "MKReverseGeocodingRequest, MKAddress, MKAddressRepresentations",
       "bifrost": "springboard/ui/src/reverse_lookup.rs (PlaceIndex)",
-      "status": "partial",
-      "note": "Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no coordinate-to-place lookup; the Weather app only names places it searched for"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-11, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no coordinate-to-place lookup; the Weather app only names places it searched for"
     },
     {
       "feature": "Local search and search completion",
@@ -53,15 +53,15 @@
       "feature": "Points of interest and map features",
       "apple": "MKMapFeatureAnnotation, MKMapFeatureOptions, MKPointOfInterestFilter, MKPointOfInterestCategory, MapFeature, MapSelection",
       "bifrost": "springboard/ui/src/poi_filter.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-mapkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no POI categories, selectable features or map-item detail"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-mapkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no POI categories, selectable features or map-item detail"
     },
     {
       "feature": "Directions and routes",
       "apple": "MKDirections, MKRoute, MKRoute.Step, MKDirections.ETAResponse",
       "bifrost": "springboard/ui/src/route.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-mapkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no routing service or route data"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-mapkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no routing service or route data"
     },
     {
       "feature": "Map snapshots (static images)",
@@ -88,8 +88,8 @@
       "feature": "Geographic coordinate types (MKMapPoint, MKMapRect, MKMapSize)",
       "apple": "MKMapPoint, MKMapRect, MKMapSize, MKDistanceFormatter",
       "bifrost": "springboard/ui/src/geo.rs; springboard/ui/src/geo.rs (MapPoint, MapRect, MapSize)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. only a GPS display string exists; no projection or distance types round 75, host only: coordinate types in geo.rs."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. only a GPS display string exists; no projection or distance types round 75, host only: coordinate types in geo.rs."
     },
     {
       "feature": "Street-level imagery (Look Around)",
@@ -102,22 +102,22 @@
       "feature": "Place information and detail sheets",
       "apple": "MKMapItem, MKMapItemDetailViewController, mapItemDetailSheet, MKSelectionAccessory",
       "bifrost": "springboard/ui/src/map_item.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-mapkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. a place has a name and region only; no detail view, phone, URL or hours"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-mapkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. a place has a name and region only; no detail view, phone, URL or hours"
     },
     {
       "feature": "Maps URLs and opening in the default map app",
       "apple": "Unified Maps URLs, default navigation app setup",
       "bifrost": "springboard/ui/src/maps_link.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-19, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the workspace API opens URLs, but no maps scheme is handled and no default navigation app exists"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-19, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the workspace API opens URLs, but no maps scheme is handled and no default navigation app exists"
     },
     {
       "feature": "Indoor maps and GeoJSON",
       "apple": "MKGeoJSONDecoder, MKGeoJSONFeature, MKGeoJSONObject, IMDF sample",
       "bifrost": "springboard/core/src/geojson.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-mapkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no GeoJSON or IMDF parsing in the SDK"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (w4-mapkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no GeoJSON or IMDF parsing in the SDK"
     }
   ],
   "gaps": [

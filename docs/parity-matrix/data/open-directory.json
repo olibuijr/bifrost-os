@@ -11,15 +11,15 @@
       "feature": "Directory sessions and node connections",
       "apple": "ODSession, ODSessionRef, ODNode, ODNodeRef, ODNodeCreateWithName, ODNodeCopySubnodeNames (https://developer.apple.com/documentation/opendirectory/opendirectory-functions)",
       "bifrost": "springboard/ui/src/directory_node.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-open-directory, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API connects to a directory server or lists its nodes."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-open-directory, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API connects to a directory server or lists its nodes."
     },
     {
       "feature": "Record queries and search results",
       "apple": "ODQuery, ODQueryRef, ODQueryCreateWithNodeType, ODQueryCopyResults, ODQueryDelegate",
       "bifrost": "springboard/ui/src/directory_query.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-open-directory, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Quick search indexes local app content; it does not query a directory."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (w3-open-directory, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Quick search indexes local app content; it does not query a directory."
     },
     {
       "feature": "Directory records: read, write, group membership",
@@ -39,8 +39,8 @@
       "feature": "Asynchronous query results",
       "apple": "ODQuerySetDispatchQueue, ODQueryScheduleWithRunLoop, ODQuerySetCallback",
       "bifrost": "springboard/sdk/src/dispatch.rs",
-      "status": "partial",
-      "note": "Dispatch queues exist for apps; nothing feeds them directory results, so this row is partial only through the generic dispatch API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. Dispatch queues exist for apps; nothing feeds them directory results, so this row is partial only through the generic dispatch API."
     },
     {
       "feature": "Directory account and password policies",

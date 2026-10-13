@@ -18,15 +18,15 @@
       "feature": "Devices (device, device source, device properties)",
       "apple": "CMIOExtensionDevice, CMIOExtensionDeviceSource, CMIOExtensionDeviceProperties",
       "bifrost": "springboard/ui/src/video_device.rs (VideoDevice",
-      "status": "partial",
-      "note": "Wave 5 (w5-core-media-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. probe() enumerates /dev/video* nodes and keeps only single-planar capture devices with streaming (usable()). Discovery only; there is no device-side publishing."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-core-media-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. probe() enumerates /dev/video* nodes and keeps only single-planar capture devices with streaming (usable()). Discovery only; there is no device-side publishing."
     },
     {
       "feature": "Streams (stream, stream source, stream properties)",
       "apple": "CMIOExtensionStream, CMIOExtensionStreamSource, CMIOExtensionStreamProperties",
       "bifrost": "springboard/ui/src/video_device.rs (StreamFormat",
-      "status": "partial",
-      "note": "Wave 5 (w5-core-media-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. mmap streaming with VIDIOC_* ioctls; converts YUYV, NV12, NV21 and MJPEG to RGBA. Consumed only by the Camera app inside the shell, not exposed as a stream API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-core-media-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. mmap streaming with VIDIOC_* ioctls; converts YUYV, NV12, NV21 and MJPEG to RGBA. Consumed only by the Camera app inside the shell, not exposed as a stream API."
     },
     {
       "feature": "Clients and per-client access",
@@ -46,8 +46,8 @@
       "feature": "Properties (property, state, attributes, info and mach service keys)",
       "apple": "CMIOExtensionProperty, CMIOExtensionPropertyState, CMIOExtensionPropertyAttributes, CMIOExtensionInfoDictionaryKey, CMIOExtensionMachServiceNameKey",
       "bifrost": "springboard/ui/src/video_property.rs (PropertyStore",
-      "status": "partial",
-      "note": "Wave 5 (w5-core-media-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. V4L2 capability flags are read internally. No property model or extension info dictionary exists for app developers."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-core-media-i-o, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. V4L2 capability flags are read internally. No property model or extension info dictionary exists for app developers."
     },
     {
       "feature": "USB video class override (DriverKit)",

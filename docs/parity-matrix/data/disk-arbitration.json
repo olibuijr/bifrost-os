@@ -11,8 +11,8 @@
       "feature": "Disk description and lookup (DADisk, DADiskCreateFromBSDName, DADiskCreateFromVolumePath, DADiskGetBSDName, DADiskCopyDescription)",
       "apple": "DADisk.h: DADisk, DADiskCreateFromBSDName, DADiskCreateFromVolumePath, DADiskCopyDescription, DADiskGetBSDName",
       "bifrost": "springboard/core/src/disk_events.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-disk-arbitration, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Installer-only, shell-side, uses lsblk output. No app-facing disk object, no description dictionary, no volume-path lookup."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 4 (w4-disk-arbitration, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Installer-only, shell-side, uses lsblk output. No app-facing disk object, no description dictionary, no volume-path lookup."
     },
     {
       "feature": "Session and run loop or dispatch queue scheduling (DASession)",
@@ -25,29 +25,29 @@
       "feature": "Mount, unmount, eject and rename commands (DADiskMount, DADiskUnmount, DADiskEject, DADiskRename)",
       "apple": "DADiskMount, DADiskMountWithArguments, DADiskUnmount, DADiskEject, DADiskRename",
       "bifrost": "springboard/core/src/disk_commands.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-18, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Installer unmounts its own target; no app or shell API to mount, eject or rename a volume. Sprint 3: the shell service plan_unmount and plan_eject validate (claim, approval, device state) and return the plan; DiskSession.plan_unmount and plan_eject call them. The plan is not run yet (needs the privileged helper on Midget)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 4 (theme-18, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Installer unmounts its own target; no app or shell API to mount, eject or rename a volume. Sprint 3: the shell service plan_unmount and plan_eject validate (claim, approval, device state) and return the plan; DiskSession.plan_unmount and plan_eject call them. The plan is not run yet (needs the privileged helper on Midget)."
     },
     {
       "feature": "Disk appeared, disappeared and description-changed callbacks (DARegisterDiskAppearedCallback, DARegisterDiskDisappearedCallback, DARegisterDiskDescriptionChangedCallback)",
       "apple": "DARegisterDiskAppearedCallback, DARegisterDiskDisappearedCallback, DARegisterDiskDescriptionChangedCallback, DARegisterDiskPeekCallback",
       "bifrost": "springboard/core/src/disk_events.rs, disk_wire.rs, sdk/src/disk_arbitration.rs, src/shell/services/disks.rs",
-      "status": "partial",
-      "note": "Sprint 3: the shell scans /sys/block and /proc/mounts every 2 s and pushes disk_appeared, disk_disappeared and disk_description_changed to apps; DiskSession.register_* run the callbacks on its dispatch queue and replay connected disks as appeared. Host tests only; not yet tried with a real USB disk on Midget. Events go to apps as service events, not the notify bus."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Sprint 3: the shell scans /sys/block and /proc/mounts every 2 s and pushes disk_appeared, disk_disappeared and disk_description_changed to apps; DiskSession.register_* run the callbacks on its dispatch queue and replay connected disks as appeared. Host tests only; not yet tried with a real USB disk on Midget. Events go to apps as service events, not the notify bus."
     },
     {
       "feature": "Mount and unmount approval (DARegisterDiskMountApprovalCallback, DARegisterDiskUnmountApprovalCallback, DARegisterDiskEjectApprovalCallback)",
       "apple": "DARegisterDiskMountApprovalCallback, DARegisterDiskUnmountApprovalCallback, DARegisterDiskEjectApprovalCallback, DADissenter",
       "bifrost": "springboard/core/src/disk_events.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hook that lets an app or policy block a mount, unmount or eject. DADissenter has no counterpart."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hook that lets an app or policy block a mount, unmount or eject. DADissenter has no counterpart."
     },
     {
       "feature": "Disk claims (DADiskClaim, DADiskUnclaim, DADiskIsClaimed)",
       "apple": "DADiskClaim, DADiskUnclaim, DADiskIsClaimed, DADiskSetOptions, DADiskGetOptions",
       "bifrost": "springboard/core/src/disk_claims.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-18, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No exclusive-use claim on a disk. The installer uses shell commands, not a claim."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-18, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No exclusive-use claim on a disk. The installer uses shell commands, not a claim."
     },
     {
       "feature": "Volumes in the Files sidebar",

@@ -11,8 +11,8 @@
       "feature": "Daily metric reports to the app (MXMetricManager, MetricReport)",
       "apple": "MXMetricManager, MetricReport (async sequences, once per day, previous 24 h)",
       "bifrost": "springboard/sdk/src/daily_metric_report.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK type delivers a daily report to an app. Host counters are read by the shell for its own menu extras and by ProcessInfo; no report is produced."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK type delivers a daily report to an app. Host counters are read by the shell for its own menu extras and by ProcessInfo; no report is produced."
     },
     {
       "feature": "Immediate diagnostic reports (DiagnosticReport)",
@@ -25,8 +25,8 @@
       "feature": "Crash diagnostics (CrashDiagnostic, call stacks)",
       "apple": "CrashDiagnostic, CallStackTree, CallStackThread, CallStackFrame",
       "bifrost": "springboard/sdk/src/call_stack_tree.rs; wired: springboard/apps/console-desktop/src/diagnostics.rs (DailySource) over source.rs Coredumps",
-      "status": "partial",
-      "note": "Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Each crash is one line: timestamp, thread, panic location and message (diag.rs CrashEntry, signature). No structured call-stack tree is exposed to any app. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Each crash is one line: timestamp, thread, panic location and message (diag.rs CrashEntry, signature). No structured call-stack tree is exposed to any app. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Hang diagnostics and UI stall detection (HangDiagnostic, HangTimeMetric)",
@@ -39,57 +39,57 @@
       "feature": "Animation hitch and slow-frame measurement (HitchTimeMetric, HitchTimeRatio)",
       "apple": "HitchTimeMetric, HitchTimeRatio",
       "bifrost": "springboard/sdk/src/hitch_ratio.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Frame budget is classified at 16.7 ms and 33 ms and written to perf.log, rate-limited to 20 lines per second. The data stays in the shell; there is no per-app hitch metric."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-metrickit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Frame budget is classified at 16.7 ms and 33 ms and written to perf.log, rate-limited to 20 lines per second. The data stays in the shell; there is no per-app hitch metric."
     },
     {
       "feature": "CPU and memory metrics (CPUTimeMetric, PeakMemoryMetric, SuspendedMemoryMetric)",
       "apple": "CPUTimeMetric, CPUInstructionsCountMetric, PeakMemoryMetric, SuspendedMemoryMetric",
       "bifrost": "springboard/core/src/host.rs (per-process memory and CPU counters from /proc), springboard/sdk/src/process_info.rs",
-      "status": "partial",
-      "note": "An app can read its own memory and CPU counters through ProcessInfo at the moment of the call. No peak or suspended-memory statistics are kept, and no instruction counts exist."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. An app can read its own memory and CPU counters through ProcessInfo at the moment of the call. No peak or suspended-memory statistics are kept, and no instruction counts exist."
     },
     {
       "feature": "Memory and CPU exception diagnostics (MemoryExceptionDiagnostic, CPUExceptionDiagnostic)",
       "apple": "MemoryExceptionDiagnostic, CPUExceptionDiagnostic",
       "bifrost": "springboard/core/src/resource_exception.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. An app killed for memory or CPU limits is not recorded as a diagnostic event; only panics and watchdog exits are."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 4 (theme-20, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. An app killed for memory or CPU limits is not recorded as a diagnostic event; only panics and watchdog exits are."
     },
     {
       "feature": "Time-in-use metrics (foreground, background, audio, location time)",
       "apple": "TotalForegroundTimeMetric, TotalBackgroundTimeMetric, TotalBackgroundAudioTimeMetric, TotalBackgroundLocationTimeMetric, LocationActivityTimeMetric, CellularConditionTimeMetric",
       "bifrost": "springboard/core/src/app_metrics.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-metrickit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell knows when each app is foreground or backgrounded but keeps no per-app time totals and reports none."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-metrickit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell knows when each app is foreground or backgrounded but keeps no per-app time totals and reports none."
     },
     {
       "feature": "Launch, resume and extended launch timing (TimeToFirstDrawMetric, ApplicationResumeTimeMetric, ExtendedLaunchMetric)",
       "apple": "TimeToFirstDrawMetric, OptimizedTimeToFirstDrawMetric, ApplicationResumeTimeMetric, ExtendedLaunchMetric, LaunchTaskID",
       "bifrost": "springboard/core/src/app_metrics.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-metrickit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No time-to-first-draw or resume timing is measured per app and delivered to it."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-metrickit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No time-to-first-draw or resume timing is measured per app and delivered to it."
     },
     {
       "feature": "Termination metrics (ForegroundTerminationMetric, BackgroundTerminationMetric)",
       "apple": "ForegroundTerminationMetric, BackgroundTerminationMetric, AppLaunchDiagnostic",
       "bifrost": "springboard/core/src/app_metrics.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-metrickit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell writes a last_exit file for the watchdog. Termination is not counted by category and not reported to apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-metrickit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell writes a last_exit file for the watchdog. Termination is not counted by category and not reported to apps."
     },
     {
       "feature": "Network data metrics (Wi-Fi and cellular upload and download)",
       "apple": "TotalWiFiUploadMetric, TotalWiFiDownloadMetric, TotalCellularUploadMetric, TotalCellularDownloadMetric",
       "bifrost": "springboard/sdk/src/net_totals.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-18, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The network daemon does not attribute byte counts to apps and no per-app totals exist."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 5 (theme-18, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The network daemon does not attribute byte counts to apps and no per-app totals exist."
     },
     {
       "feature": "Disk write and storage metrics (LogicalDiskWritesMetric, TotalFileSizeMetric, DiskWriteExceptionDiagnostic)",
       "apple": "LogicalDiskWritesMetric, DiskWriteExceptionDiagnostic, TotalDiskSpaceCapacityMetric, TotalFileCountMetric, TotalFileSizeMetric",
       "bifrost": "springboard/core/src/app_disk_writes.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-metrickit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No per-app write totals or file-size attribution, and no disk-write exception path."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (w5-metrickit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No per-app write totals or file-size attribution, and no disk-write exception path."
     },
     {
       "feature": "GPU and Metal frame metrics (GPUTimeMetric, MetalFrameRateMetric)",
@@ -102,15 +102,15 @@
       "feature": "Custom signpost intervals (SignpostIntervalMetric, mxSignpost)",
       "apple": "SignpostIntervalMetric, mxSignpost, mxSignpostAnimationIntervalBegin",
       "bifrost": "springboard/core/src/signpost.rs (Summary",
-      "status": "partial",
-      "note": "Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Unified logging exists, but no signposter. docs/bifrost-ui.md (Unified Logging gaps) and docs/milestone-unified-logging.md list signposts and spin reports as planned work."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-25, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Unified logging exists, but no signposter. docs/bifrost-ui.md (Unified Logging gaps) and docs/milestone-unified-logging.md list signposts and spin reports as planned work."
     },
     {
       "feature": "Reading own log entries that reports are built from (LogStore)",
       "apple": "OSLogStore (used alongside MetricKit diagnostics)",
       "bifrost": "springboard/core/src/log.rs (LogStore::current_process, LogStore::local), springboard/sdk/src/bin/bifrost-log.rs",
-      "status": "partial",
-      "note": "An app can read its own process entries in memory. The journal is readable only by apps with the log-store entitlement. This is not a MetricKit substitute."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. An app can read its own process entries in memory. The journal is readable only by apps with the log-store entitlement. This is not a MetricKit substitute."
     },
     {
       "feature": "Sharing diagnostics with the developer",

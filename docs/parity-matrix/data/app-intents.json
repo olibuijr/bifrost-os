@@ -11,57 +11,57 @@
       "feature": "AppIntent declaration and metadata (title, description)",
       "apple": "AppIntent, title, description, init()",
       "bifrost": "springboard/sdk/src/intents.rs (Intent::new, Intent::to_json); wired: springboard/apps/shortcuts-desktop/src/automation.rs declared; src/widget.rs picker Intents section",
-      "status": "partial",
-      "note": "id, title and description are declared and listed by intent.list; no isDiscoverable flag Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. id, title and description are declared and listed by intent.list; no isDiscoverable flag Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Intent parameters",
       "apple": "IntentParameter, primitive and framework types (Integers, Doubles, Booleans, Strings, URLs, Dates, Files, Currencies, People, Placemarks, Measurements)",
       "bifrost": "springboard/sdk/src/intents.rs:22 (ParamType), Param::optional at springboard/sdk/src/intents.rs:113; wired: springboard/apps/shortcuts-desktop/src/automation.rs declared (shortcut parameter now optional)",
-      "status": "partial",
-      "note": "String, Int, Bool, Date (ISO 8601 text), Url and Entity(type) only; no Double, Files, Currencies, People, Placemarks or Measurements; parameters are validated by the SDK before perform Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. String, Int, Bool, Date (ISO 8601 text), Url and Entity(type) only; no Double, Files, Currencies, People, Placemarks or Measurements; parameters are validated by the SDK before perform Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Perform and IntentResult (value and dialog)",
       "apple": "perform(), IntentResult, Dialog, result(dialog:), result(value:)",
       "bifrost": "springboard/sdk/src/intents.rs:246 (IntentResult::value, with_dialog); wired: springboard/apps/shortcuts-desktop/src/automation.rs perform; src/main.rs run_intent; src/widget.rs show_result",
-      "status": "partial",
-      "note": "returns a JSON value and dialog text to the caller; the shell neither shows nor speaks the dialog Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. returns a JSON value and dialog text to the caller; the shell neither shows nor speaks the dialog Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Snippets and result views",
       "apple": "IntentResult.Snippet, result(dialog:view:), SnippetIntent, EmptySnippetIntent",
       "bifrost": "springboard/sdk/src/intents.rs (Snippet; wired: springboard/apps/shortcuts-desktop/src/automation.rs perform (Snippet rows); src/main.rs run_intent; src/widget.rs show_snippet, draw_result",
-      "status": "partial",
-      "note": "Wave 3 (w3-app-intents, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no interactive result view for an intent Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Wave 3 (w3-app-intents, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no interactive result view for an intent Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Follow-on and opens-app results",
       "apple": "OpensAppIntent, result(opensIntent:), result(actionButtonIntent:)",
       "bifrost": "springboard/sdk/src/intents.rs; wired: springboard/apps/shortcuts-desktop/src/automation.rs perform (opens run-shortcut with the shortcut id), title_of; src/widget.rs Target::ResultRun, take_intent_requests",
-      "status": "partial",
-      "note": "Wave 2 (app-intents, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an intent cannot hand off to another intent or open a screen in the app Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Wave 2 (app-intents, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. an intent cannot hand off to another intent or open a screen in the app Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Execution modes and authentication",
       "apple": "AppIntent.supportedModes, IntentModes, continueInForeground(), allowedExecutionTargets, authenticationPolicy",
       "bifrost": "springboard/ui/src/intent_resolve.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-07, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. intents always run in the app process; no foreground or background choice and no authentication policy"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-07, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. intents always run in the app process; no foreground or background choice and no authentication policy"
     },
     {
       "feature": "Entities and entity queries",
       "apple": "AppEntity, EntityQuery (entities(for:), entities(matching:), suggestedEntities), defaultQuery, DisplayRepresentation",
       "bifrost": "springboard/sdk/src/intents.rs:208 (Entity), :238 (EntityQuery), entity.query over the control socket",
-      "status": "partial",
-      "note": "suggested, by id and by string are served by App::entities; no defaultQuery, no URL representation, no ownership or sharing"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. suggested, by id and by string are served by App::entities; no defaultQuery, no URL representation, no ownership or sharing"
     },
     {
       "feature": "App enums",
       "apple": "AppEnum, EnumURLRepresentation, defaultResolverSpecification",
       "bifrost": "springboard/sdk/src/intents.rs (ParamType::Enum)",
-      "status": "partial",
-      "note": "Wave 5 (w5-app-intents, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. ParamType has no enum case; predefined value sets cannot be declared"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Wave 5 (w5-app-intents, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. ParamType has no enum case; predefined value sets cannot be declared"
     },
     {
       "feature": "App Shortcuts (AppShortcutsProvider)",
@@ -88,22 +88,22 @@
       "feature": "Intent errors",
       "apple": "AppIntentError, CustomAppIntentErrorConvertible, needsValueError",
       "bifrost": "springboard/sdk/src/intents.rs:323 (failed), RpcError INVALID_PARAMS from validate",
-      "status": "partial",
-      "note": "failures return RPC errors with a message; no typed error set and no needs-value or confirmation errors"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. failures return RPC errors with a message; no typed error set and no needs-value or confirmation errors"
     },
     {
       "feature": "Common data types",
       "apple": "Common data types (Files, Dates, Currencies, Payments, People, Placemarks, Measurements)",
       "bifrost": "springboard/sdk/src/intents.rs (ParamType::Double",
-      "status": "partial",
-      "note": "Wave 3 (w3-app-intents, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. only the parameter types listed under Intent parameters"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Wave 3 (w3-app-intents, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. only the parameter types listed under Intent parameters"
     },
     {
       "feature": "Donations and discovery",
       "apple": "IntentDonationManager, RelevantIntentManager, RelevantIntent, AppEntityContext",
       "bifrost": "springboard/sdk/src/donations.rs",
-      "status": "partial",
-      "note": "Wave 2 (app-intents, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. apps cannot tell the system which intents were used; no relevance ranking"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (app-intents, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. apps cannot tell the system which intents were used; no relevance ranking"
     },
     {
       "feature": "Focus filters",

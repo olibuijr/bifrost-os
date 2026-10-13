@@ -18,8 +18,8 @@
       "feature": "Volumes and items",
       "apple": "FSVolume, FSItem, FSFileName",
       "bifrost": "springboard/ui/src/fs_volume.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-fskit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Files uses shell file utilities. Apps get paths and descriptors, not a volume or item object model."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-fskit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Files uses shell file utilities. Apps get paths and descriptors, not a volume or item object model."
     },
     {
       "feature": "Resources (block device, path URL, generic URL)",
@@ -32,8 +32,8 @@
       "feature": "Containers and probing",
       "apple": "FSContainerIdentifier, FSContainerStatus, FSProbeResult, FSMatchResult",
       "bifrost": "springboard/ui/src/fs_probe.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-fskit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No probe-then-mount step exists for an app or the shell."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-fskit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No probe-then-mount step exists for an app or the shell."
     },
     {
       "feature": "Extents and blockmaps",
@@ -46,8 +46,8 @@
       "feature": "Errors and logging",
       "apple": "FSError, FSKitErrorDomain, fs_errorForPOSIXError, FSDataCacheError",
       "bifrost": "springboard/core/src/log.rs",
-      "status": "partial",
-      "note": "Logging exists. FSKit's typed file system error domain has no BifrOSt counterpart."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Logging exists. FSKit's typed file system error domain has no BifrOSt counterpart."
     },
     {
       "feature": "Tasks and operation identifiers",
@@ -60,15 +60,15 @@
       "feature": "File change notification",
       "apple": "Used with mounted volumes (no direct FSKit class)",
       "bifrost": "springboard/sdk/src/fswatch.rs (FSEvent stream over inotify, recursive)",
-      "status": "partial",
-      "note": "Apple's FSEvents has no direct FSKit class. This row covers the watch side of a mounted volume's changes."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Apple's FSEvents has no direct FSKit class. This row covers the watch side of a mounted volume's changes."
     },
     {
       "feature": "Client interaction and maintenance",
       "apple": "FSClient, FSManageableResourceMaintenanceOperations",
       "bifrost": "springboard/ui/src/fs_maintenance.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-fskit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets an app or daemon ask for a mount, check or repair. The installer partitions disks (springboard/src/installer/plan.rs), but that is not an app-facing API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-fskit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets an app or daemon ask for a mount, check or repair. The installer partitions disks (springboard/src/installer/plan.rs), but that is not an app-facing API."
     },
     {
       "feature": "Entitlement and sandbox",

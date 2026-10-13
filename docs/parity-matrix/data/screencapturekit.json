@@ -11,15 +11,15 @@
       "feature": "Stream screen content to an app (SCStream, SCStreamConfiguration, SCStreamOutput)",
       "apple": "SCStream, SCStreamConfiguration, SCStreamOutput, SCStreamOutputType, SCStreamFrameInfo, SCFrameStatus",
       "bifrost": "springboard/ui/src/capture_config.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-screencapturekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The compositor exposes wlr-screencopy and ext-image-copy-capture, but only the agent MCP server uses them. No app receives a frame stream."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 4 (w4-screencapturekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The compositor exposes wlr-screencopy and ext-image-copy-capture, but only the agent MCP server uses them. No app receives a frame stream."
     },
     {
       "feature": "Discover displays, apps and windows to capture (SCShareableContent, SCDisplay, SCRunningApplication, SCWindow)",
       "apple": "SCShareableContent, SCShareableContentInfo, SCShareableContentStyle, SCDisplay, SCRunningApplication, SCWindow",
       "bifrost": "springboard/ui/src/capture_content.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-screencapturekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The window list is available to the agent tooling only. Apps get no enumeration API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 4 (w4-screencapturekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The window list is available to the agent tooling only. Apps get no enumeration API."
     },
     {
       "feature": "Filter what a stream captures (SCContentFilter)",
@@ -32,8 +32,8 @@
       "feature": "Single-frame screenshots (SCScreenshotManager, SCScreenshotConfiguration, SCScreenshotOutput)",
       "apple": "SCScreenshotManager, SCScreenshotConfiguration, SCScreenshotOutput",
       "bifrost": "springboard/ui/src/capture_shot.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-screencapturekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The chord saves to Photos and the shell's tests cover it (springboard/src/shell/tests.rs, screenshot_chord_saves_a_png_shows_the_thumbnail_and_opens_photos). No app SDK call takes a capture. Output is PNG only and the configuration has no size, quality or scale options."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-screencapturekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The chord saves to Photos and the shell's tests cover it (springboard/src/shell/tests.rs, screenshot_chord_saves_a_png_shows_the_thumbnail_and_opens_photos). No app SDK call takes a capture. Output is PNG only and the configuration has no size, quality or scale options."
     },
     {
       "feature": "Capture a single window even when covered (window image capture source)",
@@ -46,29 +46,29 @@
       "feature": "System content-sharing picker (SCContentSharingPicker, SCContentSharingPickerConfiguration, SCContentSharingPickerMode, SCContentSharingPickerObserver)",
       "apple": "SCContentSharingPicker and related types",
       "bifrost": "springboard/ui/src/capture_picker.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-screencapturekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The picker is Apple's recommended selection UI. BifrOSt has no equivalent and no portal frontend for screen sharing."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (w5-screencapturekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The picker is Apple's recommended selection UI. BifrOSt has no equivalent and no portal frontend for screen sharing."
     },
     {
       "feature": "Permission for screen recording and persistent capture (Persistent Content Capture, privacy string)",
       "apple": "Persistent Content Capture symbol, screen recording permission prompt",
       "bifrost": "springboard/ui/src/capture_access.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-screencapturekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No permission model covers screen capture for apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 5 (w5-screencapturekit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No permission model covers screen capture for apps."
     },
     {
       "feature": "Clip buffering and recording editor (SCClipBufferingOutput, SCRecordingEditor, SCVideoEffectOutput)",
       "apple": "SCClipBufferingOutput, SCRecordingEditor, SCVideoEffectOutput and their delegates",
       "bifrost": "springboard/ui/src/clip_buffer.rs, springboard/ui/src/recording.rs (Trim)",
-      "status": "partial",
-      "note": "Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No instant-replay buffer or recording editor exists. The media stack is audio-focused (springboard/audiod) plus hardware video decode in springboard/src/media/. round 75, host only: clip buffer and trim model."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 19 tests. Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No instant-replay buffer or recording editor exists. The media stack is audio-focused (springboard/audiod) plus hardware video decode in springboard/src/media/. round 75, host only: clip buffer and trim model."
     },
     {
       "feature": "Stream errors and lifecycle (SCStreamDelegate, SCStreamError)",
       "apple": "SCStreamDelegate, SCStreamError, SCStreamErrorDomain",
       "bifrost": "springboard/ui/src/capture_error.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-screencapturekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. There is no stream to report errors for."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 4 (w4-screencapturekit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. There is no stream to report errors for."
     }
   ],
   "gaps": [

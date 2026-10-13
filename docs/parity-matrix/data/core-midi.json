@@ -32,15 +32,15 @@
       "feature": "MIDI Messages (MIDI 1.0 and 2.0 / UMP construction)",
       "apple": "MIDI1UPNoteOn, MIDI1UPControlChange, MIDI2NoteOn, MIDI2PitchBend, MIDIMessage_32, MIDIMessage_64 (https://developer.apple.com/documentation/coremidi/midi-messages)",
       "bifrost": "springboard/apps/daw/src/model.rs:152 (note struct: pitch p, velocity v in 0..1)",
-      "status": "partial",
-      "note": "The DAW note model holds a pitch number and a velocity. There is no encoding to or from MIDI 1.0 bytes or Universal MIDI Packets, and no control change, pitch bend or SysEx support."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 3 tests. The DAW note model holds a pitch number and a velocity. There is no encoding to or from MIDI 1.0 bytes or Universal MIDI Packets, and no control change, pitch bend or SysEx support."
     },
     {
       "feature": "Note number to pitch and frequency",
       "apple": "kMIDINoteAttributePitch, kMIDINoteAttributeManufacturerSpecific, kMIDINoteAttributeProfileSpecific, kMIDINoteAttributeNone (https://developer.apple.com/documentation/coremidi)",
       "bifrost": "springboard/apps/daw/src/compose.rs:88 (midi() note-name parser, pitches()), springboard/apps/daw/src/dsp.rs:7 (mtof)",
-      "status": "partial",
-      "note": "Covers note names (C#4, Bb2) to note numbers and note numbers to Hz. The per-note attribute types (pitch, manufacturer-specific, profile-specific) have no counterpart."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Covers note names (C#4, Bb2) to note numbers and note numbers to Hz. The per-note attribute types (pitch, manufacturer-specific, profile-specific) have no counterpart."
     },
     {
       "feature": "MIDI Thru Connection (play-through, value maps, transforms)",

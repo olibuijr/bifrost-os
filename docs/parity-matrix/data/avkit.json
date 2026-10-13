@@ -39,15 +39,15 @@
       "feature": "Content proposals and parental controls",
       "apple": "AVContentProposal, AVContentProposalViewController, AVContentProposalAction",
       "bifrost": "springboard/ui/src/content_proposal.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-avkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No next-up proposal sheet in the SDK or the media apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (w3-avkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No next-up proposal sheet in the SDK or the media apps."
     },
     {
       "feature": "Media trimming and export",
       "apple": "AVPlayerViewTrimResult, trimming in a macOS player",
       "bifrost": "springboard/ui/src/media_trim.rs; wired: springboard/apps/voicememos-desktop/src/voicememos.rs (menu, export_selected); src/store.rs (export_copy); trim handles already wired via recording::Trim; wired: springboard/apps/daw/src/export.rs, springboard/apps/daw/src/main.rs (toggle_trim, nudge_trim, export), springboard/ui/src/media_trim.rs; wired: springboard/apps/voicememos-desktop/src/store.rs (save_split) and src/voicememos.rs (split_selected, can_split, MENU_SPLIT)",
-      "status": "partial",
-      "note": "Wave 6 (b12, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No trim control in the player HUD (springboard/src/deildu/player_view.rs). Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b12, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No trim control in the player HUD (springboard/src/deildu/player_view.rs). Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Display management (HDR, refresh mode switching)",
@@ -81,8 +81,8 @@
       "feature": "Capture events from hardware buttons",
       "apple": "AVCaptureEventInteraction, AVCaptureEvent, AVCaptureEventSound",
       "bifrost": "springboard/ui/src/capture_event.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-avkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hardware capture button handler; the shutter is on-screen only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-avkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hardware capture button handler; the shutter is on-screen only."
     },
     {
       "feature": "Camera facing direction",
@@ -116,8 +116,8 @@
       "feature": "Error domain and codes",
       "apple": "AVKitErrorDomain, AVKitError, AVKitError.Code",
       "bifrost": "springboard/src/media/mod.rs (Error type)",
-      "status": "partial",
-      "note": "Media errors exist as a Rust Error enum; no AVKit error codes, and the content-restriction codes have no counterpart."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 3 tests. Media errors exist as a Rust Error enum; no AVKit error codes, and the content-restriction codes have no counterpart."
     }
   ],
   "gaps": [

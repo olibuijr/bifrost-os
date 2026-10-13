@@ -11,15 +11,15 @@
       "feature": "Smart card slots and cards",
       "apple": "TKSmartCardSlotManager, TKSmartCardSlot, TKSmartCard (https://developer.apple.com/documentation/cryptotokenkit)",
       "bifrost": "springboard/ui/src/smartcard_slot.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-cryptotokenkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No smart card reader enumeration or slot handling. Repo-wide search for pcsc, smartcard, ccid and token terms finds no code."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-cryptotokenkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No smart card reader enumeration or slot handling. Repo-wide search for pcsc, smartcard, ccid and token terms finds no code."
     },
     {
       "feature": "Using cryptographic assets stored on a smart card",
       "apple": "Article: Using Cryptographic Assets Stored on a Smart Card",
       "bifrost": "springboard/ui/src/token_objects.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-cryptotokenkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Keys and certificates on hardware are not reachable from apps. springboard/sdk/src/keychain.rs does not expose them either."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-cryptotokenkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Keys and certificates on hardware are not reachable from apps. springboard/sdk/src/keychain.rs does not expose them either."
     },
     {
       "feature": "Smart card token driver and token",
@@ -32,29 +32,29 @@
       "feature": "Token watcher, driver and session base classes",
       "apple": "TKTokenWatcher, TKTokenDriver, TKToken, TKTokenSession",
       "bifrost": "springboard/ui/src/token_watch.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-cryptotokenkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token presence tracking or session authentication state."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-cryptotokenkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token presence tracking or session authentication state."
     },
     {
       "feature": "Authenticating users with a cryptographic token",
       "apple": "Article: Authenticating Users with a Cryptographic Token",
       "bifrost": "springboard/ui/src/token_registration.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token-based login factor. Login itself exists; no hardware token is involved."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token-based login factor. Login itself exists; no hardware token is involved."
     },
     {
       "feature": "Smart card authentication configuration",
       "apple": "Article: Configuring Smart Card Authentication; TKSmartCardTokenRegistrationManager",
       "bifrost": "springboard/ui/src/token_registration.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token registration or managed-device policy for token auth."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No token registration or managed-device policy for token auth."
     },
     {
       "feature": "Persistent tokens (HSM)",
       "apple": "Persistent token support, macOS 10.15.4 and later (overview)",
       "bifrost": "springboard/ui/src/token_registration.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No always-available token or HSM access."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No always-available token or HSM access."
     },
     {
       "feature": "NFC smart card slot session",
@@ -67,8 +67,8 @@
       "feature": "Errors",
       "apple": "TKError, TKErrorDomain, TKError.Code",
       "bifrost": "springboard/ui/src/token_watch.rs (TokenError)",
-      "status": "partial",
-      "note": "Wave 3 (w3-cryptotokenkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No CryptoTokenKit error domain. The keychain error type covers generic-password results only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-cryptotokenkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No CryptoTokenKit error domain. The keychain error type covers generic-password results only."
     }
   ],
   "gaps": [

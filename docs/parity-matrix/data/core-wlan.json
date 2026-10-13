@@ -32,8 +32,8 @@
       "feature": "Channel, band, width and PHY mode (CWChannel, CWChannelBand, CWChannelWidth, CWPHYMode)",
       "apple": "CWChannel, CWChannelBand, CWChannelWidth, CWPHYMode",
       "bifrost": "springboard/sdk/src/wlan.rs (Band",
-      "status": "partial",
-      "note": "Wave 4 (w4-core-wlan, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no channel number, band, width or PHY mode is decoded or exposed"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-core-wlan, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no channel number, band, width or PHY mode is decoded or exposed"
     },
     {
       "feature": "Saved network profiles (CWNetworkProfile, CWMutableNetworkProfile)",
@@ -67,29 +67,29 @@
       "feature": "Wi-Fi events (CWEventDelegate, CWEventType)",
       "apple": "CWEventDelegate: ssidDidChange, bssidDidChange, linkDidChange, powerDidChange, scanCacheUpdated, modeDidChange, countryCodeDidChange, linkQualityDidChange",
       "bifrost": "springboard/sdk/src/wlan_events.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-core-wlan, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. one status snapshot instead of typed per-event callbacks; no delegate interface for apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-core-wlan, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. one status snapshot instead of typed per-event callbacks; no delegate interface for apps"
     },
     {
       "feature": "Link quality and RSSI",
       "apple": "CWInterface.rssiValue, noiseMeasurement, transmitRate, linkQuality (CWEventType link quality)",
       "bifrost": "Status.rssi in springboard/src/net/wifi.rs:45-64 (dBm, current network only)",
-      "status": "partial",
-      "note": "no noise, transmit rate or link quality; RSSI is available to the shell only"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. no noise, transmit rate or link quality; RSSI is available to the shell only"
     },
     {
       "feature": "Keychain helpers for Wi-Fi passwords and EAP identities",
       "apple": "CWKeychainSetWiFiPassword, CWKeychainFindWiFiPassword, CWKeychainSetWiFiEAPUsernameAndPassword, CWKeychainCopyEAPIdentityList and related functions",
       "bifrost": "springboard/sdk/src/wifi_secrets.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-18, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no Wi-Fi keychain domain, no EAP identity list, no per-SSID secret store"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (theme-18, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no Wi-Fi keychain domain, no EAP identity list, no per-SSID secret store"
     },
     {
       "feature": "Network merge and identity utilities (CWMergeNetworks, CWKeychainCopyEAPIdentityList)",
       "apple": "CWMergeNetworks, CWKeychainCopyEAPIdentityList",
       "bifrost": "springboard/sdk/src/wlan.rs (merge",
-      "status": "partial",
-      "note": "Wave 4 (w4-core-wlan, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. scan results are not merged by SSID across BSSIDs in an app-facing API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-core-wlan, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. scan results are not merged by SSID across BSSIDs in an app-facing API"
     },
     {
       "feature": "Sandbox access through interface objects",

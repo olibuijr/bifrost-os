@@ -32,29 +32,29 @@
       "feature": "Statistical summaries",
       "apple": "NumericSummary, CategoricalSummary, AnyCategoricalSummary",
       "bifrost": "springboard/ui/src/column_summary.rs; wired: springboard/apps/calculator-desktop/src/tape.rs (statistics_lines, via bifrost_app::controls::column_summary::NumericSummary)",
-      "status": "partial",
-      "note": "Wave 4 (theme-08, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mean, median, quartile or category count code found; springboard/src/files/info.rs Summary counts files and bytes only, which is not a statistics layer Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-08, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mean, median, quartile or category count code found; springboard/src/files/info.rs Summary counts files and bytes only, which is not a statistics layer Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Sorting order",
       "apple": "Order",
       "bifrost": "springboard/ui/src/table.rs (SortDescriptor, sort by descriptors)",
-      "status": "partial",
-      "note": "stable multi-key sort exists for table views; no general ordering type outside the table view"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. stable multi-key sort exists for table views; no general ordering type outside the table view"
     },
     {
       "feature": "Column identifier",
       "apple": "ColumnID",
       "bifrost": "springboard/ui/src/table.rs (Column id, sort_key)",
-      "status": "partial",
-      "note": "a string key with no element type attached"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. a string key with no element type attached"
     },
     {
       "feature": "Formatting options",
       "apple": "FormattingOptions",
       "bifrost": "springboard/ui/src/format.rs (byte_count, duration, relative, grouped)",
-      "status": "partial",
-      "note": "fixed formatters for bytes, durations, relative dates and grouped integers; no option set"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 4 tests. fixed formatters for bytes, durations, relative dates and grouped integers; no option set"
     },
     {
       "feature": "CSV reading",
@@ -67,22 +67,22 @@
       "feature": "CSV writing",
       "apple": "CSVWritingError",
       "bifrost": "springboard/sdk/src/csv_writer.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-12, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no CSV writer in the SDK or apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-12, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no CSV writer in the SDK or apps"
     },
     {
       "feature": "JSON reading and writing",
       "apple": "JSONReadingError, JSONWritingOptions",
       "bifrost": "springboard/sdk/src/coding.rs (Codable JSON, reuses bifrost_core::json)",
-      "status": "partial",
-      "note": "Codable-style encode and decode exists; no tabular or column-wise JSON mapping"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Codable-style encode and decode exists; no tabular or column-wise JSON mapping"
     },
     {
       "feature": "Column encode and decode errors",
       "apple": "ColumnDecodingError, ColumnEncodingError",
       "bifrost": "springboard/sdk/src/coding.rs",
-      "status": "partial",
-      "note": "Codable errors exist but are not tied to columns"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Codable errors exist but are not tied to columns"
     },
     {
       "feature": "Turi Create SFrame reading",

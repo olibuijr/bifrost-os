@@ -11,15 +11,15 @@
       "feature": "Publisher protocol and operators",
       "apple": "Publisher, Publishers (map, filter, merge, combineLatest, debounce...)",
       "bifrost": "springboard/sdk/src/observable.rs",
-      "status": "partial",
-      "note": "only map and remove_duplicates; no filter, merge, combineLatest, debounce, flatMap"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. only map and remove_duplicates; no filter, merge, combineLatest, debounce, flatMap"
     },
     {
       "feature": "Type-erased publishers",
       "apple": "AnyPublisher, Published",
       "bifrost": "springboard/sdk/src/observable.rs",
-      "status": "partial",
-      "note": "Observable<T> plays @Published; no AnyPublisher erasure"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Observable<T> plays @Published; no AnyPublisher erasure"
     },
     {
       "feature": "Cancellation",
@@ -32,29 +32,29 @@
       "feature": "Convenience publishers",
       "apple": "Future, Just, Deferred, Empty, Fail, Record",
       "bifrost": "springboard/sdk/src/observable.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. none; Observable::new is the nearest to Just"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. none; Observable::new is the nearest to Just"
     },
     {
       "feature": "Connectable publishers",
       "apple": "ConnectablePublisher, share, multicast",
       "bifrost": "springboard/sdk/src/observable.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no connect/autoconnect"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no connect/autoconnect"
     },
     {
       "feature": "Subscribers and demand",
       "apple": "Subscriber, Subscribers, AnySubscriber, Subscription, Subscriptions, back pressure",
       "bifrost": "springboard/sdk/src/observable.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. sink/subscribe closures only; no Demand, no completion, no failure type"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. sink/subscribe closures only; no Demand, no completion, no failure type"
     },
     {
       "feature": "Subjects",
       "apple": "Subject, CurrentValueSubject, PassthroughSubject",
       "bifrost": "springboard/sdk/src/observable.rs",
-      "status": "partial",
-      "note": "CurrentValueSubject via Observable; no PassthroughSubject, no send(completion:)"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. CurrentValueSubject via Observable; no PassthroughSubject, no send(completion:)"
     },
     {
       "feature": "Schedulers",
@@ -67,36 +67,36 @@
       "feature": "Foundation publishers",
       "apple": "NotificationCenter, Timer, URLSession, KVO publishers",
       "bifrost": "springboard/sdk/src/notification.rs, springboard/sdk/src/url.rs",
-      "status": "partial",
-      "note": "sources exist with callbacks; none are exposed as publishers"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 20 tests. sources exist with callbacks; none are exposed as publishers"
     },
     {
       "feature": "ObservableObject",
       "apple": "ObservableObject, ObservableObjectPublisher",
       "bifrost": "springboard/sdk/src/observable_object.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-34, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no objectWillChange aggregate; one Observable per property"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (theme-34, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no objectWillChange aggregate; one Observable per property"
     },
     {
       "feature": "Async publishers",
       "apple": "AsyncPublisher, AsyncThrowingPublisher",
       "bifrost": "springboard/sdk/src/async_publisher.rs; wired: springboard/apps/podcasts-desktop/src/refresh.rs (over springboard/sdk/src/async_publisher.rs)",
-      "status": "partial",
-      "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no async sequence bridge Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no async sequence bridge Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Encoders and decoders",
       "apple": "TopLevelEncoder, TopLevelDecoder, decode operator",
       "bifrost": "springboard/sdk/src/coding.rs",
-      "status": "partial",
-      "note": "Codable-style coding exists, no publisher decode operator"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Codable-style coding exists, no publisher decode operator"
     },
     {
       "feature": "Debugging identifiers",
       "apple": "CombineIdentifier, CustomCombineIdentifierConvertible, print/handleEvents",
       "bifrost": "springboard/sdk/src/observable.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. only subscriber_count"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Wave 3 (theme-17, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. only subscriber_count"
     },
     {
       "feature": "UI-side observable value",

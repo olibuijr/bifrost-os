@@ -11,36 +11,36 @@
       "feature": "Tokenizing text (NLTokenizer)",
       "apple": "NLTokenizer, NLTokenUnit word, sentence, paragraph, document",
       "bifrost": "springboard/sdk/src/spellcheck.rs:99 (words), springboard/ui/src/text.rs:145 (next_word_end), springboard/ui/src/text.rs:163 (prev_word_start)",
-      "status": "partial",
-      "note": "word units only: words() splits on alphanumeric runs and keeps inner apostrophes; no sentence or paragraph units and no locale-aware segmentation (docs/bifrost-ui.md:672 says no UAX #29 and no CJK dictionary segmentation)"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 1 tests. word units only: words() splits on alphanumeric runs and keeps inner apostrophes; no sentence or paragraph units and no locale-aware segmentation (docs/bifrost-ui.md:672 says no UAX #29 and no CJK dictionary segmentation)"
     },
     {
       "feature": "Language identification (NLLanguageRecognizer, NLLanguage)",
       "apple": "NLLanguageRecognizer (dominantLanguage, languageHypotheses, languageHints), NLLanguage",
       "bifrost": "springboard/ui/src/language.rs (LanguageRecognizer; wired: springboard/apps/news-desktop/src/wire.rs (translation_plan) over springboard/ui/src/language.rs; wired: springboard/apps/books-desktop/src/books/mod.rs (look_up) + narrate.rs via springboard/ui/src/language.rs dominant_language",
-      "status": "partial",
-      "note": "Wave 2 (natural-language, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no text-to-language detection anywhere in the SDK or shell; the only language values are the two user-selected Locale languages Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 2 (natural-language, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no text-to-language detection anywhere in the SDK or shell; the only language values are the two user-selected Locale languages Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Script detection (NLScript)",
       "apple": "NLScript",
       "bifrost": "springboard/ui/src/script.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-14, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no script classifier; text rendering uses the font engine (springboard/render/src/font.rs) without a script API for apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (theme-14, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no script classifier; text rendering uses the font engine (springboard/render/src/font.rs) without a script API for apps"
     },
     {
       "feature": "Parts of speech and lexical tagging (NLTagger, NLTag lexical class)",
       "apple": "NLTagger with NLTagScheme.lexicalClass, tags(in:unit:scheme:options:), enumerateTags",
       "bifrost": "springboard/ui/src/lexical_tags.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no part-of-speech or lemma data; the spellcheck dictionary is a plain word list (springboard/apps/keyboard/src/words/en.txt) with no tags"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no part-of-speech or lemma data; the spellcheck dictionary is a plain word list (springboard/apps/keyboard/src/words/en.txt) with no tags"
     },
     {
       "feature": "Named entity recognition (NLTagger nameType)",
       "apple": "NLTagger with NLTagScheme.nameType, NLTag personalName, placeName, organizationName",
       "bifrost": "springboard/ui/src/detect.rs:9 (Kind: Link, Date, Address, Phone)",
-      "status": "partial",
-      "note": "pattern-based data detection only; people, places and organizations are not recognised, and the detector result is not merged with the spell checker (docs/bifrost-ui.md:1429)"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. pattern-based data detection only; people, places and organizations are not recognised, and the detector result is not merged with the spell checker (docs/bifrost-ui.md:1429)"
     },
     {
       "feature": "Spelling-aware word lookup (companion, not Apple NL)",
@@ -53,8 +53,8 @@
       "feature": "Text embedding and similarity (NLEmbedding)",
       "apple": "NLEmbedding: wordEmbedding(for:), sentenceEmbedding(for:), neighbors(for:maximumCount:distanceType:)",
       "bifrost": "springboard/ui/src/embedding.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no vector model and no distance API for apps; quicksearch matches keywords and titles only (springboard/sdk/src/quicksearch.rs:18, :33)"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no vector model and no distance API for apps; quicksearch matches keywords and titles only (springboard/sdk/src/quicksearch.rs:18, :33)"
     },
     {
       "feature": "Contextual embedding (NLContextualEmbedding)",
@@ -67,15 +67,15 @@
       "feature": "Custom text models (NLModel, Create ML text classifier and word tagger)",
       "apple": "NLModel, Create ML text classifier and word tagger",
       "bifrost": "springboard/ui/src/text_classifier.rs; wired: springboard/ui/src/text_classifier.rs (used by springboard/apps/assistant-desktop/src/safety.rs router and route)",
-      "status": "partial",
-      "note": "Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no API to load or run a trained text model in apps; the shell has no ML text runtime Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 6 (b06, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no API to load or run a trained text model in apps; the shell has no ML text runtime Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Locale-aware text formatting (related to language data)",
       "apple": "Not in Natural Language; listed as the closest locale service",
       "bifrost": "springboard/sdk/src/locale.rs (Locale), springboard/ui/src/format.rs (number, date, byte, measurement formatters)",
-      "status": "partial",
-      "note": "built-in data covers en and is only (docs/bifrost-ui.md:1343); no plural rules and no other languages"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. built-in data covers en and is only (docs/bifrost-ui.md:1343); no plural rules and no other languages"
     }
   ],
   "gaps": [

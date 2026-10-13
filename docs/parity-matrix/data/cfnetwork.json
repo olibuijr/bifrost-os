@@ -11,50 +11,50 @@
       "feature": "HTTP client requests and responses",
       "apple": "CFHTTPMessage, CFHTTPMessageCreateRequest, CFHTTPMessageCopyHeaderFieldValue, CFHTTPMessageSetBody (https://developer.apple.com/documentation/cfnetwork/http-messages)",
       "bifrost": "springboard/sdk/src/url.rs (URLRequest::new, set_header, value; URLSession::data_task, bytes)",
-      "status": "partial",
-      "note": "URLRequest carries URL, method, body and headers. There is no raw serialized HTTP message, no response status line access and no CFHTTPMessageAppendBytes equivalent."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. URLRequest carries URL, method, body and headers. There is no raw serialized HTTP message, no response status line access and no CFHTTPMessageAppendBytes equivalent."
     },
     {
       "feature": "HTTP read streams and redirects",
       "apple": "CFReadStreamCreateForHTTPRequest, kCFStreamPropertyHTTPShouldAutoredirect, kCFStreamPropertyHTTPFinalURL (https://developer.apple.com/documentation/cfnetwork/streams)",
       "bifrost": "springboard/sdk/src/url.rs (URLSession::bytes, 301/302/303/307/308 followed up to 5 hops); springboard/src/deildu/http.rs (keep-alive, redirects)",
-      "status": "partial",
-      "note": "Streaming and redirects work. Persistent connections are reused, but no HTTP/2, no stream properties and no final-URL property are exposed."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Streaming and redirects work. Persistent connections are reused, but no HTTP/2, no stream properties and no final-URL property are exposed."
     },
     {
       "feature": "Cookies and session storage",
       "apple": "Cookie storage through CFNetwork and the HTTP stream session (CFHTTPMessage headers; Apple doc mentions no separate cookie API in this framework)",
       "bifrost": "springboard/sdk/src/http_cookies.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-cfnetwork, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK URLSession keeps no cookies. Only the Deildu client keeps its own jar; apps get none."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (w3-cfnetwork, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK URLSession keeps no cookies. Only the Deildu client keeps its own jar; apps get none."
     },
     {
       "feature": "HTTP authentication",
       "apple": "CFHTTPAuthentication, CFHTTPMessageApplyCredentials, kCFHTTPAuthenticationSchemeBasic (https://developer.apple.com/documentation/cfnetwork/http-authentication)",
       "bifrost": "springboard/sdk/src/http_auth.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-cfnetwork, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No credentials type and no challenge handling for apps. Decided in docs/bifrost-ui.md section URLSession as a gap (no URLCredential)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 3 (w3-cfnetwork, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No credentials type and no challenge handling for apps. Decided in docs/bifrost-ui.md section URLSession as a gap (no URLCredential)."
     },
     {
       "feature": "Host name resolution",
       "apple": "CFHost, CFHostCreateWithName, CFHostStartInfoResolution, CFHostGetAddressing (https://developer.apple.com/documentation/cfnetwork/hosts)",
       "bifrost": "springboard/sdk/src/host_addressing.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-cfnetwork, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The resolver exists inside the shell's HTTP client. Apps have no name lookup API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-cfnetwork, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The resolver exists inside the shell's HTTP client. Apps have no name lookup API."
     },
     {
       "feature": "Global proxy configuration",
       "apple": "CFNetworkCopySystemProxySettings, CFNetworkCopyProxiesForURL, proxy autoconfiguration scripts (https://developer.apple.com/documentation/cfnetwork/global-proxy-configuration)",
       "bifrost": "springboard/core/src/proxy.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No proxy settings are read or applied. The Network settings page shows Ethernet, Wi-Fi and a Network Manager row only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (theme-06, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No proxy settings are read or applied. The Network settings page shows Ethernet, Wi-Fi and a Network Manager row only."
     },
     {
       "feature": "Network services (Bonjour)",
       "apple": "CFNetService, CFNetServiceBrowser, CFNetServiceRegisterWithOptions, CFNetServiceResolveWithTimeout (https://developer.apple.com/documentation/cfnetwork/network-services)",
       "bifrost": "springboard/sdk/src/dns_service.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-cfnetwork, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No service discovery or registration API for apps. The shell has no mDNS browser exposed in the SDK."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 5 (w5-cfnetwork, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No service discovery or registration API for apps. The shell has no mDNS browser exposed in the SDK."
     },
     {
       "feature": "Network configuration, link state and DHCP",
@@ -74,29 +74,29 @@
       "feature": "Secure sockets and SOCKS",
       "apple": "kCFStreamPropertySSLSettings, kCFStreamSSLValidatesCertificateChain, kCFStreamErrorDomainSOCKS (https://developer.apple.com/documentation/cfnetwork/streams)",
       "bifrost": "springboard/src/deildu/http.rs (Tls wraps rustls with the webpki roots)",
-      "status": "partial",
-      "note": "TLS certificate validation is on, using the webpki roots, for the HTTP client. No per-stream SSL settings, no client identities and no SOCKS."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. TLS certificate validation is on, using the webpki roots, for the HTTP client. No per-stream SSL settings, no client identities and no SOCKS."
     },
     {
       "feature": "Network diagnostics",
       "apple": "CFNetDiagnostic, CFNetDiagnosticCreateWithURL, CFNetDiagnosticDiagnoseProblemInteractively (https://developer.apple.com/documentation/cfnetwork/network-diagnostics)",
       "bifrost": "springboard/sdk/src/net_diagnostic.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-cfnetwork, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No diagnostic window or API. The Wi-Fi page shows link state only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-cfnetwork, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No diagnostic window or API. The Wi-Fi page shows link state only."
     },
     {
       "feature": "FTP transfers",
       "apple": "CFReadStreamCreateWithFTPURL, CFWriteStreamCreateWithFTPURL, CFFTPCreateParsedResourceListing (https://developer.apple.com/documentation/cfnetwork/ftp)",
       "bifrost": "springboard/sdk/src/ftp.rs (bifrost_app::ftp); wired: springboard/apps/files/src/server.rs (fetch, read_reply, Files::open_connect)",
-      "status": "partial",
-      "note": "Wave 6 (b16, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. FTP is not implemented in the SDK. Low priority for a desktop with a file portal. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b16, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. FTP is not implemented in the SDK. Low priority for a desktop with a file portal. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Error domains and codes",
       "apple": "CFNetworkErrors, CFStreamErrorHTTP, Error Domains (https://developer.apple.com/documentation/cfnetwork/errors)",
       "bifrost": "springboard/sdk/src/url.rs (Reply error values)",
-      "status": "partial",
-      "note": "Errors are returned as Rust results with the transport message. There is no CFNetworkErrors code mapping."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Errors are returned as Rust results with the transport message. There is no CFNetworkErrors code mapping."
     }
   ],
   "gaps": [

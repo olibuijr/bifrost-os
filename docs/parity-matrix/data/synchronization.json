@@ -11,22 +11,22 @@
       "feature": "Atomic values",
       "apple": "Atomic<Value> with add, bitwiseAnd, load, store, exchange, compareExchange (https://developer.apple.com/documentation/synchronization/atomic)",
       "bifrost": "springboard/sdk/src/dispatch.rs:108 (AtomicU64), springboard/sdk/src/dispatch.rs:529 (AtomicBool), std::sync::atomic",
-      "status": "partial",
-      "note": "Rust std atomics only; no SDK-level wrapper or documented SDK API for atomics"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. Rust std atomics only; no SDK-level wrapper or documented SDK API for atomics"
     },
     {
       "feature": "Lazily initialised atomic reference",
       "apple": "AtomicLazyReference (https://developer.apple.com/documentation/synchronization/atomiclazyreference)",
       "bifrost": "springboard/sdk/src/dispatch.rs:112 (OnceLock pool), springboard/src/bare/app_manager.rs:31 (OnceLock static)",
-      "status": "partial",
-      "note": "std OnceLock covers the one-time init case; no atomic-reference type for arbitrary strong references"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. std OnceLock covers the one-time init case; no atomic-reference type for arbitrary strong references"
     },
     {
       "feature": "WordPair",
       "apple": "WordPair, a pair of two word-sized UInts stored atomically (https://developer.apple.com/documentation/synchronization/wordpair)",
       "bifrost": "springboard/sdk/src/synchronization.rs (WordPair, AtomicWordPair)",
-      "status": "partial",
-      "note": "Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. grep for WordPair and pair-atomic wrappers in springboard/sdk, ui, render and core returned nothing"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 20 tests. Wave 6 (b08, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. grep for WordPair and pair-atomic wrappers in springboard/sdk, ui, render and core returned nothing"
     },
     {
       "feature": "Atomic representable protocols",
@@ -39,22 +39,22 @@
       "feature": "Memory ordering semantics",
       "apple": "AtomicLoadOrdering, AtomicStoreOrdering, AtomicUpdateOrdering (https://developer.apple.com/documentation/synchronization/atomicloadordering)",
       "bifrost": "springboard/sdk/src/dispatch.rs:187 (Ordering::Relaxed), springboard/sdk/src/dispatch.rs:544 (Ordering::SeqCst)",
-      "status": "partial",
-      "note": "std::sync::atomic::Ordering used directly; no per-operation ordering type in an SDK API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. std::sync::atomic::Ordering used directly; no per-operation ordering type in an SDK API"
     },
     {
       "feature": "Atomic memory fence",
       "apple": "atomicMemoryFence(ordering:) (https://developer.apple.com/documentation/synchronization/atomicmemoryfence(ordering:))",
       "bifrost": "std::sync::atomic::fence (not observed in springboard/sdk/src/dispatch.rs)",
-      "status": "partial",
-      "note": "std fence is available to Rust code; no SDK function or documented use found"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. std fence is available to Rust code; no SDK function or documented use found"
     },
     {
       "feature": "Mutex with scoped lock",
       "apple": "Mutex<Value> with init, withLock and withLockIfAvailable (https://developer.apple.com/documentation/synchronization/mutex)",
       "bifrost": "springboard/sdk/src/dispatch.rs:24 (lock helper over std::sync::Mutex), springboard/sdk/src/dispatch.rs:250 (static JOBS Mutex)",
-      "status": "partial",
-      "note": "std Mutex used widely; the closure-scoped withLock and withLockIfAvailable shape is not offered as an SDK type"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. std Mutex used widely; the closure-scoped withLock and withLockIfAvailable shape is not offered as an SDK type"
     }
   ],
   "gaps": [

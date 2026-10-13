@@ -11,15 +11,15 @@
       "feature": "Client creation and teardown",
       "apple": "es_new_client, es_delete_client, es_new_client_result_t (Creating a Client, Destroying a Client)",
       "bifrost": "springboard/sdk/src/event_client.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-endpoint-security, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No root-level client that connects to a monitoring subsystem. Apps only get the per-app control socket (springboard/sdk/src/control.rs)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-endpoint-security, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No root-level client that connects to a monitoring subsystem. Apps only get the per-app control socket (springboard/sdk/src/control.rs)."
     },
     {
       "feature": "Subscribing to events",
       "apple": "es_subscribe, es_unsubscribe, es_unsubscribe_all, es_subscriptions, es_event_type_t (Subscribing to Events)",
       "bifrost": "springboard/sdk/src/process_events.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing to subscribe to. The only event feeds are the workspace notifications and the file watcher, each with its own API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing to subscribe to. The only event feeds are the workspace notifications and the file watcher, each with its own API."
     },
     {
       "feature": "Process execution, fork and exit events",
@@ -32,50 +32,50 @@
       "feature": "Process signal, working directory and root directory events",
       "apple": "es_event_signal_t, es_event_chdir_t, es_event_chroot_t (Process Event Types)",
       "bifrost": "springboard/sdk/src/process_events.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hook on signal delivery or directory changes."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hook on signal delivery or directory changes."
     },
     {
       "feature": "File-system events (open, create, write, rename, unlink, and others)",
       "apple": "es_event_open_t, es_event_create_t, es_event_write_t, es_event_rename_t, es_event_unlink_t and the other File-System Event Types",
       "bifrost": "springboard/sdk/src/fswatch.rs (WatchStream)",
-      "status": "partial",
-      "note": "Recursive inotify watch with events coalesced per path. Reports changes after they happen and gives no process that made the change. The docs name it FSEventStream in bifrost_app::fsevents, but the file is fswatch.rs. Docs and code disagree on the name."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Recursive inotify watch with events coalesced per path. Reports changes after they happen and gives no process that made the change. The docs name it FSEventStream in bifrost_app::fsevents, but the file is fswatch.rs. Docs and code disagree on the name."
     },
     {
       "feature": "File metadata events (xattr, ACL, flags, mode, owner, stat, readdir)",
       "apple": "es_event_getextattr_t, es_event_setacl_t, es_event_stat_t, es_event_readdir_t and the other File Metadata Event Types",
       "bifrost": "springboard/sdk/src/file_metadata.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-endpoint-security, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The watcher reports content changes only, not attribute or metadata access."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-endpoint-security, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The watcher reports content changes only, not attribute or metadata access."
     },
     {
       "feature": "Authorization events and responses",
       "apple": "es_respond_auth_result, es_respond_flags_result, es_auth_result_t, AUTH event types, es_result_t",
       "bifrost": "springboard/sdk/src/auth_events.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-endpoint-security, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Endpoint Security can allow or deny an operation before it runs. Docbroker grants decide what an app may open, but they are not a system event hook. The sandbox is applied once at launch with no per-event decision."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-endpoint-security, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Endpoint Security can allow or deny an operation before it runs. Docbroker grants decide what an app may open, but they are not a system event hook. The sandbox is applied once at launch with no per-event decision."
     },
     {
       "feature": "Mount, unmount and remount events",
       "apple": "es_event_mount_t, es_event_unmount_t, es_event_remount_t, ES_MOUNT_DISPOSITION_* (File System Mounting Event Types)",
       "bifrost": "springboard/sdk/src/process_events.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The installer mounts and unmounts its own targets (springboard/src/installer/plan.rs). No API reports mounts to apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The installer mounts and unmounts its own targets (springboard/src/installer/plan.rs). No API reports mounts to apps."
     },
     {
       "feature": "Memory mapping and protection events",
       "apple": "es_event_mmap_t, es_event_mprotect_t (Memory Mapping Event Types)",
       "bifrost": "springboard/sdk/src/memory_events.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-16, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hook on mmap or mprotect."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (theme-16, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hook on mmap or mprotect."
     },
     {
       "feature": "Interprocess events (trace, remote thread creation, suspend and resume)",
       "apple": "es_event_trace_t, es_event_remote_thread_create_t, es_event_proc_suspend_resume_t (Interprocess Events)",
       "bifrost": "springboard/sdk/src/process_events.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No ptrace or remote-thread monitoring found in springboard/src, springboard/sdk/src or springboard/core/src."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No ptrace or remote-thread monitoring found in springboard/src, springboard/sdk/src or springboard/core/src."
     },
     {
       "feature": "Task port events (get task, read, inspect, name ports)",
@@ -88,36 +88,36 @@
       "feature": "User and group ID change events",
       "apple": "es_event_setuid_t, es_event_setgid_t, es_event_seteuid_t, es_event_setegid_t, es_event_setreuid_t, es_event_setregid_t (User and Group ID Types)",
       "bifrost": "springboard/sdk/src/identity_events.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-endpoint-security, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hook on credential changes. Launch-time identity drops are handled in springboard/src/bare/app_policy.rs (drop_identity), with no event emitted."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (w3-endpoint-security, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No hook on credential changes. Launch-time identity drops are handled in springboard/src/bare/app_policy.rs (drop_identity), with no event emitted."
     },
     {
       "feature": "Code signing validity events",
       "apple": "es_event_cs_invalidated_t, ES_CS_VALIDATION_CATEGORY_* (Code Signing Event Types)",
       "bifrost": "springboard/core/src/codesign_events.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-28, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code-signing status events. Packages are checked at install time, which is a different event."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-28, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code-signing status events. Packages are checked at install time, which is a different event."
     },
     {
       "feature": "Login, logout, su, sudo, SSH and screen-sharing events",
       "apple": "ES_EVENT_TYPE_NOTIFY_LOGIN_LOGIN, ES_EVENT_TYPE_NOTIFY_SUDO, ES_EVENT_TYPE_NOTIFY_OPENSSH_LOGIN, ES_EVENT_TYPE_NOTIFY_SCREENSHARING_ATTACH and related notify types",
       "bifrost": "springboard/core/src/session_events.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-endpoint-security, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Session events are not published to apps. Logs go to the journal, and no security event stream is built from them."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-endpoint-security, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Session events are not published to apps. Logs go to the journal, and no security event stream is built from them."
     },
     {
       "feature": "Socket, pseudoterminal, clock and kernel events",
       "apple": "Socket Event Types, Pseudoterminal Event Types, Clock Event Types, Kernel Event Types",
       "bifrost": "springboard/core/src/security_event.rs; wired: springboard/core/src/security_event.rs (adapter springboard/apps/console-desktop/src/security.rs)",
-      "status": "partial",
-      "note": "Wave 6 (b18, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No event hooks for these. The terminal app exists but emits no security events. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 6 (b18, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No event hooks for these. The terminal app exists but emits no security events. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Muting and clearing the cache",
       "apple": "es_mute_process, es_mute_path, es_mute_process_events, es_mute_path_events, es_unmute_*, es_clear_cache (Muting Events, Unmuting Events, Managing Cached Results)",
       "bifrost": "springboard/sdk/src/process_events.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on a client, which does not exist."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on a client, which does not exist."
     },
     {
       "feature": "Message retain and release",

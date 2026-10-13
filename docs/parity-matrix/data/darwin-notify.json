@@ -32,15 +32,15 @@
       "feature": "Signal-based delivery (notify_register_signal)",
       "apple": "notify_register_signal(_:_:_:)",
       "bifrost": "springboard/core/src/notify_center.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-02, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No POSIX signal delivery for notifications."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 5 (theme-02, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No POSIX signal delivery for notifications."
     },
     {
       "feature": "File descriptor delivery (notify_register_file_descriptor)",
       "apple": "notify_register_file_descriptor(_:_:_:_:)",
       "bifrost": "springboard/core/src/notify_center.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. fswatch exposes an fd for file-system events only; there is no fd for named notifications."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 2 (theme-20, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. fswatch exposes an fd for file-system events only; there is no fd for named notifications."
     },
     {
       "feature": "Mach port delivery (notify_register_mach_port)",
@@ -67,8 +67,8 @@
       "feature": "Posting to a non-running app (suspensionBehavior)",
       "apple": "notify_post delivery when target not running",
       "bifrost": "springboard/sdk/src/post_delivery.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-09, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. An app that is not running misses the post, equal to Apple's drop behaviour, with no option to hold it."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-09, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. An app that is not running misses the post, equal to Apple's drop behaviour, with no option to hold it."
     },
     {
       "feature": "System event names (kNotifyTimeZoneChange, kNotifyClockSet, kNotifyVFSMount, kNotifyVFSUnmount, kNotifyVFSLowDiskSpace, kNotifySCNetworkChange, kNotifySCHostNameChange, kNotifyDSCacheInvalidation*, kNotifyASLDBUpdate)",

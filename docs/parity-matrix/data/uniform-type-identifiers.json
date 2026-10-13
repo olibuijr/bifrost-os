@@ -40,29 +40,29 @@
       "feature": "Localized type description",
       "apple": "UTType.localizedDescription",
       "bifrost": "springboard/ui/src/uttype.rs:117 (description)",
-      "status": "partial",
-      "note": "English strings only, no localization tables"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. English strings only, no localization tables"
     },
     {
       "feature": "Generic tag classes",
       "apple": "UTTagClass and tags(), UTType.tags for other classes",
       "bifrost": "springboard/ui/src/uttype.rs (TagClass), springboard/ui/src/uttype_declarations.rs (UtTagClass, UtType::tag, UtType::tags)",
-      "status": "partial",
-      "note": "UtTagClass takes any class string (filename extension, MIME type, or a declared class from UTTypeTagSpecification); host unit tests only, not yet checked on Midget. No system tag classes beyond the two Apple ones"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 28 tests. UtTagClass takes any class string (filename extension, MIME type, or a declared class from UTTypeTagSpecification); host unit tests only, not yet checked on Midget. No system tag classes beyond the two Apple ones"
     },
     {
       "feature": "App-declared exported and imported types",
       "apple": "UTExportedTypeDeclarations, UTImportedTypeDeclarations, Defining file and data types for your app",
       "bifrost": "springboard/ui/src/utdecl.rs (checks), springboard/ui/src/uttype_declarations.rs (parse_manifest, register_manifest, register_plist, UtType)",
-      "status": "partial",
-      "note": "[[exported_types]]/[[imported_types]] manifest blocks and UTExportedTypeDeclarations-shaped entries register into the uttype lookups (extension, MIME, conformance to public.data, description); UtType has exported_as, imported_as, filename_extension, mime_type, tag, is_declared, is_dynamic, is_public. Exported beats imported; cycles and reserved ids are refused; built-in extensions stay with the system. Host unit tests only; the shell does not call register_manifest at app launch yet, not yet checked on Midget. One MIME type per declaration is indexed"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 22 tests. [[exported_types]]/[[imported_types]] manifest blocks and UTExportedTypeDeclarations-shaped entries register into the uttype lookups (extension, MIME, conformance to public.data, description); UtType has exported_as, imported_as, filename_extension, mime_type, tag, is_declared, is_dynamic, is_public. Exported beats imported; cycles and reserved ids are refused; built-in extensions stay with the system. Host unit tests only; the shell does not call register_manifest at app launch yet, not yet checked on Midget. One MIME type per declaration is indexed"
     },
     {
       "feature": "System-declared type catalogue",
       "apple": "System-declared uniform type identifiers (the Apple list on the landing page)",
       "bifrost": "springboard/ui/src/uttype.rs (58 entries)",
-      "status": "partial",
-      "note": "covers the common images, audio, video, text, archive, code and document types; no 3D, Apple-only, Shazam or bundle types"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. covers the common images, audio, video, text, archive, code and document types; no 3D, Apple-only, Shazam or bundle types"
     },
     {
       "feature": "Sharing payload type",
@@ -82,8 +82,8 @@
       "feature": "Document read and write by type",
       "apple": "NSDocument readableTypes, writableTypes, data(ofType:)",
       "bifrost": "springboard/sdk/src/document.rs:40 (Document trait: read, write, readable_types, default_type)",
-      "status": "partial",
-      "note": "type strings are UTIs; no writable types list or conversion rules"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 20 tests. type strings are UTIs; no writable types list or conversion rules"
     },
     {
       "feature": "Conformance check for tag matching in file kind",

@@ -18,8 +18,8 @@
       "feature": "Audio application and recording permission",
       "apple": "AVAudioApplication: requestRecordPermission, recordPermission, input mute state",
       "bifrost": "springboard/proto/src/svc.rs (Cmd::RecordStart, Cmd::RecordStop); springboard/apps/voicememos-desktop/src/voicememos.rs:208",
-      "status": "partial",
-      "note": "recording is gated by an explicit user tap in the app, but there is no permission request or mute state API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. recording is gated by an explicit user tap in the app, but there is no permission request or mute state API"
     },
     {
       "feature": "Audio interruptions",
@@ -74,8 +74,8 @@
       "feature": "Speech synthesis (AVSpeechSynthesizer)",
       "apple": "Speech synthesis voices and utterances",
       "bifrost": "springboard/ui/src/speech.rs; wired: springboard/apps/books-desktop/src/books/narrate.rs (Narration over springboard/ui/src/speech.rs)",
-      "status": "partial",
-      "note": "Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no text-to-speech engine or SDK API found Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no text-to-speech engine or SDK API found Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Mixing and volume control",

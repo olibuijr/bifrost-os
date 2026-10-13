@@ -46,8 +46,8 @@
       "feature": "Scanner view (IKScannerDeviceView)",
       "apple": "IKScannerDeviceView, IKScannerDeviceViewDelegate",
       "bifrost": "springboard/ui/src/scan_job.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No scanner support: the only scanner hits in the tree are the camera QR decoder and unrelated text."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-33, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No scanner support: the only scanner hits in the tree are the camera QR decoder and unrelated text."
     },
     {
       "feature": "Image decoding for apps",
@@ -95,8 +95,8 @@
       "feature": "PDF annotations and form widgets (PDFAnnotation, PDFAppearanceCharacteristics, PDFBorder, widgets)",
       "apple": "PDFAnnotation, PDFAction, PDFDestination, PDFAppearanceCharacteristics, PDFBorder; widget how-to articles",
       "bifrost": "springboard/ui/src/acroform.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-quartz, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The PDF engine reads no annotations or AcroForm fields. PDFCraft's annotation UI comes from the upstream binary and is not reachable from apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-quartz, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The PDF engine reads no annotations or AcroForm fields. PDFCraft's annotation UI comes from the upstream binary and is not reachable from apps."
     },
     {
       "feature": "PDF writing, print workflow and Quartz filters (QuartzFilter, QuartzFilterManager)",

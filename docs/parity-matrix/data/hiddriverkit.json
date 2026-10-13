@@ -25,8 +25,8 @@
       "feature": "Device discovery and matching by capability",
       "apple": "Match Criteria, kIOHIDEventServicePropertiesRequiredForMatching, IOHIDEventService",
       "bifrost": "springboard/ui/src/device_match.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-hiddriverkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Matching is by evdev capability, not by HID usage pairs; no app-facing matching API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-hiddriverkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Matching is by evdev capability, not by HID usage pairs; no app-facing matching API"
     },
     {
       "feature": "Keyboard events",
@@ -74,8 +74,8 @@
       "feature": "Raw HID report and element access for apps",
       "apple": "IOHIDElement, HID Usage Tables, Low-Level Information",
       "bifrost": "springboard/ui/src/hid_report.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-18, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API exposes HID report elements or usage tables to apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-18, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API exposes HID report elements or usage tables to apps"
     }
   ],
   "gaps": [

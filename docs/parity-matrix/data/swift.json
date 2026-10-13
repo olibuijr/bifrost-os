@@ -25,29 +25,29 @@
       "feature": "Observation and observable values",
       "apple": "Observation, @Published / ObservableObject",
       "bifrost": "springboard/sdk/src/observable.rs, springboard/ui/src/observe.rs",
-      "status": "partial",
-      "note": "Observable<T> with sink and map and remove_duplicates; no withObservationTracking dependency capture, no objectWillChange aggregate, no debounce or combineLatest"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 23 tests. Observable<T> with sink and map and remove_duplicates; no withObservationTracking dependency capture, no objectWillChange aggregate, no debounce or combineLatest"
     },
     {
       "feature": "Codable encoding and decoding",
       "apple": "Codable, JSONEncoder, JSONDecoder, PropertyListEncoder",
       "bifrost": "springboard/sdk/src/coding.rs (codable! macro, JSON and XML plist)",
-      "status": "partial",
-      "note": "JSON and XML plist are covered; no CodingKeys renaming, no binary plist, Data unsupported"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. JSON and XML plist are covered; no CodingKeys renaming, no binary plist, Data unsupported"
     },
     {
       "feature": "Concurrency and dispatch",
       "apple": "Swift concurrency (async/await, Task), Adopting strict concurrency in Swift 6 apps",
       "bifrost": "springboard/sdk/src/dispatch.rs (DispatchQueue, DispatchGroup, QoS)",
-      "status": "partial",
-      "note": "GCD-style queues and groups exist; no async/await syntax, no Task or actor isolation, no compile-time data-race checking"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. GCD-style queues and groups exist; no async/await syntax, no Task or actor isolation, no compile-time data-race checking"
     },
     {
       "feature": "Actors and isolation",
       "apple": "Actor, @MainActor, Sendable",
       "bifrost": "springboard/sdk/src/actor.rs; wired: springboard/sdk/src/actor.rs (used by springboard/apps/shortcuts-desktop/src/automation.rs Planner)",
-      "status": "partial",
-      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Rust uses Send and Sync bounds and the main queue; there is no actor type in the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Rust uses Send and Sync bounds and the main queue; there is no actor type in the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Distributed actors",
@@ -60,22 +60,22 @@
       "feature": "Regular expression DSL",
       "apple": "RegexBuilder, Regex",
       "bifrost": "springboard/sdk/src/synchronization.rs, springboard/ui/src/regex.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No regex builder API; text search in the SDK does not expose regex matching"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 20 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No regex builder API; text search in the SDK does not expose regex matching"
     },
     {
       "feature": "Low-level atomic operations",
       "apple": "Synchronization (Atomic, Mutex)",
       "bifrost": "springboard/sdk/src/synchronization.rs, springboard/ui/src/regex.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Rust std primitives are used internally; no SDK API wraps them for apps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 20 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Rust std primitives are used internally; no SDK API wraps them for apps"
     },
     {
       "feature": "Data detection in text",
       "apple": "Swift Standard Library text handling with DataDetection (related)",
       "bifrost": "springboard/ui/src/detect.rs (links, dates, phone numbers)",
-      "status": "partial",
-      "note": "Covers NSDataDetector-style kinds; not a Swift API, listed for the text-processing counterpart"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Covers NSDataDetector-style kinds; not a Swift API, listed for the text-processing counterpart"
     },
     {
       "feature": "Objective-C and C interoperability",

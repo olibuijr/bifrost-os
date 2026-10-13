@@ -11,8 +11,8 @@
       "feature": "Match base type and string scanning",
       "apple": "DDMatch, DataDetector",
       "bifrost": "springboard/ui/src/detect.rs (find, Kind, Match); wired: springboard/apps/notes-desktop/src/notes/parity.rs (Kind::Flight and Kind::Address now flagged by Check Spelling and Links)",
-      "status": "partial",
-      "note": "returns kind plus byte range only; no typed payload per match Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. returns kind plus byte range only; no typed payload per match Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Web links",
@@ -25,57 +25,57 @@
       "feature": "Phone numbers",
       "apple": "DDMatchPhoneNumber",
       "bifrost": "springboard/ui/src/detect.rs (Kind::Phone); wired: springboard/apps/calendar-desktop/src/calendar/notes.rs (phone), Target::CopyPhone in src/calendar.rs, share_copy in src/main.rs",
-      "status": "partial",
-      "note": "range only, 7 to 15 digits; no parsed number value Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. range only, 7 to 15 digits; no parsed number value Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Postal addresses",
       "apple": "DDMatchPostalAddress",
       "bifrost": "springboard/ui/src/detect.rs (Kind::Address)",
-      "status": "partial",
-      "note": "street plus house number, English and Icelandic; no components (city, postcode)"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. street plus house number, English and Icelandic; no components (city, postcode)"
     },
     {
       "feature": "Calendar events and dates",
       "apple": "DDMatchCalendarEvent",
       "bifrost": "springboard/ui/src/detect.rs (Kind::Date); wired: springboard/apps/calendar-desktop/src/calendar/quick.rs (parse), Calendar::new_event_from_text in src/calendar.rs, File > New Event from Text in src/main.rs",
-      "status": "partial",
-      "note": "only yyyy-mm-dd and d.m.yyyy; no times, ranges or relative dates Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. only yyyy-mm-dd and d.m.yyyy; no times, ranges or relative dates Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
     },
     {
       "feature": "Email addresses",
       "apple": "DDMatchEmailAddress",
       "bifrost": "springboard/ui/src/detect.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Kind has no Email variant"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Kind has no Email variant"
     },
     {
       "feature": "Flight numbers",
       "apple": "DDMatchFlightNumber",
       "bifrost": "springboard/ui/src/detect.rs",
-      "status": "partial",
-      "note": "Wave 6 (b04, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Wave 6 (b04, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget."
     },
     {
       "feature": "Money amounts",
       "apple": "DDMatchMoneyAmount",
       "bifrost": "springboard/ui/src/detect.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
     },
     {
       "feature": "Shipment tracking numbers",
       "apple": "DDMatchShipmentTrackingNumber",
       "bifrost": "springboard/ui/src/detect.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
     },
     {
       "feature": "Pasteboard detection",
       "apple": "detectPatterns, detectedPatterns, detectValues, detectedValues",
       "bifrost": "springboard/ui/src/detect.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the detector could run over pasteboard text but is not wired"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the detector could run over pasteboard text but is not wired"
     },
     {
       "feature": "SDK reach and docs",

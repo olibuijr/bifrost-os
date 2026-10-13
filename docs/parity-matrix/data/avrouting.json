@@ -11,15 +11,15 @@
       "feature": "System route picker with custom destinations",
       "apple": "AVRoutePickerView, AVCustomRoutingController, AVCustomRoutingDelegate",
       "bifrost": "springboard/ui/src/route_picker.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-avrouting, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no picker UI for media receivers; the Music app draws an AirPlay-like glyph (springboard/apps/music-desktop/src/music.rs) that is decorative and opens nothing"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (w3-avrouting, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no picker UI for media receivers; the Music app draws an AirPlay-like glyph (springboard/apps/music-desktop/src/music.rs) that is decorative and opens nothing"
     },
     {
       "feature": "Authorized routes and route activation",
       "apple": "AVCustomRoutingController.authorizedRoutes, setActive(_:for:), isRouteActive(_:), invalidateAuthorization(for:)",
       "bifrost": "springboard/ui/src/route_auth.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-avrouting, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no per-app authorization of network receivers"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-avrouting, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no per-app authorization of network receivers"
     },
     {
       "feature": "Route addresses on the local network",
@@ -32,15 +32,15 @@
       "feature": "Custom action items in the picker",
       "apple": "AVCustomRoutingActionItem, customActionItems",
       "bifrost": "springboard/ui/src/route_action.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-avrouting, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-avrouting, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
     },
     {
       "feature": "Route events",
       "apple": "AVCustomRoutingEvent, AVCustomDeviceRoute, AVCustomRoutingEventReason",
       "bifrost": "springboard/sdk/src/route_events.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-30, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (theme-30, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
     },
     {
       "feature": "Device discovery extension",
@@ -53,8 +53,8 @@
       "feature": "Playback arbitration between participants",
       "apple": "AVRoutingPlaybackArbiter (shared, preferredParticipantForExternalPlayback, preferredParticipantForNonMixableAudioRoutes), AVRoutingPlaybackParticipant",
       "bifrost": "springboard/ui/src/playback_arbiter.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. audiod serves the speaker, but apps cannot declare a preferred participant; the voice memo app only yields by stopping. Apple's arbiter is Mac Catalyst 26.0 only"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 2 (theme-10, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. audiod serves the speaker, but apps cannot declare a preferred participant; the voice memo app only yields by stopping. Apple's arbiter is Mac Catalyst 26.0 only"
     },
     {
       "feature": "Output route switching (local)",

@@ -25,50 +25,50 @@
       "feature": "Nonreplicated File Provider extension (managed local files with placeholders)",
       "apple": "Nonreplicated File Provider extension",
       "bifrost": "springboard/ui/src/file_provider.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-file-provider, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No placeholder or dataless file concept, and no on-demand hydration. Files app reads and writes ordinary files only (springboard/src/files/fs.rs)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 5 (w5-file-provider, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No placeholder or dataless file concept, and no on-demand hydration. Files app reads and writes ordinary files only (springboard/src/files/fs.rs)."
     },
     {
       "feature": "Extension management (NSFileProviderManager: domains, signalEnumerator, reimport)",
       "apple": "NSFileProviderManager",
       "bifrost": "springboard/sdk/src/file_provider.rs, springboard/ui/src/file_provider.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing signals the shell or Files that remote content changed. The nearest mechanism is the FSEventStream poll, which only watches local folders."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Nothing signals the shell or Files that remote content changed. The nearest mechanism is the FSEventStream poll, which only watches local folders."
     },
     {
       "feature": "Provided items (item, identifier, capabilities, type and creator)",
       "apple": "NSFileProviderItem, NSFileProviderItemProtocol, NSFileProviderItemIdentifier, NSFileProviderItemCapabilities, NSFileProviderTypeAndCreator",
       "bifrost": "springboard/ui/src/uttype.rs (type identifiers), springboard/src/files/fs.rs (local item model)",
-      "status": "partial",
-      "note": "Local items have a path and a UTI-style type. There is no provider item protocol, remote identifier, or per-item capability set exposed to a provider."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Local items have a path and a UTI-style type. There is no provider item protocol, remote identifier, or per-item capability set exposed to a provider."
     },
     {
       "feature": "Cloud search (NSFileProviderSearching)",
       "apple": "NSFileProviderSearching",
       "bifrost": "springboard/sdk/src/file_provider.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-file-provider, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Quick search indexes local content only. Apps cannot register a provider search source."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Wave 5 (w5-file-provider, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Quick search indexes local content only. Apps cannot register a provider search source."
     },
     {
       "feature": "Domains (NSFileProviderDomain, external volume eligibility)",
       "apple": "NSFileProviderDomain, NSFileProviderVolumeUnsupportedReason",
       "bifrost": "springboard/sdk/src/file_provider.rs, springboard/ui/src/file_provider.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No domain registry. Volumes are not tracked as providers."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No domain registry. Volumes are not tracked as providers."
     },
     {
       "feature": "Errors (NSFileProviderError codes, sync error keys)",
       "apple": "NSFileProviderError, NSFileProviderErrorDomain and its keys",
       "bifrost": "springboard/sdk/src/file_coordination.rs (CoordinationError: Timeout, Io)",
-      "status": "partial",
-      "note": "Only coordination errors exist. There are no provider error codes such as non-existent item or colliding item."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 3 tests. Only coordination errors exist. There are no provider error codes such as non-existent item or colliding item."
     },
     {
       "feature": "Coordinated access to items shared with other processes (adjacent, Foundation)",
       "apple": "NSFileCoordinator, NSFilePresenter (used by providers)",
       "bifrost": "springboard/sdk/src/file_coordination.rs, docs/bifrost-ui.md section 'NSFileCoordinator and NSFilePresenter'",
-      "status": "partial",
-      "note": "Advisory flock on the parent directory, with a 5 s timeout. Presenters get change callbacks. There is no relinquish or save negotiation, no will-move callback, and no versions."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 3 tests. Advisory flock on the parent directory, with a 5 s timeout. Presenters get change callbacks. There is no relinquish or save negotiation, no will-move callback, and no versions."
     },
     {
       "feature": "Change feed for item updates (adjacent, FSEvents)",

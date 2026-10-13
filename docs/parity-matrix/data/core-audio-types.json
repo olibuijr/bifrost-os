@@ -32,15 +32,15 @@
       "feature": "Codec class descriptions",
       "apple": "AudioClassDescription",
       "bifrost": "springboard/src/media/codec.rs (codec sniff from content type and first bytes)",
-      "status": "partial",
-      "note": "Codec identity is an internal enum chosen by sniffing. There is no descriptor type that apps can query."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Codec identity is an internal enum chosen by sniffing. There is no descriptor type that apps can query."
     },
     {
       "feature": "AudioTimeStamp and timestamp flags",
       "apple": "AudioTimeStamp, AudioTimeStampFlags",
       "bifrost": "springboard/src/media/demux/mod.rs (Sample with pts_us and dts_us in microseconds)",
-      "status": "partial",
-      "note": "Only presentation and decode times in microseconds. No sample time, host time, rate scalar or flag set."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Only presentation and decode times in microseconds. No sample time, host time, rate scalar or flag set."
     },
     {
       "feature": "SMPTE time",
@@ -74,8 +74,8 @@
       "feature": "Packet descriptions and packet dependencies",
       "apple": "AudioStreamPacketDescription, AudioStreamPacketDependencyDescription",
       "bifrost": "springboard/src/media/demux/mp4.rs (Mp4Sample with offset and size per sample); springboard/src/media/demux/mod.rs (Sample with keyframe flag)",
-      "status": "partial",
-      "note": "Each sample carries offset, size and keyframe. There is no variable-bit-rate packet table and no dependency description."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 28 tests. Each sample carries offset, size and keyframe. There is no variable-bit-rate packet table and no dependency description."
     },
     {
       "feature": "Sample type and fixed-point canonical format",

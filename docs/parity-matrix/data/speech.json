@@ -18,8 +18,8 @@
       "feature": "Analyzer modules and voice activity detection",
       "apple": "SpeechTranscriber, DictationTranscriber, SpeechDetector, SpeechModule, LocaleDependentSpeechModule",
       "bifrost": "springboard/ui/src/voice_activity.rs; wired: springboard/ui/src/voice_activity.rs via springboard/apps/voicememos-desktop/src/store.rs (speech_spans, next_speech_ms) and src/voicememos.rs (skip_silence_from, toggle_skip_silence)",
-      "status": "partial",
-      "note": "Wave 2 (speech, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No module protocol or voice activity detection. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (speech, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No module protocol or voice activity detection. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Audio input for analysis (file and microphone sequence providers, converter)",
@@ -32,29 +32,29 @@
       "feature": "Microphone consent and ownership",
       "apple": "Microphone access for speech input (permission prompt)",
       "bifrost": "springboard/ui/src/mic_consent.rs (SDK: springboard/sdk/src/lib.rs microphone)",
-      "status": "partial",
-      "note": "Wave 4 (w4-speech, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service is the one process that opens the microphone; it starts only on an explicit RecordStart. No permission prompt API for apps. SFSpeechRecognizer.request_authorization gates every task in the app; the shell does not enforce it."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-speech, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service is the one process that opens the microphone; it starts only on an explicit RecordStart. No permission prompt API for apps. SFSpeechRecognizer.request_authorization gates every task in the app; the shell does not enforce it."
     },
     {
       "feature": "Recognition results (alternatives, confidence, time ranges)",
       "apple": "SpeechModuleResult, AnalyzerInput time codes, SFSpeechRecognitionResult",
       "bifrost": "springboard/ui/src/recognition.rs",
-      "status": "partial",
-      "note": "Wave 2 (speech, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No result type with alternatives or confidence. SDK result types now exist in speech_recognizer.rs (segments with timestamp, duration, confidence); no alternatives beyond the best one."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (speech, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No result type with alternatives or confidence. SDK result types now exist in speech_recognizer.rs (segments with timestamp, duration, confidence); no alternatives beyond the best one."
     },
     {
       "feature": "Custom vocabulary and language models",
       "apple": "AnalysisContext, SFSpeechLanguageModel, SFSpeechLanguageModel.Configuration, SFCustomLanguageModelData",
       "bifrost": "springboard/ui/src/recognition.rs (ContextualStrings)",
-      "status": "partial",
-      "note": "Wave 2 (speech, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No custom language model or contextual strings."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (speech, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No custom language model or contextual strings."
     },
     {
       "feature": "Asset and model installation",
       "apple": "AssetInventory, AssetInstallationRequest, SpeechModels",
       "bifrost": "springboard/ui/src/speech_assets.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-speech, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No on-device model download or install path for speech. springboard/updated handles system updates only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-speech, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No on-device model download or install path for speech. springboard/updated handles system updates only."
     },
     {
       "feature": "System dictation entry point",

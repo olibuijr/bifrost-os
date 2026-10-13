@@ -53,8 +53,8 @@
       "feature": "Notification attachments and rich media",
       "apple": "UNNotificationAttachment, UNNotificationAttachment options",
       "bifrost": "springboard/ui/src/notifattach.rs",
-      "status": "partial",
-      "note": "Wave 2 (user-notifications-ui, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attachment API. Notification cards show text only. The shell has image drawing (springboard/render/src/imgdec, springboard/src/shell/notify/list.rs) that could carry an image thumbnail."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (user-notifications-ui, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attachment API. Notification cards show text only. The shell has image drawing (springboard/render/src/imgdec, springboard/src/shell/notify/list.rs) that could carry an image thumbnail."
     },
     {
       "feature": "Notification sounds",
@@ -95,15 +95,15 @@
       "feature": "Background push and notification service extension",
       "apple": "UNNotificationServiceExtension, background push (content-available), Modifying content in newly delivered notifications",
       "bifrost": "springboard/ui/src/notifservice.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-user-notifications, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on remote push, which is missing. No app extension point runs between delivery and display."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (w5-user-notifications, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on remote push, which is missing. No app extension point runs between delivery and display."
     },
     {
       "feature": "Communication notifications",
       "apple": "Implementing communication notifications, UNNotificationContentProviding, UNNotificationAttributedMessageContext",
       "bifrost": "springboard/sdk/src/messaging.rs (Notice",
-      "status": "partial",
-      "note": "Wave 5 (theme-13, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No sender-based notification styling and no intent-backed message content. App Intents exist but are not wired into notification content."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (theme-13, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No sender-based notification styling and no intent-backed message content. App Intents exist but are not wired into notification content."
     },
     {
       "feature": "Web push notifications",

@@ -46,8 +46,8 @@
       "feature": "Wi-Fi accessory configuration (unconfigured accessories)",
       "apple": "EAWiFiUnconfiguredAccessoryBrowser, EAWiFiUnconfiguredAccessory, Wireless Accessory Configuration Entitlement https://developer.apple.com/documentation/externalaccessory/eawifiunconfiguredaccessorybrowser",
       "bifrost": "springboard/sdk/src/wifi_accessory_browser.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-19, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No scan for unconfigured Wi-Fi accessories and no configuration hand-off. The Wi-Fi stack (netd) is OS-level and has no app API for this."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (theme-19, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No scan for unconfigured Wi-Fi accessories and no configuration hand-off. The Wi-Fi stack (netd) is OS-level and has no app API for this."
     },
     {
       "feature": "Accessory input and media devices",

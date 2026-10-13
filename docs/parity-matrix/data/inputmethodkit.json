@@ -60,8 +60,8 @@
       "feature": "Candidate panel types, location hints and opacity",
       "apple": "IMKCandidatePanelType, IMKCandidatesLocationHint, IMKCandidatesOpacityAttributeName, IMKCandidatesSendServerKeyEventFirst",
       "bifrost": "springboard/ui/src/candidates.rs (PanelType",
-      "status": "partial",
-      "note": "Wave 3 (w3-inputmethodkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No panel type or location hint exists. The caret rectangle is available (ctx.caret_rect, springboard/sdk/src/lib.rs)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-inputmethodkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No panel type or location hint exists. The caret rectangle is available (ctx.caret_rect, springboard/sdk/src/lib.rs)."
     },
     {
       "feature": "Mouse handling for input methods",
@@ -102,8 +102,8 @@
       "feature": "Enumerations, constants and data types",
       "apple": "IMKCandidatePanelType, IMKStyleType, InputMethodKit Enumerations and Constants",
       "bifrost": "springboard/proto/src/lib.rs (InputTraits, ReturnKeyType, TextContentKind)",
-      "status": "partial",
-      "note": "Text input traits are covered. No candidate or style enumerations exist."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 34 tests. Text input traits are covered. No candidate or style enumerations exist."
     }
   ],
   "gaps": [

@@ -11,29 +11,29 @@
       "feature": "Badges on files and folders",
       "apple": "FIFinderSync.requestBadgeIdentifier(for:), FIFinderSyncController.setBadgeIdentifier(_:for:), setBadgeImage(_:label:forBadgeIdentifier:)",
       "bifrost": "springboard/ui/src/filebadge.rs (BadgeSet)",
-      "status": "partial",
-      "note": "Wave 3 (theme-22, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Files shows no per-item badge from an app. Nothing in the SDK or Files app sets one."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-22, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Files shows no per-item badge from an app. Nothing in the SDK or Files app sets one."
     },
     {
       "feature": "Custom shortcut menus in the file manager",
       "apple": "FIFinderSyncProtocol.menu(for:), FIMenuKind (contextualMenuForItems, contextualMenuForContainer)",
       "bifrost": "springboard/ui/src/fileaction.rs (Placement::ItemsMenu",
-      "status": "partial",
-      "note": "Wave 3 (theme-22, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Files builds its own context menu. Apps cannot add items to it. The SDK context_menu call only serves the app's own window."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 3 (theme-22, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Files builds its own context menu. Apps cannot add items to it. The SDK context_menu call only serves the app's own window."
     },
     {
       "feature": "Toolbar buttons in the file manager",
       "apple": "FIFinderSyncProtocol.toolbarItemName, toolbarItemImage, toolbarItemToolTip",
       "bifrost": "springboard/ui/src/fileaction.rs (Placement::Toolbar",
-      "status": "partial",
-      "note": "Wave 3 (theme-22, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The toolbar kit is for an app's own unified window. Files has no toolbar slot for other apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 3 (theme-22, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The toolbar kit is for an app's own unified window. Files has no toolbar slot for other apps."
     },
     {
       "feature": "Observing monitored directories",
       "apple": "FIFinderSyncProtocol.beginObservingDirectory(at:), endObservingDirectory(at:), FIFinderSyncController.directoryURLs",
       "bifrost": "springboard/sdk/src/fswatch.rs (WatchStream: recursive inotify, coalesced events)",
-      "status": "partial",
-      "note": "Apps can watch a folder tree and get change events. There is no begin or end callback tied to the user viewing a folder, and no list of directories an extension manages."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Apps can watch a folder tree and get change events. There is no begin or end callback tied to the user viewing a folder, and no list of directories an extension manages."
     },
     {
       "feature": "Current selection and target folder",
@@ -53,15 +53,15 @@
       "feature": "Per-item tags and last-used data shared with the Finder",
       "apple": "FIFinderSyncController.tagDataForItem(with:), setTagData(_:forItemWith:completion:), lastUsedDateForItem(with:), setLastUsedDate(_:forItemWith:completion:), values(forAttributes:forItemWith:completion:)",
       "bifrost": "springboard/ui/src/itemattrs.rs (Store)",
-      "status": "partial",
-      "note": "Wave 3 (theme-22, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK API exposes item tags or last-used dates to other apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (theme-22, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK API exposes item tags or last-used dates to other apps."
     },
     {
       "feature": "Cross-process file coordination for sync clients",
       "apple": "Used with Finder Sync by sync extensions (not a Finder Sync symbol)",
       "bifrost": "springboard/sdk/src/file_coordination.rs (NativeFileCoordinator, flock on the parent directory)",
-      "status": "partial",
-      "note": "Read and write coordination exists for apps. It is not a Finder Sync hook and does not notify the file manager."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 3 tests. Read and write coordination exists for apps. It is not a Finder Sync hook and does not notify the file manager."
     }
   ],
   "gaps": [

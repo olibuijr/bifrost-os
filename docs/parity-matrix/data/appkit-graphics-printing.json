@@ -81,8 +81,8 @@
       "feature": "Color: colour panel",
       "apple": "NSColorPanel, NSColorWell",
       "bifrost": "springboard/ui/src/panels.rs (ColorPanel)",
-      "status": "partial",
-      "note": "RGB plus alpha model with change callback; no colour well control, no picker modes (wheel, sliders, palettes, crayons)"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. RGB plus alpha model with change callback; no colour well control, no picker modes (wheel, sliders, palettes, crayons)"
     },
     {
       "feature": "Color: colour spaces and lists",

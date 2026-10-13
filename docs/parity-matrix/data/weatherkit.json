@@ -32,15 +32,15 @@
       "feature": "Precipitation",
       "apple": "Precipitation, PrecipitationAmountByType, SnowfallAmount",
       "bifrost": "springboard/ui/src/precipitation.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-37, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Precipitation kind comes only from the weather code. No amounts, probabilities or snowfall are requested."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-37, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Precipitation kind comes only from the weather code. No amounts, probabilities or snowfall are requested."
     },
     {
       "feature": "Pressure trend",
       "apple": "PressureTrend",
       "bifrost": "springboard/ui/src/pressure_trend.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-15, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The forecast URL does not request pressure."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (theme-15, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The forecast URL does not request pressure."
     },
     {
       "feature": "UV index",
@@ -60,15 +60,15 @@
       "feature": "Minute forecast",
       "apple": "MinuteWeather",
       "bifrost": "springboard/ui/src/precipitation.rs (MinuteForecast",
-      "status": "partial",
-      "note": "Wave 2 (theme-37, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No minute-level precipitation request or type."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-37, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No minute-level precipitation request or type."
     },
     {
       "feature": "Weather alerts",
       "apple": "WeatherAlert, WeatherSeverity, WeatherAvailability",
       "bifrost": "springboard/ui/src/weather_alert.rs; wired: springboard/apps/weather-desktop/src/insights.rs (footer_lines alert availability via WeatherAvailability; alert_banner via most_severe, not drawn)",
-      "status": "partial",
-      "note": "Wave 2 (theme-37, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The forecast URL requests no alert data, and no code in the repo models alerts. The notification layer (springboard/src/shell/usernotif.rs) has no weather source. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 2 (theme-37, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The forecast URL requests no alert data, and no code in the repo models alerts. The notification layer (springboard/src/shell/usernotif.rs) has no weather source. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Sun and moon events",
@@ -81,8 +81,8 @@
       "feature": "Historical statistics and comparisons",
       "apple": "DailyWeatherStatistics, MonthlyWeatherStatistics, HourlyWeatherStatistics, Percentiles, Trend, HistoricalComparisons, WeatherChanges",
       "bifrost": "springboard/ui/src/weather_stats.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-15, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code in the repo requests or stores historical or statistical weather data. Open-Meteo is used only for the forecast endpoint."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-15, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code in the repo requests or stores historical or statistical weather data. Open-Meteo is used only for the forecast endpoint."
     },
     {
       "feature": "Weather errors",
@@ -95,8 +95,8 @@
       "feature": "Data attribution",
       "apple": "WeatherAttribution",
       "bifrost": "springboard/ui/src/weather_attribution.rs; wired: springboard/apps/weather-desktop/src/insights.rs (footer_lines, WeatherAttribution); springboard/apps/weather-desktop/src/weather.rs (footer loop after the MAP card)",
-      "status": "partial",
-      "note": "Wave 2 (theme-37, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attribution text for Open-Meteo was found in springboard/apps/weather-desktop/src or springboard/src/shell/weather. Apple requires attribution with WeatherKit data, so an equivalent is needed for any provider shown in the UI. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 2 (theme-37, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attribution text for Open-Meteo was found in springboard/apps/weather-desktop/src or springboard/src/shell/weather. Apple requires attribution with WeatherKit data, so an equivalent is needed for any provider shown in the UI. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     }
   ],
   "gaps": [

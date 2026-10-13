@@ -11,8 +11,8 @@
       "feature": "Audio file analyzer",
       "apple": "SNAudioFileAnalyzer (init(url:), add(_:withObserver:), analyze(), analyze(completionHandler:), cancelAnalysis())",
       "bifrost": "springboard/ui/src/sound_classify.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Files can be decoded, but no analysis pass runs over them and no SDK type wraps this"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Files can be decoded, but no analysis pass runs over them and no SDK type wraps this"
     },
     {
       "feature": "Audio stream analyzer",
@@ -25,22 +25,22 @@
       "feature": "Built-in sound classifier request",
       "apple": "SNClassifySoundRequest(classifierIdentifier:), SNClassifierIdentifier, windowDuration, overlapFactor, knownClassifications",
       "bifrost": "springboard/ui/src/sound_classify.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No classifier model, label set or request object exists"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No classifier model, label set or request object exists"
     },
     {
       "feature": "Custom Core ML sound classifier request",
       "apple": "SNClassifySoundRequest(mlModel:), SNTimeDurationConstraint, windowDurationConstraint",
       "bifrost": "springboard/ui/src/sound_classify.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Core ML or other model runtime for audio. No code matches a model-loading path"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Core ML or other model runtime for audio. No code matches a model-loading path"
     },
     {
       "feature": "Classification results",
       "apple": "SNClassificationResult (timeRange, classifications, classification(forIdentifier:)), SNClassification",
       "bifrost": "springboard/ui/src/sound_classify.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No result type with time ranges or confidences"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No result type with time ranges or confidences"
     },
     {
       "feature": "Results observer callbacks",
@@ -60,8 +60,8 @@
       "feature": "Errors",
       "apple": "SNError, SNError.Code, SNErrorDomain",
       "bifrost": "springboard/ui/src/sound_classify.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Sound Analysis error domain. It follows from the missing classifier"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (theme-09, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Sound Analysis error domain. It follows from the missing classifier"
     }
   ],
   "gaps": [

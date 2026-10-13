@@ -11,8 +11,8 @@
       "feature": "Web-usage reporting (STWebpageController)",
       "apple": "STWebpageController: url, urlIsBlocked, urlIsPlayingVideo, urlIsPictureInPicture, suppressUsageRecording, setBundleIdentifier(_:), profileIdentifier",
       "bifrost": "springboard/ui/src/web_usage.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-23, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The browser keeps visits for its own History menu. Nothing reports web usage to a Screen Time store, and no block check for URLs exists."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (theme-23, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The browser keeps visits for its own History menu. Nothing reports web usage to a Screen Time store, and no block check for URLs exists."
     },
     {
       "feature": "Configuration observer and configuration (STScreenTimeConfigurationObserver, STScreenTimeConfiguration)",
@@ -25,8 +25,8 @@
       "feature": "Web-history deletion (STWebHistory)",
       "apple": "STWebHistory: init(bundleIdentifier:), init(profileIdentifier:), deleteAllHistory(), deleteHistory(during:), deleteHistory(for:), fetchAllHistory(completionHandler:), fetchHistory(during:completionHandler:)",
       "bifrost": "springboard/ui/src/web_history.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-screen-time, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets an app or a parent delete or fetch another app's web history by bundle identifier or date range."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-screen-time, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API lets an app or a parent delete or fetch another app's web history by bundle identifier or date range."
     },
     {
       "feature": "Per-app usage records",

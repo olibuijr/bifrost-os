@@ -11,8 +11,8 @@
       "feature": "Managed asset packs (AssetPack, AssetPackManager, AssetPackManifest)",
       "apple": "AssetPack, AssetPackManager, AssetPackManifest",
       "bifrost": "springboard/ui/src/assetpack.rs, springboard/ui/src/downloadqueue.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no pack concept, no on-demand pack status or removal"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 18 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no pack concept, no on-demand pack status or removal"
     },
     {
       "feature": "System-scheduled downloads while the app is not running (ManagedDownloaderExtension, BAAppGroupID, BAHasManagedAssetPacks)",
@@ -32,36 +32,36 @@
       "feature": "Localized asset packs",
       "apple": "Reducing download and storage demands with localized asset packs",
       "bifrost": "springboard/ui/src/assetpack.rs, springboard/ui/src/downloadqueue.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 18 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
     },
     {
       "feature": "Testing packs against a local mock server",
       "apple": "Testing asset packs locally",
       "bifrost": "springboard/ui/src/assetmock.rs (MockPackSource)",
-      "status": "partial",
-      "note": "Wave 4 (w4-background-assets, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-background-assets, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
     },
     {
       "feature": "Unmanaged download manager and URL downloads (BADownloadManager, BAURLDownload, BADownload)",
       "apple": "BADownloadManager, BAURLDownload, BADownload",
       "bifrost": "springboard/sdk/src/url.rs (download_task: dest.part renamed on success, progress, cancel)",
-      "status": "partial",
-      "note": "runs only while the app is alive; no persistent queue, no scheduling, no essential/non-essential priority"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. runs only while the app is alive; no persistent queue, no scheduling, no essential/non-essential priority"
     },
     {
       "feature": "Downloader extension and manifest (BADownloaderExtension, BAManifestURL)",
       "apple": "BADownloaderExtension, BADownloaderExtensionConfiguration, BAManifestURL",
       "bifrost": "springboard/ui/src/assetpack.rs (AssetPackManifest::to_lines",
-      "status": "partial",
-      "note": "Wave 4 (w4-background-assets, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no extension that runs while the app is closed or before first launch"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 4 (w4-background-assets, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no extension that runs while the app is closed or before first launch"
     },
     {
       "feature": "Install-size limits for initial downloads",
       "apple": "BAInitialDownloadRestrictions, BAEssentialMaxInstallSize, BAMaxInstallSize",
       "bifrost": "springboard/ui/src/assetpack.rs, springboard/ui/src/downloadqueue.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 18 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
     },
     {
       "feature": "System update download with size and hash check",
@@ -81,15 +81,15 @@
       "feature": "Errors (ManagedBackgroundAssetsError, BAErrorCode, LocalAvailabilityError)",
       "apple": "ManagedBackgroundAssetsError, BAErrorCode, LocalAvailabilityError",
       "bifrost": "URLError in springboard/sdk/src/url.rs",
-      "status": "partial",
-      "note": "no asset-specific errors"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. no asset-specific errors"
     },
     {
       "feature": "Size calculation methods",
       "apple": "SizeCalculationMethod",
       "bifrost": "springboard/ui/src/assetpack.rs, springboard/ui/src/downloadqueue.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 18 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget."
     }
   ],
   "gaps": [

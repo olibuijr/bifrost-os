@@ -32,15 +32,15 @@
       "feature": "People picker and person view",
       "apple": "ABPeoplePickerView, ABPersonView",
       "bifrost": "springboard/ui/src/contact_picker.rs",
-      "status": "partial",
-      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No SDK picker or embeddable person view; each app would have to rebuild one"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No SDK picker or embeddable person view; each app would have to rebuild one"
     },
     {
       "feature": "Groups",
       "apple": "ABGroup, ABGroupAddMember, ABGroupRemoveMember, ABGroupCopyArrayOfAllMembers, subgroups",
       "bifrost": "springboard/ui/src/contact_groups.rs",
-      "status": "partial",
-      "note": "Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Favorites is a flag on the contact; there are no group records or membership"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 6 (b02, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Favorites is a flag on the contact; there are no group records or membership"
     },
     {
       "feature": "vCard import and export",
@@ -53,15 +53,15 @@
       "feature": "Contact photos",
       "apple": "ABPersonSetImageData, ABPersonCopyImageData, ABImageClient, ABBeginLoadingImageDataForClient",
       "bifrost": "springboard/ui/src/contact_photo.rs (Photos::set",
-      "status": "partial",
-      "note": "Wave 4 (w4-address-book, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Contact struct has no image field"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-address-book, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Contact struct has no image field"
     },
     {
       "feature": "Formatted postal addresses",
       "apple": "ABCreateFormattedAddressFromDictionary",
       "bifrost": "springboard/ui/src/postal_address.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No structured address fields and no locale-aware formatter"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No structured address fields and no locale-aware formatter"
     },
     {
       "feature": "Sharing and copying contact values",
@@ -81,15 +81,15 @@
       "feature": "Change notifications",
       "apple": "ABAddressBookRegisterExternalChangeCallback, ABAddressBookUnregisterExternalChangeCallback",
       "bifrost": "springboard/ui/src/contact_changes.rs (Observers::register",
-      "status": "partial",
-      "note": "Wave 4 (w4-address-book, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No callback when the contact store changes outside the app"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 4 (w4-address-book, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No callback when the contact store changes outside the app"
     },
     {
       "feature": "Access authorization",
       "apple": "ABAddressBookRequestAccessWithCompletion, ABAddressBookGetAuthorizationStatus",
       "bifrost": "springboard/ui/src/contact_access.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No contacts permission type; the manifest only has storage"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No contacts permission type; the manifest only has storage"
     },
     {
       "feature": "Action plug-in delegate",

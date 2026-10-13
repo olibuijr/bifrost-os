@@ -39,8 +39,8 @@
       "feature": "Role handlers (viewer, editor, shell)",
       "apple": "LSCopyAllRoleHandlersForContentType, LSCopyDefaultRoleHandlerForContentType, LSSetDefaultRoleHandlerForContentType, LSRolesMask",
       "bifrost": "springboard/ui/src/launch.rs (Role",
-      "status": "partial",
-      "note": "Wave 3 (w3-core-services, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only one default per type; no roles."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 3 (w3-core-services, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only one default per type; no roles."
     },
     {
       "feature": "Shared file lists (recent items, favourites)",
@@ -53,8 +53,8 @@
       "feature": "Quarantine properties",
       "apple": "kLSQuarantine* keys (kLSQuarantineTypeWebDownload and others)",
       "bifrost": "springboard/core/src/quarantine.rs (Quarantine",
-      "status": "partial",
-      "note": "Wave 3 (w3-core-services, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Downloads are not tagged with origin metadata."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (w3-core-services, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Downloads are not tagged with origin metadata."
     },
     {
       "feature": "File system change notifications",
@@ -67,8 +67,8 @@
       "feature": "Event history and event IDs",
       "apple": "FSEventsGetCurrentEventId, FSEventsGetLastEventIdForDeviceBeforeTime, FSEventStreamGetLatestEventId, FSEventStreamFlushSync",
       "bifrost": "springboard/sdk/src/fswatch.rs (EventJournal, replay_since); wired: springboard/apps/files/src/perf.rs (catch_up, unseen, record_events)",
-      "status": "partial",
-      "note": "Wave 6 (b17, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. A change stream cannot replay events since a saved ID after a restart. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 6 (b17, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. A change stream cannot replay events since a saved ID after a restart. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Apple Events (inter-process messages with replies)",
@@ -88,29 +88,29 @@
       "feature": "File metadata search (MDQuery, kMDItem*, MDLabel)",
       "apple": "MDQuery, MDItem, MDLabel, kMDItem* constants, importer plug-ins",
       "bifrost": "springboard/ui/src/metaquery.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-08, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attribute store that apps can query, and no importer plug-ins."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 4 (theme-08, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attribute store that apps can query, and no importer plug-ins."
     },
     {
       "feature": "Dictionary lookup",
       "apple": "DCSCopyTextDefinition, DCSGetTermRangeInString, DCSDictionary",
       "bifrost": "springboard/sdk/src/definitions.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No definition lookup API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 3 (theme-27, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No definition lookup API."
     },
     {
       "feature": "Backup exclusion",
       "apple": "CSBackupSetItemExcluded, CSBackupIsItemExcluded",
       "bifrost": "springboard/core/src/backup_exclusion.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-28, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No per-item backup exclusion in the SDK or shell."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-28, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No per-item backup exclusion in the SDK or shell."
     },
     {
       "feature": "Identity services (users and groups)",
       "apple": "Identity Services article (user and group database, access controls)",
       "bifrost": "springboard/ui/src/identity.rs (Directory)",
-      "status": "partial",
-      "note": "Wave 2 (theme-01, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Accounts and sign-in belong to the login shell and to bifrost-cloud, not to an SDK API for apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 2 (theme-01, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Accounts and sign-in belong to the login shell and to bifrost-cloud, not to an SDK API for apps."
     },
     {
       "feature": "Power and sleep",

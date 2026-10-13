@@ -32,22 +32,22 @@
       "feature": "Async and sync submission",
       "apple": "async(execute:), sync(execute:)",
       "bifrost": "springboard/sdk/src/dispatch.rs:367 (async_), :407 (sync)",
-      "status": "partial",
-      "note": "sync returns T; sync from the main thread onto main panics instead of deadlocking silently"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. sync returns T; sync from the main thread onto main panics instead of deadlocking silently"
     },
     {
       "feature": "asyncAndWait",
       "apple": "asyncAndWait(execute:) on queues and workloops",
       "bifrost": "springboard/sdk/src/dispatch.rs (DispatchQueue::async_and_wait)",
-      "status": "partial",
-      "note": "Wave 2 (theme-34, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. use DispatchWorkItem::wait or DispatchGroup::wait"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. Wave 2 (theme-34, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. use DispatchWorkItem::wait or DispatchGroup::wait"
     },
     {
       "feature": "Delayed submission",
       "apple": "DispatchQueue.asyncAfter(deadline:qos:flags:execute:), DispatchTime",
       "bifrost": "springboard/sdk/src/dispatch.rs:393 (async_after), :400 (async_after_leeway)",
-      "status": "partial",
-      "note": "takes a Duration, not DispatchTime or DispatchWallTime; leeway is supported"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. takes a Duration, not DispatchTime or DispatchWallTime; leeway is supported"
     },
     {
       "feature": "Dispatch groups",
@@ -67,22 +67,22 @@
       "feature": "Quality of service",
       "apple": "DispatchQoS: userInteractive, userInitiated, default, utility, background, unspecified",
       "bifrost": "springboard/sdk/src/dispatch.rs:36 (enum Qos)",
-      "status": "partial",
-      "note": "four levels: UserInteractive, UserInitiated, Utility, Background; no default or unspecified; no QoS inheritance"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. four levels: UserInteractive, UserInitiated, Utility, Background; no default or unspecified; no QoS inheritance"
     },
     {
       "feature": "Barriers on concurrent queues",
       "apple": "DispatchQueue barrier flag, Dispatch Barrier",
       "bifrost": "springboard/sdk/src/dispatch.rs (DispatchQueue::concurrent",
-      "status": "partial",
-      "note": "Wave 2 (theme-29, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md:1095 lists no barriers; use a serial queue or a Mutex"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. Wave 2 (theme-29, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md:1095 lists no barriers; use a serial queue or a Mutex"
     },
     {
       "feature": "Target queues and concurrentPerform",
       "apple": "setTarget(queue:), DispatchQueue.concurrentPerform",
       "bifrost": "springboard/sdk/src/dispatch.rs (concurrent_perform); target queues still missing",
-      "status": "partial",
-      "note": "Wave 6 (b17, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. docs/bifrost-ui.md:1095-1096 lists both as gaps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. Wave 6 (b17, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. docs/bifrost-ui.md:1095-1096 lists both as gaps"
     },
     {
       "feature": "Memory pressure source",
@@ -95,29 +95,29 @@
       "feature": "Other dispatch sources (timer, read, write, signal, process, file system)",
       "apple": "DispatchSource (activate, suspend, resume, cancel, setEventHandler, DispatchSourceProtocol)",
       "bifrost": "springboard/sdk/src/timer_source.rs (timer source model only)",
-      "status": "partial",
-      "note": "Wave 5 (theme-07, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no timer source (async_after_leeway covers one-shot timers); no fd or signal sources; no suspend, resume or cancel"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (theme-07, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no timer source (async_after_leeway covers one-shot timers); no fd or signal sources; no suspend, resume or cancel"
     },
     {
       "feature": "Dispatch I/O channels",
       "apple": "DispatchIO, dispatch_io_t, barrier, setLimit",
       "bifrost": "springboard/sdk/src/dispatch_io.rs (DispatchIO, StreamType)",
-      "status": "partial",
-      "note": "Stream and random-access channels over a file or pipe with chunked read/write handlers, set_limit, low water and close; no barrier operations or cleanup handlers. Host unit tests only, not yet checked on Midget."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Stream and random-access channels over a file or pipe with chunked read/write handlers, set_limit, low water and close; no barrier operations or cleanup handlers. Host unit tests only, not yet checked on Midget."
     },
     {
       "feature": "DispatchData",
       "apple": "DispatchData, DispatchDataIterator, dispatch_data_t",
       "bifrost": "springboard/sdk/src/dispatch_data.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-12, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. buffers are Vec<u8> or Bytes; no sparse or concatenated dispatch data type"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-12, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. buffers are Vec<u8> or Bytes; no sparse or concatenated dispatch data type"
     },
     {
       "feature": "Semaphores",
       "apple": "DispatchSemaphore(value:), wait, signal",
       "bifrost": "springboard/sdk/src/dispatch.rs (DispatchSemaphore",
-      "status": "partial",
-      "note": "Wave 2 (theme-29, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md:1096 says use std::sync or a group instead; decided, not missing by accident"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. Wave 2 (theme-29, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md:1096 says use std::sync or a group instead; decided, not missing by accident"
     },
     {
       "feature": "Workloops",
@@ -130,15 +130,15 @@
       "feature": "dispatch_once and dispatchPrecondition",
       "apple": "dispatch_once, DispatchPredicate, dispatchPrecondition(condition:)",
       "bifrost": "std::sync::OnceLock is used directly in springboard/sdk/src/url.rs:168 and springboard/sdk/src/process_info.rs:189; no SDK wrapper",
-      "status": "partial",
-      "note": "one-time initialisation works through std, but there is no dispatch_once API and no precondition check on queues"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 17 tests. one-time initialisation works through std, but there is no dispatch_once API and no precondition check on queues"
     },
     {
       "feature": "Dispatch time types",
       "apple": "DispatchTime, DispatchWallTime, DispatchTimeInterval, DispatchTimeoutResult",
       "bifrost": "std::time::Duration and Instant (springboard/sdk/src/dispatch.rs:591 uses Duration)",
-      "status": "partial",
-      "note": "wait timeouts are Durations; no wall-clock time type and no timeout result enum"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 29 tests. wait timeouts are Durations; no wall-clock time type and no timeout result enum"
     }
   ],
   "gaps": [

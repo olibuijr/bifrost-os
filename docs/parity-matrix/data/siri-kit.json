@@ -11,36 +11,36 @@
       "feature": "Intent objects and dispatch (INIntent, INIntentResponse)",
       "apple": "INIntent, INIntentResponse, Dispatching intents to handlers",
       "bifrost": "springboard/sdk/src/intents.rs (Intent, IntentResult, dispatch)",
-      "status": "partial",
-      "note": "Apps declare intents and answer intent.<id> over the control socket. No handler protocol and no per-intent handler classes; the app is one dispatch target."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Apps declare intents and answer intent.<id> over the control socket. No handler protocol and no per-intent handler classes; the app is one dispatch target."
     },
     {
       "feature": "Parameter resolution, confirmation and disambiguation",
       "apple": "Resolving the Parameters of an Intent, Confirming the Details of an Intent, Resolution Results",
       "bifrost": "springboard/ui/src/intent_resolve.rs; wired: springboard/apps/shortcuts-desktop/src/automation.rs resolve (unchanged this round)",
-      "status": "partial",
-      "note": "Wave 2 (theme-07, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only type and required-field checks run. No needs-value, disambiguation or confirmation steps, as docs/bifrost-ui.md 'App Intents' records. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-07, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only type and required-field checks run. No needs-value, disambiguation or confirmation steps, as docs/bifrost-ui.md 'App Intents' records. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Common data types (strings, dates, URLs, entities)",
       "apple": "Common Data Types, INParameter",
       "bifrost": "springboard/sdk/src/intents.rs:22 (ParamType)",
-      "status": "partial",
-      "note": "String, Int, Bool, Date (ISO 8601 text), Url and Entity(type). No currency, contact, image or person types."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. String, Int, Bool, Date (ISO 8601 text), Url and Entity(type). No currency, contact, image or person types."
     },
     {
       "feature": "Entities and entity queries",
       "apple": "INParameter (entity parameters), Common Data Types (contacts, people, lists)",
       "bifrost": "springboard/sdk/src/intents.rs:208 (Entity), :238 (EntityQuery)",
-      "status": "partial",
-      "note": "Suggested, by id and by string. Nothing in the shell shows an entity picker yet."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Suggested, by id and by string. Nothing in the shell shows an entity picker yet."
     },
     {
       "feature": "Intent results and dialog",
       "apple": "INIntentResponse, Handling an Intent",
       "bifrost": "springboard/sdk/src/intents.rs:246 (IntentResult)",
-      "status": "partial",
-      "note": "Returns a JSON value and a dialog string to the caller. The dialog is not shown or spoken by Search."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Returns a JSON value and a dialog string to the caller. The dialog is not shown or spoken by Search."
     },
     {
       "feature": "Shortcuts in Search (suggested actions)",
@@ -53,8 +53,8 @@
       "feature": "Donating interactions and shortcuts",
       "apple": "Donating Shortcuts, Donating Reservations, INInteraction, INIntentDonationMetadata, Deleting Donated Shortcuts",
       "bifrost": "springboard/sdk/src/donation.rs",
-      "status": "partial",
-      "note": "Wave 2 (siri-kit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps cannot tell the system what the user did so Search can suggest it later."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 2 (siri-kit, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps cannot tell the system what the user did so Search can suggest it later."
     },
     {
       "feature": "Shortcuts app integration",
@@ -74,15 +74,15 @@
       "feature": "Custom vocabulary, synonyms and intent phrases",
       "apple": "Registering Custom Vocabulary with SiriKit, INVocabulary, Specifying Synonyms for Your App Name, Intent Phrases, Parameter Vocabularies",
       "bifrost": "springboard/ui/src/intent_vocab.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-siri-kit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No vocabulary file or phrase registration. Search matches titles and app names only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (w3-siri-kit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No vocabulary file or phrase registration. Search matches titles and app names only."
     },
     {
       "feature": "Messaging intents (send, search messages, contacts)",
       "apple": "Messaging, Improving interactions between Siri and your messaging app",
       "bifrost": "springboard/sdk/src/messaging.rs (SendRequest",
-      "status": "partial",
-      "note": "Wave 5 (theme-13, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No messaging intent domain. A messaging app would need a conversation and contact entity model first."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (theme-13, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No messaging intent domain. A messaging app would need a conversation and contact entity model first."
     },
     {
       "feature": "Lists and Notes intents",
@@ -95,8 +95,8 @@
       "feature": "Media intents (play, add to queue, search media)",
       "apple": "Media, Managing Audio with SiriKit, Improving Siri Media Interactions and App Selection",
       "bifrost": "springboard/ui/src/media_request.rs (MediaVerb)",
-      "status": "partial",
-      "note": "Wave 3 (theme-12, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Music and audio apps exist but declare no media intents, so Search cannot start playback through an intent."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 3 (theme-12, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Music and audio apps exist but declare no media intents, so Search cannot start playback through an intent."
     },
     {
       "feature": "Ride, payment, workout, reservation, car and calling domains",
@@ -109,22 +109,22 @@
       "feature": "Intents app extension and Intents UI extension",
       "apple": "Creating an Intents App Extension, Creating an Intents UI Extension, Structuring Your Code to Support App Extensions",
       "bifrost": "springboard/sdk/src/intents.rs (out-of-process call over the app control socket)",
-      "status": "partial",
-      "note": "The app itself serves intents over its control socket, so no extension target is needed. No separate extension process, no UI extension and no custom Siri or Maps view."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. The app itself serves intents over its control socket, so no extension target is needed. No separate extension process, no UI extension and no custom Siri or Maps view."
     },
     {
       "feature": "Vocabulary files and intent declarations in the bundle",
       "apple": "Global Vocabulary Reference, Intent Class Identifiers",
       "bifrost": "manifest.toml [[intent]] tables (springboard/sdk/src/intents.rs manifest_toml)",
-      "status": "partial",
-      "note": "Intent declarations are in the manifest. No vocabulary or global phrase file."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. Intent declarations are in the manifest. No vocabulary or global phrase file."
     },
     {
       "feature": "Authorization to use Siri",
       "apple": "Requesting Authorization to Use Siri",
       "bifrost": "springboard/ui/src/intent_access.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-siri-kit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No permission prompt or grant for intent access. The app's manifest and notification permissions are the only per-app grants (docs/bifrost-ui.md)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (w3-siri-kit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No permission prompt or grant for intent access. The app's manifest and notification permissions are the only per-app grants (docs/bifrost-ui.md)."
     },
     {
       "feature": "Watch face and Maps relevance",

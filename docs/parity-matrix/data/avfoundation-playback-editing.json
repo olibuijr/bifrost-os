@@ -25,22 +25,22 @@
       "feature": "Media reading and writing",
       "apple": "AVAssetReader, AVAssetWriter, AVAssetExportSession, AVAssetImageGenerator",
       "bifrost": "springboard/ui/src/export_session.rs, springboard/ui/src/frame_grab.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Reading samples is internal to the player; no writer, no export, no frame-grab API"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Reading samples is internal to the player; no writer, no export, no frame-grab API"
     },
     {
       "feature": "Media types and utilities",
       "apple": "AVFileType, AVMediaType, AVCaption",
       "bifrost": "springboard/ui/src/uttype.rs",
-      "status": "partial",
-      "note": "File type identification exists; no captions or subtitle model"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. File type identification exists; no captions or subtitle model"
     },
     {
       "feature": "Video settings",
       "apple": "AVVideoSettings keys and constants",
       "bifrost": "springboard/ui/src/video_settings.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-avfoundation-playback-editing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decode only, no encoder settings"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-avfoundation-playback-editing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decode only, no encoder settings"
     },
     {
       "feature": "Audio settings",
@@ -88,8 +88,8 @@
       "feature": "Streaming and AirPlay",
       "apple": "HLS playback, AVRoutePickerView, FairPlay",
       "bifrost": "springboard/src/media/source.rs",
-      "status": "partial",
-      "note": "HTTP sources and MSE demux exist; no HLS, AirPlay or DRM"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 2 tests. HTTP sources and MSE demux exist; no HLS, AirPlay or DRM"
     },
     {
       "feature": "Sample buffer playback",
@@ -102,8 +102,8 @@
       "feature": "Composite assets",
       "apple": "AVMutableComposition, AVMutableCompositionTrack",
       "bifrost": "springboard/ui/src/composition.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No composition model"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No composition model"
     },
     {
       "feature": "QuickTime movies",
@@ -116,15 +116,15 @@
       "feature": "Video effects and compositing",
       "apple": "AVVideoComposition, AVVideoCompositing, AVVideoCompositionCoreAnimationTool",
       "bifrost": "springboard/ui/src/video_transition.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-avfoundation-playback-editing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No transitions, custom compositor or layer-animation tool"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-avfoundation-playback-editing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No transitions, custom compositor or layer-animation tool"
     },
     {
       "feature": "Audio mixing",
       "apple": "AVAudioMix, AVMutableAudioMixInputParameters",
       "bifrost": "springboard/ui/src/composition.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A system mixer exists; no per-track volume ramps over an asset"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A system mixer exists; no per-track volume ramps over an asset"
     }
   ],
   "gaps": [

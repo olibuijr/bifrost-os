@@ -39,8 +39,8 @@
       "feature": "Haptics and rumble",
       "apple": "GCDeviceHaptics, GCDevice.haptics",
       "bifrost": "springboard/core/src/rumble.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The vibrator check serves the keyboard feedback setting only. No rumble or haptic-locality API exists for controllers or apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The vibrator check serves the keyboard feedback setting only. No rumble or haptic-locality API exists for controllers or apps."
     },
     {
       "feature": "Battery and light on controllers",
@@ -53,22 +53,22 @@
       "feature": "Motion sensing (gyro and accelerometer)",
       "apple": "GCMotion",
       "bifrost": "springboard/ui/src/controller_motion.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-game-controller, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No motion or orientation input is read from controllers or from the device."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-game-controller, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No motion or orientation input is read from controllers or from the device."
     },
     {
       "feature": "Virtual on-screen controller",
       "apple": "GCVirtualController",
       "bifrost": "springboard/ui/src/virtual_controller.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-game-controller, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The touch layer could feed a virtual pad, but no SDK virtual controller exists."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-game-controller, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The touch layer could feed a virtual pad, but no SDK virtual controller exists."
     },
     {
       "feature": "Racing wheels, paddles and gear shifters",
       "apple": "GCRacingWheel, GCRacingWheelInput, GCGearShifterElement, GCSteeringWheelElement",
       "bifrost": "springboard/ui/src/racing_wheel.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-game-controller, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No force-feedback or wheel input model exists."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-game-controller, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No force-feedback or wheel input model exists."
     },
     {
       "feature": "Gamepad input in web content",

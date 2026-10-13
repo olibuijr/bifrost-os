@@ -18,8 +18,8 @@
       "feature": "Service availability check",
       "apple": "SLComposeViewController.isAvailable(forServiceType:)",
       "bifrost": "springboard/sdk/src/social.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-30, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No service types exist to check."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 3 (theme-30, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No service types exist to check."
     },
     {
       "feature": "Post contents (initial text, images, URLs)",
@@ -46,15 +46,15 @@
       "feature": "HTTP request assembly for a service",
       "apple": "SLRequest(forServiceType:requestMethod:url:parameters:), preparedURLRequest(), perform(handler:)",
       "bifrost": "springboard/sdk/src/url.rs (URLRequest::new, URLRequest::post, set_header, URLSession::data_task)",
-      "status": "partial",
-      "note": "Generic HTTP exists. No service-typed request, no parameter encoding and no multipart body (none found in springboard/sdk/src or springboard/src)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Generic HTTP exists. No service-typed request, no parameter encoding and no multipart body (none found in springboard/sdk/src or springboard/src)."
     },
     {
       "feature": "Multipart upload body",
       "apple": "SLRequest.addMultipartData(_:withName:type:filename:), addMultipartData(_:withName:type:)",
       "bifrost": "springboard/sdk/src/multipart.rs, springboard/sdk/src/social.rs, springboard/ui/src/compose.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK URL code has no multipart builder."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 18 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK URL code has no multipart builder."
     },
     {
       "feature": "Social account credentials",

@@ -32,8 +32,8 @@
       "feature": "Keyframe and group animations (CAKeyframeAnimation, CAAnimationGroup, CAValueFunction)",
       "apple": "CAKeyframeAnimation, CAAnimationGroup, CAValueFunction, CAAnimationCalculationMode",
       "bifrost": "springboard/ui/src/anim.rs, springboard/ui/src/frame_rate.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md lists keyframe and group animations as decided gaps"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 16 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. docs/bifrost-ui.md lists keyframe and group animations as decided gaps"
     },
     {
       "feature": "Spring animation (CASpringAnimation)",
@@ -60,8 +60,8 @@
       "feature": "Preferred frame rate (CAFrameRateRange, ProMotion)",
       "apple": "CAFrameRateRange, 'Optimizing iPhone and iPad apps to support ProMotion displays'",
       "bifrost": "springboard/ui/src/anim.rs, springboard/ui/src/frame_rate.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no API for an app to request a refresh rate"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 16 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no API for an app to request a refresh rate"
     },
     {
       "feature": "Transitions (CATransition)",
@@ -81,8 +81,8 @@
       "feature": "Shape layer (CAShapeLayer, Bezier paths)",
       "apple": "CAShapeLayer, CAShapeLayerFillRule, CAShapeLayerLineCap, CAShapeLayerLineJoin",
       "bifrost": "springboard/ui/src/stroke_style.rs, springboard/ui/src/shape.rs (Path::dashed)",
-      "status": "partial",
-      "note": "Wave 4 (w4-core-animation, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-facing path or stroke API; polygon fill is private to shell modules"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 3 tests. Wave 4 (w4-core-animation, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-facing path or stroke API; polygon fill is private to shell modules"
     },
     {
       "feature": "Gradient layer (CAGradientLayer)",
@@ -102,8 +102,8 @@
       "feature": "Transforms (CATransform3D, CATransformLayer, transform matrices)",
       "apple": "CATransform3D, CATransform3DMake*, CATransformLayer",
       "bifrost": "springboard/ui/src/transform3d.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-04, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. views have no transform and no 3D; the only transform code is the browser CSS transform parser"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 2 (theme-04, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. views have no transform and no 3D; the only transform code is the browser CSS transform parser"
     },
     {
       "feature": "Scroll and tiled layers (CAScrollLayer, CATiledLayer)",

@@ -18,8 +18,8 @@
       "feature": "Standard in-app Safari browser sheet",
       "apple": "SFSafariViewController, SFSafariSettings",
       "bifrost": "springboard/ui/src/browser_sheet.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-safari-services, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. An SDK app has to build its own web view and chrome. No system-provided browser sheet with Safari's controls."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 4 (w4-safari-services, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. An SDK app has to build its own web view and chrome. No system-provided browser sheet with Safari's controls."
     },
     {
       "feature": "Safari web extensions and Safari app extensions",
@@ -32,15 +32,15 @@
       "feature": "Content blockers",
       "apple": "SFContentBlockerManager, SFContentBlockerState, creating a content blocker",
       "bifrost": "springboard/core/src/app_links.rs, springboard/ui/src/content_rules.rs, springboard/ui/src/reading_list.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No content-blocking rules API and no ad or tracker blocking."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No content-blocking rules API and no ad or tracker blocking."
     },
     {
       "feature": "Safari Reading List",
       "apple": "SSReadingList, SSReadingListError, SSReadingListErrorDomain",
       "bifrost": "springboard/core/src/app_links.rs, springboard/ui/src/content_rules.rs, springboard/ui/src/reading_list.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Reader mode exists in springboard/src/shell/browser/reader.rs, but it has no saved list and no SDK API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Reader mode exists in springboard/src/shell/browser/reader.rs, but it has no saved list and no SDK API."
     },
     {
       "feature": "Authentication sessions (shared Safari login)",
@@ -53,15 +53,15 @@
       "feature": "Universal links and associated domains",
       "apple": "SFUniversalLink, applinks service, Associated Domains Entitlement",
       "bifrost": "springboard/core/src/app_links.rs, springboard/ui/src/content_rules.rs, springboard/ui/src/reading_list.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No mapping from a website to an installed app and no link handoff. Apps cannot claim web domains."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No mapping from a website to an installed app and no link handoff. Apps cannot claim web domains."
     },
     {
       "feature": "Safari settings access",
       "apple": "SFSafariSettings, SFSafariSettingsError",
       "bifrost": "springboard/ui/src/browser_settings.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-23, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Preferences are private to the Browser app. Other apps cannot read them and there is no system-wide Safari settings object."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (theme-23, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Preferences are private to the Browser app. Other apps cannot read them and there is no system-wide Safari settings object."
     },
     {
       "feature": "Browser app features (history, bookmarks, tabs, private windows)",
@@ -81,8 +81,8 @@
       "feature": "Importing data exported from Safari",
       "apple": "Importing data exported from Safari (bookmarks, saved passwords)",
       "bifrost": "springboard/ui/src/bookmark_import.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-safari-services, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No import path for Safari bookmarks or passwords. Browser bookmarks are stored as TSV under ~/.local/share/bifrost-browser/."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-safari-services, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No import path for Safari bookmarks or passwords. Browser bookmarks are stored as TSV under ~/.local/share/bifrost-browser/."
     },
     {
       "feature": "Home Screen bookmarks and availability checks",

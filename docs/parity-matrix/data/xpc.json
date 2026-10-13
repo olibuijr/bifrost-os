@@ -11,8 +11,8 @@
       "feature": "Creating XPC services (XPCListener, XPCSession, XPCReceivedMessage)",
       "apple": "XPCListener, XPCSession, XPCReceivedMessage, xpc_listener_t, xpc_session_t",
       "bifrost": "springboard/sdk/src/peer_session.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK type for typed peer-to-peer sessions with a listener. The control socket is one request per connection and is served by the app for agents and tools, not for app-to-app messaging. The shell-to-app protocol is internal and not exposed to apps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK type for typed peer-to-peer sessions with a listener. The control socket is one request per connection and is served by the app for agents and tools, not for app-to-app messaging. The shell-to-app protocol is internal and not exposed to apps."
     },
     {
       "feature": "XPC services launched on demand, shut down when idle, restarted on crash",
@@ -46,22 +46,22 @@
       "feature": "XPC objects (typed values for messages)",
       "apple": "XPC objects (xpc_dictionary_t, xpc_array_t, xpc_string_t and others)",
       "bifrost": "springboard/sdk/src/coding.rs (Codable and plist); bifrost_core::json (JSON values used by control and intent calls)",
-      "status": "partial",
-      "note": "Messages are JSON or plist, not XPC objects. Apps that already use Codable or JSON can exchange data, but there is no typed XPC object model or XPC-compatible wire format."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Messages are JSON or plist, not XPC objects. Apps that already use Codable or JSON can exchange data, but there is no typed XPC object model or XPC-compatible wire format."
     },
     {
       "feature": "XPC connections and endpoints (XPCEndpoint, anonymous listeners)",
       "apple": "XPCEndpoint, XPCPeerRequirement, xpc_endpoint_t",
       "bifrost": "springboard/sdk/src/peer_session.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No endpoint objects that can be passed between processes, and no peer requirement or code-signing check. Access control is owner-UID only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 3 (theme-21, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No endpoint objects that can be passed between processes, and no peer requirement or code-signing check. Access control is owner-UID only."
     },
     {
       "feature": "Peer validation (XPCPeerRequirement)",
       "apple": "XPCPeerRequirement, xpc_peer_requirement_t",
       "bifrost": "springboard/sdk/src/control.rs (SO_PEERCRED owner check); springboard/src/bare/app_policy.rs (bubblewrap sandbox policy for apps)",
-      "status": "partial",
-      "note": "The owner UID check covers same-user access. There is no requirement on bundle identity, signing or entitlements, because BifrOSt has no code-signing peer check."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. The owner UID check covers same-user access. There is no requirement on bundle identity, signing or entitlements, because BifrOSt has no code-signing peer check."
     }
   ],
   "gaps": [

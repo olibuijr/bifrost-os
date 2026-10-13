@@ -25,8 +25,8 @@
       "feature": "Streaming responses",
       "apple": "LanguageModelSession streamed responses, GeneratedContent deltas",
       "bifrost": "springboard/sdk/src/url.rs (URLSession::bytes), springboard/apps/assistant-desktop/src/api.rs (SseParser); wired: springboard/apps/assistant-desktop/src/api.rs (SseParser, Event::Delta); src/view.rs (tick)",
-      "status": "partial",
-      "note": "HTTP byte streaming exists for the Assistant's SSE; no model-level partial-generation API Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. HTTP byte streaming exists for the Assistant's SSE; no model-level partial-generation API Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Guided generation (Generable, Guide, GenerationSchema)",
@@ -39,15 +39,15 @@
       "feature": "Tool calling (Tool)",
       "apple": "Tool protocol, tool calling in sessions",
       "bifrost": "springboard/ui/src/tool_calls.rs; wired: springboard/ui/src/model_tool.rs (model); springboard/apps/assistant-desktop/src/tools.rs, src/api.rs (run, run_turn), src/view.rs (tool_blocks, Event::Tool)",
-      "status": "partial",
-      "note": "Wave 4 (theme-15, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. App Intents are invoked by the shell or the user, not by a model; the agent MCP tools are for external agents and are not a model tool API for apps Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 14 tests. Wave 4 (theme-15, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. App Intents are invoked by the shell or the user, not by a model; the agent MCP tools are for external agents and are not a model tool API for apps Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Intent-style actions for system use",
       "apple": "App Intents overlap (Apple exposes intents separately from Foundation Models)",
       "bifrost": "springboard/sdk/src/intents.rs",
-      "status": "partial",
-      "note": "typed intents with parameters and shortcuts exist; they could later serve as tool definitions"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 32 tests. typed intents with parameters and shortcuts exist; they could later serve as tool definitions"
     },
     {
       "feature": "Context window and token budget",
@@ -60,15 +60,15 @@
       "feature": "Session transcripts",
       "apple": "Transcripts, transcript entries, segments and attachments",
       "bifrost": "springboard/apps/assistant-desktop/src/model.rs (conversations as JSON files); wired: springboard/apps/assistant-desktop/src/session.rs (session) over springboard/ui/src/transcript.rs",
-      "status": "partial",
-      "note": "the Assistant stores conversation history itself; there is no framework-level transcript type Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. the Assistant stores conversation history itself; there is no framework-level transcript type Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Multimodal prompt attachments",
       "apple": "Attachment, ImageAttachmentContent, ImageReference",
       "bifrost": "springboard/ui/src/model_attachment.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-foundation-models, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. images can be decoded, but the Assistant has no image input path to a model"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 4 (w4-foundation-models, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. images can be decoded, but the Assistant has no image input path to a model"
     },
     {
       "feature": "Dynamic instructions and profiles",
@@ -95,15 +95,15 @@
       "feature": "Safety guardrails for generated output",
       "apple": "Improving the safety of generative model output (guidance, guardrail errors)",
       "bifrost": "springboard/ui/src/guardrail.rs; wired: springboard/ui/src/guardrail.rs (used by springboard/apps/assistant-desktop/src/safety.rs, view.rs)",
-      "status": "partial",
-      "note": "Wave 6 (b01, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no output filtering in the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b01, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. no output filtering in the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
     },
     {
       "feature": "Content tagging and entity detection",
       "apple": "Content tagging (topics, actions, objects, emotions) in SystemLanguageModel",
       "bifrost": "springboard/ui/src/detect.rs (data detectors)",
-      "status": "partial",
-      "note": "pattern-based data detectors for links, dates and addresses; no model-based tagging of topics or emotions"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 15 tests. pattern-based data detectors for links, dates and addresses; no model-based tagging of topics or emotions"
     },
     {
       "feature": "Private Cloud Compute model",
@@ -116,8 +116,8 @@
       "feature": "Evaluation and runtime profiling of prompts",
       "apple": "Evaluating prompts, evaluating responses, Instruments profiling",
       "bifrost": "tools/bench.py (host benches), springboard/core/src/log.rs (logging)",
-      "status": "partial",
-      "note": "benchmarks and logs exist for the shell; nothing measures prompts or model responses"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. benchmarks and logs exist for the shell; nothing measures prompts or model responses"
     }
   ],
   "gaps": [

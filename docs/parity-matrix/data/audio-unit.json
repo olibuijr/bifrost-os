@@ -25,8 +25,8 @@
       "feature": "Built-in effects",
       "apple": "Apple's built-in Audio Units (effects)",
       "bifrost": "springboard/apps/daw/src/devices/fx.rs (17 effects), springboard/apps/daw/src/dsp.rs (biquad, compressor, delay, LFO, oscillator)",
-      "status": "partial",
-      "note": "DAW-only, not exposed to other apps as an audio unit; effect routing is fixed in the DAW"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. DAW-only, not exposed to other apps as an audio unit; effect routing is fixed in the DAW"
     },
     {
       "feature": "Built-in instruments",

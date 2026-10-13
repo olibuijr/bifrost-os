@@ -32,8 +32,8 @@
       "feature": "Authorization Services and privileged operations",
       "apple": "AuthorizationCreate, AuthorizationExecuteWithPrivileges, authorization rights",
       "bifrost": "springboard/ui/src/access_control.rs (RightStore",
-      "status": "partial",
-      "note": "Wave 2 (theme-01, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The privileged helper (privd) checks login through PAM for the shell. Apps have no authorization API, and the manifest permission is the only grant. docs/bifrost-ui.md records that the shell still runs as root (stage 2 is pending)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 24 tests. Wave 2 (theme-01, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The privileged helper (privd) checks login through PAM for the shell. Apps have no authorization API, and the manifest permission is the only grant. docs/bifrost-ui.md records that the shell still runs as root (stage 2 is pending)."
     },
     {
       "feature": "Login and session authentication",
@@ -46,15 +46,15 @@
       "feature": "TLS client connections",
       "apple": "Secure Transport (legacy), URLSession trust evaluation",
       "bifrost": "springboard/sdk/src/url.rs (rustls via springboard::deildu::http::Tls)",
-      "status": "partial",
-      "note": "Apps get HTTPS through the shell's rustls stack. No SDK API to set or inspect the trust policy, pin certificates or read the peer certificate."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. Apps get HTTPS through the shell's rustls stack. No SDK API to set or inspect the trust policy, pin certificates or read the peer certificate."
     },
     {
       "feature": "Certificate, key and trust evaluation",
       "apple": "SecTrustCreateWithCertificates, SecTrustEvaluateWithError, SecIdentityCreate, SecPolicyCreate*",
       "bifrost": "springboard/ui/src/trust.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-10, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Wi-Fi 802.1X sheet has a Don't Validate Server option, but that is a user choice in the network sheet, not a certificate API (springboard/src/shell/wifi_page.rs:56, NOTICE). The SDK has no certificate types."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 3 (theme-10, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Wi-Fi 802.1X sheet has a Don't Validate Server option, but that is a user choice in the network sheet, not a certificate API (springboard/src/shell/wifi_page.rs:56, NOTICE). The SDK has no certificate types."
     },
     {
       "feature": "App Transport Security (secure network links)",
@@ -74,8 +74,8 @@
       "feature": "Code signing services",
       "apple": "SecStaticCodeCreateWithPath, SecCodeCheckValidity, code signature inspection",
       "bifrost": "springboard/core/src/code_seal.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-security, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code signing or signature verification found in the repo. Apps are installed without a signature check (store apps run from /var/lib/springboard/apps/<id>)."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 5 (w5-security, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No code signing or signature verification found in the repo. Apps are installed without a signature check (store apps run from /var/lib/springboard/apps/<id>)."
     },
     {
       "feature": "Notarization and Hardened Runtime",
@@ -88,15 +88,15 @@
       "feature": "Randomization services",
       "apple": "SecRandomCopyBytes",
       "bifrost": "springboard/sdk/src/entropy.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-security, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK call returns random bytes to apps. Internal use only."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-security, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK call returns random bytes to apps. Internal use only."
     },
     {
       "feature": "Security transforms (encryption, signing, verification)",
       "apple": "SecTransform, SecKeyCreateEncryptedData, SecKeyCreateSignature",
       "bifrost": "springboard/sdk/src/digest.rs",
-      "status": "partial",
-      "note": "Wave 4 (w4-security, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK API for encryption, signing or key objects. Hashing and MAC are internal to the shell."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 4 (w4-security, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK API for encryption, signing or key objects. Hashing and MAC are internal to the shell."
     },
     {
       "feature": "Password AutoFill and Shared Web Credentials",
@@ -109,8 +109,8 @@
       "feature": "One-time codes",
       "apple": "One-time codes (textContentType oneTimeCode)",
       "bifrost": "springboard/ui/src/one_time_code.rs",
-      "status": "partial",
-      "note": "Wave 3 (theme-28, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK text-field content type for one-time codes or autofill from messages."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (theme-28, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK text-field content type for one-time codes or autofill from messages."
     },
     {
       "feature": "Security framework result codes",

@@ -25,8 +25,8 @@
       "feature": "Preference storage for a screen saver module",
       "apple": "ScreenSaverDefaults: init(forModuleWithName:)",
       "bifrost": "springboard/sdk/src/defaults.rs (UserDefaults-style store for apps)",
-      "status": "partial",
-      "note": "a general defaults store exists; no per-module screen saver domain"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 13 tests. a general defaults store exists; no per-module screen saver domain"
     },
     {
       "feature": "Window backing store and gamma fade for the saver window",
@@ -67,8 +67,8 @@
       "feature": "Sleep inhibitors held by apps",
       "apple": "Power management assertions (outside the framework)",
       "bifrost": "springboard/core/src/sleep_assertions.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-screen-saver, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the system reads inhibitors; no SDK call lets an app hold one to block the saver or display sleep"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 5 (w5-screen-saver, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the system reads inhibitors; no SDK call lets an app hold one to block the saver or display sleep"
     }
   ],
   "gaps": [

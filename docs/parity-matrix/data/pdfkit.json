@@ -53,8 +53,8 @@
       "feature": "PDFPage: page image and PDF creation",
       "apple": "PDFPage init(image:options:), dataRepresentation",
       "bifrost": "springboard/ui/src/pdfpage.rs",
-      "status": "partial",
-      "note": "Wave 2 (theme-21, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to create a PDF page from an image or to serialize a page"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 11 tests. Wave 2 (theme-21, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API to create a PDF page from an image or to serialize a page"
     },
     {
       "feature": "Annotations",
@@ -67,8 +67,8 @@
       "feature": "Widgets and form fields",
       "apple": "PDFAnnotation widget properties (widgetFieldType, widgetStringValue, text, button and choice widgets), form filling",
       "bifrost": "springboard/ui/src/pdfform.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-pdfkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The reader does not parse AcroForm fields"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 9 tests. Wave 5 (w5-pdfkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The reader does not parse AcroForm fields"
     },
     {
       "feature": "Outline (table of contents)",
@@ -81,15 +81,15 @@
       "feature": "Selection and find",
       "apple": "PDFSelection, PDFDocument selection(from:at:to:at:with:), PDFPage selectionForWord(at:), selectionForLine(at:), PDFDocument find and FoundSelection",
       "bifrost": "springboard/ui/src/pdfselect.rs; wired: springboard/apps/books-desktop/src/books/mod.rs (select_page, has_selection, selection_text, page_text); draw.rs (selection tint); main.rs (Find > Select Page, Find > Copy Selection)",
-      "status": "partial",
-      "note": "Wave 3 (w3-pdfkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell has a general text search (springboard/sdk/src/quicksearch.rs), but it does not index PDF text. No selection object Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (w3-pdfkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell has a general text search (springboard/sdk/src/quicksearch.rs), but it does not index PDF text. No selection object Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Write operations (save, write options, permissions)",
       "apple": "PDFDocument write operations, PDFDocumentWriteOption, accessPermissions, password unlock (takePasswordFrom)",
       "bifrost": "springboard/ui/src/pdf_access.rs",
-      "status": "partial",
-      "note": "Wave 6 (b10, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Save as PDF copies the original bytes, so no page edits are written. Encrypted and password-protected files are not handled"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 6 (b10, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Save as PDF copies the original bytes, so no page edits are written. Encrypted and password-protected files are not handled"
     },
     {
       "feature": "Printing PDF documents",
@@ -102,8 +102,8 @@
       "feature": "Page overlay and markup mode",
       "apple": "PDFPageOverlayViewProvider, PDFView isInMarkupMode, pageOverlayViewProvider",
       "bifrost": "springboard/ui/src/pdf_overlay.rs",
-      "status": "partial",
-      "note": "Wave 6 (b10, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No overlay or markup view"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 6 (b10, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No overlay or markup view"
     }
   ],
   "gaps": [

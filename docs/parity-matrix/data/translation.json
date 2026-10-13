@@ -18,36 +18,36 @@
       "feature": "Translation session and tasks",
       "apple": "TranslationSession (init(installedSource:target:), translate(_:), translate(batch:), translations(from:), cancel(), prepareTranslation()), translationTask(_:action:), translationTask(source:target:action:)",
       "bifrost": "springboard/sdk/src/translation.rs, springboard/ui/src/translation.rs; wired: springboard/apps/news-desktop/src/wire.rs (translate_article) over springboard/sdk/src/translation.rs and springboard/ui/src/translation.rs; wired: springboard/apps/books-desktop/src/books/narrate.rs (translate_notice, LanguageAvailability::check_session)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no session type; no way for an app to request a translation between two languages Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no session type; no way for an app to request a translation between two languages Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Language availability",
       "apple": "LanguageAvailability (supportedLanguages, status(from:to:), status(for:to:)), LanguageAvailability.Status",
       "bifrost": "springboard/sdk/src/translation.rs, springboard/ui/src/translation.rs; wired: springboard/apps/news-desktop/src/wire.rs (installed) over springboard/ui/src/translation.rs; wired: springboard/apps/books-desktop/src/books/narrate.rs (LanguageAvailability::new, check_session)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Locale describes the user's language but has no list of translatable pairs and no download-status query Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Locale describes the user's language but has no list of translatable pairs and no download-status query Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Translation errors",
       "apple": "TranslationError (nothingToTranslate, unableToIdentifyLanguage, notInstalled, unsupported*Language, unsupportedLanguagePairing, internalError, alreadyCancelled)",
       "bifrost": "springboard/sdk/src/translation.rs, springboard/ui/src/translation.rs; wired: springboard/apps/news-desktop/src/news.rs (translate, notice) over springboard/ui/src/translation.rs; wired: springboard/apps/books-desktop/src/books/narrate.rs (TranslationError::error_description in the notice)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no error model for translation; not applicable until a translation backend exists Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no error model for translation; not applicable until a translation backend exists Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
       "feature": "Formatted-text translation",
       "apple": "TranslationSession.translate(_:) overload that preserves formatting (AttributedString input)",
       "bifrost": "springboard/ui/src/translation.rs (translate_runs), springboard/sdk/src/translation.rs (TranslationSession::translate_attributed)",
-      "status": "partial",
-      "note": "Wave 4 (theme-24, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. not checked in code; the attributed text type would be the input, but no translate step exists"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 12 tests. Wave 4 (theme-24, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. not checked in code; the attributed text type would be the input, but no translate step exists"
     },
     {
       "feature": "Localized UI strings and number and date formats (related, not translation)",
       "apple": "Not part of Translation; related to Foundation Locale and localized strings",
       "bifrost": "springboard/sdk/src/locale.rs (Locale, Bundle::load, NumberFormatter, DateFormatter); docs/bifrost-ui.md (Locale and localization section)",
-      "status": "partial",
-      "note": "reads <app>/<lang>.lproj/Localizable.strings and formats numbers and dates for en and is only; it does not translate text between languages"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. reads <app>/<lang>.lproj/Localizable.strings and formats numbers and dates for en and is only; it does not translate text between languages"
     }
   ],
   "gaps": [

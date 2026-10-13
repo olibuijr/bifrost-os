@@ -11,29 +11,29 @@
       "feature": "Synced directory: open, state, close",
       "apple": "GameSaveSyncedDirectory.openDirectory(containerIdentifier:), state, GameSaveSyncedDirectory.State, close() (https://developer.apple.com/documentation/gamesave/gamesavesynceddirectory)",
       "bifrost": "springboard/sdk/src/save_sync.rs, springboard/ui/src/save_sync.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API returns a cloud-backed directory for an app. The app data directory is local only; nothing syncs it."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No API returns a cloud-backed directory for an app. The app data directory is local only; nothing syncs it."
     },
     {
       "feature": "Syncing a directory and progress UI",
       "apple": "finishSyncing(), finishSyncing(statusDisplay:) with modal progress alert",
       "bifrost": "springboard/sdk/src/save_sync.rs, springboard/ui/src/save_sync.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No sync engine and no sync progress alert. The shell's backup code (springboard/src/shell/backup.rs) covers only the shell's own data (Notes, Contacts, Calendar, reminders, settings), not app directories."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No sync engine and no sync progress alert. The shell's backup code (springboard/src/shell/backup.rs) covers only the shell's own data (Notes, Contacts, Calendar, reminders, settings), not app directories."
     },
     {
       "feature": "Conflict resolution between versions",
       "apple": "GameSaveSyncedDirectory.Version, resolveConflicts(with:)",
       "bifrost": "springboard/sdk/src/save_sync.rs, springboard/ui/src/save_sync.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The coordinator locks writes between local processes. Its own doc lists no version or ubiquitous-item coordination, so there is no version list and no conflict resolution."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The coordinator locks writes between local processes. Its own doc lists no version or ubiquitous-item coordination, so there is no version list and no conflict resolution."
     },
     {
       "feature": "Triggering and deferring uploads",
       "apple": "triggerPendingUpload()",
       "bifrost": "springboard/sdk/src/save_sync.rs, springboard/ui/src/save_sync.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No upload queue. Files are only written to local disk."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No upload queue. Files are only written to local disk."
     },
     {
       "feature": "Offline and local-only saving",
@@ -46,8 +46,8 @@
       "feature": "Error domain for save errors",
       "apple": "GameSaveErrorDomain (let, String)",
       "bifrost": "springboard/sdk/src/save_sync.rs, springboard/ui/src/save_sync.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No error domain exists because no save API exists. Would follow the sync API."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No error domain exists because no save API exists. Would follow the sync API."
     },
     {
       "feature": "Objective-C class",

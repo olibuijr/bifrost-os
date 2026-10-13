@@ -11,22 +11,22 @@
       "feature": "Device discovery and capabilities",
       "apple": "FFIsForceFeedback, FFCreateDevice, FFReleaseDevice, FFDeviceGetForceFeedbackCapabilities, FFCAPABILITIES",
       "bifrost": "springboard/core/src/gamepad.rs (supports_rumble)",
-      "status": "partial",
-      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. evdev bitmaps are parsed for keys, abs and switches only; no check for the FF capability bit, so a wheel or gamepad with force feedback is not identified as one"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. evdev bitmaps are parsed for keys, abs and switches only; no check for the FF capability bit, so a wheel or gamepad with force feedback is not identified as one"
     },
     {
       "feature": "Effect creation, download and playback",
       "apple": "FFDeviceCreateEffect, FFEffectDownload, FFEffectStart, FFEffectStop, FFEffectUnload, FFEffectSetParameters, FFEffectGetParameters, FFEFFECT, FFPERIODIC, FFCONSTANTFORCE, FFRAMPFORCE, FFCONDITION, FFCUSTOMFORCE, FFENVELOPE",
       "bifrost": "springboard/core/src/force_effect.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-05, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no EVIOCSFF upload, no FF effect structures, no EV_FF play events"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 16 tests. Wave 5 (theme-05, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no EVIOCSFF upload, no FF effect structures, no EV_FF play events"
     },
     {
       "feature": "Device properties and force-feedback state",
       "apple": "FFDeviceGetForceFeedbackProperty, FFDeviceSetForceFeedbackProperty, FFDeviceGetForceFeedbackState, FFDeviceSendForceFeedbackCommand, FFState, FFProperty",
       "bifrost": "springboard/core/src/force_effect.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-05, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no gain, autocenter or actuator-enable control"
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 16 tests. Wave 5 (theme-05, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no gain, autocenter or actuator-enable control"
     },
     {
       "feature": "Hardware escape commands",

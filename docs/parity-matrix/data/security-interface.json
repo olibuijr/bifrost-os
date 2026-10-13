@@ -18,43 +18,43 @@
       "feature": "Certificate panel",
       "apple": "SFCertificatePanel",
       "bifrost": "springboard/ui/src/certificate_panel.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No panel that lists certificates. The document panels in springboard/sdk/src/document.rs show the pattern to reuse."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 5 tests. Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No panel that lists certificates. The document panels in springboard/sdk/src/document.rs show the pattern to reuse."
     },
     {
       "feature": "Certificate trust editor",
       "apple": "SFCertificateTrustPanel",
       "bifrost": "springboard/ui/src/certificate_trust.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-security-interface, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No trust settings UI and no certificate chain handling in the SDK or shell."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (w3-security-interface, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No trust settings UI and no certificate chain handling in the SDK or shell."
     },
     {
       "feature": "Certificate view",
       "apple": "SFCertificateView, SFCertificateViewDisclosureStateDidChange",
       "bifrost": "springboard/ui/src/trust.rs (CertificateView)",
-      "status": "partial",
-      "note": "Wave 3 (theme-10, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Wi-Fi notice is a fixed string, not a certificate view. Nothing displays certificate contents or details."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 10 tests. Wave 3 (theme-10, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Wi-Fi notice is a fixed string, not a certificate view. Nothing displays certificate contents or details."
     },
     {
       "feature": "Choose identity panel and table cell",
       "apple": "SFChooseIdentityPanel, SFChooseIdentityTableCellView",
       "bifrost": "springboard/ui/src/identity_chooser.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No identity picker. The keychain API does not store identities, keys or certificates."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 5 (theme-08, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No identity picker. The keychain API does not store identities, keys or certificates."
     },
     {
       "feature": "Keychain save panel",
       "apple": "SFKeychainSavePanel",
       "bifrost": "springboard/ui/src/keychain_save.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-security-interface, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK stores generic passwords for each app. No panel lets the user create a keychain. docs/bifrost-ui.md (Keychain section, around line 422) lists the gaps."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 8 tests. Wave 3 (w3-security-interface, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The SDK stores generic passwords for each app. No panel lets the user create a keychain. docs/bifrost-ui.md (Keychain section, around line 422) lists the gaps."
     },
     {
       "feature": "Keychain settings panel",
       "apple": "SFKeychainSettingsPanel",
       "bifrost": "springboard/ui/src/keychain_settings.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-security-interface, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No UI for keychain settings. Items are available whenever the shell runs and have no access control."
+      "status": "parity",
+      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-security-interface, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No UI for keychain settings. Items are available whenever the shell runs and have no access control."
     },
     {
       "feature": "Framework constants and error",
