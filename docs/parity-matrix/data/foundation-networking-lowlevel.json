@@ -31,7 +31,7 @@
     {
       "feature": "URL Loading: WebSocket and streaming tasks",
       "apple": "URLSessionWebSocketTask, URLSessionStreamTask",
-      "bifrost": "springboard/sdk/src/websocket.rs, springboard/core/src/websocket.rs",
+      "bifrost": "springboard/core/src/websocket.rs (re-exported by springboard/sdk/src/websocket.rs)",
       "status": "partial",
       "note": "Wave 5 (w5-foundation-networking-lowlevel, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no WebSocket client in the SDK"
     },

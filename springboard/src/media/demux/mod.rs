@@ -378,3 +378,44 @@ pub(crate) mod fixtures {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ticks_convert_to_microseconds_for_common_timescales() {
+        assert_eq!(ticks_to_us(90_000, 90_000), 1_000_000);
+        assert_eq!(ticks_to_us(1, 1_000), 1_000);
+        assert_eq!(ticks_to_us(48_000 * 3, 48_000), 3_000_000);
+        assert_eq!(ticks_to_us(-45_000, 90_000), -500_000);
+    }
+
+    #[test]
+    fn ticks_do_not_overflow_for_long_streams_and_a_zero_timescale_does_not_divide_by_zero() {
+        assert_eq!(ticks_to_us(i64::MAX / 2_000_000, 1), (i64::MAX / 2_000_000) * 1_000_000);
+        assert_eq!(ticks_to_us(5, 0), 5_000_000);
+    }
+
+    #[test]
+    fn errors_describe_what_went_wrong() {
+        assert_eq!(DemuxError::Invalid("box").to_string(), "invalid box");
+        assert_eq!(DemuxError::Unsupported("codec").to_string(), "unsupported codec");
+        assert_eq!(DemuxError::MissingInit.to_string(), "media segment before init segment");
+        assert_eq!(DemuxError::Failed.to_string(), "source buffer is in an error state");
+    }
+
+    #[test]
+    fn track_defaults_are_an_unknown_video_track() {
+        let t = TrackInfo::default();
+        assert_eq!((t.kind, t.codec, t.default_duration_us), (TrackKind::Video, CodecId::Unknown, None));
+        assert!(t.codec_private.is_empty());
+    }
+
+    #[test]
+    fn a_sample_keeps_separate_presentation_and_decode_times() {
+        let s = Sample { track: 1, pts_us: 66_000, dts_us: 33_000, duration_us: 33_000, keyframe: false, data: vec![1] };
+        assert!(s.pts_us > s.dts_us);
+        assert_eq!(s.clone(), s);
+    }
+}

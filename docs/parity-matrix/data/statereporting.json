@@ -38,7 +38,7 @@
     {
       "feature": "Unified logging as diagnostic context",
       "apple": "os.Logger and OSLogStore (the logging side that complements state reports)",
-      "bifrost": "springboard/sdk/src/log.rs, springboard/core/src/log.rs, docs/milestone-unified-logging.md",
+      "bifrost": "springboard/core/src/log.rs (re-exported by springboard/sdk/src/log.rs), docs/milestone-unified-logging.md",
       "status": "partial",
       "note": "Logger and LogStore exist; no info-in-memory tier, no per-value privacy masks (docs/bifrost-ui.md, Unified Logging)"
     },

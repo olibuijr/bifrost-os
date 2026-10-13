@@ -66,14 +66,14 @@
     {
       "feature": "Paragraph styles and tab stops",
       "apple": "CTParagraphStyle, CTTextTab, kCTParagraphStyleAttributeName",
-      "bifrost": "springboard/ui/src/textfit.rs (wrap, truncate, Truncate)",
+      "bifrost": "springboard/ui/src/typeset.rs (ParagraphStyle, tab_advance)",
       "status": "partial",
       "note": "Only line wrapping and head, middle and tail truncation. No alignment, indents, spacing, tab stops or line-height settings on attributed strings."
     },
     {
       "feature": "Line breaking and truncation",
       "apple": "CTTypesetterSuggestLineBreak, CTLineCreateTruncatedLine",
-      "bifrost": "springboard/ui/src/textfit.rs (wrap, truncate)",
+      "bifrost": "springboard/ui/src/typeset.rs (frame wrapping, truncated_line, Truncation)",
       "status": "partial",
       "note": "Greedy word wrap and binary-search truncation against a caller-supplied measure function. No grapheme or script-aware break rules beyond whitespace. Browser layout has its own wrapper in springboard/src/shell/browser/layout2/text.rs."
     },

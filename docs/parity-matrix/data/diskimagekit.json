@@ -10,7 +10,7 @@
     {
       "feature": "Create an empty disk image (RAW)",
       "apple": "DiskImage.init(creating:), RAWCreationConfiguration, DiskImage.CreationConfiguration",
-      "bifrost": "springboard/ui/src/disk_image.rs (RawCreation",
+      "bifrost": "springboard/core/src/disk_image.rs (RawCreation",
       "status": "partial",
       "note": "Wave 3 (w3-diskimagekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK type creates an image file of a given size and block size."
     },
@@ -24,7 +24,7 @@
     {
       "feature": "Open an existing disk image",
       "apple": "DiskImage.init(opening:), OpenConfiguration, OpenConfigurationProtocol, OpenConfiguration.Mode",
-      "bifrost": "springboard/ui/src/disk_image.rs (DiskImage::open_raw)",
+      "bifrost": "springboard/core/src/disk_image.rs (DiskImage::open_raw)",
       "status": "partial",
       "note": "Wave 3 (w3-diskimagekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Opening an image as a block device needs a loop device or a userspace mount through the system layer, and apps get no API for it."
     },
@@ -38,7 +38,7 @@
     {
       "feature": "Block size and format values",
       "apple": "DiskImage.Format, DiskImage.BlockSize, DiskImage.LayerType",
-      "bifrost": "springboard/ui/src/disk_image.rs (BlockSize",
+      "bifrost": "springboard/core/src/disk_image.rs (BlockSize",
       "status": "partial",
       "note": "Wave 3 (w3-diskimagekit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No types for image format or block size exist in the SDK."
     },
@@ -66,7 +66,7 @@
     {
       "feature": "Error types",
       "apple": "IncompatibleStackingError, InvalidBlockCountError, CorruptedImageError, UnsupportedFormatError",
-      "bifrost": "springboard/ui/src/disk_image.rs",
+      "bifrost": "springboard/core/src/disk_image.rs (ImageError)",
       "status": "partial",
       "note": "Wave 5 (theme-21, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Depends on the create, open and stack APIs above."
     }
