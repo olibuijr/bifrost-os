@@ -11,6 +11,7 @@ pub mod albums;
 pub mod edit;
 pub mod exif;
 pub mod grid;
+pub mod import;
 pub mod library;
 pub mod models;
 pub mod recipe;
