@@ -3,8 +3,10 @@
 //! where the surface is drawn.
 
 use crate::inspect::{self, Inspection};
+use crate::job::{Job, JobKind, Outcome};
 use crate::model::{self, Column, ColumnSet, EnergyAverages, Filter, History, Signal, Sort, SortKey, Tab, UpdateFrequency};
 use crate::sample::{ProcSample, Sampler, Snapshot};
+use crate::{diagnostics, sample_proc};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sheet;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
@@ -15,6 +17,7 @@ use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets::{CAPSULE_PT, TOOLBAR_GAP_PT};
 use bifrost_app::TouchKind;
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 /// Sidebar width (points) and the inset of the content from it and from the window edge.
 pub const SIDE_PT: f32 = 180.0;
@@ -42,6 +45,10 @@ pub const B_QUIT: u32 = 1;
 pub const B_SEARCH: u32 = 2;
 pub const B_FORCE: u32 = 3;
 pub const B_INSPECT: u32 = 4;
+pub const B_STOP: u32 = 5;
+pub const B_REPORT_CLOSE: u32 = 6;
+pub const B_REPORT_SAVE: u32 = 7;
+pub const B_REPORT_COPY: u32 = 8;
 /// Sidebar row ids.
 const ROW_ALL: u32 = 1;
 const ROW_MINE: u32 = 2;
@@ -59,6 +66,11 @@ pub const MENU_INSPECT: u32 = 4;
 pub const MENU_COPY: u32 = 5;
 pub const MENU_DELTAS: u32 = 6;
 pub const MENU_CPU_HISTORY: u32 = 7;
+pub const MENU_SAMPLE: u32 = 8;
+pub const MENU_DIAGNOSTICS: u32 = 9;
+pub const MENU_SAVE: u32 = 10;
+pub const MENU_CLOSE_REPORT: u32 = 11;
+pub const MENU_STOP: u32 = 12;
 /// Update Frequency radio items: MENU_FREQ + index into `UpdateFrequency::ALL`.
 pub const MENU_FREQ: u32 = 20;
 /// Send Signal items: MENU_SIGNAL + index into `model::SIGNALS`.
@@ -68,10 +80,44 @@ pub const MENU_FILTER: u32 = 60;
 /// View > Columns items: MENU_COLUMN + index into `Tab::all_columns()` of the current tab.
 pub const MENU_COLUMN: u32 = 100;
 
+/// Height of one line of the report view (points) and how often a running job is looked at (milliseconds).
+pub const REPORT_LINE_PT: f32 = 16.0;
+const JOB_POLL_MS: f64 = 200.0;
+
+/// Text the window shows in place of the table: a process sample or the diagnostics summary. It scrolls, saves and
+/// copies.
+pub struct Report {
+    pub title: String,
+    pub text: String,
+    pub lines: Vec<String>,
+    pub scroll: Scroller,
+}
+
+impl Report {
+    pub fn new(title: &str, text: &str) -> Report {
+        Report { title: title.to_string(), text: text.to_string(), lines: text.lines().map(str::to_string).collect(), scroll: Scroller::new() }
+    }
+
+    /// The file name the save panel suggests: the title with the characters a path cannot hold replaced.
+    pub fn save_name(&self) -> String {
+        let clean: String = self.title.chars().map(|c| if matches!(c, '/' | ':' | '\\' | '\n') { '-' } else { c }).collect();
+        format!("{clean}.txt")
+    }
+}
+
+/// Something the window needs from the app layer, which owns the shell connection: a save panel for a report or for the
+/// diagnostics archive.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Request {
+    SaveReport { name: String, text: String },
+    SaveBundle(PathBuf),
+}
+
 /// Where a press started, so the release can act on the same thing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Press {
     None,
+    Report,
     Sidebar,
     Toolbar(u32),
     Tab(usize),
@@ -126,6 +172,14 @@ pub struct Monitor {
     pub averages: EnergyAverages,
     /// The CPU graph shows one strip per core (View > CPU History) instead of the total.
     pub cpu_history: bool,
+    /// The background task running now (a process sample or the diagnostics), if any.
+    pub job: Option<Job>,
+    /// The report shown in place of the table.
+    pub report: Option<Report>,
+    /// A save the app layer should ask the shell for; taken with `take_request`.
+    pub request: Option<Request>,
+    /// The app's storage folder, where the diagnostics archive is prepared.
+    pub data_dir: PathBuf,
 }
 
 impl Monitor {
@@ -155,6 +209,10 @@ impl Monitor {
             scope: None,
             averages: EnergyAverages::default(),
             cpu_history: false,
+            job: None,
+            report: None,
+            request: None,
+            data_dir: PathBuf::new(),
         }
     }
 
@@ -165,7 +223,11 @@ impl Monitor {
 
     /// Reads the machine when a second has passed. True when the window needs a new frame.
     pub fn tick(&mut self, t: f64) -> bool {
-        let moving = self.scroll.tick(t);
+        let mut moving = self.scroll.tick(t);
+        if let Some(report) = &mut self.report {
+            moving |= report.scroll.tick(t);
+        }
+        moving |= self.poll_job();
         let due = self.last_sample.map_or(true, |last| t - last >= self.frequency.millis());
         if !due {
             return moving;
@@ -198,7 +260,113 @@ impl Monitor {
 
     /// The time of the next reading, so the app wakes for it.
     pub fn next_wake(&self, t: f64) -> f64 {
-        self.last_sample.map_or(t, |last| last + self.frequency.millis()).max(t)
+        let reading = self.last_sample.map_or(t, |last| last + self.frequency.millis()).max(t);
+        // a running job is looked at often enough for its progress to move
+        if self.job.is_some() {
+            reading.min(t + JOB_POLL_MS)
+        } else {
+            reading
+        }
+    }
+
+    // --- background jobs and the report ---
+
+    pub fn job_running(&self) -> bool {
+        self.job.is_some()
+    }
+
+    /// Process > Sample Process: looks at the selected process's threads for ten seconds.
+    pub fn start_sample(&mut self) {
+        if self.job.is_some() {
+            return;
+        }
+        let Some(p) = self.selected_proc().cloned() else { return };
+        let (pid, name) = (p.pid, p.name.clone());
+        self.report = None;
+        self.job = Some(Job::start(JobKind::Sample, &format!("Sampling {name}"), move |progress| {
+            sample_proc::run(pid, &name, sample_proc::DURATION_SECS, sample_proc::INTERVAL_MS, progress)
+        }));
+        self.status.clear();
+    }
+
+    /// View > Run System Diagnostics: gathers the logs and counters into an archive to save.
+    pub fn start_diagnostics(&mut self) {
+        if self.job.is_some() {
+            return;
+        }
+        let procs = self.snapshot.as_ref().map(|s| s.procs.clone()).unwrap_or_default();
+        let dir = self.data_dir.clone();
+        self.job = Some(Job::start(JobKind::Diagnostics, "Gathering system diagnostics", move |progress| diagnostics::gather(&dir, &procs, progress)));
+        self.status.clear();
+    }
+
+    /// Asks the running job to stop; its outcome (Cancelled) arrives through `poll_job`.
+    pub fn stop_job(&mut self) {
+        if let Some(job) = &self.job {
+            job.stop();
+            self.status = "Stopping".into();
+        }
+    }
+
+    /// Takes the outcome of a finished job. True when the window needs a frame (a job is running or has just ended).
+    fn poll_job(&mut self) -> bool {
+        let Some(job) = &self.job else { return false };
+        let Some(outcome) = job.poll() else { return true };
+        self.job = None;
+        self.status.clear();
+        match outcome {
+            Outcome::Report { title, text } => self.report = Some(Report::new(&title, &text)),
+            Outcome::Bundle(path) => {
+                self.request = Some(Request::SaveBundle(path));
+                self.status = "Choose where to save the diagnostics".into();
+            }
+            Outcome::Failed(message) => self.status = message,
+            Outcome::Cancelled => self.status = "Stopped".into(),
+        }
+        true
+    }
+
+    /// The progress line of the running job: "4 of 10 seconds" or "3 of 18 items".
+    pub fn job_text(&self) -> String {
+        let Some(job) = &self.job else { return String::new() };
+        let (done, total) = job.counts();
+        match (job.kind, total) {
+            (_, 0) => "Starting".into(),
+            (JobKind::Sample, _) => format!("{} of {} seconds", done / 1000, total / 1000),
+            (JobKind::Diagnostics, _) => format!("{done} of {total} items"),
+        }
+    }
+
+    /// Hands the app layer the save it should ask for, once.
+    pub fn take_request(&mut self) -> Option<Request> {
+        self.request.take()
+    }
+
+    /// Asks for the report to be saved as a text file.
+    pub fn save_report(&mut self) {
+        if let Some(report) = &self.report {
+            self.request = Some(Request::SaveReport { name: report.save_name(), text: report.text.clone() });
+        }
+    }
+
+    pub fn close_report(&mut self) {
+        self.report = None;
+    }
+
+    /// The report's area: under the toolbar, down to the footer.
+    pub fn report_rect(&self, ui: &Ui) -> Rect {
+        let g = self.geo(ui);
+        let top = UNIFIED_BAR_PT + GAP_PT;
+        Rect { x: g.content_x, y: top, w: g.content_w, h: (g.table_bottom - top).max(0.0) }
+    }
+
+    /// Sets the report's scroll range from its line count.
+    pub fn fit_report_scroll(&mut self, ui: &Ui) {
+        let height = self.report_rect(ui).h;
+        if let Some(report) = &mut self.report {
+            let content = report.lines.len() as f32 * REPORT_LINE_PT + INSET_PT;
+            report.scroll.set_max((content - height).max(0.0));
+        }
     }
 
     /// Recomputes the table rows from the last reading and the filter, search and sort.
@@ -514,13 +682,25 @@ impl Monitor {
     }
 
     fn bar(&self) -> Toolbar {
-        Toolbar::new(vec![
+        if self.report.is_some() {
+            return Toolbar::new(vec![
+                ToolbarItem::button(B_REPORT_CLOSE, "Done"),
+                ToolbarItem::button(B_REPORT_SAVE, "Save..."),
+                ToolbarItem::button(B_REPORT_COPY, "Copy"),
+                ToolbarItem::flexible_space(),
+            ]);
+        }
+        let mut items = vec![
             ToolbarItem::button(B_QUIT, "Quit Process").enabled(self.can_quit_selected()),
             ToolbarItem::button(B_FORCE, "Force Quit").enabled(self.can_quit_selected()),
             ToolbarItem::button(B_INSPECT, "Inspect").enabled(self.has_selected()),
-            ToolbarItem::flexible_space(),
-            ToolbarItem::custom(B_SEARCH, "Search", SEARCH_PT),
-        ])
+        ];
+        if self.job.is_some() {
+            items.push(ToolbarItem::button(B_STOP, "Stop"));
+        }
+        items.push(ToolbarItem::flexible_space());
+        items.push(ToolbarItem::custom(B_SEARCH, "Search", SEARCH_PT));
+        Toolbar::new(items)
     }
 
     pub fn bar_layout(&self, ui: &Ui) -> (Toolbar, ToolbarLayout) {
@@ -554,6 +734,15 @@ impl Monitor {
             B_QUIT => self.quit_selected(),
             B_FORCE => self.force_quit_selected(),
             B_INSPECT => self.toggle_inspector(),
+            B_STOP => self.stop_job(),
+            B_REPORT_CLOSE => self.close_report(),
+            B_REPORT_SAVE => self.save_report(),
+            B_REPORT_COPY => {
+                if let Some(report) = &self.report {
+                    bifrost_app::kit::clipboard::set_text(&report.text);
+                    self.status = "Copied the report".into();
+                }
+            }
             B_SEARCH => self.search_focused = true,
             _ => {}
         }
@@ -575,6 +764,11 @@ impl Monitor {
 
     /// Editing keys (shell key codes: 8 backspace, 1 escape). True when a frame is needed.
     pub fn key(&mut self, code: u32) -> bool {
+        // Escape leaves the report
+        if self.report.is_some() && code == 1 {
+            self.report = None;
+            return true;
+        }
         if !self.search_focused {
             return false;
         }
@@ -608,6 +802,16 @@ impl Monitor {
                     Press::Sidebar
                 } else if y < UNIFIED_BAR_PT {
                     self.toolbar_hit(ui, x, y).map_or(Press::None, Press::Toolbar)
+                } else if self.report.is_some() {
+                    // the report fills the content; it scrolls by dragging
+                    if y < g.table_bottom {
+                        if let Some(report) = &mut self.report {
+                            report.scroll.down(y, t);
+                        }
+                        Press::Report
+                    } else {
+                        Press::None
+                    }
                 } else if y >= seg.y && y < seg.y + seg.h && x >= seg.x && x < seg.x + seg.w {
                     sheet::segment_hit(seg, Tab::ALL.len(), x, y).map_or(Press::None, Press::Tab)
                 } else if let Some(i) = self.head_hit(ui, x, y) {
@@ -626,6 +830,11 @@ impl Monitor {
                 if self.press == Press::Table {
                     self.scroll.moved(y, t);
                 }
+                if self.press == Press::Report {
+                    if let Some(report) = &mut self.report {
+                        report.scroll.moved(y, t);
+                    }
+                }
             }
             TouchKind::Up | TouchKind::Cancel => {
                 let press = std::mem::replace(&mut self.press, Press::None);
@@ -637,7 +846,13 @@ impl Monitor {
                     }
                     Press::Sidebar => {
                         if let Some(id) = self.sidebar_hit(ui, x, y) {
+                            self.report = None;
                             self.select_filter(id);
+                        }
+                    }
+                    Press::Report => {
+                        if let Some(report) = &mut self.report {
+                            report.scroll.up(y, t);
                         }
                     }
                     Press::Tab(i) => {
@@ -860,5 +1075,124 @@ mod tests {
         base.cpu_ticks = 200;
         m.baselines.insert(7, base);
         assert_eq!(m.copy_text().as_deref(), Some("sh\tme\t0.0%\t0:03.00\t0\t7"));
+    }
+
+    fn wait_for_job(m: &mut Monitor) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while m.job.is_some() {
+            m.poll_job();
+            assert!(std::time::Instant::now() < deadline, "the job did not finish");
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+    }
+
+    #[test]
+    fn a_finished_sample_becomes_a_report_that_can_be_saved() {
+        let mut m = Monitor::new(800.0, 600.0);
+        m.job = Some(Job::start(JobKind::Sample, "Sampling x", |_| Outcome::Report { title: "Sample of a/b".into(), text: "one\ntwo\nthree".into() }));
+        assert!(m.job_running());
+        wait_for_job(&mut m);
+        let report = m.report.as_ref().expect("report");
+        assert_eq!(report.lines, vec!["one", "two", "three"]);
+        assert_eq!(report.save_name(), "Sample of a-b.txt");
+        m.save_report();
+        assert_eq!(m.take_request(), Some(Request::SaveReport { name: "Sample of a-b.txt".into(), text: "one\ntwo\nthree".into() }));
+        assert_eq!(m.take_request(), None, "a request is handed out once");
+        m.close_report();
+        assert!(m.report.is_none());
+    }
+
+    #[test]
+    fn a_finished_bundle_asks_for_a_place_to_save_it() {
+        let mut m = Monitor::new(800.0, 600.0);
+        m.job = Some(Job::start(JobKind::Diagnostics, "Gathering", |_| Outcome::Bundle(PathBuf::from("/data/bundle.zip"))));
+        wait_for_job(&mut m);
+        assert_eq!(m.take_request(), Some(Request::SaveBundle(PathBuf::from("/data/bundle.zip"))));
+        assert!(m.report.is_none());
+    }
+
+    #[test]
+    fn a_failed_or_stopped_job_says_so_in_the_footer() {
+        let mut m = Monitor::new(800.0, 600.0);
+        m.job = Some(Job::start(JobKind::Sample, "Sampling", |_| Outcome::Failed("x ended before it could be sampled".into())));
+        wait_for_job(&mut m);
+        assert_eq!(m.status, "x ended before it could be sampled");
+        m.job = Some(Job::start(JobKind::Sample, "Sampling", |p| {
+            while !p.cancelled() {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            Outcome::Cancelled
+        }));
+        m.stop_job();
+        wait_for_job(&mut m);
+        assert_eq!(m.status, "Stopped");
+    }
+
+    #[test]
+    fn sampling_needs_a_selection_and_one_job_at_a_time() {
+        let mut m = Monitor::new(800.0, 600.0);
+        m.start_sample();
+        assert!(!m.job_running(), "nothing selected");
+        with_rows(&mut m, vec![proc(std::process::id(), 1, "self")]);
+        m.selected = Some(std::process::id());
+        m.start_sample();
+        assert!(m.job_running());
+        let label = m.job.as_ref().map(|j| j.label.clone());
+        assert_eq!(label.as_deref(), Some("Sampling self"));
+        m.start_diagnostics();
+        assert_eq!(m.job.as_ref().map(|j| j.kind), Some(JobKind::Sample), "a second job does not replace the first");
+        m.stop_job();
+        wait_for_job(&mut m);
+    }
+
+    #[test]
+    fn a_running_job_wakes_the_window_sooner() {
+        let mut m = Monitor::new(800.0, 600.0);
+        m.last_sample = Some(1000.0);
+        m.frequency = UpdateFrequency::Normally;
+        assert_eq!(m.next_wake(1100.0), 6000.0);
+        m.job = Some(Job::start(JobKind::Sample, "Sampling", |p| {
+            while !p.cancelled() {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            Outcome::Cancelled
+        }));
+        assert_eq!(m.next_wake(1100.0), 1300.0);
+        m.stop_job();
+        wait_for_job(&mut m);
+    }
+
+    #[test]
+    fn the_toolbar_switches_to_the_report_actions_and_escape_leaves() {
+        let mut m = Monitor::new(800.0, 600.0);
+        let ids = |m: &Monitor| m.bar().items.iter().map(|i| i.id).collect::<Vec<_>>();
+        assert!(ids(&m).contains(&B_SEARCH));
+        assert!(!ids(&m).contains(&B_STOP));
+        m.report = Some(Report::new("T", "a"));
+        assert_eq!(&ids(&m)[..3], &[B_REPORT_CLOSE, B_REPORT_SAVE, B_REPORT_COPY]);
+        assert!(!ids(&m).contains(&B_SEARCH));
+        assert!(m.key(1));
+        assert!(m.report.is_none());
+    }
+
+    #[test]
+    fn job_progress_reads_as_seconds_or_items() {
+        let mut m = Monitor::new(800.0, 600.0);
+        assert_eq!(m.job_text(), "");
+        m.job = Some(Job::start(JobKind::Sample, "Sampling", |p| {
+            p.set(4000, 10_000);
+            while !p.cancelled() {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            Outcome::Cancelled
+        }));
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while m.job_text() == "Starting" {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert_eq!(m.job_text(), "4 of 10 seconds");
+        m.stop_job();
+        wait_for_job(&mut m);
     }
 }

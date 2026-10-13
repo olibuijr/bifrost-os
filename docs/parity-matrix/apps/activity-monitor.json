@@ -33,9 +33,9 @@
    "area": "view",
    "apple": "View menu process filters",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:126",
-   "note": "System, Active, Inactive added (sidebar + View menu). Windowed, GPU and Selected Processes remain.",
-   "wire": "Add System, Active, Inactive, Windowed, GPU and Selected Processes filters to model::Filter (model.rs:135 keep) and as sidebar rows in window.rs:330 plus a View menu in main.rs main_menu; windowed needs the shell window list over the app SDK, active/inactive uses recent CPU ticks."
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:254",
+   "note": "Sidebar and View > Filter Processes now also offer Selected Processes (the selection and everything it started, via ppid) and GPU Processes (GPU share above 0). Windowed Processes remains: it needs the shell window list over the app SDK. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Add Windowed Processes once the SDK exposes the shell window list (owner pids) to apps; filter on that set in model::visible_within."
   },
   {
    "feature": "Search / filter processes by name",
@@ -69,45 +69,45 @@
    "area": "panel",
    "apple": "ProcessInspector.nib: Memory, Statistics, Open Files and Ports tabs",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/inspect.rs:63",
-   "note": "Inspector card replaces the graph and lists command, exe, threads and open files/sockets; no separate window, no Memory/Statistics tabs, no parent process or reveal-in-file-manager link.",
-   "wire": "Turn the inspector into its own window with Memory / Statistics / Open Files and Ports segments (inspect.rs adds parent pid, faults, context switches from /proc/<pid>/status), plus a Reveal in Files button for exe."
+   "bifrost": "springboard/apps/activity-desktop/src/inspect.rs:52",
+   "note": "The inspector card now also shows the parent process (name and pid), page faults (minor and major) and context switches (voluntary and involuntary), read from /proc/<pid>/stat and status. Still a card in place of the graph, with no Memory/Statistics/Open Files segments and no reveal-in-file-manager link. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Turn the inspector into its own window with Memory / Statistics / Open Files and Ports segments, plus a Reveal in Files button for exe."
   },
   {
    "feature": "Sample Process",
    "area": "menu",
    "apple": "View > Sample Process (Sample.nib)",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add Process > Sample Process: read /proc/<pid>/task/*/stack and wchan over N seconds in a new sample_proc.rs, show the text in a window with Save..."
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/sample_proc.rs:145",
+   "note": "Process > Sample Process (and a toolbar Stop) looks at every thread of the selected process every 20 ms for 10 s on a background thread and shows the report (kernel wait stack, else wchan, else state, counted per thread) in the window, with Copy and Save.... No user-space call graph, and the duration is fixed. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Add a duration choice (3, 10, 30 s) and, where ptrace is permitted, user-space frames from /proc/<pid>/task/<tid>/syscall and a symbolizer."
   },
   {
    "feature": "Run Spindump / System Diagnostics",
    "area": "menu",
    "apple": "View > Run Spindump, Run System Diagnostics",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add View > Run System Diagnostics that gathers /proc snapshots, journal tail and dmesg into a tarball on the Desktop via a thread, with a progress sheet."
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/diagnostics.rs:127",
+   "note": "View > Run System Diagnostics gathers 13 /proc files, the process list, journal tail, kernel log, disk usage and failed units into a zip (progress card with Stop), then opens the save panel. A zip chosen in the save panel, not a tarball on the Desktop; no system-wide stack sampling like spindump. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Add a system-wide sampling pass (every process, the Sample Process routine) and an option to write to the Desktop without the panel once the shell grants that."
   },
   {
    "feature": "Show Deltas for Process",
    "area": "menu",
    "apple": "View > Show Deltas for Process",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Store a per-pid baseline when toggled in window.rs and show counters relative to it in the table columns."
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:471",
+   "note": "Process > Show Deltas for Process stores a baseline for the selected pid (dropped when it exits); CPU Time, Bytes Read, Bytes Written and GPU Time count from it and the name carries a (deltas) mark. Sorting still uses the absolute figure. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Sort by the delta figure while a baseline is set, and keep several baselines visible with a column that shows the elapsed time."
   },
   {
    "feature": "Columns submenu (choose visible columns)",
    "area": "menu",
    "apple": "View > Columns",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Columns are fixed per tab (model.rs:54).",
-   "wire": "Add View > Columns with checkable items per tab (Threads, PID, User, Ports, Kind, Real Mem, Private Mem, Purgeable, Compressed, CPU Time, Idle Wake Ups, Bytes Read/Written...) persisted in app prefs; model::Tab::columns filters by the set."
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:57",
+   "note": "View > Columns lists the optional columns of the current tab as checkable items (required ones are disabled) and stores the choice in app defaults (ColumnSet). Offers CPU Time, Parent PID, Virtual Size, 12 hr Average, Preventing Sleep, Bytes Read/Written, GPU Time, Packets In/Out. No Ports, Kind, Private or Purgeable memory, Idle Wake Ups. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Add the remaining reference columns that have a Linux source: Ports (open sockets per pid), Private Mem (smaps_rollup Private_*), Idle Wake Ups (voluntary context switches per second)."
   },
   {
    "feature": "Update Frequency",
@@ -123,9 +123,9 @@
    "area": "view",
    "apple": "CPU tab footer graph, Window > CPU History",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:144",
-   "note": "Graph card per tab with history; no per-core history and no floating CPU History window.",
-   "wire": "Record per-core shares in sample.rs from /proc/stat cpuN lines and add Window > CPU History opening a floating panel with one strip per core."
+   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:312",
+   "note": "View > CPU History swaps the CPU graph for one strip per core (from the cpuN lines of /proc/stat), kept in app defaults. No floating CPU History window. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Add Window > CPU History as a floating panel when the SDK has a panel window level for apps."
   },
   {
    "feature": "Floating CPU Usage window and Keep on Top",
@@ -150,18 +150,18 @@
    "area": "view",
    "apple": "Memory tab footer: pressure graph, app/wired/compressed, cached, swap",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/inspect.rs:119",
-   "note": "Pressure parsed from PSI; footer shows used/total; no wired/compressed/cache breakdown rows.",
-   "wire": "Extend sample.rs parse_meminfo to Shmem, Buffers, SwapCached and Zswap, and show the breakdown rows in the Memory graph card (draw.rs graph())."
+   "bifrost": "springboard/apps/activity-desktop/src/draw.rs:244",
+   "note": "The Memory graph card shows App, Kernel, Shared, Cached Files, Compressed (zswap) and Swap Used from /proc/meminfo; pressure is still read from PSI in inspect.rs. The split is derived from meminfo, not the reference categories, and there is no pressure graph in the footer. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Draw the PSI pressure history as a small graph in the Memory footer and colour it green, yellow or red by threshold."
   },
   {
    "feature": "Energy impact and preventing-sleep columns",
    "area": "view",
    "apple": "Energy tab: Energy Impact, average, App Nap, Preventing Sleep",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:146",
-   "note": "Energy impact is an estimate from CPU; no preventing-sleep or 12-hour average.",
-   "wire": "Read inhibitors from logind (systemd-inhibit --list) for a Preventing Sleep column and keep a rolling 12-hour mean per process name."
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:57",
+   "note": "The Energy tab has a Preventing Sleep column (blocking sleep or idle locks from logind ListInhibitors via busctl, read every 10 s only while the column is shown) and an optional 12 hr Average column per process name (moving mean with a 12 hour time constant, since the app started, not stored). Energy impact is still a CPU and disk estimate; no App Nap column. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Persist the per-name averages across launches in app storage, and add an App Nap analogue from cgroup freezer or cpu.idle state."
   },
   {
    "feature": "Disk tab: bytes per process and graph",
@@ -177,18 +177,18 @@
    "area": "view",
    "apple": "Network tab: sent/received bytes and packets per process",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:70",
-   "note": "Shows interfaces with totals, not per process; no packets.",
-   "wire": "Add per-process socket attribution (sock_diag) or at least packet counts from /proc/net/dev in model.rs:70 columns."
+   "bifrost": "springboard/apps/activity-desktop/src/sample.rs:272",
+   "note": "The Network tab keeps interface rows and adds optional Packets In and Packets Out columns from /proc/net/dev. Still per interface, not per process. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Attribute traffic per process with sock_diag (inode to pid via /proc/<pid>/fd) and the byte counters from the tcp_info netlink reply."
   },
   {
    "feature": "GPU tab / GPU History",
    "area": "view",
    "apple": "Window > GPU History, GPU columns",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Read DRM fdinfo (drm-engine-*) per process for a GPU % column and a GPU History window."
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/sample.rs:318",
+   "note": "A GPU tab (% GPU, GPU Time, graph of the machine total) reads the DRM client usage counters in /proc/<pid>/fdinfo, only while the tab or the GPU filter is shown. Needs a kernel driver that publishes drm-engine-* (amdgpu, i915, xe, msm, panfrost, v3d); the NVIDIA proprietary driver does not. The history is the tab graph, not a separate floating GPU History window. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Add a Window > GPU History floating panel with one strip per engine, and an nvidia-smi fallback for the proprietary driver."
   },
   {
    "feature": "Footer totals (processes, CPU, memory)",
@@ -204,8 +204,8 @@
    "area": "menu",
    "apple": "Edit > Copy",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/main.rs:130",
-   "note": "Edit > Copy (cmd+C) copies the row as tab-separated text.",
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:378",
+   "note": "Edit > Copy (cmd+C) copies the row as tab-separated text of the columns the tab shows (View > Columns), counting from the baseline when Show Deltas is on. built on parity/team-d-activity-monitor; not yet verified on Midget.",
    "wire": "Handle Edit > Copy in main.rs menu_action to put the selected row's columns as tab-separated text on the pasteboard."
   },
   {

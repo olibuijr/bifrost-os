@@ -6,7 +6,7 @@
 use crate::inspect::Inspection;
 use crate::model::{self, bytes, energy, percent, rate, Column, SortKey, Tab, HISTORY};
 use crate::sample::{ProcSample, Snapshot};
-use crate::window::{Geo, Monitor, B_SEARCH, FOOT_PT, HEAD_PT, ROW_PT, SIDE_PT, SIDE_SCROLL};
+use crate::window::{Geo, Monitor, B_SEARCH, FOOT_PT, HEAD_PT, REPORT_LINE_PT, ROW_PT, SIDE_PT, SIDE_SCROLL};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::colors::{SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, SELECTION, SEPARATOR_C, WHITE};
@@ -128,10 +128,64 @@ impl Monitor {
         self.fit_scroll(ui);
         fill(s, ui, 0.0, 0.0, g.w, g.h, CONTENT_BG.now());
         self.draw_sidebar(ui, s, &g);
-        self.draw_graph(ui, s);
-        self.draw_tabs(ui, s);
-        self.draw_rows(ui, s, &g);
+        if self.report.is_some() {
+            self.fit_report_scroll(ui);
+            self.draw_report(ui, s);
+        } else {
+            self.draw_graph(ui, s);
+            self.draw_tabs(ui, s);
+            self.draw_rows(ui, s, &g);
+        }
         self.draw_chrome(ui, s, &g);
+        if self.job.is_some() {
+            self.draw_job(ui, s, &g);
+        }
+    }
+
+    /// The report in a card: one line per text line, leading spaces as an indent, the title and thread lines bold.
+    fn draw_report(&mut self, ui: &Ui, s: &mut Surface) {
+        const INDENT_PT: f32 = 4.0;
+        let r = self.report_rect(ui);
+        rounded(s, ui, r.x, r.y, r.w, r.h, CARD_RADIUS_PT, CARD_BG.now());
+        let Some(report) = &self.report else { return };
+        let offset = report.scroll.offset();
+        let first = (offset / REPORT_LINE_PT).floor().max(0.0) as usize;
+        for (i, line) in report.lines.iter().enumerate().skip(first) {
+            let y = r.y + CARD_PAD / 2.0 + i as f32 * REPORT_LINE_PT - offset;
+            if y + REPORT_LINE_PT > r.y + r.h {
+                break;
+            }
+            if y < r.y {
+                continue;
+            }
+            let body = line.trim_start();
+            let indent = (line.len() - body.len()) as f32 * INDENT_PT;
+            let heading = i == 0 || body.starts_with("Thread ");
+            let (weight, color) = if heading { (Weight::Semibold, LABEL.now()) } else { (Weight::Regular, LABEL.now()) };
+            let x = r.x + CARD_PAD + indent;
+            text(&mut self.labels, s, ui, body, MAC_SUBHEAD_PT, weight, color, x, y + REPORT_LINE_PT / 2.0, r.w - 2.0 * CARD_PAD - indent);
+        }
+    }
+
+    /// The progress card over the table while a background task runs: what it does, a bar and the count.
+    fn draw_job(&mut self, ui: &Ui, s: &mut Surface, g: &Geo) {
+        const CARD_H: f32 = 78.0;
+        const BAR_H: f32 = 6.0;
+        let Some((label, fraction)) = self.job.as_ref().map(|j| (j.label.clone(), j.fraction())) else { return };
+        let detail = self.job_text();
+        let w = g.content_w.min(380.0);
+        let x = g.content_x + (g.content_w - w) / 2.0;
+        let y = (g.table_top + g.table_bottom - CARD_H) / 2.0;
+        rounded(s, ui, x - 1.0, y - 1.0, w + 2.0, CARD_H + 2.0, CARD_RADIUS_PT + 1.0, SEPARATOR_C.now());
+        rounded(s, ui, x, y, w, CARD_H, CARD_RADIUS_PT, CARD_BG.now());
+        let inner = w - 2.0 * CARD_PAD;
+        text(&mut self.labels, s, ui, &label, MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), x + CARD_PAD, y + 20.0, inner);
+        let bar_y = y + 36.0;
+        rounded(s, ui, x + CARD_PAD, bar_y, inner, BAR_H, BAR_H / 2.0, SEPARATOR_C.now());
+        if fraction > 0.0 {
+            rounded(s, ui, x + CARD_PAD, bar_y, (inner * fraction).max(BAR_H), BAR_H, BAR_H / 2.0, SYSTEM_BLUE.now());
+        }
+        text(&mut self.labels, s, ui, &detail, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x + CARD_PAD, y + 58.0, inner);
     }
 
     fn draw_sidebar(&self, ui: &Ui, s: &mut Surface, g: &Geo) {
@@ -347,19 +401,21 @@ impl Monitor {
             widgets::search_field(s, ui, &self.query, Rect { x: r.x, y: r.y + 4.0, w: r.w, h: r.h - 8.0 }, "Search", self.search_focused);
         }
 
-        let cols: Vec<(Column, f32, f32)> = self.col_frames(ui);
-        fill(s, ui, g.content_x, g.head_y, g.content_w, HEAD_PT, CONTENT_BG.now());
-        for (col, cx, cw) in &cols {
-            let sorted = col.key.is_some() && col.key == Some(self.sort.key);
-            let title = if sorted {
-                format!("{} {}", col.title, if self.sort.descending { "▼" } else { "▲" })
-            } else {
-                col.title.to_string()
-            };
-            let color = if sorted { LABEL.now() } else { LABEL_2.now() };
-            text(&mut self.labels, s, ui, &title, MAC_FOOTNOTE_PT, Weight::Semibold, color, cx + PAD, g.head_y + HEAD_PT / 2.0, cw - 2.0 * PAD);
+        if self.report.is_none() {
+            let cols: Vec<(Column, f32, f32)> = self.col_frames(ui);
+            fill(s, ui, g.content_x, g.head_y, g.content_w, HEAD_PT, CONTENT_BG.now());
+            for (col, cx, cw) in &cols {
+                let sorted = col.key.is_some() && col.key == Some(self.sort.key);
+                let title = if sorted {
+                    format!("{} {}", col.title, if self.sort.descending { "▼" } else { "▲" })
+                } else {
+                    col.title.to_string()
+                };
+                let color = if sorted { LABEL.now() } else { LABEL_2.now() };
+                text(&mut self.labels, s, ui, &title, MAC_FOOTNOTE_PT, Weight::Semibold, color, cx + PAD, g.head_y + HEAD_PT / 2.0, cw - 2.0 * PAD);
+            }
+            fill(s, ui, g.content_x, g.head_y + HEAD_PT - 1.0, g.content_w, 1.0, SEPARATOR_C.now());
         }
-        fill(s, ui, g.content_x, g.head_y + HEAD_PT - 1.0, g.content_w, 1.0, SEPARATOR_C.now());
 
         let fy = g.h - FOOT_PT;
         fill(s, ui, x0, fy, g.w - x0, FOOT_PT, CONTENT_BG.now());

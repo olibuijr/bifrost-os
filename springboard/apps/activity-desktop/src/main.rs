@@ -3,23 +3,32 @@
 //! table's rows and the graph history are `model.rs`. Quitting sends SIGTERM, and only to processes of this user.
 
 #[allow(dead_code)]
+mod diagnostics;
+#[allow(dead_code)]
 mod draw;
 #[allow(dead_code)]
 mod inspect;
+#[allow(dead_code)]
+mod job;
 #[allow(dead_code)]
 mod model;
 #[allow(dead_code)]
 mod sample;
 #[allow(dead_code)]
+mod sample_proc;
+#[allow(dead_code)]
 mod window;
 
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::proto::DocErrorCode;
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use model::{ColumnSet, Filter, Tab, UpdateFrequency, SIGNALS};
+use std::io::Write;
+use std::path::PathBuf;
 use window::{
-    Monitor, MENU_COLUMN, MENU_COPY, MENU_CPU_HISTORY, MENU_DELTAS, MENU_FILTER, MENU_FIND, MENU_FORCE, MENU_FREQ, MENU_INSPECT, MENU_QUIT,
-    MENU_SIGNAL,
+    Monitor, Request, MENU_CLOSE_REPORT, MENU_COLUMN, MENU_COPY, MENU_CPU_HISTORY, MENU_DELTAS, MENU_DIAGNOSTICS, MENU_FILTER, MENU_FIND, MENU_FORCE,
+    MENU_FREQ, MENU_INSPECT, MENU_QUIT, MENU_SAMPLE, MENU_SAVE, MENU_SIGNAL, MENU_STOP,
 };
 
 /// The preference holding View > Update Frequency, in seconds.
@@ -29,31 +38,35 @@ const PREF_COLUMNS: &str = "columns";
 /// The preference holding View > CPU History.
 const PREF_CPU_HISTORY: &str = "cpuHistory";
 
-struct ActivityApp {
-    monitor: Option<Monitor>,
+/// What a pending save panel will write once the user has chosen a place.
+enum Export {
+    /// Report text.
+    Text(Vec<u8>),
+    /// A prepared archive in the app's storage; removed after it is written.
+    File(PathBuf),
 }
 
-impl App for ActivityApp {
-    fn id(&self) -> &str {
-        "is.olibuijr.activity.desktop"
-    }
+struct ActivityApp {
+    monitor: Option<Monitor>,
+    /// The save panel asked for, by request id.
+    export: Option<(u32, Export)>,
+}
 
-    fn configure(&mut self, ctx: &Ctx) {
-        ctx.enable_sudden_termination(); // keeps no unsaved state
-        let (w, h) = (ctx.cfg.w as f32, ctx.cfg.h as f32);
-        match &mut self.monitor {
-            Some(m) => m.resize(w, h),
-            None => {
-                let mut m = Monitor::new(w, h);
-                m.set_frequency(UpdateFrequency::from_seconds(ctx.defaults().int(PREF_FREQUENCY)));
-                m.set_columns(ColumnSet::from_pref(&ctx.defaults().string(PREF_COLUMNS).unwrap_or_default()));
-                m.set_cpu_history(ctx.defaults().bool(PREF_CPU_HISTORY));
-                self.monitor = Some(m);
-            }
+impl ActivityApp {
+    /// Asks the shell for the save panel the window wants, if it wants one.
+    fn serve(&mut self, ctx: &Ctx) {
+        let Some(request) = self.monitor.as_mut().and_then(Monitor::take_request) else { return };
+        // a save still waiting is dropped, and an archive it held is cleaned up
+        if let Some((_, Export::File(path))) = self.export.take() {
+            let _ = std::fs::remove_file(path);
         }
+        self.export = Some(match request {
+            Request::SaveReport { name, text } => (ctx.save_document(&name, &["public.text"]), Export::Text(text.into_bytes())),
+            Request::SaveBundle(path) => (ctx.save_document("System Diagnostics.zip", &["zip"]), Export::File(path)),
+        });
     }
 
-    fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+    fn handle_event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         let Some(m) = &mut self.monitor else { return false };
         let changed = match ev {
             Input::Touch { kind, x, y, t, .. } => m.touch(&ctx.ui, kind, x, y, t),
@@ -74,55 +87,7 @@ impl App for ActivityApp {
         changed
     }
 
-    fn tick(&mut self, _ctx: &Ctx, t: f64) -> bool {
-        self.monitor.as_mut().map_or(false, |m| m.tick(t))
-    }
-
-    fn next_wake(&self, t: f64) -> Option<f64> {
-        self.monitor.as_ref().map(|m| m.next_wake(t))
-    }
-
-    fn controls(&self, ctx: &Ctx) -> Vec<Node> {
-        self.monitor.as_ref().map_or_else(Vec::new, |m| m.controls(&ctx.ui))
-    }
-
-    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        let Some(m) = &self.monitor else { return Vec::new() };
-        let can_signal = m.can_quit_selected();
-        let mut process = vec![
-            AppMenuItem::new(MENU_QUIT, "Quit Process").enabled(can_signal),
-            AppMenuItem::new(MENU_FORCE, "Force Quit Process").enabled(can_signal),
-            AppMenuItem::submenu("Send Signal to Process").enabled(can_signal),
-        ];
-        for (i, sig) in SIGNALS.iter().enumerate() {
-            process.push(AppMenuItem::new(MENU_SIGNAL + i as u32, &format!("SIG{}", sig.name)).enabled(can_signal).depth(1));
-        }
-        process.push(AppMenuItem::separator());
-        process.push(AppMenuItem::new(MENU_DELTAS, "Show Deltas for Process").checked(m.deltas_on_selected()).enabled(m.has_selected()));
-        process.push(AppMenuItem::new(MENU_INSPECT, "Inspect Process").enabled(m.has_selected()));
-        process.push(AppMenuItem::new(MENU_FIND, "Find Process").key("cmd+f"));
-
-        let mut view = vec![AppMenuItem::submenu("Filter Processes")];
-        for (i, f) in Filter::ALL.iter().enumerate() {
-            view.push(AppMenuItem::new(MENU_FILTER + i as u32, f.label()).checked(m.filter == *f).depth(1));
-        }
-        view.push(AppMenuItem::submenu("Columns"));
-        for (i, col) in m.tab.all_columns().iter().enumerate() {
-            view.push(AppMenuItem::new(MENU_COLUMN + i as u32, col.title).checked(m.columns.shown(m.tab, col)).enabled(!col.required).depth(1));
-        }
-        view.push(AppMenuItem::submenu("Update Frequency"));
-        for (i, f) in UpdateFrequency::ALL.iter().enumerate() {
-            view.push(AppMenuItem::new(MENU_FREQ + i as u32, f.label()).checked(m.frequency == *f).depth(1));
-        }
-        view.push(AppMenuItem::new(MENU_CPU_HISTORY, "CPU History").checked(m.cpu_history).enabled(m.tab == Tab::Cpu));
-        vec![
-            AppMenu { title: "Edit".into(), items: vec![AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(m.has_selected())] },
-            AppMenu { title: "View".into(), items: view },
-            AppMenu { title: "Process".into(), items: process },
-        ]
-    }
-
-    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+    fn run_menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         let Some(m) = &mut self.monitor else { return false };
         match id {
             MENU_QUIT => {
@@ -144,6 +109,26 @@ impl App for ActivityApp {
             }
             MENU_DELTAS => {
                 m.toggle_deltas();
+                true
+            }
+            MENU_SAMPLE => {
+                m.start_sample();
+                true
+            }
+            MENU_DIAGNOSTICS => {
+                m.start_diagnostics();
+                true
+            }
+            MENU_STOP => {
+                m.stop_job();
+                true
+            }
+            MENU_SAVE => {
+                m.save_report();
+                true
+            }
+            MENU_CLOSE_REPORT => {
+                m.close_report();
                 true
             }
             MENU_CPU_HISTORY => {
@@ -181,6 +166,151 @@ impl App for ActivityApp {
             _ => false,
         }
     }
+}
+
+impl App for ActivityApp {
+    fn id(&self) -> &str {
+        "is.olibuijr.activity.desktop"
+    }
+
+    fn configure(&mut self, ctx: &Ctx) {
+        ctx.enable_sudden_termination(); // keeps no unsaved state
+        let (w, h) = (ctx.cfg.w as f32, ctx.cfg.h as f32);
+        match &mut self.monitor {
+            Some(m) => m.resize(w, h),
+            None => {
+                let mut m = Monitor::new(w, h);
+                m.data_dir = ctx.data_dir.clone();
+                m.set_frequency(UpdateFrequency::from_seconds(ctx.defaults().int(PREF_FREQUENCY)));
+                m.set_columns(ColumnSet::from_pref(&ctx.defaults().string(PREF_COLUMNS).unwrap_or_default()));
+                m.set_cpu_history(ctx.defaults().bool(PREF_CPU_HISTORY));
+                self.monitor = Some(m);
+            }
+        }
+    }
+
+    fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        let changed = self.handle_event(ctx, ev);
+        self.serve(ctx);
+        changed
+    }
+
+    fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
+        let changed = self.monitor.as_mut().map_or(false, |m| m.tick(t));
+        self.serve(ctx);
+        changed
+    }
+
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        match ev {
+            DocumentEvent::SaveTo(mut doc) => match self.export.take() {
+                Some((request, export)) if request == doc.request => {
+                    let bytes = match &export {
+                        Export::Text(bytes) => Ok(bytes.clone()),
+                        Export::File(path) => std::fs::read(path),
+                    };
+                    match bytes.and_then(|b| doc.file.write_all(&b)) {
+                        Ok(()) => ctx.commit_document(request),
+                        Err(e) => {
+                            ctx.log(&format!("save: {e}"));
+                            ctx.abort_document(request);
+                            if let Some(m) = &mut self.monitor {
+                                m.status = "Could not save the file".into();
+                            }
+                        }
+                    }
+                    if let Export::File(path) = export {
+                        let _ = std::fs::remove_file(path);
+                    }
+                    true
+                }
+                other => {
+                    self.export = other;
+                    false
+                }
+            },
+            DocumentEvent::Saved(doc) => {
+                if let Some(m) = &mut self.monitor {
+                    m.status = format!("Saved {}", doc.name);
+                }
+                true
+            }
+            DocumentEvent::Failed { request, code } => {
+                if self.export.as_ref().map_or(false, |(r, _)| *r == request) {
+                    if let Some((_, Export::File(path))) = self.export.take() {
+                        let _ = std::fs::remove_file(path);
+                    }
+                }
+                if code != DocErrorCode::Cancelled {
+                    ctx.log(&format!("document: {code:?}"));
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    fn next_wake(&self, t: f64) -> Option<f64> {
+        self.monitor.as_ref().map(|m| m.next_wake(t))
+    }
+
+    fn controls(&self, ctx: &Ctx) -> Vec<Node> {
+        self.monitor.as_ref().map_or_else(Vec::new, |m| m.controls(&ctx.ui))
+    }
+
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        let Some(m) = &self.monitor else { return Vec::new() };
+        let can_signal = m.can_quit_selected();
+        let mut process = vec![
+            AppMenuItem::new(MENU_QUIT, "Quit Process").enabled(can_signal),
+            AppMenuItem::new(MENU_FORCE, "Force Quit Process").enabled(can_signal),
+            AppMenuItem::submenu("Send Signal to Process").enabled(can_signal),
+        ];
+        for (i, sig) in SIGNALS.iter().enumerate() {
+            process.push(AppMenuItem::new(MENU_SIGNAL + i as u32, &format!("SIG{}", sig.name)).enabled(can_signal).depth(1));
+        }
+        process.push(AppMenuItem::separator());
+        process.push(AppMenuItem::new(MENU_DELTAS, "Show Deltas for Process").checked(m.deltas_on_selected()).enabled(m.has_selected()));
+        process.push(AppMenuItem::new(MENU_INSPECT, "Inspect Process").enabled(m.has_selected()));
+        process.push(AppMenuItem::new(MENU_SAMPLE, "Sample Process").enabled(m.has_selected() && !m.job_running()));
+        process.push(AppMenuItem::new(MENU_STOP, "Stop Background Task").key("cmd+.").enabled(m.job_running()));
+        process.push(AppMenuItem::new(MENU_FIND, "Find Process").key("cmd+f"));
+
+        let mut view = vec![AppMenuItem::submenu("Filter Processes")];
+        for (i, f) in Filter::ALL.iter().enumerate() {
+            view.push(AppMenuItem::new(MENU_FILTER + i as u32, f.label()).checked(m.filter == *f).depth(1));
+        }
+        view.push(AppMenuItem::submenu("Columns"));
+        for (i, col) in m.tab.all_columns().iter().enumerate() {
+            view.push(AppMenuItem::new(MENU_COLUMN + i as u32, col.title).checked(m.columns.shown(m.tab, col)).enabled(!col.required).depth(1));
+        }
+        view.push(AppMenuItem::submenu("Update Frequency"));
+        for (i, f) in UpdateFrequency::ALL.iter().enumerate() {
+            view.push(AppMenuItem::new(MENU_FREQ + i as u32, f.label()).checked(m.frequency == *f).depth(1));
+        }
+        view.push(AppMenuItem::new(MENU_CPU_HISTORY, "CPU History").checked(m.cpu_history).enabled(m.tab == Tab::Cpu));
+        view.push(AppMenuItem::separator());
+        view.push(AppMenuItem::new(MENU_DIAGNOSTICS, "Run System Diagnostics...").enabled(!m.job_running()));
+        let has_report = m.report.is_some();
+        vec![
+            AppMenu {
+                title: "File".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_SAVE, "Save Report...").key("cmd+s").enabled(has_report),
+                    AppMenuItem::new(MENU_CLOSE_REPORT, "Close Report").enabled(has_report),
+                ],
+            },
+            AppMenu { title: "Edit".into(), items: vec![AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(m.has_selected())] },
+            AppMenu { title: "View".into(), items: view },
+            AppMenu { title: "Process".into(), items: process },
+        ]
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        let changed = self.run_menu_action(ctx, id);
+        self.serve(ctx);
+        changed
+    }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
         if let Some(m) = &mut self.monitor {
@@ -193,5 +323,5 @@ impl App for ActivityApp {
 }
 
 fn main() {
-    bifrost_app::run(ActivityApp { monitor: None });
+    bifrost_app::run(ActivityApp { monitor: None, export: None });
 }

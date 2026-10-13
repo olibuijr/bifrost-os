@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0
+
+- View > Columns chooses the columns of each tab (CPU Time, Parent PID, Virtual Size, 12 hr Average, Preventing Sleep, Bytes Read and Written, GPU Time, Packets In and Out) and remembers the choice.
+- Process > Show Deltas for Process counts a process's CPU time, bytes read and written and GPU time from the moment you turn it on.
+- A GPU tab shows each process's share of the graphics engines and the machine's total, read from the kernel's per-client usage counters. The sidebar and View > Filter Processes add GPU Processes and Selected Processes (the selected process and everything it started).
+- View > CPU History replaces the CPU graph with one strip per core.
+- The Memory tab splits used memory into App, Kernel, Shared, Cached Files, Compressed and Swap.
+- The Energy tab shows which processes keep the computer awake (a blocking sleep or idle lock held with the login manager) and a 12 hour average per process name.
+- The Network tab adds packet counts.
+- The process inspector shows the parent process, page faults and context switches.
+- Process > Sample Process watches every thread of the selected process for ten seconds and reports where each one waited, in a report you can copy or save.
+- View > Run System Diagnostics gathers kernel counters, the process list, the journal tail, the kernel log and disk usage into one archive and asks where to save it.
+- The app asks for the documents permission, for the save panel.
+
 ## 0.3.0
 
 - The sidebar and View > Filter Processes add System, Active and Inactive processes.
