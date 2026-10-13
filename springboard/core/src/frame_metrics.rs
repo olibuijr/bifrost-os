@@ -185,6 +185,33 @@ mod tests {
     }
 
     #[test]
+    fn equal_presentation_times_are_accepted_and_have_no_rate() {
+        let mut r = Recorder::new(4, SIXTY_HZ);
+        r.record(1, 50).unwrap();
+        r.record(1, 50).unwrap();
+        assert_eq!(r.summary().frames, 2);
+        assert_eq!(r.summary().frame_rate, 0.0);
+    }
+
+    #[test]
+    fn zero_refresh_period_counts_no_drops() {
+        let mut r = Recorder::new(4, 0);
+        r.record(0, 0).unwrap();
+        r.record(0, 1_000_000_000).unwrap();
+        assert_eq!(r.summary().dropped, 0);
+    }
+
+    #[test]
+    fn dropped_frames_leave_with_the_window() {
+        let mut r = Recorder::new(2, SIXTY_HZ);
+        r.record(0, 0).unwrap();
+        r.record(0, 4 * SIXTY_HZ).unwrap();
+        assert_eq!(r.summary().dropped, 1);
+        r.record(0, 5 * SIXTY_HZ).unwrap();
+        assert_eq!(r.summary().dropped, 0);
+    }
+
+    #[test]
     fn zero_capacity_keeps_one_frame() {
         let mut r = Recorder::new(0, SIXTY_HZ);
         r.record(1, 0).unwrap();

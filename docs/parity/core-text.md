@@ -55,7 +55,7 @@ drawing path yet, so they are models for apps and the renderer to call, not chan
 | Core Text | Paragraph styles and tab stops | partial | springboard/ui/src/paragraph.rs (`ParagraphStyle`, `TextTab`) |
 | Core Text | Ruby annotations | partial | springboard/ui/src/ruby.rs (`RubyAnnotation`, `layout`) |
 
-All three stay partial. Metrics and the cascade are functions on `Font` and on a slice of faces; apps still get
+All four stay partial. Metrics and the cascade are functions on `Font` and on a slice of faces; apps still get
 no font object or descriptor. The paragraph model is not yet read by the attributed string drawing in
 `springboard/sdk/src/attributed.rs`, and the spacing fields are stored but not applied.
 

@@ -33,6 +33,9 @@ CPU only, operating on an 8-bit single-channel `Plane`:
 - Still missing: integral images, region statistics (mean, variance, min and max), image arithmetic,
   reductions, convolution (Sobel, Laplacian, median), Lanczos scaling, neural network and recurrent layers,
   matrix kernels, and keyed archiving of kernels. The base trait exists (see below); the binary kernel base does not.
+- No GPU path. The official classes run as compute kernels; `filter.rs` runs on the CPU.
+- Verification has not been run in this round (no build, per the stage rules). The unit tests in
+  `filter.rs` (10 tests) are the next thing to run.
 
 ## Kernel base trait (team A4)
 
@@ -44,6 +47,3 @@ CPU only, operating on an 8-bit single-channel `Plane`:
   https://developer.apple.com/documentation/metalperformanceshaders/mpskernel
 - Built on parity/team-a-04; not yet verified on Midget. The tests in `kernel.rs` (module `tests`) were written but
   not run in this round.
-- No GPU path. The official classes run as compute kernels; `filter.rs` runs on the CPU.
-- Verification has not been run in this round (no build, per the stage rules). The unit tests in
-  `filter.rs` (10 tests) are the next thing to run.

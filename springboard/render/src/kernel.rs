@@ -287,6 +287,19 @@ mod tests {
         assert_eq!(once.wrap, Wrap::Clear);
     }
 
+    fn whiten(c: [f32; 4]) -> [f32; 4] {
+        [1.0, 1.0, 1.0, c[3]]
+    }
+
+    #[test]
+    fn chain_order_matters() {
+        let src = Sampler::new(1, 1, vec![BLACK], Wrap::Edge).unwrap();
+        let white = ColorMap { name: "whiten", map: whiten };
+        let inv = ColorMap { name: "invert", map: invert };
+        assert_eq!(run_chain(&src, &[&white, &inv]).unwrap().pixels, vec![BLACK]);
+        assert_eq!(run_chain(&src, &[&inv, &white]).unwrap().pixels, vec![WHITE]);
+    }
+
     #[test]
     fn empty_chain_copies_the_source() {
         let src = Sampler::new(1, 2, vec![1, 2], Wrap::Edge).unwrap();

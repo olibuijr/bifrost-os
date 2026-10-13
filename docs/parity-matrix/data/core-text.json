@@ -103,7 +103,7 @@
    "apple": "CTRubyAnnotation, kCTRubyAnnotationAttributeName",
    "bifrost": "springboard/ui/src/ruby.rs",
    "status": "partial",
-   "note": "Pure model: RubyAnnotation, RubyPosition, RubyAlignment, RubyOverhang and layout() give the x positions of base and annotation, the overhang and the widened base, plus baseline_offset and line_extra. No caller in the drawing path yet, and no CTRubyAnnotation object for apps. built on parity/team-a-04; not yet verified on Midget."
+   "note": "Pure geometry model: RubyAnnotation, RubyPosition, RubyAlignment, RubyOverhang and layout() give the start of each annotation character, the overhang, the padding and the advance of the base run, plus baseline_offset, side_offset and line_extra. The model was added by the ct-scripts round and recorded here by parity/team-a-04. No caller in the drawing path yet, the attributed string carries no ruby attribute, and no CTRubyAnnotation object for apps. Not yet verified on Midget."
   },
   {
    "feature": "Run delegates and embedded attachments",
