@@ -1,3 +1,7 @@
+## 0.14.1
+
+- The Web Inspector console keeps its last 500 input lines for Up and Down recall; the oldest are dropped.
+
 ## 0.14.0
 
 - File > AutoFill Password fills the sign-in form of the open page from the shared passwords (the same logins as the Passwords app and Settings). The item is enabled only on a page with a password field. It picks the newest login whose site matches the page's host or a parent domain, fills the field before the password and the password, and skips notes and certificates. The app asks for the `keychain` permission and the `is.bifrost.passwords` group.

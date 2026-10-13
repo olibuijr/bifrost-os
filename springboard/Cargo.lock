@@ -444,7 +444,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-browser"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-mail"
-version = "0.4.0"
+version = "0.5.1"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

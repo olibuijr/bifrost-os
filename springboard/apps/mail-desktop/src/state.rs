@@ -12,6 +12,9 @@ use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Se
 use std::collections::HashMap;
 
 pub const INBOX: &str = "INBOX";
+/// Most message texts kept at once. Past this the lowest UIDs (the oldest mail) are dropped; a dropped text is
+/// asked for again when its message is opened.
+pub const MAX_CACHED_BODIES: usize = 64;
 /// One line of the list: a message, and in the threaded view how many messages its conversation holds.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Line {
@@ -296,6 +299,17 @@ impl Mail {
         if self.current().is_some_and(|a| a.id == account_id) && self.mailbox == mailbox {
             self.attachments.insert(uid, crate::body::attachments(&text));
             self.bodies.insert(uid, text);
+            self.trim_bodies(uid);
+        }
+    }
+
+    /// Keeps at most [`MAX_CACHED_BODIES`] texts: the open message and `keep` stay, the lowest UIDs go first.
+    fn trim_bodies(&mut self, keep: u32) {
+        while self.bodies.len() > MAX_CACHED_BODIES {
+            let victim = self.bodies.keys().copied().filter(|&u| u != keep && Some(u) != self.open).min();
+            let Some(victim) = victim else { break };
+            self.bodies.remove(&victim);
+            self.attachments.remove(&victim);
         }
     }
 
@@ -547,6 +561,22 @@ mod tests {
         assert!(!mail.open_message(3));
         mail.body_arrived("other", INBOX, 4, "not shown".into());
         assert!(!mail.bodies.contains_key(&4));
+    }
+
+    #[test]
+    fn the_text_cache_stays_bounded_and_keeps_the_open_message() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let rows: Vec<Listed> = (1..=(MAX_CACHED_BODIES as u32 + 40)).map(|u| listed(u, "x")).collect();
+        mail.apply_listing("work", INBOX, vec![], rows);
+        assert!(mail.open_message(1));
+        for uid in 1..=(MAX_CACHED_BODIES as u32 + 40) {
+            mail.body_arrived("work", INBOX, uid, format!("body {uid}"));
+        }
+        assert_eq!(mail.bodies.len(), MAX_CACHED_BODIES);
+        assert_eq!(mail.attachments.len(), mail.bodies.len(), "attachments leave with their texts");
+        assert!(mail.bodies.contains_key(&(MAX_CACHED_BODIES as u32 + 40)), "the newest text is kept");
+        assert!(!mail.bodies.contains_key(&2), "the lowest UID went first");
+        assert!(mail.open_message(2), "a dropped text is asked for again");
     }
 
     #[test]

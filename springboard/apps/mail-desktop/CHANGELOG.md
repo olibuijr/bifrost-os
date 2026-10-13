@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.1
+
+- Mail keeps at most 64 message texts in memory. The oldest are dropped first, and a dropped message is loaded again when it is opened, so a long session in one mailbox no longer grows without bound. The open message is never dropped.
+
 ## 0.5.0 — 2026-10-13
 
 - Message > Print... (Cmd+P) prints the open message's headers and decoded body as plain text, through the shared print

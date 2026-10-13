@@ -195,7 +195,7 @@ impl SystemService for NotifyBus {
     }
 
     fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
-        let running = |app: &str| super::apphost::slot_of(app).is_some_and(|slot| shell.ext.get(slot).is_some_and(|h| h.is_some()));
+        let running = |app: &str| crate::shell::apphost::slot_of(app).is_some_and(|slot| shell.ext.get(slot).is_some_and(|h| h.is_some()));
         self.prune(running);
         let now = Seen {
             light: bifrost_render::appearance::target_is_light(),
