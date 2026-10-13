@@ -185,9 +185,9 @@
    "area": "view",
    "apple": "day/week view direct manipulation",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/layout.rs:91",
-   "note": "drag_create/drag_move geometry exists and is tested but timeview/touch handling never calls it",
-   "wire": "In Calendar::touch (calendar.rs) on Down+Move in a time column, use layout::drag_create for a new draft and layout::drag_move for a pressed event, save on Up; draw the live block in timeview.rs draw_time."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/drag.rs:78",
+   "note": "Press, hold 250 ms, then drag: empty space draws out a new event (editor opens on release), an event moves in time and across days (saved); a press that moves at once still scrolls; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Drag at once (no 250 ms hold) when the pointer is a mouse and scrolling has another input; drag all-day events between days; resize an event by its edge."
   },
   {
    "feature": "CalDAV accounts sync",

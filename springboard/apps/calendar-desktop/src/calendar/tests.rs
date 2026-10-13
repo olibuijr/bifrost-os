@@ -980,3 +980,136 @@ fn the_file_commands_are_menu_items_for_the_app_to_run() {
     c.activate(&ui, Target::Add, 0.0);
     assert!(!c.enabled(Command::Import) && !c.enabled(Command::ExportArchive));
 }
+
+/// Window pixels at the middle of minute `minute` in day column `col` of the Week view's hour grid.
+fn grid_xy(c: &Calendar, ui: &Ui, col: usize, minute: u32) -> (f32, f32) {
+    let (gut, col_w) = c.col_geometry(ui);
+    let top = ui.pt(timeview::GRID0 + timeview::ALLDAY_H) - c.scroll.offset();
+    (c.x0 + gut + col_w * (col as f32 + 0.5), top + (minute as f32 + 0.5) / 60.0 * ui.pt(c.prefs.hour_h))
+}
+
+fn week_calendar(ui: &Ui, file: PathBuf) -> Calendar {
+    let mut c = new(ui, file);
+    c.activate(ui, Target::View(View::Week), 0.0);
+    c
+}
+
+#[test]
+fn holding_then_dragging_on_empty_space_draws_out_a_new_event() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = week_calendar(&ui, temp.file());
+    // Sunday 4 October is column 0, so column 3 is Wednesday the 7th
+    let (x, y) = grid_xy(&c, &ui, 3, 600);
+    let (_, y2) = grid_xy(&c, &ui, 3, 690);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x, y + 1.0), 300.0);
+    assert!(c.drag.is_some(), "held long enough, the move drags");
+    c.touch(&ui, Event::Move(x, y2), 400.0);
+    assert_eq!(c.drag.map(|d| d.span), Some(layout::DragSpan { start: 600, end: 705 }));
+    c.touch(&ui, Event::Up(x, y2), 450.0);
+    assert!(c.drag.is_none());
+    let draft = c.editor.as_ref().expect("the editor opens on the drawn-out event");
+    assert!(!draft.existing);
+    assert_eq!((draft.event.date, draft.event.minute, draft.event.duration), (date(2026, 10, 7), 600, 105));
+    assert!(c.events.is_empty(), "nothing is saved until Save");
+    assert_eq!(c.selected, date(2026, 10, 7));
+}
+
+#[test]
+fn dragging_upwards_works_too_and_a_drawn_event_takes_the_default_alert() {
+    use prefs::Setting;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = week_calendar(&ui, temp.file());
+    c.change_setting(&ui, Setting::Alert(3));
+    let (x, y) = grid_xy(&c, &ui, 1, 720);
+    let (_, y2) = grid_xy(&c, &ui, 1, 660);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x, y2), 300.0);
+    c.touch(&ui, Event::Up(x, y2), 310.0);
+    let e = c.editor.as_ref().unwrap().event.clone();
+    assert_eq!((e.date, e.minute, e.duration, e.alert), (date(2026, 10, 5), 660, 75, 3));
+}
+
+#[test]
+fn holding_then_dragging_an_event_moves_it_to_another_day_and_time() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = week_calendar(&ui, temp.file());
+    // the event is on Sunday the 4th at 09:00 for an hour; grab it 20 minutes in and drop it on Tuesday near 13:20
+    let (x, y) = grid_xy(&c, &ui, 0, 560);
+    let (x2, y2) = grid_xy(&c, &ui, 2, 800);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x, y + 1.0), 300.0);
+    c.touch(&ui, Event::Move(x2, y2), 400.0);
+    assert_eq!(c.drag.map(|d| (d.day, d.span.start)), Some((date(2026, 10, 6), 780)));
+    c.touch(&ui, Event::Up(x2, y2), 450.0);
+    assert!(c.editor.is_none(), "a moved event does not open the editor");
+    let moved = &c.events[0];
+    assert_eq!((moved.date, moved.minute, moved.duration), (date(2026, 10, 6), 780, 60));
+    assert_eq!(c.notice.as_deref(), Some("Moved Standup to 13:00"));
+    let again = new(&ui, temp.file());
+    assert_eq!((again.events[0].date, again.events[0].minute), (date(2026, 10, 6), 780), "saved");
+}
+
+#[test]
+fn a_press_that_moves_at_once_still_scrolls() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = week_calendar(&ui, temp.file());
+    let before = c.scroll.offset();
+    let (x, y) = grid_xy(&c, &ui, 3, 600);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x, y + ui.pt(60.0)), 40.0);
+    c.touch(&ui, Event::Move(x, y + ui.pt(120.0)), 80.0);
+    assert!(c.drag.is_none(), "not held, so not a drag");
+    c.touch(&ui, Event::Up(x, y + ui.pt(120.0)), 120.0);
+    assert!(c.editor.is_none() && c.events.is_empty());
+    assert_ne!(c.scroll.offset(), before, "the grid scrolled");
+}
+
+#[test]
+fn a_quick_tap_on_an_event_in_the_week_still_opens_it() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = week_calendar(&ui, temp.file());
+    let (x, y) = grid_xy(&c, &ui, 0, 560);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Up(x, y), 50.0);
+    assert!(c.drag.is_none());
+    assert!(c.editor.as_ref().is_some_and(|d| d.existing && d.event.id == 1));
+}
+
+#[test]
+fn a_drag_that_ends_where_it_began_changes_nothing() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = week_calendar(&ui, temp.file());
+    let (x, y) = grid_xy(&c, &ui, 0, 560);
+    c.touch(&ui, Event::Down(x, y), 0.0);
+    c.touch(&ui, Event::Move(x, y + 1.0), 300.0);
+    c.touch(&ui, Event::Up(x, y + 1.0), 350.0);
+    assert!(c.editor.is_none());
+    assert_eq!((c.events[0].date, c.events[0].minute), (date(2026, 10, 4), 540));
+    assert!(c.notice.is_none());
+}
+
+#[test]
+fn nothing_drags_in_the_month_grid_or_the_hour_labels() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.touch(&ui, Event::Down(500.0, 700.0), 0.0);
+    c.touch(&ui, Event::Move(520.0, 720.0), 400.0);
+    assert!(c.drag.is_none() && c.press.is_none(), "the month grid does not drag");
+    c.touch(&ui, Event::Up(520.0, 720.0), 450.0);
+    let mut w = week_calendar(&ui, temp.file());
+    let (gut, _) = w.col_geometry(&ui);
+    let (_, y) = grid_xy(&w, &ui, 0, 600);
+    w.touch(&ui, Event::Down(w.x0 + gut / 2.0, y), 0.0);
+    assert!(w.press.is_none(), "the hour labels scroll, they do not draw events");
+}

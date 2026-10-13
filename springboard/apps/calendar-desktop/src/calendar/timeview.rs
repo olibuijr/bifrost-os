@@ -16,14 +16,14 @@ use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, SEPARA
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CALLOUT_PT, MAC_TITLE3_PT};
 use super::chrome::cal_colour;
 
-const GRID0: f32 = 192.0;
+pub(super) const GRID0: f32 = 192.0;
 /// Week view: the weekday names, the day badge and the day number (points below the top).
 const WEEKDAY_Y_PT: f32 = 150.0;
 const DAY_BADGE_Y_PT: f32 = 158.0;
 const DAY_NUM_Y_PT: f32 = 173.0;
 /// Year view: the top of the month grid.
 const YEAR_TOP_PT: f32 = 140.0;
-const ALLDAY_H: f32 = 28.0;
+pub(super) const ALLDAY_H: f32 = 28.0;
 const GUTTER: f32 = 52.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,7 +68,7 @@ impl Calendar {
     }
 
     /// Days shown as columns: the selected day, or its week (Sunday first, or Monday with the setting).
-    fn view_days(&self) -> Vec<Date> {
+    pub(super) fn view_days(&self) -> Vec<Date> {
         if self.view == View::Day {
             return vec![self.selected];
         }
@@ -120,14 +120,14 @@ impl Calendar {
         };
     }
 
-    fn col_geometry(&self, ui: &Ui) -> (f32, f32) {
+    pub(super) fn col_geometry(&self, ui: &Ui) -> (f32, f32) {
         let n = if self.view == View::Day { 1.0 } else { 7.0 };
         let gut = ui.pt(GUTTER);
         (gut, (self.w as f32 - gut - ui.pt(SPACE_S)) / n)
     }
 
     /// Screen rectangles `(id, x, y, w, h)` of every event in the grid.
-    fn time_rects(&self, ui: &Ui) -> Vec<(u64, f32, f32, f32, f32)> {
+    pub(super) fn time_rects(&self, ui: &Ui) -> Vec<(u64, f32, f32, f32, f32)> {
         let (gut, col_w) = self.col_geometry(ui);
         let top = ui.pt(GRID0) - self.scroll.offset();
         let hours_top = top + ui.pt(ALLDAY_H);
@@ -270,7 +270,15 @@ impl Calendar {
                 .iter()
                 .map(|e| (e.id, e.title.clone(), e.minute, e.all_day))
                 .collect();
+            // the event being moved is drawn at the pointer instead
+            let lifted = self.drag.and_then(|d| match d.kind {
+                super::drag::Kind::Move { id, .. } => Some(id),
+                super::drag::Kind::Create { .. } => None,
+            });
             for (id, x, y, rw, rh) in rects {
+                if lifted == Some(id) {
+                    continue;
+                }
                 let Some((_, title, minute, all_day)) = by_id.iter().find(|e| e.0 == id) else {
                     continue;
                 };
@@ -286,6 +294,7 @@ impl Calendar {
                     }
                 }
             }
+            self.draw_drag(&mut g, ui, hours_top, hh, gut, col_w, &days);
             if let Some(i) = days.iter().position(|d| *d == self.today) {
                 if let Some(y) = layout::now_line_y(now_min, hours_top, hh) {
                     g.fill_rrect(gut + col_w * i as f32, y, col_w, ui.pt(1.5), 0.0, red());

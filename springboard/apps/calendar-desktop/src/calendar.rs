@@ -5,6 +5,7 @@ pub mod archive;
 mod chrome;
 pub mod clip;
 pub mod connect;
+mod drag;
 pub mod exchange;
 mod goto;
 pub mod ics;
@@ -175,6 +176,9 @@ pub struct Calendar {
     editor: Option<Draft>,
     /// Go to Date: the date the sheet shows while it is open (`goto.rs`).
     goto: Option<Date>,
+    /// A press in the Day or Week grid that becomes a drag if it is held, and the drag itself (`drag.rs`).
+    press: Option<drag::Press>,
+    drag: Option<drag::Drag>,
     /// The event last opened or saved: what Copy and Cut act on while it is on the shown day (`clip.rs`).
     picked: Option<u64>,
     /// Title, Location, Notes.
@@ -268,6 +272,8 @@ impl Calendar {
             text_style: (ui.text_scale, ui.bold),
             editor: None,
             goto: None,
+            press: None,
+            drag: None,
             picked: None,
             fields,
             labels: TextCache::default(),
@@ -997,9 +1003,12 @@ impl Calendar {
                 if self.scrolling {
                     self.scroll.down(y, t);
                 }
+                self.begin_press(ui, x, y, t);
             }
             Event::Move(..) => {
-                if self.scrolling {
+                if self.track_drag(ui, x, y, t) {
+                    // a press held and dragged in the hour grid: the block follows the pointer
+                } else if self.scrolling {
                     self.scroll.moved(y, t);
                     if self.scroll.dragging() {
                         self.pressed = None;
@@ -1012,6 +1021,14 @@ impl Calendar {
                 }
             }
             Event::Up(..) => {
+                if self.drag.is_some() {
+                    self.finish_drag(ui, t);
+                    self.pressed = None;
+                    self.start = None;
+                    self.scrolling = false;
+                    return;
+                }
+                self.press = None;
                 let pressed = self.pressed.take();
                 self.start = None;
                 let tap = if std::mem::take(&mut self.scrolling) {
