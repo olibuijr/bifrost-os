@@ -2,20 +2,25 @@
 
 One MCP tool (`springboard/mcp/src/browser.rs`) for web development and daily-driver checks in the BifrOSt
 Browser. It maps each `action` to a `browser.*` method on the Browser's app control socket
-(`/var/lib/springboard/appdata/is.olibuijr.browser.desktop/control.sock`, JSON-RPC 2.0, same uid) through
+(`$XDG_RUNTIME_DIR/bifrost/apps/is.olibuijr.browser.desktop.sock`, found by `sys::app_sockets`; JSON-RPC 2.0, same uid) through
 `sys::app_rpc`. It launches the Browser (`open-app`) and waits up to 15 s for the socket if it is not running.
 The method contract lives with the devtools-browser track; this tool consumes it exactly.
 
 | action | method | notes |
 |---|---|---|
 | state, tabs | browser.state, browser.tabs | tabs prints `*id [index] url "title"`, `*` = current |
-| new_tab, select_tab, close_tab, reopen_tab | browser.tab.* | `id` = tab id |
+| new_tab, select_tab, close_tab, reopen_tab | browser.tab.* | `id` = tab id; `new_tab` takes `url`, `background` |
+| favicon | browser.favicon | `id` = tab id |
+| downloads | browser.downloads | `cancel`, `clear` |
+| bookmarks | browser.bookmarks | `op`, `url`, `title`, `query`, `limit` |
+| history | browser.history | `query`, `limit`, `remove`, `clear` |
+| storage, styles | browser.eval | run page JS in the tab. `storage`: `kind` local, session, cookie or all; `key` alone reads, `key`+`value` sets, `key`+`delete` removes. `styles`: computed styles of `selector` |
 | navigate | browser.navigate | `wait` load (default), commit, none; reply `loaded URL "title" (tab N)` |
 | back, forward, reload | browser.back/forward/reload | `hard` on reload |
 | eval | browser.eval | result text; a JS error is an `isError` result |
 | console, network | browser.console / browser.network | cursor per session via `next_seq`; filters `level`, `text`; `follow_ms` waits for new rows; `reset`, `since_seq`, `clear` |
 | dom | browser.dom | mode query (default, rects), outer_html, text, attrs; html capped at 200 KB |
-| screenshot | browser.screenshot | image content block + saved `/tmp/bifrost-browser-shot-N.png`; scale info in the text. `scale` (0.1 to 4) resamples the PNG in the Browser app (box filter down, bilinear up); `width`/`height` in the reply are the scaled size |
+| screenshot | browser.screenshot | image content block + saved `/tmp/bifrost-browser-shot-N.png`; scale info in the text. Also `full_page`, `selector`, `rect`. `scale` (0.1 to 4) resamples the PNG in the Browser app (box filter down, bilinear up); `width`/`height` in the reply are the scaled size |
 | wait | browser.wait | for load, selector, js, console, idle |
 | viewport, zoom, find, user_agent | same names | emulation presets or custom size/dpr |
 | input | browser.input | click/move/key/text/scroll; `selector` resolves to the element centre via dom |
