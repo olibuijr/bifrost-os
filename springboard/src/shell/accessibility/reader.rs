@@ -15,6 +15,7 @@
 //! magnification and are not laid out as a list yet), a Settings sidebar in a split window, rows scrolled out of view, and
 //! the built-in apps. See docs/parity/wire6-a11y-roles.md.
 
+use super::earcons::{Earcon, ReaderEvent};
 use super::tree::{add_app_tree, AxState};
 use super::walk::{self, SETTINGS};
 #[cfg(feature = "desktop-wayland")]
@@ -47,6 +48,10 @@ pub struct Reader {
     pending: bool,
     /// the last frame drew a ring, so the frame that removes it repaints the area
     drawn: bool,
+    /// the sound option is off: no earcon is queued (false, the default, keeps them on)
+    silent: bool,
+    /// earcons asked for since the shell last took them
+    earcons: Vec<Earcon>,
 }
 
 impl Reader {
@@ -63,6 +68,7 @@ impl Reader {
         let live: Vec<&'a Element> = els.iter().filter(|e| e.enabled && walk::in_rotor(e, rotor)).collect();
         if live.is_empty() {
             self.cursor = None;
+            self.cue(ReaderEvent::Failed);
             return None;
         }
         let n = live.len();
@@ -73,6 +79,8 @@ impl Reader {
             (Some(p), true) => (p + 1) % n,
             (Some(p), false) => (p + n - 1) % n,
         };
+        let wrapped = at.is_some_and(|p| if forward { next < p } else { next > p });
+        self.cue(if wrapped { ReaderEvent::Wrapped } else { ReaderEvent::FocusMoved });
         let e = live[next];
         self.cursor = Some(e.address.clone());
         Some(e)
@@ -81,8 +89,29 @@ impl Reader {
     /// Moves to the next (`forward`) or previous rotor, wrapping, and returns the rotor it lands on.
     pub fn cycle_rotor(&mut self, forward: bool) -> usize {
         let n = walk::rotor_count();
+        self.cue(ReaderEvent::RotorChanged);
         self.rotor = if forward { (self.rotor + 1) % n } else { (self.rotor + n - 1) % n };
         self.rotor
+    }
+
+    /// Turns the earcons on or off (the reader's sound option).
+    pub fn set_sounds(&mut self, on: bool) {
+        self.silent = !on;
+        if !on {
+            self.earcons.clear();
+        }
+    }
+
+    /// Asks for the earcon of `event`, unless sounds are off.
+    pub fn cue(&mut self, event: ReaderEvent) {
+        if !self.silent {
+            self.earcons.push(Earcon::for_event(event));
+        }
+    }
+
+    /// The earcons asked for since the last call, in order; the shell's sound player plays them.
+    pub fn take_earcons(&mut self) -> Vec<Earcon> {
+        std::mem::take(&mut self.earcons)
     }
 
     /// The rotor index the cursor walks.
@@ -239,6 +268,7 @@ impl Shell {
         let els = self.reader_walk();
         let Some(el) = self.reader.focused(&els).cloned() else { return Vec::new() };
         if !el.enabled {
+            self.reader.cue(ReaderEvent::Failed);
             self.announce.post(&walk::speech(&el), AnnouncePriority::High);
             return Vec::new();
         }
@@ -273,6 +303,7 @@ impl Shell {
             },
             _ => Vec::new(),
         };
+        self.reader.cue(ReaderEvent::Activated);
         self.dirty = true;
         fx
     }
@@ -372,6 +403,43 @@ mod tests {
         r.step(&els, true);
         els.insert(0, el("settings/new", "page", "New", "", true));
         assert_eq!(r.focused(&els).map(|e| e.name.as_str()), Some("C"));
+    }
+
+    #[test]
+    fn a_move_queues_a_focus_earcon_and_a_wrap_queues_the_wrap_earcon() {
+        let els = page();
+        let mut r = Reader::default();
+        r.step(&els, true);
+        assert_eq!(r.take_earcons(), vec![Earcon::Focus]);
+        r.step(&els, true);
+        r.step(&els, true);
+        r.take_earcons();
+        r.step(&els, true);
+        assert_eq!(r.take_earcons(), vec![Earcon::Wrap], "forward past the last wraps");
+        r.step(&els, false);
+        assert_eq!(r.take_earcons(), vec![Earcon::Wrap], "back from the first wraps");
+        assert!(r.take_earcons().is_empty(), "taking drains the queue");
+    }
+
+    #[test]
+    fn nothing_to_read_and_rotor_changes_queue_their_earcons() {
+        let mut r = Reader::default();
+        r.step(&[], true);
+        r.cycle_rotor(true);
+        assert_eq!(r.take_earcons(), vec![Earcon::Error, Earcon::PageTurn]);
+    }
+
+    #[test]
+    fn no_earcon_is_queued_when_sounds_are_off() {
+        let els = page();
+        let mut r = Reader::default();
+        r.set_sounds(false);
+        r.step(&els, true);
+        r.cue(ReaderEvent::Failed);
+        assert!(r.take_earcons().is_empty());
+        r.set_sounds(true);
+        r.step(&els, true);
+        assert_eq!(r.take_earcons(), vec![Earcon::Focus]);
     }
 
     #[test]
