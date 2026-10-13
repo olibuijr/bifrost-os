@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.6 — 2026-10-13
+
+- Smoothness: the key-state fast path also takes an app frame that is still a few pixels larger than its window (the size the app first drew at), clipped to the body as the full draw clips it; such switches fell back to drawing the whole window.
+
 ## 0.7.5 — 2026-10-13
 
 - Smoothness: a built-in window keeps its last body, so when only the key state moves (another window comes forward) and nothing in it changed since it was drawn, the body is reused and only the frame, the dim and the lights are drawn.

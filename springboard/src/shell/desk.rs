@@ -1610,7 +1610,10 @@ impl Shell {
                     let width=w.r.w as usize; let height=w.r.h as usize; let top=title_of(w.app,&m) as usize;
                     let body_h=height.saturating_sub(top);
                     let mapped=self.ext.get(slot as usize).and_then(Option::as_ref).filter(|h|h.running()).and_then(|h|h.frame()).map(|(_,w,h)|(w,h));
-                    if (unchanged || refocus) && !self.keyboard.shown() && !self.keyboard.animating() && mapped==Some((width,body_h)) {
+                    // on a key-state change the app's last frame may still be a few pixels larger than the window (the
+                    // size it first drew at); `blit` clips it to the body exactly as the full draw would, so it is taken
+                    let fits = mapped==Some((width,body_h)) || (refocus && mapped.is_some_and(|(mw,mh)| mw>=width && mh>=body_h));
+                    if (unchanged || refocus) && !self.keyboard.shown() && !self.keyboard.animating() && fits {
                         let mut retained=cached.take().unwrap();
                         retained.focused=focused;
                         let pixels=std::sync::Arc::make_mut(&mut retained.pixels);
