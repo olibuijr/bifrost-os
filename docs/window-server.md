@@ -286,9 +286,10 @@ What the compositor does:
   only: X11 applications get keys from the virtual keyboard, not text. The window server's chords (`keybindings.rs`) are
   intercepted before the keys reach an input method's keyboard grab, so a keyboard that grabs the keys never sees them.
 
-Binding the on-screen keyboard (`docs/keyboard-system-app.md`): the keyboard app is an SDK app, not a Wayland client, so the
-shell (`src/bare/wayland.rs`, the shell's own connection to `bifrost-wm`) binds `zwp_input_method_manager_v2` and
-`zwp_virtual_keyboard_manager_v1` once and translates, using the mapping already written in `src/shell/textinput.rs`:
+Binding the on-screen keyboard (`docs/keyboard-system-app.md`), planned and not written yet: the keyboard app is an SDK app,
+not a Wayland client, so the shell (`src/bare/wayland.rs`, the shell's own connection to `bifrost-wm`) is to bind
+`zwp_input_method_manager_v2` and `zwp_virtual_keyboard_manager_v1` once and translate, using the mapping already written in
+`src/shell/textinput.rs`:
 
 | Input method event | Shell action |
 |---|---|
@@ -301,4 +302,4 @@ shell (`src/bare/wayland.rs`, the shell's own connection to `bifrost-wm`) binds 
 | `KeyboardOut::Enter` and arrows | virtual-keyboard keys (no input-method request carries them) |
 | popup surface (candidates) | `get_input_popup_surface`, placed by the compositor |
 
-The shell counts `done` events and sends that number as `serial` in `commit`.
+The shell is to count `done` events and send that number as `serial` in `commit`.
