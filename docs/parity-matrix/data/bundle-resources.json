@@ -3,8 +3,8 @@
   "doc": "https://developer.apple.com/documentation/bundleresources",
   "macos_since": "10.0",
   "status": "partial",
-  "bifrost": "springboard/src/shell/apphost.rs (Manifest), springboard/src/shell/store/install.rs (parse_manifest, install_archive), springboard/src/bare/app_policy.rs (Policy::with_entitlements, Policy::from_permissions, prepare_data), springboard/sdk/src/locale.rs (Bundle, set_main_bundle), springboard/ui/src/launch.rs (Handler), springboard/sdk/src/workspace.rs",
-  "summary": "BifrOSt covers the app package manifest, permission and entitlement gating, a fixed package layout and localized string bundles. It has no Info.plist, no privacy manifest for declaring collected data or required-reason APIs, and no universal links (applinks) service.",
+  "bifrost": "springboard/src/shell/apphost.rs (Manifest), springboard/src/shell/store/install.rs (parse_manifest, install_archive), springboard/src/bare/app_policy.rs (Policy::with_entitlements, Policy::from_permissions, prepare_data), springboard/sdk/src/locale.rs (Bundle, set_main_bundle), springboard/ui/src/launch.rs (Handler), springboard/sdk/src/workspace.rs, springboard/sdk/src/bundle_resources.rs (association file model)",
+  "summary": "BifrOSt covers the app package manifest, permission and entitlement gating, a fixed package layout, localized string bundles and a model of domain association files for universal links. It has no Info.plist, and the universal links model is not yet fetched, verified or wired into the shell.",
   "rea_evidence": "ev_245e8b8557d7a64dd4d2b2b588dff39b3c6f7443c6959b6b4c47f2a11448de12",
   "features": [
     {
@@ -66,14 +66,14 @@
     {
       "feature": "Universal links service (applinks)",
       "apple": "applinks: apple-app-site-association domain verification that routes https links to the app",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No domain association file, no verification and no https link routing to a non-browser app. The browser claims http and https by default (springboard/src/shell/defaultapps.rs builtin)."
+      "bifrost": "springboard/sdk/src/bundle_resources.rs (AssociationFile::parse, AssociationFile::route, split_https)",
+      "status": "partial",
+      "note": "Pure model of the domain association file: parses the applinks details (app ids, path rules with * and exclude, and the older paths list) and routes an https path to the installed app that claims it. Not wired: the file is not fetched or verified over https and the shell does not send https links to apps yet. The browser still claims http and https by default (springboard/src/shell/defaultapps.rs builtin). built on parity/team-a-06; not yet verified on Midget."
     }
   ],
   "gaps": [
     "No privacy manifest: an app cannot declare the data it collects or its required-reason API use (Privacy manifest files).",
-    "No universal links service: https links cannot be routed to an installed app by domain association.",
+    "Universal links are not live: the association file is not fetched or verified over https, and the shell does not route https links to apps (springboard/sdk/src/bundle_resources.rs holds only the model).",
     "No Info.plist equivalent with CFBundle-style keys; manifest.toml is the only identity file and it is not a plist.",
     "URL-scheme routing by the shell is not wired for non-web schemes (docs/default-apps.md, Not done yet).",
     "Entitlements are limited to log-store; there is no general entitlements file and no signing.",
