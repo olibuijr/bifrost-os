@@ -696,6 +696,7 @@ pub mod vertical_text;
 pub mod ruby;
 pub mod services_menu;
 pub mod look_up;
+pub mod stardict;
 pub use bifrost_render::cg;
 pub mod pdfpage;
 pub mod pdfselect;

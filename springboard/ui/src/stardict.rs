@@ -1,10 +1,22 @@
-//! Dictionaries for the Dictionary app, in the StarDict layout (an `.ifo` description, an `.idx` word index and a
-//! `.dict` data file, as dictd-style packages ship them). Parsing and lookup are pure; reading a definition from the
-//! data file is the only I/O. A plain word list gives a spelling answer when no installed dictionary defines a word.
+//! Dictionaries for the Dictionary app and the Look Up popover, in the StarDict layout (an `.ifo` description, an `.idx`
+//! word index and a `.dict` data file, as dictd-style packages ship them). Parsing and lookup are pure; reading a
+//! definition from the data file is the only I/O. A plain word list gives a spelling answer when no installed
+//! dictionary defines a word.
 
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+
+/// The system's StarDict folder, read after the app's own dictionaries.
+pub const SYSTEM_DICTIONARIES: &str = "/usr/share/stardict";
+/// The system word list (one word per line), for spelling answers.
+pub const WORD_LIST: &str = "/usr/share/dict/words";
+
+/// Loads every dictionary an app's data folder and the system hold, and the word list. Shared by the Dictionary app
+/// and the shell's Look Up popover, so both read the same dictionaries.
+pub fn load_library(data_dir: &Path) -> Library {
+    Library::load(&[data_dir.join("dictionaries"), PathBuf::from(SYSTEM_DICTIONARIES)], Path::new(WORD_LIST))
+}
 
 /// The first line of every `.ifo` file.
 const IFO_MAGIC: &str = "StarDict's dict ifo file";
