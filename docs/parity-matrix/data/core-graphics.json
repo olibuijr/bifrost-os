@@ -10,37 +10,37 @@
   {
    "feature": "Bitmap drawing context (CGContext, bitmap contexts)",
    "apple": "CGContext, CGBitmapContextCreate (Creating Bitmap Graphics Contexts)",
-   "bifrost": "springboard/render/src/gfx.rs:636 (Surface), springboard/sdk/src/widgets.rs; wired: springboard/apps/freeform-desktop/src/style.rs (Bitmap)",
+   "bifrost": "springboard/render/src/gfx.rs:636 (Surface), springboard/sdk/src/widgets.rs; wired: springboard/apps/freeform-desktop/src/style.rs (Bitmap); springboard/sdk/src/graphics_context.rs, graphics_stroke.rs, graphics_gradient.rs",
    "status": "partial",
-   "note": "Apps draw into a Surface over a pixel buffer, which is an immediate-mode canvas. There is no context object with a graphics state stack (save and restore) and no PDF or page context. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+   "note": "Apps draw into a Surface over a pixel buffer, which is an immediate-mode canvas. There is no context object with a graphics state stack (save and restore) and no PDF or page context. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. GraphicsContext keeps a gstate stack (save_gstate, restore_gstate) with CTM, clip, colours, alpha, blend, shadow and line parameters, and draws into a premultiplied Layer; Canvas::draw is the view draw callback. Host tests only, no PDF context; verify on Midget."
   },
   {
    "feature": "Path construction and stroking (CGPath, CGMutablePath)",
    "apple": "CGPath, CGMutablePath, move/add/close, fill and stroke path",
-   "bifrost": "springboard/render/src/cg/path.rs (Path, Affine, copy_by_dashing), springboard/render/src/cg/raster.rs (dash_polyline, fill_stroke), springboard/render/src/gradient.rs",
+   "bifrost": "springboard/render/src/cg/path.rs (Path, Affine, copy_by_dashing), springboard/render/src/cg/raster.rs (dash_polyline, fill_stroke), springboard/render/src/gradient.rs; springboard/sdk/src/graphics_context.rs, graphics_stroke.rs, graphics_gradient.rs",
    "status": "partial",
-   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No public path type. Bezier flattening exists only for glyph outlines inside the font engine. Apps cannot draw an arbitrary path. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No public path type. Bezier flattening exists only for glyph outlines inside the font engine. Apps cannot draw an arbitrary path. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Path has add_arc, add_curve, add_quad_curve, add_ellipse, add_rect, add_rounded_rect, add_path, transformed, contains and bounding_box. The stroker supports butt, round and square caps, miter, round and bevel joins, a miter limit and dashes. Host tests only; verify on Midget."
   },
   {
    "feature": "Primitive shapes (rects, rounded rects, lines, ellipses, arcs)",
    "apple": "CGContextFillRect, CGContextStrokeRect, CGContextAddEllipseInRect, CGContextAddArc, lines",
-   "bifrost": "springboard/render/src/gfx.rs:772 fill_rect, :781 fill_rrect, :837 stroke_rrect, :614-622 rrect_coverage and rrect_mask, :590 squircle_mask",
+   "bifrost": "springboard/render/src/gfx.rs:772 fill_rect, :781 fill_rrect, :837 stroke_rrect, :614-622 rrect_coverage and rrect_mask, :590 squircle_mask; springboard/sdk/src/graphics_context.rs, graphics_stroke.rs, graphics_gradient.rs",
    "status": "partial",
-   "note": "Axis-aligned rectangles, rounded rectangles and squircles are covered, with anti-aliased edges for rounded shapes. Lines, ellipses and arcs have no call."
+   "note": "Axis-aligned rectangles, rounded rectangles and squircles are covered, with anti-aliased edges for rounded shapes. Lines, ellipses and arcs have no call. Rect, ellipse, rounded rect and arc paths fill and stroke through GraphicsContext with a scanline coverage rasterizer. Host tests only; verify on Midget."
   },
   {
    "feature": "Clipping",
    "apple": "CGContextClip, clip rect and clip path, CGContextClipToRect",
-   "bifrost": "springboard/render/src/cg/context.rs (clip_to_rect, clip_to_rects, clip_to_path, clip_to_mask, reset_clip), springboard/render/src/cg/raster.rs (Coverage::clipped_by)",
+   "bifrost": "springboard/render/src/cg/context.rs (clip_to_rect, clip_to_rects, clip_to_path, clip_to_mask, reset_clip), springboard/render/src/cg/raster.rs (Coverage::clipped_by); springboard/sdk/src/graphics_context.rs, graphics_stroke.rs, graphics_gradient.rs",
    "status": "partial",
-   "note": "The clip model (Wave 3, theme-19) is gone, so no code implements this row. The Surface has no clip. Scroll views redraw the whole window in some cases to avoid clipping."
+   "note": "The clip model (Wave 3, theme-19) is gone, so no code implements this row. The Surface has no clip. Scroll views redraw the whole window in some cases to avoid clipping. clip_to_rect, clip (non-zero) and clip_with (even-odd) intersect an anti-aliased coverage mask that save_gstate and restore_gstate restore. Host tests only; verify on Midget."
   },
   {
    "feature": "Affine transforms and transform stack (CGAffineTransform, CTM)",
    "apple": "CGAffineTransform, CGContextConcatCTM, CGContextTranslateCTM, CGContextScaleCTM, CGContextRotateCTM",
-   "bifrost": "springboard/render/src/cg/path.rs (Affine, Path), springboard/render/src/gradient.rs; wired: springboard/render/src/cg/path.rs (Affine, used by springboard/apps/freeform-desktop/src/freeform.rs edit())",
+   "bifrost": "springboard/render/src/cg/path.rs (Affine, Path), springboard/render/src/gradient.rs; wired: springboard/render/src/cg/path.rs (Affine, used by springboard/apps/freeform-desktop/src/freeform.rs edit()); springboard/sdk/src/graphics_context.rs, graphics_stroke.rs, graphics_gradient.rs",
    "status": "partial",
-   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The compositor applies transforms to whole window surfaces for window effects. Apps have no per-draw transform stack or CGAffineTransform type. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The compositor applies transforms to whole window surfaces for window effects. Apps have no per-draw transform stack or CGAffineTransform type. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Affine mirrors CGAffineTransform (concatenating, inverted, translated_by, scaled_by, rotated_by); the context exposes ctm, concatenate, translate_by, scale_by and rotate_by. Host tests only; verify on Midget."
   },
   {
    "feature": "Colour and colour spaces (CGColor, CGColorSpace)",
@@ -52,9 +52,9 @@
   {
    "feature": "Gradients (linear and radial, CGGradient)",
    "apple": "CGGradient, CGContextDrawLinearGradient, CGContextDrawRadialGradient",
-   "bifrost": "springboard/render/src/cg/path.rs (Affine, Path), springboard/render/src/gradient.rs; wired: springboard/render/src/gradient.rs (used by springboard/apps/freeform-desktop/src/style.rs fill_polygon)",
+   "bifrost": "springboard/render/src/cg/path.rs (Affine, Path), springboard/render/src/gradient.rs; wired: springboard/render/src/gradient.rs (used by springboard/apps/freeform-desktop/src/style.rs fill_polygon); springboard/sdk/src/graphics_context.rs, graphics_stroke.rs, graphics_gradient.rs",
    "status": "partial",
-   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Gradients exist only inside the browser's tile painter, behind private functions. The SDK does not expose a gradient fill. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Gradients exist only inside the browser's tile painter, behind private functions. The SDK does not expose a gradient fill. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Gradient (stops, evenly spaced colours) with draw_linear_gradient and draw_radial_gradient (two circles, draws_before_start and draws_after_end), painted through the clip with alpha and blend mode. No shadow under gradients. Host tests only; verify on Midget."
   },
   {
    "feature": "Shadings and gradient functions (CGShading, CGFunction)",
@@ -108,9 +108,9 @@
   {
    "feature": "Layers and offscreen reusable content (CGLayer)",
    "apple": "CGLayer, CGLayerCreateWithContext, CGContextDrawLayerInRect",
-   "bifrost": "springboard/render/src/cg/reusable_layer.rs",
+   "bifrost": "springboard/render/src/cg/reusable_layer.rs; springboard/sdk/src/graphics_context.rs, graphics_stroke.rs, graphics_gradient.rs",
    "status": "partial",
-   "note": "Wave 6 (b09, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Group opacity saves and blends a backdrop internally, but there is no app-facing reusable layer object."
+   "note": "Wave 6 (b09, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Group opacity saves and blends a backdrop internally, but there is no app-facing reusable layer object. new_layer_context makes an offscreen context and draw_layer_at composites it with clip, alpha and blend; draw_layer draws a group. Host tests only; verify on Midget."
   },
   {
    "feature": "Display services (Quartz Display Services)",
@@ -142,8 +142,6 @@
   }
  ],
  "gaps": [
-  "No app-facing path API (CGPath, CGMutablePath): arbitrary Bezier and polyline drawing, fill and stroke.",
-  "No clip rectangle or clip path on the Surface (docs/bifrost-ui.md:867).",
   "No app-facing transform stack or CGAffineTransform; only compositor-side window transforms exist.",
   "No gradient, shading, function or pattern fills for apps; linear and radial gradients live only in springboard/src/shell/browser/tiles.rs.",
   "No line, ellipse or arc drawing calls on the Surface.",

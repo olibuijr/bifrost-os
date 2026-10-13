@@ -3591,3 +3591,31 @@ wiring.
 - `shape_ot`: An OpenType text shaper
 - `temporal_upscale`: Temporal upscaler model for CPU rasters
 - `video_transfer`: Pixel transfer and pixel rotation for decoded video pictures, as plain std code.
+
+## Core Graphics: drawing context (`CGContext`, `CGPath`, `CGAffineTransform`, `CGGradient`, `CGLayer`)
+
+Code: `springboard/sdk/src/graphics_context.rs` (`GraphicsContext`, `Path`, scanline rasterizer),
+`graphics_stroke.rs` (`LineCap`, `LineJoin`, `StrokeStyle`, stroker and dashes), `graphics_gradient.rs` (`Affine`,
+`Gradient`, `GradientOptions`). A view draws through `Canvas::draw(|ctx, size| ...)`; the result is a premultiplied
+`Layer`. Coverage is exact horizontally and sampled at four sub-scanlines vertically.
+
+| Apple | BifrOSt |
+|---|---|
+| `saveGState`, `restoreGState` | `save_gstate`, `restore_gstate`: CTM, clip, colours, alpha, blend, shadow, line parameters |
+| `ctm`, `concatenate(_:)`, `translateBy`, `scaleBy`, `rotate(by:)` | `ctm`, `concatenate`, `translate_by`, `scale_by`, `rotate_by` |
+| `CGAffineTransform` | `Affine`: `translation`, `scale`, `rotation`, `concatenating`, `inverted`, `translated_by`, `scaled_by`, `rotated_by`, `apply` |
+| `beginPath`, `move`, `addLine`, `addPath`, `closePath` | `begin_path`, `move_to`, `add_line`, `add_path`, `close_path` (points are placed with the CTM at call time) |
+| `fillPath(using:)`, `strokePath()`, `clip(using:)` | `fill_path(rule)`, `stroke_path()`, `clip_path(rule)`; each clears the current path |
+| `clip(to: rect)` | `clip_to_rect`; `clip_with(path, rule)` for an explicit path |
+| `setLineWidth`, `setLineCap`, `setLineJoin`, `setMiterLimit`, `setLineDash(phase:lengths:)` | same names in snake case |
+| `setFillColor`, `setStrokeColor`, `setAlpha`, `setBlendMode`, `setShadow(offset:blur:color:)` | `set_fill_color`, `set_stroke_color`, `set_alpha`, `set_blend_mode`, `set_shadow` |
+| `CGMutablePath` `addArc`, `addCurve`, `addQuadCurve`, `addEllipse`, `addRoundedRect`, `addRect`, `addPath` | `Path::add_arc` (y-down, increasing angle unless `clockwise`), `add_curve`, `add_quad_curve`, `add_ellipse`, `add_rounded_rect`, `add_rect`, `add_path` |
+| `CGPath.contains`, `boundingBoxOfPath`, `currentPoint`, `copy(using:)` | `Path::contains(x, y, rule)`, `bounding_box`, `current_point`, `transformed` |
+| `CGGradient`, `drawLinearGradient`, `drawRadialGradient` | `Gradient::new` / `Gradient::evenly`, `draw_linear_gradient`, `draw_radial_gradient` (two circles) with `GradientOptions { draws_before_start, draws_after_end }` |
+| `CGLayer` | `GraphicsContext::new_layer_context(w, h)` and `draw_layer_at(&layer, dx, dy)`; `draw_layer` for a group |
+
+Decisions and gaps: a stroke measures its width and dash with the CTM at stroke time, using the uniform scale
+`sqrt(|det|)`, so a non-uniform CTM gives an average width. Gradients are not shadowed. Gradient colours interpolate in
+unpremultiplied RGBA, not in a colour space. The old stroker used round joins and caps; the default is now butt caps
+and miter joins with a limit of 10, as in Core Graphics. No PDF context (printing task), no patterns or shadings.
+Tests are host golden-pixel tests, not yet run on Midget.
