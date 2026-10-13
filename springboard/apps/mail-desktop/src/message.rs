@@ -2,7 +2,9 @@
 //! renderer that turns a compose draft into the text SMTP sends.
 
 use bifrost_app::controls::internet_accounts::valid_address;
-use crate::codec::{decode_words, encode_word};
+use crate::body::Attachment;
+use crate::category::{self, Category};
+use crate::codec::{base64_encode, decode_words, encode_word};
 
 /// The headers of one message, as the list and the threads need them. Names are matched without case.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -16,6 +18,8 @@ pub struct Summary {
     pub cc: String,
     pub reply_to: String,
     pub date: String,
+    /// The group the headers and the sender put the message in (View > Category).
+    pub category: Category,
 }
 
 /// Unfolds and splits a header block into `(lowercase name, value)` pairs. Stops at the first empty line.
@@ -53,6 +57,12 @@ pub fn parse_ids(value: &str) -> Vec<String> {
 }
 
 impl Summary {
+    /// This summary with its category worked out from the parsed headers.
+    fn categorised(mut self, headers: &[(String, String)]) -> Summary {
+        self.category = category::classify(headers, &self.from, &self.subject);
+        self
+    }
+
     pub fn from_headers(raw: &str) -> Summary {
         let headers = parse_headers(raw);
         let get = |name: &str| headers.iter().find(|(n, _)| n == name).map(|(_, v)| v.as_str());
@@ -67,7 +77,8 @@ impl Summary {
             cc: get("cc").map(decode_words).unwrap_or_default(),
             reply_to: get("reply-to").map(decode_words).unwrap_or_default(),
             date: get("date").unwrap_or_default().to_string(),
-        }
+            category: Category::default(),
+        }.categorised(&headers)
     }
 }
 
@@ -117,6 +128,8 @@ pub struct Draft {
     pub in_reply_to: Option<String>,
     /// The References chain of the message being answered, oldest first.
     pub references: Vec<String>,
+    /// Files sent with the message (File > Attach Files, Forward as Attachment).
+    pub attachments: Vec<Attachment>,
 }
 
 const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -193,18 +206,83 @@ impl Draft {
             out.push_str(&format!("References: {}\r\n", refs.join(" ")));
         }
         out.push_str("MIME-Version: 1.0\r\n");
-        out.push_str("Content-Type: text/plain; charset=UTF-8\r\n");
-        out.push_str("Content-Transfer-Encoding: 8bit\r\n\r\n");
-        for line in self.body.split('\n') {
-            out.push_str(line.strip_suffix('\r').unwrap_or(line));
-            out.push_str("\r\n");
+        if self.attachments.is_empty() {
+            out.push_str("Content-Type: text/plain; charset=UTF-8\r\n");
+            out.push_str("Content-Transfer-Encoding: 8bit\r\n\r\n");
+            push_text(&mut out, &self.body);
+            return Ok(out);
         }
+        let boundary = boundary_for(message_id);
+        out.push_str(&format!("Content-Type: multipart/mixed; boundary=\"{boundary}\"\r\n\r\n"));
+        out.push_str(&format!("--{boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"));
+        push_text(&mut out, &self.body);
+        for file in &self.attachments {
+            out.push_str(&attachment_part(&boundary, file));
+        }
+        out.push_str(&format!("--{boundary}--\r\n"));
         Ok(out)
     }
 
     /// Every address the message goes to (To, Cc and Bcc), for the SMTP RCPT commands.
     pub fn envelope_recipients(&self) -> Vec<&str> {
         self.to.iter().chain(&self.cc).chain(&self.bcc).map(String::as_str).collect()
+    }
+}
+
+/// Body text with CRLF line ends.
+fn push_text(out: &mut String, text: &str) {
+    for line in text.split('\n') {
+        out.push_str(line.strip_suffix('\r').unwrap_or(line));
+        out.push_str("\r\n");
+    }
+}
+
+/// A MIME boundary made from the message id, so the same message always gets the same one.
+fn boundary_for(message_id: &str) -> String {
+    let id: String = message_id.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    format!("=_bifrost_{id}")
+}
+
+/// A file name that can stand in a quoted header parameter: quotes, backslashes and line breaks become `_`, and a name
+/// with non-ASCII characters is sent as an encoded word.
+fn header_file_name(name: &str) -> String {
+    let plain: String = name.chars().map(|c| if c == '"' || c == '\\' || c.is_control() { '_' } else { c }).collect();
+    encode_word(&plain)
+}
+
+/// One attachment as a MIME part, closed by its own line end, behind a `--boundary` line. A forwarded message
+/// (`message/rfc822`) is sent as it is; other files are base64 in lines of 76 characters.
+fn attachment_part(boundary: &str, file: &Attachment) -> String {
+    let name = header_file_name(&file.name);
+    let mime = if file.mime.is_empty() || file.mime.contains(['\r', '\n']) { "application/octet-stream" } else { file.mime.as_str() };
+    let mut out = format!("--{boundary}\r\nContent-Type: {mime}; name=\"{name}\"\r\n");
+    if mime.eq_ignore_ascii_case("message/rfc822") {
+        out.push_str(&format!("Content-Transfer-Encoding: 8bit\r\nContent-Disposition: attachment; filename=\"{name}\"\r\n\r\n"));
+        push_text(&mut out, &String::from_utf8_lossy(&file.bytes));
+        return out;
+    }
+    out.push_str(&format!("Content-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"{name}\"\r\n\r\n"));
+    let encoded = base64_encode(&file.bytes);
+    for chunk in encoded.as_bytes().chunks(76) {
+        out.push_str(&String::from_utf8_lossy(chunk));
+        out.push_str("\r\n");
+    }
+    out
+}
+
+/// A contact's names and address from a `Name <addr>` value: the given name is the first word of the display name, the
+/// family name the rest. Without a display name the part of the address before the `@` is the given name.
+pub fn contact_parts(from: &str) -> (String, String, String) {
+    let email = address_of(from).to_string();
+    let name = from.split('<').next().unwrap_or("").trim().trim_matches('"').trim();
+    let name = if name.contains('@') { "" } else { name };
+    if name.is_empty() {
+        let local = email.split('@').next().unwrap_or("").to_string();
+        return (local, String::new(), email);
+    }
+    match name.split_once(' ') {
+        Some((given, family)) => (given.to_string(), family.trim().to_string(), email),
+        None => (name.to_string(), String::new(), email),
     }
 }
 
@@ -323,6 +401,19 @@ pub fn forward_draft(original: &Summary, from: &str, text: &str) -> Draft {
     body.push('\n');
     body.push_str(text);
     Draft { from: from.to_string(), subject, body, ..Draft::default() }
+}
+
+/// Forward as Attachment (Message > Forward as Attachment): the whole original goes along as a `message/rfc822` file under
+/// a `Fwd:` subject, with an empty body.
+pub fn forward_attachment_draft(original: &Summary, from: &str, raw: &str) -> Draft {
+    let mut draft = forward_draft(original, from, "");
+    draft.body = String::new();
+    draft.attachments = vec![Attachment {
+        name: crate::export::eml_name(&original.subject),
+        mime: "message/rfc822".into(),
+        bytes: crate::export::crlf(raw).into_bytes(),
+    }];
+    draft
 }
 
 /// Paste as Quotation (Edit menu): every line of `text` starts with `> ` (an empty line with `>`).
@@ -463,8 +554,56 @@ mod tests {
     }
 
     #[test]
+    fn forward_as_attachment_carries_the_message_and_no_text() {
+        let original = Summary { subject: "Plan".into(), ..Summary::default() };
+        let draft = forward_attachment_draft(&original, "me@example.com", "Subject: Plan\n\nhi\n");
+        assert_eq!(draft.subject, "Fwd: Plan");
+        assert!(draft.body.is_empty());
+        assert_eq!(draft.attachments.len(), 1);
+        assert_eq!(draft.attachments[0].name, "Plan.eml");
+        assert_eq!(draft.attachments[0].mime, "message/rfc822");
+        assert_eq!(draft.attachments[0].bytes, b"Subject: Plan\r\n\r\nhi\r\n".to_vec());
+    }
+
+    #[test]
     fn a_quotation_prefixes_every_line() {
         assert_eq!(quote_text("one\n\ntwo"), "> one\n>\n> two");
         assert_eq!(quote_text(""), "");
+    }
+
+    #[test]
+    fn attachments_make_a_multipart_message() {
+        let draft = Draft {
+            from: "me@example.com".into(),
+            to: vec!["a@example.com".into()],
+            body: "See attached".into(),
+            attachments: vec![Attachment { name: "a\"b.txt".into(), mime: "text/plain".into(), bytes: b"hello".to_vec() }],
+            ..Draft::default()
+        };
+        let text = draft.render("<1.2@x.is>", 0).unwrap();
+        assert!(text.contains("Content-Type: multipart/mixed; boundary=\"=_bifrost_12xis\"\r\n\r\n--=_bifrost_12xis\r\n"));
+        assert!(text.contains("See attached\r\n--=_bifrost_12xis\r\nContent-Type: text/plain; name=\"a_b.txt\"\r\n"));
+        assert!(text.contains("Content-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=\"a_b.txt\"\r\n\r\naGVsbG8=\r\n"));
+        assert!(text.ends_with("--=_bifrost_12xis--\r\n"));
+        let plain = Draft { attachments: vec![], ..draft }.render("<1.2@x.is>", 0).unwrap();
+        assert!(plain.contains("Content-Type: text/plain; charset=UTF-8") && !plain.contains("multipart"));
+    }
+
+    #[test]
+    fn long_files_are_wrapped_at_76_characters_and_forwarded_messages_stay_text() {
+        let big = Attachment { name: "big.bin".into(), mime: String::new(), bytes: vec![7u8; 200] };
+        let part = attachment_part("B", &big);
+        assert!(part.contains("Content-Type: application/octet-stream; name=\"big.bin\""));
+        assert!(part.lines().all(|l| l.len() <= 76 || l.starts_with("Content") || l.starts_with("--")));
+        let forwarded = Attachment { name: "Plan.eml".into(), mime: "message/rfc822".into(), bytes: b"Subject: Plan\n\nhi\n".to_vec() };
+        let part = attachment_part("B", &forwarded);
+        assert!(part.contains("Content-Transfer-Encoding: 8bit") && part.ends_with("Subject: Plan\r\n\r\nhi\r\n\r\n"));
+    }
+
+    #[test]
+    fn a_contact_is_made_from_a_sender() {
+        assert_eq!(contact_parts("Ana María O <ana@example.com>"), ("Ana".into(), "María O".into(), "ana@example.com".into()));
+        assert_eq!(contact_parts("\"Bo\" <bo@example.com>"), ("Bo".into(), String::new(), "bo@example.com".into()));
+        assert_eq!(contact_parts("cy@example.com"), ("cy".into(), String::new(), "cy@example.com".into()));
     }
 }

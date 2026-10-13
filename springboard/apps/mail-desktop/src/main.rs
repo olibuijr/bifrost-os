@@ -52,6 +52,10 @@ impl App for MailApp {
         self.window.as_mut().is_some_and(|mail| mail.service_reply(ctx, request, result))
     }
 
+    fn document(&mut self, ctx: &Ctx, ev: bifrost_app::DocumentEvent) -> bool {
+        self.window.as_mut().is_some_and(|mail| mail.document(ctx, ev))
+    }
+
     fn keychain(&mut self, ctx: &Ctx, reply: bifrost_app::keychain::Reply) -> bool {
         self.window.as_mut().is_some_and(|mail| mail.keychain(ctx, reply))
     }

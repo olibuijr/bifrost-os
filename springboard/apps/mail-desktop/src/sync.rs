@@ -52,6 +52,8 @@ pub enum Event {
     Changed { account: String, mailbox: String, uid: u32, result: Result<(), String> },
     /// The server's matches for the search `query` in `mailbox`: the newest matches' headers.
     Found { account: String, mailbox: String, query: String, result: Result<Vec<Listed>, String> },
+    /// Every message of `mailbox` as the server holds it, for Export Mailbox.
+    Exported { account: String, mailbox: String, result: Result<Vec<String>, String> },
     /// The inbox watcher's connection state: `live` while IDLE is waiting for the server.
     Watch { account: String, live: bool },
     /// The server reported a new message in the inbox (from IDLE). The window lists the inbox again.
@@ -113,6 +115,24 @@ fn fetch_body(transport: &dyn Transport, account: &Account, password: &str, mail
     let _ = session.mark_seen(uid);
     session.logout();
     Ok(text)
+}
+
+/// Reads every message of `mailbox` (Mailbox > Export Mailbox). The messages are not marked as read.
+pub fn export(transport: &dyn Transport, account: &Account, password: &str, mailbox: &str) -> Event {
+    let result = fetch_all(transport, account, password, mailbox);
+    Event::Exported { account: account.id.clone(), mailbox: mailbox.to_string(), result }
+}
+
+fn fetch_all(transport: &dyn Transport, account: &Account, password: &str, mailbox: &str) -> Result<Vec<String>, String> {
+    let mut session = session::connect(transport, accounts::incoming(account)?)?;
+    session.login(&account.username, password)?;
+    session.select(mailbox)?;
+    let mut messages = Vec::new();
+    for uid in session.uids()? {
+        messages.push(session.message(uid)?);
+    }
+    session.logout();
+    Ok(messages)
 }
 
 /// Applies `action` to one message of `mailbox` on the server.

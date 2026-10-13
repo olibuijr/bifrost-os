@@ -8,20 +8,27 @@ use crate::flags::{Flag, FlagColor};
 use crate::message::{self, Priority};
 use crate::migrate;
 use crate::search::Query;
-use crate::state::{Filter, Mail, Notice, Sheet, SortKey, ARCHIVE_NAMES, INBOX, JUNK_NAMES, TRASH_NAMES};
+use crate::category::Category;
+use crate::reminders::{self, When};
+use crate::rules::{self, Action};
+use crate::signatures;
+use crate::smart;
+use crate::state::{is_multiline, Filter, Mail, Notice, Sheet, SortKey, ARCHIVE_NAMES, INBOX, JUNK_NAMES, TRASH_NAMES};
 use crate::sync::{self, Change, Event};
 use crate::transport;
+use bifrost_app::contacts::{self, Key, Record, SaveRequest, Value};
 use bifrost_app::controls::internet_accounts::Account;
 use bifrost_app::keychain::{self, Error as LegacyError, Reply as KeyReply};
 use bifrost_app::kit::{clipboard, Scroller, TextCache, Ui};
 use bifrost_app::passwords::{self, Error as KeyError};
 use bifrost_app::usernotif::{self, Request};
-use bifrost_app::{AppMenu, AppMenuItem, Ctx, KeyInput, TouchKind};
+use bifrost_app::proto::{DocErrorCode, DocMode};
+use bifrost_app::{AppMenu, AppMenuItem, Ctx, Document, DocumentEvent, KeyInput, OpenOptions, TouchKind};
 use bifrost_app::proto::{CHORD_CTRL, CHORD_META};
 use bifrost_core::json::Json;
 use springboard::deildu::http::Transport;
-use std::collections::{HashMap, HashSet};
-use std::io::Read;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::io::{Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -65,6 +72,18 @@ pub const MENU_RAW_SOURCE: u32 = 35;
 pub const MENU_SAVE_AS: u32 = 36;
 pub const MENU_QUICKLY: u32 = 37;
 pub const MENU_CLEAR_FLAG: u32 = 38;
+pub const MENU_ATTACH: u32 = 39;
+pub const MENU_REMOVE_FILES: u32 = 40;
+pub const MENU_FORWARD_ATTACHMENT: u32 = 41;
+pub const MENU_ADD_CONTACT: u32 = 42;
+pub const MENU_NEW_RULE: u32 = 43;
+pub const MENU_APPLY_RULES: u32 = 44;
+pub const MENU_NEW_SMART: u32 = 45;
+pub const MENU_SIGNATURE: u32 = 46;
+pub const MENU_EXPORT: u32 = 47;
+pub const MENU_FIND_BODY: u32 = 48;
+pub const MENU_FIND_NEXT: u32 = 49;
+pub const MENU_FIND_PREVIOUS: u32 = 50;
 /// Menu ids that run from a base: the nth entry of a list (mailboxes, sort keys, filters, priorities) is `base + n`.
 pub const MENU_MOVE_BASE: u32 = 100;
 pub const MENU_COPY_BASE: u32 = 200;
@@ -72,6 +91,11 @@ pub const MENU_SORT_BASE: u32 = 300;
 pub const MENU_FILTER_BASE: u32 = 400;
 pub const MENU_PRIORITY_BASE: u32 = 500;
 pub const MENU_COLOR_BASE: u32 = 600;
+/// View > Category: the first entry (index 0) is every category, the others follow `Category::ALL`.
+pub const MENU_CATEGORY_BASE: u32 = 700;
+pub const MENU_REMIND_BASE: u32 = 800;
+pub const MENU_RULE_REMOVE_BASE: u32 = 900;
+pub const MENU_SMART_REMOVE_BASE: u32 = 1000;
 /// Most mailboxes a Move To or Copy To submenu lists (and the room each id range has).
 pub const MENU_TARGET_LIMIT: usize = 99;
 
@@ -85,6 +109,10 @@ pub const POLL_MS: f64 = 60_000.0;
 /// An account whose inbox is watched over IDLE is listed by the watcher when mail arrives; the poll still checks it
 /// once every this many poll rounds (10 minutes) in case the watcher missed something.
 pub const IDLE_CHECK_ROUNDS: u32 = 10;
+/// Most messages one run of the rules acts on, so a large mailbox does not open hundreds of connections at once.
+const RULE_BATCH: usize = 40;
+/// Most bytes of one attached file that are read (the message limit is in `state`).
+const ATTACH_READ_MAX: u64 = 25 * 1024 * 1024;
 /// Movement, in points, before a press counts as a drag.
 const DRAG_PT: f32 = 6.0;
 /// Key codes the shell sends for the editing keys (as the other apps read them).
@@ -158,6 +186,25 @@ pub struct MailWindow {
     pub reader_scroll: Scroller,
     /// Where the muted conversations are kept (see [`crate::mute`]).
     muted_path: std::path::PathBuf,
+    /// Where the rules, reminders, smart mailboxes and signatures are kept.
+    rules_path: std::path::PathBuf,
+    reminders_path: std::path::PathBuf,
+    smart_path: std::path::PathBuf,
+    signatures_path: std::path::PathBuf,
+    /// Save panels waiting for their file to be written, by request: the bytes to write.
+    saves: HashMap<u32, Vec<u8>>,
+    /// Files still to be saved after the panel on screen (Save Attachments with several files): name and bytes.
+    save_queue: VecDeque<(String, Vec<u8>)>,
+    /// The open panel of Attach Files, while it is on screen.
+    attach_request: Option<u32>,
+    /// The Contacts request of Add Sender to Contacts and the address being added.
+    contact_request: Option<(u32, String)>,
+    /// Where the attachment names of the open message were drawn, by position (see `draw_reader`).
+    pub attachment_hits: Vec<(crate::draw::Rect, usize)>,
+    /// Where the first line of the open message's text starts in the reader's content, and the height of a line, for
+    /// Find Next to scroll to a match.
+    pub body_origin: f32,
+    pub body_line: f32,
     press: Option<Press>,
     pub labels: TextCache,
     /// The wrapped text of the open message, for the width it was laid out at.
@@ -198,6 +245,15 @@ impl MailWindow {
         let mut mail = Mail::new(mail_accounts);
         let muted_path = ctx.data_dir.join(crate::mute::FILE);
         mail.muted = crate::mute::load(&muted_path);
+        let rules_path = ctx.data_dir.join(rules::FILE);
+        let reminders_path = ctx.data_dir.join(reminders::FILE);
+        let smart_path = ctx.data_dir.join(smart::FILE);
+        let signatures_path = ctx.data_dir.join(signatures::FILE);
+        mail.rules = rules::load(&rules_path);
+        mail.reminders = reminders::load(&reminders_path);
+        mail.smart = smart::load(&smart_path);
+        mail.signatures = signatures::load(&signatures_path);
+        mail.clock = now_unix();
         if let Some(e) = load_error.or(import_error) {
             mail.status = e;
         }
@@ -221,6 +277,17 @@ impl MailWindow {
             list_scroll: Scroller::new(),
             reader_scroll: Scroller::new(),
             muted_path,
+            rules_path,
+            reminders_path,
+            smart_path,
+            signatures_path,
+            saves: HashMap::new(),
+            save_queue: VecDeque::new(),
+            attach_request: None,
+            contact_request: None,
+            attachment_hits: Vec::new(),
+            body_origin: 0.0,
+            body_line: 0.0,
             press: None,
             labels: TextCache::default(),
             laid: None,
@@ -283,12 +350,23 @@ impl MailWindow {
             self.next_poll = t + POLL_MS;
             self.poll();
         }
+        self.check_reminders(ctx);
         let scrolled = self.list_scroll.tick(t) | self.reader_scroll.tick(t);
         std::mem::take(&mut self.dirty) || scrolled
     }
 
     /// The answer to one of the requests the window made to Passwords. False when the request was not the window's.
     pub fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.contact_request.as_ref().is_some_and(|(id, _)| *id == request) {
+            let (_, email) = self.contact_request.take().unwrap_or_default();
+            self.mail.status = match result {
+                Ok(reply) if contacts::decode_saved(reply).is_some() => format!("Added {email} to Contacts"),
+                Ok(_) => "Contacts did not confirm the new contact".to_string(),
+                Err(e) => format!("{email} was not added to Contacts: {e}"),
+            };
+            self.dirty = true;
+            return true;
+        }
         if self.pending.get(&request).is_some_and(Pending::from_keychain) {
             return false;
         }
@@ -455,6 +533,7 @@ impl MailWindow {
     pub fn menu_items(&self) -> Vec<AppMenu> {
         let mail = &self.mail;
         let compose_open = matches!(mail.sheet, Some(Sheet::Compose(_)));
+        let compose_has_files = matches!(&mail.sheet, Some(Sheet::Compose(c)) if !c.attachments.is_empty());
         let open = mail.open.is_some();
         let targets = mail.move_targets();
         let mut message = vec![
@@ -462,8 +541,11 @@ impl MailWindow {
             AppMenuItem::new(MENU_REPLY, "Reply").key("cmd+shift+r").enabled(open),
             AppMenuItem::new(MENU_REPLY_ALL, "Reply All").key("cmd+alt+r").enabled(open),
             AppMenuItem::new(MENU_FORWARD, "Forward").key("cmd+shift+f").enabled(open && self.open_body_loaded()),
+            AppMenuItem::new(MENU_FORWARD_ATTACHMENT, "Forward as Attachment").enabled(open && self.open_body_loaded()),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_SEND, "Send").key("cmd+shift+d").enabled(compose_open),
+            AppMenuItem::new(MENU_ATTACH, "Attach Files...").key("cmd+shift+a").enabled(compose_open),
+            AppMenuItem::new(MENU_REMOVE_FILES, "Remove Attached Files").enabled(compose_has_files),
             AppMenuItem::submenu("Set Priority").enabled(compose_open),
         ];
         let current = match &mail.sheet {
@@ -487,7 +569,7 @@ impl MailWindow {
         message.extend([
             AppMenuItem::new(MENU_UNREAD, "Mark as Unread").enabled(open),
             AppMenuItem::new(MENU_MUTE, if muted { "Unmute" } else { "Mute" }).enabled(open),
-            AppMenuItem::new(MENU_ARCHIVE, "Archive").key("cmd+shift+a").enabled(open),
+            AppMenuItem::new(MENU_ARCHIVE, "Archive").key("cmd+ctrl+a").enabled(open),
             AppMenuItem::new(MENU_TRASH, "Move to Trash").enabled(open),
             AppMenuItem::new(MENU_JUNK, "Move to Junk").key("cmd+shift+j").enabled(open),
             AppMenuItem::submenu("Move To").enabled(open),
@@ -502,6 +584,20 @@ impl MailWindow {
         let again = mail.last_target.as_ref().filter(|t| targets.contains(t));
         let again_title = again.map_or_else(|| "Move Again".to_string(), |t| format!("Move Again to {t}"));
         message.push(AppMenuItem::new(MENU_MOVE_AGAIN, &again_title).enabled(open && again.is_some()));
+        message.push(AppMenuItem::submenu("Remind Me").enabled(open));
+        for (i, when) in When::ALL.into_iter().enumerate() {
+            message.push(AppMenuItem::new(MENU_REMIND_BASE + i as u32, when.label()).depth(1));
+        }
+        message.extend([
+            AppMenuItem::new(MENU_ADD_CONTACT, "Add Sender to Contacts").enabled(open),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_NEW_RULE, "New Rule..."),
+            AppMenuItem::new(MENU_APPLY_RULES, "Apply Rules").key("cmd+alt+l").enabled(!mail.rules.is_empty()),
+            AppMenuItem::submenu("Remove Rule").enabled(!mail.rules.is_empty()),
+        ]);
+        for (i, rule) in mail.rules.iter().enumerate().take(MENU_TARGET_LIMIT) {
+            message.push(AppMenuItem::new(MENU_RULE_REMOVE_BASE + i as u32, &format!("{} ({})", rule.name, rule.action.label())).depth(1));
+        }
         message.extend([
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_SAVE, "Save Attachments...").key("cmd+alt+a").enabled(self.open_has_files()),
@@ -526,8 +622,20 @@ impl MailWindow {
             AppMenuItem::new(MENU_ERASE_TRASH, "Erase Deleted Items").enabled(mail.find_mailbox(&TRASH_NAMES).is_some()),
             AppMenuItem::new(MENU_ERASE_JUNK, "Erase Junk Mail").enabled(mail.find_mailbox(&JUNK_NAMES).is_some()),
             AppMenuItem::separator(),
-            AppMenuItem::new(MENU_ADD, "Add Account..."),
+            AppMenuItem::new(MENU_NEW_SMART, "New Smart Mailbox...").enabled(!mail.accounts.is_empty()),
+            AppMenuItem::submenu("Delete Smart Mailbox").enabled(!mail.smart.is_empty()),
         ];
+        let mut mailbox = mailbox;
+        for (i, smart) in mail.smart.iter().enumerate().take(MENU_TARGET_LIMIT) {
+            mailbox.push(AppMenuItem::new(MENU_SMART_REMOVE_BASE + i as u32, &smart.name).depth(1));
+        }
+        mailbox.extend([
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_EXPORT, "Export Mailbox...").enabled(!mail.accounts.is_empty()),
+            AppMenuItem::new(MENU_SIGNATURE, "Edit Signature...").enabled(!mail.accounts.is_empty()),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_ADD, "Add Account..."),
+        ]);
 
         let mut view = vec![
             AppMenuItem::new(MENU_SHOW_SIDEBAR, if mail.show_sidebar { "Hide Sidebar" } else { "Show Sidebar" }).key("cmd+ctrl+s"),
@@ -552,12 +660,26 @@ impl MailWindow {
             AppMenuItem::new(MENU_EXPAND_ALL, "Expand All Conversations").enabled(mail.threaded),
             AppMenuItem::new(MENU_COLLAPSE_ALL, "Collapse All Conversations").enabled(mail.threaded),
             AppMenuItem::separator(),
+            AppMenuItem::submenu("Category"),
+            AppMenuItem::new(MENU_CATEGORY_BASE, "All Categories").depth(1).checked(mail.category.is_none()),
+        ]);
+        for (i, category) in Category::ALL.into_iter().enumerate() {
+            view.push(AppMenuItem::new(MENU_CATEGORY_BASE + 1 + i as u32, category.label()).depth(1).checked(mail.category == Some(category)));
+        }
+        view.extend([
+            AppMenuItem::separator(),
             AppMenuItem::new(MENU_SHOW_CC, "Cc Address Field").checked(mail.show_cc),
             AppMenuItem::new(MENU_SHOW_BCC, "Bcc Address Field").checked(mail.show_bcc),
             AppMenuItem::new(MENU_SHOW_REPLY_TO, "Reply-To Address Field").checked(mail.show_reply_to),
         ]);
 
-        let edit = vec![AppMenuItem::new(MENU_PASTE_QUOTE, "Paste as Quotation").key("cmd+alt+v").enabled(compose_open)];
+        let edit = vec![
+            AppMenuItem::new(MENU_PASTE_QUOTE, "Paste as Quotation").key("cmd+alt+v").enabled(compose_open),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_FIND_BODY, "Find in Message...").key("cmd+alt+f").enabled(open),
+            AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(open && !mail.body_find.is_empty()),
+            AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(open && !mail.body_find.is_empty()),
+        ];
 
         vec![
             AppMenu { title: "Message".into(), items: message },
@@ -624,6 +746,21 @@ impl MailWindow {
             MENU_SAVE_AS => self.save_open_as(ctx),
             MENU_QUICKLY => self.mail.open_quickly(),
             MENU_CLEAR_FLAG => self.set_color_open(None),
+            MENU_ATTACH => self.attach_files(ctx),
+            MENU_REMOVE_FILES => {
+                let n = self.mail.clear_attachments();
+                self.mail.status = format!("Removed {n} attached file{}", if n == 1 { "" } else { "s" });
+            }
+            MENU_FORWARD_ATTACHMENT => self.forward_as_attachment(),
+            MENU_ADD_CONTACT => self.add_sender(ctx),
+            MENU_NEW_RULE => self.mail.open_rule(),
+            MENU_APPLY_RULES => self.apply_rules(None),
+            MENU_NEW_SMART => self.mail.open_smart(),
+            MENU_SIGNATURE => self.mail.open_signature(),
+            MENU_EXPORT => self.export_mailbox(),
+            MENU_FIND_BODY => self.mail.open_find_body(),
+            MENU_FIND_NEXT => self.step_match(1),
+            MENU_FIND_PREVIOUS => self.step_match(-1),
             _ => {
                 if let Some(i) = menu_index(id, MENU_MOVE_BASE) {
                     let target = self.mail.move_targets().get(i).cloned();
@@ -652,6 +789,36 @@ impl MailWindow {
                         Some(color) => self.set_color_open(Some(*color)),
                         None => return false,
                     }
+                } else if let Some(i) = menu_index(id, MENU_CATEGORY_BASE) {
+                    match i {
+                        0 => self.mail.category = None,
+                        _ => match Category::ALL.get(i - 1) {
+                            Some(category) => self.mail.category = Some(*category),
+                            None => return false,
+                        },
+                    }
+                    self.list_scroll = Scroller::new();
+                } else if let Some(i) = menu_index(id, MENU_REMIND_BASE) {
+                    match When::ALL.get(i) {
+                        Some(when) => self.remind_open(*when),
+                        None => return false,
+                    }
+                } else if let Some(i) = menu_index(id, MENU_RULE_REMOVE_BASE) {
+                    if self.mail.remove_rule(i).is_none() {
+                        return false;
+                    }
+                    self.mail.status = match rules::save(&self.rules_path, &self.mail.rules) {
+                        Ok(()) => "Rule removed".into(),
+                        Err(e) => format!("The rules could not be saved: {e}"),
+                    };
+                } else if let Some(i) = menu_index(id, MENU_SMART_REMOVE_BASE) {
+                    if self.mail.remove_smart(i).is_none() {
+                        return false;
+                    }
+                    self.mail.status = match smart::save(&self.smart_path, &self.mail.smart) {
+                        Ok(()) => "Smart mailbox removed".into(),
+                        Err(e) => format!("The smart mailboxes could not be saved: {e}"),
+                    };
                 } else if let Some(i) = menu_index(id, MENU_PRIORITY_BASE) {
                     match Priority::ALL.get(i) {
                         Some(priority) => self.mail.set_priority(*priority),
@@ -673,8 +840,13 @@ impl MailWindow {
             Event::Listed { account, mailbox, result } => match result {
                 Ok(listing) => {
                     let notices = self.mail.apply_listing(&account, &mailbox, listing.mailboxes, listing.messages);
+                    let arrived: Vec<u32> = notices.iter().map(|n| n.uid).collect();
                     for notice in notices {
                         self.notify(ctx, &notice);
+                    }
+                    let shown = self.mail.current().is_some_and(|a| a.id == account) && self.mail.mailbox == mailbox;
+                    if shown && mailbox.eq_ignore_ascii_case(INBOX) && !arrived.is_empty() && !self.mail.rules.is_empty() {
+                        self.apply_rules(Some(arrived));
                     }
                     if self.mail.current().is_some_and(|a| a.id == account) {
                         self.mail.status.clear();
@@ -704,6 +876,14 @@ impl MailWindow {
             Event::Found { account, mailbox, query, result } => match result {
                 Ok(messages) => self.mail.apply_found(&account, &mailbox, &query, messages),
                 Err(e) => self.mail.status = format!("{}: {e}", self.account_name(&account)),
+            },
+            Event::Exported { mailbox, result, .. } => match result {
+                Ok(messages) => {
+                    let name = crate::mbox::file_name(&mailbox);
+                    self.mail.status = format!("Exporting {} message{}", messages.len(), if messages.len() == 1 { "" } else { "s" });
+                    self.begin_save(ctx, &name, crate::mbox::write(&messages).into_bytes());
+                }
+                Err(e) => self.mail.status = format!("The mailbox could not be exported: {e}"),
             },
             Event::Watch { account, live } => {
                 if live {
@@ -831,20 +1011,36 @@ impl MailWindow {
         };
     }
 
-    /// File > Save As: the raw source of the open message is written as an `.eml` file in the app's data directory.
+    /// File > Save As: the raw source of the open message goes to a `.eml` file the save panel names.
     fn save_open_as(&mut self, ctx: &Ctx) {
         let Some(uid) = self.mail.open else { return };
         let Some(raw) = self.mail.bodies.get(&uid) else { return };
         let subject = self.mail.row(uid).map(|r| r.summary.subject.clone()).unwrap_or_default();
-        self.mail.status = match crate::export::save_eml(&ctx.data_dir.join("saved"), &subject, raw) {
-            Ok(path) => format!("Saved {}", path.display()),
-            Err(e) => format!("The message could not be saved: {e}"),
-        };
+        let bytes = crate::export::crlf(raw).into_bytes();
+        self.begin_save(ctx, &crate::export::eml_name(&subject), bytes);
+    }
+
+    /// Shows the save panel with `name` in its field. The file is written when the panel answers (see `document`).
+    fn begin_save(&mut self, ctx: &Ctx, name: &str, bytes: Vec<u8>) {
+        let request = ctx.save_document(name, &[]);
+        self.saves.insert(request, bytes);
+    }
+
+    /// Starts the next file of a Save Attachments that has several.
+    fn next_save(&mut self, ctx: &Ctx) {
+        if let Some((name, bytes)) = self.save_queue.pop_front() {
+            self.begin_save(ctx, &name, bytes);
+        }
     }
 
     /// Moves the open message to the account's Archive or Trash mailbox. The message leaves the list at once.
     fn move_open(&mut self, candidates: &[&str], label: &str) {
         let Some(uid) = self.mail.open else { return };
+        self.move_uid(uid, candidates, label);
+    }
+
+    /// Moves message `uid` to the account's Archive, Trash or Junk mailbox (the first of `candidates` it has).
+    fn move_uid(&mut self, uid: u32, candidates: &[&str], label: &str) {
         let Some(to) = self.mail.find_mailbox(candidates) else {
             self.mail.status = format!("This account has no {label} mailbox");
             return;
@@ -946,21 +1142,261 @@ impl MailWindow {
         self.mail.open.and_then(|uid| self.mail.attachments.get(&uid)).is_some_and(|files| !files.is_empty())
     }
 
-    /// Writes the open message's files into the app's data directory, one folder per message.
+    /// Message > Save Attachments: a save panel for each file of the open message, one after the other. Cancelling a panel
+    /// stops the rest.
     fn save_attachments(&mut self, ctx: &Ctx) {
         let Some(uid) = self.mail.open else { return };
-        let dir = ctx.data_dir.join("attachments").join(uid.to_string());
-        let result = match self.mail.attachments.get(&uid) {
-            Some(files) if !files.is_empty() => attachments::save_all(&dir, files),
+        let files: Vec<(String, Vec<u8>)> = match self.mail.attachments.get(&uid) {
+            Some(files) if !files.is_empty() => files.iter().map(|f| (attachments::safe_name(&f.name), f.bytes.clone())).collect(),
             _ => {
                 self.mail.status = "This message has no attachments".into();
                 return;
             }
         };
-        self.mail.status = match result {
-            Ok(n) => format!("Saved {n} attachment{} to {}", if n == 1 { "" } else { "s" }, dir.display()),
-            Err(e) => format!("The attachments could not be saved: {e}"),
+        self.mail.status = format!("Saving {} attachment{}", files.len(), if files.len() == 1 { "" } else { "s" });
+        self.save_queue = files.into();
+        self.next_save(ctx);
+    }
+
+    /// A click on one file of the open message: its save panel.
+    fn save_attachment(&mut self, ctx: &Ctx, index: usize) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(file) = self.mail.attachments.get(&uid).and_then(|files| files.get(index)) else { return };
+        let (name, bytes) = (attachments::safe_name(&file.name), file.bytes.clone());
+        self.save_queue.clear();
+        self.begin_save(ctx, &name, bytes);
+    }
+
+    /// File > Attach Files: the open panel, several files at once. The answer arrives in `document`.
+    fn attach_files(&mut self, ctx: &Ctx) {
+        let options = OpenOptions { mode: DocMode::Read, title: "Attach Files".into(), multiple: true, files: true, ..OpenOptions::default() };
+        self.attach_request = Some(ctx.open_panel(&options));
+    }
+
+    /// Mailbox > Export Mailbox: every message of the shown mailbox is read from the server, then the save panel names the
+    /// `.mbox` file.
+    fn export_mailbox(&mut self) {
+        let Some(account) = self.mail.current().cloned() else { return };
+        let Some(password) = self.mail.password(&account).map(str::to_string) else {
+            self.mail.status = format!("No password is saved for {}", account.name);
+            return;
         };
+        let mailbox = self.mail.mailbox.clone();
+        let transport = self.transport.clone();
+        self.mail.status = format!("Reading {} for export", crate::draw::mailbox_title(&mailbox));
+        self.jobs += 1;
+        sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::export(transport.as_ref(), &account, &password, &mailbox));
+    }
+
+    /// The answer of a file panel: the files to attach, the file to write, or a cancel. False when the request was not
+    /// the window's.
+    pub fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        match ev {
+            DocumentEvent::OpenedMany { request, docs } if self.attach_request == Some(request) => {
+                self.attach_request = None;
+                self.attach_documents(ctx, docs);
+            }
+            DocumentEvent::Opened(doc) if self.attach_request == Some(doc.request) => {
+                self.attach_request = None;
+                self.attach_documents(ctx, vec![doc]);
+            }
+            DocumentEvent::SaveTo(mut doc) => {
+                let request = doc.request;
+                match self.saves.remove(&request) {
+                    Some(bytes) => match doc.file.write_all(&bytes) {
+                        Ok(()) => ctx.commit_document(request),
+                        Err(e) => {
+                            self.mail.status = format!("The file could not be written: {e}");
+                            ctx.abort_document(request);
+                            self.save_queue.clear();
+                        }
+                    },
+                    None => {
+                        ctx.abort_document(request);
+                        return false;
+                    }
+                }
+            }
+            DocumentEvent::Saved(doc) => {
+                ctx.release_document(doc.grant);
+                self.mail.status = format!("Saved {}", doc.name);
+                self.next_save(ctx);
+            }
+            DocumentEvent::Failed { request, code } => {
+                let ours = self.saves.remove(&request).is_some() || self.attach_request == Some(request);
+                if !ours {
+                    return false;
+                }
+                if self.attach_request == Some(request) {
+                    self.attach_request = None;
+                }
+                self.save_queue.clear();
+                if code != DocErrorCode::Cancelled {
+                    self.mail.status = format!("The file panel failed: {code:?}");
+                }
+            }
+            _ => return false,
+        }
+        self.dirty = true;
+        true
+    }
+
+    /// Reads the files an open panel returned and attaches them to the message being written.
+    fn attach_documents(&mut self, ctx: &Ctx, docs: Vec<Document>) {
+        for doc in docs {
+            let mut bytes = Vec::new();
+            let read = (&doc.file).take(ATTACH_READ_MAX + 1).read_to_end(&mut bytes);
+            ctx.release_document(doc.grant);
+            if let Err(e) = read {
+                self.mail.status = format!("{} could not be read: {e}", doc.name);
+                continue;
+            }
+            let file = crate::body::Attachment { mime: attachments::mime_for(&doc.name).to_string(), name: doc.name, bytes };
+            if let Err(e) = self.mail.attach(file) {
+                self.mail.status = e;
+            }
+        }
+    }
+
+    /// Message > Add Sender to Contacts: the sender of the open message goes to the address book.
+    fn add_sender(&mut self, ctx: &Ctx) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(from) = self.mail.row(uid).map(|r| r.summary.from.clone()) else { return };
+        let (given, family, email) = message::contact_parts(&from);
+        if email.is_empty() {
+            self.mail.status = "The message has no sender address".into();
+            return;
+        }
+        let mut record = Record::new(0);
+        record.set(Key::GivenName, Value::Text(given));
+        if !family.is_empty() {
+            record.set(Key::FamilyName, Value::Text(family));
+        }
+        record.set(Key::Emails, Value::List(vec![email.clone()]));
+        let request = contacts::save(ctx, &SaveRequest { add: vec![record], ..SaveRequest::default() });
+        self.mail.status = format!("Adding {email} to Contacts");
+        self.contact_request = Some((request, email));
+    }
+
+    /// Message > Forward as Attachment: the open message goes along whole as a file.
+    fn forward_as_attachment(&mut self) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(original) = self.mail.row(uid).map(|r| r.summary.clone()) else { return };
+        let Some(raw) = self.mail.bodies.get(&uid).cloned() else { return };
+        self.mail.open_forward_attachment(&original, &raw);
+    }
+
+    // rules, reminders and finding ----------------------------------------------------------------------------------
+
+    /// Does what the rules say to the shown mailbox's messages (all of them, or only `only`).
+    fn apply_rules(&mut self, only: Option<Vec<u32>>) {
+        let actions = self.mail.rule_actions(only.as_deref());
+        let count = actions.len().min(RULE_BATCH);
+        for (uid, action) in actions.into_iter().take(RULE_BATCH) {
+            self.run_action(uid, &action);
+        }
+        if only.is_none() {
+            self.mail.status = match count {
+                0 => "No rule applies to this mailbox".into(),
+                1 => "Applied rules to 1 message".into(),
+                n => format!("Applied rules to {n} messages"),
+            };
+        }
+    }
+
+    fn run_action(&mut self, uid: u32, action: &Action) {
+        match action {
+            Action::MarkRead => {
+                self.mail.set_flag_locally(uid, Flag::Seen, true);
+                self.change_message(uid, Change::Flag { flag: Flag::Seen, on: true });
+            }
+            Action::Flag => {
+                self.mail.set_flag_locally(uid, Flag::Flagged, true);
+                self.change_message(uid, Change::Flag { flag: Flag::Flagged, on: true });
+            }
+            Action::Archive => self.move_uid(uid, &ARCHIVE_NAMES, "Archive"),
+            Action::Trash => self.move_uid(uid, &TRASH_NAMES, "Trash"),
+            Action::Junk => self.move_uid(uid, &JUNK_NAMES, "Junk"),
+            Action::MoveTo(name) => {
+                if self.mail.mailboxes.contains(name) && *name != self.mail.mailbox {
+                    self.mail.remove_row(uid);
+                    self.change_message(uid, Change::Move { to: name.clone() });
+                }
+            }
+        }
+    }
+
+    /// Message > Remind Me: the open message leaves the list until `when`.
+    fn remind_open(&mut self, when: When) {
+        let Some(uid) = self.mail.open else { return };
+        let now = now_unix();
+        self.mail.status = if self.mail.remind(uid, when, now) {
+            match reminders::save(&self.reminders_path, &self.mail.reminders) {
+                Ok(()) => format!("You will be reminded: {}", when.label().to_lowercase()),
+                Err(e) => format!("The reminders could not be saved: {e}"),
+            }
+        } else {
+            "This message has no Message-ID, so it cannot be reminded".into()
+        };
+        self.reader_scroll = Scroller::new();
+    }
+
+    /// The reminders whose time has come bring their messages back as unread, with a notification.
+    fn check_reminders(&mut self, ctx: &Ctx) {
+        let before = self.mail.clock;
+        let now = now_unix();
+        let due = self.mail.take_due_reminders(now);
+        if self.mail.reminders.iter().any(|r| r.due <= now && r.due > before) {
+            self.dirty = true;
+        }
+        if due.is_empty() {
+            return;
+        }
+        let account = self.mail.current().map(|a| a.id.clone()).unwrap_or_default();
+        for uid in due {
+            let Some(summary) = self.mail.row(uid).map(|r| r.summary.clone()) else { continue };
+            self.mail.set_flag_locally(uid, Flag::Seen, false);
+            self.change_message(uid, Change::Flag { flag: Flag::Seen, on: false });
+            self.notify(ctx, &Notice { account: account.clone(), uid, from: summary.from, subject: summary.subject });
+        }
+        if let Err(e) = reminders::save(&self.reminders_path, &self.mail.reminders) {
+            self.mail.status = format!("The reminders could not be saved: {e}");
+        }
+        self.dirty = true;
+    }
+
+    /// The lines of the open message that contain the text of Find in Message.
+    fn find_matches(&self) -> Vec<usize> {
+        match &self.laid {
+            Some(laid) if Some(laid.uid) == self.mail.open => crate::draw::find_lines(&laid.lines, &self.mail.body_find.to_lowercase()),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Scrolls the reader to the current match and says how many there are.
+    fn show_match(&mut self) {
+        if self.mail.body_find.is_empty() {
+            return;
+        }
+        let matches = self.find_matches();
+        match matches.get(self.mail.find_index.min(matches.len().saturating_sub(1))) {
+            Some(line) => {
+                let target = self.body_origin + *line as f32 * self.body_line - 3.0 * self.body_line;
+                self.reader_scroll.jump_to(target.max(0.0));
+                self.mail.status = format!("Match {} of {}", self.mail.find_index + 1, matches.len());
+            }
+            None => self.mail.status = format!("\"{}\" was not found in this message", self.mail.body_find),
+        }
+    }
+
+    /// Edit > Find Next and Find Previous.
+    fn step_match(&mut self, step: isize) {
+        let count = self.find_matches().len();
+        if self.mail.step_find(count, step).is_some() {
+            self.show_match();
+        } else {
+            self.mail.status = "Nothing to find: use Find in Message first".into();
+        }
     }
 
     /// Runs one change to a message of the shown mailbox on the server.
@@ -1074,6 +1510,41 @@ impl MailWindow {
                 self.mail.close_sheet();
                 self.search_server();
             }
+            Some(Sheet::Signature(form)) => {
+                if self.mail.set_signature(form.value("Signature")).is_some() {
+                    self.mail.status = match signatures::save(&self.signatures_path, &self.mail.signatures) {
+                        Ok(()) => "Signature saved".into(),
+                        Err(e) => format!("The signature could not be saved: {e}"),
+                    };
+                }
+                self.mail.close_sheet();
+            }
+            Some(Sheet::Rule(form)) => match self.mail.add_rule_from(&form) {
+                Ok(()) => {
+                    self.mail.close_sheet();
+                    self.mail.status = match rules::save(&self.rules_path, &self.mail.rules) {
+                        Ok(()) => "Rule added. Message > Apply Rules runs it on this mailbox".into(),
+                        Err(e) => format!("The rules could not be saved: {e}"),
+                    };
+                }
+                Err(e) => self.mail.status = e,
+            },
+            Some(Sheet::Smart(form)) => match self.mail.add_smart_from(&form) {
+                Ok(()) => {
+                    self.mail.close_sheet();
+                    self.mail.status = match smart::save(&self.smart_path, &self.mail.smart) {
+                        Ok(()) => "Smart mailbox added".into(),
+                        Err(e) => format!("The smart mailboxes could not be saved: {e}"),
+                    };
+                }
+                Err(e) => self.mail.status = e,
+            },
+            Some(Sheet::FindBody(form)) => {
+                let text = form.value("Find in message").to_string();
+                self.mail.set_body_find(&text);
+                self.mail.close_sheet();
+                self.show_match();
+            }
             None => {}
         }
     }
@@ -1130,14 +1601,21 @@ impl MailWindow {
 
     fn focus_is_message(&self) -> bool {
         match &self.mail.sheet {
-            Some(Sheet::Compose(c)) => c.form.fields.get(c.form.focus).is_some_and(|f| f.label == "Message"),
+            Some(Sheet::Compose(c)) => c.form.fields.get(c.form.focus).is_some_and(|f| is_multiline(f.label)),
+            Some(Sheet::Signature(_)) => true,
             _ => false,
         }
     }
 
     fn form_mut(&mut self) -> Option<&mut crate::state::Form> {
         match self.mail.sheet.as_mut()? {
-            Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) => Some(form),
+            Sheet::Setup(form)
+            | Sheet::Search(form)
+            | Sheet::Quickly(form)
+            | Sheet::Signature(form)
+            | Sheet::Rule(form)
+            | Sheet::Smart(form)
+            | Sheet::FindBody(form) => Some(form),
             Sheet::Compose(compose) => Some(&mut compose.form),
             Sheet::Mailbox(sheet) => Some(&mut sheet.form),
         }
@@ -1166,6 +1644,7 @@ impl MailWindow {
                 crate::draw::Button::Refresh => self.refresh_selected(),
                 crate::draw::Button::Compose => self.compose(),
                 crate::draw::Button::Reply => self.reply(),
+                crate::draw::Button::ReplyAll => self.reply_all(),
                 crate::draw::Button::Archive => self.move_open(&ARCHIVE_NAMES, "Archive"),
                 crate::draw::Button::Trash => self.move_open(&TRASH_NAMES, "Trash"),
             },
@@ -1179,8 +1658,15 @@ impl MailWindow {
                     self.list_scroll = Scroller::new();
                     self.refresh_selected();
                 }
+                crate::draw::Side::Smart(index) => {
+                    if self.mail.apply_smart(index) {
+                        self.list_scroll = Scroller::new();
+                        self.search_server();
+                    }
+                }
                 crate::draw::Side::Add => self.mail.open_setup(),
             },
+            crate::draw::Hit::Attachment(index) => self.save_attachment(ctx, index),
             crate::draw::Hit::Message(uid) => self.open_message(uid),
             crate::draw::Hit::Field(index) => {
                 if let Some(form) = self.form_mut() {

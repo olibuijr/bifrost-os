@@ -5,7 +5,7 @@
 use crate::attachments;
 use crate::flags::{Flag, FlagColor};
 use crate::layout;
-use crate::state::{Mail, Sheet};
+use crate::state::{is_multiline, Mail, Sheet};
 use crate::window::{MailWindow, Region};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, WHITE};
 use bifrost_app::kit::{colors, Surface, TextCache, Ui, Weight};
@@ -67,6 +67,7 @@ pub enum Button {
     Refresh,
     Compose,
     Reply,
+    ReplyAll,
     Archive,
     Trash,
 }
@@ -75,6 +76,8 @@ pub enum Button {
 pub enum Side {
     Account(usize),
     Mailbox(String),
+    /// A smart mailbox, by its position in the list.
+    Smart(usize),
     Add,
 }
 
@@ -83,6 +86,8 @@ pub enum Hit {
     Button(Button),
     Side(Side),
     Message(u32),
+    /// A file of the open message, by its position.
+    Attachment(usize),
     Field(usize),
     Cancel,
     Primary,
@@ -98,6 +103,7 @@ fn toolbar_items(ui: &Ui, w: f32, open: bool) -> Vec<(Button, &'static str, Rect
     let mut order: Vec<(Button, &'static str)> = vec![(Button::Compose, "Compose")];
     if open {
         order.push((Button::Reply, "Reply"));
+        order.push((Button::ReplyAll, "Reply All"));
         order.push((Button::Archive, "Archive"));
         order.push((Button::Trash, "Trash"));
     }
@@ -126,6 +132,10 @@ fn side_items(mail: &Mail, ui: &Ui, width: f32, top: f32) -> Vec<(Side, Rect)> {
                 items.push((Side::Mailbox(name.clone()), [0.0, y, width, row]));
                 y += row;
             }
+            for smart in 0..mail.smart.len() {
+                items.push((Side::Smart(smart), [0.0, y, width, row]));
+                y += row;
+            }
         }
     }
     items.push((Side::Add, [0.0, y, width, row]));
@@ -138,21 +148,39 @@ pub struct SheetLayout {
     pub fields: Vec<Rect>,
     pub cancel: Rect,
     pub primary: Rect,
+    /// The line under the fields that lists the files of a new message (empty rectangle when there are none).
+    pub note: Rect,
+}
+
+/// The form a sheet edits.
+pub fn sheet_form(sheet: &Sheet) -> &crate::state::Form {
+    match sheet {
+        Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) | Sheet::Signature(form) | Sheet::Rule(form) | Sheet::Smart(form) | Sheet::FindBody(form) => form,
+        Sheet::Compose(compose) => &compose.form,
+        Sheet::Mailbox(sheet) => &sheet.form,
+    }
+}
+
+/// The text of the line that lists the files of a new message, or None when it has none.
+pub fn attachment_note(sheet: &Sheet) -> Option<String> {
+    let Sheet::Compose(compose) = sheet else { return None };
+    if compose.attachments.is_empty() {
+        return None;
+    }
+    let parts: Vec<String> = compose.attachments.iter().map(|a| format!("{} ({})", a.name, attachments::size_text(a.bytes.len()))).collect();
+    Some(format!("Attached: {}", parts.join(", ")))
 }
 
 pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet) -> SheetLayout {
-    let form = match sheet {
-        Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) => form,
-        Sheet::Compose(compose) => &compose.form,
-        Sheet::Mailbox(sheet) => &sheet.form,
-    };
+    let form = sheet_form(sheet);
     let pad = ui.pt(SHEET_PAD_PT);
     let head = ui.pt(SHEET_HEAD_PT);
     let foot = ui.pt(SHEET_FOOT_PT);
-    let heights: Vec<f32> = form.fields.iter().map(|f| if f.label == "Message" { ui.pt(MESSAGE_PT) } else { ui.pt(FIELD_PT) }).collect();
+    let heights: Vec<f32> = form.fields.iter().map(|f| if is_multiline(f.label) { ui.pt(MESSAGE_PT) } else { ui.pt(FIELD_PT) }).collect();
     let body: f32 = heights.iter().sum();
     let pw = ui.pt(SHEET_W_PT).min(w - 2.0 * ui.pt(SPACE_M)).max(0.0);
-    let ph = head + body + foot;
+    let note_h = if attachment_note(sheet).is_some() { ui.pt(FOOT_LINE_PT) + ui.pt(SPACE_S) } else { 0.0 };
+    let ph = head + body + note_h + foot;
     let px = ((w - pw) / 2.0).max(0.0);
     let py = ((h - ph) / 2.0).max(ui.pt(TOOLBAR_PT) + pad);
     let mut y = py + head;
@@ -161,12 +189,13 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet) -> SheetLayout {
         fields.push([px + pad, y, pw - 2.0 * pad, hh]);
         y += hh;
     }
+    let note = [px + pad, y, pw - 2.0 * pad, note_h];
     let bh = ui.pt(BUTTON_H_PT);
     let bw = ui.pt(BUTTON_W_PT);
     let by = py + ph - pad - bh;
     let primary = [px + pw - pad - bw, by, bw, bh];
     let cancel = [primary[0] - ui.pt(SPACE_S) - bw, by, bw, bh];
-    SheetLayout { panel: [px, py, pw, ph], fields, cancel, primary }
+    SheetLayout { panel: [px, py, pw, ph], fields, cancel, primary, note }
 }
 
 /// The wrapped text of the open message, kept while the message and the width stay the same.
@@ -199,6 +228,15 @@ pub fn wrap(ui: &Ui, text: &str, width: f32, pt: f32, weight: Weight) -> Vec<Str
         lines.push(line);
     }
     lines
+}
+
+/// The indices of the lines that contain `needle` (already lower case), without regard to case. An empty needle finds
+/// nothing.
+pub fn find_lines(lines: &[String], needle: &str) -> Vec<usize> {
+    if needle.is_empty() {
+        return Vec::new();
+    }
+    lines.iter().enumerate().filter(|(_, line)| line.to_lowercase().contains(needle)).map(|(i, _)| i).collect()
 }
 
 /// `text` cut to fit `max` pixels, with `...` where it is cut.
@@ -257,7 +295,7 @@ fn short_date(date: &str) -> String {
     }
 }
 
-fn mailbox_title(name: &str) -> &str {
+pub fn mailbox_title(name: &str) -> &str {
     if name.eq_ignore_ascii_case("INBOX") {
         "Inbox"
     } else {
@@ -322,6 +360,9 @@ impl MailWindow {
             return toolbar_items(ui, w, open).into_iter().find(|(_, _, r)| inside(*r, x, y)).map_or(Hit::None, |(b, _, _)| Hit::Button(b));
         }
         let [side, list, _] = columns(ui, w, self.mail.show_sidebar);
+        if let Some((_, index)) = self.attachment_hits.iter().find(|(r, _)| inside(*r, x, y)) {
+            return Hit::Attachment(*index);
+        }
         if x < side {
             return side_items(&self.mail, ui, side, top).into_iter().find(|(_, r)| inside(*r, x, y)).map_or(Hit::None, |(s, _)| Hit::Side(s));
         }
@@ -381,12 +422,21 @@ impl MailWindow {
                     put_mid(s, &mut self.labels, ui, name, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), pad, cy);
                 }
                 Side::Mailbox(name) => {
-                    let selected = name == self.mail.mailbox;
+                    let selected = name == self.mail.mailbox && self.mail.active_smart.is_none();
                     if selected {
                         s.fill_rrect(r[0] + inset, r[1], r[2] - 2.0 * inset, r[3], ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
                     }
                     let color = if selected { WHITE } else { LABEL.now() };
                     put_mid(s, &mut self.labels, ui, mailbox_title(&name), MAC_BODY_PT, Weight::Regular, color, pad + inset, cy);
+                }
+                Side::Smart(index) => {
+                    let selected = self.mail.active_smart == Some(index);
+                    if selected {
+                        s.fill_rrect(r[0] + inset, r[1], r[2] - 2.0 * inset, r[3], ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
+                    }
+                    let color = if selected { WHITE } else { LABEL.now() };
+                    let name = self.mail.smart.get(index).map_or("", |m| m.name.as_str());
+                    put_mid(s, &mut self.labels, ui, &fit(ui, name, MAC_BODY_PT, Weight::Regular, (r[2] - pad - 2.0 * inset).max(0.0)), MAC_BODY_PT, Weight::Regular, color, pad + inset, cy);
                 }
                 Side::Add => {
                     put_mid(s, &mut self.labels, ui, "Add Account...", MAC_BODY_PT, Weight::Regular, colors::SYSTEM_BLUE.now(), pad, cy);
@@ -470,6 +520,7 @@ impl MailWindow {
     }
 
     fn draw_reader(&mut self, s: &mut Surface, ui: &Ui, x0: f32, width: f32, top: f32, h: f32) {
+        self.attachment_hits.clear();
         let pad = ui.pt(READER_PAD_PT);
         let area = (h - top).max(0.0);
         let text_w = (width - 2.0 * pad).max(0.0);
@@ -513,13 +564,19 @@ impl MailWindow {
         s.fill_rect(px(x), px(y), px(text_w), (ui.pt(1.0) as usize).max(1), SEPARATOR_C.now());
         y += ui.pt(SPACE_M);
 
-        let files: Option<String> = self.mail.attachments.get(&uid).filter(|f| !f.is_empty()).map(|files| {
-            let parts: Vec<String> = files.iter().map(|a| format!("{} ({})", a.name, attachments::size_text(a.bytes.len()))).collect();
-            format!("Attachments: {}", parts.join(", "))
-        });
-        if let Some(text) = files {
-            for line in wrap(ui, &text, text_w, MAC_FOOTNOTE_PT, Weight::Regular) {
-                put(s, &mut self.labels, ui, &line, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, y);
+        let files: Vec<String> = self
+            .mail
+            .attachments
+            .get(&uid)
+            .map(|files| files.iter().map(|a| format!("{} ({})", a.name, attachments::size_text(a.bytes.len()))).collect())
+            .unwrap_or_default();
+        if !files.is_empty() {
+            put(s, &mut self.labels, ui, "Attachments (click one to save it)", MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, y);
+            y += ui.pt(FOOT_LINE_PT);
+            for (index, label) in files.iter().enumerate() {
+                let text = fit(ui, label, MAC_FOOTNOTE_PT, Weight::Regular, text_w);
+                put(s, &mut self.labels, ui, &text, MAC_FOOTNOTE_PT, Weight::Regular, colors::SYSTEM_BLUE.now(), x, y);
+                self.attachment_hits.push(([x, y, text_w, ui.pt(FOOT_LINE_PT)], index));
                 y += ui.pt(FOOT_LINE_PT);
             }
             y += ui.pt(SPACE_M);
@@ -530,8 +587,21 @@ impl MailWindow {
             y += ui.pt(BODY_LINE_PT);
         }
         let line_h = ui.pt(BODY_LINE_PT);
-        for line in &lines {
+        self.body_origin = y - (top + pad - offset);
+        self.body_line = line_h;
+        let needle = self.mail.body_find.to_lowercase();
+        let current = find_lines(&lines, &needle).get(self.mail.find_index).copied();
+        for (i, line) in lines.iter().enumerate() {
             if y >= top - line_h && y <= h {
+                if !needle.is_empty() {
+                    let shade = if current == Some(i) { colors::SYSTEM_ORANGE } else { colors::SYSTEM_YELLOW };
+                    for (start, found) in line.to_lowercase().match_indices(needle.as_str()) {
+                        let (Some(before), Some(hit)) = (line.get(..start), line.get(start..start + found.len())) else { continue };
+                        let hx = x + ui.measure(before, MAC_BODY_PT, Weight::Regular);
+                        let hw = ui.measure(hit, MAC_BODY_PT, Weight::Regular);
+                        s.fill_rect(px(hx), px(y), px(hw), px(line_h), shade.now());
+                    }
+                }
                 put(s, &mut self.labels, ui, line, MAC_BODY_PT, Weight::Regular, LABEL.now(), x, y);
             }
             y += line_h;
@@ -563,6 +633,10 @@ impl MailWindow {
         let (title, action, form) = match sheet {
             Sheet::Search(form) => ("Find", "Search", form),
             Sheet::Quickly(form) => ("Open Quickly", "Go", form),
+            Sheet::Signature(form) => ("Signature", "Save", form),
+            Sheet::Rule(form) => ("New Rule", "Add Rule", form),
+            Sheet::Smart(form) => ("New Smart Mailbox", "Create", form),
+            Sheet::FindBody(form) => ("Find in Message", "Find", form),
             Sheet::Setup(form) => ("Add Account", "Add Account", form),
             Sheet::Compose(compose) => (if compose.in_reply_to.is_some() { "Reply" } else { "New Message" }, "Send", &compose.form),
             Sheet::Mailbox(sheet) if sheet.rename_from.is_some() => ("Rename Mailbox", "Rename", &sheet.form),
@@ -582,7 +656,7 @@ impl MailWindow {
             let tx = r[0] + pad;
             put(s, &mut self.labels, ui, field.label, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), tx, r[1] + ui.pt(5.0));
             let value_y = r[1] + ui.pt(20.0);
-            if field.label == "Message" {
+            if is_multiline(field.label) {
                 let text_w = r[2] - 2.0 * pad;
                 let line_h = ui.pt(BODY_LINE_PT);
                 if field.value.is_empty() {
@@ -619,6 +693,10 @@ impl MailWindow {
             }
         }
 
+        if let Some(note) = attachment_note(sheet) {
+            let text = fit(ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, l.note[2]);
+            put_mid(s, &mut self.labels, ui, &text, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), l.note[0], l.note[1] + l.note[3] / 2.0);
+        }
         let (cr, pr) = (l.cancel, l.primary);
         s.fill_rrect(cr[0], cr[1], cr[2], cr[3], ui.pt(RADIUS_PT), FIELD_BG.now());
         put_centred(s, &mut self.labels, ui, "Cancel", MAC_BODY_PT, Weight::Regular, LABEL.now(), cr[0] + cr[2] / 2.0, cr[1] + cr[3] / 2.0);
@@ -659,6 +737,14 @@ mod tests {
     #[test]
     fn raw_source_keeps_the_headers_and_drops_carriage_returns() {
         assert_eq!(raw_text("Subject: x\r\nX-A:\t1\r\n\r\nbody\u{7}"), "Subject: x\nX-A:\t1\n\nbody");
+    }
+
+    #[test]
+    fn find_lists_the_lines_with_the_text_in_any_case() {
+        let lines: Vec<String> = ["Hello there", "nothing", "say HELLO"].iter().map(|l| l.to_string()).collect();
+        assert_eq!(find_lines(&lines, "hello"), vec![0, 2]);
+        assert!(find_lines(&lines, "").is_empty());
+        assert!(find_lines(&lines, "zzz").is_empty());
     }
 
     #[test]

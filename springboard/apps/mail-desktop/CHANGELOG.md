@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.9.0 — 2026-10-13
+
+- Message > Attach Files (Shift+Cmd+A) opens the file panel and adds the chosen files to the new message; the sheet
+  lists them and Remove Attached Files clears the list. A message with files is sent as `multipart/mixed` with base64
+  parts. Archive moves to Ctrl+Cmd+A.
+- Message > Forward as Attachment sends the original message whole as a `message/rfc822` file.
+- Save As, Save Attachments and a click on a file name in the reader now ask where to save through the save panel. Mailbox
+  > Export Mailbox reads every message of the shown mailbox and writes an `.mbox` file.
+- Mailbox > Edit Signature keeps one signature per account, added after a `-- ` line when a message is sent.
+- Message > New Rule, Apply Rules (Opt+Cmd+L) and Remove Rule: a rule looks for text in From, To or Subject and moves,
+  archives, trashes, junks, reads or flags the message. Rules also run on new inbox mail.
+- Message > Remind Me (1 hour, tomorrow, 3 days, next week) keeps a message out of the list until its time, then brings
+  it back as unread with a notification.
+- Message > Add Sender to Contacts sends the sender's name and address to the address book.
+- Mailbox > New Smart Mailbox saves a search that appears in the sidebar under the mailboxes; Delete Smart Mailbox
+  removes it.
+- View > Category lists only Primary, Transactions, Updates or Promotions mail, sorted from the message headers.
+- Edit > Find in Message (Opt+Cmd+F), Find Next and Find Previous (Cmd+G) highlight matches in the open message and
+  scroll to them.
+- Reply All is on the toolbar.
+
 ## 0.8.0 — 2026-10-13
 
 - Message > Flag Color (Red, Orange, Yellow, Green, Blue, Purple, Gray) and Clear Flag. The colour is kept in the

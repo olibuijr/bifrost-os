@@ -3,8 +3,13 @@
 //! network, the passwords or the window; `window.rs` runs the jobs and feeds their results in.
 
 use crate::body::Attachment;
+use crate::category::Category;
 use crate::flags::{Flag, FlagColor, Flags};
 use crate::message::{self, Draft, Priority, Summary};
+use crate::reminders::{self, Reminder, When};
+use crate::rules::{self, Action, Rule};
+use crate::smart::Smart;
+use crate::signatures;
 use crate::search::{Doc, Query};
 use crate::session::Listed;
 use crate::threads::{self, Node};
@@ -23,6 +28,9 @@ pub struct Line {
     pub thread: usize,
     pub depth: usize,
 }
+
+/// Most bytes of files one new message carries (25 MB, the usual limit of mail servers).
+pub const MAX_ATTACHED_BYTES: usize = 25 * 1024 * 1024;
 
 /// The mailbox names Archive and Trash are looked up under, in order (providers name them differently).
 pub const ARCHIVE_NAMES: [&str; 4] = ["Archive", "Archives", "All Mail", "[Gmail]/All Mail"];
@@ -97,6 +105,11 @@ pub struct Row {
     pub summary: Summary,
 }
 
+/// True for the fields that take several lines: the message body and a signature.
+pub fn is_multiline(label: &str) -> bool {
+    matches!(label, "Message" | "Signature")
+}
+
 /// One line of a sheet. `hint` shows while the value is empty; `secret` hides the value.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Field {
@@ -161,6 +174,8 @@ pub struct Compose {
     pub in_reply_to: Option<String>,
     pub references: Vec<String>,
     pub priority: Priority,
+    /// The files that go with the message (Message > Attach Files).
+    pub attachments: Vec<Attachment>,
 }
 
 impl Compose {
@@ -211,6 +226,14 @@ pub enum Sheet {
     Mailbox(MailboxSheet),
     /// Open Quickly: one field; Return opens the first mailbox whose name contains the text.
     Quickly(Form),
+    /// Edit Signature: the signature of the shown account.
+    Signature(Form),
+    /// New Rule: name, condition, text and action.
+    Rule(Form),
+    /// New Smart Mailbox: name and search.
+    Smart(Form),
+    /// Find in Message: the text to look for in the open message.
+    FindBody(Form),
 }
 
 /// A message that arrived since the last listing of the inbox, for a notification.
@@ -284,6 +307,22 @@ pub struct Mail {
     pub show_sidebar: bool,
     /// View > Raw Source: the reader shows the message as the server holds it, headers and all.
     pub show_raw: bool,
+    /// The signature of each account, by account id (Mailbox > Edit Signature).
+    pub signatures: HashMap<String, String>,
+    /// Message > New Rule: the rules, in the order they run.
+    pub rules: Vec<Rule>,
+    /// Message > Remind Me: the messages kept out of the list until their time, and the clock they are checked
+    /// against (Unix seconds, set by the window on every tick).
+    pub reminders: Vec<Reminder>,
+    pub clock: i64,
+    /// Mailbox > New Smart Mailbox: the saved searches, and the one applied now.
+    pub smart: Vec<Smart>,
+    pub active_smart: Option<usize>,
+    /// View > Category: only the messages of this group are listed.
+    pub category: Option<Category>,
+    /// Edit > Find in Message: the text looked for in the open message, and which match Find Next is on.
+    pub body_find: String,
+    pub find_index: usize,
 }
 
 impl Mail {
@@ -315,6 +354,15 @@ impl Mail {
             muted: HashSet::new(),
             show_sidebar: true,
             show_raw: false,
+            signatures: HashMap::new(),
+            rules: Vec::new(),
+            reminders: Vec::new(),
+            clock: 0,
+            smart: Vec::new(),
+            active_smart: None,
+            category: None,
+            body_find: String::new(),
+            find_index: 0,
         }
     }
 
@@ -344,6 +392,8 @@ impl Mail {
         self.found = None;
         self.open = None;
         self.collapsed.clear();
+        self.active_smart = None;
+        self.body_find.clear();
     }
 
     /// Takes the result of a listing. Returns the notices for new inbox messages. The rows change only when the listing
@@ -391,6 +441,7 @@ impl Mail {
     /// Opens a message in the reader. Returns true when its text is not loaded yet.
     pub fn open_message(&mut self, uid: u32) -> bool {
         self.open = Some(uid);
+        self.find_index = 0;
         self.mark_seen_locally(uid);
         !self.bodies.contains_key(&uid)
     }
@@ -602,7 +653,39 @@ impl Mail {
         let last = fields.len() - 1;
         let mut form = Form::new(fields);
         form.focus_on(if draft.to.is_empty() { 0 } else { last });
-        self.sheet = Some(Sheet::Compose(Compose { form, in_reply_to: draft.in_reply_to, references: draft.references, priority: draft.priority }));
+        self.sheet = Some(Sheet::Compose(Compose {
+            form,
+            in_reply_to: draft.in_reply_to,
+            references: draft.references,
+            priority: draft.priority,
+            attachments: draft.attachments,
+        }));
+    }
+
+    /// Forward as Attachment: the whole of `raw` goes with the message as a file.
+    pub fn open_forward_attachment(&mut self, original: &Summary, raw: &str) {
+        let own = self.current().map(|a| a.email.clone()).unwrap_or_default();
+        self.open_draft(message::forward_attachment_draft(original, &own, raw));
+    }
+
+    /// Attaches a file to the compose sheet that is open. Refused when the files together would pass
+    /// [`MAX_ATTACHED_BYTES`], or when no message is being written.
+    pub fn attach(&mut self, file: Attachment) -> Result<(), String> {
+        let Some(Sheet::Compose(compose)) = &mut self.sheet else { return Err("Open a new message first".into()) };
+        let total: usize = compose.attachments.iter().map(|a| a.bytes.len()).sum::<usize>() + file.bytes.len();
+        if total > MAX_ATTACHED_BYTES {
+            return Err(format!("{} is too large: a message carries at most {} MB of files", file.name, MAX_ATTACHED_BYTES / (1024 * 1024)));
+        }
+        compose.attachments.push(file);
+        Ok(())
+    }
+
+    /// Takes every file off the compose sheet that is open. Returns how many there were.
+    pub fn clear_attachments(&mut self) -> usize {
+        match &mut self.sheet {
+            Some(Sheet::Compose(compose)) => std::mem::take(&mut compose.attachments).len(),
+            _ => 0,
+        }
     }
 
     /// Shows or hides an optional address field of new messages and of the compose sheet that is open.
@@ -696,6 +779,7 @@ impl Mail {
     pub fn apply_search(&mut self, text: &str) {
         self.search = text.trim().to_string();
         self.found = None;
+        self.active_smart = None;
     }
 
     /// The rows the list shows. With a search applied and the server's answer in, that answer (the server searched
@@ -704,6 +788,10 @@ impl Mail {
     pub fn visible_rows(&self) -> Vec<Row> {
         let mut rows = self.matching_rows();
         rows.retain(|row| self.filter.matches(row.flags));
+        if let Some(category) = self.category {
+            rows.retain(|row| row.summary.category == category);
+        }
+        rows.retain(|row| !row.summary.message_id.as_deref().is_some_and(|id| reminders::hides(&self.reminders, id, self.clock)));
         let text = |row: &Row| match self.sort {
             SortKey::Date => String::new(),
             SortKey::From => row.summary.from.to_lowercase(),
@@ -741,6 +829,158 @@ impl Mail {
             })
             .cloned()
             .collect()
+    }
+
+    // signatures -------------------------------------------------------------------------------------------------
+
+    /// Mailbox > Edit Signature: a sheet with the shown account's signature.
+    pub fn open_signature(&mut self) {
+        let current = self.current().and_then(|a| self.signatures.get(&a.id)).cloned().unwrap_or_default();
+        self.sheet = Some(Sheet::Signature(Form::new(vec![Field::new("Signature", "Added after a -- line when you send", &current)])));
+    }
+
+    /// Keeps `text` as the shown account's signature; blank text removes it. None when there is no account.
+    pub fn set_signature(&mut self, text: &str) -> Option<()> {
+        let id = self.current()?.id.clone();
+        if text.trim().is_empty() {
+            self.signatures.remove(&id);
+        } else {
+            self.signatures.insert(id, text.trim_end().to_string());
+        }
+        Some(())
+    }
+
+    // rules ------------------------------------------------------------------------------------------------------
+
+    /// Message > New Rule: a sheet for the condition and the action.
+    pub fn open_rule(&mut self) {
+        self.sheet = Some(Sheet::Rule(Form::new(vec![
+            Field::new("Name", "Shown in Remove Rule", ""),
+            Field::new("If", "from, to, subject or any", "from"),
+            Field::new("Contains", "Text to look for", ""),
+            Field::new("Then", "move:Mailbox, archive, trash, junk, read, flag", ""),
+        ])));
+    }
+
+    /// Adds the rule a New Rule sheet describes at the end of the list.
+    pub fn add_rule_from(&mut self, form: &Form) -> Result<(), String> {
+        let rule = Rule::from_form(form.value("Name"), form.value("If"), form.value("Contains"), form.value("Then"))?;
+        self.rules.push(rule);
+        Ok(())
+    }
+
+    pub fn remove_rule(&mut self, index: usize) -> Option<Rule> {
+        (index < self.rules.len()).then(|| self.rules.remove(index))
+    }
+
+    /// What the rules do to the listed messages: the message and the action of the first rule that matches it.
+    /// `only` limits the check to some UID values (new arrivals). A message that is already read, or already flagged, is
+    /// not given Mark as Read or Flag again.
+    pub fn rule_actions(&self, only: Option<&[u32]>) -> Vec<(u32, Action)> {
+        self.rows
+            .iter()
+            .filter(|row| only.map_or(true, |uids| uids.contains(&row.uid)))
+            .filter_map(|row| {
+                let action = rules::decide(&self.rules, &row.summary)?;
+                let useless = match action {
+                    Action::MarkRead => row.flags.contains(Flag::Seen),
+                    Action::Flag => row.flags.contains(Flag::Flagged),
+                    _ => false,
+                };
+                (!useless).then(|| (row.uid, action.clone()))
+            })
+            .collect()
+    }
+
+    // reminders --------------------------------------------------------------------------------------------------
+
+    /// Message > Remind Me: message `uid` leaves the list until `when` after `now`. False when its Message-ID is not
+    /// known (a reminder is keyed by it).
+    pub fn remind(&mut self, uid: u32, when: When, now: i64) -> bool {
+        let Some(id) = self.row(uid).and_then(|r| r.summary.message_id.clone()) else { return false };
+        reminders::set(&mut self.reminders, &id, now + when.seconds());
+        self.clock = now;
+        if self.open == Some(uid) {
+            self.open = None;
+        }
+        true
+    }
+
+    /// Moves the clock to `now` and returns the UID values of listed messages whose reminder has come due; those reminders
+    /// are removed. A reminder whose message is not listed waits, and is dropped when it is long overdue.
+    pub fn take_due_reminders(&mut self, now: i64) -> Vec<u32> {
+        self.clock = now;
+        let mut uids = Vec::new();
+        for reminder in reminders::due(&self.reminders, now) {
+            let listed = self.rows.iter().find(|row| row.summary.message_id.as_deref() == Some(reminder.message_id.as_str())).map(|row| row.uid);
+            if let Some(uid) = listed {
+                uids.push(uid);
+            }
+            if listed.is_some() || now - reminder.due > reminders::STALE_SECS {
+                self.reminders.retain(|r| r.message_id != reminder.message_id);
+            }
+        }
+        uids
+    }
+
+    // smart mailboxes --------------------------------------------------------------------------------------------
+
+    /// Mailbox > New Smart Mailbox: a sheet for the name, with the search applied now as the starting query.
+    pub fn open_smart(&mut self) {
+        let query = self.search.clone();
+        self.sheet = Some(Sheet::Smart(Form::new(vec![
+            Field::new("Name", "Invoices", ""),
+            Field::new("Search", "from:ana subject:fundur \"exact phrase\"", &query),
+        ])));
+    }
+
+    pub fn add_smart_from(&mut self, form: &Form) -> Result<(), String> {
+        let smart = Smart::new(form.value("Name"), form.value("Search"), &self.smart)?;
+        self.smart.push(smart);
+        Ok(())
+    }
+
+    pub fn remove_smart(&mut self, index: usize) -> Option<Smart> {
+        if index >= self.smart.len() {
+            return None;
+        }
+        self.active_smart = match self.active_smart {
+            Some(active) if active == index => None,
+            Some(active) if active > index => Some(active - 1),
+            other => other,
+        };
+        Some(self.smart.remove(index))
+    }
+
+    /// Chooses smart mailbox `index` in the sidebar: its query is applied to the shown mailbox.
+    pub fn apply_smart(&mut self, index: usize) -> bool {
+        let Some(query) = self.smart.get(index).map(|s| s.query.clone()) else { return false };
+        self.apply_search(&query);
+        self.active_smart = Some(index);
+        true
+    }
+
+    // find in message --------------------------------------------------------------------------------------------
+
+    /// Edit > Find in Message: a sheet with the text looked for so far.
+    pub fn open_find_body(&mut self) {
+        let text = self.body_find.clone();
+        self.sheet = Some(Sheet::FindBody(Form::new(vec![Field::new("Find in message", "Text to look for", &text)])));
+    }
+
+    /// Sets the text to look for in the open message. The current match goes back to the first.
+    pub fn set_body_find(&mut self, text: &str) {
+        self.body_find = text.trim().to_string();
+        self.find_index = 0;
+    }
+
+    /// Moves the current match by `step` (1 or -1) among `count` matches, wrapping round. None when there are none.
+    pub fn step_find(&mut self, count: usize, step: isize) -> Option<usize> {
+        if count == 0 {
+            return None;
+        }
+        self.find_index = (self.find_index as isize + step).rem_euclid(count as isize) as usize;
+        Some(self.find_index)
     }
 
     pub fn close_sheet(&mut self) {
@@ -787,6 +1027,7 @@ impl Mail {
         if to.is_empty() {
             return Err("Add at least one recipient".into());
         }
+        let signature = self.current().and_then(|a| self.signatures.get(&a.id)).map_or("", String::as_str);
         Ok(Draft {
             from,
             to,
@@ -795,9 +1036,10 @@ impl Mail {
             reply_to: message::split_addresses(compose.form.value("Reply-To")),
             priority: compose.priority,
             subject: compose.form.value("Subject").to_string(),
-            body: compose.form.value("Message").to_string(),
+            body: signatures::append(compose.form.value("Message"), signature),
             in_reply_to: compose.in_reply_to.clone(),
             references: compose.references.clone(),
+            attachments: compose.attachments.clone(),
         })
     }
 
@@ -1148,11 +1390,11 @@ mod tests {
             Field::new("Subject", "", "Hi"),
             Field::new("Message", "", "Body"),
         ]);
-        let draft = mail.draft_from(&Compose { form, in_reply_to: None, references: vec![], priority: Priority::Normal }).unwrap();
+        let draft = mail.draft_from(&Compose { form, in_reply_to: None, references: vec![], priority: Priority::Normal, attachments: vec![] }).unwrap();
         assert_eq!(draft.to, vec!["ana@example.com", "bo@example.com"]);
         assert_eq!(draft.from, "olibuijr@example.com");
         let empty = Form::new(vec![Field::new("To", "", " ")]);
-        assert!(mail.draft_from(&Compose { form: empty, in_reply_to: None, references: vec![], priority: Priority::Normal }).is_err());
+        assert!(mail.draft_from(&Compose { form: empty, in_reply_to: None, references: vec![], priority: Priority::Normal, attachments: vec![] }).is_err());
     }
 
     fn compose_of(mail: &Mail) -> &Compose {
@@ -1316,6 +1558,115 @@ mod tests {
         assert!(arrivals(None, &listed_now).is_empty());
         assert_eq!(arrivals(Some(4), &listed_now).len(), 1);
         assert!(arrivals(Some(5), &listed_now).is_empty());
+    }
+
+    fn with_id(uid: u32, id: &str, subject: &str) -> Listed {
+        Listed { uid, flags: Flags::empty(), header: format!("Message-ID: <{id}@x>\r\nSubject: {subject}\r\nFrom: Ana <ana@example.com>\r\n\r\n") }
+    }
+
+    #[test]
+    fn the_signature_of_the_account_is_added_when_a_message_is_made() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.open_compose(None);
+        let Some(Sheet::Compose(mut compose)) = mail.sheet.clone() else { panic!("expected a compose sheet") };
+        compose.form.fields.iter_mut().find(|f| f.label == "To").unwrap().value = "bo@example.com".into();
+        compose.form.fields.iter_mut().find(|f| f.label == "Message").unwrap().value = "Hello".into();
+        assert_eq!(mail.draft_from(&compose).unwrap().body, "Hello");
+        mail.set_signature("Ana\nSales").unwrap();
+        assert_eq!(mail.draft_from(&compose).unwrap().body, "Hello\n\n-- \nAna\nSales");
+        mail.set_signature("  ").unwrap();
+        assert_eq!(mail.draft_from(&compose).unwrap().body, "Hello", "a blank signature removes it");
+    }
+
+    #[test]
+    fn rules_pick_the_messages_they_act_on() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(1, "Invoice 7"), listed(2, "Lunch"), listed(3, "Invoice 8")]);
+        mail.set_flag_locally(3, Flag::Seen, true);
+        mail.rules.push(Rule::from_form("Bills", "subject", "invoice", "read").unwrap());
+        assert_eq!(mail.rule_actions(None), vec![(1, Action::MarkRead)], "a read message needs nothing");
+        mail.rules.insert(0, Rule::from_form("Lunch", "subject", "lunch", "move:Food").unwrap());
+        assert_eq!(mail.rule_actions(Some(&[2][..])), vec![(2, Action::MoveTo("Food".into()))]);
+        assert!(mail.rule_actions(Some(&[9][..])).is_empty());
+        assert!(mail.remove_rule(5).is_none());
+        assert_eq!(mail.remove_rule(0).map(|r| r.name), Some("Lunch".to_string()));
+    }
+
+    #[test]
+    fn a_reminded_message_leaves_the_list_and_returns_when_due() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], vec![with_id(1, "a", "Plan"), with_id(2, "b", "Lunch")]);
+        mail.open_message(1);
+        assert_eq!(mail.open, Some(1));
+        assert!(mail.remind(1, When::InAnHour, 1_000));
+        assert_eq!(mail.open, None);
+        assert_eq!(mail.visible_rows().iter().map(|r| r.uid).collect::<Vec<_>>(), vec![2]);
+        assert!(mail.take_due_reminders(2_000).is_empty(), "not yet");
+        assert_eq!(mail.visible_rows().len(), 1);
+        assert_eq!(mail.take_due_reminders(1_000 + 3_600), vec![1]);
+        assert_eq!(mail.visible_rows().len(), 2, "back in the list");
+        assert!(mail.reminders.is_empty());
+        assert!(!mail.remind(77, When::Tomorrow, 0), "an unlisted message has no id to key on");
+    }
+
+    #[test]
+    fn a_smart_mailbox_applies_its_search_until_another_view_is_chosen() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(3, "Fundur"), listed(4, "Reikningur")]);
+        mail.open_smart();
+        let Some(Sheet::Smart(mut form)) = mail.sheet.clone() else { panic!("expected the smart mailbox sheet") };
+        form.fields[0].value = "Bills".into();
+        form.fields[1].value = "subject:reikn".into();
+        mail.add_smart_from(&form).unwrap();
+        assert!(mail.add_smart_from(&form).is_err(), "names are unique");
+        assert!(mail.apply_smart(0));
+        assert_eq!(mail.active_smart, Some(0));
+        assert_eq!(mail.visible_rows().iter().map(|r| r.uid).collect::<Vec<_>>(), vec![4]);
+        mail.apply_search("");
+        assert_eq!(mail.active_smart, None);
+        assert!(mail.apply_smart(0));
+        mail.show_mailbox("Sent");
+        assert_eq!(mail.active_smart, None);
+        assert!(mail.remove_smart(0).is_some() && mail.remove_smart(0).is_none());
+    }
+
+    #[test]
+    fn the_category_filter_keeps_one_group() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let shop = Listed { uid: 5, flags: Flags::empty(), header: "Subject: Your order has shipped\r\nFrom: Shop <noreply@shop.example>\r\n\r\n".into() };
+        mail.apply_listing("work", INBOX, vec![], vec![listed(3, "Lunch"), shop]);
+        mail.category = Some(Category::Transactions);
+        assert_eq!(mail.visible_rows().iter().map(|r| r.uid).collect::<Vec<_>>(), vec![5]);
+        mail.category = Some(Category::Primary);
+        assert_eq!(mail.visible_rows().iter().map(|r| r.uid).collect::<Vec<_>>(), vec![3]);
+        mail.category = None;
+        assert_eq!(mail.visible_rows().len(), 2);
+    }
+
+    #[test]
+    fn files_attach_to_the_open_message_up_to_the_size_limit() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let file = |name: &str, n: usize| Attachment { name: name.into(), mime: "text/plain".into(), bytes: vec![0; n] };
+        assert!(mail.attach(file("a.txt", 1)).is_err(), "no message is open");
+        mail.open_compose(None);
+        mail.attach(file("a.txt", 10)).unwrap();
+        assert!(mail.attach(file("big.bin", MAX_ATTACHED_BYTES)).is_err());
+        let Some(Sheet::Compose(compose)) = &mail.sheet else { panic!("expected a compose sheet") };
+        assert_eq!(compose.attachments.len(), 1);
+        assert_eq!(mail.clear_attachments(), 1);
+        assert_eq!(mail.clear_attachments(), 0);
+    }
+
+    #[test]
+    fn find_next_wraps_round_the_matches() {
+        let mut mail = Mail::new(vec![account("work")]);
+        assert_eq!(mail.step_find(0, 1), None);
+        mail.set_body_find("  word ");
+        assert_eq!(mail.body_find, "word");
+        assert_eq!(mail.step_find(3, 1), Some(1));
+        assert_eq!(mail.step_find(3, 1), Some(2));
+        assert_eq!(mail.step_find(3, 1), Some(0));
+        assert_eq!(mail.step_find(3, -1), Some(2));
     }
 
     #[test]
