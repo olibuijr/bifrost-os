@@ -116,7 +116,7 @@ fn decode_depth(doc: &Doc, s: &Stream, res: Option<&Dict>, depth: u8) -> Option<
     let (w, h) = (w as usize, h as usize);
     let (data, left) = doc.decode(s);
     let mut img = match left.as_deref() {
-        Some("DCTDecode") => from_gfx(&crate::imgdec::decode(&data)?),
+        Some("DCTDecode") => from_gfx(&crate::cg::imageio::decode(&data)?),
         Some(_) => return None,
         None => raw_image(doc, d, &data, w, h, res)?,
     };

@@ -134,7 +134,7 @@ impl Generator {
         // a type no provider draws is answered with its icon at once, without a worker
         let file = SourceFile::new(path.to_path_buf(), stamp);
         if self.registry.provider_for(&file.type_id).is_none() {
-            return Ok((key, Answer::of_art(icon_for(&file))));
+            return Ok((key, Answer::of_art(bifrost_ui::thumb_service::icon_for(&file))));
         }
         let cached = self.cache.path(&key);
         if let Some((w, h)) = raw_size(&cached) {

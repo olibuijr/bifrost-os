@@ -1543,18 +1543,17 @@ impl Settings {
     }
 
     fn join(&mut self, ui: &Ui, t: f64) -> Vec<Effect> {
+        // a one-field prompt (`forms`) finishes its flow here: the next prompt, a change through privd, or an alert
         if let Some((purpose, text)) = self.sheet.as_ref().and_then(|sh| sh.form_result()) {
             self.sheet = None;
-            return self.form_done(ui, &purpose, &text, t);
-        }
-        // a one-field prompt (`forms`) finishes its flow here: the next prompt, a change through privd, or an alert
             let r = match purpose {
                 super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname => super::sharing_page::finish(&purpose, &text).map(|_| None),
                 super::forms::Purpose::PrinterAddress => super::print_scan_page::finish(&purpose, &text).map(|_| None),
-                _ => super::users_page::finish(&purpose, &text),
+                _ => return self.form_done(ui, &purpose, &text, t),
             };
             self.edit_result(ui, t, r);
             return vec![];
+        }
         match self.sheet.take_if(|sh| sh.can_join()) {
             Some(sh) => vec![Effect::Wifi(sh.action())],
             None => vec![],
@@ -1593,6 +1592,9 @@ impl Settings {
             Ok(Some(p)) => self.sheet = Some(Sheet::form(ui, self.w, t, p)),
             Ok(None) => self.rebuild_visible(ui),
             Err(e) => self.alert = Some(Alert::new(ui, Command::Notice(e))),
+        }
+    }
+
     /// Applies a zone chosen in the picker: the clock and the page follow at once.
     fn pick_zone(&mut self, ui: &Ui, prefs: &mut Prefs, zone: &str) {
         self.zone_picker = None;

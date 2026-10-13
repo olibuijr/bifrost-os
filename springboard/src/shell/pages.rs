@@ -1644,7 +1644,7 @@ mod tests {
 
         // the computer name and the sharing services come first; Nearby Share and AirPlay & Handoff are the last group
         let sharing = spec(PageId::Sharing, &model(&info, &opts));
-        assert_eq!(sharing.groups[0].items[0].action, Action::Sharing(super::sharing_page::Edit::ComputerName));
+        assert_eq!(sharing.groups[0].items[0].action, Action::Sharing(super::super::sharing_page::Edit::ComputerName));
         assert_eq!(sharing.groups[2].items[0].action, Action::Push(PageId::Nearby));
         assert_eq!(sharing.groups[2].items[0].value, NEARBY_CHOICES[opts.nearby.min(NEARBY_CHOICES.len() - 1)]);
         assert_eq!(sharing.groups[2].items[1].action, Action::Push(PageId::AirPlayHandoff), "AirPlay & Handoff is reachable, not an orphan page");

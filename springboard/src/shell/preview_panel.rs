@@ -40,6 +40,8 @@ pub fn registry() -> Registry {
     r
 }
 
+/// Pictures larger than this are not decoded (the panel is a preview, not an editor).
+pub const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
 /// Text previews read this many bytes at most, and show at most [`MAX_TEXT_LINES`] lines of [`MAX_LINE_CHARS`] characters.
 pub const MAX_TEXT_BYTES: u64 = 16 * 1024;
 pub const MAX_TEXT_LINES: usize = 24;
@@ -87,6 +89,8 @@ pub fn local_path(url: &str) -> Option<&str> {
 pub enum Body {
     #[default]
     Empty,
+    /// waiting for the thumbnails service's picture of the file
+    Loading,
     Image(Image),
     Text(Vec<String>),
     Info(String),
@@ -100,15 +104,7 @@ pub fn load_body(item: Option<&PreviewItem>) -> Body {
     let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
     let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
     match kind_for(name) {
-        Kind::Pdf => Body::Info("PDF document. Open it in Books to read it.".into()),
-        Kind::Audio => Body::Info("Audio file. Open it in Music to play it.".into()),
-        Kind::Image => {
-            let small = std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.len() <= MAX_IMAGE_BYTES);
-            match small.then(|| std::fs::read(p).ok()).flatten().and_then(|b| crate::cg::imageio::decode(&b)) {
-                Some(im) => Body::Image(im),
-                None => Body::Info("This picture cannot be shown.".into()),
-            }
-        }
+        Kind::Pdf | Kind::Audio | Kind::Image => Body::Loading,
         Kind::Text => {
             let mut buf = Vec::new();
             match std::fs::File::open(p).and_then(|f| f.take(MAX_TEXT_BYTES).read_to_end(&mut buf)) {
@@ -118,6 +114,17 @@ pub fn load_body(item: Option<&PreviewItem>) -> Body {
         }
         Kind::Other => Body::Info(if ext.is_empty() { "No preview for this file.".into() } else { format!("No preview for .{ext} files.") }),
     }
+}
+
+/// The body for an item whose thumbnail has only an icon: which app plays or reads it, or that it has no preview.
+pub fn fallback_body(item: &PreviewItem) -> Body {
+    let name = local_path(&item.url).and_then(|p| Path::new(p).file_name()).and_then(|n| n.to_str()).unwrap_or("");
+    Body::Info(match kind_for(name) {
+        Kind::Pdf => "PDF document. Open it in Books to read it.".into(),
+        Kind::Audio => "Audio file. Open it in Music to play it.".into(),
+        Kind::Image => "This picture cannot be shown.".into(),
+        _ => "No preview for this file.".into(),
+    })
 }
 
 /// The panel's state. Lives in the shell; see the module docs.

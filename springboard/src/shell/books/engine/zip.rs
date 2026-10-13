@@ -1,7 +1,7 @@
 //! A read-only ZIP reader (central directory, stored and deflated members),
 //! enough for EPUB containers.
 
-use super::inflate;
+use bifrost_render::cg::pdf::inflate;
 
 #[derive(Clone, Debug)]
 struct Entry {
