@@ -48,6 +48,8 @@ pub const MENU_ATTACH: u32 = 7;
 pub const MENU_EMOJI: u32 = 8;
 pub const MENU_SETTINGS: u32 = 9;
 pub const MENU_FIND: u32 = 10;
+pub const MENU_PIN_UP: u32 = 11;
+pub const MENU_PIN_DOWN: u32 = 12;
 // Message context menu.
 pub const CTX_REPLY: u32 = 20;
 pub const CTX_EDIT: u32 = 21;
@@ -477,9 +479,19 @@ impl MessagesWindow {
     }
 
     fn pin(&mut self, ctx: &Ctx, id: &str) {
-        self.model.toggle_pin(id);
+        if let Err(e) = self.model.toggle_pin(id) {
+            self.model.status = e;
+            return;
+        }
         self.save_prefs();
         self.badge(ctx);
+    }
+
+    /// Moves a pinned conversation one place up or down among the pins.
+    fn move_pin(&mut self, id: &str, up: bool) {
+        if self.model.move_pin(id, up) {
+            self.save_prefs();
+        }
     }
 
     fn mute(&mut self, ctx: &Ctx, id: &str) {
@@ -544,7 +556,7 @@ impl MessagesWindow {
             MENU_EMOJI => self.open_emoji(None),
             MENU_SETTINGS => self.model.overlay = Overlay::Settings,
             MENU_FIND => self.model.search_focus = true,
-            MENU_PIN | MENU_MUTE | MENU_UNREAD | MENU_DELETE | MENU_DETAILS => {
+            MENU_PIN | MENU_PIN_UP | MENU_PIN_DOWN | MENU_MUTE | MENU_UNREAD | MENU_DELETE | MENU_DETAILS => {
                 let from_menu = match &self.ctx_target {
                     Some(CtxTarget::Room(room)) => Some(room.clone()),
                     _ => None,
@@ -552,6 +564,8 @@ impl MessagesWindow {
                 let Some(room) = from_menu.or_else(|| self.model.selected.clone()) else { return false };
                 match id {
                     MENU_PIN => self.pin(ctx, &room),
+                    MENU_PIN_UP => self.move_pin(&room, true),
+                    MENU_PIN_DOWN => self.move_pin(&room, false),
                     MENU_MUTE => self.mute(ctx, &room),
                     MENU_UNREAD => self.mark_unread(ctx, &room),
                     MENU_DELETE => self.model.overlay = Overlay::Confirm(room),
@@ -594,6 +608,8 @@ impl MessagesWindow {
                 title: "Conversation".into(),
                 items: vec![
                     AppMenuItem::new(MENU_PIN, if pinned { "Unpin" } else { "Pin" }).key("cmd+shift+p").enabled(has_room),
+                    AppMenuItem::new(MENU_PIN_UP, "Move Pin Up").enabled(has_room && room.is_some_and(|id| self.model.can_move_pin(id, true))),
+                    AppMenuItem::new(MENU_PIN_DOWN, "Move Pin Down").enabled(has_room && room.is_some_and(|id| self.model.can_move_pin(id, false))),
                     AppMenuItem::new(MENU_MUTE, if muted { "Show Alerts" } else { "Hide Alerts" }).key("cmd+shift+d").enabled(has_room),
                     AppMenuItem::new(MENU_UNREAD, if marked { "Mark as Read" } else { "Mark as Unread" }).key("cmd+shift+u").enabled(has_room),
                     AppMenuItem::separator(),
@@ -617,12 +633,16 @@ impl MessagesWindow {
         }
         let item = |id: u32, label: &str, enabled: bool| ContextItem { id, label: label.to_string(), enabled };
         if let Some(room) = self.room_at(&ctx.ui, x, y) {
-            let items = vec![
-                item(MENU_PIN, if self.model.is_pinned(&room) { "Unpin" } else { "Pin" }, true),
+            let mut items = vec![item(MENU_PIN, if self.model.is_pinned(&room) { "Unpin" } else { "Pin" }, true)];
+            if self.model.is_pinned(&room) {
+                items.push(item(MENU_PIN_UP, "Move Pin Up", self.model.can_move_pin(&room, true)));
+                items.push(item(MENU_PIN_DOWN, "Move Pin Down", self.model.can_move_pin(&room, false)));
+            }
+            items.extend([
                 item(MENU_MUTE, if self.model.is_muted(&room) { "Show Alerts" } else { "Hide Alerts" }, true),
                 item(MENU_UNREAD, if self.model.is_marked_unread(&room) { "Mark as Read" } else { "Mark as Unread" }, true),
                 item(MENU_DELETE, "Delete Conversation...", true),
-            ];
+            ]);
             self.ctx_target = Some(CtxTarget::Room(room));
             ctx.context_menu(x, y, items);
             return false;
@@ -662,7 +682,9 @@ impl MessagesWindow {
     pub fn context_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         let target = self.ctx_target.clone();
         match (id, target) {
-            (MENU_PIN | MENU_MUTE | MENU_UNREAD | MENU_DELETE, Some(CtxTarget::Room(_))) => return self.run_command(ctx, id),
+            (MENU_PIN | MENU_PIN_UP | MENU_PIN_DOWN | MENU_MUTE | MENU_UNREAD | MENU_DELETE, Some(CtxTarget::Room(_))) => {
+                return self.run_command(ctx, id)
+            }
             (CTX_REPLY, Some(CtxTarget::Message(m))) => {
                 self.model.begin_reply(&m);
             }

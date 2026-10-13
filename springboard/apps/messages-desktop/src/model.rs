@@ -272,6 +272,9 @@ fn toggle(list: &mut Vec<String>, id: &str) -> bool {
     }
 }
 
+/// The most conversations that can be pinned at once.
+pub const PIN_LIMIT: usize = 9;
+
 /// What the composer's text becomes when it is sent.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Compose {
@@ -433,9 +436,33 @@ impl Messages {
         self.prefs.unread_marks.iter().any(|x| x == id)
     }
 
-    /// Pins or unpins a conversation. True when it is pinned afterwards.
-    pub fn toggle_pin(&mut self, id: &str) -> bool {
-        toggle(&mut self.prefs.pinned, id)
+    /// Pins or unpins a conversation. True when it is pinned afterwards. A new pin goes after the others; past
+    /// [`PIN_LIMIT`] it is refused with the reason.
+    pub fn toggle_pin(&mut self, id: &str) -> Result<bool, String> {
+        if !self.is_pinned(id) && self.prefs.pinned.len() >= PIN_LIMIT {
+            return Err(format!("You can pin up to {PIN_LIMIT} conversations"));
+        }
+        Ok(toggle(&mut self.prefs.pinned, id))
+    }
+
+    /// True when the pinned conversation `id` has a neighbour to swap places with, above (`up`) or below it.
+    pub fn can_move_pin(&self, id: &str, up: bool) -> bool {
+        match self.prefs.pinned.iter().position(|x| x == id) {
+            Some(i) if up => i > 0,
+            Some(i) => i + 1 < self.prefs.pinned.len(),
+            None => false,
+        }
+    }
+
+    /// Moves the pinned conversation `id` one place up or down among the pins. False when it cannot move.
+    pub fn move_pin(&mut self, id: &str, up: bool) -> bool {
+        if !self.can_move_pin(id, up) {
+            return false;
+        }
+        let Some(i) = self.prefs.pinned.iter().position(|x| x == id) else { return false };
+        let j = if up { i - 1 } else { i + 1 };
+        self.prefs.pinned.swap(i, j);
+        true
     }
 
     /// Hides or shows the alerts of a conversation. True when they are hidden afterwards.
@@ -454,11 +481,12 @@ impl Messages {
         marked
     }
 
-    /// The conversations the list shows: those matching the search, pinned ones first, the rest in their order.
+    /// The conversations the list shows: those matching the search, the pinned ones first in the order they were pinned
+    /// (and moved to), the rest in their order.
     pub fn visible_rooms(&self) -> Vec<&Room> {
         let query = self.search.trim().to_lowercase();
         let mut rooms: Vec<&Room> = self.rooms.iter().filter(|r| r.matches(&self.user_id, &query)).collect();
-        rooms.sort_by_key(|r| !self.is_pinned(&r.id));
+        rooms.sort_by_key(|r| self.prefs.pinned.iter().position(|x| *x == r.id).unwrap_or(usize::MAX));
         rooms
     }
 
@@ -1010,10 +1038,41 @@ mod tests {
     fn pinned_conversations_sort_first_and_keep_their_order() {
         let mut m = two_rooms();
         assert_eq!(m.visible_rooms().iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["!b:x", "!a:x"]);
-        assert!(m.toggle_pin("!a:x"));
+        assert_eq!(m.toggle_pin("!a:x"), Ok(true));
         assert_eq!(m.visible_rooms()[0].id, "!a:x");
-        assert!(!m.toggle_pin("!a:x"), "a second toggle unpins");
+        assert_eq!(m.toggle_pin("!a:x"), Ok(false), "a second toggle unpins");
         assert_eq!(m.visible_rooms()[0].id, "!b:x");
+    }
+
+    #[test]
+    fn pins_keep_the_order_they_were_made_in_and_can_be_moved() {
+        let mut m = two_rooms();
+        m.apply_sync(&sync(vec![update("!c:x", vec![ev("$3", "@a:x", 5, Body::Text("c".into()))], 0)]));
+        m.toggle_pin("!a:x").unwrap();
+        m.toggle_pin("!c:x").unwrap();
+        let ids = |m: &Messages| m.visible_rooms().iter().map(|r| r.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&m), ["!a:x", "!c:x", "!b:x"], "pins in pin order, then the rest");
+        assert!(!m.can_move_pin("!a:x", true) && m.can_move_pin("!a:x", false));
+        assert!(!m.can_move_pin("!b:x", true), "an unpinned conversation does not move");
+        assert!(m.move_pin("!c:x", true));
+        assert_eq!(ids(&m), ["!c:x", "!a:x", "!b:x"]);
+        assert!(!m.move_pin("!c:x", true), "already first");
+        assert!(!m.move_pin("!a:x", false), "already last of the pins");
+    }
+
+    #[test]
+    fn at_most_nine_conversations_can_be_pinned() {
+        let mut m = signed_in();
+        let updates: Vec<RoomUpdate> = (0..PIN_LIMIT + 1).map(|i| update(&format!("!r{i}:x"), vec![], 0)).collect();
+        m.apply_sync(&sync(updates));
+        for i in 0..PIN_LIMIT {
+            assert_eq!(m.toggle_pin(&format!("!r{i}:x")), Ok(true));
+        }
+        let refused = m.toggle_pin(&format!("!r{PIN_LIMIT}:x"));
+        assert!(refused.unwrap_err().contains('9'));
+        assert!(!m.is_pinned(&format!("!r{PIN_LIMIT}:x")));
+        assert_eq!(m.toggle_pin("!r0:x"), Ok(false), "a pin can always be taken off");
+        assert_eq!(m.toggle_pin(&format!("!r{PIN_LIMIT}:x")), Ok(true), "which makes room");
     }
 
     #[test]
@@ -1075,7 +1134,7 @@ mod tests {
     fn a_removed_conversation_leaves_no_trace() {
         let mut m = two_rooms();
         m.select("!a:x");
-        m.toggle_pin("!a:x");
+        m.toggle_pin("!a:x").unwrap();
         m.toggle_mute("!a:x");
         m.overlay = Overlay::Details;
         m.remove_room("!a:x");
@@ -1239,7 +1298,7 @@ mod tests {
     #[test]
     fn signing_out_keeps_only_the_preferences() {
         let mut m = two_rooms();
-        m.toggle_pin("!a:x");
+        m.toggle_pin("!a:x").unwrap();
         m.composer = "x".into();
         m.sign_out();
         assert!(!m.signed_in());
