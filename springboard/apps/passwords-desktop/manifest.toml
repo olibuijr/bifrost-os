@@ -1,0 +1,12 @@
+id = "is.olibuijr.passwords.desktop"
+name = "Passwords"
+version = "0.1.0"
+exec = "bifrost-passwords"
+icon = "icon.png"
+min_shell = "0.4.84"
+summary = "Saved website logins: search, reveal, copy, generate, delete, import and export CSV."
+category = "Utilities"
+architecture = "x86_64-linux"
+permissions = ["keychain", "storage"]
+keychain_groups = ["is.bifrost.passwords"]
+window = "full-size"
