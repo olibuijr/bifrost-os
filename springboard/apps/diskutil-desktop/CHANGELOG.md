@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Refusal sentences come from the disk session (`Refusal::sentence`), shared with the `diskutil` command line tool; the app's own copy is removed.
+
 ## 0.1.0
 
 - New app: Disk Utility. A sidebar of internal and external disks with their partitions, and an info pane with
