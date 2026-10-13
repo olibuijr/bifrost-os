@@ -4,7 +4,8 @@
 
 use crate::color::{self, convert, copy_text, CopyFormat, Reading, Rgb8, Space};
 use crate::loupe::{self, Pointer};
-use crate::source::{PixelRect, ScreenSource};
+use crate::source::{Ask, PixelRect, ScreenSource};
+use bifrost_core::json::Json;
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::{TextCache, Ui};
@@ -85,6 +86,21 @@ impl ColorMeter {
             Some((x, y)) => self.pointer.follow(x, y),
             None => false,
         }
+    }
+
+    /// The requests the source needs sent now, around the readout's pixel.
+    pub fn wants(&mut self) -> Vec<Ask> {
+        self.source.wants((self.pointer.x, self.pointer.y), self.cells)
+    }
+
+    /// Records the request id the shell gave `ask`.
+    pub fn track(&mut self, request: u32, ask: Ask) {
+        self.source.track(request, ask);
+    }
+
+    /// Takes the shell's reply to `request` when it was one of ours. True when a frame is needed.
+    pub fn answer(&mut self, request: u32, result: &Result<Json, String>) -> bool {
+        self.source.answer(request, result)
     }
 
     /// The display size, when the source can read one.
@@ -289,7 +305,7 @@ mod tests {
 
     #[test]
     fn without_a_source_there_is_no_reading_and_no_loupe() {
-        let m = ColorMeter::new(Box::new(crate::source::NoCapture));
+        let m = ColorMeter::new(Box::new(crate::source::ShellSource::default()));
         assert!(m.reading().is_none());
         assert!(m.loupe_pixels().is_none());
         assert!(m.rows().iter().any(|(_, v)| v == "Not available"));
@@ -297,7 +313,7 @@ mod tests {
 
     #[test]
     fn the_loupe_is_a_square_that_fits_the_window() {
-        let mut m = ColorMeter::new(Box::new(crate::source::NoCapture));
+        let mut m = ColorMeter::new(Box::new(crate::source::ShellSource::default()));
         m.size = (1000.0, 640.0);
         let l = m.loupe_rect();
         assert_eq!(l.w, l.h);
