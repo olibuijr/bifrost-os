@@ -5,7 +5,7 @@
 //! the common forms other writers produce (hex escapes, `\uN` with its fallback character, `\plain`, `\pard`), and
 //! skips the destinations it does not use (colour and style tables, info, pictures, `\*` extensions).
 
-use crate::text::{Align, Cell, Style, DEFAULT_SIZE, FAMILIES};
+use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, DEFAULT_TAB, FAMILIES, MAX_TAB, MIN_TAB, SPACINGS};
 
 /// Whether `bytes` are an RTF file (the header every RTF file starts with).
 pub fn is_rtf(bytes: &[u8]) -> bool {
@@ -14,16 +14,26 @@ pub fn is_rtf(bytes: &[u8]) -> bool {
 
 /// Destinations whose text is not document text.
 const SKIPPED_DESTINATIONS: &[&str] = &[
-    "colortbl", "stylesheet", "info", "pict", "header", "headerl", "headerr", "footer", "footerl", "footerr", "footnote",
+    "stylesheet", "info", "pict", "header", "headerl", "headerr", "footer", "footerl", "footerr", "footnote",
     "generator", "listtable", "listoverridetable", "rsidtbl", "xmlnstbl", "latentstyles", "themedata",
     "colorschememapping", "datastore", "fldinst", "object", "mmathPr", "filetbl", "revtbl",
 ];
 
-/// Writes the cells as RTF.
+/// Writes the cells as RTF with the default tab stops.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn write(cells: &[Cell]) -> Vec<u8> {
-    let mut out = String::from("{\\rtf1\\ansi\\deff0{\\fonttbl");
+    write_doc(cells, DEFAULT_TAB)
+}
+
+/// Writes the cells as RTF: the font and colour tables, the tab stop distance (`\deftab`, in twips), then paragraphs.
+pub fn write_doc(cells: &[Cell], tab: f32) -> Vec<u8> {
+    let mut out = format!("{{\\rtf1\\ansi\\deff0\\deftab{}{{\\fonttbl", (tab * 20.0).round() as i32);
     for (i, family) in FAMILIES.iter().enumerate() {
         out += &format!("{{\\f{i} {family};}}");
+    }
+    out += "}{\\colortbl;";
+    for (_, [r, g, b]) in COLORS.iter().skip(1) {
+        out += &format!("\\red{r}\\green{g}\\blue{b};");
     }
     out += "}\n";
     let mut para_start = true;
@@ -31,6 +41,7 @@ pub fn write(cells: &[Cell]) -> Vec<u8> {
     for c in cells {
         if para_start {
             out += &format!("\\pard\\q{} ", align_code(c.style.align));
+            out += &paragraph_words(&c.style);
             para_start = false;
         }
         if c.ch == '\n' {
@@ -49,10 +60,16 @@ pub fn write(cells: &[Cell]) -> Vec<u8> {
 }
 
 /// Reads an RTF file. Text the reader does not understand is dropped, never shown as garbage.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn read(bytes: &[u8]) -> Vec<Cell> {
+    read_doc(bytes).0
+}
+
+/// Reads an RTF file: the cells and the distance between tab stops.
+pub fn read_doc(bytes: &[u8]) -> (Vec<Cell>, f32) {
     let mut reader = Reader::default();
     reader.run(bytes);
-    reader.cells
+    (reader.cells, reader.tab.clamp(MIN_TAB, MAX_TAB))
 }
 
 /// Reads plain text: UTF-8 (invalid bytes become the replacement character), with CR LF as one line break.
@@ -76,13 +93,28 @@ fn align_code(align: Align) -> char {
 }
 
 fn same_character(a: &Style, b: &Style) -> bool {
-    a.bold == b.bold && a.italic == b.italic && a.underline == b.underline && a.size == b.size && a.font == b.font
+    a.bold == b.bold && a.italic == b.italic && a.underline == b.underline && a.size == b.size && a.font == b.font && a.color == b.color
+}
+
+/// The control words of a paragraph's line spacing (`\sl` in twips with `\slmult1`) and list.
+fn paragraph_words(style: &Style) -> String {
+    let mut words = String::new();
+    if style.spacing > 0 {
+        let multiple = SPACINGS.get(style.spacing as usize).copied().unwrap_or(1.0);
+        words += &format!("\\sl{}\\slmult1 ", (multiple * 240.0).round() as i32);
+    }
+    match style.list {
+        ListKind::None => {}
+        ListKind::Bullet => words += "\\pnlvlblt ",
+        ListKind::Numbered => words += "\\pnlvlbody ",
+    }
+    words
 }
 
 /// The control words that set a character's formatting from nothing: `\plain` first, so nothing is inherited.
 fn character_words(style: &Style) -> String {
     let mut words = String::from("\\plain ");
-    words += &format!("\\f{} \\fs{} ", style.font, (style.size * 2.0).round() as i32);
+    words += &format!("\\f{} \\fs{} \\cf{} ", style.font, (style.size * 2.0).round() as i32, style.color);
     if style.bold {
         words += "\\b ";
     }
@@ -138,11 +170,20 @@ struct Reader {
     group_start: bool,
     /// the high surrogate of a `\u` pair, until its low half arrives
     high: Option<u32>,
+    /// the depth of the colour table group, while it is read; its entries (index into `COLORS`, `None` for the
+    /// automatic colour), and the entry being read
+    ctable: Option<usize>,
+    colors: Vec<Option<u8>>,
+    rgb: [i64; 3],
+    /// the distance between tab stops, from `\deftab`
+    tab: f32,
 }
 
 impl Reader {
     fn run(&mut self, bytes: &[u8]) {
         self.uc = 1;
+        self.tab = DEFAULT_TAB;
+        self.rgb = [-1; 3];
         let mut i = 0;
         while i < bytes.len() {
             let b = bytes[i];
@@ -163,6 +204,9 @@ impl Reader {
                     if self.table == Some(closing) {
                         self.table = None;
                     }
+                    if self.ctable == Some(closing) {
+                        self.ctable = None;
+                    }
                     self.group_start = false;
                 }
                 b'\\' => {
@@ -176,6 +220,10 @@ impl Reader {
                     }
                     if self.table.is_some() {
                         self.table_char(b as char);
+                    } else if self.ctable.is_some() {
+                        if b == b';' {
+                            self.color_entry();
+                        }
                     } else {
                         self.literal(b as char);
                     }
@@ -219,6 +267,12 @@ impl Reader {
             }
             if first && name == "fonttbl" {
                 self.table = Some(self.depth);
+                return i;
+            }
+            if first && name == "colortbl" {
+                self.ctable = Some(self.depth);
+                self.rgb = [-1; 3];
+                self.colors.clear();
                 return i;
             }
             if first && SKIPPED_DESTINATIONS.contains(&name.as_str()) {
@@ -273,6 +327,7 @@ impl Reader {
             "ul" => self.cur.underline = on,
             "ulnone" => self.cur.underline = false,
             "plain" => {
+                self.cur.color = 0;
                 self.cur.bold = false;
                 self.cur.italic = false;
                 self.cur.underline = false;
@@ -298,7 +353,33 @@ impl Reader {
             "qc" => self.cur.align = Align::Center,
             "qr" => self.cur.align = Align::Right,
             "qj" => self.cur.align = Align::Justified,
-            "pard" => self.cur.align = Align::Left,
+            "pard" => {
+                self.cur.align = Align::Left;
+                self.cur.spacing = 0;
+                self.cur.list = ListKind::None;
+            }
+            "red" if self.ctable.is_some() => self.rgb[0] = param.unwrap_or(0),
+            "green" if self.ctable.is_some() => self.rgb[1] = param.unwrap_or(0),
+            "blue" if self.ctable.is_some() => self.rgb[2] = param.unwrap_or(0),
+            "cf" => {
+                self.cur.color = match param {
+                    Some(n) if n > 0 => self.colors.get(n as usize).copied().flatten().unwrap_or(0),
+                    _ => 0,
+                };
+            }
+            "sl" => {
+                // `\sl240\slmult1` is single spacing; a height without `\slmult1` is read the same way
+                if let Some(twips) = param.filter(|&v| v > 0) {
+                    self.cur.spacing = nearest_spacing(twips as f32 / 240.0);
+                }
+            }
+            "pnlvlblt" => self.cur.list = ListKind::Bullet,
+            "pnlvlbody" => self.cur.list = ListKind::Numbered,
+            "deftab" => {
+                if let Some(twips) = param.filter(|&v| v > 0) {
+                    self.tab = twips as f32 / 20.0;
+                }
+            }
             "par" | "line" => self.push('\n'),
             "tab" => self.push('\t'),
             "uc" => self.uc = param.unwrap_or(1).max(0) as usize,
@@ -322,6 +403,14 @@ impl Reader {
             }
             _ => {}
         }
+    }
+
+    /// A `;` in the colour table ends an entry. The first entry (no components) is the automatic colour.
+    fn color_entry(&mut self) {
+        let [r, g, b] = self.rgb;
+        let entry = if r < 0 && g < 0 && b < 0 { None } else { Some(nearest_color([r.max(0) as i32, g.max(0) as i32, b.max(0) as i32])) };
+        self.colors.push(entry);
+        self.rgb = [-1; 3];
     }
 
     fn font_index(&self, number: u32) -> u8 {
@@ -358,6 +447,29 @@ impl Reader {
     }
 }
 
+/// The spacing index closest to a multiple of the natural line height.
+fn nearest_spacing(multiple: f32) -> u8 {
+    let mut best = 0;
+    for (i, m) in SPACINGS.iter().enumerate() {
+        if (m - multiple).abs() < (SPACINGS[best] - multiple).abs() {
+            best = i;
+        }
+    }
+    best as u8
+}
+
+/// The palette colour (never the default entry) closest to an rgb value.
+pub fn nearest_color(rgb: [i32; 3]) -> u8 {
+    let dist = |c: &[u8; 3]| (0..3).map(|k| (c[k] as i32 - rgb[k]).pow(2)).sum::<i32>();
+    let mut best = 1;
+    for (i, (_, c)) in COLORS.iter().enumerate().skip(1) {
+        if dist(c) < dist(&COLORS[best].1) {
+            best = i;
+        }
+    }
+    best as u8
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -383,6 +495,23 @@ mod tests {
         ];
         let back = read(&write(&cells));
         assert_eq!(back, cells);
+    }
+
+    #[test]
+    fn colour_spacing_list_and_tab_stops_round_trip() {
+        let red = Style { color: 1, ..Style::default() };
+        let listed = Style { list: ListKind::Numbered, spacing: 2, ..Style::default() };
+        let cells = vec![cell('a', red), cell('\n', red), cell('b', listed), cell('\n', listed)];
+        let (back, tab) = read_doc(&write_doc(&cells, 54.0));
+        assert_eq!(back, cells);
+        assert_eq!(tab, 54.0);
+    }
+
+    #[test]
+    fn a_foreign_colour_table_maps_to_the_nearest_palette_colour() {
+        let back = read(b"{\\rtf1{\\colortbl;\\red250\\green10\\blue10;}\\cf1 x\\cf0 y}");
+        assert_eq!(back[0].style.color, 1, "near red");
+        assert_eq!(back[1].style.color, 0);
     }
 
     #[test]
