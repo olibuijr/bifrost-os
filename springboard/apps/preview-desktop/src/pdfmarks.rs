@@ -205,7 +205,10 @@ mod tests {
         assert_eq!(e.annotations.len(), 1);
         let a = &e.annotations[0];
         assert_eq!(a.subtype, "Highlight");
-        assert_eq!(a.rect, [0.0, 396.0, 306.0, 792.0]);
+        // the page-to-user mapping is an inverted matrix, so the corners carry float noise (395.99999999999994)
+        for (got, want) in a.rect.iter().zip([0.0, 396.0, 306.0, 792.0]) {
+            assert!((got - want).abs() < 1e-9, "{:?}", a.rect);
+        }
         assert_eq!(a.entries["QuadPoints"].array().unwrap().len(), 8);
         assert!(a.appearance.starts_with(b"/GS0 gs"));
     }
