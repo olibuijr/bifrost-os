@@ -15,6 +15,13 @@
       "note": "59 named line drawings; unknown names draw nothing. Not the SF Symbols catalogue. The renderer's symbol font path finds no real symbol font on the device, so the drawings are what ships"
     },
     {
+      "feature": "Symbol drawing: shape painters and named icons",
+      "apple": "No direct counterpart; the fill behind a symbol image (CGContext fill of a path into a rect)",
+      "bifrost": "springboard/sdk/src/glyph_draw.rs (paint, disc, ring, segment, arc, ellipse, either, globe, mic, dismiss_keyboard, alarm_clock, stopwatch, timer re-exported from springboard/render/src/sdf_glyphs.rs; springboard/src/shell/glyphs.rs re-exports the same)",
+      "status": "partial",
+      "note": "The shell's painters are now the SDK's: apps can draw through bifrost_app::glyph_draw, and shell and SDK draw identical pixels (tests in sdk glyph_draw and render sdf_glyphs). Still one colour per call, no rendering modes (monochrome, hierarchical, palette) and no symbol weights or scales; apps still import springboard::shell::glyphs until they move (no app changes this sprint). Parity needs a Midget check"
+    },
+    {
       "feature": "Appear, disappear and scale effects",
       "apple": "appear, disappear, scale (AppearSymbolEffect, DisappearSymbolEffect, ScaleSymbolEffect)",
       "bifrost": "springboard/ui/src/symbol_effect.rs, springboard/sdk/src/glyphs.rs (glyph_effect)",
