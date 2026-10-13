@@ -16,13 +16,13 @@
     "size": 9711308
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: ヒラギノ丸ゴ ProN W4",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family ヒラギノ丸ゴ ProN W4: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/ヒラギノ明朝 ProN.ttc",
@@ -37,13 +37,13 @@
     "size": 19394720
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: ヒラギノ明朝 ProN",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family ヒラギノ明朝 ProN: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W0.ttc",
@@ -58,13 +58,13 @@
     "size": 3567260
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W1.ttc",
@@ -79,13 +79,13 @@
     "size": 7270616
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W2.ttc",
@@ -100,13 +100,13 @@
     "size": 7253864
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
@@ -121,13 +121,13 @@
     "size": 7848412
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc",
@@ -142,13 +142,13 @@
     "size": 7242460
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W5.ttc",
@@ -163,13 +163,13 @@
     "size": 7242924
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",
@@ -184,13 +184,13 @@
     "size": 7950428
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W7.ttc",
@@ -205,13 +205,13 @@
     "size": 3603380
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W8.ttc",
@@ -226,13 +226,13 @@
     "size": 3740272
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W9.ttc",
@@ -247,13 +247,13 @@
     "size": 3465048
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/儷宋 Pro.ttf",
@@ -268,13 +268,13 @@
     "size": 8796
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: 儷宋 Pro",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family 儷宋 Pro: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/儷黑 Pro.ttf",
@@ -289,13 +289,13 @@
     "size": 5776
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: 儷黑 Pro",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family 儷黑 Pro: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/华文仿宋.ttf",
@@ -310,13 +310,13 @@
     "size": 10744
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: 华文仿宋",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family 华文仿宋: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/华文细黑.ttf",
@@ -331,13 +331,13 @@
     "size": 8500
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: 华文细黑",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family 华文细黑: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/华文黑体.ttf",
@@ -352,13 +352,13 @@
     "size": 9284
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: 华文黑体",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family 华文黑体: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }

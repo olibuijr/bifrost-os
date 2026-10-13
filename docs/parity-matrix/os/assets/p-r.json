@@ -226,13 +226,13 @@
     "size": 1769580
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Palatino",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Palatino: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PTMono.ttc",
@@ -247,13 +247,13 @@
     "size": 309040
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced font: PTMono",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family PTMono: no BifrOSt equivalent; BifrOSt mono set is JetBrains Mono, Geist Mono, Fira Code, Source Code Pro. Needed for documents and Terminal themes that name it; candidate: Liberation Mono or Cousine (OFL/Apache)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PTSans.ttc",
@@ -268,13 +268,13 @@
     "size": 2765928
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: PTSans",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family PTSans: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PTSerif.ttc",
@@ -289,13 +289,13 @@
     "size": 1151016
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: PTSerif",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family PTSerif: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PTSerifCaption.ttc",
@@ -310,13 +310,13 @@
     "size": 699800
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: PTSerifCaption",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family PTSerifCaption: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Papyrus.ttc",
@@ -331,13 +331,13 @@
     "size": 1102236
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Papyrus",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Papyrus: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PartyLET-plain.ttf",
@@ -352,13 +352,13 @@
     "size": 208944
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: PartyLET-plain",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family PartyLET-plain: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Phosphate.ttc",
@@ -373,13 +373,13 @@
     "size": 222748
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Phosphate",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Phosphate: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/PlantagenetCherokee.ttf",
@@ -394,13 +394,13 @@
     "size": 71952
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: PlantagenetCherokee",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family PlantagenetCherokee: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Raanana.ttc",
@@ -415,13 +415,13 @@
     "size": 40200
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Raanana",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Raanana: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Rockwell.ttc",
@@ -436,13 +436,13 @@
     "size": 471440
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Rockwell",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Rockwell: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MapKit.framework/Versions/A/Resources/pcf.otf",
@@ -457,13 +457,13 @@
     "size": 13660
    },
    "description": "",
-   "role": "",
+   "role": "Fallback or utility font: pcf",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "pcf: system fallback/utility font (last-resort glyph boxes, invisible glyphs, keyboard glyphs); BifrOSt font fallback (springboard/render/src/fontfallback.rs) has no last-resort glyph font, tofu is drawn by the renderer",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/resizeDown-bottom.pdf",
@@ -1570,13 +1570,13 @@
     "size": 136960
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: PortagoITC TT",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family PortagoITC TT: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Princetown LET Fonts.ttf",
@@ -1591,13 +1591,13 @@
     "size": 36720
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Princetown LET Fonts",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Princetown LET Fonts: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Raya.ttc",
@@ -1612,13 +1612,13 @@
     "size": 55308
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Raya",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Raya: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/PCmyoungjo.ttf",
@@ -1633,13 +1633,13 @@
     "size": 8156
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: PCmyoungjo",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family PCmyoungjo: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/PadyakkeExpandedOne.otf",
@@ -1654,13 +1654,13 @@
     "size": 6984
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: PadyakkeExpandedOne",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family PadyakkeExpandedOne: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Pilgiche.ttf",
@@ -1675,13 +1675,13 @@
     "size": 7864
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Pilgiche",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Pilgiche: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Produkt.ttc",
@@ -1696,13 +1696,13 @@
     "size": 212528
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Produkt",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Produkt: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/ProximaNova.ttc",
@@ -1717,13 +1717,13 @@
     "size": 58160
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: ProximaNova",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family ProximaNova: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/PublicoHeadline.ttc",
@@ -1738,13 +1738,13 @@
     "size": 31772
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: PublicoHeadline",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family PublicoHeadline: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/PublicoText.ttc",
@@ -1759,13 +1759,13 @@
     "size": 29480
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: PublicoText",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family PublicoText: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/QuotesCaps-Regular.otf",
@@ -1780,13 +1780,13 @@
     "size": 8632
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: QuotesCaps-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family QuotesCaps-Regular: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/QuotesScript-Regular.otf",
@@ -1801,13 +1801,13 @@
     "size": 9608
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: QuotesScript-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family QuotesScript-Regular: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Reserved/PingFangUI.ttc",
@@ -1822,13 +1822,13 @@
     "size": 61473880
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/PopupAppeared.aiff",
@@ -1948,13 +1948,13 @@
     "size": 321112
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Proxima Nova Bold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Proxima Nova Bold: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Sounds/Ping.aiff",

@@ -499,13 +499,13 @@
     "size": 619536
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: MarkerFelt",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family MarkerFelt: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Menlo.ttc",
@@ -520,13 +520,13 @@
     "size": 2134132
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced font: Menlo",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Menlo: no BifrOSt equivalent; BifrOSt mono set is JetBrains Mono, Geist Mono, Fira Code, Source Code Pro. Needed for documents and Terminal themes that name it; candidate: Liberation Mono or Cousine (OFL/Apache)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Monaco.ttf",
@@ -541,13 +541,13 @@
     "size": 529148
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced font: Monaco",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Monaco: no BifrOSt equivalent; BifrOSt mono set is JetBrains Mono, Geist Mono, Fira Code, Source Code Pro. Needed for documents and Terminal themes that name it; candidate: Liberation Mono or Cousine (OFL/Apache)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/MuktaMahee.ttc",
@@ -562,13 +562,13 @@
     "size": 846728
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: MuktaMahee",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family MuktaMahee: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/NewYork.ttf",
@@ -583,13 +583,13 @@
     "size": 721580
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: NewYork",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NewYork: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/NewYorkItalic.ttf",
@@ -604,13 +604,13 @@
     "size": 597572
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: NewYorkItalic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NewYorkItalic: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Noteworthy.ttc",
@@ -625,13 +625,13 @@
     "size": 552564
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Noteworthy",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Noteworthy: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/NotoNastaliq.ttc",
@@ -646,13 +646,13 @@
     "size": 913612
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoNastaliq",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoNastaliq: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/NotoSansArmenian.ttc",
@@ -667,13 +667,13 @@
     "size": 155048
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansArmenian",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansArmenian: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/NotoSansKannada.ttc",
@@ -688,13 +688,13 @@
     "size": 1034352
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansKannada",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansKannada: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/NotoSansMyanmar.ttc",
@@ -709,13 +709,13 @@
     "size": 1693624
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansMyanmar",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansMyanmar: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/NotoSansOriya.ttc",
@@ -730,13 +730,13 @@
     "size": 315292
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansOriya",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansOriya: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/NotoSerifMyanmar.ttc",
@@ -751,13 +751,13 @@
     "size": 1134164
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSerifMyanmar",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSerifMyanmar: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Optima.ttc",
@@ -772,13 +772,13 @@
     "size": 247824
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Optima",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Optima: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Malayalam MN.ttc",
@@ -793,13 +793,13 @@
     "size": 169844
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Malayalam MN",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Malayalam MN: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Malayalam Sangam MN.ttc",
@@ -814,13 +814,13 @@
     "size": 179992
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Malayalam Sangam MN",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Malayalam Sangam MN: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Marion.ttc",
@@ -835,13 +835,13 @@
     "size": 914976
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Marion",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Marion: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Microsoft Sans Serif.ttf",
@@ -856,13 +856,13 @@
     "size": 652248
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Microsoft Sans Serif",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Microsoft Sans Serif: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Mishafi Gold.ttf",
@@ -877,13 +877,13 @@
     "size": 647648
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Mishafi Gold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Mishafi Gold: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Mishafi.ttf",
@@ -898,13 +898,13 @@
     "size": 1425176
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Mishafi",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Mishafi: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Mshtakan.ttc",
@@ -919,13 +919,13 @@
     "size": 169068
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Mshtakan",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Mshtakan: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Muna.ttc",
@@ -940,13 +940,13 @@
     "size": 196780
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Muna",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Muna: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Myanmar MN.ttc",
@@ -961,13 +961,13 @@
     "size": 237220
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Myanmar MN",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Myanmar MN: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Myanmar Sangam MN.ttc",
@@ -982,13 +982,13 @@
     "size": 188768
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Myanmar Sangam MN",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Myanmar Sangam MN: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NISC18030.ttf",
@@ -1003,13 +1003,13 @@
     "size": 7108660
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NISC18030",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NISC18030: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Nadeem.ttc",
@@ -1024,13 +1024,13 @@
     "size": 59092
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Nadeem",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Nadeem: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NewPeninimMT.ttc",
@@ -1045,13 +1045,13 @@
     "size": 150116
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NewPeninimMT",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NewPeninimMT: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansAdlam-Regular.ttf",
@@ -1066,13 +1066,13 @@
     "size": 61236
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansAdlam-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansAdlam-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansAvestan-Regular.ttf",
@@ -1087,13 +1087,13 @@
     "size": 12888
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansAvestan-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansAvestan-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansBamum-Regular.ttf",
@@ -1108,13 +1108,13 @@
     "size": 148664
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansBamum-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansBamum-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansBassaVah-Regular.ttf",
@@ -1129,13 +1129,13 @@
     "size": 7740
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansBassaVah-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansBassaVah-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansBatak-Regular.ttf",
@@ -1150,13 +1150,13 @@
     "size": 22084
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansBatak-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansBatak-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansBhaiksuki-Regular.ttf",
@@ -1171,13 +1171,13 @@
     "size": 220044
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansBhaiksuki-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansBhaiksuki-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansBuginese-Regular.ttf",
@@ -1192,13 +1192,13 @@
     "size": 7236
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansBuginese-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansBuginese-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansBuhid-Regular.ttf",
@@ -1213,13 +1213,13 @@
     "size": 5612
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansBuhid-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansBuhid-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansCarian-Regular.ttf",
@@ -1234,13 +1234,13 @@
     "size": 6688
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansCarian-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansCarian-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansCaucasianAlbanian-Regular.ttf",
@@ -1255,13 +1255,13 @@
     "size": 26828
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansCaucasianAlbanian-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansCaucasianAlbanian-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansChakma-Regular.ttf",
@@ -1276,13 +1276,13 @@
     "size": 41592
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansChakma-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansChakma-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansCham-Regular.ttf",
@@ -1297,13 +1297,13 @@
     "size": 30208
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansCham-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansCham-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansCoptic-Regular.ttf",
@@ -1318,13 +1318,13 @@
     "size": 28084
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansCoptic-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansCoptic-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansCuneiform-Regular.ttf",
@@ -1339,13 +1339,13 @@
     "size": 820316
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansCuneiform-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansCuneiform-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansCypriot-Regular.ttf",
@@ -1360,13 +1360,13 @@
     "size": 8332
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansCypriot-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansCypriot-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansDuployan-Regular.ttf",
@@ -1381,13 +1381,13 @@
     "size": 18724
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansDuployan-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansDuployan-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansEgyptianHieroglyphs-Regular.ttf",
@@ -1402,13 +1402,13 @@
     "size": 585444
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansEgyptianHieroglyphs-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansEgyptianHieroglyphs-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansElbasan-Regular.ttf",
@@ -1423,13 +1423,13 @@
     "size": 11172
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansElbasan-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansElbasan-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansGlagolitic-Regular.ttf",
@@ -1444,13 +1444,13 @@
     "size": 23264
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansGlagolitic-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansGlagolitic-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansGothic-Regular.ttf",
@@ -1465,13 +1465,13 @@
     "size": 6152
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansGothic-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansGothic-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansGunjalaGondi-Regular.otf",
@@ -1486,13 +1486,13 @@
     "size": 32372
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansGunjalaGondi-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansGunjalaGondi-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansHanifiRohingya-Regular.ttf",
@@ -1507,13 +1507,13 @@
     "size": 19400
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansHanifiRohingya-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansHanifiRohingya-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansHanunoo-Regular.ttf",
@@ -1528,13 +1528,13 @@
     "size": 7896
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansHanunoo-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansHanunoo-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansHatran-Regular.ttf",
@@ -1549,13 +1549,13 @@
     "size": 5020
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansHatran-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansHatran-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansImperialAramaic-Regular.ttf",
@@ -1570,13 +1570,13 @@
     "size": 6500
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansImperialAramaic-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansImperialAramaic-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansInscriptionalPahlavi-Regular.ttf",
@@ -1591,13 +1591,13 @@
     "size": 6032
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansInscriptionalPahlavi-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansInscriptionalPahlavi-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansInscriptionalParthian-Regular.ttf",
@@ -1612,13 +1612,13 @@
     "size": 7792
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansInscriptionalParthian-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansInscriptionalParthian-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansJavanese-Regular.otf",
@@ -1633,13 +1633,13 @@
     "size": 86944
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansJavanese-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansJavanese-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansKaithi-Regular.ttf",
@@ -1654,13 +1654,13 @@
     "size": 62716
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansKaithi-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansKaithi-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansKayahLi-Regular.ttf",
@@ -1675,13 +1675,13 @@
     "size": 9464
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansKayahLi-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansKayahLi-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansKharoshthi-Regular.ttf",
@@ -1696,13 +1696,13 @@
     "size": 25388
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansKharoshthi-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansKharoshthi-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansKhojki-Regular.ttf",
@@ -1717,13 +1717,13 @@
     "size": 42632
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansKhojki-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansKhojki-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansKhudawadi-Regular.ttf",
@@ -1738,13 +1738,13 @@
     "size": 19032
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansKhudawadi-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansKhudawadi-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansLepcha-Regular.ttf",
@@ -1759,13 +1759,13 @@
     "size": 24500
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansLepcha-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansLepcha-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansLimbu-Regular.ttf",
@@ -1780,13 +1780,13 @@
     "size": 12912
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansLimbu-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansLimbu-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansLinearA-Regular.ttf",
@@ -1801,13 +1801,13 @@
     "size": 58140
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansLinearA-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansLinearA-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansLinearB-Regular.ttf",
@@ -1822,13 +1822,13 @@
     "size": 64828
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansLinearB-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansLinearB-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansLisu-Regular.ttf",
@@ -1843,13 +1843,13 @@
     "size": 6516
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansLisu-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansLisu-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansLycian-Regular.ttf",
@@ -1864,13 +1864,13 @@
     "size": 4556
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansLycian-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansLycian-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansLydian-Regular.ttf",
@@ -1885,13 +1885,13 @@
     "size": 4592
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansLydian-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansLydian-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansMahajani-Regular.ttf",
@@ -1906,13 +1906,13 @@
     "size": 14144
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansMahajani-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansMahajani-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansMandaic-Regular.ttf",
@@ -1927,13 +1927,13 @@
     "size": 18908
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansMandaic-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansMandaic-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansManichaean-Regular.ttf",
@@ -1948,13 +1948,13 @@
     "size": 31448
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansManichaean-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansManichaean-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansMarchen-Regular.ttf",
@@ -1969,13 +1969,13 @@
     "size": 125956
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansMarchen-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansMarchen-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansMasaramGondi-Regular.otf",
@@ -1990,13 +1990,13 @@
     "size": 23052
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansMasaramGondi-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansMasaramGondi-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansMeeteiMayek-Regular.ttf",
@@ -2011,13 +2011,13 @@
     "size": 16044
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansMeeteiMayek-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansMeeteiMayek-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansMendeKikakui-Regular.ttf",
@@ -2032,13 +2032,13 @@
     "size": 35360
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansMendeKikakui-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansMendeKikakui-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansMeroitic-Regular.ttf",
@@ -2053,13 +2053,13 @@
     "size": 33644
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansMeroitic-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansMeroitic-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansMiao-Regular.ttf",
@@ -2074,13 +2074,13 @@
     "size": 36236
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansMiao-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansMiao-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansModi-Regular.ttf",
@@ -2095,13 +2095,13 @@
     "size": 42688
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansModi-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansModi-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansMongolian-Regular.ttf",
@@ -2116,13 +2116,13 @@
     "size": 253932
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansMongolian-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansMongolian-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansMro-Regular.ttf",
@@ -2137,13 +2137,13 @@
     "size": 6904
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansMro-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansMro-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansMultani-Regular.ttf",
@@ -2158,13 +2158,13 @@
     "size": 9856
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansMultani-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansMultani-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansNKo-Regular.ttf",
@@ -2179,13 +2179,13 @@
     "size": 24608
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansNKo-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansNKo-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansNabataean-Regular.ttf",
@@ -2200,13 +2200,13 @@
     "size": 8400
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansNabataean-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansNabataean-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansNagMundari-Regular.ttf",
@@ -2221,13 +2221,13 @@
     "size": 17152
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansNagMundari-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansNagMundari-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansNewTaiLue-Regular.ttf",
@@ -2242,13 +2242,13 @@
     "size": 17000
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansNewTaiLue-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansNewTaiLue-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansNewa-Regular.ttf",
@@ -2263,13 +2263,13 @@
     "size": 149024
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansNewa-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansNewa-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansOlChiki-Regular.ttf",
@@ -2284,13 +2284,13 @@
     "size": 8860
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansOlChiki-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansOlChiki-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansOldHungarian-Regular.ttf",
@@ -2305,13 +2305,13 @@
     "size": 54020
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansOldHungarian-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansOldHungarian-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansOldItalic-Regular.ttf",
@@ -2326,13 +2326,13 @@
     "size": 7524
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansOldItalic-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansOldItalic-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansOldNorthArabian-Regular.ttf",
@@ -2347,13 +2347,13 @@
     "size": 7284
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansOldNorthArabian-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansOldNorthArabian-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansOldPermic-Regular.ttf",
@@ -2368,13 +2368,13 @@
     "size": 9984
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansOldPermic-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansOldPermic-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansOldPersian-Regular.ttf",
@@ -2389,13 +2389,13 @@
     "size": 13180
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansOldPersian-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansOldPersian-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansOldSouthArabian-Regular.ttf",
@@ -2410,13 +2410,13 @@
     "size": 5232
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansOldSouthArabian-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansOldSouthArabian-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansOldTurkic-Regular.ttf",
@@ -2431,13 +2431,13 @@
     "size": 8372
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansOldTurkic-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansOldTurkic-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansOsage-Regular.ttf",
@@ -2452,13 +2452,13 @@
     "size": 12512
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansOsage-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansOsage-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansOsmanya-Regular.ttf",
@@ -2473,13 +2473,13 @@
     "size": 8604
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansOsmanya-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansOsmanya-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansPahawhHmong-Regular.ttf",
@@ -2494,13 +2494,13 @@
     "size": 18272
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansPahawhHmong-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansPahawhHmong-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansPalmyrene-Regular.ttf",
@@ -2515,13 +2515,13 @@
     "size": 15684
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansPalmyrene-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansPalmyrene-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansPauCinHau-Regular.ttf",
@@ -2536,13 +2536,13 @@
     "size": 9816
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansPauCinHau-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansPauCinHau-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansPhagsPa-Regular.ttf",
@@ -2557,13 +2557,13 @@
     "size": 34176
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansPhagsPa-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansPhagsPa-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansPhoenician-Regular.ttf",
@@ -2578,13 +2578,13 @@
     "size": 6252
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansPhoenician-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansPhoenician-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansPsalterPahlavi-Regular.ttf",
@@ -2599,13 +2599,13 @@
     "size": 21676
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansPsalterPahlavi-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansPsalterPahlavi-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansRejang-Regular.ttf",
@@ -2620,13 +2620,13 @@
     "size": 7620
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansRejang-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansRejang-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSamaritan-Regular.ttf",
@@ -2641,13 +2641,13 @@
     "size": 11164
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansSamaritan-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansSamaritan-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSaurashtra-Regular.ttf",
@@ -2662,13 +2662,13 @@
     "size": 19792
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansSaurashtra-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansSaurashtra-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSharada-Regular.ttf",
@@ -2683,13 +2683,13 @@
     "size": 44108
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansSharada-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansSharada-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSiddham-Regular.otf",
@@ -2704,13 +2704,13 @@
     "size": 94408
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansSiddham-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansSiddham-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSoraSompeng-Regular.ttf",
@@ -2725,13 +2725,13 @@
     "size": 8108
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansSoraSompeng-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansSoraSompeng-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSundanese-Regular.ttf",
@@ -2746,13 +2746,13 @@
     "size": 11512
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansSundanese-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansSundanese-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSunuwar-Regular.otf",
@@ -2767,13 +2767,13 @@
     "size": 12420
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansSunuwar-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansSunuwar-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSylotiNagri-Regular.ttf",
@@ -2788,13 +2788,13 @@
     "size": 16576
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansSylotiNagri-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansSylotiNagri-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansSyriac-Regular.ttf",
@@ -2809,13 +2809,13 @@
     "size": 115268
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansSyriac-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansSyriac-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTagalog-Regular.ttf",
@@ -2830,13 +2830,13 @@
     "size": 7012
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansTagalog-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansTagalog-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTagbanwa-Regular.ttf",
@@ -2851,13 +2851,13 @@
     "size": 6648
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansTagbanwa-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansTagbanwa-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTaiLe-Regular.ttf",
@@ -2872,13 +2872,13 @@
     "size": 12072
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansTaiLe-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansTaiLe-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTaiTham-Regular.ttf",
@@ -2893,13 +2893,13 @@
     "size": 51040
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansTaiTham-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansTaiTham-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTaiViet-Regular.ttf",
@@ -2914,13 +2914,13 @@
     "size": 18220
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansTaiViet-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansTaiViet-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTakri-Regular.ttf",
@@ -2935,13 +2935,13 @@
     "size": 16652
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansTakri-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansTakri-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansThaana-Regular.ttf",
@@ -2956,13 +2956,13 @@
     "size": 18792
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansThaana-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansThaana-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTifinagh-Regular.otf",
@@ -2977,13 +2977,13 @@
     "size": 24956
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansTifinagh-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansTifinagh-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansTirhuta-Regular.ttf",
@@ -2998,13 +2998,13 @@
     "size": 69944
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansTirhuta-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansTirhuta-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansUgaritic-Regular.ttf",
@@ -3019,13 +3019,13 @@
     "size": 7656
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansUgaritic-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansUgaritic-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansVai-Regular.ttf",
@@ -3040,13 +3040,13 @@
     "size": 57764
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansVai-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansVai-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansWancho-Regular.ttf",
@@ -3061,13 +3061,13 @@
     "size": 17992
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansWancho-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansWancho-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansWarangCiti-Regular.ttf",
@@ -3082,13 +3082,13 @@
     "size": 25304
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansWarangCiti-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansWarangCiti-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSansYi-Regular.ttf",
@@ -3103,13 +3103,13 @@
     "size": 134064
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSansYi-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSansYi-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSerifAhom-Regular.ttf",
@@ -3124,13 +3124,13 @@
     "size": 19512
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSerifAhom-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSerifAhom-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSerifBalinese-Regular.ttf",
@@ -3145,13 +3145,13 @@
     "size": 51264
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSerifBalinese-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSerifBalinese-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSerifNyiakengPuachueHmong-Regular.ttf",
@@ -3166,13 +3166,13 @@
     "size": 14888
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSerifNyiakengPuachueHmong-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSerifNyiakengPuachueHmong-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/NotoSerifYezidi-Regular.otf",
@@ -3187,13 +3187,13 @@
     "size": 8664
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSerifYezidi-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSerifYezidi-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Oriya MN.ttc",
@@ -3208,13 +3208,13 @@
     "size": 209620
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Oriya MN",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Oriya MN: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Oriya Sangam MN.ttc",
@@ -3229,13 +3229,13 @@
     "size": 181016
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Oriya Sangam MN",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Oriya Sangam MN: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/makeAlias-bottom.pdf",
@@ -3565,13 +3565,13 @@
     "size": 158088
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: Mona Lisa Solid ITC TT",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Mona Lisa Solid ITC TT: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Nisan.ttc",
@@ -3586,13 +3586,13 @@
     "size": 58876
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Nisan",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Nisan: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Maku-Devanagari.ttc",
@@ -3607,13 +3607,13 @@
     "size": 22980
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Maku-Devanagari",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Maku-Devanagari: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Mali.ttc",
@@ -3628,13 +3628,13 @@
     "size": 61128
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Mali",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Mali: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Modak-Devanagari.ttf",
@@ -3649,13 +3649,13 @@
     "size": 7452
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Modak-Devanagari",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Modak-Devanagari: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Mukta-Devanagari.ttc",
@@ -3670,13 +3670,13 @@
     "size": 54384
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Mukta-Devanagari",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Mukta-Devanagari: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/MuktaMalar-Tamil.ttc",
@@ -3691,13 +3691,13 @@
     "size": 60916
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: MuktaMalar-Tamil",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family MuktaMalar-Tamil: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/MuktaVaani-Gujarati.ttc",
@@ -3712,13 +3712,13 @@
     "size": 59152
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: MuktaVaani-Gujarati",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family MuktaVaani-Gujarati: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/MyriadArabic.ttc",
@@ -3733,13 +3733,13 @@
     "size": 75036
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: MyriadArabic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family MyriadArabic: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/NanumGothic.ttc",
@@ -3754,13 +3754,13 @@
     "size": 23768
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: NanumGothic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NanumGothic: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/NanumMyeongjo.ttc",
@@ -3775,13 +3775,13 @@
     "size": 33584
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: NanumMyeongjo",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NanumMyeongjo: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/NanumScript.ttc",
@@ -3796,13 +3796,13 @@
     "size": 16404
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: NanumScript",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NanumScript: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Niramit.ttc",
@@ -3817,13 +3817,13 @@
     "size": 60160
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Niramit",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Niramit: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/NomNaTong.otf",
@@ -3838,13 +3838,13 @@
     "size": 8256
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NomNaTong",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NomNaTong: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/NotoSerifKannada.ttc",
@@ -3859,13 +3859,13 @@
     "size": 62564
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NotoSerifKannada",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NotoSerifKannada: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/NovemberBanglaTraditional.ttf",
@@ -3880,13 +3880,13 @@
     "size": 37024
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NovemberBanglaTraditional",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NovemberBanglaTraditional: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/NovemberIndia.otf",
@@ -3901,13 +3901,13 @@
     "size": 101400
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: NovemberIndia",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family NovemberIndia: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedDevanagari.ttc",
@@ -3922,13 +3922,13 @@
     "size": 41852
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCompressedDevanagari",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCompressedDevanagari: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedGujarati.ttc",
@@ -3943,13 +3943,13 @@
     "size": 51492
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCompressedGujarati",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCompressedGujarati: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedGurmukhi.ttc",
@@ -3964,13 +3964,13 @@
     "size": 51660
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCompressedGurmukhi",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCompressedGurmukhi: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedKannada.ttc",
@@ -3985,13 +3985,13 @@
     "size": 61824
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCompressedKannada",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCompressedKannada: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedMeeteiMayek.ttc",
@@ -4006,13 +4006,13 @@
     "size": 49064
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCompressedMeeteiMayek",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCompressedMeeteiMayek: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedOdia.ttc",
@@ -4027,13 +4027,13 @@
     "size": 57388
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCompressedOdia",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCompressedOdia: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedOlChiki.ttc",
@@ -4048,13 +4048,13 @@
     "size": 48336
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCompressedOlChiki",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCompressedOlChiki: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedTamil.ttc",
@@ -4069,13 +4069,13 @@
     "size": 46960
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCompressedTamil",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCompressedTamil: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCompressedTelugu.ttc",
@@ -4090,13 +4090,13 @@
     "size": 65556
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCompressedTelugu",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCompressedTelugu: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedDevanagari.ttc",
@@ -4111,13 +4111,13 @@
     "size": 42316
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCondensedDevanagari",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCondensedDevanagari: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedGujarati.ttc",
@@ -4132,13 +4132,13 @@
     "size": 52068
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCondensedGujarati",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCondensedGujarati: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedGurmukhi.ttc",
@@ -4153,13 +4153,13 @@
     "size": 51976
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCondensedGurmukhi",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCondensedGurmukhi: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedKannada.ttc",
@@ -4174,13 +4174,13 @@
     "size": 63212
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCondensedKannada",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCondensedKannada: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedMeeteiMayek.ttc",
@@ -4195,13 +4195,13 @@
     "size": 49432
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCondensedMeeteiMayek",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCondensedMeeteiMayek: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedOdia.ttc",
@@ -4216,13 +4216,13 @@
     "size": 58376
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCondensedOdia",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCondensedOdia: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedOlChiki.ttc",
@@ -4237,13 +4237,13 @@
     "size": 48720
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCondensedOlChiki",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCondensedOlChiki: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedTamil.ttc",
@@ -4258,13 +4258,13 @@
     "size": 47512
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCondensedTamil",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCondensedTamil: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberCondensedTelugu.ttc",
@@ -4279,13 +4279,13 @@
     "size": 66376
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberCondensedTelugu",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberCondensedTelugu: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberDevanagari.ttc",
@@ -4300,13 +4300,13 @@
     "size": 41720
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberDevanagari",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberDevanagari: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberGujarati.ttc",
@@ -4321,13 +4321,13 @@
     "size": 50764
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberGujarati",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberGujarati: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberGurmukhi.ttc",
@@ -4342,13 +4342,13 @@
     "size": 49848
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberGurmukhi",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberGurmukhi: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberIndia.otf",
@@ -4363,13 +4363,13 @@
     "size": 125260
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberIndia",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberIndia: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberKannada.ttc",
@@ -4384,13 +4384,13 @@
     "size": 62864
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberKannada",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberKannada: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberMeeteiMayek.ttc",
@@ -4405,13 +4405,13 @@
     "size": 48504
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberMeeteiMayek",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberMeeteiMayek: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberOdia.ttc",
@@ -4426,13 +4426,13 @@
     "size": 57100
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberOdia",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberOdia: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberOlChiki.ttc",
@@ -4447,13 +4447,13 @@
     "size": 47816
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberOlChiki",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberOlChiki: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberTamil.ttc",
@@ -4468,13 +4468,13 @@
     "size": 45840
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberTamil",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberTamil: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OctoberTelugu.ttc",
@@ -4489,13 +4489,13 @@
     "size": 63920
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: OctoberTelugu",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OctoberTelugu: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Ornanong.ttc",
@@ -4510,13 +4510,13 @@
     "size": 34412
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Ornanong",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Ornanong: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Osaka.ttf",
@@ -4531,13 +4531,13 @@
     "size": 4496
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: Osaka",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Osaka: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/OsakaMono.ttf",
@@ -4552,13 +4552,13 @@
     "size": 4068
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced font: OsakaMono",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family OsakaMono: no BifrOSt equivalent; BifrOSt mono set is JetBrains Mono, Geist Mono, Fira Code, Source Code Pro. Needed for documents and Terminal themes that name it; candidate: Liberation Mono or Cousine (OFL/Apache)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/MenuDown.aiff",
@@ -4741,13 +4741,13 @@
     "size": 2856984
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: MacintoshSkeletal",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family MacintoshSkeletal: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Sounds/Morse.aiff",

@@ -16,13 +16,13 @@
     "size": 110280
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-BoldItalic.otf",
@@ -37,13 +37,13 @@
     "size": 101336
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Heavy.otf",
@@ -58,13 +58,13 @@
     "size": 102584
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-HeavyItalic.otf",
@@ -79,13 +79,13 @@
     "size": 91560
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Light.otf",
@@ -100,13 +100,13 @@
     "size": 102088
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-LightItalic.otf",
@@ -121,13 +121,13 @@
     "size": 92112
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Medium.otf",
@@ -142,13 +142,13 @@
     "size": 111468
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-MediumItalic.otf",
@@ -163,13 +163,13 @@
     "size": 102004
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Regular.otf",
@@ -184,13 +184,13 @@
     "size": 110560
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-RegularItalic.otf",
@@ -205,13 +205,13 @@
     "size": 102180
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-Semibold.otf",
@@ -226,13 +226,13 @@
     "size": 111096
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SF-Mono-SemiboldItalic.otf",
@@ -247,13 +247,13 @@
     "size": 102568
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SFMono-Terminal.ttf",
@@ -268,13 +268,13 @@
     "size": 225376
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app/Contents/Resources/Fonts/SFMonoItalic-Terminal.ttf",
@@ -289,13 +289,13 @@
     "size": 202224
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Desktop Pictures/.thumbnails/Solar Gradients.heic",
@@ -457,13 +457,13 @@
     "size": 719968
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SFArabic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SFArabic: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFArabicRounded.ttf",
@@ -478,13 +478,13 @@
     "size": 783568
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SFArabicRounded",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SFArabicRounded: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFArmenian.ttf",
@@ -499,13 +499,13 @@
     "size": 86792
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SFArmenian",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SFArmenian: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFArmenianRounded.ttf",
@@ -520,13 +520,13 @@
     "size": 62640
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SFArmenianRounded",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SFArmenianRounded: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFCamera.ttf",
@@ -541,13 +541,13 @@
     "size": 117636
    },
    "description": "",
-   "role": "",
+   "role": "SF variant font: SFCamera",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Apple SF variant (SFCamera) with no BifrOSt equivalent: BifrOSt has only one UI family (Inter) with no compact, rounded or width variants; Inter has no rounded cut, candidate: Nunito/Quicksand for rounded, Inter at opsz for compact",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFCompact.ttf",
@@ -562,13 +562,13 @@
     "size": 1896040
    },
    "description": "",
-   "role": "",
+   "role": "SF variant font: SFCompact",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Apple SF variant (SFCompact) with no BifrOSt equivalent: BifrOSt has only one UI family (Inter) with no compact, rounded or width variants; Inter has no rounded cut, candidate: Nunito/Quicksand for rounded, Inter at opsz for compact",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFCompactItalic.ttf",
@@ -583,13 +583,13 @@
     "size": 1012892
    },
    "description": "",
-   "role": "",
+   "role": "SF variant font: SFCompactItalic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Apple SF variant (SFCompactItalic) with no BifrOSt equivalent: BifrOSt has only one UI family (Inter) with no compact, rounded or width variants; Inter has no rounded cut, candidate: Nunito/Quicksand for rounded, Inter at opsz for compact",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFCompactRounded.ttf",
@@ -604,13 +604,13 @@
     "size": 1080280
    },
    "description": "",
-   "role": "",
+   "role": "SF variant font: SFCompactRounded",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Apple SF variant (SFCompactRounded) with no BifrOSt equivalent: BifrOSt has only one UI family (Inter) with no compact, rounded or width variants; Inter has no rounded cut, candidate: Nunito/Quicksand for rounded, Inter at opsz for compact",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFGeorgian.ttf",
@@ -625,13 +625,13 @@
     "size": 94468
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SFGeorgian",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SFGeorgian: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFGeorgianRounded.ttf",
@@ -646,13 +646,13 @@
     "size": 61664
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SFGeorgianRounded",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SFGeorgianRounded: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFHebrew.ttf",
@@ -667,13 +667,13 @@
     "size": 62376
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SFHebrew",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SFHebrew: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFHebrewRounded.ttf",
@@ -688,13 +688,13 @@
     "size": 55100
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SFHebrewRounded",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SFHebrewRounded: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFIndia.ttc",
@@ -709,13 +709,13 @@
     "size": 2269684
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SFIndia",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SFIndia: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFNS.ttf",
@@ -730,13 +730,13 @@
     "size": 7872432
    },
    "description": "",
-   "role": "",
+   "role": "System UI font (SF Pro / San Francisco family, all weights and optical sizes)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default system font is Inter (SFUI.ttf, variable wght+opsz, OFL) as stand-in for SF Pro; optional Geist, IBM Plex Sans, Source Sans 3 in Settings > Fonts. Not the Apple glyph shapes",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFNSItalic.ttf",
@@ -751,13 +751,13 @@
     "size": 1057128
    },
    "description": "",
-   "role": "",
+   "role": "System UI font (SF Pro / San Francisco family, all weights and optical sizes)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default system font is Inter (SFUI.ttf, variable wght+opsz, OFL) as stand-in for SF Pro; optional Geist, IBM Plex Sans, Source Sans 3 in Settings > Fonts. Not the Apple glyph shapes",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFNSMono.ttf",
@@ -772,13 +772,13 @@
     "size": 218796
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFNSMonoItalic.ttf",
@@ -793,13 +793,13 @@
     "size": 195864
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced system font (SF Mono)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "BifrOSt default mono font is JetBrains Mono (SFUIMono.ttf, variable wght 100-800, OFL) as stand-in for SF Mono; optional Geist Mono, Fira Code, Source Code Pro",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/SFNSRounded.ttf",
@@ -814,13 +814,13 @@
     "size": 1773444
    },
    "description": "",
-   "role": "",
+   "role": "SF variant font: SFNSRounded",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Apple SF variant (SFNSRounded) with no BifrOSt equivalent: BifrOSt has only one UI family (Inter) with no compact, rounded or width variants; Inter has no rounded cut, candidate: Nunito/Quicksand for rounded, Inter at opsz for compact",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/STHeiti Light.ttc",
@@ -835,13 +835,13 @@
     "size": 55775164
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/STHeiti Medium.ttc",
@@ -856,13 +856,13 @@
     "size": 55746488
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXGeneral.otf",
@@ -877,13 +877,13 @@
     "size": 369156
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXGeneral",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXGeneral: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXGeneralBol.otf",
@@ -898,13 +898,13 @@
     "size": 186612
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXGeneralBol",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXGeneralBol: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXGeneralBolIta.otf",
@@ -919,13 +919,13 @@
     "size": 143764
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXGeneralBolIta",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXGeneralBolIta: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXGeneralItalic.otf",
@@ -940,13 +940,13 @@
     "size": 141844
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXGeneralItalic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXGeneralItalic: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntDBol.otf",
@@ -961,13 +961,13 @@
     "size": 16992
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXIntDBol",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXIntDBol: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntDReg.otf",
@@ -982,13 +982,13 @@
     "size": 17500
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXIntDReg",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXIntDReg: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntSmBol.otf",
@@ -1003,13 +1003,13 @@
     "size": 16608
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXIntSmBol",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXIntSmBol: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntSmReg.otf",
@@ -1024,13 +1024,13 @@
     "size": 17416
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXIntSmReg",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXIntSmReg: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpBol.otf",
@@ -1045,13 +1045,13 @@
     "size": 16576
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXIntUpBol",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXIntUpBol: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpDBol.otf",
@@ -1066,13 +1066,13 @@
     "size": 16932
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXIntUpDBol",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXIntUpDBol: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpDReg.otf",
@@ -1087,13 +1087,13 @@
     "size": 16964
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXIntUpDReg",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXIntUpDReg: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpReg.otf",
@@ -1108,13 +1108,13 @@
     "size": 16856
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXIntUpReg",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXIntUpReg: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpSmBol.otf",
@@ -1129,13 +1129,13 @@
     "size": 16916
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXIntUpSmBol",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXIntUpSmBol: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXIntUpSmReg.otf",
@@ -1150,13 +1150,13 @@
     "size": 17184
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXIntUpSmReg",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXIntUpSmReg: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXNonUni.otf",
@@ -1171,13 +1171,13 @@
     "size": 54556
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXNonUni",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXNonUni: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXNonUniBol.otf",
@@ -1192,13 +1192,13 @@
     "size": 25508
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXNonUniBol",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXNonUniBol: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXNonUniBolIta.otf",
@@ -1213,13 +1213,13 @@
     "size": 41188
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXNonUniBolIta",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXNonUniBolIta: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXNonUniIta.otf",
@@ -1234,13 +1234,13 @@
     "size": 46268
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXNonUniIta",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXNonUniIta: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizFiveSymReg.otf",
@@ -1255,13 +1255,13 @@
     "size": 13464
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXSizFiveSymReg",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXSizFiveSymReg: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizFourSymBol.otf",
@@ -1276,13 +1276,13 @@
     "size": 12628
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXSizFourSymBol",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXSizFourSymBol: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizFourSymReg.otf",
@@ -1297,13 +1297,13 @@
     "size": 15656
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXSizFourSymReg",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXSizFourSymReg: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizOneSymBol.otf",
@@ -1318,13 +1318,13 @@
     "size": 12924
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXSizOneSymBol",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXSizOneSymBol: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizOneSymReg.otf",
@@ -1339,13 +1339,13 @@
     "size": 19004
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXSizOneSymReg",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXSizOneSymReg: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizThreeSymBol.otf",
@@ -1360,13 +1360,13 @@
     "size": 12636
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXSizThreeSymBol",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXSizThreeSymBol: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizThreeSymReg.otf",
@@ -1381,13 +1381,13 @@
     "size": 15648
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXSizThreeSymReg",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXSizThreeSymReg: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizTwoSymBol.otf",
@@ -1402,13 +1402,13 @@
     "size": 12576
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXSizTwoSymBol",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXSizTwoSymBol: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXSizTwoSymReg.otf",
@@ -1423,13 +1423,13 @@
     "size": 15620
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXSizTwoSymReg",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXSizTwoSymReg: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXTwoMath.otf",
@@ -1444,13 +1444,13 @@
     "size": 838652
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXTwoMath",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXTwoMath: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXTwoText-Italic.ttf",
@@ -1465,13 +1465,13 @@
     "size": 454368
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXTwoText-Italic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXTwoText-Italic: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXTwoText.ttf",
@@ -1486,13 +1486,13 @@
     "size": 418956
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXTwoText",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXTwoText: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXVar.otf",
@@ -1507,13 +1507,13 @@
     "size": 21776
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXVar",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXVar: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/STIXVarBol.otf",
@@ -1528,13 +1528,13 @@
     "size": 14808
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: STIXVarBol",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family STIXVarBol: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Sana.ttc",
@@ -1549,13 +1549,13 @@
     "size": 74156
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Sana",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Sana: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Sathu.ttf",
@@ -1570,13 +1570,13 @@
     "size": 413948
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Sathu",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Sathu: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Savoye LET.ttc",
@@ -1591,13 +1591,13 @@
     "size": 101228
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Savoye LET",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Savoye LET: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Seravek.ttc",
@@ -1612,13 +1612,13 @@
     "size": 6214992
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Seravek",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Seravek: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Shree714.ttc",
@@ -1633,13 +1633,13 @@
     "size": 520112
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Shree714",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Shree714: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/SignPainter.ttc",
@@ -1654,13 +1654,13 @@
     "size": 392124
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: SignPainter",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SignPainter: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Silom.ttf",
@@ -1675,13 +1675,13 @@
     "size": 288080
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Silom",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Silom: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Sinhala MN.ttc",
@@ -1696,13 +1696,13 @@
     "size": 772984
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Sinhala MN",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Sinhala MN: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Sinhala Sangam MN.ttc",
@@ -1717,13 +1717,13 @@
     "size": 752820
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Sinhala Sangam MN",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Sinhala Sangam MN: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Skia.ttf",
@@ -1738,13 +1738,13 @@
     "size": 489556
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Skia",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Skia: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/SnellRoundhand.ttc",
@@ -1759,13 +1759,13 @@
     "size": 3576120
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: SnellRoundhand",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SnellRoundhand: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Songti.ttc",
@@ -1780,13 +1780,13 @@
     "size": 66902744
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: Songti",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Songti: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/SukhumvitSet.ttc",
@@ -1801,13 +1801,13 @@
     "size": 338496
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SukhumvitSet",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SukhumvitSet: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/SuperClarendon.ttc",
@@ -1822,13 +1822,13 @@
     "size": 2679976
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: SuperClarendon",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SuperClarendon: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Symbol.ttf",
@@ -1843,13 +1843,13 @@
     "size": 78196
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: Symbol",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Symbol: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MediaToolbox.framework/Versions/A/Resources/SFSymbolsNeededByCoreMedia-Semibold.ttf",
@@ -1864,13 +1864,13 @@
     "size": 7260
    },
    "description": "",
-   "role": "",
+   "role": "SF variant font: SFSymbolsNeededByCoreMedia-Semibold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Apple SF variant (SFSymbolsNeededByCoreMedia-Semibold) with no BifrOSt equivalent: BifrOSt has only one UI family (Inter) with no compact, rounded or width variants; Inter has no rounded cut, candidate: Nunito/Quicksand for rounded, Inter at opsz for compact",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0/rdoc/generator/template/darkfish/fonts/SourceCodePro-Bold.ttf",
@@ -1885,13 +1885,13 @@
     "size": 71200
    },
    "description": "",
-   "role": "",
+   "role": "Webfont of Ruby 2.6 rdoc HTML template",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "status": "n/a",
+   "note": "documentation webfont of the bundled Ruby 2.6 rdoc generator; no user or app role in BifrOSt (no Ruby framework)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Ruby.framework/Versions/2.6/usr/lib/ruby/2.6.0/rdoc/generator/template/darkfish/fonts/SourceCodePro-Regular.ttf",
@@ -1906,13 +1906,13 @@
     "size": 71692
    },
    "description": "",
-   "role": "",
+   "role": "Webfont of Ruby 2.6 rdoc HTML template",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "status": "n/a",
+   "note": "documentation webfont of the bundled Ruby 2.6 rdoc generator; no user or app role in BifrOSt (no Ruby framework)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/screenshotWindow-bottom.pdf",
@@ -1969,13 +1969,13 @@
     "size": 12260
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Scancardium_2.0",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Scancardium_2.0: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRecognition.framework/Versions/A/Resources/Fonts/Spendcardium.ttf",
@@ -1990,13 +1990,13 @@
     "size": 20460
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Spendcardium",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Spendcardium: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Santa Fe LET Fonts.ttf",
@@ -2011,13 +2011,13 @@
     "size": 110004
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Santa Fe LET Fonts",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Santa Fe LET Fonts: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/SchemeBold.otf",
@@ -2032,13 +2032,13 @@
     "size": 168828
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: SchemeBold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SchemeBold: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/SchoolHouse Cursive B.ttf",
@@ -2053,13 +2053,13 @@
     "size": 63824
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: SchoolHouse Cursive B",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SchoolHouse Cursive B: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/SchoolHouse Printed A.ttf",
@@ -2074,13 +2074,13 @@
     "size": 90336
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: SchoolHouse Printed A",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SchoolHouse Printed A: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Somer.ttc",
@@ -2095,13 +2095,13 @@
     "size": 56352
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Somer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Somer: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Stone Sans.ttc",
@@ -2116,13 +2116,13 @@
     "size": 486932
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Stone Sans",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Stone Sans: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Synchro LET Fonts.ttf",
@@ -2137,13 +2137,13 @@
     "size": 157012
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Synchro LET Fonts",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Synchro LET Fonts: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaDevanagari.ttc",
@@ -2158,13 +2158,13 @@
     "size": 61216
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SamaDevanagari",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SamaDevanagari: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaGujarati.ttc",
@@ -2179,13 +2179,13 @@
     "size": 58628
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SamaGujarati",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SamaGujarati: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaGurmukhi.ttc",
@@ -2200,13 +2200,13 @@
     "size": 52860
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SamaGurmukhi",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SamaGurmukhi: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaKannada.ttc",
@@ -2221,13 +2221,13 @@
     "size": 68408
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SamaKannada",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SamaKannada: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaMalayalam.ttc",
@@ -2242,13 +2242,13 @@
     "size": 81748
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SamaMalayalam",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SamaMalayalam: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SamaTamil.ttc",
@@ -2263,13 +2263,13 @@
     "size": 68972
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: SamaTamil",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SamaTamil: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Sarabun.ttc",
@@ -2284,13 +2284,13 @@
     "size": 73356
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Sarabun",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Sarabun: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SauberScript.ttc",
@@ -2305,13 +2305,13 @@
     "size": 6328
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: SauberScript",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SauberScript: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Shobhika-Devanagari.ttc",
@@ -2326,13 +2326,13 @@
     "size": 9992
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Shobhika-Devanagari",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Shobhika-Devanagari: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SimSong.ttc",
@@ -2347,13 +2347,13 @@
     "size": 14040
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: SimSong",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SimSong: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/SpotMono.ttc",
@@ -2368,13 +2368,13 @@
     "size": 11880
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced font: SpotMono",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family SpotMono: no BifrOSt equivalent; BifrOSt mono set is JetBrains Mono, Geist Mono, Fira Code, Source Code Pro. Needed for documents and Terminal themes that name it; candidate: Liberation Mono or Cousine (OFL/Apache)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Srisakdi.ttc",
@@ -2389,13 +2389,13 @@
     "size": 9296
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Srisakdi",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Srisakdi: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PassKitUIFoundation.framework/Versions/A/Resources/SF-Cash-Text-Condensed-Medium.otf",
@@ -2410,13 +2410,13 @@
     "size": 168936
    },
    "description": "",
-   "role": "",
+   "role": "SF variant font: SF-Cash-Text-Condensed-Medium",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Apple SF variant (SF-Cash-Text-Condensed-Medium) with no BifrOSt equivalent: BifrOSt has only one UI family (Inter) with no compact, rounded or width variants; Inter has no rounded cut, candidate: Nunito/Quicksand for rounded, Inter at opsz for compact",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PassKitUIFoundation.framework/Versions/A/Resources/SF-Cash-Text-Condensed-Regular.otf",
@@ -2431,13 +2431,13 @@
     "size": 164212
    },
    "description": "",
-   "role": "",
+   "role": "SF variant font: SF-Cash-Text-Condensed-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Apple SF variant (SF-Cash-Text-Condensed-Regular) with no BifrOSt equivalent: BifrOSt has only one UI family (Inter) with no compact, rounded or width variants; Inter has no rounded cut, candidate: Nunito/Quicksand for rounded, Inter at opsz for compact",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PassKitUIFoundation.framework/Versions/A/Resources/SF-Cash-Text-Condensed-Semibold.otf",
@@ -2452,13 +2452,13 @@
     "size": 170412
    },
    "description": "",
-   "role": "",
+   "role": "SF variant font: SF-Cash-Text-Condensed-Semibold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Apple SF variant (SF-Cash-Text-Condensed-Semibold) with no BifrOSt equivalent: BifrOSt has only one UI family (Inter) with no compact, rounded or width variants; Inter has no rounded cut, candidate: Nunito/Quicksand for rounded, Inter at opsz for compact",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PassKitUIFoundation.framework/Versions/A/Resources/SFCash-Chiseled.otf",
@@ -2473,13 +2473,13 @@
     "size": 19148
    },
    "description": "",
-   "role": "",
+   "role": "SF variant font: SFCash-Chiseled",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Apple SF variant (SFCash-Chiseled) with no BifrOSt equivalent: BifrOSt has only one UI family (Inter) with no compact, rounded or width variants; Inter has no rounded cut, candidate: Nunito/Quicksand for rounded, Inter at opsz for compact",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PassKitUIFoundation.framework/Versions/A/Resources/SFCash-Plain.otf",
@@ -2494,13 +2494,13 @@
     "size": 10100
    },
    "description": "",
-   "role": "",
+   "role": "SF variant font: SFCash-Plain",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Apple SF variant (SFCash-Plain) with no BifrOSt equivalent: BifrOSt has only one UI family (Inter) with no compact, rounded or width variants; Inter has no rounded cut, candidate: Nunito/Quicksand for rounded, Inter at opsz for compact",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PassKitUIFoundation.framework/Versions/A/Resources/SourceSans3-Italic.ttf",
@@ -2515,13 +2515,13 @@
     "size": 237140
    },
    "description": "",
-   "role": "",
+   "role": "Source Sans (Adobe, OFL) bundled by macOS",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/fontprefs.rs",
+   "status": "partial",
+   "note": "same family is in BifrOSt's font library (Source Sans 3 / variable); selectable in Settings > Fonts",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/ScrollPage.aiff",
@@ -2809,13 +2809,13 @@
     "size": 88412
    },
    "description": "",
-   "role": "",
+   "role": "SF variant font: SFProRoundedStatusBar",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Apple SF variant (SFProRoundedStatusBar) with no BifrOSt equivalent: BifrOSt has only one UI family (Inter) with no compact, rounded or width variants; Inter has no rounded cut, candidate: Nunito/Quicksand for rounded, Inter at opsz for compact",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }

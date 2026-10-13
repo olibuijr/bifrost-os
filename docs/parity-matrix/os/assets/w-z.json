@@ -16,13 +16,13 @@
     "size": 367284
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Waseem",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Waseem: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Webdings.ttf",
@@ -37,13 +37,13 @@
     "size": 124308
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: Webdings",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Webdings: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Wingdings 2.ttf",
@@ -58,13 +58,13 @@
     "size": 68768
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: Wingdings 2",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Wingdings 2: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Wingdings 3.ttf",
@@ -79,13 +79,13 @@
     "size": 38308
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: Wingdings 3",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Wingdings 3: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Wingdings.ttf",
@@ -100,13 +100,13 @@
     "size": 86384
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: Wingdings",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Wingdings: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Zapfino.ttf",
@@ -121,13 +121,13 @@
     "size": 399180
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Zapfino",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Zapfino: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/ZapfDingbats.ttf",
@@ -142,13 +142,13 @@
     "size": 154344
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: ZapfDingbats",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family ZapfDingbats: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Yaziji.ttc",
@@ -163,13 +163,13 @@
     "size": 58180
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Yaziji",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Yaziji: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Zawra.ttc",
@@ -184,13 +184,13 @@
     "size": 161444
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Zawra",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Zawra: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/WawaSC-Regular.otf",
@@ -205,13 +205,13 @@
     "size": 7516
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: WawaSC-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family WawaSC-Regular: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/WawaTC-Regular.otf",
@@ -226,13 +226,13 @@
     "size": 8472
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: WawaTC-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family WawaTC-Regular: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/WeibeiSC-Bold.otf",
@@ -247,13 +247,13 @@
     "size": 9756
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: WeibeiSC-Bold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family WeibeiSC-Bold: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/WeibeiTC-Bold.otf",
@@ -268,13 +268,13 @@
     "size": 11168
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: WeibeiTC-Bold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family WeibeiTC-Bold: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Xingkai.ttc",
@@ -289,13 +289,13 @@
     "size": 46324
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: Xingkai",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Xingkai: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Yu Gothic Bold.otf",
@@ -310,13 +310,13 @@
     "size": 5648
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: Yu Gothic Bold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Yu Gothic Bold: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Yu Gothic Medium.otf",
@@ -331,13 +331,13 @@
     "size": 5600
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: Yu Gothic Medium",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Yu Gothic Medium: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/YuMincho.ttc",
@@ -352,13 +352,13 @@
     "size": 26188
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: YuMincho",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family YuMincho: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Yuanti.ttc",
@@ -373,13 +373,13 @@
     "size": 46172
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: Yuanti",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Yuanti: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/YuppySC-Regular.otf",
@@ -394,13 +394,13 @@
     "size": 7376
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: YuppySC-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family YuppySC-Regular: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/YuppyTC-Regular.otf",
@@ -415,13 +415,13 @@
     "size": 8424
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: YuppyTC-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family YuppyTC-Regular: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WebAreaLoaded.aiff",
@@ -667,13 +667,13 @@
     "size": 107280
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: WorkflowGlyphs",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family WorkflowGlyphs: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }

@@ -688,13 +688,13 @@
     "size": 3280104
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: ADTNumeric",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family ADTNumeric: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Apple Braille Outline 6 Dot.ttf",
@@ -709,13 +709,13 @@
     "size": 264360
    },
    "description": "",
-   "role": "",
+   "role": "Braille font: Apple Braille Outline 6 Dot",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Braille glyph font: BifrOSt has a braille model (springboard/ui/src/braille.rs) but ships no Braille Unicode font; needed to show braille patterns on screen",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Apple Braille Outline 8 Dot.ttf",
@@ -730,13 +730,13 @@
     "size": 281428
    },
    "description": "",
-   "role": "",
+   "role": "Braille font: Apple Braille Outline 8 Dot",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Braille glyph font: BifrOSt has a braille model (springboard/ui/src/braille.rs) but ships no Braille Unicode font; needed to show braille patterns on screen",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Apple Braille Pinpoint 6 Dot.ttf",
@@ -751,13 +751,13 @@
     "size": 183528
    },
    "description": "",
-   "role": "",
+   "role": "Braille font: Apple Braille Pinpoint 6 Dot",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Braille glyph font: BifrOSt has a braille model (springboard/ui/src/braille.rs) but ships no Braille Unicode font; needed to show braille patterns on screen",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Apple Braille Pinpoint 8 Dot.ttf",
@@ -772,13 +772,13 @@
     "size": 190116
    },
    "description": "",
-   "role": "",
+   "role": "Braille font: Apple Braille Pinpoint 8 Dot",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Braille glyph font: BifrOSt has a braille model (springboard/ui/src/braille.rs) but ships no Braille Unicode font; needed to show braille patterns on screen",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Apple Braille.ttf",
@@ -793,13 +793,13 @@
     "size": 136404
    },
    "description": "",
-   "role": "",
+   "role": "Braille font: Apple Braille",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "Braille glyph font: BifrOSt has a braille model (springboard/ui/src/braille.rs) but ships no Braille Unicode font; needed to show braille patterns on screen",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Apple Color Emoji.ttc",
@@ -814,13 +814,13 @@
     "size": 192120460
    },
    "description": "",
-   "role": "",
+   "role": "Colour emoji font",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/render/src/emoji.rs; packaging/arch/runtime-packages.txt",
+   "status": "partial",
+   "note": "BifrOSt renders emoji with Noto Color Emoji (noto-fonts-emoji in the runtime package list); not Apple artwork",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Apple Symbols.ttf",
@@ -835,13 +835,13 @@
     "size": 895440
    },
    "description": "",
-   "role": "",
+   "role": "Unicode symbols font (Apple Symbols)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/tools/pack.py; springboard/render/src/symbols.rs",
+   "status": "partial",
+   "note": "BifrOSt ships Noto Sans Symbols 2 as Symbols.ttf for Unicode symbols; not SF Symbols (no SF Symbols font exists open source)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/AppleSDGothicNeo.ttc",
@@ -856,13 +856,13 @@
     "size": 55323000
    },
    "description": "",
-   "role": "",
+   "role": "CJK system UI font (Chinese, Japanese, Korean sans)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt; springboard/render/src/fontfallback.rs",
+   "status": "partial",
+   "note": "CJK glyph coverage comes from the noto-fonts-cjk package through the font fallback chain; not the Apple family or its weight set, and no per-language style selection",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/AquaKana.ttc",
@@ -877,13 +877,13 @@
     "size": 18486872
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: AquaKana",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AquaKana: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/ArialHB.ttc",
@@ -898,13 +898,13 @@
     "size": 188236
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: ArialHB",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family ArialHB: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Avenir Next Condensed.ttc",
@@ -919,13 +919,13 @@
     "size": 3239976
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Avenir Next Condensed",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Avenir Next Condensed: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Avenir Next.ttc",
@@ -940,13 +940,13 @@
     "size": 4941620
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Avenir Next",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Avenir Next: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Avenir.ttc",
@@ -961,13 +961,13 @@
     "size": 1595024
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Avenir",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Avenir: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/CJKSymbolsFallback.ttc",
@@ -982,13 +982,13 @@
     "size": 768520
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: CJKSymbolsFallback",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family CJKSymbolsFallback: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Courier.ttc",
@@ -1003,13 +1003,13 @@
     "size": 1135004
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced font: Courier",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Courier: no BifrOSt equivalent; BifrOSt mono set is JetBrains Mono, Geist Mono, Fira Code, Source Code Pro. Needed for documents and Terminal themes that name it; candidate: Liberation Mono or Cousine (OFL/Apache)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Academy Engraved LET Fonts.ttf",
@@ -1024,13 +1024,13 @@
     "size": 105016
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Academy Engraved LET Fonts",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Academy Engraved LET Fonts: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Al Nile.ttc",
@@ -1045,13 +1045,13 @@
     "size": 124128
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Al Nile",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Al Nile: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Al Tarikh.ttc",
@@ -1066,13 +1066,13 @@
     "size": 76228
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Al Tarikh",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Al Tarikh: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/AlBayan.ttc",
@@ -1087,13 +1087,13 @@
     "size": 180172
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: AlBayan",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AlBayan: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/AmericanTypewriter.ttc",
@@ -1108,13 +1108,13 @@
     "size": 2405276
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: AmericanTypewriter",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AmericanTypewriter: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Andale Mono.ttf",
@@ -1129,13 +1129,13 @@
     "size": 109700
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced font: Andale Mono",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Andale Mono: no BifrOSt equivalent; BifrOSt mono set is JetBrains Mono, Geist Mono, Fira Code, Source Code Pro. Needed for documents and Terminal themes that name it; candidate: Liberation Mono or Cousine (OFL/Apache)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Apple Chancery.ttf",
@@ -1150,13 +1150,13 @@
     "size": 332904
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Apple Chancery",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Apple Chancery: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/AppleGothic.ttf",
@@ -1171,13 +1171,13 @@
     "size": 15253080
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: AppleGothic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AppleGothic: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/AppleMyungjo.ttf",
@@ -1192,13 +1192,13 @@
     "size": 18757828
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: AppleMyungjo",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AppleMyungjo: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Black.ttf",
@@ -1213,13 +1213,13 @@
     "size": 122556
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Arial Black",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Arial Black: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Bold Italic.ttf",
@@ -1234,13 +1234,13 @@
     "size": 558672
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Arial Bold Italic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Arial Bold Italic: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Bold.ttf",
@@ -1255,13 +1255,13 @@
     "size": 750984
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Arial Bold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Arial Bold: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Italic.ttf",
@@ -1276,13 +1276,13 @@
     "size": 553284
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Arial Italic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Arial Italic: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Narrow Bold Italic.ttf",
@@ -1297,13 +1297,13 @@
     "size": 183932
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Arial Narrow Bold Italic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Arial Narrow Bold Italic: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Narrow Bold.ttf",
@@ -1318,13 +1318,13 @@
     "size": 184420
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Arial Narrow Bold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Arial Narrow Bold: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Narrow Italic.ttf",
@@ -1339,13 +1339,13 @@
     "size": 184944
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Arial Narrow Italic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Arial Narrow Italic: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Narrow.ttf",
@@ -1360,13 +1360,13 @@
     "size": 179492
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Arial Narrow",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Arial Narrow: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Rounded Bold.ttf",
@@ -1381,13 +1381,13 @@
     "size": 49296
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Arial Rounded Bold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Arial Rounded Bold: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
@@ -1402,13 +1402,13 @@
     "size": 23278008
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Arial Unicode",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Arial Unicode: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Arial.ttf",
@@ -1423,13 +1423,13 @@
     "size": 773236
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Arial",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Arial: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Athelas.ttc",
@@ -1444,13 +1444,13 @@
     "size": 2309724
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Athelas",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Athelas: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Ayuthaya.ttf",
@@ -1465,13 +1465,13 @@
     "size": 303740
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Ayuthaya",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Ayuthaya: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Baghdad.ttc",
@@ -1486,13 +1486,13 @@
     "size": 105864
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Baghdad",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Baghdad: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bangla MN.ttc",
@@ -1507,13 +1507,13 @@
     "size": 312452
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Bangla MN",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Bangla MN: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bangla Sangam MN.ttc",
@@ -1528,13 +1528,13 @@
     "size": 435872
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Bangla Sangam MN",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Bangla Sangam MN: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Baskerville.ttc",
@@ -1549,13 +1549,13 @@
     "size": 1340512
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Baskerville",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Baskerville: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Beirut.ttc",
@@ -1570,13 +1570,13 @@
     "size": 78208
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Beirut",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Beirut: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/BigCaslon.ttf",
@@ -1591,13 +1591,13 @@
     "size": 219236
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: BigCaslon",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BigCaslon: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bodoni 72 OS.ttc",
@@ -1612,13 +1612,13 @@
     "size": 229680
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Bodoni 72 OS",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Bodoni 72 OS: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bodoni 72 Smallcaps Book.ttf",
@@ -1633,13 +1633,13 @@
     "size": 79844
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Bodoni 72 Smallcaps Book",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Bodoni 72 Smallcaps Book: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bodoni 72.ttc",
@@ -1654,13 +1654,13 @@
     "size": 416160
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Bodoni 72",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Bodoni 72: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bodoni Ornaments.ttf",
@@ -1675,13 +1675,13 @@
     "size": 72360
    },
    "description": "",
-   "role": "",
+   "role": "Symbol, dingbat or math font: Bodoni Ornaments",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Bodoni Ornaments: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Bradley Hand Bold.ttf",
@@ -1696,13 +1696,13 @@
     "size": 592244
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Bradley Hand Bold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Bradley Hand Bold: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Brush Script.ttf",
@@ -1717,13 +1717,13 @@
     "size": 222640
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Brush Script",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Brush Script: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Chalkboard.ttc",
@@ -1738,13 +1738,13 @@
     "size": 170252
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Chalkboard",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Chalkboard: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/ChalkboardSE.ttc",
@@ -1759,13 +1759,13 @@
     "size": 524848
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: ChalkboardSE",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family ChalkboardSE: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Chalkduster.ttf",
@@ -1780,13 +1780,13 @@
     "size": 483152
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Chalkduster",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Chalkduster: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Charter.ttc",
@@ -1801,13 +1801,13 @@
     "size": 2096264
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Charter",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Charter: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Cochin.ttc",
@@ -1822,13 +1822,13 @@
     "size": 1223340
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Cochin",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Cochin: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Comic Sans MS Bold.ttf",
@@ -1843,13 +1843,13 @@
     "size": 120120
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Comic Sans MS Bold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Comic Sans MS Bold: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Comic Sans MS.ttf",
@@ -1864,13 +1864,13 @@
     "size": 135484
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: Comic Sans MS",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Comic Sans MS: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Copperplate.ttc",
@@ -1885,13 +1885,13 @@
     "size": 1254748
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Copperplate",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Copperplate: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Corsiva.ttc",
@@ -1906,13 +1906,13 @@
     "size": 72584
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Corsiva",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Corsiva: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Courier New Bold Italic.ttf",
@@ -1927,13 +1927,13 @@
     "size": 506640
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced font: Courier New Bold Italic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Courier New Bold Italic: no BifrOSt equivalent; BifrOSt mono set is JetBrains Mono, Geist Mono, Fira Code, Source Code Pro. Needed for documents and Terminal themes that name it; candidate: Liberation Mono or Cousine (OFL/Apache)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Courier New Bold.ttf",
@@ -1948,13 +1948,13 @@
     "size": 691796
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced font: Courier New Bold",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Courier New Bold: no BifrOSt equivalent; BifrOSt mono set is JetBrains Mono, Geist Mono, Fira Code, Source Code Pro. Needed for documents and Terminal themes that name it; candidate: Liberation Mono or Cousine (OFL/Apache)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Courier New Italic.ttf",
@@ -1969,13 +1969,13 @@
     "size": 589900
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced font: Courier New Italic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Courier New Italic: no BifrOSt equivalent; BifrOSt mono set is JetBrains Mono, Geist Mono, Fira Code, Source Code Pro. Needed for documents and Terminal themes that name it; candidate: Liberation Mono or Cousine (OFL/Apache)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Fonts/Supplemental/Courier New.ttf",
@@ -1990,13 +1990,13 @@
     "size": 684624
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced font: Courier New",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Courier New: no BifrOSt equivalent; BifrOSt mono set is JetBrains Mono, Geist Mono, Fira Code, Source Code Pro. Needed for documents and Terminal themes that name it; candidate: Liberation Mono or Cousine (OFL/Apache)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/arrow-bottom.pdf",
@@ -2179,13 +2179,13 @@
     "size": 404692
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: ADTGaramond",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family ADTGaramond: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/AlFirat.ttc",
@@ -2200,13 +2200,13 @@
     "size": 58036
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: AlFirat",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AlFirat: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/AlKhalil.ttc",
@@ -2221,13 +2221,13 @@
     "size": 109532
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: AlKhalil",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AlKhalil: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/AlRafidain.ttc",
@@ -2242,13 +2242,13 @@
     "size": 49536
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: AlRafidain",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AlRafidain: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/AlRafidainAlFanni.ttc",
@@ -2263,13 +2263,13 @@
     "size": 52244
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: AlRafidainAlFanni",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AlRafidainAlFanni: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Algiers.ttc",
@@ -2284,13 +2284,13 @@
     "size": 96020
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Algiers",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Algiers: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/AsphaltMedium.otf",
@@ -2305,13 +2305,13 @@
     "size": 349416
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: AsphaltMedium",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AsphaltMedium: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/BalegaRegular.otf",
@@ -2326,13 +2326,13 @@
     "size": 32120
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: BalegaRegular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BalegaRegular: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/BankGothic.ttc",
@@ -2347,13 +2347,13 @@
     "size": 219400
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: BankGothic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BankGothic: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Basra.ttc",
@@ -2368,13 +2368,13 @@
     "size": 132364
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Basra",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Basra: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/BebasNeue.otf",
@@ -2389,13 +2389,13 @@
     "size": 34408
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: BebasNeue",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BebasNeue: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Blackmoor LET Fonts.ttf",
@@ -2410,13 +2410,13 @@
     "size": 259372
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Blackmoor LET Fonts",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Blackmoor LET Fonts: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Blair Medium.ttf",
@@ -2431,13 +2431,13 @@
     "size": 140440
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Blair Medium",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Blair Medium: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Bodoni Ornaments.ttf",
@@ -2452,13 +2452,13 @@
     "size": 55644
    },
    "description": "",
-   "role": "",
+   "role": "Duplicate font file (Bodoni Ornaments)",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "status": "n/a",
+   "note": "duplicate of path:/System/Library/Fonts/Supplemental/Bodoni Ornaments.ttf",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Bodoni SvtyTwo OS.ttc",
@@ -2473,13 +2473,13 @@
     "size": 250480
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Bodoni SvtyTwo OS",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Bodoni SvtyTwo OS: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Bodoni SvtyTwo SC Book.ttf",
@@ -2494,13 +2494,13 @@
     "size": 90580
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Bodoni SvtyTwo SC Book",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Bodoni SvtyTwo SC Book: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Bodoni SvtyTwo.ttc",
@@ -2515,13 +2515,13 @@
     "size": 522868
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Bodoni SvtyTwo",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Bodoni SvtyTwo: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/BookAntiqua.ttc",
@@ -2536,13 +2536,13 @@
     "size": 566440
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: BookAntiqua",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BookAntiqua: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/BookmanOldStyle.ttc",
@@ -2557,13 +2557,13 @@
     "size": 593048
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: BookmanOldStyle",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BookmanOldStyle: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Bordeaux Roman Bold LET Fonts.ttf",
@@ -2578,13 +2578,13 @@
     "size": 110188
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Bordeaux Roman Bold LET Fonts",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Bordeaux Roman Bold LET Fonts: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Braganza.ttf",
@@ -2599,13 +2599,13 @@
     "size": 198920
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Braganza",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Braganza: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Capitals.ttf",
@@ -2620,13 +2620,13 @@
     "size": 76088
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Capitals",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Capitals: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Carlito.ttc",
@@ -2641,13 +2641,13 @@
     "size": 2729936
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Carlito",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Carlito: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/CenturyGothic.ttc",
@@ -2662,13 +2662,13 @@
     "size": 515232
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: CenturyGothic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family CenturyGothic: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/CenturySchoolbook.ttc",
@@ -2683,13 +2683,13 @@
     "size": 282240
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font: CenturySchoolbook",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family CenturySchoolbook: no BifrOSt equivalent; documents and web pages that name it fall back to Inter. Needed for layout fidelity; candidate: metric-compatible Liberation/Arimo/Tinos/Cousine (OFL), not shipped today",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/AdelleSans.ttc",
@@ -2704,13 +2704,13 @@
     "size": 47736
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: AdelleSans",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AdelleSans: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/AkayaKannada.ttf",
@@ -2725,13 +2725,13 @@
     "size": 23336
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: AkayaKannada",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AkayaKannada: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/AkayaTelivigala.ttf",
@@ -2746,13 +2746,13 @@
     "size": 28212
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: AkayaTelivigala",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AkayaTelivigala: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/AnnaiMN.ttf",
@@ -2767,13 +2767,13 @@
     "size": 29068
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: AnnaiMN",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AnnaiMN: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Apple LiGothic Medium.ttf",
@@ -2788,13 +2788,13 @@
     "size": 5492
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: Apple LiGothic Medium",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Apple LiGothic Medium: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Apple LiSung Light.ttf",
@@ -2809,13 +2809,13 @@
     "size": 7952
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: Apple LiSung Light",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Apple LiSung Light: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/ArimaKoshi.ttc",
@@ -2830,13 +2830,13 @@
     "size": 53120
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: ArimaKoshi",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family ArimaKoshi: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/ArimaMadurai.ttc",
@@ -2851,13 +2851,13 @@
     "size": 47968
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: ArimaMadurai",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family ArimaMadurai: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BIZ_UDGothic_stub.ttc",
@@ -2872,13 +2872,13 @@
     "size": 13040
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: BIZ_UDGothic_stub",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BIZ_UDGothic_stub: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BIZ_UDMincho-regular_stub.ttf",
@@ -2893,13 +2893,13 @@
     "size": 9384
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: BIZ_UDMincho-regular_stub",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BIZ_UDMincho-regular_stub: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMDoHyeon-Regular.otf",
@@ -2914,13 +2914,13 @@
     "size": 4504
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: BMDoHyeon-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BMDoHyeon-Regular: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMHanna11yrs-Regular.otf",
@@ -2935,13 +2935,13 @@
     "size": 4764
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: BMHanna11yrs-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BMHanna11yrs-Regular: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMHannaAir-Regular.otf",
@@ -2956,13 +2956,13 @@
     "size": 25668
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: BMHannaAir-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BMHannaAir-Regular: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMHannaPro-Regular.otf",
@@ -2977,13 +2977,13 @@
     "size": 25272
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: BMHannaPro-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BMHannaPro-Regular: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMJua-Regular.otf",
@@ -2998,13 +2998,13 @@
     "size": 7780
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: BMJua-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BMJua-Regular: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMKirangHaerang-Regular.otf",
@@ -3019,13 +3019,13 @@
     "size": 36460
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: BMKirangHaerang-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BMKirangHaerang-Regular: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BMYeongSung-Regular.otf",
@@ -3040,13 +3040,13 @@
     "size": 26916
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: BMYeongSung-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BMYeongSung-Regular: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Baijam.ttc",
@@ -3061,13 +3061,13 @@
     "size": 53480
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Baijam",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Baijam: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Baloo-Devanagari.ttc",
@@ -3082,13 +3082,13 @@
     "size": 46176
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Baloo-Devanagari",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Baloo-Devanagari: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooBhai-Gujarati.ttc",
@@ -3103,13 +3103,13 @@
     "size": 50940
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: BalooBhai-Gujarati",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BalooBhai-Gujarati: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooBhaijaanUrdu-Regular.ttf",
@@ -3124,13 +3124,13 @@
     "size": 16604
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: BalooBhaijaanUrdu-Regular",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BalooBhaijaanUrdu-Regular: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooBhainaOdia.ttc",
@@ -3145,13 +3145,13 @@
     "size": 47264
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: BalooBhainaOdia",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BalooBhainaOdia: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooChettanMalayalam.ttc",
@@ -3166,13 +3166,13 @@
     "size": 67516
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: BalooChettanMalayalam",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BalooChettanMalayalam: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooDaBanga.ttc",
@@ -3187,13 +3187,13 @@
     "size": 45848
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: BalooDaBanga",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BalooDaBanga: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooPaajiGurmukhi.ttc",
@@ -3208,13 +3208,13 @@
     "size": 44056
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: BalooPaajiGurmukhi",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BalooPaajiGurmukhi: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooTammaKannada.ttc",
@@ -3229,13 +3229,13 @@
     "size": 59448
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: BalooTammaKannada",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BalooTammaKannada: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooTammuduTelugu.ttc",
@@ -3250,13 +3250,13 @@
     "size": 57292
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: BalooTammuduTelugu",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BalooTammuduTelugu: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BalooThambiTamil.ttc",
@@ -3271,13 +3271,13 @@
     "size": 56040
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: BalooThambiTamil",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BalooThambiTamil: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Baoli.ttc",
@@ -3292,13 +3292,13 @@
     "size": 22716
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: Baoli",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Baoli: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/BiauKai.ttc",
@@ -3313,13 +3313,13 @@
     "size": 15744
    },
    "description": "",
-   "role": "",
+   "role": "CJK or Korean/Japanese decorative or serif font: BiauKai",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family BiauKai: only noto-fonts-cjk is packaged; no serif, rounded or handwriting CJK styles. Needed for documents that name it; candidate: Noto Serif CJK / Noto Sans CJK weights",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Brill-Italic.ttf",
@@ -3334,13 +3334,13 @@
     "size": 15676
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Brill-Italic",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Brill-Italic: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Brill-Roman.ttf",
@@ -3355,13 +3355,13 @@
     "size": 14664
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Brill-Roman",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Brill-Roman: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/CambayDevanagari.ttc",
@@ -3376,13 +3376,13 @@
     "size": 20436
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: CambayDevanagari",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family CambayDevanagari: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Canela.ttc",
@@ -3397,13 +3397,13 @@
     "size": 16964
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Canela",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Canela: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/CanelaDeck.ttc",
@@ -3418,13 +3418,13 @@
     "size": 26784
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: CanelaDeck",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family CanelaDeck: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/CanelaText.ttc",
@@ -3439,13 +3439,13 @@
     "size": 26820
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: CanelaText",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family CanelaText: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/ChakraPetch.ttc",
@@ -3460,13 +3460,13 @@
     "size": 46456
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: ChakraPetch",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family ChakraPetch: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Charm.ttc",
@@ -3481,13 +3481,13 @@
     "size": 11820
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Charm",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Charm: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/Charmonman.ttc",
@@ -3502,13 +3502,13 @@
     "size": 9644
    },
    "description": "",
-   "role": "",
+   "role": "Script/language coverage font: Charmonman",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Charmonman: script or language coverage not shipped; BifrOSt only packages noto-fonts-cjk and noto-fonts-emoji (packaging/arch/runtime-packages.txt). Needed for text in that script; candidate: matching Noto Sans/Serif family (OFL) via the font fallback chain in springboard/render/src/fontfallback.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/ActionsAvailable.aiff",
@@ -3943,13 +3943,13 @@
     "size": 37992
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: Coolvetica",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family Coolvetica: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Sounds/Basso.aiff",
@@ -4027,13 +4027,13 @@
     "size": 2968
    },
    "description": "",
-   "role": "",
+   "role": "Latin text/display font: AGC",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "font family AGC: decorative or text typeface with no BifrOSt equivalent (library has only Inter, Geist, IBM Plex Sans, Source Sans 3). Low priority; needed only for documents that name it (Pages/TextEdit/Font Book)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }
