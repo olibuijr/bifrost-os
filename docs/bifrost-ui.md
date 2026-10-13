@@ -1971,6 +1971,19 @@ the ledger. A batch holds calls back and commits all or none; `fetch_last_client
 but not. Type, authors, `YYYY-MM-DD` dates and searchable custom values are folded into the shell keywords, so `search_items`
 matches them. The wire format is unchanged. Gap: the shell does not use `ranking_hint` yet, and `RemoteConnectionError` is never raised.
 
+### Core Spotlight stores, expiry and user queries
+
+- `CSSearchableItem::expiration_date(secs)` and `is_expired(now)` mirror `expirationDate`.
+- `bifrost_ui::searchstore` (re-exported from `quicksearch` as `StoreSet`, `IndexStore`, `StoredItem`): one store per app and
+  optional index name (`CSSearchableIndex(name:protectionClass:)`). It supports delete by identifier, by domain (a domain
+  also removes its dotted sub-domains) and all, `purge_expired(now)`, oldest-first eviction at 1000 items, and
+  `begin_batch` / `end_batch(state)` / `client_state` (state up to 250 bytes). `StoreSet::search(requester, owner, name,
+  query, now)` returns every live item to the owner and only public items to other apps.
+- `bifrost_ui::usersearch` (`run_user_query`, `CSUserQueryContext`, `CSSuggestion`): the items of a `CSSearchQuery` plus
+  completions of the last word typed, ranked by how many records hold the word.
+- Gaps: the stores are in memory and not yet wired to the shell service or the on-disk files; the attribute query grammar,
+  streamed found-items replies and metadata queries over app containers are not built; the assistant search tool stays a gap.
+
 ## Table columns and shared panels (NSTableView, NSFontPanel, NSColorPanel parity)
 
 Code: `springboard/ui/src/table.rs`, `springboard/ui/src/panels.rs` (SDK: `bifrost_app::controls::table`, `controls::panels`). Pure models with unit tests.

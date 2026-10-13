@@ -641,6 +641,8 @@ pub mod metaquery;
 pub mod column_summary;
 pub mod searchquery;
 pub mod searchindex;
+pub mod searchstore;
+pub mod usersearch;
 pub mod index_client;
 pub mod quicksearch_query;
 pub mod pathbar;
