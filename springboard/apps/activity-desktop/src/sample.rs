@@ -254,7 +254,7 @@ pub fn parse_passwd(text: &str) -> HashMap<u32, String> {
     text.lines()
         .filter_map(|line| {
             let f: Vec<&str> = line.split(':').collect();
-            Some((f.get(2)?.parse().ok()?, f.first()?.to_string()))
+            Some((f.get(2)?.parse::<u32>().ok()?, f.first()?.to_string()))
         })
         .collect()
 }
