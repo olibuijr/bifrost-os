@@ -400,6 +400,10 @@ pub struct AppHost {
     pub accessory: Vec<bifrost_proto::AccessoryItem>,
     /// How the shell shows this app (`launch_route` at spawn; a `Buffers` message from a direct app demotes it).
     route: Route,
+    /// The touch frames the app gets (`ToApp::Touches`): one tracker per surface, at the app's scale.
+    frames: bifrost_ui::touch::TouchTracker,
+    /// The scale `frames` was built for (points to pixels), so a new `Configure` at another scale rebuilds it.
+    frame_scale: f32,
     /// Set when a direct app demoted to `Route::Shm`; `take_fallback` reads it once so the shell opens its window.
     fallback: bool,
 }
@@ -496,6 +500,8 @@ impl AppHost {
             input_traits: bifrost_proto::InputTraits::default(),
             accessory: Vec::new(),
             route: Route::Shm,
+            frames: bifrost_ui::touch::TouchTracker::with_scale(cfg.scale),
+            frame_scale: cfg.scale,
             fallback: false,
         }
     }
@@ -668,6 +674,10 @@ impl AppHost {
 
     pub fn configure(&mut self, cfg: Configure) {
         self.size = (cfg.w as usize, cfg.h as usize);
+        if cfg.scale != self.frame_scale {
+            self.frames = bifrost_ui::touch::TouchTracker::with_scale(cfg.scale);
+            self.frame_scale = cfg.scale;
+        }
         self.send(&ToApp::Configure(cfg));
     }
 
@@ -679,6 +689,22 @@ impl AppHost {
     /// plain stream once it sees frames; locations are in the app's surface pixels, like `touch`.
     pub fn touches(&mut self, ev: bifrost_ui::touch::TouchEvent) {
         self.send(&ToApp::Touches(ev));
+    }
+
+    /// Feeds one contact to the app's touch tracker and sends the frame it makes (nothing when the sample changes
+    /// nothing). Call it before the matching `touch`, so the app sees the frame first.
+    pub fn feed_touch(&mut self, raw: bifrost_ui::touch::Raw, sample: bifrost_ui::touch::Sample, t_ms: f64) {
+        if let Some(ev) = self.frames.frame(&[(raw, sample)], t_ms) {
+            self.touches(ev);
+        }
+    }
+
+    /// Takes every touch the app holds away (focus lost, window closed, a system gesture took over): one frame of
+    /// `Cancelled` touches. A no-op when no touch is down.
+    pub fn cancel_touches(&mut self, t_ms: f64) {
+        if let Some(ev) = self.frames.cancel_all(t_ms) {
+            self.touches(ev);
+        }
     }
 
     pub fn key(&mut self, k: KeyInput) {
@@ -964,6 +990,7 @@ impl AppHost {
         if !self.running() {
             return true;
         }
+        self.cancel_touches(now);
         match quit_plan(self.sudden) {
             QuitPlan::KillNow => self.sigkill(),
             QuitPlan::QuitThenKill(ms) => {
@@ -1304,7 +1331,50 @@ impl Shell {
             Event::Up(x, y) => (TouchKind::Up, x, y),
             _ => return,
         };
+        // the pointer as a touch frame, before the plain stream; a finger on the touchscreen is reported by its contact
+        if let Some((raw, s)) = super::touch_frames::pointer_sample(kind, x, y, &self.touch_contacts) {
+            h.feed_touch(raw, s, t);
+        }
         h.touch(kind, 0, x, y, t as u32);
+    }
+
+    /// A touchscreen contact (`Event::Contact`) at (`x`, `y`) in screen pixels. The foreground external app gets it as a
+    /// touch frame, in the same coordinates as its plain touches. A finger that went down on the on-screen keyboard stays
+    /// with the keyboard. The finger is recorded either way, so the pointer stream stands aside while it is down.
+    /// `deliver` is false when a system gesture holds the finger: its contact is still recorded, but the app gets nothing.
+    pub fn ext_contact(&mut self, id: i32, phase: crate::bare::input::TouchPhase, x: f32, y: f32, t: f64, deliver: bool) {
+        use crate::bare::input::TouchPhase as Phase;
+        match phase {
+            Phase::Down => self.touch_contacts.down(id),
+            Phase::Up | Phase::Cancel => self.touch_contacts.up(id),
+            Phase::Move => {}
+        }
+        let Screen::App(AppId::External(n)) = self.screen else { return };
+        if !deliver {
+            return;
+        }
+        let (x, y) = if self.letterboxed(AppId::External(n)) {
+            match self.letterbox_event(Event::Move(x, y)) {
+                Event::Move(x, y) => (x, y),
+                _ => (x, y),
+            }
+        } else {
+            (x, y)
+        };
+        if phase == Phase::Down && self.keyboard.shown() && y >= self.kb_top() {
+            return;
+        }
+        let Some(Some(h)) = self.ext.get_mut(n as usize) else { return };
+        h.feed_touch(super::touch_frames::raw_of_phase(phase), super::touch_frames::contact_sample(id, x, y), t);
+    }
+
+    /// The foreground app lost the touches (focus moved, the window closed, a system gesture took them): every touch it
+    /// holds is cancelled in one frame, before the app is suspended.
+    pub fn ext_cancel_touches(&mut self, t: f64) {
+        self.touch_contacts.clear();
+        if let Some(Some(h)) = self.ext_fg.and_then(|n| self.ext.get_mut(n as usize)) {
+            h.cancel_touches(t);
+        }
     }
 
     /// Routes the shell keyboard's output to the foreground external app.
@@ -1421,6 +1491,7 @@ impl Shell {
             _ => None,
         };
         if fg != self.ext_fg {
+            self.ext_cancel_touches(t);
             if let Some(Some(h)) = self.ext_fg.and_then(|n| self.ext.get_mut(n as usize)) {
                 h.suspend();
             }

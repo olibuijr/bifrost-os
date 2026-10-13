@@ -9,6 +9,7 @@ pub mod atspi;
 pub mod account;
 pub mod applib;
 pub mod apphost;
+pub mod touch_frames;
 pub mod intents;
 pub mod kinds;
 mod apps;
@@ -640,6 +641,8 @@ pub struct Shell {
     form: bifrost_ui::form_factor::FormFactor,
     /// a physical keyboard is attached; on a tablet it keeps the on-screen keyboard down
     hw_keyboard: bool,
+    /// the touchscreen fingers that are down, so the pointer stream does not report them twice (`touch_frames`)
+    touch_contacts: touch_frames::Contacts,
     /// the device has a vibrator (`bare::vibrator::vibrator_available`)
     haptics: bool,
     /// a touch that started on the keyboard
@@ -938,6 +941,7 @@ impl Shell {
             keyboard,
             form: bifrost_ui::form_factor::FormFactor::current(),
             hw_keyboard: false,
+            touch_contacts: touch_frames::Contacts::default(),
             haptics: false,
             kb_touch: false,
             desk_kb_lift: None,
