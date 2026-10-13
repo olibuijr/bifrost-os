@@ -57,6 +57,69 @@ impl Api {
         self.send_content(room, &protocol::image_content(&info))
     }
 
+    /// Uploads any file and sends it to `room` as a file message.
+    pub fn send_file(&self, room: &str, name: &str, mime: &str, bytes: &[u8]) -> Result<(), String> {
+        let mxc = self.upload(name, mime, bytes)?;
+        let info = protocol::ImageInfo { name, mxc: &mxc, mime, size: bytes.len() as u64 };
+        self.send_content(room, &protocol::file_content(&info))
+    }
+
+    /// Sends a text message that answers the message `reply_to`.
+    pub fn send_reply(&self, room: &str, text: &str, reply_to: &str) -> Result<(), String> {
+        self.send_content(room, &protocol::reply_content(text, reply_to))
+    }
+
+    /// Replaces the words of the message `target` with `text`.
+    pub fn send_edit(&self, room: &str, target: &str, text: &str) -> Result<(), String> {
+        self.send_content(room, &protocol::edit_content(target, text))
+    }
+
+    /// Reacts to the message `target` with `key` (an emoji).
+    pub fn send_reaction(&self, room: &str, target: &str, key: &str) -> Result<(), String> {
+        let url = protocol::send_event_url(&self.base, room, "m.reaction", &txn_id());
+        let content = protocol::reaction_content(target, key);
+        let answer = call(&self.http, "PUT", &url, Some(self.token.as_str()), Some((content.as_bytes(), "application/json")), CALL_LIMIT)?;
+        protocol::parse_event_id(&answer).map(|_| ())
+    }
+
+    /// Removes (redacts) `event`: Undo Send for a message, or taking back a reaction.
+    pub fn redact(&self, room: &str, event: &str) -> Result<(), String> {
+        let url = protocol::redact_url(&self.base, room, event, &txn_id());
+        let answer = call(&self.http, "PUT", &url, Some(self.token.as_str()), Some(("{}".as_bytes(), "application/json")), CALL_LIMIT)?;
+        protocol::parse_event_id(&answer).map(|_| ())
+    }
+
+    /// Makes a private conversation with `user_id` and returns its room id.
+    pub fn create_direct(&self, user_id: &str) -> Result<String, String> {
+        let url = protocol::create_room_url(&self.base);
+        let body = protocol::create_direct_body(user_id);
+        let answer = call(&self.http, "POST", &url, Some(self.token.as_str()), Some((body.as_bytes(), "application/json")), CALL_LIMIT)?;
+        protocol::parse_room_id(&answer)
+    }
+
+    /// Leaves `room`, then forgets it so it does not come back in the list. A failed forget is not an error: the room
+    /// is left either way.
+    pub fn leave(&self, room: &str) -> Result<(), String> {
+        let empty = Some(("{}".as_bytes(), "application/json"));
+        call(&self.http, "POST", &protocol::leave_url(&self.base, room), Some(self.token.as_str()), empty, CALL_LIMIT)?;
+        let _ = call(&self.http, "POST", &protocol::forget_url(&self.base, room), Some(self.token.as_str()), empty, CALL_LIMIT);
+        Ok(())
+    }
+
+    /// Renames `room`.
+    pub fn rename_room(&self, room: &str, name: &str) -> Result<(), String> {
+        let url = protocol::room_name_url(&self.base, room);
+        let body = protocol::room_name_body(name);
+        let answer = call(&self.http, "PUT", &url, Some(self.token.as_str()), Some((body.as_bytes(), "application/json")), CALL_LIMIT)?;
+        protocol::parse_event_id(&answer).map(|_| ())
+    }
+
+    /// Ends this device's session on the homeserver. The access token stops working.
+    pub fn logout(&self) -> Result<(), String> {
+        let empty = Some(("{}".as_bytes(), "application/json"));
+        call(&self.http, "POST", &protocol::logout_url(&self.base), Some(self.token.as_str()), empty, CALL_LIMIT).map(|_| ())
+    }
+
     /// Marks `event` as read in `room` (a public read receipt).
     pub fn read_receipt(&self, room: &str, event: &str) -> Result<(), String> {
         let url = protocol::receipt_url(&self.base, room, event);

@@ -1,7 +1,7 @@
 //! Messages as an installed BifrOSt desktop app: hosts `window::MessagesWindow` through the SDK.
 
 use bifrost_app::kit::{Damage, Surface};
-use bifrost_app::{App, Command, Commands, Ctx, DocumentEvent, Input};
+use bifrost_app::{App, AppMenu, Command, Commands, Ctx, DocumentEvent, Input};
 use bifrost_core::json::Json;
 use bifrost_messages::window::MessagesWindow;
 
@@ -37,8 +37,18 @@ impl App for MessagesApp {
             Input::Touch { kind, x, y, t, .. } => messages.touch(ctx, kind, x, y, t),
             Input::Key(k) => messages.key(ctx, k),
             Input::Command(Command::Paste) => messages.paste(ctx),
+            Input::Context { x, y } => messages.context(ctx, x, y),
+            Input::ContextAction(id) => messages.context_action(ctx, id),
             _ => false,
         }
+    }
+
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        self.window.as_ref().map(|messages| messages.main_menu()).unwrap_or_default()
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        self.window.as_mut().is_some_and(|messages| messages.menu_action(ctx, id))
     }
 
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {

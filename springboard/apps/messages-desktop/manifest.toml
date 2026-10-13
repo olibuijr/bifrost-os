@@ -1,6 +1,6 @@
 id = "is.olibuijr.messages.desktop"
 name = "Messages"
-version = "0.1.1"
+version = "0.2.0"
 exec = "bifrost-messages"
 icon = "icon.svg"
 min_shell = "0.4.84"

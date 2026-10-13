@@ -25,6 +25,16 @@ pub enum Event {
     Sent { room: String, result: Result<(), String> },
     /// A read receipt was sent.
     Read { result: Result<(), String> },
+    /// A reaction, edit or removal finished. `what` names it for the error line ("React", "Edit", "Undo Send").
+    Changed { what: &'static str, result: Result<(), String> },
+    /// A new conversation was made: the room id, or why not.
+    Created { result: Result<String, String> },
+    /// The account left `room`.
+    Left { room: String, result: Result<(), String> },
+    /// The room was renamed to `name`.
+    Renamed { room: String, name: String, result: Result<(), String> },
+    /// The session ended on the homeserver (the local sign-out has already happened).
+    LoggedOut { result: Result<(), String> },
 }
 
 /// Runs `work` on a new thread and sends its event, then writes the wake pipe.
@@ -94,4 +104,53 @@ pub fn send_image(api: Arc<Api>, room: String, name: String, mime: &'static str,
 /// Marks `event` as read in `room`.
 pub fn read(api: Arc<Api>, room: String, event: String) -> Event {
     Event::Read { result: api.read_receipt(&room, &event) }
+}
+
+/// Uploads any file and sends it to `room`.
+pub fn send_file(api: Arc<Api>, room: String, name: String, mime: &'static str, bytes: Vec<u8>) -> Event {
+    let result = api.send_file(&room, &name, mime, &bytes);
+    Event::Sent { room, result }
+}
+
+/// Sends a text that answers `reply_to`.
+pub fn send_reply(api: Arc<Api>, room: String, text: String, reply_to: String) -> Event {
+    let result = api.send_reply(&room, &text, &reply_to);
+    Event::Sent { room, result }
+}
+
+/// Replaces the words of `target`.
+pub fn send_edit(api: Arc<Api>, room: String, target: String, text: String) -> Event {
+    Event::Changed { what: "Edit", result: api.send_edit(&room, &target, &text) }
+}
+
+/// Reacts to `target` with `key`.
+pub fn send_reaction(api: Arc<Api>, room: String, target: String, key: String) -> Event {
+    Event::Changed { what: "React", result: api.send_reaction(&room, &target, &key) }
+}
+
+/// Removes `event` from `room`.
+pub fn redact(api: Arc<Api>, room: String, event: String, what: &'static str) -> Event {
+    Event::Changed { what, result: api.redact(&room, &event) }
+}
+
+/// Makes a direct conversation with `user_id`.
+pub fn create_direct(api: Arc<Api>, user_id: String) -> Event {
+    Event::Created { result: api.create_direct(&user_id) }
+}
+
+/// Leaves and forgets `room`.
+pub fn leave(api: Arc<Api>, room: String) -> Event {
+    let result = api.leave(&room);
+    Event::Left { room, result }
+}
+
+/// Renames `room`.
+pub fn rename(api: Arc<Api>, room: String, name: String) -> Event {
+    let result = api.rename_room(&room, &name);
+    Event::Renamed { room, name, result }
+}
+
+/// Ends the session on the homeserver.
+pub fn logout(api: Arc<Api>) -> Event {
+    Event::LoggedOut { result: api.logout() }
 }
