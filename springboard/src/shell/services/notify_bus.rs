@@ -18,11 +18,14 @@
 //!
 //! System names the shell posts, once per change, after the first tick (which only records the state):
 //! `system.appearance.change` (the scheme went Light or Dark), `system.screen.locked` and `system.screen.unlocked`,
-//! and `system.network.change` (the Wi-Fi or wired link went up or down). Each reaches the apps that hold a token on it.
+//! `system.network.change` (the Wi-Fi or wired link went up or down), `system.contacts.change` (the contacts file
+//! changed) and `system.calendar.change` (the events file changed). Each reaches the apps that hold a token on it.
 use super::{Event, Shell, SystemService};
 use bifrost_core::json::Json;
 use bifrost_core::notify_center::NotifyCenter;
 use std::collections::BTreeMap;
+use std::path::Path;
+use std::time::SystemTime;
 
 /// The name the service is registered under.
 pub const SERVICE: &str = "notify_bus";
@@ -36,6 +39,12 @@ pub const SCREEN_LOCKED: &str = "system.screen.locked";
 pub const SCREEN_UNLOCKED: &str = "system.screen.unlocked";
 /// Posted when the connection goes up or down (Wi-Fi or wired).
 pub const NETWORK_CHANGE: &str = "system.network.change";
+/// Posted when the contacts file changes (the Contacts app saved, or the file appeared or went).
+pub const CONTACTS_CHANGE: &str = "system.contacts.change";
+/// Posted when the events file changes (the Calendar app saved, or the file appeared or went).
+pub const CALENDAR_CHANGE: &str = "system.calendar.change";
+/// How often the store files are stat'ed, in seconds of shell time.
+const STORE_STAT_INTERVAL: f64 = 1.0;
 /// Longest name, in bytes.
 pub const MAX_NAME: usize = 128;
 /// Most tokens one app may hold.
@@ -57,6 +66,10 @@ struct Seen {
     locked: bool,
     /// Wi-Fi or a wired link is up.
     reachable: bool,
+    /// The contacts file's modification time, `None` when there is no file.
+    contacts: Option<SystemTime>,
+    /// The events file's modification time, `None` when there is no file.
+    calendar: Option<SystemTime>,
 }
 
 #[derive(Default)]
@@ -64,6 +77,10 @@ pub struct NotifyBus {
     center: NotifyCenter,
     owners: BTreeMap<u32, Owner>,
     last: Option<Seen>,
+    /// The shell time of the last stat of the store files, `None` before the first tick.
+    stat_at: Option<f64>,
+    /// The store files' modification times as of `stat_at`: contacts, then calendar.
+    stores: (Option<SystemTime>, Option<SystemTime>),
 }
 
 impl NotifyBus {
@@ -169,6 +186,12 @@ impl NotifyBus {
             if prev.reachable != now.reachable {
                 self.center.post(NETWORK_CHANGE);
             }
+            if prev.contacts != now.contacts {
+                self.center.post(CONTACTS_CHANGE);
+            }
+            if prev.calendar != now.calendar {
+                self.center.post(CALENDAR_CHANGE);
+            }
         }
     }
 
@@ -194,13 +217,24 @@ impl SystemService for NotifyBus {
         self.handle(app_id, method, params)
     }
 
-    fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
+    fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
         let running = |app: &str| crate::shell::apphost::slot_of(app).is_some_and(|slot| shell.ext.get(slot).is_some_and(|h| h.is_some()));
         self.prune(running);
+        match self.stat_at {
+            Some(at) if t - at < STORE_STAT_INTERVAL => {}
+            _ => {
+                self.stat_at = Some(t);
+                let contacts = crate::shell::contactstore::store_path(&shell.data_dir);
+                let calendar = super::calendar::store_path(&shell.data_dir);
+                self.stores = (stamp(&contacts), stamp(&calendar));
+            }
+        }
         let now = Seen {
             light: bifrost_render::appearance::target_is_light(),
             locked: shell.is_locked(),
             reachable: shell.info.online || shell.info.wired,
+            contacts: self.stores.0,
+            calendar: self.stores.1,
         };
         self.system_changes(now);
         self.deliver()
@@ -209,6 +243,11 @@ impl SystemService for NotifyBus {
 
 fn is_system(name: &str) -> bool {
     name.starts_with(SYSTEM_PREFIX)
+}
+
+/// The modification time of the file at `path`; `None` when it is missing or unreadable.
+fn stamp(path: &Path) -> Option<SystemTime> {
+    std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
 fn obj(fields: Vec<(&str, Json)>) -> Json {
@@ -246,6 +285,7 @@ fn state_param(params: &Json) -> Result<u64, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{Duration, UNIX_EPOCH};
 
     fn params(fields: Vec<(&str, Json)>) -> Json {
         obj(fields)
@@ -264,7 +304,17 @@ mod tests {
     }
 
     fn quiet() -> Seen {
-        Seen { light: false, locked: false, reachable: true }
+        Seen { light: false, locked: false, reachable: true, contacts: None, calendar: None }
+    }
+
+    /// A quiet shell whose store files were last written at the given seconds after the epoch.
+    fn stores(contacts: Option<u64>, calendar: Option<u64>) -> Seen {
+        let at = |secs: u64| Some(UNIX_EPOCH + Duration::from_secs(secs));
+        Seen { contacts: contacts.and_then(at), calendar: calendar.and_then(at), ..quiet() }
+    }
+
+    fn event_names(bus: &mut NotifyBus) -> Vec<(Option<String>, String)> {
+        bus.deliver().into_iter().map(|e| (e.app, e.body.get("name").and_then(Json::as_str).unwrap().to_string())).collect()
     }
 
     #[test]
@@ -431,10 +481,10 @@ mod tests {
             bus.handle("app.a", "register", &name(n)).unwrap();
         }
         bus.system_changes(quiet());
-        bus.system_changes(Seen { light: true, locked: false, reachable: true });
+        bus.system_changes(Seen { light: true, ..quiet() });
         let names: Vec<String> = bus.deliver().into_iter().map(|e| e.body.get("name").and_then(Json::as_str).unwrap().to_string()).collect();
         assert_eq!(names, vec![APPEARANCE_CHANGE.to_string()]);
-        bus.system_changes(Seen { light: true, locked: true, reachable: false });
+        bus.system_changes(Seen { light: true, locked: true, reachable: false, ..quiet() });
         let names: Vec<String> = bus.deliver().into_iter().map(|e| e.body.get("name").and_then(Json::as_str).unwrap().to_string()).collect();
         assert_eq!(names, vec![SCREEN_LOCKED.to_string(), NETWORK_CHANGE.to_string()]);
     }
@@ -446,6 +496,39 @@ mod tests {
         bus.system_changes(quiet());
         bus.system_changes(quiet());
         assert!(bus.deliver().is_empty());
+    }
+
+    #[test]
+    fn a_store_change_reaches_only_the_apps_on_that_name() {
+        let mut bus = NotifyBus::default();
+        bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).unwrap();
+        bus.handle("app.b", "register", &name(CALENDAR_CHANGE)).unwrap();
+        bus.system_changes(stores(Some(1), Some(1)));
+        assert!(bus.deliver().is_empty(), "the first tick only records the stamps");
+        bus.system_changes(stores(Some(2), Some(1)));
+        assert_eq!(event_names(&mut bus), vec![(Some("app.a".to_string()), CONTACTS_CHANGE.to_string())]);
+        bus.system_changes(stores(Some(2), Some(3)));
+        assert_eq!(event_names(&mut bus), vec![(Some("app.b".to_string()), CALENDAR_CHANGE.to_string())]);
+        bus.system_changes(stores(Some(2), Some(3)));
+        assert!(bus.deliver().is_empty(), "an unchanged store posts nothing");
+    }
+
+    #[test]
+    fn a_store_file_that_appears_or_goes_is_a_change() {
+        let mut bus = NotifyBus::default();
+        bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).unwrap();
+        bus.system_changes(stores(None, None));
+        bus.system_changes(stores(Some(5), None));
+        assert_eq!(event_names(&mut bus).len(), 1);
+        bus.system_changes(stores(None, None));
+        assert_eq!(event_names(&mut bus).len(), 1);
+    }
+
+    #[test]
+    fn apps_cannot_post_the_store_change_names() {
+        let mut bus = NotifyBus::default();
+        assert!(bus.handle("app.a", "post", &name(CONTACTS_CHANGE)).is_err());
+        assert!(bus.handle("app.a", "post", &name(CALENDAR_CHANGE)).is_err());
     }
 
     #[test]

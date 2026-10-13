@@ -15,7 +15,10 @@ suspend and resume) is reached through a shell service and an SDK client.
 3. **System names posted by the shell** (after the first tick, which only records the state):
    - `system.appearance.change` when the scheme goes Light or Dark (`bifrost_render::appearance::target_is_light`);
    - `system.screen.locked` and `system.screen.unlocked` when `Shell::is_locked` changes;
-   - `system.network.change` when `Info::online` or `Info::wired` changes.
+   - `system.network.change` when `Info::online` or `Info::wired` changes;
+   - `system.contacts.change` and `system.calendar.change` when the modification time of the contacts file
+     (`contactstore::store_path`) or the events file (`services::calendar::store_path`) changes, stat'ed at most once
+     per second of shell time. A file that appears or goes counts as a change.
 4. **SDK client** (`springboard/sdk/src/notify_bus.rs`, `bifrost_app::notify_bus`). Request functions `post`,
    `register(ctx, name, Mode)`, `check`, `suspend`, `resume`, `cancel`, `valid`, `set_state`, `state`, reply readers
    `token_from_reply`, `flag_from_reply`, `state_from_reply`, and the event reader `notified(service, event, body)`.
