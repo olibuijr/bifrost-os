@@ -138,3 +138,4 @@ pub mod text_replacements;
 pub mod volume;
 pub mod identity;
 pub mod reachability;
+pub mod frame_metrics;

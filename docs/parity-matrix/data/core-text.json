@@ -4,7 +4,7 @@
  "macos_since": "10.8",
  "status": "partial",
  "bifrost": "springboard/render/src/font.rs, springboard/render/src/cff.rs, springboard/render/src/gvar.rs, springboard/render/src/fontprefs.rs, springboard/render/src/emoji.rs, springboard/sdk/src/attributed.rs, springboard/sdk/src/layer_kinds/text.rs, springboard/ui/src/text.rs, springboard/src/shell/browser/layout2/text.rs",
- "summary": "BifrOSt has a TrueType and CFF font engine with metrics, cmap glyph lookup, variable-font axes and an attributed string model with line wrapping and truncation. It has no app-facing font objects, font manager, OpenType shaping (kerning, ligatures outside colour emoji), paragraph styles, tabs, ruby, bidi or vertical text.",
+ "summary": "BifrOSt has a TrueType and CFF font engine with metrics, cmap glyph lookup, variable-font axes and an attributed string model with line wrapping and truncation. It has no app-facing font objects, font manager, OpenType shaping (kerning, ligatures outside colour emoji), paragraph styles, tabs, bidi or vertical text.",
  "rea_evidence": "ev_8a0f6117f795b88ecbe61729def8f85adde1891b72468685784e9c7cb5d9b831",
  "features": [
   {
@@ -101,9 +101,9 @@
   {
    "feature": "Ruby annotations",
    "apple": "CTRubyAnnotation, kCTRubyAnnotationAttributeName",
-   "bifrost": "none found in the text modules",
-   "status": "gap",
-   "note": "No ruby text. Low priority outside CJK locales."
+   "bifrost": "springboard/ui/src/ruby.rs",
+   "status": "partial",
+   "note": "Pure geometry model: RubyAnnotation, RubyPosition, RubyAlignment, RubyOverhang and layout() give the start of each annotation character, the overhang, the padding and the advance of the base run, plus baseline_offset, side_offset and line_extra. The model was added by the ct-scripts round and recorded here by parity/team-a-04. No caller in the drawing path yet, the attributed string carries no ruby attribute, and no CTRubyAnnotation object for apps. Not yet verified on Midget."
   },
   {
    "feature": "Run delegates and embedded attachments",

@@ -4,7 +4,7 @@
   "macos_since": "10.13",
   "status": "partial",
   "bifrost": "springboard/render/src/gfx.rs (CPU blur), springboard/src/gpu/wl.rs (GPU dual-Kawase blur pyramid), springboard/render/src/gfx/rotate.rs (bilinear resample), springboard/render/src/emoji.rs (area and bilinear resample), springboard/src/gpu/egl.rs (EGL/GLES compute and render path)",
-  "summary": "BifrOSt has a GPU blur pyramid and bilinear resampling, both used internally by the shell for glass and scaling. It exposes no app-facing GPU image-filter, histogram, matrix or neural-network API, and no Metal-style kernel layer; most of the framework has no counterpart.",
+  "summary": "BifrOSt has a GPU blur pyramid and bilinear resampling, both used internally by the shell for glass and scaling. It exposes no app-facing GPU image-filter, histogram, matrix or neural-network API, and only a unary kernel base trait with a chain runner (springboard/render/src/kernel.rs), not a Metal-style kernel layer; most of the framework has no counterpart.",
   "rea_evidence": "ev_dc16a204f342e059f1a161b951e799bfe8079a8056c0055eac0b1c2c928fba5d",
   "features": [
     {
@@ -122,9 +122,9 @@
     {
       "feature": "Kernel base classes and keyed archiving",
       "apple": "MPSKernel, MPSUnaryImageKernel, MPSBinaryImageKernel, NSKeyedArchiver with MPSKeyedUnarchiver",
-      "bifrost": "springboard/sdk/src/coding.rs (Codable and plist) for serialisation; no kernel base class",
-      "status": "gap",
-      "note": "There is no kernel abstraction for apps to subclass. Serialisation exists, but for app data, not GPU kernels."
+      "bifrost": "springboard/render/src/kernel.rs (UnaryImageKernel, ColorMap, run_chain); springboard/sdk/src/coding.rs (serialisation, not kernels)",
+      "status": "partial",
+      "note": "UnaryImageKernel is the base trait for one-image kernels and run_chain runs a list of them in order. No MPSKernel or binary kernel base, no GPU dispatch, and no keyed archiving of kernels. Built on parity/team-a-04; not yet verified on Midget. Nothing but the colour kernel adapter implements the trait yet, and no caller outside the tests uses run_chain."
     }
   ],
   "gaps": [

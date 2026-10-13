@@ -207,12 +207,110 @@ fn lerp4(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
     ]
 }
 
+/// The base of a unary image kernel, the counterpart of MPSUnaryImageKernel. A kernel reads one image and writes an
+/// image of the same size. `encode` does the work, and `label` names the kernel in logs.
+pub trait UnaryImageKernel {
+    /// The name of the kernel, for logs.
+    fn label(&self) -> &str;
+
+    /// The output pixels for `src`: one packed pixel per source pixel, in the source's row order.
+    fn encode(&self, src: &Sampler) -> Vec<u32>;
+}
+
+/// A colour kernel as a `UnaryImageKernel`: `map` gives the new straight colour of each pixel.
+pub struct ColorMap<F: Fn([f32; 4]) -> [f32; 4]> {
+    pub name: &'static str,
+    pub map: F,
+}
+
+impl<F: Fn([f32; 4]) -> [f32; 4]> UnaryImageKernel for ColorMap<F> {
+    fn label(&self) -> &str {
+        self.name
+    }
+
+    fn encode(&self, src: &Sampler) -> Vec<u32> {
+        color_kernel(src, &self.map)
+    }
+}
+
+/// Runs `kernels` in order, each on the output of the one before it, and returns the last output. An empty list
+/// returns a copy of `src`. Returns None when a kernel does not return one pixel per source pixel.
+pub fn run_chain(src: &Sampler, kernels: &[&dyn UnaryImageKernel]) -> Option<Sampler> {
+    let mut current = src.clone();
+    for kernel in kernels {
+        let pixels = kernel.encode(&current);
+        current = Sampler::new(current.width, current.height, pixels, current.wrap)?;
+    }
+    Some(current)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     const BLACK: u32 = 0xff00_0000;
     const WHITE: u32 = 0xffff_ffff;
+
+    struct Truncated;
+
+    impl UnaryImageKernel for Truncated {
+        fn label(&self) -> &str {
+            "truncated"
+        }
+
+        fn encode(&self, _src: &Sampler) -> Vec<u32> {
+            Vec::new()
+        }
+    }
+
+    fn invert(c: [f32; 4]) -> [f32; 4] {
+        [1.0 - c[0], 1.0 - c[1], 1.0 - c[2], c[3]]
+    }
+
+    #[test]
+    fn color_map_labels_and_applies_its_function() {
+        let src = Sampler::new(1, 1, vec![BLACK], Wrap::Edge).unwrap();
+        let k = ColorMap { name: "invert", map: invert };
+        assert_eq!(k.label(), "invert");
+        assert_eq!(k.encode(&src), vec![WHITE]);
+    }
+
+    #[test]
+    fn chain_applies_kernels_in_order() {
+        let src = Sampler::new(2, 1, vec![BLACK, WHITE], Wrap::Clear).unwrap();
+        let inv = ColorMap { name: "invert", map: invert };
+        let twice = run_chain(&src, &[&inv, &inv]).unwrap();
+        assert_eq!(twice.pixels, src.pixels);
+        let once = run_chain(&src, &[&inv]).unwrap();
+        assert_eq!(once.pixels, vec![WHITE, BLACK]);
+        assert_eq!(once.width, 2);
+        assert_eq!(once.wrap, Wrap::Clear);
+    }
+
+    fn whiten(c: [f32; 4]) -> [f32; 4] {
+        [1.0, 1.0, 1.0, c[3]]
+    }
+
+    #[test]
+    fn chain_order_matters() {
+        let src = Sampler::new(1, 1, vec![BLACK], Wrap::Edge).unwrap();
+        let white = ColorMap { name: "whiten", map: whiten };
+        let inv = ColorMap { name: "invert", map: invert };
+        assert_eq!(run_chain(&src, &[&white, &inv]).unwrap().pixels, vec![BLACK]);
+        assert_eq!(run_chain(&src, &[&inv, &white]).unwrap().pixels, vec![WHITE]);
+    }
+
+    #[test]
+    fn empty_chain_copies_the_source() {
+        let src = Sampler::new(1, 2, vec![1, 2], Wrap::Edge).unwrap();
+        assert_eq!(run_chain(&src, &[]).unwrap(), src);
+    }
+
+    #[test]
+    fn kernel_with_wrong_output_size_fails_the_chain() {
+        let src = Sampler::new(1, 1, vec![BLACK], Wrap::Edge).unwrap();
+        assert!(run_chain(&src, &[&Truncated]).is_none());
+    }
 
     #[test]
     fn sampler_rejects_empty_or_mismatched_sizes() {
