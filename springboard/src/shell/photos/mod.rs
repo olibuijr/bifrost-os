@@ -508,6 +508,8 @@ pub struct Photos {
     edit_clip: Option<Edit>,
     /// a link that arrived while the library was still being read; it is followed once the scan lands
     pending_link: Option<link::Link>,
+    /// a physical keyboard does the typing: the text card raises no on-screen keyboard
+    hardware_keyboard: bool,
     /// what the export sheet has chosen
     export: export::Options,
     /// the picker's second page is open
@@ -627,6 +629,7 @@ impl Photos {
             stack: Stack::default(),
             edit_clip: None,
             pending_link: None,
+            hardware_keyboard: false,
             export: export::Options::default(),
             more_menu: false,
             keywords_open: false,

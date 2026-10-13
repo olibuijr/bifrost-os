@@ -128,15 +128,17 @@ const HINT_PT: f32 = 44.0;
 const MARGIN_PT: f32 = 16.0;
 
 impl Entry {
-    /// Opens the card for `purpose` with `initial` in the field; the keyboard slides in at `t`. `w` is the screen
-    /// width in px.
-    pub fn open(ui: &Ui, w: i32, purpose: Purpose, initial: &str, t: f64) -> Entry {
+    /// Opens the card for `purpose` with `initial` in the field. The on-screen keyboard slides in at `t` unless a
+    /// physical keyboard does the typing (`soft_keyboard` false). `w` is the screen width in px.
+    pub fn open(ui: &Ui, w: i32, purpose: Purpose, initial: &str, soft_keyboard: bool, t: f64) -> Entry {
         let mut field = TextField::new(ui, purpose.placeholder(), 17.0, false, purpose.max());
         field.set_text(ui, initial);
         field.focused = true;
         let mut keyboard = Keyboard::new_hidden(w as f32, ui.s);
         keyboard.set_return_key(if purpose.live() { ReturnKey::Search } else { ReturnKey::Done });
-        keyboard.set_shown(true, t);
+        if soft_keyboard {
+            keyboard.set_shown(true, t);
+        }
         Entry { purpose, field, keyboard }
     }
 
@@ -236,7 +238,7 @@ mod tests {
     #[test]
     fn typing_edits_the_field_return_commits_and_escape_cancels() {
         let ui = ui();
-        let mut e = Entry::open(&ui, 1200, Purpose::Title, "Sea", 0.0);
+        let mut e = Entry::open(&ui, 1200, Purpose::Title, "Sea", true, 0.0);
         assert_eq!(e.field.text(), "Sea");
         assert_eq!(e.key(&ui, Out::Text("s".into()), 1.0), Outcome::Typing);
         assert_eq!(e.field.text(), "Seas");
@@ -251,14 +253,14 @@ mod tests {
     #[test]
     fn the_field_keeps_to_the_limit_of_its_purpose() {
         let ui = ui();
-        let e = Entry::open(&ui, 1200, Purpose::Title, &"x".repeat(500), 0.0);
+        let e = Entry::open(&ui, 1200, Purpose::Title, &"x".repeat(500), true, 0.0);
         assert_eq!(e.field.len(), Purpose::Title.max());
     }
 
     #[test]
     fn the_card_sits_under_the_status_bar_inside_the_screen() {
         let ui = ui();
-        let e = Entry::open(&ui, 1200, Purpose::Search, "", 0.0);
+        let e = Entry::open(&ui, 1200, Purpose::Search, "", true, 0.0);
         let status = ui.pt(20.0);
         let (x, y, w, h) = e.card(&ui, 1200, status);
         assert!(x >= 0.0 && x + w <= 1200.0 && y > status);

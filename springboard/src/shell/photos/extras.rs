@@ -97,6 +97,11 @@ impl Photos {
         false
     }
 
+    /// Tells the app that a physical keyboard does the typing (a desktop), so no on-screen keyboard is raised.
+    pub fn set_hardware_keyboard(&mut self, on: bool) {
+        self.hardware_keyboard = on;
+    }
+
     /// Sets the star rating of `p` and keeps the change for Undo.
     pub(super) fn rate_photo(&mut self, p: &Photo, rating: u8) {
         let before = self.pref_now(&format!("rate:{}", p.path.display()));
@@ -221,7 +226,7 @@ impl Photos {
         self.entry_error = None;
         self.entry_press = None;
         self.pressed = None;
-        self.entry = Some(Entry::open(ui, self.w, purpose, initial, t));
+        self.entry = Some(Entry::open(ui, self.w, purpose, initial, !self.hardware_keyboard, t));
         self.dirty = true;
     }
 
@@ -247,11 +252,11 @@ impl Photos {
             Event::Down(x, y) | Event::Move(x, y) | Event::Up(x, y) => (x, y),
             _ => return,
         };
-        let (w, h, status) = (self.w, self.h, ui.pt(STATUS_PT));
+        let (w, h, status, hardware) = (self.w, self.h, ui.pt(STATUS_PT), self.hardware_keyboard);
         let Some(e) = self.entry.as_mut() else { return };
         let frame = e.field_frame(ui, w, status);
         if e.field.touch(ui, ev, frame, w as f32, t) {
-            if e.field.focused {
+            if e.field.focused && !hardware {
                 e.keyboard.set_shown(true, t);
             }
             self.dirty = true;
