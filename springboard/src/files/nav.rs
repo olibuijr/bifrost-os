@@ -2,7 +2,7 @@
 //! slides in from the right while the one beneath drifts a third of the
 //! way left under a light dimming; a pop plays it backwards.
 
-use crate::shell::gestures::ease_out_quartic;
+use bifrost_ui::transition::{Ease, Subtype, Transition as Effect};
 
 /// How long a push or pop takes, in ms.
 pub const MS: f64 = 350.0;
@@ -27,13 +27,11 @@ struct Transition {
 /// x offsets of the page underneath and of the page on top, in px, and
 /// the shade alpha (0..=255) over the one underneath.
 pub fn placement(dir: Dir, p: f32, w: f32) -> (f32, f32, u8) {
-    let e = ease_out_quartic(p.clamp(0.0, 1.0));
-    // how far "in" the top page is: 1 fully on screen
-    let k = match dir {
-        Dir::Push => e,
-        Dir::Pop => 1.0 - e,
-    };
-    (-(UNDER_SHIFT * w * k).round(), (w * (1.0 - k)).round(), (UNDER_DIM * 255.0 * k) as u8)
+    // the shared push transition: a pop is the same effect played backwards
+    let push = Effect::push(Subtype::FromRight).parallax(UNDER_SHIFT, UNDER_DIM).ease(Ease::OutQuartic);
+    let tr = if dir == Dir::Pop { push.reversed() } else { push };
+    let pl = tr.placement(p, w, 0.0);
+    (pl.under_x.round(), pl.over_x.round(), pl.shade_u8())
 }
 
 pub struct Nav<P> {

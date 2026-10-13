@@ -18,6 +18,7 @@ use super::passcode::{self, Lock, LockOut, Overlay, OverlayOut};
 use super::screentime::{self, config::Config as StConfig, page::{StEdit, View as StView}, usage as st_usage};
 use super::prefs::Prefs;
 use super::storage::Scanner;
+use bifrost_ui::transition::{Ease, Subtype, Transition as SlideFx};
 use super::storage_page::{self, DevState, PageState};
 use super::update::{self, Updater};
 use super::{backup, backup_page, diag, diagnostics_page};
@@ -313,9 +314,10 @@ fn wallpaper_name(list: &[Wallpaper], id: &str) -> String {
     list.iter().find(|w| w.id == id).map(|w| w.name.clone()).unwrap_or_default()
 }
 
-/// Spring-like ease-out for the slide.
-fn ease(p: f32) -> f32 {
-    1.0 - (1.0 - p.clamp(0.0, 1.0)).powi(3)
+/// The page slide as the shared push transition: a pop plays it backwards.
+fn slide(push: bool) -> SlideFx {
+    let e = SlideFx::push(Subtype::FromRight).parallax(PARALLAX, 60.0 / 255.0).ease(Ease::OutCubic);
+    if push { e } else { e.reversed() }
 }
 
 impl Settings {
@@ -2507,14 +2509,11 @@ impl Settings {
                     // renders take a while, and a slide timed from the tap would skip its start
                     tr.start = tr.start.max(t);
                 }
-                let e = ease(((t - tr.start) / PUSH_MS) as f32);
-                let k = if tr.push { 1.0 - e } else { e };
+                let pl = slide(tr.push).placement(((t - tr.start) / PUSH_MS) as f32, self.w as f32, 0.0);
                 let (under_img, over_img) = tr.imgs.as_ref().expect("rendered");
-                // how far the moving page covers the one underneath: 0 = not at all
-                let c = 1.0 - k;
-                s.blit(under_img, (-(self.w as f32) * PARALLAX * c).round() as i32, 0, 255 - (60.0 * c) as u32, 255);
+                s.blit(under_img, pl.under_x.round() as i32, 0, 255 - (pl.shade * 255.0).round() as u32, 255);
                 // the moving page is opaque: a row copy, not a per-pixel blend
-                let ox = ((self.w as f32 * k).round() as i32).clamp(-(over_img.w as i32), self.w);
+                let ox = (pl.over_x.round() as i32).clamp(-(over_img.w as i32), self.w);
                 s.copy(over_img.view(), ox, 0);
                 self.transition = Some(tr);
             }

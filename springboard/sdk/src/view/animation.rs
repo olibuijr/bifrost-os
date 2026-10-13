@@ -157,6 +157,7 @@ pub(super) struct Animator {
     /// groups with no track left to run: completed on the next tick
     ready: Vec<u64>,
     pub(super) reduce: Option<bool>,
+    links: crate::frame_clock::FrameLinks,
 }
 
 fn union(a: Option<Rect>, b: Rect) -> Rect {
@@ -374,7 +375,33 @@ impl<S: Responder> Window<S> {
 
     /// When the next animation frame is due, in the clock of `t` (seconds); `None` when nothing animates.
     pub fn next_wake(&self, t: f64) -> Option<f64> {
-        (!self.anim.tracks.is_empty() || !self.anim.ready.is_empty() || super::any_wants_tick(self.root.as_ref())).then_some(t + FRAME)
+        let anim = (!self.anim.tracks.is_empty() || !self.anim.ready.is_empty() || super::any_wants_tick(self.root.as_ref())).then_some(FRAME);
+        let link = self.anim.links.wake_interval();
+        match (anim, link) {
+            (None, None) => None,
+            (a, l) => Some(t + a.unwrap_or(f64::MAX).min(l.unwrap_or(f64::MAX))),
+        }
+    }
+
+    /// Attaches a per-frame callback to this window; it runs from [`Window::tick`] at its preferred rate.
+    pub fn add_frame_link(&mut self, link: crate::frame_clock::FrameLink) -> crate::frame_clock::LinkId {
+        self.anim.links.add(link)
+    }
+    pub fn remove_frame_link(&mut self, id: crate::frame_clock::LinkId) -> Option<crate::frame_clock::FrameLink> {
+        self.anim.links.remove(id)
+    }
+    pub fn frame_link_mut(&mut self, id: crate::frame_clock::LinkId) -> Option<&mut crate::frame_clock::FrameLink> {
+        self.anim.links.get_mut(id)
+    }
+    /// The refresh rate of the display the window is on, which frame-rate ranges resolve against (default 60).
+    pub fn set_display_refresh(&mut self, hz: f32) {
+        if hz.is_finite() && hz > 0.0 {
+            self.anim.links.display_hz = hz;
+        }
+    }
+    /// Runs the frame links due at `t`; true when any ran.
+    pub(super) fn fire_frame_links(&mut self, t: f64) -> bool {
+        self.anim.links.fire(t) > 0
     }
 
     /// Advances the tracks to `t` (seconds). Called by [`Window::tick`].

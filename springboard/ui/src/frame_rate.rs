@@ -41,9 +41,37 @@ impl FrameRateRange {
     }
 }
 
+impl Default for FrameRateRange {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl FrameRateRange {
+    /// A range that asks for exactly `rate` frames per second.
+    pub fn fixed(rate: f32) -> Self {
+        Self::new(rate, rate, rate)
+    }
+
+    /// Seconds between updates on a display refreshing at `display_hz`: the resolved rate, or the display's own rate
+    /// for the default range. `None` when the display reports no usable rate.
+    pub fn interval(self, display_hz: f32) -> Option<f64> {
+        let rate = self.resolve(display_hz).or_else(|| (display_hz.is_finite() && display_hz > 0.0).then_some(display_hz))?;
+        Some(1.0 / f64::from(rate))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn interval_follows_the_resolved_rate() {
+        assert_eq!(FrameRateRange::fixed(30.0).interval(60.0), Some(1.0 / 30.0));
+        assert_eq!(FrameRateRange::default().interval(60.0), Some(1.0 / 60.0), "no request: the display rate");
+        assert_eq!(FrameRateRange::fixed(120.0).interval(60.0), Some(1.0 / 60.0));
+        assert_eq!(FrameRateRange::fixed(30.0).interval(0.0), None);
+    }
 
     #[test]
     fn the_default_range_resolves_to_nothing() {
