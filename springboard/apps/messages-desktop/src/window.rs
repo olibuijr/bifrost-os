@@ -525,7 +525,7 @@ impl MessagesWindow {
 
     fn open_emoji(&mut self, message: Option<String>) {
         if self.model.selected.is_some() {
-            self.model.overlay = Overlay::Emoji(message);
+            self.model.open_emoji(message);
         }
     }
 
@@ -768,10 +768,12 @@ impl MessagesWindow {
             }
             (OverlayAction::Pick(i), Overlay::Emoji(target)) => {
                 self.model.overlay = Overlay::None;
-                if let Some(emoji) = crate::model::EMOJI.get(i) {
+                if let Some(emoji) = self.model.emoji_choices().get(i).cloned() {
+                    self.model.note_emoji_used(&emoji);
+                    self.save_prefs();
                     match target {
-                        Some(msg) => self.react(&msg, emoji),
-                        None => self.model.composer.push_str(emoji),
+                        Some(msg) => self.react(&msg, &emoji),
+                        None => self.model.composer.push_str(&emoji),
                     }
                 }
             }
@@ -917,6 +919,7 @@ impl MessagesWindow {
                 p.value.push_str(text);
                 p.error.clear();
             }
+            Overlay::Emoji(_) => self.model.emoji_query.push_str(text),
             Overlay::None => {
                 if self.model.search_focus {
                     self.model.search.push_str(text);
@@ -937,6 +940,9 @@ impl MessagesWindow {
         match &mut self.model.overlay {
             Overlay::Prompt(p) => {
                 p.value.pop();
+            }
+            Overlay::Emoji(_) => {
+                self.model.emoji_query.pop();
             }
             Overlay::None => {
                 if self.model.search_focus {
@@ -964,6 +970,12 @@ impl MessagesWindow {
                     self.submit_sign_in();
                 } else if let Overlay::Prompt(p) = self.model.overlay.clone() {
                     self.submit_prompt(p);
+                } else if matches!(self.model.overlay, Overlay::Emoji(_)) {
+                    // Return picks the first emoji the search shows.
+                    if self.model.emoji_choices().is_empty() {
+                        return false;
+                    }
+                    self.overlay_action(ctx, OverlayAction::Pick(0));
                 } else if self.model.overlay != Overlay::None {
                     return false;
                 } else if self.model.search_focus {
@@ -1004,7 +1016,7 @@ impl MessagesWindow {
     }
 
     pub fn paste(&mut self, ctx: &Ctx) -> bool {
-        if !matches!(self.model.overlay, Overlay::None | Overlay::Prompt(_)) {
+        if !matches!(self.model.overlay, Overlay::None | Overlay::Prompt(_) | Overlay::Emoji(_)) {
             return false;
         }
         let Some(text) = ctx.pasteboard_string() else { return false };

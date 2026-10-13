@@ -226,16 +226,57 @@ pub const REACTIONS: [(&str, &str); 6] = [
     ("Question", "\u{2753}"),
 ];
 
-/// The emoji the composer's picker offers, in rows of [`EMOJI_COLUMNS`].
-pub const EMOJI: [&str; 40] = [
-    "\u{1F600}", "\u{1F603}", "\u{1F604}", "\u{1F601}", "\u{1F606}", "\u{1F605}", "\u{1F602}", "\u{1F642}",
-    "\u{1F609}", "\u{1F60A}", "\u{1F60D}", "\u{1F618}", "\u{1F61C}", "\u{1F914}", "\u{1F610}", "\u{1F62E}",
-    "\u{1F622}", "\u{1F62D}", "\u{1F620}", "\u{1F631}", "\u{1F634}", "\u{1F60E}", "\u{1F973}", "\u{1F64F}",
-    "\u{1F44D}", "\u{1F44E}", "\u{1F44F}", "\u{1F64C}", "\u{1F44B}", "\u{1F4AA}", "\u{2764}\u{FE0F}", "\u{1F494}",
-    "\u{1F525}", "\u{2728}", "\u{1F389}", "\u{1F381}", "\u{2705}", "\u{274C}", "\u{2753}", "\u{203C}\u{FE0F}",
+/// The emoji the picker offers with the words that find them, in rows of [`EMOJI_COLUMNS`].
+pub const EMOJI_CATALOG: [(&str, &str); 64] = [
+    ("\u{1F600}", "grinning smile happy"), ("\u{1F603}", "smile happy joy"),
+    ("\u{1F604}", "laugh happy"), ("\u{1F601}", "beam grin"),
+    ("\u{1F606}", "laugh squint"), ("\u{1F605}", "sweat relief"),
+    ("\u{1F602}", "joy laugh tears lol"), ("\u{1F642}", "slight smile"),
+    ("\u{1F609}", "wink"), ("\u{1F60A}", "blush smile"),
+    ("\u{1F60D}", "love heart eyes"), ("\u{1F618}", "kiss"),
+    ("\u{1F61C}", "tongue wink silly"), ("\u{1F914}", "think thinking hmm"),
+    ("\u{1F610}", "neutral meh"), ("\u{1F62E}", "surprised wow"),
+    ("\u{1F622}", "cry sad tear"), ("\u{1F62D}", "sob cry"),
+    ("\u{1F620}", "angry mad"), ("\u{1F631}", "scream shock fear"),
+    ("\u{1F634}", "sleep tired zzz"), ("\u{1F60E}", "cool sunglasses"),
+    ("\u{1F973}", "party celebrate"), ("\u{1F64F}", "pray thanks please"),
+    ("\u{1F44D}", "thumbs up like yes ok"), ("\u{1F44E}", "thumbs down dislike no"),
+    ("\u{1F44F}", "clap applause"), ("\u{1F64C}", "raised hands hooray"),
+    ("\u{1F44B}", "wave hello bye"), ("\u{1F4AA}", "strong muscle flex"),
+    ("\u{2764}\u{FE0F}", "heart love red"), ("\u{1F494}", "broken heart"),
+    ("\u{1F525}", "fire hot"), ("\u{2728}", "sparkles shine"),
+    ("\u{1F389}", "tada party celebrate"), ("\u{1F381}", "gift present"),
+    ("\u{2705}", "check done yes"), ("\u{274C}", "cross no wrong"),
+    ("\u{2753}", "question"), ("\u{203C}\u{FE0F}", "exclamation emphasis"),
+    ("\u{1F607}", "angel halo"), ("\u{1F923}", "rofl laugh floor"),
+    ("\u{1F60B}", "yum tasty"), ("\u{1F917}", "hug"),
+    ("\u{1F644}", "eye roll"), ("\u{1F62C}", "grimace awkward"),
+    ("\u{1F633}", "flushed embarrassed"), ("\u{1F97A}", "pleading puppy"),
+    ("\u{1F621}", "rage furious"), ("\u{1F92F}", "mind blown"),
+    ("\u{1F91D}", "handshake deal"), ("\u{1F440}", "eyes look"),
+    ("\u{1F648}", "see no evil monkey"), ("\u{1F4AF}", "hundred perfect"),
+    ("\u{2615}", "coffee tea"), ("\u{1F355}", "pizza food"),
+    ("\u{1F382}", "cake birthday"), ("\u{1F31E}", "sun sunny"),
+    ("\u{1F308}", "rainbow"), ("\u{2B50}", "star"),
+    ("\u{1F436}", "dog puppy"), ("\u{1F431}", "cat kitten"),
+    ("\u{1F680}", "rocket launch ship"), ("\u{1F4A1}", "idea light bulb"),
 ];
 /// How many emoji a row of the picker holds.
 pub const EMOJI_COLUMNS: usize = 8;
+
+/// The most recently used emoji the picker puts first.
+pub const RECENT_EMOJI_MAX: usize = 8;
+
+/// The catalogue emoji whose words contain every word of `query` (any case). An empty query finds all of them, in
+/// catalogue order.
+pub fn emoji_matches(query: &str) -> Vec<&'static str> {
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    EMOJI_CATALOG
+        .iter()
+        .filter(|(emoji, keywords)| words.iter().all(|w| keywords.contains(w.as_str()) || emoji.contains(w.as_str())))
+        .map(|(emoji, _)| *emoji)
+        .collect()
+}
 
 /// The per-conversation choices the user makes: pinned, alerts hidden, and marked as unread. Kept as room ids and saved
 /// in the app's preferences as one id per line.
@@ -244,6 +285,8 @@ pub struct RoomPrefs {
     pub pinned: Vec<String>,
     pub muted: Vec<String>,
     pub unread_marks: Vec<String>,
+    /// The emoji picked most recently, newest first.
+    pub recent_emoji: Vec<String>,
 }
 
 impl RoomPrefs {
@@ -402,6 +445,8 @@ pub struct Messages {
     /// Set while the composer holds a reply or an edit.
     pub compose: Option<Compose>,
     pub overlay: Overlay,
+    /// What is typed in the emoji picker's search field.
+    pub emoji_query: String,
 }
 
 impl Messages {
@@ -499,6 +544,31 @@ impl Messages {
         let mut rooms: Vec<&Room> = self.rooms.iter().filter(|r| r.matches(&self.user_id, &query)).collect();
         rooms.sort_by_key(|r| self.prefs.pinned.iter().position(|x| *x == r.id).unwrap_or(usize::MAX));
         rooms
+    }
+
+    /// The emoji the open picker shows: with no search, the recent ones first and then the rest of the catalogue; with
+    /// a search, the emoji it finds.
+    pub fn emoji_choices(&self) -> Vec<String> {
+        let found = emoji_matches(&self.emoji_query);
+        if !self.emoji_query.trim().is_empty() {
+            return found.into_iter().map(str::to_string).collect();
+        }
+        let recent: Vec<&str> =
+            self.prefs.recent_emoji.iter().map(String::as_str).filter(|e| found.iter().any(|f| *f == *e)).collect();
+        recent.iter().copied().chain(found.iter().copied().filter(|e| !recent.iter().any(|r| r == e))).map(str::to_string).collect()
+    }
+
+    /// Opens the picker with an empty search, for a message (a reaction) or for the composer.
+    pub fn open_emoji(&mut self, message: Option<String>) {
+        self.emoji_query.clear();
+        self.overlay = Overlay::Emoji(message);
+    }
+
+    /// Notes that `emoji` was picked: it moves to the front of the recent ones, which keep [`RECENT_EMOJI_MAX`].
+    pub fn note_emoji_used(&mut self, emoji: &str) {
+        self.prefs.recent_emoji.retain(|e| e != emoji);
+        self.prefs.recent_emoji.insert(0, emoji.to_string());
+        self.prefs.recent_emoji.truncate(RECENT_EMOJI_MAX);
     }
 
     /// Forgets a conversation that was left or deleted.
@@ -1348,7 +1418,49 @@ mod tests {
 
     #[test]
     fn the_emoji_picker_fills_whole_rows() {
-        assert_eq!(EMOJI.len() % EMOJI_COLUMNS, 0);
+        assert_eq!(EMOJI_CATALOG.len() % EMOJI_COLUMNS, 0);
         assert_eq!(REACTIONS.len(), 6);
+        let mut seen: Vec<&str> = EMOJI_CATALOG.iter().map(|(e, _)| *e).collect();
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), EMOJI_CATALOG.len(), "no emoji twice");
+    }
+
+    #[test]
+    fn a_search_finds_emoji_by_every_word() {
+        assert_eq!(emoji_matches("").len(), EMOJI_CATALOG.len());
+        assert_eq!(emoji_matches("THUMBS up"), vec!["\u{1F44D}"]);
+        assert!(emoji_matches("party").contains(&"\u{1F389}") && emoji_matches("party").contains(&"\u{1F973}"));
+        assert!(emoji_matches("no such word").is_empty());
+        assert_eq!(emoji_matches("\u{1F525}"), vec!["\u{1F525}"], "the emoji itself finds itself");
+    }
+
+    #[test]
+    fn the_picker_puts_recent_emoji_first_and_a_search_replaces_the_list() {
+        let mut m = signed_in();
+        m.open_emoji(None);
+        assert_eq!(m.emoji_choices().len(), EMOJI_CATALOG.len());
+        m.note_emoji_used("\u{1F525}");
+        m.note_emoji_used("\u{1F389}");
+        m.note_emoji_used("\u{1F525}");
+        assert_eq!(m.prefs.recent_emoji, vec!["\u{1F525}".to_string(), "\u{1F389}".to_string()], "newest first, no repeats");
+        let choices = m.emoji_choices();
+        assert_eq!(&choices[..2], ["\u{1F525}".to_string(), "\u{1F389}".to_string()]);
+        assert_eq!(choices.len(), EMOJI_CATALOG.len(), "a recent emoji is not listed twice");
+        m.emoji_query = "cat".into();
+        assert_eq!(m.emoji_choices(), vec!["\u{1F431}".to_string()]);
+        m.open_emoji(Some("$1".into()));
+        assert!(m.emoji_query.is_empty(), "opening the picker clears the search");
+        assert_eq!(m.overlay, Overlay::Emoji(Some("$1".into())));
+    }
+
+    #[test]
+    fn only_the_latest_emoji_are_remembered() {
+        let mut m = signed_in();
+        for (emoji, _) in EMOJI_CATALOG.iter().take(RECENT_EMOJI_MAX + 3) {
+            m.note_emoji_used(emoji);
+        }
+        assert_eq!(m.prefs.recent_emoji.len(), RECENT_EMOJI_MAX);
+        assert_eq!(m.prefs.recent_emoji[0], EMOJI_CATALOG[RECENT_EMOJI_MAX + 2].0);
     }
 }
