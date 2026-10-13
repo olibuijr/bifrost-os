@@ -23,9 +23,9 @@ pub enum Action {
     OpenInTerminal,
     GetInfo,
     Delete,
-    /// zip the item into a new archive next to it
+    /// compress the item into a new .zip next to it
     Compress,
-    /// unzip a .zip into a new folder next to it
+    /// expand an archive into a new folder next to it
     Extract,
     NewFolder,
     Paste,
@@ -47,7 +47,7 @@ impl Action {
             Action::GetInfo => "Get Info",
             Action::Delete => "Delete",
             Action::Compress => "Compress",
-            Action::Extract => "Uncompress",
+            Action::Extract => "Expand",
             Action::NewFolder => "New Folder",
             Action::Paste => "Paste",
             Action::Restore => "Put Back…",

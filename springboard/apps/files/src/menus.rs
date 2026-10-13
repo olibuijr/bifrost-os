@@ -52,6 +52,10 @@ pub(crate) const MENU_GROUP_DATE: u32 = 24;
 
 pub(crate) const MENU_OPEN_WITH: u32 = 25;
 
+pub(crate) const MENU_COMPRESS_TGZ: u32 = 26;
+
+pub(crate) const MENU_COMPRESS_TXZ: u32 = 27;
+
 impl Files {
     /// Right-click: selects the item under the pointer and opens the item or folder menu.
     pub(crate) fn context_menu_at(&mut self, ctx: &Ctx, x: f32, y: f32) {
@@ -75,8 +79,10 @@ impl Files {
                 ContextItem { id: MENU_INFO, label: "Get Info".into(), enabled: single },
                 ContextItem { id: MENU_OPEN_WITH, label: "Open With…".into(), enabled: single && self.focus_entry().is_some_and(|e| !e.is_dir) },
                 ContextItem { id: MENU_COMPRESS, label: "Compress".into(), enabled: !in_bin && !self.in_recents() },
+                ContextItem { id: MENU_COMPRESS_TGZ, label: "Compress as TAR.GZ".into(), enabled: !in_bin && !self.in_recents() },
+                ContextItem { id: MENU_COMPRESS_TXZ, label: "Compress as TAR.XZ".into(), enabled: !in_bin && !self.in_recents() },
                 ContextItem { id: MENU_TAGS, label: "Tags…".into(), enabled: true },
-                ContextItem { id: MENU_EXTRACT, label: "Extract".into(), enabled: single && self.focus_entry().is_some_and(Self::is_zip) },
+                ContextItem { id: MENU_EXTRACT, label: "Expand".into(), enabled: single && self.focus_entry().is_some_and(Self::is_archive) },
                 ContextItem { id: MENU_RENAME, label: "Rename".into(), enabled: single && !in_bin },
                 ContextItem { id: MENU_COPY, label: "Copy".into(), enabled: true },
                 ContextItem { id: MENU_CUT, label: "Cut".into(), enabled: true },
@@ -112,7 +118,9 @@ impl Files {
             MENU_QUICK_LOOK => self.quick_look(),
             MENU_INFO => self.get_info(),
             MENU_OPEN_WITH => self.open_with_panel(),
-            MENU_COMPRESS => self.compress(),
+            MENU_COMPRESS => self.compress(archive::Format::Zip),
+            MENU_COMPRESS_TGZ => self.compress(archive::Format::TarGz),
+            MENU_COMPRESS_TXZ => self.compress(archive::Format::TarXz),
             MENU_TAGS => self.open_tags(),
             MENU_EXTRACT => self.extract(),
             MENU_COPY_NAME => if let Some(entry) = self.focus_entry() { bifrost_app::kit::clipboard::set_text(&entry.name); },

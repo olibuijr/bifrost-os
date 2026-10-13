@@ -24,7 +24,7 @@ pub(crate) enum JobKind {
     /// Duplicate: a taken name keeps both, without asking.
     Duplicate,
     Trash,
-    Compress,
+    Compress(archive::Format),
     Extract,
 }
 
@@ -131,15 +131,15 @@ pub(crate) fn transfer_now(op: Op, sources: &[PathBuf], dest: &Path, cancel: &At
     }
 }
 
-/// Writes a .zip of `sources` into `dest` on this thread.
-pub(crate) fn compress_now(sources: &[PathBuf], dest: &Path, cancel: &AtomicBool, tx: &Feed<Event>) -> Report {
+/// Writes an archive of `sources` in `format` into `dest` on this thread.
+pub(crate) fn compress_now(sources: &[PathBuf], dest: &Path, format: archive::Format, cancel: &AtomicBool, tx: &Feed<Event>) -> Report {
     let mut report = Report::default();
     let mut tick = |done: u64, total: u64| {
         let _ = tx.send(Event::Progress(Progress { bytes_done: done, bytes_total: total, items_total: sources.len(), ..Default::default() }));
         !cancel.load(Ordering::Relaxed)
     };
     // the archive is written into the folder, which is held for writing while it is made
-    let made = crate::coordinate::writing_in(dest, || zip::create(sources, dest, &mut tick));
+    let made = crate::coordinate::writing_in(dest, || archive::create(sources, dest, format, &mut tick));
     match made {
         Ok(Ok(out)) => report.done.push(out),
         Ok(Err(e)) if e.kind() == std::io::ErrorKind::Interrupted => report.cancelled = true,
@@ -149,7 +149,7 @@ pub(crate) fn compress_now(sources: &[PathBuf], dest: &Path, cancel: &AtomicBool
     report
 }
 
-/// Unpacks a .zip into a new folder beside it on this thread.
+/// Expands an archive into a new folder beside it on this thread.
 pub(crate) fn extract_now(archive: &Path, dest: &Path, cancel: &AtomicBool, tx: &Feed<Event>) -> Report {
     let mut report = Report::default();
     let mut tick = |done: u64, total: u64| {
@@ -157,7 +157,7 @@ pub(crate) fn extract_now(archive: &Path, dest: &Path, cancel: &AtomicBool, tx: 
         !cancel.load(Ordering::Relaxed)
     };
     // the new folder is made in `dest`, so `dest` is held for writing while the archive unpacks
-    match crate::coordinate::writing_in(dest, || zip::extract(archive, dest, &mut tick)) {
+    match crate::coordinate::writing_in(dest, || archive::extract(archive, dest, &mut tick)) {
         Ok(Ok(out)) => report.done.push(out.dir),
         Ok(Err(e)) if e.kind() == std::io::ErrorKind::Interrupted => report.cancelled = true,
         Ok(Err(e)) => report.failed.push((archive.to_path_buf(), e.to_string())),
@@ -226,7 +226,7 @@ impl Files {
                 JobKind::Transfer(op) => transfer_now(op, &s, &d, &flag, &tx, Some(&answer_rx)),
                 JobKind::Duplicate => transfer_now(Op::Copy, &s, &d, &flag, &tx, None),
                 JobKind::Trash => trash_now(&s, &bin, &flag, &tx),
-                JobKind::Compress => compress_now(&s, &d, &flag, &tx),
+                JobKind::Compress(format) => compress_now(&s, &d, format, &flag, &tx),
                 JobKind::Extract => extract_now(&s[0], &d, &flag, &tx),
             };
             let _ = tx.send(Event::Done(report));
@@ -254,7 +254,7 @@ impl Files {
             JobKind::Duplicate => "duplicated",
             JobKind::Transfer(Op::Move) => "moved",
             JobKind::Trash => "moved to the Trash",
-            JobKind::Compress => "compressed",
+            JobKind::Compress(_) => "compressed",
             JobKind::Extract => "extracted",
         };
         let notice = if report.stopped {
@@ -323,11 +323,11 @@ impl Files {
             }
         }
     }
-    pub(crate) fn is_zip(entry: &Entry) -> bool {
-        !entry.is_dir && entry.name.to_lowercase().ends_with(".zip")
+    pub(crate) fn is_archive(entry: &Entry) -> bool {
+        !entry.is_dir && archive::is_archive(&entry.name)
     }
-    /// Compress the selection into a .zip in the open folder.
-    pub(crate) fn compress(&mut self) {
+    /// Compress the selection into an archive of `format` in the open folder.
+    pub(crate) fn compress(&mut self, format: archive::Format) {
         if self.in_bin() || self.in_recents() {
             return;
         }
@@ -336,11 +336,11 @@ impl Files {
             return;
         }
         let dest = self.path.clone();
-        self.start_job("Compressing", JobKind::Compress, paths, dest);
+        self.start_job("Compressing", JobKind::Compress(format), paths, dest);
     }
-    /// Extract the focused .zip into a new folder beside it.
+    /// Expand the focused archive into a new folder beside it.
     pub(crate) fn extract(&mut self) {
-        let Some(entry) = self.focus_entry().filter(|e| Self::is_zip(e)).map(|e| e.path.clone()) else {
+        let Some(entry) = self.focus_entry().filter(|e| Self::is_archive(e)).map(|e| e.path.clone()) else {
             return;
         };
         let dest = self.path.clone();
