@@ -102,7 +102,7 @@ mod tests {
         let url = geocoder().search_url("  Laugavegur 1, Reykjavík ").unwrap();
         assert_eq!(
             url,
-            "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=Laugavegur%201%2C%20Reykj%C3%A1vik"
+            "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&q=Laugavegur%201%2C%20Reykjav%C3%ADk"
         );
     }
 

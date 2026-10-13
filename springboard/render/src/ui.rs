@@ -743,6 +743,7 @@ mod appearance_guard {
         ("shell/desk.rs", "desktop backdrop and dock placeholder tiles"),
         ("shell/desktop_bar.rs", "blur base under translucent materials"),
         ("shell/camera/", "camera viewfinder is always black"),
+        ("apps/photobooth-desktop/", "camera viewfinder is always black"),
         ("shell/photos/", "full-screen photo viewer and camera tile are black, as in Photos"),
         ("apps/clock-desktop/src/clock/", "translucent scrims (night shade, sheet dimming) over the clock faces"),
         ("shell/magnifier.rs", "magnifier viewfinder"),
