@@ -722,7 +722,8 @@ mod tests {
     fn the_frame_rate_follows_the_display_only_on_the_gpu_path() {
         assert_eq!(frame_rate(60, true), 60, "the display's rate while the GPU path is up");
         assert_eq!(frame_rate(144, true), MAX_FPS, "capped at the fastest recording");
-        assert_eq!(frame_rate(24, true), FPS, "never below the software rate");
+        // a display slower than the software rate is recorded at the software rate, not below it
+        assert_eq!(frame_rate(5, true), FPS, "never below the software rate");
         assert_eq!(frame_rate(60, false), FPS, "the software path records at 10 frames a second");
     }
 
