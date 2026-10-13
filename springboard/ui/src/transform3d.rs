@@ -228,3 +228,78 @@ mod tests {
         assert!(Transform3D::make_perspective(0.0).is_identity());
     }
 }
+
+/// Conversion to and from a 2D affine, equality, and about-a-point helpers.
+impl Transform3D {
+    /// The 3D transform of a 2D affine `[a, b, c, d, tx, ty]`: `x' = a*x + c*y + tx`, `y' = b*x + d*y + ty`.
+    pub fn from_affine(a: [f32; 6]) -> Transform3D {
+        let mut t = Self::IDENTITY;
+        t.m[0][0] = a[0];
+        t.m[0][1] = a[1];
+        t.m[1][0] = a[2];
+        t.m[1][1] = a[3];
+        t.m[3][0] = a[4];
+        t.m[3][1] = a[5];
+        t
+    }
+
+    /// The 2D affine `[a, b, c, d, tx, ty]` of this transform, dropping the z and perspective parts.
+    pub fn to_affine(self) -> [f32; 6] {
+        [self.m[0][0], self.m[0][1], self.m[1][0], self.m[1][1], self.m[3][0], self.m[3][1]]
+    }
+
+    /// True when every element matches.
+    pub fn equals(self, other: Transform3D) -> bool {
+        self == other
+    }
+
+    /// This transform applied about the point `(ax, ay, az)` instead of the origin.
+    pub fn about(self, ax: f32, ay: f32, az: f32) -> Transform3D {
+        Self::make_translation(-ax, -ay, -az).concat(self).concat(Self::make_translation(ax, ay, az))
+    }
+
+    /// Maps a point in the z = 0 plane to the screen plane, or `None` when it goes to infinity or behind the eye.
+    pub fn project(self, x: f32, y: f32) -> Option<(f32, f32)> {
+        let m = &self.m;
+        let w = x * m[0][3] + y * m[1][3] + m[3][3];
+        if !(w > 1e-6) {
+            return None;
+        }
+        Some(((x * m[0][0] + y * m[1][0] + m[3][0]) / w, (x * m[0][1] + y * m[1][1] + m[3][1]) / w))
+    }
+
+    /// The `z` a z = 0 point gets, used to order siblings front to back.
+    pub fn depth_of(self, x: f32, y: f32) -> f32 {
+        let m = &self.m;
+        let w = x * m[0][3] + y * m[1][3] + m[3][3];
+        if w.abs() < 1e-9 {
+            return 0.0;
+        }
+        (x * m[0][2] + y * m[1][2] + m[3][2]) / w
+    }
+}
+
+#[cfg(test)]
+mod ext_tests {
+    use super::*;
+
+    #[test]
+    fn affine_round_trip_and_about() {
+        let t = Transform3D::from_affine([2.0, 0.0, 0.0, 3.0, 5.0, 6.0]);
+        assert_eq!(t.to_affine(), [2.0, 0.0, 0.0, 3.0, 5.0, 6.0]);
+        assert!(t.is_affine());
+        assert!(t.equals(t));
+        // Scaling by 2 about (10, 10) keeps (10, 10) fixed.
+        let s = Transform3D::make_scale(2.0, 2.0, 1.0).about(10.0, 10.0, 0.0);
+        let (x, y) = s.project(10.0, 10.0).unwrap();
+        assert!((x - 10.0).abs() < 1e-4 && (y - 10.0).abs() < 1e-4);
+        let (x, _) = s.project(11.0, 10.0).unwrap();
+        assert!((x - 12.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn project_rejects_points_behind_the_eye() {
+        let p = Transform3D::make_translation(0.0, 0.0, 200.0).concat(Transform3D::make_perspective(100.0));
+        assert!(p.project(1.0, 1.0).is_none());
+    }
+}
