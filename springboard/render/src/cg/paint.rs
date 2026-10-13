@@ -771,7 +771,7 @@ fn affine_parts(m: &Affine) -> [f32; 6] {
 }
 
 fn coverage_parts(c: &Coverage) -> (i32, i32, usize, usize, &[u8]) {
-    (c.x, c.y, c.w, c.h, &c.data)
+    (c.x, c.y, c.w, c.h, &c.a)
 }
 
 #[cfg(test)]

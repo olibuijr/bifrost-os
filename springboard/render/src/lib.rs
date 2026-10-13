@@ -84,4 +84,3 @@ pub mod hdr_metadata;
 pub mod bayer;
 pub mod reusable_layer;
 pub mod lazy_image;
-pub mod cg;

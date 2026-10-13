@@ -1038,7 +1038,7 @@ mod tests {
         let table_len = 4 + 12 * tags.len();
         let mut offset = 128 + table_len;
         let mut table = (tags.len() as u32).to_be_bytes().to_vec();
-        let mut body = Vec::new();
+        let mut body: Vec<u8> = Vec::new();
         for (sig, data) in &tags {
             table.extend(sig.as_bytes());
             table.extend((offset as u32).to_be_bytes());
