@@ -7,7 +7,7 @@
 //! explicit Record tap. Playback of the result goes through the normal audio player.
 
 use bifrost_audio_hal::{Device, IoContext, IoProcId, IoProcConfig, Role, System};
-use bifrost_audio_types::{props, AudioError, BufferList, PropertyAddress, PropertyValue, TimeStamp};
+use bifrost_audio_types::{props, AudioError, BufferList, PropertyAddress, PropertyValue, StreamFormat, TimeStamp};
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -113,20 +113,28 @@ pub fn capture_cycle(ring: &CaptureRing, input: &BufferList) {
     }
 }
 
-/// Interleaved S16 samples as a canonical 44-byte-header PCM WAV file.
-pub fn wav_bytes(rate: u32, channels: u32, samples: &[i16]) -> Vec<u8> {
+/// The format of a voice take: 16-bit signed interleaved PCM at `rate` with `channels`, the samples `wav_bytes` writes.
+pub fn pcm16(rate: u32, channels: u32) -> StreamFormat {
+    StreamFormat::integer(rate as f64, channels, 16, 2)
+}
+
+/// Interleaved S16 samples in `format` as a canonical 44-byte-header PCM WAV file. The header takes the rate, the
+/// channel count, the frame size and the bit depth from `format`, so `format` must be 16-bit PCM (see `pcm16`).
+pub fn wav_bytes(format: &StreamFormat, samples: &[i16]) -> Vec<u8> {
     let data_len = (samples.len() * 2) as u32;
+    let rate = format.sample_rate as u32;
+    let block_align = format.bytes_per_frame as u16;
     let mut out = Vec::with_capacity(44 + data_len as usize);
     out.extend(b"RIFF");
     out.extend((36 + data_len).to_le_bytes());
     out.extend(b"WAVEfmt ");
     out.extend(16u32.to_le_bytes());
     out.extend(1u16.to_le_bytes()); // PCM
-    out.extend((channels as u16).to_le_bytes());
+    out.extend((format.channels as u16).to_le_bytes());
     out.extend(rate.to_le_bytes());
-    out.extend((rate * channels * 2).to_le_bytes());
-    out.extend(((channels * 2) as u16).to_le_bytes());
-    out.extend(16u16.to_le_bytes());
+    out.extend((rate * block_align as u32).to_le_bytes());
+    out.extend(block_align.to_le_bytes());
+    out.extend((format.bits_per_channel as u16).to_le_bytes());
     out.extend(b"data");
     out.extend(data_len.to_le_bytes());
     for s in samples {
@@ -162,22 +170,21 @@ pub struct Recorder {
     thread: Option<JoinHandle<()>>,
     device: Device,
     proc_id: IoProcId,
-    pub rate: u32,
-    pub channels: u32,
+    /// the take's format: the input device's rate with `CHANNELS`, 16-bit
+    pub format: StreamFormat,
     /// the device the recording reads, for logs
     pub node: String,
 }
 
 /// A finished take.
 pub struct Take {
-    pub rate: u32,
-    pub channels: u32,
+    pub format: StreamFormat,
     pub samples: Vec<i16>,
 }
 
 impl Take {
     pub fn wav(&self) -> Vec<u8> {
-        wav_bytes(self.rate, self.channels, &self.samples)
+        wav_bytes(&self.format, &self.samples)
     }
 }
 
@@ -237,12 +244,13 @@ impl Recorder {
             worker.lock().unwrap().samples.extend_from_slice(&chunk);
         });
         eprintln!("audio.capture: recording {node} at {rate} Hz");
-        Ok(Recorder { shared, stop, thread: Some(thread), device, proc_id, rate, channels: CHANNELS, node })
+        let format = pcm16(rate, CHANNELS);
+        Ok(Recorder { shared, stop, thread: Some(thread), device, proc_id, format, node })
     }
 
     pub fn elapsed_ms(&self) -> u64 {
-        let frames = self.shared.lock().unwrap().samples.len() as u64 / self.channels as u64;
-        frames * 1000 / self.rate as u64
+        let frames = self.shared.lock().unwrap().samples.len() as u64 / self.format.channels.max(1) as u64;
+        frames * 1000 / self.format.sample_rate.max(1.0) as u64
     }
 
     /// 0.0..=1.0 level of the latest audio, for a meter.
@@ -268,7 +276,7 @@ impl Recorder {
     pub fn stop(mut self) -> Take {
         self.halt();
         let samples = std::mem::take(&mut self.shared.lock().unwrap().samples);
-        Take { rate: self.rate, channels: self.channels, samples }
+        Take { format: self.format, samples }
     }
 }
 
@@ -328,18 +336,20 @@ mod tests {
 
     #[test]
     fn wav_header_is_canonical() {
-        let w = wav_bytes(16_000, 1, &[1, -1, 2]);
+        let w = wav_bytes(&pcm16(16_000, 1), &[1, -1, 2]);
         assert_eq!(w.len(), 44 + 6);
         assert_eq!(&w[..4], b"RIFF");
         assert_eq!(u32::from_le_bytes(w[4..8].try_into().unwrap()), 36 + 6);
         assert_eq!(u32::from_le_bytes(w[24..28].try_into().unwrap()), 16_000);
         assert_eq!(u32::from_le_bytes(w[28..32].try_into().unwrap()), 32_000);
+        assert_eq!(u16::from_le_bytes(w[32..34].try_into().unwrap()), 2, "block align is one 16-bit mono frame");
+        assert_eq!(u16::from_le_bytes(w[34..36].try_into().unwrap()), 16, "bit depth");
         assert_eq!(i16::from_le_bytes(w[46..48].try_into().unwrap()), -1);
     }
 
     #[test]
     fn wav_duration_comes_from_the_byte_rate() {
-        let w = wav_bytes(8_000, 1, &vec![0; 8_000]);
+        let w = wav_bytes(&pcm16(8_000, 1), &vec![0; 8_000]);
         assert_eq!(wav_duration_ms(&w[..44], w.len() as u64), Some(1000));
         assert_eq!(wav_duration_ms(b"nope", 4), None);
     }

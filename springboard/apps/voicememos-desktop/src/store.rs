@@ -2,7 +2,7 @@
 
 use bifrost_app::controls::recording::Trim;
 use bifrost_app::controls::voice_activity::{DetectionOptions, Event, SpeechDetector};
-use springboard::media::capture::{wav_bytes, wav_duration_ms};
+use springboard::media::capture::{pcm16, wav_bytes, wav_duration_ms};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -168,7 +168,7 @@ pub fn trimmed_wav(path: &Path, trim: Trim) -> Option<Vec<u8>> {
     let first = ((trim.start() * rate as f64).round() as usize).min(frames);
     let last = ((trim.end() * rate as f64).round() as usize).min(frames);
     let samples: Vec<i16> = data[first * frame..last * frame].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
-    Some(wav_bytes(rate, channels as u32, &samples))
+    Some(wav_bytes(&pcm16(rate, channels as u32), &samples))
 }
 
 /// Splits `memo` at `at` seconds into two new memos, `<title> part 1` and `<title> part 2`. The original is kept.
@@ -239,7 +239,7 @@ pub fn save_trim(memo: &Memo, trim: Trim) -> std::io::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use springboard::media::capture::wav_bytes;
+    use springboard::media::capture::{pcm16, wav_bytes};
 
     fn temp(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("voicememos-{name}-{}", std::process::id()));
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn save_list_rename_and_delete_round_trip() {
         let dir = temp("rt");
-        let wav = wav_bytes(8000, 1, &vec![0; 8000]);
+        let wav = wav_bytes(&pcm16(8000, 1), &vec![0; 8000]);
         let a = save(&dir, "20261004-120000", &wav, 1_000).unwrap();
         let b = save(&dir, "20261004-120000", &wav, 2_000).unwrap();
         assert_eq!(b.file_name().unwrap(), "Voice Memo 20261004-120000 2.wav");
@@ -283,7 +283,7 @@ mod tests {
     #[test]
     fn notes_sidecar_is_hidden_follows_the_rename_and_empty_notes_remove_it() {
         let dir = temp("notes");
-        let wav = wav_bytes(8000, 1, &vec![0; 800]);
+        let wav = wav_bytes(&pcm16(8000, 1), &vec![0; 800]);
         let a = save(&dir, "20261012-090000", &wav, 1_000).unwrap();
         assert_eq!(notes_path(&a).file_name().unwrap(), ".Voice Memo 20261012-090000.notes.txt");
         assert_eq!(read_notes(&a), "", "no notes yet");
@@ -304,7 +304,7 @@ mod tests {
     fn export_copies_the_recording_and_keeps_the_original() {
         let dir = temp("export");
         let out = dir.join("Downloads");
-        let wav = wav_bytes(8000, 1, &vec![0; 800]);
+        let wav = wav_bytes(&pcm16(8000, 1), &vec![0; 800]);
         let a = save(&dir, "20261012-090500", &wav, 1_000).unwrap();
         let memo = scan(&dir).remove(0);
         let first = export_copy(&memo, &out).unwrap();
@@ -334,7 +334,7 @@ mod tests {
     fn trimmed_copy_keeps_the_kept_samples_and_the_original() {
         let dir = temp("trim");
         let samples: Vec<i16> = (0..8000).map(|i| i as i16).collect();
-        let src = save(&dir, "20261004-120000", &wav_bytes(8000, 1, &samples), 100).unwrap();
+        let src = save(&dir, "20261004-120000", &wav_bytes(&pcm16(8000, 1), &samples), 100).unwrap();
         let memo = scan(&dir).remove(0);
         assert_eq!((memo.rate, memo.channels), (8000, 1));
 
@@ -356,7 +356,7 @@ mod tests {
     fn split_writes_two_parts_and_keeps_the_original() {
         let dir = temp("split");
         let samples: Vec<i16> = (0..8000).map(|i| i as i16).collect();
-        save(&dir, "20261004-120000", &wav_bytes(8000, 1, &samples), 100).unwrap();
+        save(&dir, "20261004-120000", &wav_bytes(&pcm16(8000, 1), &samples), 100).unwrap();
         let memo = scan(&dir).remove(0);
         let (a, b) = save_split(&memo, 0.25).unwrap();
         assert!(a.file_name().unwrap().to_string_lossy().ends_with(" part 1.wav"));
@@ -371,7 +371,7 @@ mod tests {
     fn a_split_too_close_to_an_end_writes_nothing() {
         let dir = temp("split-short");
         let samples: Vec<i16> = (0..8000).map(|i| i as i16).collect();
-        save(&dir, "20261004-120000", &wav_bytes(8000, 1, &samples), 100).unwrap();
+        save(&dir, "20261004-120000", &wav_bytes(&pcm16(8000, 1), &samples), 100).unwrap();
         let memo = scan(&dir).remove(0);
         assert!(save_split(&memo, 0.05).is_err(), "a 0.05 s head is below the 0.1 s minimum");
         assert_eq!(scan(&dir).len(), 1);
@@ -385,7 +385,7 @@ mod tests {
         let mut samples = vec![0i16; 4000];
         samples.extend(std::iter::repeat(10_000i16).take(4000));
         samples.extend(std::iter::repeat(0i16).take(4000));
-        let path = save(&dir, "20261004-120000", &wav_bytes(8000, 1, &samples), 100).unwrap();
+        let path = save(&dir, "20261004-120000", &wav_bytes(&pcm16(8000, 1), &samples), 100).unwrap();
         let spans = speech_spans(&path);
         assert_eq!(spans.len(), 1, "{spans:?}");
         assert!((spans[0].0 - 500.0).abs() < 0.5, "starts at 500 ms: {spans:?}");
@@ -425,7 +425,7 @@ pub fn peaks(path: &Path, n: usize) -> Vec<f32> {
 #[cfg(test)]
 mod peak_tests {
     use super::*;
-    use springboard::media::capture::wav_bytes;
+    use springboard::media::capture::{pcm16, wav_bytes};
 
     #[test]
     fn peaks_show_the_loud_half_and_stay_in_range() {
@@ -435,7 +435,7 @@ mod peak_tests {
         let path = dir.join("tone.wav");
         let mut samples = vec![0i16; 800];
         samples.extend(vec![32767i16; 800]);
-        std::fs::write(&path, wav_bytes(8000, 1, &samples)).unwrap();
+        std::fs::write(&path, wav_bytes(&pcm16(8000, 1), &samples)).unwrap();
 
         let p = peaks(&path, 4);
         assert_eq!(p.len(), 4);

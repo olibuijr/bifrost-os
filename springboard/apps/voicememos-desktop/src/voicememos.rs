@@ -1651,7 +1651,7 @@ mod tests {
     #[test]
     fn rename_and_delete_follow_the_selection() {
         let (mut app, ui) = app("flow");
-        let wav = springboard::media::capture::wav_bytes(8000, 1, &vec![0; 4000]);
+        let wav = springboard::media::capture::wav_bytes(&springboard::media::capture::pcm16(8000, 1), &vec![0; 4000]);
         store::save(&app.dir, "20261004-120000", &wav, 100).unwrap();
         app.reload();
         assert_eq!(app.memos.len(), 1);
@@ -1675,7 +1675,7 @@ mod tests {
     fn trim_saves_the_kept_part_as_a_new_memo() {
         let (mut app, ui) = app("trim");
         let samples: Vec<i16> = (0..8000).map(|i| i as i16).collect();
-        store::save(&app.dir, "20261004-120000", &springboard::media::capture::wav_bytes(8000, 1, &samples), 100).unwrap();
+        store::save(&app.dir, "20261004-120000", &springboard::media::capture::wav_bytes(&springboard::media::capture::pcm16(8000, 1), &samples), 100).unwrap();
         app.reload();
         app.selected = Some(0);
         app.activate(&ui, Target::Trim);
@@ -1697,7 +1697,7 @@ mod tests {
     fn split_at_the_playhead_writes_two_parts_and_selects_the_first() {
         let (mut app, ui) = app("split");
         let samples: Vec<i16> = (0..8000).map(|i| i as i16).collect();
-        store::save(&app.dir, "20261004-120000", &springboard::media::capture::wav_bytes(8000, 1, &samples), 100).unwrap();
+        store::save(&app.dir, "20261004-120000", &springboard::media::capture::wav_bytes(&springboard::media::capture::pcm16(8000, 1), &samples), 100).unwrap();
         app.reload();
         app.selected = Some(0);
         assert!(!app.can_split(), "a split needs the selected take to be playing");
@@ -1740,7 +1740,7 @@ mod tests {
     #[test]
     fn notes_save_beside_the_recording_and_the_menu_opens_them() {
         let (mut app, ui) = app("notes");
-        store::save(&app.dir, "20261012-100000", &springboard::media::capture::wav_bytes(8000, 1, &vec![0; 800]), 100).unwrap();
+        store::save(&app.dir, "20261012-100000", &springboard::media::capture::wav_bytes(&springboard::media::capture::pcm16(8000, 1), &vec![0; 800]), 100).unwrap();
         app.reload();
         app.selected = Some(0);
         assert!(app.has_selection(), "a selected recording enables the menu");
@@ -1767,7 +1767,7 @@ mod tests {
     }
 
     fn one_recording(app: &mut VoiceMemos, samples: usize) {
-        let wav = springboard::media::capture::wav_bytes(8000, 1, &vec![0; samples]);
+        let wav = springboard::media::capture::wav_bytes(&springboard::media::capture::pcm16(8000, 1), &vec![0; samples]);
         store::save(&app.dir, "20261004-120000", &wav, 100).unwrap();
         app.reload();
         app.selected = Some(0);
