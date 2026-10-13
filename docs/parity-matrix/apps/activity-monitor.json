@@ -33,8 +33,8 @@
    "area": "view",
    "apple": "View menu process filters",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/window.rs:330",
-   "note": "Three filters only: all, mine, other users.",
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:126",
+   "note": "System, Active, Inactive added (sidebar + View menu). Windowed, GPU and Selected Processes remain.",
    "wire": "Add System, Active, Inactive, Windowed, GPU and Selected Processes filters to model::Filter (model.rs:135 keep) and as sidebar rows in window.rs:330 plus a View menu in main.rs main_menu; windowed needs the shell window list over the app SDK, active/inactive uses recent CPU ticks."
   },
   {
@@ -59,9 +59,9 @@
    "feature": "Send Signal to Process",
    "area": "menu",
    "apple": "View > Send Signal to Process",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/main.rs:88",
+   "note": "Process > Send Signal submenu with eight signals; no signal sheet.",
    "wire": "Add a Process > Send Signal... item in main.rs:72 that opens a sheet with a signal popup (HUP, INT, KILL, TERM, USR1, USR2, STOP, CONT) and calls window.rs signal_selected(sig)."
   },
   {
@@ -113,9 +113,9 @@
    "feature": "Update Frequency",
    "area": "menu",
    "apple": "View > Update Frequency",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Fixed sampling interval.",
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:165",
+   "note": "View > Update Frequency 1/2/5 s, persisted in app defaults.",
    "wire": "Add View > Update Frequency radio items (1s/2s/5s) feeding next_wake in window.rs:161; persist it."
   },
   {
@@ -203,9 +203,9 @@
    "feature": "Copy selected row",
    "area": "menu",
    "apple": "Edit > Copy",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/main.rs:130",
+   "note": "Edit > Copy (cmd+C) copies the row as tab-separated text.",
    "wire": "Handle Edit > Copy in main.rs menu_action to put the selected row's columns as tab-separated text on the pasteboard."
   },
   {

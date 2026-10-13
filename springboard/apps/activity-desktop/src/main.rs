@@ -16,7 +16,11 @@ mod window;
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
-use window::{Monitor, MENU_FIND, MENU_FORCE, MENU_INSPECT, MENU_QUIT};
+use model::{Filter, UpdateFrequency, SIGNALS};
+use window::{Monitor, MENU_COPY, MENU_FILTER, MENU_FIND, MENU_FORCE, MENU_FREQ, MENU_INSPECT, MENU_QUIT, MENU_SIGNAL};
+
+/// The preference holding View > Update Frequency, in seconds.
+const PREF_FREQUENCY: &str = "updateSeconds";
 
 struct ActivityApp {
     monitor: Option<Monitor>,
@@ -32,7 +36,11 @@ impl App for ActivityApp {
         let (w, h) = (ctx.cfg.w as f32, ctx.cfg.h as f32);
         match &mut self.monitor {
             Some(m) => m.resize(w, h),
-            None => self.monitor = Some(Monitor::new(w, h)),
+            None => {
+                let mut m = Monitor::new(w, h);
+                m.set_frequency(UpdateFrequency::from_seconds(ctx.defaults().int(PREF_FREQUENCY)));
+                self.monitor = Some(m);
+            }
         }
     }
 
@@ -71,16 +79,32 @@ impl App for ActivityApp {
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         let Some(m) = &self.monitor else { return Vec::new() };
-        vec![AppMenu {
-            title: "Process".into(),
-            items: vec![
-                AppMenuItem::new(MENU_QUIT, "Quit Process").enabled(m.can_quit_selected()),
-                AppMenuItem::new(MENU_FORCE, "Force Quit Process").enabled(m.can_quit_selected()),
-                AppMenuItem::separator(),
-                AppMenuItem::new(MENU_INSPECT, "Inspect Process").enabled(m.has_selected()),
-                AppMenuItem::new(MENU_FIND, "Find Process").key("cmd+f"),
-            ],
-        }]
+        let can_signal = m.can_quit_selected();
+        let mut process = vec![
+            AppMenuItem::new(MENU_QUIT, "Quit Process").enabled(can_signal),
+            AppMenuItem::new(MENU_FORCE, "Force Quit Process").enabled(can_signal),
+            AppMenuItem::submenu("Send Signal to Process").enabled(can_signal),
+        ];
+        for (i, sig) in SIGNALS.iter().enumerate() {
+            process.push(AppMenuItem::new(MENU_SIGNAL + i as u32, &format!("SIG{}", sig.name)).enabled(can_signal).depth(1));
+        }
+        process.push(AppMenuItem::separator());
+        process.push(AppMenuItem::new(MENU_INSPECT, "Inspect Process").enabled(m.has_selected()));
+        process.push(AppMenuItem::new(MENU_FIND, "Find Process").key("cmd+f"));
+
+        let mut view = vec![AppMenuItem::submenu("Filter Processes")];
+        for (i, f) in Filter::ALL.iter().enumerate() {
+            view.push(AppMenuItem::new(MENU_FILTER + i as u32, f.label()).checked(m.filter == *f).depth(1));
+        }
+        view.push(AppMenuItem::submenu("Update Frequency"));
+        for (i, f) in UpdateFrequency::ALL.iter().enumerate() {
+            view.push(AppMenuItem::new(MENU_FREQ + i as u32, f.label()).checked(m.frequency == *f).depth(1));
+        }
+        vec![
+            AppMenu { title: "Edit".into(), items: vec![AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(m.has_selected())] },
+            AppMenu { title: "View".into(), items: view },
+            AppMenu { title: "Process".into(), items: process },
+        ]
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
@@ -101,6 +125,26 @@ impl App for ActivityApp {
             MENU_FIND => {
                 m.focus_search();
                 ctx.wants_keyboard(true);
+                true
+            }
+            MENU_COPY => {
+                if let Some(text) = m.copy_text() {
+                    ctx.set_pasteboard_string(&text);
+                }
+                true
+            }
+            n if (MENU_SIGNAL..MENU_SIGNAL + SIGNALS.len() as u32).contains(&n) => {
+                m.send_signal(SIGNALS[(n - MENU_SIGNAL) as usize]);
+                true
+            }
+            n if (MENU_FILTER..MENU_FILTER + Filter::ALL.len() as u32).contains(&n) => {
+                m.set_filter(Filter::ALL[(n - MENU_FILTER) as usize]);
+                true
+            }
+            n if (MENU_FREQ..MENU_FREQ + UpdateFrequency::ALL.len() as u32).contains(&n) => {
+                let f = UpdateFrequency::ALL[(n - MENU_FREQ) as usize];
+                m.set_frequency(f);
+                ctx.defaults_mut().set_int(PREF_FREQUENCY, f.seconds());
                 true
             }
             _ => false,

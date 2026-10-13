@@ -123,22 +123,112 @@ impl Sort {
     }
 }
 
-/// The sidebar filter: every process, the signed-in user's own, or the processes of other users.
+/// The sidebar filter: every process, the signed-in user's own, the processes of other users, the system's, or the
+/// ones using / not using the CPU right now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Filter {
     All,
     Mine,
     Others,
+    System,
+    Active,
+    Inactive,
 }
 
+/// Accounts below this uid belong to the system, not to a person.
+pub const FIRST_PERSON_UID: u32 = 1000;
+
 impl Filter {
+    pub const ALL: [Filter; 6] = [Filter::All, Filter::Mine, Filter::Others, Filter::System, Filter::Active, Filter::Inactive];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Filter::All => "All Processes",
+            Filter::Mine => "My Processes",
+            Filter::Others => "Other Users",
+            Filter::System => "System Processes",
+            Filter::Active => "Active Processes",
+            Filter::Inactive => "Inactive Processes",
+        }
+    }
+
     pub fn keep(self, p: &ProcSample, own_uid: u32) -> bool {
         match self {
             Filter::All => true,
             Filter::Mine => p.uid == own_uid,
             Filter::Others => p.uid != own_uid,
+            Filter::System => p.uid < FIRST_PERSON_UID,
+            Filter::Active => p.cpu > 0.0,
+            Filter::Inactive => p.cpu <= 0.0,
         }
     }
+}
+
+/// How often the machine is read (View > Update Frequency).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UpdateFrequency {
+    VeryOften,
+    Often,
+    Normally,
+}
+
+impl UpdateFrequency {
+    pub const ALL: [UpdateFrequency; 3] = [UpdateFrequency::VeryOften, UpdateFrequency::Often, UpdateFrequency::Normally];
+
+    pub fn seconds(self) -> i64 {
+        match self {
+            UpdateFrequency::VeryOften => 1,
+            UpdateFrequency::Often => 2,
+            UpdateFrequency::Normally => 5,
+        }
+    }
+
+    pub fn millis(self) -> f64 {
+        self.seconds() as f64 * 1000.0
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            UpdateFrequency::VeryOften => "Very Often (1 sec)",
+            UpdateFrequency::Often => "Often (2 sec)",
+            UpdateFrequency::Normally => "Normally (5 sec)",
+        }
+    }
+
+    /// The stored seconds back to a choice; anything unknown (or unset, 0) is the 1 s default.
+    pub fn from_seconds(s: i64) -> UpdateFrequency {
+        UpdateFrequency::ALL.into_iter().find(|f| f.seconds() == s).unwrap_or(UpdateFrequency::VeryOften)
+    }
+}
+
+/// A signal that Process > Send Signal offers, with its Linux number.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Signal {
+    pub name: &'static str,
+    pub number: i32,
+}
+
+pub const SIGNALS: [Signal; 8] = [
+    Signal { name: "HUP", number: 1 },
+    Signal { name: "INT", number: 2 },
+    Signal { name: "KILL", number: 9 },
+    Signal { name: "TERM", number: 15 },
+    Signal { name: "USR1", number: 10 },
+    Signal { name: "USR2", number: 12 },
+    Signal { name: "STOP", number: 19 },
+    Signal { name: "CONT", number: 18 },
+];
+
+/// One table row as tab-separated text (Edit > Copy): the columns of the tab, in order.
+pub fn row_text(p: &ProcSample, tab: Tab) -> String {
+    let fields: Vec<String> = match tab {
+        Tab::Cpu => vec![p.name.clone(), p.user.clone(), percent(p.cpu), p.threads.to_string(), p.pid.to_string()],
+        Tab::Memory => vec![p.name.clone(), p.user.clone(), bytes(p.rss), p.threads.to_string(), p.pid.to_string()],
+        Tab::Energy => vec![p.name.clone(), p.user.clone(), format!("{:.1}", energy(p)), p.threads.to_string(), p.pid.to_string()],
+        Tab::Disk => vec![p.name.clone(), p.user.clone(), rate(p.read_bps), rate(p.write_bps), p.pid.to_string()],
+        Tab::Network => vec![p.name.clone(), p.user.clone(), p.pid.to_string()],
+    };
+    fields.join("\t")
 }
 
 /// An energy score for one process: its CPU share plus its disk traffic. Activity Monitor's Energy column is
@@ -292,6 +382,31 @@ mod tests {
         let found = visible(&procs, Filter::All, 1000, "fire", Sort { key: SortKey::Pid, descending: false });
         assert_eq!(found.len(), 2);
         assert!(matches(&procs[0], "root"));
+    }
+
+    #[test]
+    fn system_active_and_inactive_filters() {
+        let procs = vec![proc(1, "systemd", 0, 0.0, 1), proc(2, "firefox", 1000, 2.0, 1)];
+        let sort = Sort { key: SortKey::Pid, descending: false };
+        assert_eq!(visible(&procs, Filter::System, 1000, "", sort).len(), 1);
+        assert_eq!(visible(&procs, Filter::Active, 1000, "", sort)[0].pid, 2);
+        assert_eq!(visible(&procs, Filter::Inactive, 1000, "", sort)[0].pid, 1);
+    }
+
+    #[test]
+    fn update_frequency_round_trips_and_defaults_to_one_second() {
+        for f in UpdateFrequency::ALL {
+            assert_eq!(UpdateFrequency::from_seconds(f.seconds()), f);
+        }
+        assert_eq!(UpdateFrequency::from_seconds(0), UpdateFrequency::VeryOften);
+        assert_eq!(UpdateFrequency::Normally.millis(), 5000.0);
+    }
+
+    #[test]
+    fn rows_copy_as_tab_separated_text() {
+        let p = proc(7, "sh", 1000, 12.5, 2048);
+        assert_eq!(row_text(&p, Tab::Cpu), "sh\tolibuijr\t12.5%\t1\t7");
+        assert_eq!(row_text(&p, Tab::Memory), "sh\tolibuijr\t2.0 KB\t1\t7");
     }
 
     #[test]
