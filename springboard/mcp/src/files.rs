@@ -136,7 +136,9 @@ pub fn schema() -> Value {
 mod tests {
     use super::*;
 
-    fn mock(a: Value, reply: Value) -> (Result<Value, String>, Vec<(String, Value, Duration)>) {
+    type MockOut = (Result<Value, String>, Vec<(String, Value, Duration)>);
+
+    fn mock(a: Value, reply: Value) -> MockOut {
         let mut calls = vec![];
         let r = {
             let mut rpc = |m: &str, p: &Value, t: Duration| -> Result<Value, String> {

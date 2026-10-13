@@ -1,8 +1,8 @@
 //! `bifrost-mcp --serve`: the system service (bifrost-mcp.service, on by default). Agents connect over
-//!   - MCP Streamable HTTP at http://<machine>:7420/mcp (POST JSON-RPC, JSON replies, keep-alive), with
-//!     `Authorization: Bearer <token>` from /var/lib/bifrost-mcp/token (made on first start; required on every TCP request, local agents use the unix socket);
-//!   - a Unix socket, /run/bifrost-mcp.sock (newline-delimited JSON-RPC, like stdio), for agents on the machine:
-//!     root and the desktop account's group.
+//! - MCP Streamable HTTP at http://<machine>:7420/mcp (POST JSON-RPC, JSON replies, keep-alive), with
+//!   `Authorization: Bearer <token>` from /var/lib/bifrost-mcp/token (made on first start; required on every TCP request, local agents use the unix socket);
+//! - a Unix socket, /run/bifrost-mcp.sock (newline-delimited JSON-RPC, like stdio), for agents on the machine:
+//!   root and the desktop account's group.
 //! All sessions share one context behind a lock, so input from several agents is applied in order.
 //! Input is bounded before it is buffered: lines, headers, bodies and open HTTP connections all have caps.
 
@@ -310,7 +310,7 @@ fn http_session(s: TcpStream, ctx: Shared, token: &str) {
                 match serde_json::from_str::<serde_json::Value>(&text) {
                     Ok(serde_json::Value::Array(v)) => {
                         let out: Vec<_> = v.iter().filter_map(|m| crate::handle(&mut c, &m.to_string())).collect();
-                        (!out.is_empty()).then(|| serde_json::Value::Array(out))
+                        (!out.is_empty()).then_some(serde_json::Value::Array(out))
                     }
                     _ => crate::handle(&mut c, &text),
                 }
@@ -357,7 +357,7 @@ mod tests {
     use std::io::Cursor;
 
     fn no_entropy(_: &mut [u8]) -> io::Result<()> {
-        Err(io::Error::new(io::ErrorKind::Other, "no urandom"))
+        Err(io::Error::other("no urandom"))
     }
 
     fn fixed_entropy(b: &mut [u8]) -> io::Result<()> {

@@ -410,11 +410,11 @@ pub fn perf(a: &Value) -> Result<Value, String> {
 /// FNV-style hash over 8-byte words: cheap enough to run on every poll of a full-screen capture.
 pub fn hash_image(img: &Image) -> u64 {
     let mut h: u64 = 0xcbf29ce484222325 ^ ((img.w as u64) << 32) ^ img.h as u64;
-    let mut chunks = img.rgba.chunks_exact(8);
-    for c in &mut chunks {
-        h = (h ^ u64::from_le_bytes(c.try_into().unwrap())).wrapping_mul(0x100000001b3).rotate_left(5);
+    let (words, rest) = img.rgba.as_chunks::<8>();
+    for c in words {
+        h = (h ^ u64::from_le_bytes(*c)).wrapping_mul(0x100000001b3).rotate_left(5);
     }
-    for b in chunks.remainder() {
+    for b in rest {
         h = (h ^ *b as u64).wrapping_mul(0x100000001b3);
     }
     h
@@ -432,8 +432,8 @@ pub fn diff_bbox(a: &Image, b: &Image) -> Option<(u32, u32, u32, u32)> {
         if ra == rb {
             continue;
         }
-        let first = ra.chunks_exact(4).zip(rb.chunks_exact(4)).position(|(p, q)| p != q).unwrap_or(0) as u32;
-        let last = ra.chunks_exact(4).zip(rb.chunks_exact(4)).enumerate().filter(|(_, (p, q))| p != q).map(|(i, _)| i as u32).last().unwrap_or(0);
+        let first = ra.as_chunks::<4>().0.iter().zip(rb.as_chunks::<4>().0.iter()).position(|(p, q)| p != q).unwrap_or(0) as u32;
+        let last = ra.as_chunks::<4>().0.iter().zip(rb.as_chunks::<4>().0.iter()).enumerate().filter(|(_, (p, q))| p != q).map(|(i, _)| i as u32).next_back().unwrap_or(0);
         x0 = x0.min(first);
         x1 = x1.max(last);
         y0 = y0.min(y as u32);

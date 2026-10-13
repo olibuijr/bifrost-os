@@ -755,8 +755,7 @@ mod model_tests {
     #[test]
     fn an_explicit_begin_time_sets_the_running_begin() {
         let mut t = chain();
-        let mut timing = MediaTiming::default();
-        timing.begin_time = Some(12.5);
+        let timing = MediaTiming { begin_time: Some(12.5), ..Default::default() };
         let anim = Animation::Basic { id: AnimationId(3), key: Property::Opacity, from: None, to: Some(Value::Scalar(0.0)), timing, function: TimingFunction::Linear, additive: false };
         t.apply(&tx(2, vec![Change::AddAnimation { layer: lid(1), animation: anim }]), 1.0).unwrap();
         assert_eq!(t.running[0].begin, 12.5);

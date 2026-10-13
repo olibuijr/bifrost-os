@@ -457,7 +457,7 @@ fn to_rgba(raw: &[u8], format: u32, w: u32, h: u32, stride: u32, y_invert: bool)
     for row in 0..h {
         let y = if y_invert { h - 1 - row } else { row };
         let line = &raw[(y * stride) as usize..(y * stride + w * 4) as usize];
-        for p in line.chunks_exact(4) {
+        for p in line.as_chunks::<4>().0 {
             if bgr {
                 rgba.extend_from_slice(&[p[2], p[1], p[0], 255]);
             } else {
@@ -550,7 +550,7 @@ impl Dispatch<wlr_handle::ZwlrForeignToplevelHandleV1, ()> for State {
             wlr_handle::Event::Title { title } => t.info.title = title,
             wlr_handle::Event::AppId { app_id } => t.info.app_id = app_id,
             wlr_handle::Event::State { state } => {
-                let s: Vec<u32> = state.chunks_exact(4).map(|b| u32::from_ne_bytes([b[0], b[1], b[2], b[3]])).collect();
+                let s: Vec<u32> = state.as_chunks::<4>().0.iter().map(|b| u32::from_ne_bytes(*b)).collect();
                 t.info.maximized = s.contains(&0);
                 t.info.minimized = s.contains(&1);
                 t.info.activated = s.contains(&2);

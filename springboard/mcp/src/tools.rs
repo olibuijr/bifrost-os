@@ -515,7 +515,7 @@ impl Ctx {
                 (rows.contains(&q.to_lowercase()), format!("element {q:?}"))
             } else if let Some(kv) = s(a, "state") {
                 let st = sys::shell_text("state").unwrap_or_default();
-                (st.lines().flat_map(|l| l.split("window=")).any(|l| l.trim() == kv || l.starts_with(&format!("{kv}"))), format!("state {kv:?}"))
+                (st.lines().flat_map(|l| l.split("window=")).any(|l| l.trim() == kv || l.starts_with(kv)), format!("state {kv:?}"))
             } else if let Some(cmd) = s(a, "command") {
                 let r = sys::exec(cmd, false, None, Duration::from_secs(5), None)?;
                 (r.code == Some(0), format!("command {cmd:?}"))
@@ -648,7 +648,7 @@ fn system(a: &Value) -> Result<Value, String> {
             let mut p = sys::processes();
             let filter = s(a, "filter").map(str::to_lowercase);
             p.retain(|x| filter.as_ref().is_none_or(|q| x.3.to_lowercase().contains(q)));
-            p.sort_by(|a, b| b.1.cmp(&a.1));
+            p.sort_by_key(|x| std::cmp::Reverse(x.1));
             let lim = f(a, "limit").unwrap_or(40.0) as usize;
             Ok(text(p.iter().take(lim).map(|(pid, rss, ticks, cmd)| format!("{pid}\t{}M\t{}s\t{}", rss / 1024, ticks / 100, clip(cmd, 160))).collect::<Vec<_>>().join("\n")))
         }
@@ -752,8 +752,8 @@ fn fit(img: wl::Image, max: u32) -> wl::Image {
                 let row = (sy * img.w) as usize * 4;
                 for sx in x0..x1 {
                     let p = row + sx as usize * 4;
-                    for c in 0..4 {
-                        acc[c] += img.rgba[p + c] as u32;
+                    for (c, a) in acc.iter_mut().enumerate() {
+                        *a += img.rgba[p + c] as u32;
                     }
                 }
             }
