@@ -680,6 +680,7 @@ pub mod virtual_controller;
 pub mod input_method;
 pub mod compose_method;
 pub mod vertical_text;
+pub mod ruby;
 pub mod affine;
 pub mod pdfpage;
 pub mod pdfselect;

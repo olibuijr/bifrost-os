@@ -100,6 +100,153 @@ pub fn column_lefts(columns: usize, em: f32, gap: f32, right: f32) -> Vec<f32> {
     (0..columns).map(|c| right - (c as f32 + 1.0) * em - c as f32 * gap).collect()
 }
 
+/// How a character is oriented in a vertical line, by its script.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Orientation {
+    /// Drawn upright (ideographs, kana, Hangul, full-width forms).
+    Upright,
+    /// Drawn turned a quarter turn clockwise (Latin, digits, most punctuation).
+    Rotated,
+}
+
+/// The vertical orientation of a character: upright for East Asian scripts and symbols, rotated for everything else.
+pub fn orientation(c: char) -> Orientation {
+    let v = c as u32;
+    let upright = matches!(v,
+        0x1100..=0x11ff | 0x2e80..=0x2fdf | 0x2ff0..=0x303e | 0x3041..=0x33ff | 0x3400..=0x4dbf | 0x4e00..=0xa4cf
+        | 0xa960..=0xa97f | 0xac00..=0xd7ff | 0xf900..=0xfaff | 0xfe10..=0xfe1f | 0xfe30..=0xfe6f | 0xff00..=0xff60
+        | 0xffe0..=0xffe6 | 0x1b000..=0x1b16f | 0x1f200..=0x1f2ff | 0x20000..=0x3ffff
+        | 0x2460..=0x24ff | 0x25a0..=0x25ff | 0x2600..=0x26ff | 0x2190..=0x21ff | 0xa5 | 0xa7 | 0xa8 | 0xa9
+        | 0xae | 0xb1 | 0xbc..=0xbe | 0xd7 | 0xf7 | 0x1f300..=0x1faff);
+    if upright {
+        Orientation::Upright
+    } else {
+        Orientation::Rotated
+    }
+}
+
+/// The form of a punctuation or bracket character used in a vertical line, when it differs from the horizontal one.
+pub fn vertical_form(c: char) -> Option<char> {
+    Some(match c {
+        '\u{3001}' => '\u{fe11}',
+        '\u{3002}' => '\u{fe12}',
+        '\u{ff0c}' => '\u{fe10}',
+        '\u{ff1a}' => '\u{fe13}',
+        '\u{ff1b}' => '\u{fe14}',
+        '\u{ff01}' => '\u{fe15}',
+        '\u{ff1f}' => '\u{fe16}',
+        '\u{2026}' => '\u{fe19}',
+        '\u{2025}' => '\u{fe30}',
+        '\u{2014}' => '\u{fe31}',
+        '\u{2013}' => '\u{fe32}',
+        '\u{ff3f}' => '\u{fe33}',
+        '\u{ff08}' => '\u{fe35}',
+        '\u{ff09}' => '\u{fe36}',
+        '\u{ff5b}' => '\u{fe37}',
+        '\u{ff5d}' => '\u{fe38}',
+        '\u{3014}' => '\u{fe39}',
+        '\u{3015}' => '\u{fe3a}',
+        '\u{3010}' => '\u{fe3b}',
+        '\u{3011}' => '\u{fe3c}',
+        '\u{300a}' => '\u{fe3d}',
+        '\u{300b}' => '\u{fe3e}',
+        '\u{3008}' => '\u{fe3f}',
+        '\u{3009}' => '\u{fe40}',
+        '\u{300c}' => '\u{fe41}',
+        '\u{300d}' => '\u{fe42}',
+        '\u{300e}' => '\u{fe43}',
+        '\u{300f}' => '\u{fe44}',
+        '\u{ff3b}' => '\u{fe47}',
+        '\u{ff3d}' => '\u{fe48}',
+        _ => return None,
+    })
+}
+
+/// Chooses the form of each character of `text` in a vertical line. Characters with an upright orientation are
+/// [`Forms::Vertical`]; others are [`Forms::Horizontal`] (turned). A run of 2 to `max_group` ASCII digits that sits
+/// between upright characters, or alone, is [`Forms::HorizontalInVertical`] (tate-chu-yoko). `explicit` lists
+/// character ranges the caller marks horizontal-in-vertical regardless of the rule.
+pub fn classify(text: &str, max_group: usize, explicit: &[std::ops::Range<usize>]) -> Vec<Forms> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out: Vec<Forms> = chars
+        .iter()
+        .map(|&c| if orientation(c) == Orientation::Upright { Forms::Vertical } else { Forms::Horizontal })
+        .collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i].is_ascii_digit() {
+            let s = i;
+            while i < chars.len() && chars[i].is_ascii_digit() {
+                i += 1;
+            }
+            let len = i - s;
+            let before_ok = s == 0 || out[s - 1] == Forms::Vertical;
+            let after_ok = i == chars.len() || out[i] == Forms::Vertical;
+            if len >= 2 && len <= max_group && before_ok && after_ok {
+                out[s..i].fill(Forms::HorizontalInVertical);
+            }
+        } else {
+            i += 1;
+        }
+    }
+    for r in explicit {
+        for k in r.start.min(out.len())..r.end.min(out.len()) {
+            out[k] = Forms::HorizontalInVertical;
+        }
+    }
+    out
+}
+
+/// Lays out `text` in one column: classifies it, takes the advances from `advance_of` (horizontal advance in px of a
+/// character at size `em`), and places it. A convenience over [`classify`] and [`layout_column`].
+pub fn layout_text(text: &str, em: f32, top: f32, advance_of: &dyn Fn(char) -> f32) -> (Vec<Placed>, f32) {
+    let forms = classify(text, 4, &[]);
+    let glyphs: Vec<Glyph> = text.chars().zip(forms).map(|(c, f)| Glyph { advance: advance_of(c), forms: f }).collect();
+    layout_column(&glyphs, em, top)
+}
+
+#[cfg(test)]
+mod form_tests {
+    use super::*;
+
+    #[test]
+    fn scripts_get_their_orientation() {
+        assert_eq!(orientation('日'), Orientation::Upright);
+        assert_eq!(orientation('あ'), Orientation::Upright);
+        assert_eq!(orientation('a'), Orientation::Rotated);
+    }
+
+    #[test]
+    fn punctuation_has_vertical_forms() {
+        assert_eq!(vertical_form('\u{3001}'), Some('\u{fe11}'));
+        assert_eq!(vertical_form('\u{300c}'), Some('\u{fe41}'));
+        assert_eq!(vertical_form('a'), None);
+    }
+
+    #[test]
+    fn short_digit_runs_between_ideographs_go_horizontal_in_vertical() {
+        let f = classify("日12日", 4, &[]);
+        assert_eq!(f, vec![Forms::Vertical, Forms::HorizontalInVertical, Forms::HorizontalInVertical, Forms::Vertical]);
+        // one digit and long runs are turned
+        assert_eq!(classify("日1日", 4, &[])[1], Forms::Horizontal);
+        assert_eq!(classify("日12345日", 4, &[])[1], Forms::Horizontal);
+        // next to Latin letters they are turned
+        assert_eq!(classify("a12", 4, &[])[1], Forms::Horizontal);
+    }
+
+    #[test]
+    fn explicit_ranges_win() {
+        assert_eq!(classify("日ab日", 4, &[1..3])[2], Forms::HorizontalInVertical);
+    }
+
+    #[test]
+    fn layout_text_places_mixed_text() {
+        let (b, len) = layout_text("日12", 10.0, 0.0, &|_| 5.0);
+        assert_eq!(b.len(), 3);
+        assert_eq!(len, 20.0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

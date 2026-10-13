@@ -267,6 +267,17 @@ impl<'a> Font<'a> {
         }
     }
 
+    /// The outline of glyph `gid` at size `px` as straight segments `[x0, y0, x1, y1]`, curves flattened. The origin
+    /// is the glyph origin on the baseline, x grows right and y grows down (so ink above the baseline is negative).
+    /// `vars` selects a variable-font instance. Empty for a glyph without outline.
+    pub fn glyph_segments(&self, gid: u16, px: f32, vars: &[Var]) -> Vec<[f32; 4]> {
+        let k = px / self.upem;
+        let mut lines: Vec<(Pt, Pt)> = Vec::new();
+        let norm = self.normalized(vars);
+        self.outline(gid, Affine([k, 0.0, 0.0, -k, 0.0, 0.0]), &mut lines, 0, &norm);
+        lines.iter().map(|(a, b)| [a.x, a.y, b.x, b.y]).collect()
+    }
+
     /// The variation axes (empty for static fonts).
     pub fn axes(&self) -> &[Axis] {
         &self.axes
