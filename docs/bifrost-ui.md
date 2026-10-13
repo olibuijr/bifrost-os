@@ -2303,3 +2303,16 @@ Screen Time and slot-notification agents have no counterpart and stay `gap`. Par
 ## AppKit: named alert sounds (`bifrost_sdk::system_sound`, `shell::alert_sound`)
 
 `SystemSounds::named(name)` mirrors `NSSound(named:)` for the system alert names: Basso, Blow, Bottle, Frog, Funk, Glass, Hero, Morse, Ping, Pop, Purr, Sosumi, Submarine and Tink (plus Bell, Chime, Pulse, Tick). It returns a `SoundId` for a listed name and `None` for any other (`ALERT_NAMES` lists them). The id plays like any created sound. The shell synthesises each tone from a note recipe (additive sine notes and noise bursts, under 1.5 s, no clipping), so the sound is an equivalent, not the original recording. Settings > Sound > Alert Sound lists all of them (`options::ALERT_SOUNDS`). Status: partial until checked on Midget.
+
+## Core Location (`bifrost_app::core_location`, the `location` service)
+
+`LocationManager` mirrors `CLLocationManager`: `authorization_status`, `request_when_in_use_authorization`,
+`start_updating_location` / `stop_updating_location`, `request_location`, `desired_accuracy` (`accuracy::*`),
+`distance_filter`, and a `Delegate` with `did_update_locations`, `did_fail_with_error` and `did_change_authorization`.
+`Location` mirrors `CLLocation` (coordinate, horizontal accuracy, timestamp, `distance_from`); `reverse_geocode` returns a
+city-level `Placemark`. Authorization is the privacy grant (Settings > Privacy > App Permissions > Location); errors are
+`bifrost_ui::location_auth::LocationError`. The shell side is `springboard/src/shell/services/location.rs`.
+Honest limits: no GPS hardware and no Wi-Fi positioning. A fix is a manual location from the shell prefs
+(`location.manual.*`, 100 m) or an IP lookup that is off by default (`location.ip.enabled`, `location.ip.endpoint`, about
+25 km); altitude is always absent; reverse geocoding knows only those places within 50 km, not a worldwide gazetteer;
+no heading, regions or background updates. Host-tested only; the rows stay partial until checked on Midget.

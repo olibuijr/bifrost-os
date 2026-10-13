@@ -46,6 +46,7 @@ pub mod search_ranking;
 pub mod privacy_permissions;
 pub mod contacts;
 pub mod calendar;
+pub mod location;
 pub mod screen_sample;
 pub mod power_service;
 pub mod audio_devices;
@@ -114,6 +115,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(privacy_permissions::PrivacyPermissions),
         Box::new(contacts::Contacts),
         Box::new(calendar::Calendar),
+        Box::new(location::Location::default()),
         Box::new(screen_sample::ScreenSample),
         Box::new(widgets_timeline::WidgetsTimeline),
         Box::new(power_service::PowerService::default()),
