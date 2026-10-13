@@ -386,6 +386,14 @@ impl TimeRange {
     }
 }
 
+/// Equal when `compare` says so (`CMTime` is `Equatable` by `CMTimeCompare`): 1/2 equals 2/4, and an invalid or
+/// indefinite time equals nothing, itself included.
+impl PartialEq for MediaTime {
+    fn eq(&self, other: &MediaTime) -> bool {
+        self.compare(other) == Some(Ordering::Equal)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
