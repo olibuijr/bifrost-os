@@ -124,6 +124,7 @@ pub mod ui;
 pub mod splitview;
 mod desk;
 pub mod window_fx;
+pub mod wake;
 pub mod desktop_network;
 pub mod disk_image;
 mod desktop_bar;
@@ -1403,54 +1404,55 @@ impl Shell {
     /// When the shell next needs `tick` without any input (caret blink,
     /// countdowns, alarms), in monotonic ms; None when nothing is pending.
     pub fn next_wake(&self, t: f64) -> Option<f64> {
-        let mut due = self.clock.next_wake(t, self.screen_on);
-        if bifrost_render::appearance::fading() { due = Some(t); }
-        if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due=Some(due.map_or(when,|at|at.min(when)));}
-        if self.dock_animating(t) || self.fx_animating(t) { due = Some(t); }
+        let mut due = wake::Wake::default();
+        due.add(self.clock.next_wake(t, self.screen_on));
+        if bifrost_render::appearance::fading() { due.add(Some(t)); }
+        if let Some(when)=self.desk.as_ref().and_then(|d|d.dock_hide_at){due.add(Some(when));}
+        if self.dock_animating(t) || self.fx_animating(t) { due.add(Some(t)); }
         if self.metrics_active() {
             // the CPU/RAM read joins a wake-up that is already planned inside its tolerance window
             let menu = self.metrics_menu_open();
-            let when = desktop_metrics::coalesce(desktop_metrics::deadline(self.desktop_metrics_at, menu).max(t), desktop_metrics::tolerance_ms(menu), due);
-            due = Some(due.map_or(when, |d| d.min(when)));
+            let when = desktop_metrics::coalesce(desktop_metrics::deadline(self.desktop_metrics_at, menu).max(t), desktop_metrics::tolerance_ms(menu), due.get());
+            due.add(Some(when));
         }
         if let Some(at) = self.dying.iter().filter_map(apphost::AppHost::quit_deadline).reduce(f64::min) {
-            due = Some(due.map_or(at, |d| d.min(at)));
+            due.add(Some(at));
         }
         if let Some(w) = self.screentime_wake(t) {
-            due = Some(due.map_or(w, |d| d.min(w)));
+            due.add(Some(w));
         }
         if let Some(w) = self.lock_pad_wake(t).filter(|_| self.screen_on) {
-            due = Some(due.map_or(w, |d| d.min(w)));
+            due.add(Some(w));
         }
         if let Some(w) = self.login_wake(t).filter(|_| self.screen_on) {
-            due = Some(due.map_or(w, |d| d.min(w)));
+            due.add(Some(w));
         }
         if self.screen_on && !self.is_locked() {
             if let Some(w) = self.assistive_touch.next_wake(t) {
-                due = Some(due.map_or(w, |d| d.min(w)));
+                due.add(Some(w));
             }
         }
         if let Some(w) = self.cc.next_wake().filter(|_| self.screen_on) {
-            due = Some(due.map_or(w, |d| d.min(w)));
+            due.add(Some(w));
         }
         if self.screen_on {
             if let Some(w) = self.quicksearch.next_wake(t) {
-                due = Some(due.map_or(w, |d| d.min(w)));
+                due.add(Some(w));
             }
         }
         if self.screen_on && self.screen == Screen::App(AppId::Settings) {
             if let Some(w) = self.settings.as_ref().and_then(|st| st.next_wake(t)) {
-                due = Some(due.map_or(w, |d| d.min(w)));
+                due.add(Some(w));
             }
         }
         if self.desk.as_ref().is_some_and(|d| d.dock_slide.borrow().active(t / 1000.0)) {
-            due = Some(due.map_or(t + 16.0, |d| d.min(t + 16.0)));
+            due.add(Some(t + 16.0));
         }
         if let Some(w) = self.perf.next_wake().filter(|_| self.screen_on) {
-            due = Some(due.map_or(w, |d| d.min(w)));
+            due.add(Some(w));
         }
         if let Some(w) = self.hud.next_wake(t).filter(|_| self.screen_on) {
-            due = Some(due.map_or(w, |d| d.min(w)));
+            due.add(Some(w));
         }
         let app_wake = if self.screen_on {
             match self.screen {
@@ -1466,48 +1468,48 @@ impl Shell {
             None
         };
         if let Some(w) = app_wake {
-            due = Some(due.map_or(w, |d| d.min(w)));
+            due.add(Some(w));
         }
         if let Some(w) = self.notify.next_wake(t) {
-            due = Some(due.map_or(w, |d| d.min(w)));
+            due.add(Some(w));
         }
         if let Some(w) = self.home_wake().filter(|_| self.screen_on) {
-            due = Some(due.map_or(w, |d| d.min(w)));
+            due.add(Some(w));
         }
         if self.screen_on && self.screen == Screen::App(AppId::Terminal) {
             if let Some(w) = self.terminal_ui.next_wake() {
-                due = Some(due.map_or(w, |d| d.min(w)));
+                due.add(Some(w));
             }
             if let Some(w) = self.term_touch.next_wake() {
-                due = Some(due.map_or(w, |d| d.min(w)));
+                due.add(Some(w));
             }
             if self.terminal_ui.blink {
                 let w = term::next_blink(t);
-                due = Some(due.map_or(w, |d| d.min(w)));
+                due.add(Some(w));
             }
         }
         if self.screen_on && self.screen == Screen::App(AppId::Photos) {
             if let Some(w) = self.photos.as_ref().and_then(Photos::next_wake) {
-                due = Some(due.map_or(w, |d| d.min(w)));
+                due.add(Some(w));
             }
         }
         if let Some(w) = self.shot.as_ref().filter(|_| self.screen_on).and_then(|o| o.next_wake(t)) {
-            due = Some(due.map_or(w, |d| d.min(w)));
+            due.add(Some(w));
         }
         // a running countdown redraws once a second and captures when it ends
         if let Some((_, cd)) = self.capture.as_ref().and_then(|c| c.pending) {
             let w = if cd.done(t) { t } else { (t + 1.0).min(cd.end()) };
-            due = Some(due.map_or(w, |d| d.min(w)));
+            due.add(Some(w));
         }
         if self.screen_on && self.screen == Screen::App(AppId::Files) {
             if let Some(w) = self.files.as_ref().and_then(|f| f.next_wake(t)) {
-                due = Some(due.map_or(w, |d| d.min(w)));
+                due.add(Some(w));
             }
         }
         if let Some(w) = self.audio_next_wake(t) {
-            due = Some(due.map_or(w, |d| d.min(w)));
+            due.add(Some(w));
         }
-        due
+        due.get()
     }
 
     /// The media volume 0..=1 the Control Center slider shows.
