@@ -638,6 +638,9 @@ pub struct Shell {
     /// touch on the terminal grid: scroll, tap, long-press selection, menu
     term_touch: termtouch::TermTouch,
     last_input: f64,
+    /// when Settings last reported a content change from its tick (loads landing, timers): with `last_input`, the desk
+    /// keeps a focused Settings window's cached pixels until one of them is newer than the cache
+    settings_changed: f64,
     /// where a bottom-left corner swipe started (General › Gestures)
     corner_start: Option<(f32, f32)>,
     /// the slide-to-power-off sheet (Power held for a second)
@@ -924,6 +927,7 @@ impl Shell {
             kb_touch: false,
             term_touch: termtouch::TermTouch::default(),
             last_input: 0.0,
+            settings_changed: 0.0,
             corner_start: None,
             power_menu: None,
             #[cfg(feature = "desktop-wayland")]
@@ -2960,7 +2964,11 @@ impl Shell {
         }
         if self.screen == Screen::App(AppId::Settings) {
             if let Some(st) = &mut self.settings {
-                self.dirty |= st.tick(&self.ui, t);
+                let changed = st.tick(&self.ui, t);
+                if changed {
+                    self.settings_changed = t;
+                }
+                self.dirty |= changed;
                 // Install Now: the update's backup is in, so the restart goes ahead
                 if st.take_install_ready() {
                     effects.push(Effect::Restart);

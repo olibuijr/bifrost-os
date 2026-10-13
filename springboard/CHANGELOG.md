@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.1 — 2026-10-13
+
+- Smoothness: a focused Settings window keeps its cached pixels until input, a change Settings reports or an animation makes them stale (it was redrawn in full on every desktop frame, about 23 ms a frame at 2560x1440 on the lab PC). It still refreshes at least once a second.
+
 ## 0.7.0 — 2026-10-13
 
 Round 75: ten parity waves (macOS 27 reverse, daily-driver apps and settings, command-line tools, smoothness).

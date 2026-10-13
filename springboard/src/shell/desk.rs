@@ -1562,6 +1562,11 @@ impl Shell {
                 let quiet = match w.app {
                     AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref)
                         .is_some_and(|h| h.running() && h.frame().is_some() && !h.has_pending()),
+                    // A focused Settings window keeps its pixels until input, a reported change or an animation
+                    // makes them stale (it was redrawn in full on every desk frame: ~23 ms at 2560x1440 on Midget,
+                    // round 75); it still refreshes once a second like the background built-ins below.
+                    AppId::Settings if focused => cached.as_ref().is_some_and(|c| t - c.drawn < 1000. && c.drawn > self.last_input && c.drawn > self.settings_changed)
+                        && self.settings.as_ref().is_some_and(|st| st.next_wake(t).map_or(true, |w| w > t)),
                     // Background built-ins refresh once a second for status/jobs;
                     // input/focus changes always bypass this cache.
                     _ => !focused && cached.as_ref().is_some_and(|c| t - c.drawn < 1000.),
