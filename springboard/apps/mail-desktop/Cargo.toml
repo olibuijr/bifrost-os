@@ -13,6 +13,5 @@ path = "src/main.rs"
 
 [dependencies]
 bifrost-app = { path = "../../sdk" }
-bifrost-core = { path = "../../core" }
 # the shell's TLS transport (rustls + graviola, webpki roots): IMAP and SMTP connections reuse it
 springboard = { path = "../.." }
