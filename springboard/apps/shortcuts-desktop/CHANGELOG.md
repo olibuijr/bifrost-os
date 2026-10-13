@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.0 — 2026-10-13
+
+- The action library gains four kinds, in the Add Action list after Start Timer: Show Notification (a message from a list), Copy Text (a text from a list, put on the clipboard), Open Folder (a folder in the home directory: Desktop, Documents, Downloads, Pictures or Music) and Run Shell Script (a command from a list). Their values are picked from their lists, so a saved value always has a known meaning.
+- The shortcut model moved to the shell crate (`springboard::shortcuts`), so the app, its control socket and the new `shortcuts` command read and write one file. The app's own copy is gone.
+- Plans show each new step's line the same way as the others, from one shared line function.
+- Needs system 0.4.84, as before. The app still cannot run its steps itself; see the `shortcuts` command for the steps the command line can run.
+
 ## 1.6.2 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

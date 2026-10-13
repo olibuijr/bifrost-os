@@ -3,7 +3,7 @@
 //! sent over the app protocol yet and are only logged.
 
 mod automation;
-mod model;
+use springboard::shortcuts as model;
 mod services;
 mod widget;
 
@@ -30,7 +30,7 @@ impl ShortcutsApp {
     fn shortcuts(&self, data_dir: &Path) -> Vec<model::Shortcut> {
         match &self.w {
             Some(c) => c.list().to_vec(),
-            None => automation::stored(data_dir),
+            None => model::stored(data_dir),
         }
     }
 
@@ -163,9 +163,9 @@ impl App for ShortcutsApp {
                     Some(c) => c.edit_list(|l| automation::script_set(l, params)),
                     None => {
                         // no window yet: change the saved file, so the next launch shows the change
-                        let mut list = automation::stored(data_dir);
+                        let mut list = model::stored(data_dir);
                         automation::script_set(&mut list, params).and_then(|out| {
-                            model::save(&data_dir.join(automation::FILE), &list)
+                            model::save(&data_dir.join(model::FILE), &list)
                                 .map(|_| out)
                                 .map_err(|e| intents::failed(format!("could not save the list: {e}")))
                         })

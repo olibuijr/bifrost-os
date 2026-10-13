@@ -5,7 +5,7 @@
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CALLOUT_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT};
 use crate::automation;
-use crate::model;
+use springboard::shortcuts as model;
 use bifrost_app::kit::ui::{
     Ui, Weight, CARD_BG, CARD_RADIUS_PT, CELL_RADIUS_PT, CONTROL_PRESSED, CONTENT_BG, LABEL, LABEL_2, LABEL_3, LINK,
     MAC_TITLE3_PT, PRESSED, ROW_PRESSED, SEPARATOR_C, SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PINK,
@@ -17,7 +17,7 @@ use bifrost_app::controls::{Node, Rect as PtRect, Role};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
 use bifrost_app::kit::{Event, Surface, TextCache};
-use crate::model::{Action, Daily, Shortcut, KINDS, MAX_ACTIONS, MAX_SHORTCUTS};
+use springboard::shortcuts::{Action, Daily, Shortcut, KINDS, MAX_ACTIONS, MAX_SHORTCUTS};
 use bifrost_app::proto::LoginStatus as Status;
 use bifrost_app::intents::Snippet;
 use bifrost_core::json::Json;
