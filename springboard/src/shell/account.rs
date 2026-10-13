@@ -45,6 +45,22 @@ pub fn password_status_needs_set(passwd_s_line: &str) -> bool {
     matches!(passwd_s_line.split_whitespace().nth(1), Some("NP" | "L" | "LK"))
 }
 
+/// Why a password change is refused before privd sees it (the same length rule privd enforces), or None
+/// when it may be sent: the new password is long enough, typed twice the same, and not the old one.
+pub fn password_change_problem(old: &str, new: &str, again: &str) -> Option<&'static str> {
+    if new.len() < crate::privd::auth::MIN_PASSWORD {
+        Some("The new password needs at least 8 characters.")
+    } else if new.contains(['\n', ':', '\0']) {
+        Some("The password cannot contain a colon or a line break.")
+    } else if new != again {
+        Some("The two passwords do not match.")
+    } else if new == old {
+        Some("Choose a password that is different from the current one.")
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,5 +78,14 @@ mod tests {
         assert_eq!((a.full_name.as_str(), a.username.as_str()), ("Ada Lovelace", "ada"));
         assert_eq!(parse("username=ada").unwrap().full_name, "ada");
         assert!(parse("full_name=x").is_none());
+    }
+
+    #[test]
+    fn password_change_checks_before_privd() {
+        assert_eq!(password_change_problem("old-pass", "short", "short"), Some("The new password needs at least 8 characters."));
+        assert_eq!(password_change_problem("old-pass", "a:bcdefgh", "a:bcdefgh"), Some("The password cannot contain a colon or a line break."));
+        assert_eq!(password_change_problem("old-pass", "longenough", "longenugh"), Some("The two passwords do not match."));
+        assert_eq!(password_change_problem("longenough", "longenough", "longenough"), Some("Choose a password that is different from the current one."));
+        assert_eq!(password_change_problem("old-pass", "longenough", "longenough"), None);
     }
 }
