@@ -2,7 +2,7 @@
 //! it), over the shell's TLS transport. The reply rules and command lines come from [`crate::smtp`]; this module runs
 //! the dialogue and stops at the first reply that is not the expected one.
 
-use crate::account::{Security, Server};
+use bifrost_app::controls::internet_accounts::{Security, Server};
 use crate::line::Lines;
 use crate::smtp;
 use crate::transport;

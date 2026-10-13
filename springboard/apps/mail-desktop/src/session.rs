@@ -2,7 +2,7 @@
 //! message, and the Seen flag. One connection serves one job. Every literal (`{n}` followed by n bytes) is read here and
 //! folded into its response line as a quoted string, so the parsers in [`crate::imap`] see one line per response.
 
-use crate::account::{Security, Server};
+use bifrost_app::controls::internet_accounts::{Security, Server};
 use crate::flags::{Flag, Flags};
 use crate::imap::{self, Mailbox, Reply, Status, Value};
 use crate::line::Lines;

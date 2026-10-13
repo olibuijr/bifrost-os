@@ -1,11 +1,11 @@
 //! The mail window's state: the accounts and what is selected, the message rows of the open mailbox, the open message,
 //! the sheets (account setup and compose) and the arrival baseline for new-mail notices. Nothing here touches the
-//! network, the keychain or the window; `window.rs` runs the jobs and feeds their results in.
+//! network, the passwords or the window; `window.rs` runs the jobs and feeds their results in.
 
-use crate::account::{self, Account, Security, Server};
 use crate::flags::{Flag, Flags};
 use crate::message::{self, Draft, Summary};
 use crate::session::Listed;
+use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Security, Server};
 use std::collections::HashMap;
 
 pub const INBOX: &str = "INBOX";
@@ -123,7 +123,7 @@ pub struct Mail {
     pub open: Option<u32>,
     /// Message text by UID, for the shown mailbox only.
     pub bodies: HashMap<u32, String>,
-    /// Passwords read from the keychain for this run. They are never written to the accounts file.
+    /// Passwords read from the Passwords group for this run. They are never written to the shared account list.
     pub passwords: HashMap<String, String>,
     /// The highest inbox UID seen per account id. Absent until the first inbox listing of the account.
     pub baseline: HashMap<String, u32>,
@@ -229,7 +229,7 @@ impl Mail {
             Field::new("Name", "Shown in the sidebar", ""),
             Field::new("Email", hint_email, ""),
             Field::new("User name", "Same as the email when empty", ""),
-            Field { secret: true, ..Field::new("Password", "Stored in the keychain", "") },
+            Field { secret: true, ..Field::new("Password", "Stored in Passwords", "") },
             Field::new("Incoming server", "imap.<domain> when empty", ""),
             Field::new("Incoming port", "", &IMAP_TLS_PORT.to_string()),
             Field::new("Outgoing server", "smtp.<domain> when empty", ""),
@@ -258,11 +258,12 @@ impl Mail {
         self.sheet = None;
     }
 
-    /// Checks the setup form and builds the account it describes, with its password. Hosts and ports fall back to the
-    /// domain's `imap.` and `smtp.` names and the standard ports.
-    pub fn account_from_form(&self, form: &Form) -> Result<(Account, String), String> {
+    /// Checks the setup form and builds the mail account it describes, with its password. Hosts and ports fall back to
+    /// the domain's `imap.` and `smtp.` names and the standard ports. `taken` is the whole shared list, so the new id
+    /// is unique among every account.
+    pub fn account_from_form(&self, form: &Form, taken: &[Account]) -> Result<(Account, String), String> {
         let email = form.value("Email").trim().to_string();
-        if !account::valid_address(&email) {
+        if !shared::valid_address(&email) {
             return Err("Enter an email address, for example name@example.com".into());
         }
         let domain = email.rsplit_once('@').map_or("", |(_, d)| d).to_string();
@@ -282,14 +283,10 @@ impl Mail {
         let smtp_port = port(form.value("Outgoing port"), 587)?;
         let imap_host = host(form.value("Incoming server"), &format!("imap.{domain}"));
         let smtp_host = host(form.value("Outgoing server"), &format!("smtp.{domain}"));
-        let account = Account {
-            id: account_id(&email, &self.accounts),
-            name,
-            email,
-            username,
-            imap: Server { host: imap_host, port: imap_port, security: security(imap_port, IMAP_TLS_PORT) },
-            smtp: Server { host: smtp_host, port: smtp_port, security: security(smtp_port, SMTP_TLS_PORT) },
-        };
+        let mut account = Account::new(Kind::Mail, &account_id(&email, taken), &name, &username);
+        account.email = email;
+        account.imap = Some(Server { host: imap_host, port: imap_port, security: security(imap_port, IMAP_TLS_PORT) });
+        account.smtp = Some(Server { host: smtp_host, port: smtp_port, security: security(smtp_port, SMTP_TLS_PORT) });
         account.validate().map_err(|e| e.to_string())?;
         Ok((account, password))
     }
@@ -319,7 +316,8 @@ impl Mail {
         })
     }
 
-    /// Adds an account the user set up. It becomes the shown account.
+    /// Adds an account the user set up, once it is in the shared list and its password is saved. It becomes the shown
+    /// account.
     pub fn add_account(&mut self, account: Account, password: String) {
         self.passwords.insert(account.id.clone(), password);
         self.accounts.push(account);
@@ -374,14 +372,11 @@ mod tests {
     use super::*;
 
     fn account(id: &str) -> Account {
-        Account {
-            id: id.into(),
-            name: "Work".into(),
-            email: "olibuijr@example.com".into(),
-            username: "olibuijr".into(),
-            imap: Server { host: "imap.example.com".into(), port: 993, security: Security::Tls },
-            smtp: Server { host: "smtp.example.com".into(), port: 587, security: Security::StartTls },
-        }
+        let mut a = Account::new(Kind::Mail, id, "Work", "olibuijr");
+        a.email = "olibuijr@example.com".into();
+        a.imap = Some(Server { host: "imap.example.com".into(), port: 993, security: Security::Tls });
+        a.smtp = Some(Server { host: "smtp.example.com".into(), port: 587, security: Security::StartTls });
+        a
     }
 
     fn listed(uid: u32, subject: &str) -> Listed {
@@ -460,28 +455,39 @@ mod tests {
     fn a_setup_form_builds_an_account_with_defaults() {
         let mail = Mail::new(vec![]);
         let form = setup(&[("Email", "ana@example.com"), ("Password", "secret")]);
-        let (account, password) = mail.account_from_form(&form).unwrap();
+        let (account, password) = mail.account_from_form(&form, &[]).unwrap();
         assert_eq!(password, "secret");
+        assert_eq!(account.kind, Kind::Mail);
         assert_eq!(account.id, "ana-example-com");
         assert_eq!(account.username, "ana@example.com");
-        assert_eq!(account.imap, Server { host: "imap.example.com".into(), port: 993, security: Security::Tls });
-        assert_eq!(account.smtp, Server { host: "smtp.example.com".into(), port: 587, security: Security::StartTls });
+        assert_eq!(account.imap, Some(Server { host: "imap.example.com".into(), port: 993, security: Security::Tls }));
+        assert_eq!(account.smtp, Some(Server { host: "smtp.example.com".into(), port: 587, security: Security::StartTls }));
+        assert_eq!(account.password_site(), "imap.example.com");
     }
 
     #[test]
     fn a_setup_form_needs_an_address_and_a_password() {
         let mail = Mail::new(vec![]);
-        assert!(mail.account_from_form(&setup(&[("Email", "nope"), ("Password", "x")])).is_err());
-        assert!(mail.account_from_form(&setup(&[("Email", "ana@example.com")])).is_err());
-        assert!(mail.account_from_form(&setup(&[("Email", "ana@example.com"), ("Password", "x"), ("Incoming port", "0")])).is_err());
+        assert!(mail.account_from_form(&setup(&[("Email", "nope"), ("Password", "x")]), &[]).is_err());
+        assert!(mail.account_from_form(&setup(&[("Email", "ana@example.com")]), &[]).is_err());
+        assert!(mail.account_from_form(&setup(&[("Email", "ana@example.com"), ("Password", "x"), ("Incoming port", "0")]), &[]).is_err());
     }
 
     #[test]
     fn plain_imap_ports_start_with_starttls() {
         let mail = Mail::new(vec![]);
         let form = setup(&[("Email", "ana@example.com"), ("Password", "p"), ("Incoming port", "143")]);
-        let (account, _) = mail.account_from_form(&form).unwrap();
-        assert_eq!(account.imap.security, Security::StartTls);
+        let (account, _) = mail.account_from_form(&form, &[]).unwrap();
+        assert_eq!(account.imap.map(|s| s.security), Some(Security::StartTls));
+    }
+
+    #[test]
+    fn a_new_account_id_avoids_every_account_in_the_shared_list() {
+        let mail = Mail::new(vec![]);
+        let shared_list = vec![account("ana-example-com")];
+        let form = setup(&[("Email", "ana@example.com"), ("Password", "p")]);
+        let (account, _) = mail.account_from_form(&form, &shared_list).unwrap();
+        assert_eq!(account.id, "ana-example-com-2");
     }
 
     #[test]

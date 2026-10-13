@@ -1,8 +1,9 @@
 //! Background work for the mail window. Each job runs on its own thread with its own connection, and sends one [`Event`]
 //! back. A byte written to the wake pipe tells the window's loop to read the channel, so nothing waits on a network call.
 
-use crate::account::Account;
+use crate::accounts;
 use crate::message::Draft;
+use bifrost_app::controls::internet_accounts::Account;
 use crate::session::{self, Listed, LIST_LIMIT};
 use crate::submit;
 use springboard::deildu::http::Transport;
@@ -46,7 +47,7 @@ pub fn list(transport: &dyn Transport, account: &Account, password: &str, mailbo
 }
 
 fn fetch_listing(transport: &dyn Transport, account: &Account, password: &str, mailbox: &str) -> Result<Listing, String> {
-    let mut session = session::connect(transport, &account.imap)?;
+    let mut session = session::connect(transport, accounts::incoming(account)?)?;
     session.login(&account.username, password)?;
     let mailboxes: Vec<String> = session.list()?.into_iter().map(|m| m.name).collect();
     session.select(mailbox)?;
@@ -64,7 +65,7 @@ pub fn body(transport: &dyn Transport, account: &Account, password: &str, mailbo
 }
 
 fn fetch_body(transport: &dyn Transport, account: &Account, password: &str, mailbox: &str, uid: u32) -> Result<String, String> {
-    let mut session = session::connect(transport, &account.imap)?;
+    let mut session = session::connect(transport, accounts::incoming(account)?)?;
     session.login(&account.username, password)?;
     session.select(mailbox)?;
     let text = session.message(uid)?;
@@ -76,6 +77,7 @@ fn fetch_body(transport: &dyn Transport, account: &Account, password: &str, mail
 /// Sends a rendered message (`text`, from [`Draft::render`]) to every recipient of `draft`.
 pub fn send(transport: Arc<dyn Transport>, account: Account, password: String, draft: Draft, text: String) -> Event {
     let recipients: Vec<String> = draft.to.iter().chain(draft.cc.iter()).cloned().collect();
-    let result = submit::send(transport.as_ref(), &account.smtp, &account.username, &password, &draft.from, &recipients, &text);
+    let result = accounts::outgoing(&account)
+        .and_then(|server| submit::send(transport.as_ref(), server, &account.username, &password, &draft.from, &recipients, &text));
     Event::Sent { account: account.id, result }
 }

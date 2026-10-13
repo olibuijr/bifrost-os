@@ -1,24 +1,24 @@
-//! The Mail window: the state in [`crate::state`] wired to the network jobs ([`crate::sync`]), the keychain for the
-//! passwords and the notifications for new mail. This file holds the flow and the input; drawing and hit-testing are in
-//! [`crate::draw`].
+//! The Mail window: the state in [`crate::state`] wired to the network jobs ([`crate::sync`]), the shared Internet
+//! Accounts list and Passwords for the logins, and the notifications for new mail. This file holds the flow and the
+//! input; drawing and hit-testing are in [`crate::draw`].
 
-use crate::account::{Account, KEYCHAIN_SERVICE};
+use crate::accounts;
 use crate::message;
 use crate::state::{Mail, Notice, Sheet, INBOX};
-use crate::store;
 use crate::sync::{self, Event};
 use crate::transport;
+use bifrost_app::controls::internet_accounts::Account;
 use bifrost_app::kit::{clipboard, Scroller, TextCache, Ui};
-use bifrost_app::keychain::{self, Error as KeyError, Reply as KeyReply};
+use bifrost_app::passwords::{self, Error as KeyError};
 use bifrost_app::usernotif::{self, Request};
 use bifrost_app::{AppMenu, AppMenuItem, Ctx, KeyInput, TouchKind};
 use bifrost_app::proto::{CHORD_CTRL, CHORD_META};
+use bifrost_core::json::Json;
 use springboard::deildu::http::Transport;
 use std::collections::HashMap;
 use std::io::Read;
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 
@@ -40,9 +40,9 @@ const KEY_RETURN: u32 = 13;
 /// evdev V, for the paste chord.
 const KEY_V: u32 = 47;
 
-/// What the window is waiting for from the keychain.
+/// What the window is waiting for from Passwords (the passwords group, through `service_reply`).
 enum Pending {
-    /// The password of an account, read when the app starts.
+    /// The password of an account, read when the app starts. The id is the account's.
     Load(String),
     /// A new account's password, being added. `Replace` follows when an item already exists.
     Add { account: Account, password: String },
@@ -66,7 +66,6 @@ struct Press {
 }
 
 pub struct MailWindow {
-    dir: PathBuf,
     pub mail: Mail,
     transport: Arc<dyn Transport>,
     tx: Sender<Event>,
@@ -103,11 +102,11 @@ fn now_unix() -> i64 {
 }
 
 impl MailWindow {
-    /// Reads the accounts and asks the keychain for each password. Mail is fetched as the passwords arrive.
+    /// Reads the mail accounts of the shared list and asks Passwords for each password. Mail is fetched as the passwords
+    /// arrive.
     pub fn new(ctx: &Ctx) -> MailWindow {
-        let dir = ctx.data_dir.clone();
-        let (accounts, load_error) = match store::load(&dir) {
-            Ok(accounts) => (accounts, None),
+        let (mail_accounts, load_error) = match accounts::load_mail() {
+            Ok(list) => (list, None),
             Err(e) => (Vec::new(), Some(e)),
         };
         let (tx, rx) = channel();
@@ -115,12 +114,11 @@ impl MailWindow {
             Some((rx, tx)) => (Some(rx), Some(tx)),
             None => (None, None),
         };
-        let mut mail = Mail::new(accounts);
+        let mut mail = Mail::new(mail_accounts);
         if let Some(e) = load_error {
             mail.status = e;
         }
         let mut window = MailWindow {
-            dir,
             mail,
             transport: transport::shared(),
             tx,
@@ -141,7 +139,7 @@ impl MailWindow {
             dirty: true,
         };
         for account in &window.mail.accounts {
-            let request = keychain::get(ctx, KEYCHAIN_SERVICE, &account.keychain_account());
+            let request = passwords::fill(ctx, &account.password_site(), &account.username);
             window.pending.insert(request, Pending::Load(account.id.clone()));
         }
         window
@@ -190,32 +188,32 @@ impl MailWindow {
         std::mem::take(&mut self.dirty) || scrolled
     }
 
-    /// The keychain's answer to one of the requests the window made.
-    pub fn keychain(&mut self, ctx: &Ctx, reply: KeyReply) -> bool {
-        let Some(pending) = self.pending.remove(&reply.request) else { return false };
+    /// The answer to one of the requests the window made to Passwords. False when the request was not the window's.
+    pub fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        let Some(pending) = self.pending.remove(&request) else { return false };
         match pending {
-            Pending::Load(id) => match reply.result {
-                Ok(bytes) => {
-                    self.mail.passwords.insert(id.clone(), String::from_utf8_lossy(&bytes).into_owned());
+            Pending::Load(id) => match passwords::decode_password(result) {
+                Ok(password) => {
+                    self.mail.passwords.insert(id.clone(), password);
                     self.refresh_account(&id);
                 }
                 Err(KeyError::ItemNotFound) => {
                     let name = self.account_name(&id);
-                    self.mail.status = format!("No password is saved for {name}. Add the account again");
+                    self.mail.status = format!("No password is saved for {name} in Passwords. Add the account again");
                 }
-                Err(e) => self.mail.status = format!("The keychain could not return the password: {e:?}"),
+                Err(e) => self.mail.status = format!("Passwords could not return the password: {e:?}"),
             },
-            Pending::Add { account, password } => match reply.result {
+            Pending::Add { account, password } => match passwords::decode_password(result) {
                 Ok(_) => self.account_saved(account, password),
                 Err(KeyError::DuplicateItem) => {
-                    let request = keychain::update(ctx, KEYCHAIN_SERVICE, &account.keychain_account(), password.as_bytes());
+                    let request = passwords::update(ctx, &account.password_site(), &account.username, &password);
                     self.pending.insert(request, Pending::Replace { account, password });
                 }
-                Err(e) => self.mail.status = format!("The password could not be saved: {e:?}"),
+                Err(e) => self.mail.status = format!("The password could not be saved in Passwords: {e:?}"),
             },
-            Pending::Replace { account, password } => match reply.result {
+            Pending::Replace { account, password } => match passwords::decode_password(result) {
                 Ok(_) => self.account_saved(account, password),
-                Err(e) => self.mail.status = format!("The password could not be saved: {e:?}"),
+                Err(e) => self.mail.status = format!("The password could not be saved in Passwords: {e:?}"),
             },
         }
         self.dirty = true;
@@ -378,16 +376,15 @@ impl MailWindow {
         let _ = usernotif::add(ctx, request);
     }
 
+    /// The password is in Passwords: the account goes into the shared list and becomes the shown account.
     fn account_saved(&mut self, account: Account, password: String) {
-        self.mail.add_account(account, password);
-        self.save_accounts();
-        self.mail.close_sheet();
-        self.refresh_selected();
-    }
-
-    fn save_accounts(&mut self) {
-        if let Err(e) = store::save(&self.dir, &self.mail.accounts) {
-            self.mail.status = format!("The accounts file could not be saved: {e}");
+        match accounts::add(account.clone()) {
+            Ok(()) => {
+                self.mail.add_account(account, password);
+                self.mail.close_sheet();
+                self.refresh_selected();
+            }
+            Err(e) => self.mail.status = e,
         }
     }
 
@@ -470,14 +467,23 @@ impl MailWindow {
     /// Runs the sheet's primary action: add the account, or send the message.
     fn submit(&mut self, ctx: &Ctx) {
         match self.mail.sheet.clone() {
-            Some(Sheet::Setup(form)) => match self.mail.account_from_form(&form) {
-                Ok((account, password)) => {
-                    let request = keychain::add(ctx, KEYCHAIN_SERVICE, &account.keychain_account(), password.as_bytes());
-                    self.pending.insert(request, Pending::Add { account, password });
-                    self.mail.status = "Saving the password".into();
+            Some(Sheet::Setup(form)) => {
+                let taken = match accounts::load_all() {
+                    Ok(all) => all,
+                    Err(e) => {
+                        self.mail.status = e;
+                        return;
+                    }
+                };
+                match self.mail.account_from_form(&form, &taken) {
+                    Ok((account, password)) => {
+                        let request = passwords::save(ctx, &account.password_site(), &account.username, &password);
+                        self.pending.insert(request, Pending::Add { account, password });
+                        self.mail.status = "Saving the password".into();
+                    }
+                    Err(e) => self.mail.status = e,
                 }
-                Err(e) => self.mail.status = e,
-            },
+            }
             Some(Sheet::Compose(compose)) => self.send(&compose),
             None => {}
         }

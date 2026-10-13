@@ -1,7 +1,7 @@
 //! Connections for the mail protocols. Every connection is made by the shell's TLS transport
 //! (`springboard::deildu::http`), so certificates are checked against the same roots as the rest of the desktop.
 
-use crate::account::{Security, Server};
+use bifrost_app::controls::internet_accounts::{Security, Server};
 use springboard::deildu::http::{Stream, Tls, Transport};
 use std::io;
 use std::sync::Arc;

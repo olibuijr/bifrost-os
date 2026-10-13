@@ -1,4 +1,10 @@
 # Changelog
+## 0.4.0 — 2026-10-13
+
+- Accounts come only from the shared Internet Accounts list now: Mail reads and writes `internet-accounts.ini` through
+  `bifrost_app::controls::internet_accounts` and no longer keeps its own `accounts.ini`. Passwords are in the Passwords
+  group (`is.bifrost.passwords`), under the IMAP host and the user name, the same item Settings and Passwords show.
+  Accounts saved by 0.3.0 are not migrated: add them again in Settings > Internet Accounts or in the Mail setup sheet.
 ## 0.3.0 — 2026-10-13
 
 - Live Mail: account setup sheet (password in the keychain), IMAP over TLS or STARTTLS for mailboxes, the newest

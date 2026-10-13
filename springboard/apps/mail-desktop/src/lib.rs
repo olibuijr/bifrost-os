@@ -1,10 +1,9 @@
 //! Mail: accounts, the IMAP and SMTP wire formats, messages and threads, flags, search, the pane layout, and the live
 //! window. The protocols run over the shell's TLS transport (`transport`); the window (`window`, `draw`) drives them
-//! through background jobs (`sync`) and the keychain.
+//! through background jobs (`sync`) and Passwords.
 
-pub mod account;
-pub mod body;
 pub mod accounts;
+pub mod body;
 pub mod codec;
 pub mod draw;
 pub mod flags;
@@ -17,7 +16,6 @@ pub mod search;
 pub mod session;
 pub mod smtp;
 pub mod state;
-pub mod store;
 pub mod submit;
 pub mod sync;
 pub mod threads;
