@@ -4,7 +4,7 @@
 //! the appearance.
 
 use crate::inspect::Inspection;
-use crate::model::{self, bytes, energy, percent, rate, Column, SortKey, Tab, HISTORY, SIGNALS};
+use crate::model::{self, bytes, energy, percent, rate, Column, SortKey, Tab, DISK_FLOOR, HISTORY, NET_FLOOR, SIGNALS};
 use crate::sample::{ProcSample, Snapshot};
 use crate::window::{signal_sheet_buttons, signal_sheet_row, Geo, Monitor, B_SEARCH, FOOT_PT, HEAD_PT, REPORT_LINE_PT, ROW_PT, SIDE_PT, SIDE_SCROLL};
 use bifrost_app::controls::Rect;
@@ -19,9 +19,6 @@ const PAD: f32 = 8.0;
 const CARD_PAD: f32 = 14.0;
 /// Corner radius of the graph card (points): a grouped card.
 const CARD_RADIUS_PT: f32 = 13.0;
-/// Floors for the disk and network graphs, so a quiet machine does not look busy (bytes per second).
-const DISK_FLOOR: f32 = 1024.0 * 1024.0;
-const NET_FLOOR: f32 = 64.0 * 1024.0;
 
 /// A filled rectangle in points.
 fn fill(s: &mut Surface, ui: &Ui, x: f32, y: f32, w: f32, h: f32, color: u32) {

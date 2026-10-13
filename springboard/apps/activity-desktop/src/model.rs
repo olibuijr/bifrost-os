@@ -7,6 +7,9 @@ use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 
 /// Samples kept for each graph (one per second, so one minute).
 pub const HISTORY: usize = 60;
+/// Floors for the disk and network graphs and the Dock readout, so a quiet machine does not look busy (bytes per second).
+pub const DISK_FLOOR: f32 = 1024.0 * 1024.0;
+pub const NET_FLOOR: f32 = 64.0 * 1024.0;
 
 /// The six tabs above the graph. Each picks the graph and the table's columns.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -580,6 +583,93 @@ impl History {
     }
 }
 
+/// What the Dock tile shows (View > Dock Icon): nothing special, or a live figure as the badge with a bar under it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DockMode {
+    Off,
+    Cpu,
+    Memory,
+    Disk,
+    Network,
+}
+
+impl DockMode {
+    pub const ALL: [DockMode; 5] = [DockMode::Off, DockMode::Cpu, DockMode::Memory, DockMode::Disk, DockMode::Network];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            DockMode::Off => "Application Icon",
+            DockMode::Cpu => "Show CPU Usage",
+            DockMode::Memory => "Show Memory Usage",
+            DockMode::Disk => "Show Disk Activity",
+            DockMode::Network => "Show Network Usage",
+        }
+    }
+
+    pub fn index(self) -> i64 {
+        DockMode::ALL.iter().position(|m| *m == self).unwrap_or(0) as i64
+    }
+
+    /// The stored index back to a mode; anything unknown is the plain icon.
+    pub fn from_index(i: i64) -> DockMode {
+        usize::try_from(i).ok().and_then(|i| DockMode::ALL.get(i).copied()).unwrap_or(DockMode::Off)
+    }
+}
+
+/// The badge text (at most four characters) and the bar fraction to put on the Dock tile.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DockContent {
+    pub badge: String,
+    pub fraction: Option<f32>,
+}
+
+impl DockContent {
+    /// Nothing on the tile.
+    pub fn cleared() -> Self {
+        DockContent { badge: String::new(), fraction: None }
+    }
+}
+
+/// A rate in at most four characters: "512", "1.5K", "12M", "2.5G".
+pub fn compact_rate(bps: f64) -> String {
+    const UNITS: [&str; 5] = ["", "K", "M", "G", "T"];
+    let mut v = bps.max(0.0);
+    let mut i = 0;
+    while v >= 999.5 && i < UNITS.len() - 1 {
+        v /= 1000.0;
+        i += 1;
+    }
+    if i == 0 {
+        format!("{v:.0}")
+    } else if v < 9.95 {
+        format!("{v:.1}{}", UNITS[i])
+    } else {
+        format!("{v:.0}{}", UNITS[i])
+    }
+}
+
+/// The Dock tile for a mode from the latest reading: CPU and memory as a percentage with a bar of the same size; disk
+/// and network as the combined rate with a bar against the busiest second of the last minute.
+pub fn dock_content(mode: DockMode, snap: &Snapshot, history: &History) -> DockContent {
+    let scaled = |now: f64, peak: f32, floor: f32| (now as f32 / peak.max(floor)).clamp(0.0, 1.0);
+    match mode {
+        DockMode::Off => DockContent::cleared(),
+        DockMode::Cpu => DockContent { badge: format!("{:.0}%", snap.cpu.busy), fraction: Some((snap.cpu.busy / 100.0).clamp(0.0, 1.0)) },
+        DockMode::Memory => {
+            let used = snap.memory.used_percent();
+            DockContent { badge: format!("{used:.0}%"), fraction: Some((used / 100.0).clamp(0.0, 1.0)) }
+        }
+        DockMode::Disk => {
+            let now = snap.disk_read_bps + snap.disk_write_bps;
+            DockContent { badge: compact_rate(now), fraction: Some(scaled(now, history.disk_read.peak() + history.disk_write.peak(), DISK_FLOOR)) }
+        }
+        DockMode::Network => {
+            let now: f64 = snap.ifaces.iter().map(|i| i.rx_bps + i.tx_bps).sum();
+            DockContent { badge: compact_rate(now), fraction: Some(scaled(now, history.net_rx.peak() + history.net_tx.peak(), NET_FLOOR)) }
+        }
+    }
+}
+
 /// A byte count with a binary unit: "812 B", "4.2 MB", "120 GB".
 pub fn bytes(n: u64) -> String {
     const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
@@ -701,6 +791,60 @@ mod tests {
                 assert!(cols.iter().any(|c| c.key == Some(tab.default_sort().key)));
             }
         }
+    }
+
+    #[test]
+    fn rates_fit_the_dock_badge() {
+        assert_eq!(compact_rate(0.0), "0");
+        assert_eq!(compact_rate(512.0), "512");
+        assert_eq!(compact_rate(1_500.0), "1.5K");
+        assert_eq!(compact_rate(12_000.0), "12K");
+        assert_eq!(compact_rate(999_700.0), "1.0M");
+        assert_eq!(compact_rate(2_500_000_000.0), "2.5G");
+        assert_eq!(compact_rate(-5.0), "0");
+        for v in [1.0, 999.0, 1e3, 9.9e3, 1e5, 9.99e5, 1e7, 5e8, 1e12] {
+            assert!(compact_rate(v).len() <= 4, "{v} -> {}", compact_rate(v));
+        }
+    }
+
+    #[test]
+    fn the_dock_shows_the_chosen_figure_with_a_bar() {
+        use crate::sample::{CpuShare, IfaceRate, Memory};
+        let mut history = History::default();
+        history.disk_read.push(1_000_000.0);
+        history.disk_write.push(1_000_000.0);
+        let snap = Snapshot {
+            cpu: CpuShare { busy: 37.4, user: 20.0, system: 17.4, idle: 62.6 },
+            memory: Memory { total: 1000, available: 250, ..Memory::default() },
+            disk_read_bps: 1_500_000.0,
+            disk_write_bps: 500_000.0,
+            ifaces: vec![IfaceRate { name: "e".into(), rx_bps: 30_000.0, tx_bps: 2_000.0, rx_total: 0, tx_total: 0, rx_packets: 0, tx_packets: 0 }],
+            procs: Vec::new(),
+            cores: Vec::new(),
+            gpu_busy: None,
+        };
+        assert_eq!(dock_content(DockMode::Off, &snap, &history), DockContent::cleared());
+        let cpu = dock_content(DockMode::Cpu, &snap, &history);
+        assert_eq!(cpu.badge, "37%");
+        assert!((cpu.fraction.unwrap() - 0.374).abs() < 1e-4);
+        let mem = dock_content(DockMode::Memory, &snap, &history);
+        assert_eq!(mem.badge, "75%");
+        assert!((mem.fraction.unwrap() - 0.75).abs() < 1e-4);
+        let disk = dock_content(DockMode::Disk, &snap, &history);
+        assert_eq!(disk.badge, "2.0M");
+        assert!((disk.fraction.unwrap() - 1.0).abs() < 1e-4, "above the recorded peak is a full bar");
+        let net = dock_content(DockMode::Network, &snap, &history);
+        assert_eq!(net.badge, "32K");
+        assert!((net.fraction.unwrap() - 32_000.0 / NET_FLOOR).abs() < 1e-3);
+    }
+
+    #[test]
+    fn dock_modes_round_trip_through_the_stored_index() {
+        for mode in DockMode::ALL {
+            assert_eq!(DockMode::from_index(mode.index()), mode);
+        }
+        assert_eq!(DockMode::from_index(-1), DockMode::Off);
+        assert_eq!(DockMode::from_index(99), DockMode::Off);
     }
 
     #[test]

@@ -14,7 +14,8 @@
 - Process > Sample Process watches every thread of the selected process for ten seconds and reports where each one waited, in a report you can copy or save.
 - View > Run System Diagnostics gathers kernel counters, the process list, the journal tail, the kernel log and disk usage into one archive and asks where to save it.
 - Process > Send Signal... opens a sheet with the eight signals, what each does, and Cancel and Send.
-- The app asks for the documents permission, for the save panel.
+- View > Dock Icon shows the CPU, memory, disk or network figure as the Dock badge with a bar under it, and remembers the choice.
+- The app asks for the documents permission, for the save panel, and the notifications permission, for the Dock badge.
 
 ## 0.3.0
 

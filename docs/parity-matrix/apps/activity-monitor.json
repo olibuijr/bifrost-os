@@ -140,10 +140,10 @@
    "feature": "Dock icon modes (CPU/Network/Disk/Memory graph)",
    "area": "settings",
    "apple": "View > Dock Icon",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Expose a dock badge/icon-image API in the SDK and add View > Dock Icon radio menu that renders the chosen live graph into the dock tile."
+   "status": "partial",
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:588",
+   "note": "View > Dock Icon (Application Icon, CPU, Memory, Disk, Network) puts the live figure on the Dock badge (at most four characters) with a progress bar under it, through the dock service; remembered in app defaults. The tile does not draw the scrolling graph the reference shows. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Add an image content to the dock service so the app can draw the live graph into the tile, then render the history strip there."
   },
   {
    "feature": "Memory pressure and memory breakdown",

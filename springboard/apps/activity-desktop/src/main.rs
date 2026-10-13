@@ -21,15 +21,16 @@ mod window;
 
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
+use bifrost_app::dock_tile;
 use bifrost_app::proto::DocErrorCode;
 use bifrost_app::windows::{self, WindowListOptions};
 use bifrost_core::json::Json;
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
-use model::{ColumnSet, Filter, Tab, UpdateFrequency, SIGNALS};
+use model::{ColumnSet, DockMode, Filter, Tab, UpdateFrequency, SIGNALS};
 use std::io::Write;
 use std::path::PathBuf;
 use window::{
-    Monitor, Request, MENU_CLOSE_REPORT, MENU_COLUMN, MENU_COPY, MENU_CPU_HISTORY, MENU_DELTAS, MENU_DIAGNOSTICS, MENU_FILTER, MENU_FIND, MENU_FORCE,
+    Monitor, Request, MENU_CLOSE_REPORT, MENU_COLUMN, MENU_DOCK, MENU_COPY, MENU_CPU_HISTORY, MENU_DELTAS, MENU_DIAGNOSTICS, MENU_FILTER, MENU_FIND, MENU_FORCE,
     MENU_FREQ, MENU_INSPECT, MENU_QUIT, MENU_SAMPLE, MENU_SAVE, MENU_SIGNAL, MENU_SIGNAL_SHEET, MENU_STOP,
 };
 
@@ -39,6 +40,8 @@ const PREF_FREQUENCY: &str = "updateSeconds";
 const PREF_COLUMNS: &str = "columns";
 /// The preference holding View > CPU History.
 const PREF_CPU_HISTORY: &str = "cpuHistory";
+/// The preference holding View > Dock Icon, as an index into `DockMode::ALL`.
+const PREF_DOCK: &str = "dockMode";
 
 /// What a pending save panel will write once the user has chosen a place.
 enum Export {
@@ -59,6 +62,10 @@ struct ActivityApp {
 impl ActivityApp {
     /// Asks the shell for the save panel the window wants, if it wants one.
     fn serve(&mut self, ctx: &Ctx) {
+        if let Some(tile) = self.monitor.as_mut().and_then(Monitor::take_dock_update) {
+            dock_tile::set_badge(ctx, &tile.badge);
+            dock_tile::set_progress(ctx, tile.fraction);
+        }
         if self.monitor.as_mut().map_or(false, Monitor::take_window_poll) {
             self.window_request = Some(windows::list(ctx, WindowListOptions::all()));
         }
@@ -116,6 +123,12 @@ impl ActivityApp {
             }
             MENU_DELTAS => {
                 m.toggle_deltas();
+                true
+            }
+            n if (MENU_DOCK..MENU_DOCK + DockMode::ALL.len() as u32).contains(&n) => {
+                let mode = DockMode::ALL[(n - MENU_DOCK) as usize];
+                m.set_dock_mode(mode);
+                ctx.defaults_mut().set_int(PREF_DOCK, mode.index());
                 true
             }
             MENU_SIGNAL_SHEET => {
@@ -195,6 +208,7 @@ impl App for ActivityApp {
                 m.set_frequency(UpdateFrequency::from_seconds(ctx.defaults().int(PREF_FREQUENCY)));
                 m.set_columns(ColumnSet::from_pref(&ctx.defaults().string(PREF_COLUMNS).unwrap_or_default()));
                 m.set_cpu_history(ctx.defaults().bool(PREF_CPU_HISTORY));
+                m.set_dock_mode(DockMode::from_index(ctx.defaults().int(PREF_DOCK)));
                 self.monitor = Some(m);
             }
         }
@@ -262,8 +276,9 @@ impl App for ActivityApp {
     }
 
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        // the replies to the Dock calls need nothing; taking them keeps the mailbox empty
         if self.window_request != Some(request) {
-            return false;
+            return true;
         }
         self.window_request = None;
         let Some(m) = &mut self.monitor else { return true };
@@ -313,6 +328,10 @@ impl App for ActivityApp {
         view.push(AppMenuItem::submenu("Update Frequency"));
         for (i, f) in UpdateFrequency::ALL.iter().enumerate() {
             view.push(AppMenuItem::new(MENU_FREQ + i as u32, f.label()).checked(m.frequency == *f).depth(1));
+        }
+        view.push(AppMenuItem::submenu("Dock Icon"));
+        for (i, mode) in DockMode::ALL.iter().enumerate() {
+            view.push(AppMenuItem::new(MENU_DOCK + i as u32, mode.label()).checked(m.dock_mode == *mode).depth(1));
         }
         view.push(AppMenuItem::new(MENU_CPU_HISTORY, "CPU History").checked(m.cpu_history).enabled(m.tab == Tab::Cpu));
         view.push(AppMenuItem::separator());

@@ -4,7 +4,7 @@
 
 use crate::inspect::{self, Inspection};
 use crate::job::{Job, JobKind, Outcome};
-use crate::model::{self, Column, ColumnSet, EnergyAverages, Filter, History, Signal, Sort, SortKey, Tab, UpdateFrequency};
+use crate::model::{self, Column, ColumnSet, DockContent, DockMode, EnergyAverages, Filter, History, Signal, Sort, SortKey, Tab, UpdateFrequency};
 use crate::sample::{ProcSample, Sampler, Snapshot};
 use crate::{diagnostics, sample_proc};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
@@ -81,6 +81,8 @@ pub const MENU_SIGNAL: u32 = 40;
 pub const MENU_FILTER: u32 = 60;
 /// View > Columns items: MENU_COLUMN + index into `Tab::all_columns()` of the current tab.
 pub const MENU_COLUMN: u32 = 100;
+/// View > Dock Icon items: MENU_DOCK + index into `DockMode::ALL`.
+pub const MENU_DOCK: u32 = 80;
 
 /// Height of one line of the report view (points) and how often a running job is looked at (milliseconds).
 pub const REPORT_LINE_PT: f32 = 16.0;
@@ -230,6 +232,10 @@ pub struct Monitor {
     pub window_owners: HashSet<u32>,
     /// The window list should be asked for again; taken with `take_window_poll`.
     pub window_poll: bool,
+    /// What the Dock tile shows (View > Dock Icon).
+    pub dock_mode: DockMode,
+    /// A new Dock tile to send to the shell; taken with `take_dock_update`.
+    pub dock_update: Option<DockContent>,
     /// The app's storage folder, where the diagnostics archive is prepared.
     pub data_dir: PathBuf,
 }
@@ -267,6 +273,8 @@ impl Monitor {
             signal_sheet: None,
             window_owners: HashSet::new(),
             window_poll: false,
+            dock_mode: DockMode::Off,
+            dock_update: None,
             data_dir: PathBuf::new(),
         }
     }
@@ -295,6 +303,9 @@ impl Monitor {
             p.energy_avg = self.averages.mean(&p.name);
         }
         self.history.record(&snap);
+        if self.dock_mode != DockMode::Off {
+            self.dock_update = Some(model::dock_content(self.dock_mode, &snap, &self.history));
+        }
         self.window_poll = self.filter == Filter::Windowed;
         self.snapshot = Some(snap);
         self.rebuild();
@@ -478,6 +489,23 @@ impl Monitor {
         self.scroll.jump_top();
         self.sync_scans();
         self.rebuild();
+    }
+
+    /// View > Dock Icon. A change puts the new tile (or an empty one, for the plain icon) up for the app layer.
+    pub fn set_dock_mode(&mut self, mode: DockMode) {
+        if self.dock_mode == mode {
+            return;
+        }
+        self.dock_mode = mode;
+        self.dock_update = Some(match &self.snapshot {
+            Some(snap) => model::dock_content(mode, snap, &self.history),
+            None => DockContent::cleared(),
+        });
+    }
+
+    /// Hands the app layer the Dock tile to show, once.
+    pub fn take_dock_update(&mut self) -> Option<DockContent> {
+        self.dock_update.take()
     }
 
     /// Hands the app layer the request for a fresh window list, once.
@@ -1124,6 +1152,23 @@ mod tests {
         with_rows(&mut m, vec![proc(1, 0, "init"), proc(12, 1, "other")]);
         assert_eq!(m.filter, Filter::All);
         assert_eq!(m.rows.len(), 2);
+    }
+
+    #[test]
+    fn the_dock_tile_follows_the_mode_and_clears_with_it() {
+        let mut m = Monitor::new(800.0, 600.0);
+        assert_eq!(m.take_dock_update(), None);
+        m.set_dock_mode(DockMode::Off);
+        assert_eq!(m.take_dock_update(), None, "no change, nothing to send");
+        m.set_dock_mode(DockMode::Cpu);
+        assert_eq!(m.take_dock_update(), Some(DockContent::cleared()), "no reading yet");
+        with_rows(&mut m, vec![proc(1, 0, "init")]);
+        m.set_dock_mode(DockMode::Memory);
+        let content = m.take_dock_update().expect("a tile");
+        assert!(content.badge.ends_with('%'));
+        assert!(content.fraction.is_some());
+        m.set_dock_mode(DockMode::Off);
+        assert_eq!(m.take_dock_update(), Some(DockContent::cleared()));
     }
 
     #[test]

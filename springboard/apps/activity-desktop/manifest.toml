@@ -7,5 +7,5 @@ min_shell = "0.5.4"
 summary = "Shows the processes and the CPU, memory, energy, disk and network use of this machine, and quits your own processes."
 category = "Utilities"
 architecture = "x86_64-linux"
-permissions = ["documents"]
+permissions = ["documents", "notifications"]
 window = "full-size"
