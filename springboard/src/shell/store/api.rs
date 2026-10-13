@@ -30,6 +30,8 @@ pub struct StoreApp {
     pub min_shell: String,
     /// `"app"` (default) or `"system"`
     pub kind: String,
+    /// the SDK protocol the package was built against (`sdk_protocol` in the catalogue); 0 when the entry does not say
+    pub sdk_protocol: u32,
     /// release notes, newest first (empty for entries the server has no notes for)
     pub changelog: Vec<Release>,
     /// the price in the store's currency; `None` for a free app (and for an entry that gives no currency)
@@ -88,6 +90,12 @@ impl StoreApp {
         Kind::of(&self.kind) == Kind::System
     }
 
+    /// Whether this package can run on a shell speaking SDK protocol `shell`. An entry that does not say which
+    /// protocol it was built for (0) is given the benefit of the doubt.
+    pub fn runs_on(&self, shell: u32) -> bool {
+        self.sdk_protocol == 0 || self.sdk_protocol == shell
+    }
+
     /// A paid app: the store's price is above zero. The shell has no way to buy one yet, so it is never installed.
     pub fn is_paid(&self) -> bool {
         self.price.as_ref().is_some_and(|p| p.minor > 0)
@@ -142,6 +150,7 @@ pub fn parse_catalog(text: &str) -> Result<Vec<StoreApp>, String> {
             package,
             min_shell: a.str_field("min_shell").unwrap_or_else(|| "0.0.0".into()),
             kind: a.str_field("kind").unwrap_or_else(|| "app".into()),
+            sdk_protocol: a.get("sdk_protocol").and_then(|p| p.as_u64()).and_then(|p| u32::try_from(p).ok()).unwrap_or(0),
             changelog: parse_changelog(a.get("changelog")),
             price: parse_price(a),
             age_rating: age_rating_of(&a.str_field("age_rating").unwrap_or_default()),
@@ -178,9 +187,14 @@ pub fn update_available(installed: &str, store: &str) -> bool {
     matches!((parse_semver(installed), parse_semver(store)), (Some(i), Some(s)) if s > i)
 }
 
-/// The installed apps that have a newer store version; services update silently and are left out.
+/// The installed apps that have a newer store version this shell can run; services update silently and are left out.
 pub fn updates<'a>(catalog: &'a [StoreApp], installed: &[InstalledApp]) -> Vec<&'a StoreApp> {
-    catalog.iter().filter(|s| !s.is_service() && installed.iter().any(|i| i.id == s.id && update_available(&i.version, &s.version))).collect()
+    updates_for(catalog, installed, bifrost_proto::SDK_VERSION)
+}
+
+/// `updates` for a shell speaking SDK protocol `shell`: a newer version built for another protocol is no update.
+pub fn updates_for<'a>(catalog: &'a [StoreApp], installed: &[InstalledApp], shell: u32) -> Vec<&'a StoreApp> {
+    catalog.iter().filter(|s| !s.is_service() && s.runs_on(shell) && installed.iter().any(|i| i.id == s.id && update_available(&i.version, &s.version))).collect()
 }
 
 /// The packages to install or update in the background: every `kind = "system"`, `"system-app"` or `"service"` entry
@@ -189,7 +203,7 @@ pub fn system_plan<'a>(catalog: &'a [StoreApp], installed: &[InstalledApp], shel
     let have = parse_semver(shell).unwrap_or((0, 0, 0));
     catalog
         .iter()
-        .filter(|s| s.is_preinstalled() && parse_semver(&s.min_shell).is_some_and(|m| m <= have))
+        .filter(|s| s.is_preinstalled() && s.runs_on(bifrost_proto::SDK_VERSION) && parse_semver(&s.min_shell).is_some_and(|m| m <= have))
         .filter(|s| match installed.iter().find(|i| i.id == s.id) {
             Some(i) => update_available(&i.version, &s.version),
             None => true,
@@ -309,6 +323,24 @@ mod tests {
         let mk = |v: &str| InstalledApp { id: "is.olibuijr.calc".into(), name: "Calc".into(), version: v.into(), ..Default::default() };
         assert_eq!(updates(&apps, &[mk("1.1.0")]).len(), 1);
         assert!(updates(&apps, &[mk("1.2.0")]).is_empty() && updates(&apps, &[]).is_empty());
+    }
+
+    #[test]
+    fn sdk_protocol_is_read_and_decides_whether_a_package_runs() {
+        let text = format!(
+            r#"{{"apps":[{{"id":"a","name":"A","version":"1.0.0","sha256":"{SUM}","package":"/p","sdk_protocol":1}},{{"id":"b","name":"B","version":"1.0.0","sha256":"{SUM}","package":"/q","sdk_protocol":2}},{{"id":"c","name":"C","version":"1.0.0","sha256":"{SUM}","package":"/r"}}]}}"#
+        );
+        let apps = parse_catalog(&text).unwrap();
+        assert_eq!(apps.iter().map(|a| a.sdk_protocol).collect::<Vec<_>>(), [1, 2, 0]);
+        assert_eq!(apps.iter().map(|a| a.runs_on(2)).collect::<Vec<_>>(), [false, true, true], "unknown is given the benefit of the doubt");
+    }
+
+    #[test]
+    fn updates_skip_versions_built_for_another_protocol() {
+        let mk = |p: u32| StoreApp { id: "a".into(), version: "2.0.0".into(), sdk_protocol: p, ..Default::default() };
+        let have = [InstalledApp { id: "a".into(), version: "1.0.0".into(), ..Default::default() }];
+        assert!(updates_for(&[mk(1)], &have, 2).is_empty());
+        assert_eq!(updates_for(&[mk(2)], &have, 2).len(), 1);
     }
 
     #[test]
