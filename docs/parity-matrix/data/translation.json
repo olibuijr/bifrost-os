@@ -10,9 +10,9 @@
     {
       "feature": "System translation popover",
       "apple": "translationPresentation(isPresented:text:attachmentAnchor:arrowEdge:replacementAction:)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no SDK popover that translates a selection in place; the triage pointer to springboard/src/shell/browser/ is wrong, those hits are geometric translate() transforms in tiles.rs and values.rs, not text translation"
+      "bifrost": "springboard/ui/src/translation_popover.rs, springboard/ui/src/translation.rs",
+      "status": "partial",
+      "note": "built on parity/team-a-05; not yet verified on Midget. Pure popover model: presentation checks the language pair, the engine result is recorded, and a finished translation can be written back. BifrOSt has no translation engine, so the popover cannot translate until a language service exists."
     },
     {
       "feature": "Translation session and tasks",
@@ -55,6 +55,7 @@
     "No system translation popover or inline translate action for selected text.",
     "No language-pair availability or download-status query (LanguageAvailability).",
     "No translation error model (TranslationError).",
-    "Locale data covers only en and is, so even the related localization layer lacks the language pairs a translation feature would need (docs/bifrost-ui.md, Locale gaps)."
+    "Locale data covers only en and is, so even the related localization layer lacks the language pairs a translation feature would need (docs/bifrost-ui.md, Locale gaps).",
+    "No translation engine: the popover model takes results from the caller and no language pack ships"
   ]
 }

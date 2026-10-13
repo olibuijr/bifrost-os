@@ -64,3 +64,11 @@ Both modules have unit tests (`#[cfg(test)] mod tests`).
 
 Not built or run in this stage, as the task requires. The next stage builds and tests the crates.
 Owner-rule check: `python3 tools/check-names.py` exits 0 with no hits.
+
+## System translation popover (team A5)
+
+`springboard/ui/src/translation_popover.rs` models `translationPresentation(isPresented:text:attachmentAnchor:arrowEdge:replacementAction:)`
+as a `Popover` value. `present` refuses blank text and a language pair that `LanguageAvailability::check_session` rejects,
+so a pair that is not installed never shows the popover. `finish` records the engine result, `replace` returns the
+translated text only for a finished translation, and `dismiss` drops a late result. The engine is not in BifrOSt yet, so
+the caller supplies the result. Built on parity/team-a-05; not yet verified on Midget.
