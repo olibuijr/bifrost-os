@@ -12,10 +12,9 @@
 //!   filters by any text of the contact. Answers only the contacts the app may read, sorted by name. Without a
 //!   read grant it is an error.
 //! - `save {add?, update?, delete?}` changes the book and returns `{added: [id, ...]}`, the ids the new contacts got.
-//!   `add` and `update` hold records of the fields above (`update` also needs the contact `id`; its fields replace
-//!   the contact's). `delete` holds `{id}` objects. Only full access writes: a limited grant is read-only. The whole
+//!   `add` and `update` hold records of the fields above (`update` also needs the contact `id` and changes only the
+//!   fields it names; `null` clears one). `delete` holds `{id}` objects. Only full access writes: a limited grant is read-only. The whole
 //!   call applies or none of it does, and the shell stores the book only when it succeeds.
-//!   read grant it is an error.
 //!
 //! The store holds one name per contact: the last word of it is the family name and the rest is the given name. The
 //! grants live per shell thread (thread-local, like the `privacy` service), so they reset when the shell restarts.
@@ -98,8 +97,8 @@ fn keys_of(params: &Json) -> Result<Keys, String> {
     Keys::new(&keys).map_err(|e| format!("{e:?}"))
 }
 
-/// A record from a `save` call: each name must be a known field (or `id`), holding text or a list of text. `null` is
-/// no value. The `id` is 0 when the call names none.
+/// A record from a `save` call: each name must be a known field (or `id`), holding text or a list of text. `null`
+/// clears the field. The `id` is 0 when the call names none.
 fn record_of_json(v: &Json) -> Result<Record, String> {
     let Json::Obj(fields) = v else {
         return Err("a contact is an object of fields".into());
@@ -112,7 +111,7 @@ fn record_of_json(v: &Json) -> Result<Record, String> {
         }
         let key = Key::from_name(name).ok_or_else(|| format!("no contact field {name}"))?;
         let value = match value {
-            Json::Null => continue,
+            Json::Null => Value::Text(String::new()),
             Json::Str(text) => Value::Text(text.clone()),
             Json::Arr(items) => Value::List(
                 items
@@ -141,18 +140,24 @@ fn value_of(record: &Record, key: Key) -> Result<String, String> {
     }
 }
 
-/// The contact a record describes. An update keeps the flags and label rows of the contact it replaces (`base`).
+/// The contact a record describes. An update (`base`) changes only the fields the record names, as an update in a
+/// save request writes only the keys it sets, and keeps the flags and label rows. The book stores one name: its last
+/// word is the family name and the rest the given name.
 fn contact_of(id: u64, record: &Record, base: Option<&Contact>) -> Result<Contact, String> {
-    let given = value_of(record, Key::GivenName)?;
-    let family = value_of(record, Key::FamilyName)?;
+    let field = |key: Key, kept: &str| -> Result<String, String> {
+        if record.get(key).is_some() { value_of(record, key) } else { Ok(kept.to_string()) }
+    };
+    let (kept_given, kept_family) = base.map_or(("", ""), |c| c.name.rsplit_once(' ').unwrap_or(("", c.name.as_str())));
+    let given = field(Key::GivenName, kept_given)?;
+    let family = field(Key::FamilyName, kept_family)?;
     let contact = Contact {
         id,
         name: [given, family].into_iter().filter(|part| !part.is_empty()).collect::<Vec<_>>().join(" "),
-        company: value_of(record, Key::Organization)?,
-        phone: value_of(record, Key::Phones)?,
-        email: value_of(record, Key::Emails)?,
-        address: value_of(record, Key::Address)?,
-        notes: value_of(record, Key::Note)?,
+        company: field(Key::Organization, base.map_or("", |c| &c.company))?,
+        phone: field(Key::Phones, base.map_or("", |c| &c.phone))?,
+        email: field(Key::Emails, base.map_or("", |c| &c.email))?,
+        address: field(Key::Address, base.map_or("", |c| &c.address))?,
+        notes: field(Key::Note, base.map_or("", |c| &c.notes))?,
         favorite: base.is_some_and(|c| c.favorite),
         labels: base.map_or([0; 3], |c| c.labels),
     };
@@ -448,6 +453,21 @@ mod tests {
         assert_eq!(next[1].email, "g@x");
         assert_eq!(next[1].phone, "");
         assert!(next[1].favorite);
+    }
+
+    #[test]
+    fn an_update_keeps_the_fields_it_does_not_name_and_null_clears_one() {
+        let id = "is.example.contacts-save-partial";
+        answer_prompt(id, Choice::All).unwrap();
+        let edit = obj(&[("update", Json::Arr(vec![obj(&[("id", Json::Num(1.0)), ("emails", texts(&["ada@new"])), ("note", Json::Null)])]))]);
+        let (_, next) = apply_save(id, &edit, &book()).unwrap();
+        assert_eq!(next[0].name, "Ada Lovelace");
+        assert_eq!(next[0].phone, "+354 555 0100");
+        assert_eq!(next[0].email, "ada@new");
+        assert_eq!(next[0].notes, "");
+        let rename = obj(&[("update", Json::Arr(vec![obj(&[("id", Json::Num(1.0)), ("given_name", text("Augusta Ada"))])]))]);
+        let (_, next) = apply_save(id, &rename, &book()).unwrap();
+        assert_eq!(next[0].name, "Augusta Ada Lovelace");
     }
 
     #[test]
