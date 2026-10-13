@@ -95,9 +95,9 @@
    "feature": "Rename / delete / sort albums",
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Edit Title; Sort > By Custom Order / By Name",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:616",
+   "note": "Album picker rows: Delete Album (later albums move down, albums.rs delete_album_writes) and Sort Albums (creation order or by name, albums.rs album_order), tested. Rename needs a text field in the touch shell and is not done.",
    "wire": "Add rename (TextField) and delete rows to the album menu plus sort by name; persist in albums.rs"
   },
   {
@@ -339,8 +339,8 @@
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > Play Slideshow; IPXSlideshowSettings*.nib",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/slideshow.rs:1",
-   "note": "plays; no theme, music or timing settings",
+   "bifrost": "springboard/src/shell/photos/slideshow.rs:41",
+   "note": "plays; the album picker's Slideshow Slide row sets seconds per slide (2, 4, 6, 10; slideshow.rs with_seconds, remembered). No theme or music options yet.",
    "wire": "Add a slideshow options sheet (seconds per slide, transition, music) before start at mod.rs:1404"
   },
   {
