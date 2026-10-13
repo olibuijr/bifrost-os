@@ -79,7 +79,8 @@ pub fn units(indices: &[usize], groups: &[u32]) -> Vec<Vec<usize>> {
         if g == 0 {
             out.push(vec![i]);
         } else if let Some(at) = seen.iter().position(|&s| s == g) {
-            out[out.iter().position(|u| groups.get(u[0]).copied() == Some(g)).unwrap_or(at)].push(i);
+            let k = out.iter().position(|u| groups.get(u[0]).copied() == Some(g)).unwrap_or(at);
+            out[k].push(i);
         } else {
             seen.push(g);
             out.push(vec![i]);

@@ -808,11 +808,6 @@ impl Freeform {
         self.move_units(ui, |boxes| arrange::distribute_offsets(boxes, horizontal));
     }
 
-    /// The open board's title.
-    pub fn board_title(&self) -> &str {
-        self.boards.current_title()
-    }
-
     /// Every board as (id, title, open).
     pub fn board_entries(&self) -> Vec<(u32, String, bool)> {
         self.boards.entries().iter().map(|e| (e.id, e.title.clone(), e.id == self.boards.current())).collect()

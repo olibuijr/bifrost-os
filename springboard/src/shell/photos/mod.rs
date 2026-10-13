@@ -2101,16 +2101,14 @@ impl Photos {
         (x, y + h * (self.menu_albums().len() + k) as f32, w, h)
     }
 
+    #[cfg(test)]
     fn extra_row_of(&self, ui: &Ui, target: Target) -> (f32, f32, f32, f32) {
         let k = self.extra_rows().iter().position(|&t| t == target).unwrap_or(0);
         self.extra_row(ui, k)
     }
 
-    fn new_album_row(&self, ui: &Ui) -> (f32, f32, f32, f32) {
-        self.extra_row_of(ui, Target::NewAlbum)
-    }
-
     /// The picker's sort row, below the albums and the New Album row.
+    #[cfg(test)]
     fn sort_row(&self, ui: &Ui) -> (f32, f32, f32, f32) {
         self.extra_row_of(ui, Target::SortOrder)
     }

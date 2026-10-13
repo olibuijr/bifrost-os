@@ -62,7 +62,6 @@ enum What {
     Act(Act),
     Row(u32),
     Search,
-    Nothing,
 }
 
 #[derive(Clone, Debug)]
@@ -588,7 +587,6 @@ impl Window {
             What::Search => {
                 self.focused = true;
             }
-            What::Nothing => {}
         }
         self.maps.persist();
         self.dirty = true;
@@ -995,7 +993,8 @@ impl Window {
         {
             let side_px = (side * p) as usize;
             let w = s.w.saturating_sub(side_px);
-            let mut d = Surface { w, h: s.h, stride: s.stride, px: &mut s.px[side_px.min(s.px.len())..], y0: s.y0 };
+            let start = side_px.min(s.px.len());
+            let mut d = Surface { w, h: s.h, stride: s.stride, px: &mut s.px[start..], y0: s.y0 };
             self.draw_map(&mut d, ui, side);
             self.draw_bar(&mut d, ui);
         }
@@ -1143,7 +1142,8 @@ impl Window {
 
     fn draw_bar(&mut self, d: &mut Surface, ui: &Ui) {
         let p = self.pt();
-        widgets::toolbar_band(d, ui, rect(0.0, 0.0, d.w as f32 / p, UNIFIED_BAR_PT));
+        let bar = rect(0.0, 0.0, d.w as f32 / p, UNIFIED_BAR_PT);
+        widgets::toolbar_band(d, ui, bar);
         let pressed = self.pressed.and_then(|id| self.buttons(ui).into_iter().find(|b| b.id == id)).and_then(|b| {
             let table = bar_table();
             match b.what {
