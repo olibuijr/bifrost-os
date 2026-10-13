@@ -24,6 +24,8 @@ pub(crate) enum JobKind {
     /// Duplicate: a taken name keeps both, without asking.
     Duplicate,
     Trash,
+    /// Empty Trash: every item in Recently Deleted goes for good.
+    EmptyTrash,
     Compress(archive::Format),
     Extract,
 }
@@ -166,6 +168,26 @@ pub(crate) fn extract_now(archive: &Path, dest: &Path, cancel: &AtomicBool, tx: 
     report
 }
 
+/// Deletes each item in Recently Deleted for good (Empty Trash), then drops their origin records.
+pub(crate) fn delete_now(sources: &[PathBuf], bin: &Path, cancel: &AtomicBool, tx: &Feed<Event>) -> Report {
+    let mut report = Report::default();
+    for (n, path) in sources.iter().enumerate() {
+        if cancel.load(Ordering::Relaxed) {
+            report.cancelled = true;
+            break;
+        }
+        let current = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let _ = tx.send(Event::Progress(Progress { items_done: n, items_total: sources.len(), current, ..Default::default() }));
+        match crate::coordinate::writing(path, || fs::delete(path)) {
+            Ok(Ok(())) => report.done.push(path.clone()),
+            Ok(Err(e)) => report.failed.push((path.clone(), batch::friendly(&e))),
+            Err(e) => report.failed.push((path.clone(), crate::coordinate::message(&e))),
+        }
+    }
+    prune_origins(bin);
+    report
+}
+
 /// Moves each item into the Recently Deleted folder, recording where it came from.
 pub(crate) fn trash_now(sources: &[PathBuf], bin: &Path, cancel: &AtomicBool, tx: &Feed<Event>) -> Report {
     let mut report = Report::default();
@@ -226,6 +248,7 @@ impl Files {
                 JobKind::Transfer(op) => transfer_now(op, &s, &d, &flag, &tx, Some(&answer_rx)),
                 JobKind::Duplicate => transfer_now(Op::Copy, &s, &d, &flag, &tx, None),
                 JobKind::Trash => trash_now(&s, &bin, &flag, &tx),
+                JobKind::EmptyTrash => delete_now(&s, &bin, &flag, &tx),
                 JobKind::Compress(format) => compress_now(&s, &d, format, &flag, &tx),
                 JobKind::Extract => extract_now(&s[0], &d, &flag, &tx),
             };
@@ -254,6 +277,7 @@ impl Files {
             JobKind::Duplicate => "duplicated",
             JobKind::Transfer(Op::Move) => "moved",
             JobKind::Trash => "moved to the Trash",
+            JobKind::EmptyTrash => "deleted",
             JobKind::Compress(_) => "compressed",
             JobKind::Extract => "extracted",
         };

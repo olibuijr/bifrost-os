@@ -56,6 +56,8 @@ pub(crate) const MENU_COMPRESS_TGZ: u32 = 26;
 
 pub(crate) const MENU_COMPRESS_TXZ: u32 = 27;
 
+pub(crate) const MENU_EMPTY_TRASH: u32 = 28;
+
 impl Files {
     /// Right-click: selects the item under the pointer and opens the item or folder menu.
     pub(crate) fn context_menu_at(&mut self, ctx: &Ctx, x: f32, y: f32) {
@@ -69,7 +71,7 @@ impl Files {
             self.selection.clear();
         }
         self.last_click=None;
-        let items = if hit.is_some() {
+        let mut items = if hit.is_some() {
             let in_bin = self.in_bin();
             let single = self.selection.len() == 1;
             vec![
@@ -109,6 +111,9 @@ impl Files {
                 ContextItem { id: MENU_STATUS_BAR, label: if self.status_bar { "Hide Status Bar".into() } else { "Show Status Bar".into() }, enabled: true },
             ]
         };
+        if hit.is_none() && self.in_bin() {
+            items.push(ContextItem { id: MENU_EMPTY_TRASH, label: "Empty Trash…".into(), enabled: true });
+        }
         ctx.context_menu(x, y, items);
     }
     /// Runs a context-menu choice. Returns false for an id that is not ours.
@@ -134,6 +139,7 @@ impl Files {
             MENU_NEW_FOLDER => self.new_folder(),
             MENU_HIDDEN => self.toggle_hidden(),
             MENU_PUT_BACK => self.put_back(),
+            MENU_EMPTY_TRASH => self.ask_empty_trash(),
             MENU_SIDEBAR => self.toggle_sidebar(),
             MENU_STATUS_BAR => self.toggle_status_bar(),
             MENU_GALLERY => self.set_gallery(),

@@ -1,3 +1,7 @@
+## 1.26.0 — 2026-10-13
+
+- Empty Trash: the background menu in Recently Deleted offers Empty Trash…, which asks first in a sheet. Return or the red Empty Trash button deletes every item for good as a job (the bar shows progress); Escape or Cancel closes the sheet. The sheet takes the keys and touches while it is open.
+
 ## 1.25.0 — 2026-10-13
 
 - Tabs: New Tab (⌘T) opens a tab at the open folder with its own history; ⌘W closes the open tab (the last tab stays); Ctrl+Tab and Ctrl+Shift+Tab step through tabs. Tags moves from T to Shift+T. The tab strip is not drawn yet, so tabs are reached by the keys only.
