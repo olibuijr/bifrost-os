@@ -17,37 +17,37 @@
     {
       "feature": "Per-session input controller",
       "apple": "IMKInputController",
-      "bifrost": "springboard/ui/src/input_method.rs (InputController)",
+      "bifrost": "springboard/ui/src/input_method.rs (InputController); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
       "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No base class that receives one controller per client input session."
+      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No base class that receives one controller per client input session. Sprint 2: InputController trait and ComposingController over a Composer, TextClient (set_marked_text, insert_text), new_controller(source id). Host tests only; not wired into kb_input.rs or tested on Midget."
     },
     {
       "feature": "Marked text (composition) set and clear",
       "apple": "IMKServerInput setMarkedText / unmarkText (via inputText and handle)",
-      "bifrost": "springboard/proto/src/lib.rs ToApp::SetMarkedText (60), ToApp::UnmarkText (61); springboard/ui/src/text.rs TextBuffer::has_marked_text; springboard/sdk/src/view/forms.rs draws marked text underlined; wired: springboard/src/shell/textfield.rs (set_marked, unmark, underline in draw)",
+      "bifrost": "springboard/proto/src/lib.rs ToApp::SetMarkedText (60), ToApp::UnmarkText (61); springboard/ui/src/text.rs TextBuffer::has_marked_text; springboard/sdk/src/view/forms.rs draws marked text underlined; wired: springboard/src/shell/textfield.rs (set_marked, unmark, underline in draw); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
       "status": "partial",
-      "note": "Only the on-screen keyboard can drive composition, and apps/keyboard does not yet send Preedit (docs/bifrost-ui.md section Text input client). Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Only the on-screen keyboard can drive composition, and apps/keyboard does not yet send Preedit (docs/bifrost-ui.md section Text input client). Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Sprint 2: Composers report marked text through TextClient::set_marked_text(text, selection, replacement); an empty string clears it. Host tests only."
     },
     {
       "feature": "Commit composition",
       "apple": "IMKServerInput commitComposition, IMKServerInput unmark with commit",
-      "bifrost": "springboard/proto/src/lib.rs ToApp::UnmarkText { commit }; springboard/src/shell/keyboard.rs Composition::Unmark; wired: springboard/src/shell/textfield.rs (unmark with commit)",
+      "bifrost": "springboard/proto/src/lib.rs ToApp::UnmarkText { commit }; springboard/src/shell/keyboard.rs Composition::Unmark; wired: springboard/src/shell/textfield.rs (unmark with commit); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
       "status": "partial",
-      "note": "Commit and cancel work at the field. No commitComposition request from a provider. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Commit and cancel work at the field. No commitComposition request from a provider. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Sprint 2: commit_composition inserts the marked text and clears it; cancel_composition drops it; space, digits and punctuation commit then insert. Host tests only."
     },
     {
       "feature": "Key binding and text events to the input method",
       "apple": "IMKServerInput inputText(_:client:), didCommand(by:client:), inputText(_:key:modifiers:client:), handle(_:client:)",
-      "bifrost": "springboard/ui/src/input_method.rs (Event; wired: springboard/src/shell/compose_window.rs (compose_search_key); springboard/src/shell/hwkeys.rs (hw_type Search arm); springboard/ui/src/compose_method.rs (Compose::key)",
+      "bifrost": "springboard/ui/src/input_method.rs (Event; wired: springboard/src/shell/compose_window.rs (compose_search_key); springboard/src/shell/hwkeys.rs (hw_type Search arm); springboard/ui/src/compose_method.rs (Compose::key); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
       "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Key events reach the app's own text field directly. Nothing routes them through a provider first, and there is no didCommand-style hand-off. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Key events reach the app's own text field directly. Nothing routes them through a provider first, and there is no didCommand-style hand-off. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Sprint 2: input_text(string, client) and handle(Key, client) route chars, Backspace, Return, Tab and Escape; modifiers and didCommand are not modelled. Host tests only."
     },
     {
       "feature": "Composed, original string and candidate queries",
       "apple": "IMKServerInput composedString, originalString, candidates",
-      "bifrost": "springboard/ui/src/input_method.rs (composed_string; wired: springboard/src/shell/compose_window.rs (compose_open, compose_finish); springboard/ui/src/imsession.rs (update, set_candidates, select_candidate, commit)",
+      "bifrost": "springboard/ui/src/input_method.rs (composed_string; wired: springboard/src/shell/compose_window.rs (compose_open, compose_finish); springboard/ui/src/imsession.rs (update, set_candidates, select_candidate, commit); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
       "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The app reports its text and marked range, but there is no provider-side query for candidates. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The app reports its text and marked range, but there is no provider-side query for candidates. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Sprint 2: composed_string is answered by the composers (Hangul 2-set, Telex, VNI); original_string and candidates are not (no Hanja candidates)."
     },
     {
       "feature": "Candidates window",

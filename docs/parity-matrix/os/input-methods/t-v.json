@@ -123,11 +123,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/src/shell/input_methods/telex.rs",
+   "status": "partial",
+   "note": "Pure-Rust Telex and VNI composers: marks, bar, tones with modern placement, tone removal, backspace replay. No Simple Telex or VIQR, no syllable validation. Host tests only; needs a Midget check and wiring in kb_input.rs.",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   }
  ]
 }

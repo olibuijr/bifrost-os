@@ -2066,3 +2066,23 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## InputMethodKit: composing input methods (`springboard/src/shell/input_methods`)
+
+Provider side of text input, pure Rust, no fcitx. `InputController` mirrors the reference controller:
+`input_text(string, client)` (`inputText(_:client:)`), `handle(Key, client)` (`handle(_:client:)`),
+`commit_composition(client)`, `composed_string()`, `cancel_composition(client)`. `TextClient` is the text field
+side (`set_marked_text(text, selection, replacement)`, `insert_text(text, replacement)`); an empty marked string
+clears the marking. `ComposingController<C: Composer>` turns a small state machine into a controller:
+a non-composing key (space, digit, punctuation) commits the marked text and is then inserted; when idle,
+`input_text` returns false so the client handles the key.
+
+Sources (`sources()`, `new_controller(id)`): `bifrost.inputmethod.Korean.2SetKorean` (`HangulComposer`),
+`bifrost.inputmethod.VietnameseIM.VietnameseTelex` and `...VietnameseVNI` (`VietnameseComposer`).
+Hangul: 2-set keys incl. shifted Q W E R T O P, compound vowels and finals, the final moves on a following vowel,
+backspace decomposes. Vietnamese: marks (circumflex, horn, breve, bar), five tones with modern placement,
+tone removal (`z` or `0`), repeated keys revert, backspace replays the remaining keys.
+
+Gaps: not wired into `kb_input.rs` (follow-up: look a controller up by source id and route keys), ranges count
+characters rather than UTF-16 units, no candidates window, no Hanja conversion, no ancient jamo, no Simple Telex
+or VIQR, no modifier/command events. Host tests only; parity rows stay partial until a Midget check.
