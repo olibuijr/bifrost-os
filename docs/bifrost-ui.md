@@ -688,10 +688,18 @@ Gaps (not matched yet): destinations are app windows only; the desktop backgroun
 and Files' own desktop icons are not destinations, and shell chrome (Spotlight, menus) cannot be dragged from. No Escape to
 cancel, no modifier keys choosing copy / move / link (the destination decides), no spring-loaded folders, no auto-scroll, no
 slide-back animation, one drag image (no per-item image components, no `draggingFormation`, no image swap on `Entered`).
-`NSPasteboardItem` data providers are not modelled: an item is one payload offered as several type names, and promised files
-(`NSFilePromiseProvider`) and image or rich-text data have no payload kind yet. Drags between an SDK window and a native Wayland
+Promised data lives in-process (see "Promised pasteboard data"); the drag wire still has no promised-file payload kind. Drags between an SDK window and a native Wayland
 or X11 window (the `text/uri-list` portal) are not bridged. The preview is drawn only where the shell composites on the CPU
 path; on the retained GPU window path it may not show until the next full repaint.
+
+### Promised pasteboard data (AppKit)
+
+`bifrost_app::pasteboard_promise` mirrors `NSPasteboardItemDataProvider`: `PasteboardItem::set_data_provider(provider, types)`
+lists promised types without bytes, the first `data_for_type` calls `provide_data` once and caches it, and a provider that
+returns `None` gives `PromiseError::NoData`. `PromiseBoard` adds `declare_types(types, owner)` with `PasteboardTypeOwner`,
+and `clear_contents` fires `finished_with_data_provider` / `changed_owner`. `FilePromiseProvider` +
+`FilePromiseProviderDelegate` (`file_name_for_type`, `write_promise_to`) write a promised file into a destination dir.
+Gap: promises are not carried over the wire to other apps yet.
 
 ## Open and save panels (`NSOpenPanel` / `NSSavePanel`, 0.4.81)
 

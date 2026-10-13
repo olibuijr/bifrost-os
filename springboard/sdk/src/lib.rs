@@ -124,6 +124,7 @@ pub mod usb_printer;
 pub mod pasteboard;
 pub mod pasteboard_item;
 pub mod pasteboard_types;
+pub mod pasteboard_promise;
 pub mod dnd;
 pub mod review;
 pub mod app_transaction;

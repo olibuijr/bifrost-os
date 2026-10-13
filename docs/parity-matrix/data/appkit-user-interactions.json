@@ -1,20 +1,82 @@
 {
-"framework":"AppKit (User Interactions)",
-"doc":"https://developer.apple.com/documentation/appkit",
-"macos_since":"10.0",
-"status":"partial",
-"bifrost":"bifrost_ui::{responder,keys,menu,gesture,focus,ax}, bifrost_app::dnd, springboard/src/shell/atspi/",
-"summary":"Responder chain, key equivalents, menus, gesture recognizers, typed drag and drop, dock badge and an AT-SPI accessibility bridge exist. Scroll wheel, hover and tracking areas, custom cursors, Dock menus and Touch Bar are missing.",
-"rea_evidence":"ev_c117807174d13fdfac5be6ad1bb26c6614adc9e640b17cb09120c645e24de789",
-"features":[
-{"feature":"Mouse, Keyboard, and Trackpad","apple":"NSEvent, NSResponder, key events, tracking areas, trackpad touches","bifrost":"springboard/ui/src/responder.rs, springboard/ui/src/keys.rs, springboard/ui/src/focus.rs","status":"partial","note":"responder chain, key combos and focus loop exist; app input is only Down/Move/Up/Cancel, no wheel, hover, tracking areas or nextKeyView (docs/bifrost-ui.md ~line 870)"},
-{"feature":"Menus, Cursors, and the Dock","apple":"NSMenu, NSMenuItem, NSCursor, NSDockTile, NSStatusItem","bifrost":"springboard/ui/src/menu.rs, springboard/ui/src/cursor.rs, springboard/ui/src/cursor_art.rs, springboard/src/shell/desktop_bar.rs, springboard/sdk/src/status_item.rs, springboard/src/shell/desktop_dock.rs","status":"partial","note":"menu bar, validation, key equivalents, status items and Dock badge (Ctx::set_badge) exist; NSCursor shapes (frameResize, columnResize, rowResize, move, rotate, zoom, disappearingItem, operationNotAllowed) exist as ui::cursor::Kind with layered outline/fill art in springboard/ui/src/cursor_art.rs (partial: not yet wired to the compositor, Midget check pending); no custom Dock tile content or Dock menu found"},
-{"feature":"Gestures","apple":"NSGestureRecognizer and subclasses (click, pan, magnification, rotation, press)","bifrost":"springboard/ui/src/gesture.rs, springboard/src/shell/gestures.rs","status":"partial","note":"recognizer state machines (tap, pan, long press and similar) exist as pure models; no trackpad magnify or rotate from the compositor to apps"},
-{"feature":"Touch Bar","apple":"NSTouchBar, NSTouchBarItem","bifrost":"none","status":"n/a","note":"Apple-only hardware"},
-{"feature":"Drag and Drop","apple":"NSDraggingSource, NSDraggingDestination, NSDraggingSession, NSPasteboard drag","bifrost":"springboard/sdk/src/dnd.rs, springboard/src/shell/dnd.rs","status":"partial","note":"typed drag and drop between apps (docs/bifrost-ui.md section 508); the view kit itself has no drag and drop (line ~873), so views need app glue"},
-{"feature":"Accessibility for AppKit","apple":"NSAccessibility protocols, roles, labels, announcements","bifrost":"springboard/ui/src/ax.rs, springboard/src/shell/atspi/mod.rs, springboard/src/shell/axmap.rs","status":"partial","note":"AT-SPI2 bridge with label/title/help, caret and selection, announcements; the Node is flat so nesting is reported only by ax_tree()"},
-{"feature":"NSPasteboard","apple":"NSPasteboard(name:), .general, .drag, .find, clearContents, writeObjects, pasteboardItems, availableType(from:), canReadItem, changeCount","bifrost":"springboard/sdk/src/pasteboard.rs","status":"partial","note":"named boards (app-local except general), multiple items, UTType-conforming reads; the shell wire is flat so only the first item of the general board reaches the shell; needs a Midget check"},
-{"feature":"NSPasteboardItem","apple":"NSPasteboardItem setData/setString/data(forType:)/types","bifrost":"springboard/sdk/src/pasteboard_item.rs","status":"partial","note":"typed representations per item with UTType conformance; no data providers or promised data; needs a Midget check"}
-],
-"gaps":["Scroll wheel, hover and tracking-area events for apps","Cursor art wired into the compositor with the pointer outline/fill colour setting","Dock tile custom content and Dock menu","Trackpad magnify and rotate gestures to apps","Drag and drop inside the retained view kit","Nested accessibility tree nodes"]
+ "framework": "AppKit (User Interactions)",
+ "doc": "https://developer.apple.com/documentation/appkit",
+ "macos_since": "10.0",
+ "status": "partial",
+ "bifrost": "bifrost_ui::{responder,keys,menu,gesture,focus,ax}, bifrost_app::dnd, springboard/src/shell/atspi/",
+ "summary": "Responder chain, key equivalents, menus, gesture recognizers, typed drag and drop, dock badge and an AT-SPI accessibility bridge exist. Scroll wheel, hover and tracking areas, custom cursors, Dock menus and Touch Bar are missing.",
+ "rea_evidence": "ev_c117807174d13fdfac5be6ad1bb26c6614adc9e640b17cb09120c645e24de789",
+ "features": [
+  {
+   "feature": "Mouse, Keyboard, and Trackpad",
+   "apple": "NSEvent, NSResponder, key events, tracking areas, trackpad touches",
+   "bifrost": "springboard/ui/src/responder.rs, springboard/ui/src/keys.rs, springboard/ui/src/focus.rs",
+   "status": "partial",
+   "note": "responder chain, key combos and focus loop exist; app input is only Down/Move/Up/Cancel, no wheel, hover, tracking areas or nextKeyView (docs/bifrost-ui.md ~line 870)"
+  },
+  {
+   "feature": "Menus, Cursors, and the Dock",
+   "apple": "NSMenu, NSMenuItem, NSCursor, NSDockTile, NSStatusItem",
+   "bifrost": "springboard/ui/src/menu.rs, springboard/ui/src/cursor.rs, springboard/ui/src/cursor_art.rs, springboard/src/shell/desktop_bar.rs, springboard/sdk/src/status_item.rs, springboard/src/shell/desktop_dock.rs",
+   "status": "partial",
+   "note": "menu bar, validation, key equivalents, status items and Dock badge (Ctx::set_badge) exist; NSCursor shapes (frameResize, columnResize, rowResize, move, rotate, zoom, disappearingItem, operationNotAllowed) exist as ui::cursor::Kind with layered outline/fill art in springboard/ui/src/cursor_art.rs (partial: not yet wired to the compositor, Midget check pending); no custom Dock tile content or Dock menu found"
+  },
+  {
+   "feature": "Gestures",
+   "apple": "NSGestureRecognizer and subclasses (click, pan, magnification, rotation, press)",
+   "bifrost": "springboard/ui/src/gesture.rs, springboard/src/shell/gestures.rs",
+   "status": "partial",
+   "note": "recognizer state machines (tap, pan, long press and similar) exist as pure models; no trackpad magnify or rotate from the compositor to apps"
+  },
+  {
+   "feature": "Touch Bar",
+   "apple": "NSTouchBar, NSTouchBarItem",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "Apple-only hardware"
+  },
+  {
+   "feature": "Drag and Drop",
+   "apple": "NSDraggingSource, NSDraggingDestination, NSDraggingSession, NSPasteboard drag",
+   "bifrost": "springboard/sdk/src/dnd.rs, springboard/src/shell/dnd.rs",
+   "status": "partial",
+   "note": "typed drag and drop between apps (docs/bifrost-ui.md section 508); the view kit itself has no drag and drop (line ~873), so views need app glue"
+  },
+  {
+   "feature": "Accessibility for AppKit",
+   "apple": "NSAccessibility protocols, roles, labels, announcements",
+   "bifrost": "springboard/ui/src/ax.rs, springboard/src/shell/atspi/mod.rs, springboard/src/shell/axmap.rs",
+   "status": "partial",
+   "note": "AT-SPI2 bridge with label/title/help, caret and selection, announcements; the Node is flat so nesting is reported only by ax_tree()"
+  },
+  {
+   "feature": "NSPasteboard",
+   "apple": "NSPasteboard(name:), .general, .drag, .find, clearContents, writeObjects, pasteboardItems, availableType(from:), canReadItem, changeCount",
+   "bifrost": "springboard/sdk/src/pasteboard.rs",
+   "status": "partial",
+   "note": "named boards (app-local except general), multiple items, UTType-conforming reads; the shell wire is flat so only the first item of the general board reaches the shell; needs a Midget check"
+  },
+  {
+   "feature": "NSPasteboardItem",
+   "apple": "NSPasteboardItem setData/setString/data(forType:)/types",
+   "bifrost": "springboard/sdk/src/pasteboard_item.rs",
+   "status": "partial",
+   "note": "typed representations per item with UTType conformance; no data providers or promised data; needs a Midget check"
+  },
+  {
+   "feature": "NSPasteboardItem data providers",
+   "apple": "NSPasteboardItemDataProvider, setDataProvider(_:forTypes:), declareTypes(_:owner:), NSFilePromiseProvider",
+   "bifrost": "springboard/sdk/src/pasteboard_promise.rs",
+   "status": "partial",
+   "note": "lazy in-process promised data, type owners and file promises; not yet carried over the wire to other apps"
+  }
+ ],
+ "gaps": [
+  "Scroll wheel, hover and tracking-area events for apps",
+  "Cursor art wired into the compositor with the pointer outline/fill colour setting",
+  "Dock tile custom content and Dock menu",
+  "Trackpad magnify and rotate gestures to apps",
+  "Drag and drop inside the retained view kit",
+  "Nested accessibility tree nodes"
+ ]
 }
