@@ -463,6 +463,7 @@ impl Photos {
         if !place.is_empty() {
             rows.push((DetailRow::CopyPlace, "Copy Location", String::new()));
         }
+        rows.push((DetailRow::CopyLink, "Copy Link", String::new()));
         rows
     }
 
@@ -500,6 +501,51 @@ impl Photos {
                     crate::shell::clipboard::set_text(&place);
                 }
                 self.sheet = None;
+            }
+            DetailRow::CopyLink => {
+                crate::shell::clipboard::set_text(&link::photo_url(&p.path));
+                self.sheet = None;
+            }
+        }
+    }
+
+    // --- links ---
+
+    /// Follows a `photos:` link: shows a picture, opens an album or runs a search. False when the link is not one of
+    /// ours or names something that is not there. While the library is still being read the link waits for it.
+    pub fn open_url(&mut self, ui: &Ui, url: &str) -> bool {
+        let Some(l) = link::parse(url) else { return false };
+        if self.scanning && l != link::Link::App {
+            self.pending_link = Some(l);
+            return true;
+        }
+        self.follow_link(ui, l)
+    }
+
+    /// Does what a link asks.
+    pub(super) fn follow_link(&mut self, ui: &Ui, l: link::Link) -> bool {
+        self.album_menu = false;
+        self.more_menu = false;
+        self.keywords_open = false;
+        self.dirty = true;
+        match l {
+            link::Link::App => true,
+            link::Link::Photo(path) => self.show(ui, &path),
+            link::Link::Album(name) => {
+                let want = name.to_lowercase();
+                let found = self.menu_albums().into_iter().find(|&a| self.album_title(a).to_lowercase() == want);
+                match found {
+                    Some(album) => {
+                        self.set_search(ui, "");
+                        self.select_album(ui, album);
+                        true
+                    }
+                    None => false,
+                }
+            }
+            link::Link::Search(text) => {
+                self.set_search(ui, &text);
+                true
             }
         }
     }
@@ -872,7 +918,7 @@ impl Photos {
         for (i, (kind, label, value)) in self.details_rows().into_iter().enumerate() {
             let cy = y + row * (i + 1) as f32 + row / 2.0;
             s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
-            if kind == DetailRow::CopyPlace {
+            if matches!(kind, DetailRow::CopyPlace | DetailRow::CopyLink) {
                 let color = if pressed == Some(Target::Detail(kind)) { crate::gfx::scale(BLUE, 140) } else { BLUE };
                 self.label(s, ui, label, 15.0, Weight::Regular, color, x + w / 2.0, cy);
                 continue;
@@ -1004,6 +1050,64 @@ mod tests {
         p.key(&ui, Out::Named("Undo"), 3300.0);
         assert!(p.menu_albums().contains(&Album::Smart(0)));
         assert_eq!(p.album_title(Album::Smart(0)), "Autumn");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn photos_links_show_a_picture_open_an_album_and_search() {
+        let (mut p, dir, ui) = photos("links", 4);
+        let target = p.photos()[2].clone();
+        // a picture
+        assert!(p.open_url(&ui, &link::photo_url(&target.path)));
+        assert_eq!(p.viewing().map(|q| q.path.clone()), Some(target.path.clone()));
+        p.viewer = None;
+        // an album, by name in any case
+        assert!(p.open_url(&ui, "photos://album/favorites"));
+        assert_eq!(p.album(), Album::Favorites);
+        assert!(p.open_url(&ui, &link::album_url("Recently Deleted")));
+        assert_eq!(p.album(), Album::Trash);
+        assert!(!p.open_url(&ui, "photos://album/No%20Such%20Album"));
+        assert_eq!(p.album(), Album::Trash, "an unknown album changes nothing");
+        // a search, which also leaves the album it was in
+        assert!(p.open_url(&ui, &link::search_url("img_0001")));
+        assert_eq!(p.search(), "img_0001");
+        assert_eq!(p.album(), Album::Trash, "the search stays in the open album");
+        p.select_album(&ui, Album::All);
+        assert_eq!(p.photos().len(), 1);
+        // not ours, or a picture that is not in the library
+        assert!(!p.open_url(&ui, "https://example.com/"));
+        assert!(!p.open_url(&ui, "photos://photo/no/such/picture.png"));
+        assert!(p.open_url(&ui, "photos:"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_link_that_arrives_during_the_first_scan_waits_for_it() {
+        let ui = crate::shell::tests::ui();
+        let dir = super::super::library::tests::scratch("link-wait");
+        let pics = dir.join("Pictures");
+        picture(&pics.join("IMG_0000.png"), 1_790_000_000);
+        picture(&pics.join("IMG_0001.png"), 1_790_086_400);
+        let mut p = Photos::new(&ui, 1200, 1920, dir.clone(), vec![pics.clone()], 0).unwrap();
+        assert!(p.scanning && p.photos().is_empty());
+        assert!(p.open_url(&ui, &link::photo_url(&pics.join("IMG_0001.png"))));
+        assert!(p.viewer.is_none(), "nothing to show yet");
+        pump_until(&mut p, &ui, |p| p.viewer.is_some());
+        assert_eq!(p.viewing().map(Photo::name), Some("IMG_0001.png".to_string()));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn copy_link_puts_a_link_to_the_open_photo_on_the_pasteboard() {
+        let _clip = crate::shell::clipboard::tests::exclusive();
+        let (mut p, dir, ui) = photos("copy-link", 2);
+        p.open_viewer(1);
+        let photo = p.photos()[1].clone();
+        open_details(&mut p, &ui, 1000.0);
+        detail_tap(&mut p, &ui, DetailRow::CopyLink, 1200.0);
+        assert_eq!(p.sheet, None);
+        let url = crate::shell::clipboard::text().expect("a link on the pasteboard");
+        assert_eq!(link::parse(&url), Some(link::Link::Photo(photo.path)));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

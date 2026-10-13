@@ -215,6 +215,15 @@ impl super::Shell {
                 if let super::AppId::External(slot) = def {
                     self.ext_send(slot as usize, &ToApp::Open { url: url.to_string() });
                 }
+                // a `photos:` link names a picture, an album or a search; the app follows it
+                if def == super::AppId::Photos {
+                    self.ensure_photos();
+                    if let Some(p) = self.photos.as_mut() {
+                        if !p.open_url(&self.ui, url) {
+                            return (WorkspaceStatus::NotFound, Vec::new());
+                        }
+                    }
+                }
                 (WorkspaceStatus::Ok, Vec::new())
             }
         }

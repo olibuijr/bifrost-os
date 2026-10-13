@@ -17,6 +17,7 @@ pub mod export;
 pub mod grid;
 pub mod import;
 pub mod library;
+pub mod link;
 pub mod meta;
 pub mod models;
 pub mod recipe;
@@ -233,6 +234,8 @@ pub enum DetailRow {
     Place,
     Taken,
     CopyPlace,
+    /// puts a `photos://` link to the picture on the pasteboard
+    CopyLink,
 }
 
 /// The edit mode's tool pages: a tab row picks one, and its sliders fill the rows below.
@@ -503,6 +506,8 @@ pub struct Photos {
     stack: Stack,
     /// the edit copied in the editor, for Paste Edits
     edit_clip: Option<Edit>,
+    /// a link that arrived while the library was still being read; it is followed once the scan lands
+    pending_link: Option<link::Link>,
     /// what the export sheet has chosen
     export: export::Options,
     /// the picker's second page is open
@@ -621,6 +626,7 @@ impl Photos {
             duplicates: vec![],
             stack: Stack::default(),
             edit_clip: None,
+            pending_link: None,
             export: export::Options::default(),
             more_menu: false,
             keywords_open: false,
@@ -1342,6 +1348,9 @@ impl Photos {
                     if !self.started {
                         self.started = true;
                         self.scroll.jump_to(f32::MAX);
+                    }
+                    if let Some(l) = self.pending_link.take() {
+                        self.follow_link(ui, l);
                     }
                 }
                 Done::Thumb { key, image } => {

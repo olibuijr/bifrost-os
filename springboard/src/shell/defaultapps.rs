@@ -33,7 +33,7 @@ pub const CATEGORIES: &[Category] = &[
 fn builtin(app: AppId, icon: &str) -> Option<Handler> {
     let h = Handler::new(icon);
     Some(match app {
-        AppId::Photos => h.opens("public.png", Rank::Owner).opens("public.jpeg", Rank::Owner),
+        AppId::Photos => h.opens("public.png", Rank::Owner).opens("public.jpeg", Rank::Owner).scheme("photos"),
         AppId::Files => h.opens("public.folder", Rank::Owner).opens("public.text", Rank::Alternate).opens("public.png", Rank::Alternate).opens("public.jpeg", Rank::Alternate).opens("public.audio", Rank::Alternate).opens("public.movie", Rank::Alternate),
         AppId::Browser => h.opens("public.html", Rank::Owner).opens("public.xml", Rank::Alternate).scheme("http").scheme("https"),
         AppId::Terminal => h.opens("public.shell-script", Rank::Alternate).opens("public.plain-text", Rank::None),
