@@ -59,6 +59,7 @@ mod server;
 mod sidebar;
 mod statusbar;
 mod tabs;
+mod empty_trash;
 mod system;
 mod toolbar;
 mod undo;
@@ -430,6 +431,10 @@ impl Files {
             return true;
         }
         if self.server_input(&input) {
+            self.update_controls();
+            return true;
+        }
+        if self.empty_trash_input(ctx, &input) {
             self.update_controls();
             return true;
         }

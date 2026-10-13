@@ -43,7 +43,7 @@ impl Files {
         }
         match (key, shift) {
             (14, false) => self.trash_selected(),  // Backspace
-            (14, true) => self.empty_trash(),      // Shift+Backspace: Empty Trash
+            (14, true) => self.ask_empty_trash(),  // Shift+Backspace: Empty Trash, after the confirmation sheet
             (28, false) => self.start_rename(),    // Return
             (46, false) => self.copy_selected(false), // C
             (45, false) => self.copy_selected(true),  // X

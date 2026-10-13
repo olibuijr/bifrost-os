@@ -71,7 +71,7 @@ impl Files {
             self.selection.clear();
         }
         self.last_click=None;
-        let items = if hit.is_some() {
+        let mut items = if hit.is_some() {
             let in_bin = self.in_bin();
             let single = self.selection.len() == 1;
             vec![
@@ -115,6 +115,9 @@ impl Files {
             }
             items
         };
+        if hit.is_none() && self.in_bin() {
+            items.push(ContextItem { id: MENU_EMPTY_TRASH, label: "Empty Trash…".into(), enabled: true });
+        }
         ctx.context_menu(x, y, items);
     }
     /// Runs a context-menu choice. Returns false for an id that is not ours.
@@ -137,10 +140,10 @@ impl Files {
             MENU_PASTE => self.paste(),
             MENU_DUPLICATE => self.duplicate(),
             MENU_TRASH => self.trash_selected(),
-            MENU_EMPTY_TRASH => self.empty_trash(),
             MENU_NEW_FOLDER => self.new_folder(),
             MENU_HIDDEN => self.toggle_hidden(),
             MENU_PUT_BACK => self.put_back(),
+            MENU_EMPTY_TRASH => self.ask_empty_trash(),
             MENU_SIDEBAR => self.toggle_sidebar(),
             MENU_STATUS_BAR => self.toggle_status_bar(),
             MENU_GALLERY => self.set_gallery(),

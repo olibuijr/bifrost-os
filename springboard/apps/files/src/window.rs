@@ -477,6 +477,7 @@ impl Files {
         self.paint_preview(ui, s);
         self.paint_goto(ui, s);
         self.paint_server(ui, s);
+        self.paint_empty_trash(ui, s);
     }
     /// Recents, Tags and Smart Folders list files from several places; nothing can be created or pasted into them.
     pub(crate) fn in_recents(&self) -> bool {

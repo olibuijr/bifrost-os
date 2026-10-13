@@ -10,6 +10,8 @@ pub(crate) const SPRING_DELAY: Duration = Duration::from_millis(800);
 pub(crate) struct FileManagerState {
     /// The Go to Folder sheet's path field, when open.
     pub(crate) goto: Option<TextField>,
+    /// The Empty Trash confirmation sheet is open (Recently Deleted only).
+    pub(crate) empty_trash: bool,
     /// The folder a drag hovers over and since when; it opens after `SPRING_DELAY`.
     pub(crate) spring: Option<(PathBuf, Instant)>,
     /// The items being dragged. Kept apart from the selection because a spring-loaded folder changes the selection.
