@@ -50,6 +50,13 @@
       "note": "The column and delivery exist and apps can post through usernotif. Widgets are left out of the column (center.rs comment: the shell has no widget data source on the PC yet). Included only for context: it is not an API of this framework."
     },
     {
+      "feature": "Widgets in the column layout",
+      "apple": "NCWidgetController, NCWidgetProviding (placement of Today widgets in the column)",
+      "bifrost": "springboard/ui/src/widget_column.rs (layout); springboard/ui/src/widget.rs (Controller, Limits, DisplayMode)",
+      "status": "partial",
+      "note": "Team J (parity/team-j-notification-center): pure layout model with host unit tests: hidden widgets take no room, expanded widgets take their expanded height. Not wired into springboard/src/shell/notify/center.rs, which still draws the notification column only; not yet tested on Midget."
+    },
+    {
       "feature": "Framework status (deprecated)",
       "apple": "Landing page: 'Deprecated. Use WidgetKit instead.' (macOS 10.10+, iOS 8.0+, Mac Catalyst 8.0+). See https://developer.apple.com/documentation/notificationcenter",
       "bifrost": "none (WidgetKit is not implemented on BifrOSt)",
@@ -61,7 +68,7 @@
     "No app-facing Today widget extension point (NCWidgetProviding): apps cannot supply widget content to the Today View or the home-screen gallery.",
     "No NCWidgetController equivalent: apps cannot report whether their widget has content.",
     "No search results view or list view for widgets (NCWidgetSearchViewController, NCWidgetListViewController).",
-    "The Notification Center column does not show widgets: springboard/src/shell/notify/center.rs says the shell has no widget data source on the PC yet.",
+    "The Notification Center column does not show widgets: springboard/src/shell/notify/center.rs says the shell has no widget data source on the PC yet. The layout model in springboard/ui/src/widget_column.rs exists but nothing calls it yet.",
     "WidgetKit (Apple's replacement) is not in the SDK; it is outside this framework but is where Apple's widget work now lives."
   ]
 }

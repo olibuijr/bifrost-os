@@ -52,3 +52,28 @@ Official DocC reads (`python3 -I docc.py`): `widgetkit`, `widgetkit/timelineprov
 
 Not run in this stage by instruction. The stage that builds the crate must run `cargo test -p bifrost-ui timeline` and
 `cargo test -p bifrost-ui relevance`.
+
+## Team J: access, rendering modes (parity/team-j-notification-center)
+
+Two rows move in this round. Both are pure host models; nothing is wired into the shell or apps yet, and nothing has
+been built or run on Midget.
+
+| Module | Mirrors (official names) | What it does |
+|---|---|---|
+| `springboard/ui/src/widget_access.rs` | Accessing location information in widgets; Making network requests in a widget extension | Per-widget grants keyed by bundle identifier: one location switch and a set of network hosts. A host normalizes from a host name or a URL (scheme, path, query and fragment dropped; ports and user information refused). A host grant covers the host and its subdomains and nothing else. Forgetting a widget drops its grants. |
+| `springboard/ui/src/widget_render.rs` | WidgetRenderingMode (fullColor, accented, vibrant); widgetAccentable(_:) | Resolves the requested mode against a tinted look (accented and vibrant fall back to full colour otherwise), and tints one element: accentable elements take the accent colour in accented mode, every element becomes a grey of its luminance in vibrant mode. Alpha is kept. |
+
+Matrix rows changed in `docs/parity-matrix/data/widgetkit.json`:
+
+- Location and network access in widgets: gap to partial (`springboard/ui/src/widget_access.rs`).
+- Rendering modes and accented look: note and path extended with `springboard/ui/src/widget_render.rs`; status stays partial.
+
+Left open and why:
+
+- Enforcement: the shell weather tile (`springboard/src/shell/weather/mod.rs`) still reads Open-Meteo directly. There is
+  no widget process, so the grant has no caller until the shell asks it before a fetch.
+- Widget container background: needs a drawing change in the shell tiles, not a model.
+- Vibrant mode: the luminance rule is BifrOSt's own. It is not checked against the system material on Midget.
+
+Official names were taken from the WidgetKit landing page and the rows in the matrix data; the access rules are
+BifrOSt's own design, not Apple's behaviour.
