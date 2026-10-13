@@ -18,7 +18,7 @@ use super::passcode::{self, Lock, LockOut, Overlay, OverlayOut};
 use super::screentime::{self, config::Config as StConfig, page::{StEdit, View as StView}, usage as st_usage};
 use super::prefs::Prefs;
 use super::storage::Scanner;
-use bifrost_ui::transition::{Ease, Subtype, Transition as SlideFx};
+use bifrost_ui::transition::{Ease, Subtype, Transition};
 use super::storage_page::{self, DevState, PageState};
 use super::update::{self, Updater};
 use super::{backup, backup_page, diag, diagnostics_page};
@@ -72,7 +72,7 @@ struct Entry {
     view: View,
 }
 
-struct Transition {
+struct Slide {
     push: bool,
     start: f64,
     /// the page sliding out on a pop
@@ -223,7 +223,7 @@ pub struct Settings {
     /// Dark Appearance Dims Wallpaper
     wallpaper_dim: bool,
     stack: Vec<Entry>,
-    transition: Option<Transition>,
+    transition: Option<Slide>,
     sheet: Option<Sheet>,
     /// the Time Zone picker over Date & Time
     zone_picker: Option<ZonePicker>,
@@ -315,8 +315,8 @@ fn wallpaper_name(list: &[Wallpaper], id: &str) -> String {
 }
 
 /// The page slide as the shared push transition: a pop plays it backwards.
-fn slide(push: bool) -> SlideFx {
-    let e = SlideFx::push(Subtype::FromRight).parallax(PARALLAX, 60.0 / 255.0).ease(Ease::OutCubic);
+fn slide(push: bool) -> Transition {
+    let e = Transition::push(Subtype::FromRight).parallax(PARALLAX, 60.0 / 255.0).ease(Ease::OutCubic);
     if push { e } else { e.reversed() }
 }
 
@@ -1168,7 +1168,7 @@ impl Settings {
         let entry = self.build(ui, id, back.as_deref());
         self.stack.push(entry);
         if self.stack.len() > 1 {
-            self.transition = Some(Transition { push: true, start: t, leaving: None, imgs: None });
+            self.transition = Some(Slide { push: true, start: t, leaving: None, imgs: None });
         }
     }
 
@@ -1186,7 +1186,7 @@ impl Settings {
     fn pop(&mut self, t: f64) {
         if self.stack.len() > 1 {
             let leaving = self.stack.pop();
-            self.transition = Some(Transition { push: false, start: t, leaving, imgs: None });
+            self.transition = Some(Slide { push: false, start: t, leaving, imgs: None });
         }
     }
 

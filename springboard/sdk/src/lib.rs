@@ -221,7 +221,7 @@ pub mod wifi_accessory_browser;
 pub mod compression;
 pub mod pixel_buffer;
 pub mod display_link;
-pub mod frame_clock;
+pub use bifrost_ui::frame_clock;
 pub mod gpu_layer;
 pub mod offscreen;
 /// Frame-rate ranges and transitions, shared with the shell.

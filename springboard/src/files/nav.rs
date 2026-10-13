@@ -2,7 +2,7 @@
 //! slides in from the right while the one beneath drifts a third of the
 //! way left under a light dimming; a pop plays it backwards.
 
-use bifrost_ui::transition::{Ease, Subtype, Transition as Effect};
+use bifrost_ui::transition::{Ease, Subtype, Transition};
 
 /// How long a push or pop takes, in ms.
 pub const MS: f64 = 350.0;
@@ -18,7 +18,7 @@ pub enum Dir {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct Transition {
+struct Slide {
     dir: Dir,
     start: f64,
 }
@@ -28,7 +28,7 @@ struct Transition {
 /// the shade alpha (0..=255) over the one underneath.
 pub fn placement(dir: Dir, p: f32, w: f32) -> (f32, f32, u8) {
     // the shared push transition: a pop is the same effect played backwards
-    let push = Effect::push(Subtype::FromRight).parallax(UNDER_SHIFT, UNDER_DIM).ease(Ease::OutQuartic);
+    let push = Transition::push(Subtype::FromRight).parallax(UNDER_SHIFT, UNDER_DIM).ease(Ease::OutQuartic);
     let tr = if dir == Dir::Pop { push.reversed() } else { push };
     let pl = tr.placement(p, w, 0.0);
     (pl.under_x.round(), pl.over_x.round(), pl.shade_u8())
@@ -38,7 +38,7 @@ pub struct Nav<P> {
     pages: Vec<P>,
     /// the page a pop removed, drawn on top until its slide-out ends
     leaving: Option<P>,
-    transition: Option<Transition>,
+    transition: Option<Slide>,
 }
 
 impl<P> Nav<P> {
@@ -75,7 +75,7 @@ impl<P> Nav<P> {
     pub fn push(&mut self, page: P, t: f64) {
         self.finish();
         self.pages.push(page);
-        self.transition = Some(Transition { dir: Dir::Push, start: t });
+        self.transition = Some(Slide { dir: Dir::Push, start: t });
     }
 
     /// Pops the top page unless it is the root; true when something left.
@@ -85,7 +85,7 @@ impl<P> Nav<P> {
             return false;
         }
         self.leaving = self.pages.pop();
-        self.transition = Some(Transition { dir: Dir::Pop, start: t });
+        self.transition = Some(Slide { dir: Dir::Pop, start: t });
         true
     }
 

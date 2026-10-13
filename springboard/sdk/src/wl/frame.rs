@@ -219,6 +219,31 @@ impl FrameLoop {
         self.pacer.presented(host_time, refresh_ns);
     }
 
+    /// The display's refresh rate in hertz, for `Window::set_display_refresh`.
+    pub fn refresh_hz(&self) -> f32 {
+        1.0e9 / self.pacer.link.refresh_period().max(1) as f32
+    }
+
+    /// Presents the newest frame of an app drawable layer (the layer's pixels fill the surface, cropped or padded to
+    /// the window size). Skipped when the app presented nothing new.
+    pub fn present_drawable<S: FrameSink>(&mut self, sink: &mut S, layer: &mut bifrost_ui::drawable_layer::DrawableLayer) -> Result<FrameReport, FrameError> {
+        let Some(d) = layer.take_presented() else {
+            return Ok(FrameReport { seq: 0, skipped: true, stats: FrameStats::default() });
+        };
+        let (w, h) = (self.width as usize, self.height as usize);
+        let report = self.draw_frame(sink, |s| {
+            for y in 0..h.min(d.height) {
+                let n = w.min(d.width);
+                s.px[y * s.stride..y * s.stride + n].copy_from_slice(&d.pixels[y * d.width..y * d.width + n]);
+            }
+            let mut dmg = Damage::new(w, h);
+            dmg.all();
+            dmg
+        });
+        layer.recycle(d);
+        report
+    }
+
     /// Draws one frame into the CPU surface (the app's `draw`). When nothing changed, the frame is skipped. Otherwise the
     /// surface becomes one image op of a display list, which is presented (see [`FrameLoop::present`]).
     pub fn draw_frame<S: FrameSink>(&mut self, sink: &mut S, draw: impl FnOnce(&mut Surface) -> Damage) -> Result<FrameReport, FrameError> {

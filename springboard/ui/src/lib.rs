@@ -569,6 +569,8 @@ pub mod symbol_effect;
 pub mod symbol_layers;
 pub mod frame_rate;
 pub mod transition;
+pub mod frame_clock;
+pub mod drawable_layer;
 pub mod sidebar;
 pub mod diff;
 pub mod cache;
