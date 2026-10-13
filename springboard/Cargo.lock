@@ -462,7 +462,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-calendar"
-version = "1.11.2"
+version = "1.12.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -500,6 +500,7 @@ dependencies = [
  "bifrost-core",
  "bifrost-proto",
  "bifrost-ui",
+ "springboard",
 ]
 
 [[package]]
@@ -522,7 +523,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-contacts"
-version = "1.7.1"
+version = "1.8.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -545,7 +546,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "bifrost-diskutil"
+name = "bifrost-dictionary"
 version = "0.1.0"
 dependencies = [
  "bifrost-app",
@@ -553,8 +554,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bifrost-diskutil"
+version = "0.1.1"
+dependencies = [
+ "bifrost-app",
+ "bifrost-core",
+]
+
+[[package]]
 name = "bifrost-files"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -626,7 +635,11 @@ dependencies = [
 
 [[package]]
 name = "bifrost-mail"
-version = "0.2.0"
+version = "0.3.0"
+dependencies = [
+ "bifrost-app",
+ "springboard",
+]
 
 [[package]]
 name = "bifrost-maps"
@@ -782,7 +795,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-stickies"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
