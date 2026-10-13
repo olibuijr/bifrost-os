@@ -16,6 +16,26 @@ _h, _, _p = os.environ.get("BIFROST_REPO_BIND", "192.168.1.12:8079").partition("
 BIND = (_h, int(_p or 8079))
 
 
+REF_KINDS = ("sounds/alerts", "sounds/system", "cursors", "wallpapers", "icons/apps", "icons/system", "symbols", "fonts")
+
+
+def ref_asset_files(assets):
+    """(source, installed path under /usr/share/bifrost/ref) for the reference assets under `assets`.
+    Empty when the folder is absent, so the public repo still builds. Never lists anything outside the known kinds."""
+    out = []
+    if not assets or not os.path.isdir(assets):
+        return out
+    index = os.path.join(assets, "INDEX.tsv")
+    if os.path.isfile(index):
+        out.append((index, "INDEX.tsv"))
+    for kind in REF_KINDS:
+        for dirpath, _, names in sorted(os.walk(os.path.join(assets, kind))):
+            for n in sorted(names):
+                src = os.path.join(dirpath, n)
+                out.append((src, os.path.relpath(src, assets)))
+    return out
+
+
 def run(cmd, **kw):
     r = subprocess.run(cmd, **kw)
     if r.returncode:
@@ -85,7 +105,9 @@ def main():
     src = os.path.join(REPO, "packaging/arch")
     for f in ("fast/PKGBUILD", "fast/springboard.install"):
         shutil.copy(os.path.join(src, f), work)
-    env = {**os.environ, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_AUDIO_BENCH": audio_bench, "PC_ALSA_PLUGIN": alsa_plugin, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
+    refdir = os.path.join(REPO, "bifrost-ref/assets")
+    ref_env = {"PC_REFASSETS": refdir} if ref_asset_files(refdir) else {}
+    env = {**os.environ, **ref_env, "PC_VER": ver, "PC_PKGSRC": src, "PC_BIN": binpath, "PC_BOOTWEAVE": bootweave, "PC_PORTAL": portal, "PC_PRIVD": privd, "PC_MCP": mcp, "PC_BIFROSTD": bifrostd, "PC_AUDIOD": audiod, "PC_AUDIO_BENCH": audio_bench, "PC_ALSA_PLUGIN": alsa_plugin, **wm_env, "PC_GUARD": os.path.join(REPO,"out/bifrost-update-guard-publish"), "PKGDEST": POOL, "BUILDDIR": work + "/b", "SRCDEST": work + "/s", "PKGEXT": ".pkg.tar.zst"}
     run(["makepkg", "-f", "--nodeps", "--skipinteg", "--nocheck"], cwd=work, env=env, stdout=subprocess.DEVNULL)
     pkg = sorted(glob.glob(os.path.join(POOL, f"springboard-shell-{ver}-1-x86_64.pkg.tar.zst")))[-1]
     # keep the last 3 packages

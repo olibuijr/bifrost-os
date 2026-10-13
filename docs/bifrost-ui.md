@@ -2877,3 +2877,20 @@ test exists yet; the CPU path is the reference a GPU path must match); no shader
 over built-in kernels, so app-supplied shader bodies are not run; no `MPSImageGaussianBlur` class (the blur kernel is
 `CIGaussianBlur`'s), no per-kernel `MPS` texture descriptors; `CIColorMatrix` and convolution weights are set by value, not
 by `CIFilter` input keys. Written without building or running (owner rule); parity needs a Midget check.
+
+## Reference asset layer (`bifrost_core::ref_assets`)
+
+Personal-use reference assets (alert sounds, system sounds, cursors, wallpapers, app and system icons, symbols,
+fonts) live in the gitignored `bifrost-ref/assets/` folder and are never committed. `tools/pc-publish.py`
+(`ref_asset_files`) and `packaging/arch/package-files.sh` install what exists, already converted to wav/png/ttf,
+into `/usr/share/bifrost/ref/{sounds/alerts,sounds/system,cursors,wallpapers,icons/apps,icons/system,symbols,fonts}`
+plus `INDEX.tsv`; both skip cleanly when the folder is absent. `INDEX.tsv` holds `kind<TAB>name<TAB>file` lines
+(file relative to the kind folder), so name mappings are data, not code.
+
+- `Resolver::standard(bundled)` searches `$BIFROST_REF_ROOT`, `/usr/share/bifrost/ref`, then `bundled`.
+  `resolve(Kind, name)` normalises case and extension (`Basso.aiff` finds `basso.wav`), caches the answer and
+  returns `None` when absent; `list(Kind)` feeds pickers such as the wallpaper list.
+- `SystemSounds::create_named(resolver, name)` (NSSound `named:`): alert names first, then system sounds; `None` keeps the built-in sound.
+- Not done yet: cursor and icon adoption (`cursor_service`, `cursor_art`, workspace icons) and a shell-side resolver;
+  they will call `resolve` and keep their current art as the fallback. The assets folder was empty when this landed,
+  so the os/assets sound, wallpaper and font rows are `partial` (loader and fallback only, no Midget check).
