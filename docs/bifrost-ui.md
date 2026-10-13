@@ -2370,3 +2370,10 @@ in the distance from the centre, which may differ from the reference curve; chec
   `AppleEventHandlers::install(class, id, handler)` and `rpc(method, params)` serve events from `Application::rpc`.
 
 All four are host-tested only; rows stay `partial` until checked on Midget.
+
+## Video Toolbox: compression session (`bifrost_sdk::video_compression`)
+
+- `CompressionSession::create(w, h, Codec, callback)` mirrors `VTCompressionSessionCreate`; `set_property` / `copy_property` check keys (`key::*`, the `kVTCompressionPropertyKey_*` names), types, ranges and read-only keys; `prepare_to_encode_frames`, `encode_frame(frame, pts, duration)`, `complete_frames`, `invalidate`. Time stamps must increase; output order is submission order.
+- The only encoder is lossless intra-only (one PNG per frame, all key frames). `Codec::H264` and `Codec::Hevc` fail with `Status::CouldNotFindVideoEncoder`.
+- Multi-pass: `FrameSilo` (`add_sample`, `for_each_sample`), `MultiPassStorage` (`set`, `get`, `close`, `to_bytes` / `from_bytes`), and `set_multi_pass`, `begin_pass`, `end_pass` (true when another pass is wanted).
+- Frame processing: `FrameProcessor` trait, `FrameProcessorSession` (start, process, end) and `SuperResolutionScaler` (integer upscale); `set_frame_processor` runs it before encoding.
