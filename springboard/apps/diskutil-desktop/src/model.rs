@@ -39,6 +39,14 @@ pub struct Node {
     pub smart: Option<String>,
     /// For a loop device that holds a disk image, the path of the image file (from the kernel's `loop/backing_file`).
     pub image_file: Option<String>,
+    /// The file system UUID from the udev database (`ID_FS_UUID`).
+    pub uuid: Option<String>,
+    /// The partition table type of a disk (`ID_PART_TABLE_TYPE`: `gpt` or `dos`).
+    pub part_table: Option<String>,
+    /// The drive's serial number (`ID_SERIAL_SHORT`).
+    pub serial: Option<String>,
+    /// The logical block size of the disk in bytes (`queue/logical_block_size`).
+    pub block_size: Option<u64>,
 }
 
 /// One line of the mount table.
@@ -103,6 +111,33 @@ pub fn parse_udev_db(text: &str) -> (Option<String>, Option<String>) {
         }
     }
     (fs, label)
+}
+
+/// The file system's name as the Disk menu and the sheets write it.
+pub fn fs_title(fs: bifrost_core::disk_format::Personality) -> &'static str {
+    use bifrost_core::disk_format::Personality;
+    match fs {
+        Personality::Ext4 => "ext4",
+        Personality::ExFat => "exFAT",
+        Personality::Fat32 => "FAT32",
+        Personality::Ntfs => "NTFS",
+        Personality::Btrfs => "Btrfs",
+    }
+}
+
+/// The value of one `E:KEY=value` line of the udev database. `None` when the key is missing or empty.
+pub fn parse_udev_value(text: &str, key: &str) -> Option<String> {
+    let prefix = format!("E:{key}=");
+    text.lines().find_map(|line| line.strip_prefix(prefix.as_str())).map(str::to_string).filter(|v| !v.is_empty())
+}
+
+/// The partition table type as a user reads it: `gpt` is GUID Partition Map, `dos` is Master Boot Record.
+pub fn scheme_name(part_table: &str) -> String {
+    match part_table {
+        "gpt" => "GUID Partition Map".to_string(),
+        "dos" => "Master Boot Record".to_string(),
+        other => other.to_string(),
+    }
 }
 
 /// The output of `df -B1 --output=target,size,used,avail`: the mount point and its usage, per line. The header and any
@@ -238,6 +273,18 @@ pub fn detail_rows(node: &Node) -> Vec<(&'static str, String)> {
         rows.push(("Disk", format!("/dev/{parent}")));
     }
     rows.push(("Removable", if node.removable { "Yes".to_string() } else { "No".to_string() }));
+    if let Some(uuid) = &node.uuid {
+        rows.push(("UUID", uuid.clone()));
+    }
+    if let Some(table) = &node.part_table {
+        rows.push(("Partition map", scheme_name(table)));
+    }
+    if let Some(serial) = &node.serial {
+        rows.push(("Serial number", serial.clone()));
+    }
+    if let Some(block) = node.block_size {
+        rows.push(("Block size", format!("{block} bytes")));
+    }
     if let Some(image) = &node.image_file {
         rows.push(("Image file", image.clone()));
     }
@@ -405,5 +452,24 @@ mod tests {
         assert_eq!(equal_parts_mib(10 * 1024 * 1024, 3), vec![2, 2, 0]);
         assert!(equal_parts_mib(3 * 1024 * 1024, 3).is_empty());
         assert!(equal_parts_mib(1 << 30, 0).is_empty());
+    }
+
+    #[test]
+    fn a_udev_value_is_read_by_key() {
+        let text = "E:ID_FS_UUID=1234-ABCD\nE:ID_PART_TABLE_TYPE=gpt\nE:ID_SERIAL_SHORT=\n";
+        assert_eq!(parse_udev_value(text, "ID_FS_UUID").as_deref(), Some("1234-ABCD"));
+        assert_eq!(parse_udev_value(text, "ID_SERIAL_SHORT"), None);
+        assert_eq!(parse_udev_value(text, "ID_MISSING"), None);
+        assert_eq!(scheme_name("gpt"), "GUID Partition Map");
+        assert_eq!(scheme_name("dos"), "Master Boot Record");
+    }
+
+    #[test]
+    fn get_info_lists_the_uuid_map_serial_and_block_size() {
+        let node = Node { name: "sdb".into(), uuid: Some("1234".into()), part_table: Some("gpt".into()), serial: Some("S1".into()), block_size: Some(512), ..Node::default() };
+        let rows = detail_rows(&node);
+        for (key, value) in [("UUID", "1234"), ("Partition map", "GUID Partition Map"), ("Serial number", "S1"), ("Block size", "512 bytes")] {
+            assert!(rows.iter().any(|(k, v)| *k == key && v == value), "{key}");
+        }
     }
 }

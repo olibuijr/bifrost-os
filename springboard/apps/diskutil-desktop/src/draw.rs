@@ -3,7 +3,7 @@
 //! the appearance. Text is cached per string in `TextCache`.
 
 use crate::model::{self, info_rows, Kind, Node};
-use crate::window::{DiskUtility, KEY_PT, LINE_PT, PAD_PT, SIDE_PT};
+use crate::window::{DiskUtility, FIELD_BASE, KEY_PT, LINE_PT, PAD_PT, SIDE_PT};
 use bifrost_app::controls::sidebar::SidebarItem;
 use bifrost_app::controls::{Node as Control, Rect, Role};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, SEPARATOR_C, SIDEBAR_BG};
@@ -72,6 +72,39 @@ pub fn paint(w: &mut DiskUtility, s: &mut Surface, ui: &Ui) {
 
     if let Some(pending) = &w.sheet {
         widgets::sheet(s, ui, w.window_rect(), UNIFIED_BAR_PT, &pending.sheet, 1.0, None);
+        paint_form(w, s, ui);
+    }
+}
+
+/// The text fields of the open sheet: a label, the field box (the focused one has the accent outline and a caret) and
+/// the reason the last confirm was refused, in the button row.
+fn paint_form(w: &mut DiskUtility, s: &mut Surface, ui: &Ui) {
+    let (Some(layout), Some(form)) = (w.form_layout(), w.sheet.as_ref().and_then(|p| p.form.clone())) else { return };
+    for (i, (field, r)) in form.fields.iter().zip(layout.fields.iter()).enumerate() {
+        let focused = i == form.focus;
+        let mid = r.y + r.h / 2.0;
+        text_mid(&mut w.labels, s, ui, &field.label, MAC_BODY_PT, Weight::Regular, LABEL.now(), layout.panel.x + 20.0, mid, 66.0);
+        let outline = if focused { LINK } else { SEPARATOR_C.now() };
+        fill(s, ui, *r, 5.0, outline);
+        let inner = Rect { x: r.x + 1.0, y: r.y + 1.0, w: r.w - 2.0, h: r.h - 2.0 };
+        fill(s, ui, inner, 4.0, CONTENT_BG.now());
+        let max = r.w - 12.0;
+        if field.text.is_empty() {
+            text_mid(&mut w.labels, s, ui, &field.hint, MAC_BODY_PT, Weight::Regular, LABEL_3.now(), r.x + 6.0, mid, max);
+        } else {
+            text_mid(&mut w.labels, s, ui, &field.text, MAC_BODY_PT, Weight::Regular, LABEL.now(), r.x + 6.0, mid, max);
+        }
+        if focused {
+            let shown = ui.fit(&field.text, MAC_BODY_PT, ui.pt(max.max(0.0)));
+            let width = if shown.is_empty() { 0.0 } else { w.labels.get(ui, &shown, MAC_BODY_PT, Weight::Regular, LABEL.now()).w as f32 };
+            let caret = Rect { x: r.x + 6.0 + width / ui.pt(1.0).max(1.0), y: r.y + 4.0, w: 1.0, h: r.h - 8.0 };
+            fill(s, ui, caret, 0.0, LABEL.now());
+        }
+    }
+    if let Some(error) = &form.error {
+        let x = layout.panel.x + 20.0;
+        let room = (layout.panel.w - 40.0 - 170.0).max(40.0);
+        text_mid(&mut w.labels, s, ui, error, MAC_FOOTNOTE_PT, Weight::Regular, DESTRUCTIVE, x, layout.buttons_y + 11.0, room);
     }
 }
 
@@ -127,6 +160,12 @@ pub fn controls(w: &DiskUtility, ui: &Ui) -> Vec<Control> {
     for (id, r) in w.toolbar_layout(ui).visible {
         let Some(item) = tb.items.iter().find(|i| i.id == id) else { continue };
         nodes.push(Control { id: id as u64, role: Role::Button, label: item.label.clone(), value: String::new(), bounds: r, enabled: item.enabled });
+    }
+    if let Some(form) = w.sheet.as_ref().and_then(|p| p.form.as_ref()) {
+        for (i, (field, r)) in form.fields.iter().zip(w.form_layout().map(|l| l.fields).unwrap_or_default()).enumerate() {
+            let value = if field.text.is_empty() { String::new() } else { field.text.clone() };
+            nodes.push(Control { id: FIELD_BASE + i as u64, role: Role::TextField, label: field.label.clone(), value, bounds: r, enabled: true });
+        }
     }
     let list = w.sidebar();
     let side = w.sidebar_rect();

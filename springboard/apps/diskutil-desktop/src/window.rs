@@ -4,15 +4,19 @@
 //! `REFRESH_S` seconds, and usage every `USAGE_S` seconds.
 
 use crate::actions::{self, Action};
+use crate::form::{Field, Form, FormKey};
+use crate::ops::{self, ImageFormat};
 use crate::model::{self, Kind, Node};
 use crate::{probe, sysfs};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
-use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton};
+use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton, BUTTON_H_PT, SHEET_PAD_PT};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::{TextCache, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
+use bifrost_app::KeyInput;
+use bifrost_core::disk_commands::Command;
 use bifrost_core::disk_format::{PartitionSpec, Personality};
 use bifrost_core::disk_request::DiskRequest;
 use std::collections::BTreeMap;
@@ -40,6 +44,7 @@ pub const B_REFRESH: u32 = 4;
 pub const B_DETACH: u32 = 5;
 pub const B_ERASE: u32 = 6;
 pub const B_FIRST_AID: u32 = 7;
+pub const B_PARTITION: u32 = 8;
 /// The confirmation sheet's buttons: Cancel closes it; the others answer with the request they name.
 pub const SHEET_CANCEL: u32 = 10;
 pub const SHEET_CONFIRM: u32 = 11;
@@ -48,6 +53,15 @@ pub const SHEET_REPAIR: u32 = 13;
 
 /// Accessibility and sidebar ids: a row's id is `ROW_BASE` plus its index in `DiskUtility::nodes`.
 pub const ROW_BASE: u64 = 100;
+/// Accessibility ids of a sheet's text fields: `FIELD_BASE` plus the field's index.
+pub const FIELD_BASE: u64 = 200_000;
+
+/// A form sheet is wider than an alert, and each field adds this much height (points).
+pub const FORM_W_PT: f32 = 340.0;
+pub const FIELD_ROW_PT: f32 = 30.0;
+pub const FIELD_H_PT: f32 = 22.0;
+/// The width of the label column left of a field (points).
+pub const FIELD_LABEL_PT: f32 = 70.0;
 
 /// What a point or an accessibility id stands for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,6 +72,8 @@ pub enum Target {
     Row(usize),
     /// A button of the confirmation sheet.
     Sheet(u32),
+    /// A text field of the sheet.
+    Field(usize),
 }
 
 /// The erase or first-aid action the user asked for on the selected row.
@@ -69,12 +85,66 @@ pub enum Ask {
     Info,
     /// Partition the selected disk into this many equal parts.
     Partition(usize),
+    /// Partition the selected disk into the sizes typed in the sheet.
+    PartitionCustom,
+    /// Rename the selected volume.
+    Rename,
+    /// Copy another volume onto the selected one.
+    Restore,
+    /// Make a blank disk image.
+    NewImage,
+}
+
+/// What a sheet's fields turn into when the user confirms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormKind {
+    Erase,
+    Rename,
+    Partition,
+    Restore,
+    NewImage,
+}
+
+/// What a confirmed form starts: a privileged request, or commands run as the user.
+#[derive(Debug, PartialEq)]
+pub enum Built {
+    Request(DiskRequest),
+    Plan { verb: &'static str, name: String, plan: Vec<Command> },
 }
 
 /// A confirmation sheet and the requests its buttons start, by button id.
 pub struct Pending {
     pub sheet: Sheet,
     pub requests: Vec<(u32, DiskRequest)>,
+    /// The text fields of the sheet and what they build, for the sheets that ask for a name or a size.
+    pub form: Option<Form>,
+    pub kind: Option<FormKind>,
+    /// The device the sheet is about (the selected row when it opened).
+    pub device: String,
+}
+
+impl Pending {
+    /// A sheet with buttons only.
+    pub fn plain(sheet: Sheet, requests: Vec<(u32, DiskRequest)>) -> Pending {
+        Pending { sheet, requests, form: None, kind: None, device: String::new() }
+    }
+}
+
+/// An alert sheet widened and made taller for `form`'s fields.
+fn form_sheet(title: &str, message: &str, buttons: Vec<SheetButton>, form: &Form) -> Sheet {
+    let mut sheet = Sheet::alert(title, message, buttons);
+    sheet.size.0 = FORM_W_PT;
+    sheet.size.1 += form.fields.len() as f32 * FIELD_ROW_PT;
+    sheet
+}
+
+/// Where a sheet's fields sit, in points.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FormLayout {
+    pub panel: Rect,
+    /// The top of the button row.
+    pub buttons_y: f32,
+    pub fields: Vec<Rect>,
 }
 
 /// A mount, unmount, eject or privileged request that is running on its own thread. `verb` is its progress word.
@@ -102,6 +172,8 @@ pub struct DiskUtility {
     pub show_all: bool,
     /// The file system Erase and Partition write.
     pub erase_fs: Personality,
+    /// The home folder, where new disk images are saved.
+    pub home: String,
     /// The window size in points.
     pub size: (f32, f32),
     pub last_refresh: f64,
@@ -124,6 +196,7 @@ impl DiskUtility {
             labels: TextCache::default(),
             show_all: true,
             erase_fs: Personality::Fat32,
+            home: std::env::var("HOME").unwrap_or_default(),
             size: (1200.0, 780.0),
             last_refresh: f64::NEG_INFINITY,
             last_usage: f64::NEG_INFINITY,
@@ -239,8 +312,12 @@ impl DiskUtility {
         if self.job.is_some() {
             return false;
         }
+        if ask == Ask::NewImage {
+            return self.ask_new_image();
+        }
         let Some(node) = self.selected_node().cloned() else { return false };
         let name = node.name.clone();
+        let mut form: Option<(FormKind, Form)> = None;
         let (title, message, buttons, requests) = match ask {
             Ask::Erase => {
                 let fs = self.erase_fs;
@@ -251,12 +328,18 @@ impl DiskUtility {
                     DiskRequest::EraseVolume { device: name.clone(), fs, label }
                 };
                 let buttons = vec![SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel), SheetButton::new(SHEET_CONFIRM, "Erase", ButtonRole::Destructive)];
+                let initial = match &request {
+                    DiskRequest::EraseVolume { label, .. } => label.clone(),
+                    _ => String::new(),
+                };
+                form = Some((FormKind::Erase, Form::new(vec![Field::new("Name", &initial, "Untitled")])));
                 (format!("Erase {name}?"), request.confirm_text(), buttons, vec![(SHEET_CONFIRM, request)])
             }
             Ask::Info => {
                 let message = model::detail_rows(&node).iter().map(|(k, v)| format!("{k}: {v}")).collect::<Vec<_>>().join("\n");
                 self.error = None;
-                self.sheet = Some(Pending { sheet: Sheet::alert(&format!("Info for {name}"), &message, vec![SheetButton::new(SHEET_CANCEL, "Done", ButtonRole::Cancel)]), requests: Vec::new() });
+                let done = vec![SheetButton::new(SHEET_CANCEL, "Done", ButtonRole::Cancel)];
+                self.sheet = Some(Pending::plain(Sheet::alert(&format!("Info for {name}"), &message, done), Vec::new()));
                 return true;
             }
             Ask::Partition(count) => {
@@ -270,6 +353,47 @@ impl DiskUtility {
                 let buttons = vec![SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel), SheetButton::new(SHEET_CONFIRM, "Partition", ButtonRole::Destructive)];
                 (format!("Partition {name}?"), request.confirm_text(), buttons, vec![(SHEET_CONFIRM, request)])
             }
+            Ask::PartitionCustom => {
+                if node.kind != Kind::Disk {
+                    self.error = Some(format!("{name} is a volume. Choose a disk to partition."));
+                    return true;
+                }
+                let whole = PartitionSpec { size_mib: 0, fs: self.erase_fs, label: String::new() };
+                let request = DiskRequest::PartitionDisk { device: name.clone(), partitions: vec![whole] };
+                let buttons = vec![SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel), SheetButton::new(SHEET_CONFIRM, "Partition", ButtonRole::Destructive)];
+                let message = format!(
+                    "List the size of each new partition, separated by commas: 64 GB, 25%, rest. The last one may be rest. Each is formatted as {}. All data on {name} will be lost.",
+                    model::fs_title(self.erase_fs)
+                );
+                form = Some((FormKind::Partition, Form::new(vec![Field::new("Sizes", "", "32 GB, rest")])));
+                (format!("Partition {name}?"), message, buttons, vec![(SHEET_CONFIRM, request)])
+            }
+            Ask::Rename => {
+                if node.kind != Kind::Partition {
+                    self.error = Some(format!("{name} is a disk. Choose a volume to rename."));
+                    return true;
+                }
+                let current = node.label.clone().unwrap_or_default();
+                let probe = if current.is_empty() { "X".to_string() } else { current.clone() };
+                let request = DiskRequest::RenameVolume { device: name.clone(), label: probe };
+                let buttons = vec![SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel), SheetButton::new(SHEET_CONFIRM, "Rename", ButtonRole::Default)];
+                form = Some((FormKind::Rename, Form::new(vec![Field::new("Name", &current, "Untitled")])));
+                (format!("Rename {name}"), format!("Enter a new name for {name}. The volume must not be mounted."), buttons, vec![(SHEET_CONFIRM, request)])
+            }
+            Ask::Restore => {
+                let sources = ops::restore_sources(&self.nodes, &node);
+                let Some(first) = sources.first().cloned() else {
+                    self.error = Some(format!("No unmounted device of the same kind and no larger than {name} can be copied onto it."));
+                    return true;
+                };
+                let request = DiskRequest::RestoreVolume { device: name.clone(), source: first.clone() };
+                let buttons = vec![SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel), SheetButton::new(SHEET_CONFIRM, "Restore", ButtonRole::Destructive)];
+                let shown: Vec<&str> = sources.iter().take(6).map(String::as_str).collect();
+                let message = format!("Copy a device block for block onto {name}. All data on {name} will be lost. Available: {}.", shown.join(", "));
+                form = Some((FormKind::Restore, Form::new(vec![Field::new("Copy from", &first, "device name")])));
+                (format!("Restore {name}?"), message, buttons, vec![(SHEET_CONFIRM, request)])
+            }
+            Ask::NewImage => return false,
             Ask::FirstAid => {
                 let buttons = vec![
                     SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel),
@@ -286,12 +410,180 @@ impl DiskUtility {
             return true;
         }
         self.error = None;
-        self.sheet = Some(Pending { sheet: Sheet::alert(&title, &message, buttons), requests });
+        self.sheet = Some(match form {
+            Some((kind, form)) => Pending { sheet: form_sheet(&title, &message, buttons, &form), requests, form: Some(form), kind: Some(kind), device: name },
+            None => Pending::plain(Sheet::alert(&title, &message, buttons), requests),
+        });
         true
+    }
+
+    /// Opens the sheet that asks for the name and size of a new blank image.
+    fn ask_new_image(&mut self) -> bool {
+        let form = Form::new(vec![Field::new("Name", "", "Untitled"), Field::new("Size", "1 GB", "1 GB")]);
+        let message = format!("The image is saved in your Documents folder, formatted as {}, and opened. Change the format in the Disk menu.", model::fs_title(self.erase_fs));
+        let buttons = vec![SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel), SheetButton::new(SHEET_CONFIRM, "Create", ButtonRole::Default)];
+        let sheet = form_sheet("New Blank Image", &message, buttons, &form);
+        self.error = None;
+        self.sheet = Some(Pending { sheet, requests: Vec::new(), form: Some(form), kind: Some(FormKind::NewImage), device: String::new() });
+        true
+    }
+
+    /// What the form's fields build for `kind` on `device`, or the sentence for the field that is wrong. The request is
+    /// checked against the disks here, so a refusal shows in the sheet and nothing is sent.
+    pub fn build_from_form(&self, kind: FormKind, device: &str, form: &Form) -> Result<Built, String> {
+        let node = self.nodes.iter().find(|n| n.name == device);
+        let checked = |request: DiskRequest| -> Result<Built, String> {
+            actions::check_request(&request, &self.nodes)?;
+            Ok(Built::Request(request))
+        };
+        match kind {
+            FormKind::Erase => {
+                let node = node.ok_or("The device is no longer connected.")?;
+                let label = form.value(0);
+                let fs = self.erase_fs;
+                checked(if node.kind == Kind::Disk {
+                    DiskRequest::EraseDisk { device: device.to_string(), fs, label }
+                } else {
+                    DiskRequest::EraseVolume { device: device.to_string(), fs, label }
+                })
+            }
+            FormKind::Rename => {
+                let label = form.value(0);
+                if label.is_empty() {
+                    return Err("Enter a name.".to_string());
+                }
+                checked(DiskRequest::RenameVolume { device: device.to_string(), label })
+            }
+            FormKind::Partition => {
+                let node = node.ok_or("The device is no longer connected.")?;
+                let sizes = ops::parse_partition_sizes(&form.value(0), node.size)?;
+                let partitions = sizes.into_iter().map(|size_mib| PartitionSpec { size_mib, fs: self.erase_fs, label: String::new() }).collect();
+                checked(DiskRequest::PartitionDisk { device: device.to_string(), partitions })
+            }
+            FormKind::Restore => {
+                let source = form.value(0);
+                if !self.nodes.iter().any(|n| n.name == source) {
+                    return Err(format!("\u{201c}{source}\u{201d} is not a disk or volume."));
+                }
+                checked(DiskRequest::RestoreVolume { device: device.to_string(), source })
+            }
+            FormKind::NewImage => {
+                let (path, plan) = ops::new_image_plan(&self.home, &form.value(0), &form.value(1), self.erase_fs)?;
+                if Path::new(&path).exists() {
+                    return Err("An image with that name already exists in Documents.".to_string());
+                }
+                let name = path.rsplit('/').next().unwrap_or(&path).to_string();
+                Ok(Built::Plan { verb: "Creating", name, plan })
+            }
+        }
+    }
+
+    /// Confirms the open form: starts what it builds, or shows why it cannot in the sheet.
+    fn submit_form(&mut self) -> bool {
+        let Some(pending) = &self.sheet else { return false };
+        let (Some(kind), Some(form)) = (pending.kind, pending.form.clone()) else { return false };
+        let device = pending.device.clone();
+        match self.build_from_form(kind, &device, &form) {
+            Ok(Built::Request(request)) => {
+                self.sheet = None;
+                self.start_request(request);
+            }
+            Ok(Built::Plan { verb, name, plan }) => {
+                self.sheet = None;
+                self.start_plan(verb, name, plan);
+            }
+            Err(sentence) => {
+                if let Some(form) = self.sheet.as_mut().and_then(|p| p.form.as_mut()) {
+                    form.error = Some(sentence);
+                }
+            }
+        }
+        true
+    }
+
+    /// Runs commands as the user on a thread, with `verb name` in the footer.
+    pub fn start_plan(&mut self, verb: &'static str, name: String, plan: Vec<Command>) {
+        if self.job.is_some() {
+            return;
+        }
+        self.error = None;
+        self.job = Some(Job { verb, name, rx: actions::spawn(plan) });
+    }
+
+    /// Attaches the image file at `path` (File > Open Disk Image).
+    pub fn attach_image(&mut self, path: &str) -> bool {
+        if self.job.is_some() {
+            return false;
+        }
+        match ops::attach_plan(path) {
+            Ok(plan) => {
+                let name = path.rsplit('/').next().unwrap_or(path).to_string();
+                self.start_plan("Opening", name, plan);
+            }
+            Err(sentence) => self.error = Some(sentence),
+        }
+        true
+    }
+
+    /// Writes a converted copy of the selected disk image next to it (Images > Convert).
+    pub fn convert_image(&mut self, format: ImageFormat) -> bool {
+        if self.job.is_some() {
+            return false;
+        }
+        let Some(source) = self.selected_node().and_then(|n| n.image_file.clone()) else { return false };
+        match ops::convert_plan(&source, format) {
+            Ok((target, plan)) => {
+                if Path::new(&target).exists() {
+                    self.error = Some(format!("{} already exists.", target.rsplit('/').next().unwrap_or(&target)));
+                } else {
+                    self.start_plan("Converting", source.rsplit('/').next().unwrap_or(&source).to_string(), plan);
+                }
+            }
+            Err(sentence) => self.error = Some(sentence),
+        }
+        true
+    }
+
+    /// Sends a key to the open sheet: a form takes the typing, Return confirms and Escape cancels. True when the window
+    /// needs a new frame.
+    pub fn key(&mut self, key: &KeyInput) -> bool {
+        if self.sheet.is_none() {
+            return false;
+        }
+        if let Some(outcome) = self.sheet.as_mut().and_then(|p| p.form.as_mut()).map(|f| f.key(key)) {
+            return match outcome {
+                FormKey::Confirm => self.answer(SHEET_CONFIRM),
+                FormKey::Cancel => self.answer(SHEET_CANCEL),
+                FormKey::Edited => true,
+                FormKey::Ignored => false,
+            };
+        }
+        let (default, cancel) = self.sheet.as_ref().map(|p| (p.sheet.default_button(), p.sheet.cancel_button())).unwrap_or((None, None));
+        match key {
+            KeyInput::Code(13) => default.or(cancel).is_some_and(|id| self.answer(id)),
+            KeyInput::Code(27) | KeyInput::Code(1) => cancel.is_some_and(|id| self.answer(id)),
+            _ => false,
+        }
+    }
+
+    /// The sheet's panel, button row and field rectangles, when the open sheet has a form.
+    pub fn form_layout(&self) -> Option<FormLayout> {
+        let pending = self.sheet.as_ref()?;
+        let form = pending.form.as_ref()?;
+        let l = pending.sheet.layout(self.window_rect(), UNIFIED_BAR_PT, 1.0);
+        let buttons_y = l.buttons.first().map(|(_, r)| r.y).unwrap_or(l.panel.bottom() - SHEET_PAD_PT - BUTTON_H_PT);
+        let n = form.fields.len();
+        let x = l.panel.x + SHEET_PAD_PT + FIELD_LABEL_PT;
+        let w = (l.panel.w - 2.0 * SHEET_PAD_PT - FIELD_LABEL_PT).max(0.0);
+        let fields = (0..n).map(|i| Rect { x, y: buttons_y - (n - i) as f32 * FIELD_ROW_PT, w, h: FIELD_H_PT }).collect();
+        Some(FormLayout { panel: l.panel, buttons_y, fields })
     }
 
     /// The sheet's answer. Cancel closes it; another button starts the request it names.
     fn answer(&mut self, id: u32) -> bool {
+        if id == SHEET_CONFIRM && self.sheet.as_ref().is_some_and(|p| p.form.is_some()) {
+            return self.submit_form();
+        }
         let Some(pending) = self.sheet.take() else { return false };
         if id != SHEET_CANCEL {
             if let Some((_, request)) = pending.requests.into_iter().find(|(button, _)| *button == id) {
@@ -327,6 +619,8 @@ impl DiskUtility {
             Target::Toolbar(B_ERASE) => self.ask(Ask::Erase),
             Target::Toolbar(B_FIRST_AID) => self.ask(Ask::FirstAid),
             Target::Sheet(id) => self.answer(id),
+            Target::Field(i) => self.sheet.as_mut().and_then(|p| p.form.as_mut()).is_some_and(|f| f.set_focus(i)),
+            Target::Toolbar(B_PARTITION) => self.ask(Ask::PartitionCustom),
             Target::Toolbar(B_REFRESH) => {
                 self.smart.clear();
                 self.refresh(t, true);
@@ -357,6 +651,7 @@ impl DiskUtility {
             ToolbarItem::button(B_EJECT, "Eject").enabled(idle && ejectable),
             ToolbarItem::button(B_DETACH, "Detach").enabled(idle && self.selected_image()),
             ToolbarItem::button(B_ERASE, "Erase").enabled(idle && node.is_some()),
+            ToolbarItem::button(B_PARTITION, "Partition").enabled(idle && node.is_some_and(|n| n.kind == Kind::Disk)),
             ToolbarItem::button(B_FIRST_AID, "First Aid").enabled(idle && node.is_some()),
             ToolbarItem::flexible_space(),
             ToolbarItem::icon(B_REFRESH, "Refresh", "arrow.clockwise"),
@@ -469,6 +764,7 @@ impl DiskUtility {
         if let Some(pending) = &self.sheet {
             return match pending.sheet.hit(self.window_rect(), UNIFIED_BAR_PT, 1.0, x, y) {
                 Hit::Button(id) => Target::Sheet(id),
+                Hit::Panel => self.form_layout().and_then(|l| l.fields.iter().position(|r| r.contains(x, y))).map(Target::Field).unwrap_or(Target::Nothing),
                 _ => Target::Nothing,
             };
         }
@@ -497,6 +793,7 @@ impl DiskUtility {
         match id {
             1..=99 => Target::Toolbar(id as u32),
             x if x >= ROW_BASE && x < ROW_BASE + 100_000 => Target::Row((x - ROW_BASE) as usize),
+            x if (FIELD_BASE..FIELD_BASE + 16).contains(&x) => Target::Field((x - FIELD_BASE) as usize),
             _ => Target::Nothing,
         }
     }
@@ -660,5 +957,142 @@ mod tests {
         w.selected = Some("sdb1".into());
         assert!(w.ask_menu(Ask::Partition(2)));
         assert!(w.sheet.is_none() && w.error.is_some());
+    }
+
+    #[test]
+    fn rename_opens_a_name_field_for_a_volume_and_refuses_a_disk() {
+        let mut w = one_stick();
+        w.nodes[1].label = Some("Games".into());
+        w.selected = Some("sdb1".into());
+        assert!(w.ask_menu(Ask::Rename));
+        let pending = w.sheet.as_ref().expect("sheet");
+        assert_eq!(pending.kind, Some(FormKind::Rename));
+        assert_eq!(pending.form.as_ref().map(|f| f.value(0)), Some("Games".to_string()));
+        w.sheet = None;
+        w.selected = Some("sdb".into());
+        assert!(w.ask_menu(Ask::Rename));
+        assert!(w.sheet.is_none() && w.error.is_some());
+    }
+
+    #[test]
+    fn typing_into_the_rename_sheet_builds_a_rename_request() {
+        let mut w = one_stick();
+        w.nodes[1].fs_type = Some("ext4".into());
+        w.selected = Some("sdb1".into());
+        assert!(w.ask_menu(Ask::Rename));
+        assert!(w.key(&KeyInput::Text("Photos".into())));
+        let form = w.sheet.as_ref().and_then(|p| p.form.clone()).expect("form");
+        assert_eq!(w.build_from_form(FormKind::Rename, "sdb1", &form), Ok(Built::Request(DiskRequest::RenameVolume { device: "sdb1".into(), label: "Photos".into() })));
+        let empty = Form::new(vec![Field::new("Name", "  ", "")]);
+        assert_eq!(w.build_from_form(FormKind::Rename, "sdb1", &empty), Err("Enter a name.".to_string()));
+    }
+
+    #[test]
+    fn a_bad_name_stays_in_the_sheet_with_its_reason() {
+        let mut w = one_stick();
+        w.nodes[1].fs_type = Some("vfat".into());
+        w.selected = Some("sdb1".into());
+        assert!(w.ask_menu(Ask::Rename));
+        w.key(&KeyInput::Text("A name that is far too long".into()));
+        assert!(w.key(&KeyInput::Code(13)));
+        let pending = w.sheet.as_ref().expect("the sheet stays open");
+        assert!(pending.form.as_ref().and_then(|f| f.error.as_ref()).is_some());
+        assert!(w.job.is_none());
+        assert!(w.key(&KeyInput::Code(27)));
+        assert!(w.sheet.is_none());
+    }
+
+    #[test]
+    fn the_erase_sheet_carries_a_name_field_that_feeds_the_label() {
+        let mut w = one_stick();
+        w.selected = Some("sdb".into());
+        assert!(w.ask_menu(Ask::Erase));
+        let form = w.sheet.as_ref().and_then(|p| p.form.clone()).expect("form");
+        let mut named = form.clone();
+        named.fields[0].text = "STICK".into();
+        assert_eq!(
+            w.build_from_form(FormKind::Erase, "sdb", &named),
+            Ok(Built::Request(DiskRequest::EraseDisk { device: "sdb".into(), fs: Personality::Fat32, label: "STICK".into() }))
+        );
+    }
+
+    #[test]
+    fn a_custom_partition_layout_is_parsed_from_the_sheet() {
+        let mut w = one_stick();
+        w.selected = Some("sdb".into());
+        assert!(w.activate(Target::Toolbar(B_PARTITION), 1.0));
+        assert_eq!(w.sheet.as_ref().and_then(|p| p.kind), Some(FormKind::Partition));
+        let form = Form::new(vec![Field::new("Sizes", "2 GB, rest", "")]);
+        match w.build_from_form(FormKind::Partition, "sdb", &form) {
+            Ok(Built::Request(DiskRequest::PartitionDisk { partitions, .. })) => {
+                assert_eq!(partitions.len(), 2);
+                assert_eq!(partitions[1].size_mib, 0);
+            }
+            other => panic!("{other:?}"),
+        }
+        let too_big = Form::new(vec![Field::new("Sizes", "20 GB", "")]);
+        assert!(w.build_from_form(FormKind::Partition, "sdb", &too_big).is_err());
+    }
+
+    #[test]
+    fn the_partition_button_needs_a_disk() {
+        let mut w = one_stick();
+        let enabled = |w: &DiskUtility| w.toolbar().items.iter().find(|i| i.id == B_PARTITION).is_some_and(|i| i.enabled);
+        w.selected = Some("sdb".into());
+        assert!(enabled(&w));
+        w.selected = Some("sdb1".into());
+        assert!(!enabled(&w));
+    }
+
+    #[test]
+    fn restore_offers_the_other_unmounted_volumes() {
+        let mut w = one_stick();
+        w.nodes.push(Node { name: "sdc1".into(), kind: Kind::Partition, parent: Some("sdc".into()), size: 1, ..Node::default() });
+        w.nodes[1].size = 4_000_000_000;
+        w.selected = Some("sdb1".into());
+        assert!(w.ask_menu(Ask::Restore));
+        let form = w.sheet.as_ref().and_then(|p| p.form.clone()).expect("form");
+        assert_eq!(form.value(0), "sdc1");
+        let unknown = Form::new(vec![Field::new("Copy from", "sdq9", "")]);
+        assert!(w.build_from_form(FormKind::Restore, "sdb1", &unknown).unwrap_err().contains("sdq9"));
+    }
+
+    #[test]
+    fn a_new_image_form_builds_a_plan_in_the_documents_folder() {
+        let mut w = DiskUtility::new();
+        w.home = "/nonexistent-home".into();
+        assert!(w.ask_menu(Ask::NewImage));
+        assert_eq!(w.sheet.as_ref().and_then(|p| p.kind), Some(FormKind::NewImage));
+        let form = Form::new(vec![Field::new("Name", "Backup", ""), Field::new("Size", "100 MB", "")]);
+        match w.build_from_form(FormKind::NewImage, "", &form) {
+            Ok(Built::Plan { verb, name, plan }) => {
+                assert_eq!((verb, name.as_str()), ("Creating", "Backup.img"));
+                assert_eq!(plan.first().map(|c| c.program), Some("mkdir"));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_click_on_a_field_moves_the_focus() {
+        let mut w = DiskUtility::new();
+        assert!(w.ask_menu(Ask::NewImage));
+        let layout = w.form_layout().expect("layout");
+        assert_eq!(layout.fields.len(), 2);
+        let r = layout.fields[1];
+        let (px, py) = (r.x + 4.0, r.y + 4.0);
+        assert_eq!(w.sheet.as_ref().expect("sheet").sheet.hit(w.window_rect(), UNIFIED_BAR_PT, 1.0, px, py), Hit::Panel);
+        assert_eq!(layout.fields.iter().position(|f| f.contains(px, py)), Some(1));
+        assert!(w.activate(Target::Field(1), 1.0));
+        assert_eq!(w.sheet.as_ref().and_then(|p| p.form.as_ref()).map(|f| f.focus), Some(1));
+    }
+
+    #[test]
+    fn return_closes_the_info_sheet() {
+        let mut w = one_stick();
+        w.selected = Some("sdb1".into());
+        assert!(w.ask_menu(Ask::Info));
+        assert!(w.key(&KeyInput::Code(13)));
+        assert!(w.sheet.is_none());
     }
 }

@@ -45,8 +45,8 @@
    "area": "menu",
    "apple": "File > Get Info",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/main.rs:MENU_INFO",
-   "note": "File > Get Info (cmd+I) opens a sheet with all facts (model, parent disk, image file). Not a separate window and no UUID or block size yet (the scan does not read them).",
+   "bifrost": "springboard/apps/diskutil-desktop/src/model.rs:detail_rows",
+   "note": "Get Info (cmd+I) is a sheet, not a separate window, and now lists UUID, partition map, serial number and block size from the udev database and sysfs. Not every lsblk -O field is read. Needs a check on the lab machine.",
    "wire": "Add File > Get Info (cmd+I) opening a window listing all lsblk -O fields for the node."
   },
   {
@@ -63,8 +63,8 @@
    "area": "panel",
    "apple": "SUEraseSheetController.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:Ask::Erase",
-   "note": "Disk menu picks ext4, exFAT or FAT32; a volume keeps its old name when valid. No name text field (the sheet kit has no text input), no NTFS or btrfs (the disk helper lacks them), no MBR scheme.",
+   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:build_from_form",
+   "note": "The Erase sheet has a Name field (Tab and Return work); the Disk menu offers ext4, exFAT, FAT32, NTFS and Btrfs (springboard/core/src/disk_format.rs). The format is a Disk menu choice, not a popup in the sheet, and there is no MBR scheme choice yet (the helper writes GPT only). Needs a check on the lab machine.",
    "wire": "Extend the erase sheet with a Name text field, Format popup (ext4, exFAT, FAT32, NTFS, btrfs) and Scheme popup (GPT/MBR) for disks, feeding DiskRequest::EraseDisk fs/label."
   },
   {
@@ -81,35 +81,35 @@
    "area": "panel",
    "apple": "SUPartitionSheetController.nib, Disk > Partition",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:Ask::Partition",
-   "note": "Disk > Partition into 2 to 4 Equal Parts sends DiskRequest::PartitionDisk. No bar editor for custom sizes or resize yet.",
+   "bifrost": "springboard/apps/diskutil-desktop/src/ops.rs:parse_partition_sizes",
+   "note": "Disk > Partition and a toolbar button open a sheet where the size of each partition is typed (64 GB, 25%, rest); equal parts stay in the menu. No draggable bar to resize and no resize of an existing partition in place. Needs a check on the lab machine.",
    "wire": "Add a Partition sheet with a bar of partitions, add/remove/resize, then a privd DiskRequest::Partition (sgdisk) in bifrost-core and a toolbar button in window.rs:326."
   },
   {
    "feature": "Restore (copy a volume onto another)",
    "area": "panel",
    "apple": "SURestoreSheetController.nib, Disk > Restore",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: needs a new privileged request in the disk helper (dd/partclone with progress) that cannot be built here.",
+   "status": "partial",
+   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:Ask::Restore",
+   "note": "Disk > Restore copies an unmounted volume or disk onto another of the same kind and at least the same size through disk.restore_volume (dd in the helper, springboard/core/src/disk_format.rs:restore_volume). No image source, no progress percentage and no Scan Image For Restore.",
    "wire": "Add a Restore sheet picking source volume or image; privd request running dd/partclone with progress."
   },
   {
    "feature": "Rename volume",
    "area": "menu",
    "apple": "Disk > Rename",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: needs a text field in a sheet; the sheet kit has none yet.",
+   "status": "partial",
+   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:Ask::Rename",
+   "note": "Disk > Rename opens a Name sheet and sends disk.rename_volume (e2label, fatlabel, exfatlabel, ntfslabel, btrfs filesystem label). Unmounted volumes only; no inline rename in the sidebar.",
    "wire": "Inline rename in the sidebar or a sheet; privd request using e2label/fatlabel/exfatlabel."
   },
   {
    "feature": "Create image (blank, from folder, from device)",
    "area": "menu",
    "apple": "File > New Image",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: needs a save panel plus privileged mkfs/dd plans.",
+   "status": "partial",
+   "bifrost": "springboard/apps/diskutil-desktop/src/ops.rs:new_image_plan",
+   "note": "File > New Blank Image (cmd+N) asks for a name and size, saves the image in Documents, formats it with the Disk menu format and opens it. No save panel for the location, no image from a folder or from a device.",
    "wire": "Add File > New Image submenu: blank image via truncate+mkfs, from folder via mkfs -d / mksquashfs, from device via dd, with a save panel (CreateDiskImageAccessory equivalent)."
   },
   {
@@ -117,17 +117,17 @@
    "area": "menu",
    "apple": "File > Open Disk Image",
    "status": "partial",
-   "bifrost": "springboard/apps/diskutil-desktop/src/main.rs:28",
-   "note": "Detach Disk Image exists; no open/attach.",
+   "bifrost": "springboard/apps/diskutil-desktop/src/main.rs:document",
+   "note": "File > Open Disk Image (cmd+O) uses the open panel and attaches the chosen file read-only through hdiutil; the path is read back from the open file descriptor. Needs a check on the lab machine.",
    "wire": "Add File > Open Disk Image... using the SDK open panel and a losetup -P attach through disk_session."
   },
   {
    "feature": "Convert / Resize image, Change Password",
    "area": "menu",
    "apple": "Images > Convert, Resize, Scan Image For Restore; File > Change Password",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: needs image tool plans and a password field.",
+   "status": "partial",
+   "bifrost": "springboard/apps/diskutil-desktop/src/ops.rs:convert_plan",
+   "note": "Images > Convert to qcow2 and Convert to Raw write a copy next to the selected image with qemu-img. No Resize, no Scan Image For Restore and no Change Password (needs a password field and a LUKS request).",
    "wire": "Images menu with Convert (qemu-img convert), Resize (truncate + resize2fs); LUKS change password via cryptsetup through privd."
   },
   {

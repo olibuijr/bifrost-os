@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0
+
+- Sheets can take text: a name or size field with the keyboard (Tab between fields, Return confirms, Escape cancels).
+- Erase asks for the volume name; the Disk menu adds NTFS and Btrfs to the formats.
+- Disk > Rename renames an unmounted volume (ext4, exFAT, FAT32, NTFS, Btrfs) through the disk helper.
+- Disk > Partition (and a toolbar button) takes the size of each partition, such as `64 GB, 25%, rest`.
+- Disk > Restore copies an unmounted volume or disk onto another of the same kind that is at least as large.
+- File > New Blank Image creates and formats an image in Documents and opens it; File > Open Disk Image attaches an image file.
+- Images > Convert to qcow2 and Convert to Raw write a converted copy of the selected image next to it.
+- Get Info lists the UUID, partition map, serial number and block size.
+
 ## 0.5.0
 
 - File > Show in Files (cmd+shift+R) opens the selected volume's mount point in the file manager.

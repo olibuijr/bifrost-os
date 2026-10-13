@@ -1,7 +1,7 @@
 //! Reads the disks and their partitions from the kernel's device tree (`/sys/block`) and the file system type and label
 //! from the udev database (`/run/udev/data`). Only reads files; nothing is written.
 
-use crate::model::{is_hidden_device, parse_udev_db, Kind, Node};
+use crate::model::{is_hidden_device, parse_udev_db, parse_udev_value, Kind, Node};
 use std::fs;
 use std::path::Path;
 
@@ -33,6 +33,15 @@ fn udev_fields(sys_dev: &Path, udev_dir: &Path) -> (Option<String>, Option<Strin
     }
 }
 
+/// The raw udev database text of a block device, or empty when it has none.
+fn udev_text(sys_dev: &Path, udev_dir: &Path) -> String {
+    let dev = read_trim(&sys_dev.join("dev"));
+    if dev.is_empty() {
+        return String::new();
+    }
+    fs::read_to_string(udev_dir.join(format!("b{dev}"))).unwrap_or_default()
+}
+
 /// Reads every disk under `sys_root/block`, with its partitions after it. `sys_root` is `/sys` on the device and
 /// `udev_dir` is `/run/udev/data`. Hidden devices (memory, device-mapper, RAID, and loop devices with no image) are left out.
 pub fn read_nodes(sys_root: &Path, udev_dir: &Path) -> Vec<Node> {
@@ -48,6 +57,8 @@ pub fn read_nodes(sys_root: &Path, udev_dir: &Path) -> Vec<Node> {
         let disk_dir = sys_root.join("block").join(&name);
         let (fs_type, label) = udev_fields(&disk_dir, udev_dir);
         let image_file = backing_file(&disk_dir);
+        let udev = udev_text(&disk_dir, udev_dir);
+        let block_size = read_trim(&disk_dir.join("queue/logical_block_size")).parse::<u64>().ok();
         let model = if image_file.is_some() { "Disk image".to_string() } else { read_trim(&disk_dir.join("device/model")) };
         out.push(Node {
             name: name.clone(),
@@ -60,6 +71,10 @@ pub fn read_nodes(sys_root: &Path, udev_dir: &Path) -> Vec<Node> {
             fs_type,
             label,
             image_file,
+            uuid: parse_udev_value(&udev, "ID_FS_UUID"),
+            part_table: parse_udev_value(&udev, "ID_PART_TABLE_TYPE"),
+            serial: parse_udev_value(&udev, "ID_SERIAL_SHORT"),
+            block_size,
             ..Node::default()
         });
         let mut parts: Vec<String> = match fs::read_dir(&disk_dir) {
@@ -83,6 +98,8 @@ pub fn read_nodes(sys_root: &Path, udev_dir: &Path) -> Vec<Node> {
                 read_only: read_trim(&part_dir.join("ro")) == "1",
                 fs_type,
                 label,
+                uuid: parse_udev_value(&udev_text(&part_dir, udev_dir), "ID_FS_UUID"),
+                block_size,
                 ..Node::default()
             });
         }

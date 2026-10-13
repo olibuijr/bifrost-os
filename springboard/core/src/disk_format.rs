@@ -320,6 +320,25 @@ pub fn rename_volume(
     Ok(vec![fs.label_command(&dev, label)])
 }
 
+/// Plans a blank disk image: a sparse file of `size_bytes` at `path` (an absolute path), formatted with `fs`. Nothing
+/// here needs root; the caller runs the plan as the user. The label follows the same rules as a volume label.
+pub fn blank_image_plan(path: &str, size_bytes: u64, fs: Personality, label: &str) -> Result<Vec<Command>, Refusal> {
+    if !path.starts_with('/') || path.contains('\0') {
+        return Err(Refusal::InvalidOption(path.to_string()));
+    }
+    if size_bytes < MIN_IMAGE_BYTES {
+        return Err(Refusal::InvalidOption(format!("{size_bytes} bytes")));
+    }
+    check_label(label, fs)?;
+    Ok(vec![
+        Command { program: "truncate", args: vec!["-s".to_string(), size_bytes.to_string(), path.to_string()] },
+        fs.make_command(path, label),
+    ])
+}
+
+/// The smallest image a file system tool formats (4 MiB).
+pub const MIN_IMAGE_BYTES: u64 = 4 << 20;
+
 /// Plans a block copy of `source` onto `target` (Restore). Neither may be mounted, the target must be writable, and the
 /// target must be at least as large as the source. Everything on the target is lost.
 pub fn restore_volume(
@@ -618,5 +637,21 @@ mod tests {
         assert!(restore_volume(&src, &dst, &a, &c, "disk").is_err());
         assert!(restore_volume(&src, &src, &a, &c, "disk").is_err());
         assert_eq!(restore_volume(&disk("sdb1", Some("/m")), &disk("sdc1", None), &a, &c, "disk"), Err(Refusal::Mounted("/m".into())));
+    }
+
+    #[test]
+    fn a_blank_image_is_a_sparse_file_with_a_file_system() {
+        let plan = blank_image_plan("/home/me/Docs/Backup.img", 100 << 20, Personality::Ext4, "Backup").unwrap();
+        assert_eq!(
+            words(&plan),
+            vec![("truncate", s(&["-s", "104857600", "/home/me/Docs/Backup.img"])), ("mkfs.ext4", s(&["-F", "-q", "-L", "Backup", "/home/me/Docs/Backup.img"]))]
+        );
+    }
+
+    #[test]
+    fn a_blank_image_refuses_a_relative_path_a_tiny_size_and_a_bad_label() {
+        assert!(blank_image_plan("a.img", 100 << 20, Personality::Ext4, "").is_err());
+        assert!(blank_image_plan("/a.img", 1000, Personality::Ext4, "").is_err());
+        assert!(blank_image_plan("/a.img", 100 << 20, Personality::Fat32, "WAY TOO LONG LABEL").is_err());
     }
 }
