@@ -267,6 +267,7 @@ pub struct GlyphTables<'a> {
     glyf: Option<&'a [u8]>,
     loca: Option<&'a [u8]>,
     post: Option<&'a [u8]>,
+    cff: Option<crate::cff::Cff<'a>>,
     num_hmetrics: u16,
     pub glyph_count: u16,
     loca_long: bool,
@@ -291,6 +292,7 @@ impl<'a> GlyphTables<'a> {
             glyf: t.table(b"glyf"),
             loca: t.table(b"loca"),
             post: t.table(b"post"),
+            cff: t.table(b"CFF ").and_then(crate::cff::Cff::parse),
             num_hmetrics: u16_at(hhea, 34)?.max(1),
             glyph_count: u16_at(t.table(b"maxp")?, 4)?,
             loca_long: i16_at(head, 50)? != 0,
@@ -313,13 +315,16 @@ impl<'a> GlyphTables<'a> {
         }
     }
 
-    /// The glyph's box from its outline header. Empty glyphs (spaces) give a zero box. None for outline-less
-    /// (CFF) files or a glyph out of range.
+    /// The glyph's box from its outline header. Empty glyphs (spaces) give a zero box. None for a glyph out of range or a
+    /// file with no outlines. TrueType boxes come from the glyph header, CFF boxes from the charstring.
     pub fn glyph_box(&self, gid: u16) -> Option<GlyphBox> {
         if gid >= self.glyph_count {
             return None;
         }
-        let (glyf, loca) = (self.glyf?, self.loca?);
+        let (Some(glyf), Some(loca)) = (self.glyf, self.loca) else {
+            let [x0, y0, x1, y1] = self.cff.as_ref()?.glyph_bounds(gid)?;
+            return Some(GlyphBox { x_min: x0.floor() as i16, y_min: y0.floor() as i16, x_max: x1.ceil() as i16, y_max: y1.ceil() as i16 });
+        };
         let (a, b) = if self.loca_long {
             (u32_at(loca, 4 * gid as usize)? as usize, u32_at(loca, 4 * gid as usize + 4)? as usize)
         } else {

@@ -8,7 +8,7 @@ use crate::font::{Font, Style, Var};
 use crate::fontinfo::{FaceInfo, GlyphTables, NameId, Tables, Traits};
 use crate::gfx::Image;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 /// A value in the attribute listing of a spec.
 #[derive(Clone, Debug, PartialEq)]
@@ -179,11 +179,38 @@ pub enum AutoActivation {
     Ask,
 }
 
-/// What a face is stored in.
+/// What a face is stored in: bytes handed in, or a file mapped into memory (never unmapped).
 #[derive(Clone, Debug)]
 pub enum Source {
-    Path(String),
+    Mapped { path: String, data: &'static [u8] },
     Data(Arc<Vec<u8>>),
+}
+
+impl Source {
+    /// The file the face came from, if it came from one.
+    pub fn path(&self) -> Option<&str> {
+        match self {
+            Source::Mapped { path, .. } => Some(path),
+            Source::Data(_) => None,
+        }
+    }
+}
+
+/// Font file bytes, shared or mapped.
+#[derive(Clone, Debug)]
+pub enum Bytes {
+    Shared(Arc<Vec<u8>>),
+    Static(&'static [u8]),
+}
+
+impl std::ops::Deref for Bytes {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        match self {
+            Bytes::Shared(v) => v,
+            Bytes::Static(s) => s,
+        }
+    }
 }
 
 /// The facts the manager keeps about one face.
@@ -253,7 +280,6 @@ pub struct FontManager {
     activation: AutoActivation,
     listeners: Vec<Listener>,
     events: Vec<FontEvent>,
-    files: Mutex<HashMap<String, Arc<Vec<u8>>>>,
     collections: Vec<(String, Vec<String>)>,
 }
 
@@ -265,7 +291,6 @@ impl Default for FontManager {
             activation: AutoActivation::Default,
             listeners: Vec::new(),
             events: Vec::new(),
-            files: Mutex::new(HashMap::new()),
             collections: Vec::new(),
         }
     }
@@ -295,13 +320,9 @@ impl FontManager {
     /// Registers the font file at `url` (a plain path or a `file://` URL).
     pub fn register_url(&mut self, url: &str, scope: Scope) -> Result<String, FontError> {
         let path = strip_url(url);
-        let bytes = std::fs::read(path).map_err(|e| FontError::Io(e.to_string()))?;
-        let info = FaceInfo::parse(&bytes).ok_or(FontError::Invalid)?;
-        let ps = self.add(FaceRecord::from_info(&info), Source::Path(path.to_string()), scope)?;
-        if let Ok(mut f) = self.files.lock() {
-            f.insert(path.to_string(), Arc::new(bytes));
-        }
-        Ok(ps)
+        let data = crate::assets::map_file(path).map_err(|e| FontError::Io(e.to_string()))?;
+        let info = FaceInfo::parse(data).ok_or(FontError::Invalid)?;
+        self.add(FaceRecord::from_info(&info), Source::Mapped { path: path.to_string(), data }, scope)
     }
 
     fn add(&mut self, record: FaceRecord, source: Source, scope: Scope) -> Result<String, FontError> {
@@ -321,9 +342,6 @@ impl FontManager {
             return Err(FontError::InUse);
         }
         let gone = self.faces.remove(i);
-        if let (Source::Path(p), Ok(mut f)) = (&gone.source, self.files.lock()) {
-            f.remove(p);
-        }
         self.changed(FontEvent::Unregistered(gone.record.postscript_name));
         Ok(())
     }
@@ -334,7 +352,7 @@ impl FontManager {
         let names: Vec<String> = self
             .faces
             .iter()
-            .filter(|f| matches!(&f.source, Source::Path(p) if *p == path) && f.scope != Scope::System)
+            .filter(|f| f.source.path() == Some(path.as_str()) && f.scope != Scope::System)
             .map(|f| f.record.postscript_name.clone())
             .collect();
         names.iter().filter(|n| self.unregister(n).is_ok()).count()
@@ -427,18 +445,41 @@ impl FontManager {
     }
 
     /// The file bytes of face `i`.
-    pub fn bytes(&self, i: usize) -> Option<Arc<Vec<u8>>> {
+    pub fn bytes(&self, i: usize) -> Option<Bytes> {
+        Some(match &self.faces.get(i)?.source {
+            Source::Data(d) => Bytes::Shared(d.clone()),
+            Source::Mapped { data, .. } => Bytes::Static(data),
+        })
+    }
+
+    /// The bytes of face `i` as a slice that lives for the whole process: a mapped file as is, handed-in data
+    /// as a leaked copy. For long-lived renderer faces (see `fontfallback`).
+    pub fn static_bytes(&self, i: usize) -> Option<&'static [u8]> {
         match &self.faces.get(i)?.source {
-            Source::Data(d) => Some(d.clone()),
-            Source::Path(p) => {
-                if let Some(d) = self.files.lock().ok()?.get(p) {
-                    return Some(d.clone());
+            Source::Mapped { data, .. } => Some(data),
+            Source::Data(d) => Some(Box::leak(d.to_vec().into_boxed_slice())),
+        }
+    }
+
+    /// Face indices in fallback order: the `extra` families first, then the language's default cascade, then every
+    /// other face. `skip` (the face being drawn) is left out.
+    pub fn fallback_order(&self, extra: &[String], lang: &str, skip: Option<usize>) -> Vec<usize> {
+        let mut order: Vec<usize> = Vec::new();
+        let mut names: Vec<String> = extra.to_vec();
+        names.extend(default_cascade(lang).into_iter().map(String::from));
+        for n in &names {
+            for i in self.matching(&FontSpec::new().family(n)) {
+                if !order.contains(&i) && Some(i) != skip {
+                    order.push(i);
                 }
-                let d = Arc::new(std::fs::read(p).ok()?);
-                self.files.lock().ok()?.insert(p.clone(), d.clone());
-                Some(d)
             }
         }
+        for i in 0..self.faces.len() {
+            if !order.contains(&i) && Some(i) != skip {
+                order.push(i);
+            }
+        }
+        order
     }
 
     fn score(rec: &FaceRecord, spec: &FontSpec) -> f32 {
@@ -464,6 +505,8 @@ impl FontManager {
             && spec.style.as_deref().is_none_or(|n| eq_ci(n, &rec.style))
             && spec.full_name.as_deref().is_none_or(|n| eq_ci(n, &rec.full_name))
             && spec.postscript_name.as_deref().is_none_or(|n| eq_ci(n, &rec.postscript_name))
+            // fixed pitch is mandatory when asked for
+            && !(spec.trait_mask & Traits::MONO != 0 && spec.traits.is_mono() && !rec.traits.is_mono())
     }
 
     /// Indices of the faces that satisfy the spec's names, best first. Ties keep registration order.
@@ -608,7 +651,7 @@ pub fn default_cascade(lang: &str) -> Vec<&'static str> {
 /// One face at one size: names, metrics, glyphs, tables, copies with changed attributes.
 #[derive(Clone)]
 pub struct FontObject {
-    data: Arc<Vec<u8>>,
+    data: Bytes,
     info: FaceInfo,
     spec: FontSpec,
     size: f32,
@@ -628,10 +671,10 @@ impl std::fmt::Debug for FontObject {
 impl FontObject {
     /// A font from file bytes. `size` falls back to 12 when not finite and above zero.
     pub fn from_data(data: Vec<u8>, size: f32, matrix: Option<[f32; 6]>) -> Option<FontObject> {
-        Self::build(Arc::new(data), None, size, matrix, FontSpec::new())
+        Self::build(Bytes::Shared(Arc::new(data)), None, size, matrix, FontSpec::new())
     }
 
-    fn build(data: Arc<Vec<u8>>, face: Option<usize>, size: f32, matrix: Option<[f32; 6]>, spec: FontSpec) -> Option<FontObject> {
+    fn build(data: Bytes, face: Option<usize>, size: f32, matrix: Option<[f32; 6]>, spec: FontSpec) -> Option<FontObject> {
         let info = FaceInfo::parse(&data)?;
         Font::parse(&data)?;
         let size = if size.is_finite() && size > 0.0 { size } else { 12.0 };
@@ -873,8 +916,13 @@ impl FontObject {
 
     /// Advance widths in points.
     pub fn advances(&self, gids: &[u16]) -> Vec<f32> {
-        let g = GlyphTables::new(&self.data);
         let k = self.k();
+        if !self.variations.is_empty() {
+            if let Some(f) = self.font() {
+                return gids.iter().map(|&id| f.advance_var(id, &self.variations) * k).collect();
+            }
+        }
+        let g = GlyphTables::new(&self.data);
         gids.iter().map(|&id| g.as_ref().map_or(0.0, |g| g.advance(id) as f32 * k)).collect()
     }
 
@@ -883,8 +931,8 @@ impl FontObject {
         self.font().map_or(0.0, |f| f.measure_var(text, self.size, &self.variations))
     }
 
-    /// Ink boxes in points relative to each glyph origin, y up. Empty (zero) for glyphs the face has no box for
-    /// (outline-less formats).
+    /// Ink boxes in points relative to each glyph origin, y up. Zero for glyphs the face has no box for
+    /// (out of range). TrueType and CFF outlines are both read.
     pub fn bounding_rects(&self, gids: &[u16]) -> Vec<RectF> {
         let g = GlyphTables::new(&self.data);
         let k = self.k();
@@ -937,49 +985,18 @@ impl FontObject {
     /// that covers them (the spec's cascade, then the language default, then every other face). Characters
     /// nothing covers stay with this face.
     pub fn fallback_runs(&self, mgr: &FontManager, text: &str, lang: &str) -> Vec<FallbackRun> {
-        let mut order: Vec<usize> = Vec::new();
-        let mut names: Vec<String> = self.spec.cascade.clone();
-        names.extend(default_cascade(lang).into_iter().map(String::from));
-        for n in &names {
-            for i in mgr.matching(&FontSpec::new().family(n)) {
-                if !order.contains(&i) && Some(i) != self.face {
-                    order.push(i);
-                }
+        let order = mgr.fallback_order(&self.spec.cascade, lang, self.face);
+        let mut loaded: HashMap<usize, Option<Bytes>> = HashMap::new();
+        let runs = crate::fontfallback::split(text, |ch| {
+            if self.glyph_for_char(ch) != 0 || ch.is_whitespace() || ch.is_control() {
+                return None;
             }
-        }
-        for i in 0..mgr.faces().len() {
-            if !order.contains(&i) && Some(i) != self.face {
-                order.push(i);
-            }
-        }
-        let mut loaded: HashMap<usize, Arc<Vec<u8>>> = HashMap::new();
-        let mut runs: Vec<FallbackRun> = Vec::new();
-        for ch in text.chars() {
-            let mut face = None;
-            if self.glyph_for_char(ch) == 0 && !ch.is_whitespace() && !ch.is_control() {
-                for &i in &order {
-                    let bytes = match loaded.get(&i) {
-                        Some(b) => b.clone(),
-                        None => match mgr.bytes(i) {
-                            Some(b) => {
-                                loaded.insert(i, b.clone());
-                                b
-                            }
-                            None => continue,
-                        },
-                    };
-                    if Font::parse(&bytes).is_some_and(|f| f.glyph(ch) != 0) {
-                        face = Some(i);
-                        break;
-                    }
-                }
-            }
-            match runs.last_mut() {
-                Some(r) if r.face == face => r.text.push(ch),
-                _ => runs.push(FallbackRun { face, text: ch.to_string() }),
-            }
-        }
-        runs
+            order.iter().copied().find(|&i| {
+                let bytes = loaded.entry(i).or_insert_with(|| mgr.bytes(i));
+                bytes.as_ref().is_some_and(|b| Font::parse(b).is_some_and(|f| f.glyph(ch) != 0))
+            })
+        });
+        runs.into_iter().map(|(face, t)| FallbackRun { face, text: t.to_string() }).collect()
     }
 
     /// Draws `text` as images with their x offsets in px, cascading to other faces for missing glyphs.
@@ -1010,6 +1027,7 @@ impl FontObject {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
 
     fn sf() -> Vec<u8> {
         std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).expect("assets/SFUI.ttf")
@@ -1176,6 +1194,18 @@ mod tests {
         let ob = f.optical_bounds(&ids);
         assert_eq!(ob.len(), 2);
         assert!(f.bounding_rects(&[u16::MAX])[0] == RectF::default());
+    }
+
+    #[test]
+    fn advances_follow_variations() {
+        let m = mgr();
+        let f = FontObject::from_spec(&m, &FontSpec::new().size(100.0)).unwrap();
+        if f.variation_axes().iter().any(|a| &a.0 == b"wght") {
+            let g = f.glyph_for_char('H');
+            let thin = f.with_variations(&[(*b"wght", f.variation_axes().iter().find(|a| &a.0 == b"wght").unwrap().1)]);
+            let heavy = f.with_variations(&[(*b"wght", f.variation_axes().iter().find(|a| &a.0 == b"wght").unwrap().3)]);
+            assert!(heavy.advances(&[g])[0] > thin.advances(&[g])[0]);
+        }
     }
 
     #[test]

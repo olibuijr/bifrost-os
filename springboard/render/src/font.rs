@@ -56,30 +56,6 @@ impl LineMetrics {
     }
 }
 
-/// The first face in `faces` with a glyph for `ch`, or None when no face covers it. A face with glyph 0 does not
-/// count as covering the character (`.notdef` is what a miss renders as).
-pub fn face_for_char(faces: &[Font<'_>], ch: char) -> Option<usize> {
-    faces.iter().position(|f| f.glyph(ch) != 0)
-}
-
-/// Splits `text` into runs of (face index, text): a run is a stretch of characters that share a face. Characters no
-/// face covers go to face 0, the requested font, so they still render as its `.notdef`. `faces` must not be empty.
-pub fn cascade_runs<'t>(faces: &[Font<'_>], text: &'t str) -> Vec<(usize, &'t str)> {
-    let mut runs: Vec<(usize, usize, usize)> = Vec::new(); // (face, start, end) byte offsets
-    for (i, ch) in text.char_indices() {
-        let face = face_for_char(faces, ch).unwrap_or(0);
-        let end = i + ch.len_utf8();
-        if runs.last().is_some_and(|r| r.0 == face) {
-            if let Some(run) = runs.last_mut() {
-                run.2 = end;
-            }
-        } else {
-            runs.push((face, i, end));
-        }
-    }
-    runs.into_iter().map(|(face, s, e)| (face, &text[s..e])).collect()
-}
-
 fn u16_at(d: &[u8], o: usize) -> Option<u16> {
     Some(u16::from_be_bytes(d.get(o..o + 2)?.try_into().ok()?))
 }
@@ -245,6 +221,11 @@ impl<'a> Font<'a> {
         }
         let g = u16_at(d, ranges + 2 * i + range + 2 * (c - start) as usize)?;
         (g != 0).then(|| g.wrapping_add(delta))
+    }
+
+    /// Advance width of `gid` in font units at a variation instance.
+    pub fn advance_var(&self, gid: u16, vars: &[Var]) -> f32 {
+        self.advance_at(gid, &self.normalized(vars))
     }
 
     pub fn advance(&self, gid: u16) -> f32 {
@@ -682,6 +663,14 @@ impl Font<'_> {
         if segs.iter().any(|s| s.1) {
             return segs.iter().map(|&(t, e)| if e { emoji_advance(px) } else { self.measure_var(t, px, vars) }).sum();
         }
+        if let Some((faces, runs)) = crate::fontfallback::runs(self, text) {
+            return runs.iter().map(|&(f, t)| f.map_or_else(|| self.measure_plain(t, px, vars), |i| faces[i].measure_plain(t, px, vars))).sum();
+        }
+        self.measure_plain(text, px, vars)
+    }
+
+    /// Width with no emoji or fallback handling: every character takes this face's own glyph.
+    pub(crate) fn measure_plain(&self, text: &str, px: f32, vars: &[Var]) -> f32 {
         let norm = self.normalized(vars);
         let k = px / self.upem;
         text.chars().map(|c| self.advance_at(self.glyph(c), &norm) * k).sum()
@@ -767,8 +756,55 @@ impl Font<'_> {
         if segs.iter().any(|s| s.1) {
             return self.render_mixed(&segs, st, vars);
         }
+        if let Some((faces, runs)) = crate::fontfallback::runs(self, text) {
+            return self.render_fallback(&faces, &runs, st, vars);
+        }
+        self.render_plain(text, st, vars)
+    }
+
+    /// Renders with this face's own glyphs only (no emoji or fallback handling).
+    pub(crate) fn render_plain(&self, text: &str, st: &Style, vars: &[Var]) -> Image {
         let gids: Vec<u16> = text.chars().map(|c| self.glyph(c)).collect();
         self.render_glyphs(&gids, st, &self.normalized(vars))
+    }
+
+    /// Text whose runs come from different faces, laid on one baseline.
+    fn render_fallback(&self, faces: &[Font<'static>], runs: &[(Option<usize>, &str)], st: &Style, vars: &[Var]) -> Image {
+        let k = st.px / self.upem;
+        let pad = 2 + st.embolden.ceil() as usize + if st.shadow { (st.px / 8.0).ceil() as usize } else { 0 };
+        let base_h = ((self.ascent - self.descent) * k).ceil() as usize + 2 * pad;
+        let mut parts: Vec<(i32, i32, Image)> = Vec::new();
+        let mut x = 0.0f32;
+        for &(f, t) in runs {
+            let (img, adv, dy) = match f {
+                None => (self.render_plain(t, st, vars), self.measure_plain(t, st.px, vars), 0.0),
+                Some(i) => {
+                    let face = &faces[i];
+                    let fk = st.px / face.upem;
+                    (face.render_plain(t, st, vars), face.measure_plain(t, st.px, vars), self.ascent * k - face.ascent * fk)
+                }
+            };
+            parts.push((x.round() as i32, dy.round() as i32, img));
+            x += adv;
+        }
+        let top = parts.iter().map(|p| p.1).min().unwrap_or(0).min(0);
+        let bottom = parts.iter().map(|p| p.1 + p.2.h as i32).max().unwrap_or(0).max(base_h as i32);
+        let w = x.ceil() as usize + 2 * pad;
+        let h = (bottom - top).max(1) as usize;
+        let mut out = Image::new(w, h);
+        for (px0, dy, img) in &parts {
+            let oy = dy - top;
+            for iy in 0..img.h as i32 {
+                for ix in 0..img.w as i32 {
+                    let (dx, ty) = (px0 + ix, oy + iy);
+                    if dx >= 0 && ty >= 0 && (dx as usize) < w && (ty as usize) < h {
+                        let d = &mut out.px[ty as usize * w + dx as usize];
+                        *d = crate::gfx::over(*d, img.px[iy as usize * img.w + ix as usize]);
+                    }
+                }
+            }
+        }
+        out
     }
 
     /// Renders one glyph by id (symbols looked up by name rather than character).
@@ -1094,25 +1130,5 @@ mod tests {
         assert!((double.ascent - 2.0 * m.ascent).abs() < 1e-3, "linear in size");
         assert!((double.underline_position - 2.0 * m.underline_position).abs() < 1e-3);
         assert!((m.ascent - f.ascent * 20.0 / f.upem).abs() < 1e-3);
-    }
-
-    #[test]
-    fn a_character_takes_the_first_face_that_covers_it() {
-        let data = sf();
-        let faces = vec![Font::parse(&data).unwrap(), Font::parse(&data).unwrap()];
-        assert_eq!(face_for_char(&faces, 'A'), Some(0));
-        assert_eq!(face_for_char(&faces, '\u{10FFFD}'), None, "a noncharacter is in no face");
-    }
-
-    #[test]
-    fn cascade_runs_merge_neighbours_and_keep_misses_on_the_first_face() {
-        let data = sf();
-        let faces = vec![Font::parse(&data).unwrap(), Font::parse(&data).unwrap()];
-        let text = "A\u{10FFFD}\u{00E9}A";
-        let runs = cascade_runs(&faces, text);
-        assert_eq!(runs, vec![(0usize, text)], "one run: every character maps to face 0");
-        assert_eq!(cascade_runs(&faces, "").len(), 0);
-        let rejoined: String = runs.iter().map(|r| r.1).collect();
-        assert_eq!(rejoined, text, "runs cover the whole text in order");
     }
 }
