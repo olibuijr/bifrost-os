@@ -22,6 +22,58 @@ pub const METHOD_GET: &str = "get";
 /// The event the shell pushes when the setting changes. Its body is the new flag.
 pub const EVENT_CHANGED: &str = "changed";
 
+/// The method that returns every display accommodation.
+pub const METHOD_OPTIONS: &str = "options";
+/// The event the shell pushes when any display accommodation changes. Its body is the `options` object.
+pub const EVENT_OPTIONS_CHANGED: &str = "options_changed";
+
+/// The display accommodations, named after the Workspace accessibility display flags (`accessibilityDisplayShouldIncreaseContrast`, ...).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DisplayOptions {
+    pub increase_contrast: bool,
+    pub reduce_transparency: bool,
+    pub differentiate_without_color: bool,
+    pub invert_colors: bool,
+    pub reduce_motion: bool,
+    pub dim_flashing_lights: bool,
+}
+
+impl DisplayOptions {
+    /// Decodes the `options` reply or `options_changed` body. A missing key reads as off; a non-object is an error.
+    pub fn from_json(v: &Json) -> Result<Self, String> {
+        if !matches!(v, Json::Obj(_)) {
+            return Err("accessibility_display: the options are not an object".to_string());
+        }
+        let flag = |k: &str| matches!(v.get(k), Some(Json::Bool(true)));
+        Ok(DisplayOptions {
+            increase_contrast: flag("increase_contrast"),
+            reduce_transparency: flag("reduce_transparency"),
+            differentiate_without_color: flag("differentiate_without_color"),
+            invert_colors: flag("invert_colors"),
+            reduce_motion: flag("reduce_motion"),
+            dim_flashing_lights: flag("dim_flashing_lights"),
+        })
+    }
+}
+
+/// Asks the shell for every display accommodation. Returns the request id the reply carries.
+pub fn options(ctx: &Ctx) -> u32 {
+    service::call(ctx, SERVICE, METHOD_OPTIONS, &Json::Null)
+}
+
+/// Decodes an `options` reply.
+pub fn options_from_reply(result: &Result<Json, String>) -> Result<DisplayOptions, String> {
+    match result {
+        Ok(body) => DisplayOptions::from_json(body),
+        Err(e) => Err(e.clone()),
+    }
+}
+
+/// If `service`/`event` is the options change event, decodes its body. None for any other event.
+pub fn options_changed(service_name: &str, event: &str, body: &Json) -> Option<Result<DisplayOptions, String>> {
+    (service_name == SERVICE && event == EVENT_OPTIONS_CHANGED).then(|| DisplayOptions::from_json(body))
+}
+
 /// Asks the shell for the Dim Flashing Lights setting. Returns the request id the reply carries.
 pub fn get(ctx: &Ctx) -> u32 {
     service::call(ctx, SERVICE, METHOD_GET, &Json::Null)
@@ -64,6 +116,24 @@ mod tests {
         assert_eq!(from_reply(&Ok(Json::Bool(false))), Ok(false));
         assert!(from_reply(&Ok(Json::Null)).is_err());
         assert_eq!(from_reply(&Err("no service".to_string())), Err("no service".to_string()));
+    }
+
+    #[test]
+    fn options_decode_every_flag() {
+        let body = Json::Obj(vec![("reduce_motion".to_string(), Json::Bool(true)), ("invert_colors".to_string(), Json::Bool(true))]);
+        let o = DisplayOptions::from_json(&body).unwrap();
+        assert!(o.reduce_motion && o.invert_colors);
+        assert!(!o.increase_contrast && !o.reduce_transparency && !o.differentiate_without_color && !o.dim_flashing_lights);
+        assert!(DisplayOptions::from_json(&Json::Null).is_err());
+        assert_eq!(options_from_reply(&Err("x".to_string())), Err("x".to_string()));
+    }
+
+    #[test]
+    fn only_the_options_event_is_decoded_as_options() {
+        let body = Json::Obj(vec![]);
+        assert!(options_changed(SERVICE, EVENT_OPTIONS_CHANGED, &body).is_some());
+        assert!(options_changed(SERVICE, EVENT_CHANGED, &body).is_none());
+        assert!(options_changed("screens", EVENT_OPTIONS_CHANGED, &body).is_none());
     }
 
     #[test]

@@ -59,16 +59,16 @@
   {
    "feature": "Custom actions and value setting",
    "apple": "accessibilityPerformPress, accessibilityIncrement, setAccessibilityValue",
-   "bifrost": "springboard/ui/src/ax.rs (Settable, Request, Notification); springboard/sdk/src/lib.rs (ax_set), springboard/proto/src/lib.rs (AxAction: Press, SetValue, Focus); wired: springboard/src/shell/accessibility/actions.rs; springboard/src/shell/axmap.rs (ax_actions, ax_action); springboard/src/bare/control.rs (ax actions, ax action)",
+   "bifrost": "springboard/ui/src/ax.rs (Settable, Request, Notification); springboard/sdk/src/lib.rs (ax_set), springboard/proto/src/lib.rs (AxAction: Press, SetValue, Focus); wired: springboard/src/shell/accessibility/actions.rs; springboard/src/shell/axmap.rs (ax_actions, ax_action); springboard/src/bare/control.rs (ax actions, ax action); springboard/ui/src/ax.rs (AccessibilityElement show_menu/cancel/confirm/pick, AxCustomAction, AxCustomRotor)",
    "status": "partial",
-   "note": "Default ax_set maps Press to a tap. springboard/ui/src/ax.rs now has role-keyed default handlers (Settable: slider SetValue clamps, Increment/Decrement step, text field SetValue, Focus; ValueChanged and FocusedUIElementChanged notifications); not yet routed from every app's ax_set, live Orca untested. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+   "note": "Default ax_set maps Press to a tap. springboard/ui/src/ax.rs now has role-keyed default handlers (Settable: slider SetValue clamps, Increment/Decrement step, text field SetValue, Focus; ValueChanged and FocusedUIElementChanged notifications); not yet routed from every app's ax_set, live Orca untested. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Element trait now has ShowMenu, Cancel, Confirm and Pick handlers, named custom actions and custom rotors; the AT-SPI bridge does not export them yet. Needs a Midget check."
   },
   {
    "feature": "System accessibility settings readable by apps",
    "apple": "AccessibilitySettings (reduce motion, increase contrast, reduce transparency, larger text)",
-   "bifrost": "springboard/proto/src/lib.rs:44 (Configure: reduce_motion, text_scale), springboard/render/src/appearance.rs (reduce_motion, increase_contrast, reduce_transparency), springboard/src/shell/accessibility/mod.rs",
+   "bifrost": "springboard/proto/src/lib.rs:44 (Configure: reduce_motion, text_scale), springboard/render/src/appearance.rs (reduce_motion, increase_contrast, reduce_transparency), springboard/src/shell/accessibility/mod.rs; springboard/sdk/src/accessibility_display.rs and springboard/src/shell/services/accessibility_display.rs (options, options_changed)",
    "status": "partial",
-   "note": "Apps receive reduce_motion and text_scale through Configure; contrast and transparency reach apps through the renderer (calendar-desktop follows them, see springboard/apps/calendar-desktop/CHANGELOG.md). No single SDK AccessibilitySettings struct."
+   "note": "Apps receive reduce_motion and text_scale through Configure; contrast and transparency reach apps through the renderer (calendar-desktop follows them, see springboard/apps/calendar-desktop/CHANGELOG.md). No single SDK AccessibilitySettings struct. The accessibility_display service now returns increase contrast, reduce transparency, differentiate without colour, invert colours, reduce motion and dim flashing lights, and pushes options_changed on any change. Needs a Midget check."
   },
   {
    "feature": "Display Zoom and magnification",

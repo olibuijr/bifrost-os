@@ -236,6 +236,16 @@ empty page, rotor change, press and unavailable press (`cue`, `take_earcons`; `s
 Status: partial. The cues are synthesised stand-ins, not the original sounds, and the sound player does not drain
 `take_earcons` yet (it lives in `bin/shell.rs`). The parity matrix holds no earcon rows to flip.
 
+### Accessibility actions, rotors and display options
+
+`bifrost_ui::ax::AccessibilityElement` has the rest of the action set: `accessibility_perform_show_menu`, `_cancel`,
+`_confirm` and `_pick` (all decline by default), plus `accessibility_custom_actions` (`AxCustomAction`, listed by name and
+run with `perform_custom_action`, which posts `layoutChanged`) and `accessibility_custom_rotors` (`AxCustomRotor`, whose
+`step(from, forward)` walks its element ids and wraps). Apps read all display options with
+`sdk::accessibility_display::options` and `options_changed`: `DisplayOptions` holds `increase_contrast`,
+`reduce_transparency`, `differentiate_without_color` (Button Shapes), `invert_colors` (always false), `reduce_motion` and
+`dim_flashing_lights`. The shell pushes `options_changed` once per change.
+
 ### Accessibility bridge (AT-SPI2)
 
 Screen readers (Orca) read BifrOSt apps through the AT-SPI2 bus. Three layers:

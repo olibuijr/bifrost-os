@@ -827,6 +827,78 @@ pub trait AccessibilityElement {
     fn accessibility_custom_content(&self) -> Vec<AxCustomContent> {
         Vec::new()
     }
+    /// `accessibilityPerformShowMenu()`: true when the element opened its context menu.
+    fn accessibility_perform_show_menu(&mut self) -> bool {
+        false
+    }
+    /// `accessibilityPerformCancel()`: true when the element dismissed itself or cancelled its edit.
+    fn accessibility_perform_cancel(&mut self) -> bool {
+        false
+    }
+    /// `accessibilityPerformConfirm()`: true when the element accepted its pending choice.
+    fn accessibility_perform_confirm(&mut self) -> bool {
+        false
+    }
+    /// `accessibilityPerformPick()`: true when the element picked the item it stands for.
+    fn accessibility_perform_pick(&mut self) -> bool {
+        false
+    }
+    /// `accessibilityCustomActions`: the named extra actions the element offers.
+    fn accessibility_custom_actions(&self) -> Vec<AxCustomAction> {
+        Vec::new()
+    }
+    /// `accessibilityCustomRotors`: the extra rotors the element offers.
+    fn accessibility_custom_rotors(&self) -> Vec<AxCustomRotor> {
+        Vec::new()
+    }
+    /// Runs the custom action called `name`. False when the element has no such action.
+    fn perform_custom_action(&mut self, name: &str) -> bool {
+        let _ = name;
+        false
+    }
+}
+
+/// `AccessibilityCustomAction`: an extra action listed to assistive technology by name ("Archive", "Mark as read").
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AxCustomAction {
+    pub name: String,
+}
+
+impl AxCustomAction {
+    pub fn new(name: &str) -> Self {
+        AxCustomAction { name: name.into() }
+    }
+}
+
+/// `AccessibilityCustomRotor`: a named list of element ids the user steps through ("Unread messages"). Items are `Node::id`s in
+/// the order the user reaches them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AxCustomRotor {
+    pub name: String,
+    pub items: Vec<u64>,
+}
+
+impl AxCustomRotor {
+    pub fn new(name: &str, items: Vec<u64>) -> Self {
+        AxCustomRotor { name: name.into(), items }
+    }
+
+    /// The item after (`forward`) or before `from`, wrapping at the ends. With no `from` (or one not in the rotor), forward is the
+    /// first item and backward the last. None for an empty rotor.
+    pub fn step(&self, from: Option<u64>, forward: bool) -> Option<u64> {
+        let n = self.items.len();
+        if n == 0 {
+            return None;
+        }
+        let at = from.and_then(|id| self.items.iter().position(|i| *i == id));
+        let i = match (at, forward) {
+            (None, true) => 0,
+            (None, false) => n - 1,
+            (Some(p), true) => (p + 1) % n,
+            (Some(p), false) => (p + n - 1) % n,
+        };
+        Some(self.items[i])
+    }
 }
 
 /// `AccessibilityElement`: a stand-in for something that is drawn but is not a view (a chart bar, a calendar cell). It holds
@@ -843,11 +915,13 @@ pub struct AxElement {
     pub value: String,
     pub focused: bool,
     pub custom_content: Vec<AxCustomContent>,
+    pub custom_actions: Vec<AxCustomAction>,
+    pub custom_rotors: Vec<AxCustomRotor>,
 }
 
 impl AxElement {
     pub fn new(id: u64, role: AxRole, label: &str, frame: Rect) -> Self {
-        AxElement { id, parent: None, children: Vec::new(), frame, role, subrole: None, label: label.into(), value: String::new(), focused: false, custom_content: Vec::new() }
+        AxElement { id, parent: None, children: Vec::new(), frame, role, subrole: None, label: label.into(), value: String::new(), focused: false, custom_content: Vec::new(), custom_actions: Vec::new(), custom_rotors: Vec::new() }
     }
 }
 
@@ -891,6 +965,20 @@ impl AccessibilityElement for AxElement {
     }
     fn accessibility_custom_content(&self) -> Vec<AxCustomContent> {
         self.custom_content.clone()
+    }
+    fn accessibility_custom_actions(&self) -> Vec<AxCustomAction> {
+        self.custom_actions.clone()
+    }
+    fn accessibility_custom_rotors(&self) -> Vec<AxCustomRotor> {
+        self.custom_rotors.clone()
+    }
+    /// A listed custom action succeeds and posts `layoutChanged` for the element, since a custom action changes what it shows.
+    fn perform_custom_action(&mut self, name: &str) -> bool {
+        let known = self.custom_actions.iter().any(|a| a.name == name);
+        if known {
+            post(self.id, AxNotification::LayoutChanged);
+        }
+        known
     }
 }
 
@@ -974,6 +1062,43 @@ mod tree_tests {
         let n = take_notifications();
         assert_eq!(n.len(), 64);
         assert_eq!(n[63].0, 99, "the oldest are dropped");
+    }
+
+    #[test]
+    fn default_handlers_decline_the_whole_action_set() {
+        let mut e = AxElement::new(2, AxRole::Button, "Go", r());
+        assert!(!e.accessibility_perform_show_menu());
+        assert!(!e.accessibility_perform_cancel());
+        assert!(!e.accessibility_perform_confirm());
+        assert!(!e.accessibility_perform_pick());
+        assert!(!e.perform_custom_action("Archive"));
+    }
+
+    #[test]
+    fn custom_actions_are_listed_and_invoked_by_name() {
+        take_notifications();
+        let mut e = AxElement::new(3, AxRole::Row, "Mail", r());
+        e.custom_actions.push(AxCustomAction::new("Archive"));
+        e.custom_actions.push(AxCustomAction::new("Mark as read"));
+        let names: Vec<String> = e.accessibility_custom_actions().into_iter().map(|a| a.name).collect();
+        assert_eq!(names, vec!["Archive", "Mark as read"]);
+        assert!(e.perform_custom_action("Archive"));
+        assert!(!e.perform_custom_action("Delete"));
+        assert_eq!(take_notifications(), vec![(3, AxNotification::LayoutChanged)]);
+    }
+
+    #[test]
+    fn a_custom_rotor_enumerates_its_items_and_wraps() {
+        let rotor = AxCustomRotor::new("Unread", vec![10, 20, 30]);
+        assert_eq!(rotor.step(None, true), Some(10));
+        assert_eq!(rotor.step(None, false), Some(30));
+        assert_eq!(rotor.step(Some(30), true), Some(10));
+        assert_eq!(rotor.step(Some(10), false), Some(30));
+        assert_eq!(rotor.step(Some(99), true), Some(10), "an id outside the rotor starts over");
+        assert_eq!(AxCustomRotor::new("Empty", vec![]).step(None, true), None);
+        let mut e = AxElement::new(4, AxRole::List, "Inbox", r());
+        e.custom_rotors.push(rotor);
+        assert_eq!(e.accessibility_custom_rotors()[0].name, "Unread");
     }
 
     #[test]
