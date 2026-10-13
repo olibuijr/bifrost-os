@@ -10,6 +10,26 @@ pub struct Episode {
     pub url: String,
     pub date: String,
     pub duration: String,
+    /// Release time, seconds since 1970 (0 when the feed gave none or it did not parse); orders episodes across shows.
+    pub ts: i64,
+    /// The episode notes as plain text.
+    pub notes: String,
+    /// Chapter marks from the feed, in start order.
+    pub chapters: Vec<Chapter>,
+    /// The address of the transcript file, empty when the feed names none.
+    pub transcript: String,
+}
+
+/// One chapter mark of an episode.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Chapter {
+    pub start_ms: u64,
+    pub title: String,
+}
+
+/// The chapter playing at `position_ms`: the last one that has started. None before the first.
+pub fn current_chapter(chapters: &[Chapter], position_ms: u64) -> Option<usize> {
+    chapters.iter().rposition(|c| c.start_ms <= position_ms)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -112,7 +132,7 @@ fn element(xml: &str, tag: &str) -> Option<String> {
 }
 
 /// An attribute of the first `<tag ...>` in `xml`.
-fn attribute(xml: &str, tag: &str, attr: &str) -> Option<String> {
+pub(crate) fn attribute(xml: &str, tag: &str, attr: &str) -> Option<String> {
     let i = xml.find(&format!("<{tag} "))?;
     let end = xml[i..].find('>')? + i;
     let head = &xml[i..end];
@@ -146,6 +166,96 @@ fn duration(raw: &str) -> String {
     secs.map_or_else(String::new, |s| springboard::shell::music::nowplaying::clock(s as f64 * 1000.0))
 }
 
+/// "90", "01:30" or "00:01:30.500" (also with a comma before the fraction) -> milliseconds.
+pub fn clock_ms(raw: &str) -> Option<u64> {
+    let raw = raw.trim().replace(',', ".");
+    if raw.is_empty() {
+        return None;
+    }
+    let mut secs = 0.0f64;
+    for part in raw.split(':') {
+        let v: f64 = part.trim().parse().ok().filter(|v: &f64| v.is_finite() && *v >= 0.0)?;
+        secs = secs * 60.0 + v;
+    }
+    Some((secs * 1000.0).round() as u64)
+}
+
+/// Days from 1970-01-01 to the civil date (proleptic Gregorian).
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y.rem_euclid(400);
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+/// "Mon, 05 Oct 2026 10:00:00 +0000" -> seconds since 1970. Zones as "+0100", "GMT" and "UT" are read.
+pub fn rfc2822_ts(raw: &str) -> Option<i64> {
+    let parts: Vec<&str> = raw.split_whitespace().collect();
+    let parts = if parts.first().is_some_and(|p| p.ends_with(',')) { &parts[1..] } else { &parts[..] };
+    let [day, mon, year, rest @ ..] = parts else { return None };
+    let month = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+        .iter()
+        .position(|m| mon.to_ascii_lowercase().starts_with(m))? as i64
+        + 1;
+    let (day, year): (i64, i64) = (day.parse().ok()?, year.parse().ok()?);
+    let mut clock = rest.first().map_or(Some(0), |t| clock_ms(t).map(|ms| (ms / 1000) as i64))?;
+    if let Some(zone) = rest.get(1) {
+        if let (Some(sign), true) = (zone.chars().next().filter(|c| *c == '+' || *c == '-'), zone.len() == 5) {
+            let n: i64 = zone[1..].parse().ok()?;
+            let off = (n / 100) * 3600 + (n % 100) * 60;
+            clock -= if sign == '+' { off } else { -off };
+        }
+    }
+    Some(days_from_civil(year, month, day) * 86_400 + clock)
+}
+
+/// Turns the HTML of a feed description into plain text: tags go, paragraph and line breaks become line breaks,
+/// entities are decoded, and runs of blank lines collapse to one.
+pub fn html_to_text(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(i) = rest.find('<') {
+        out.push_str(&rest[..i]);
+        let Some(end) = rest[i..].find('>') else {
+            rest = "";
+            break;
+        };
+        let closing = rest[i + 1..].starts_with('/');
+        let name: String = rest[i + 1..i + end].trim_start_matches('/').chars().take_while(|c| c.is_ascii_alphanumeric()).collect::<String>().to_ascii_lowercase();
+        if name == "br" || (closing && matches!(name.as_str(), "p" | "div" | "li" | "h1" | "h2" | "h3" | "h4")) {
+            out.push('\n');
+        }
+        rest = &rest[i + end + 1..];
+    }
+    out.push_str(rest);
+    let text = decode_entities(&out);
+    let mut lines: Vec<&str> = Vec::new();
+    for line in text.lines().map(str::trim) {
+        if line.is_empty() && lines.last().is_none_or(|l| l.is_empty()) {
+            continue;
+        }
+        lines.push(line);
+    }
+    lines.join("\n").trim().to_string()
+}
+
+/// The `<psc:chapter start=".." title=".."/>` marks of one item.
+fn chapters(item: &str) -> Vec<Chapter> {
+    let mut out = Vec::new();
+    let mut rest = item;
+    while let Some(i) = rest.find("<psc:chapter ") {
+        let Some(end) = rest[i..].find('>') else { break };
+        let tag = &rest[i..i + end + 1];
+        rest = &rest[i + end + 1..];
+        let (Some(start), title) = (attribute(tag, "psc:chapter", "start").and_then(|s| clock_ms(&s)), attribute(tag, "psc:chapter", "title")) else { continue };
+        out.push(Chapter { start_ms: start, title: title.unwrap_or_default() });
+    }
+    out.sort_by_key(|c| c.start_ms);
+    out
+}
+
 /// Parses an RSS document into its title and episodes with audio enclosures.
 pub fn parse(xml: &str) -> (String, Vec<Episode>) {
     let first_item = xml.find("<item").unwrap_or(xml.len());
@@ -165,6 +275,14 @@ pub fn parse(xml: &str) -> (String, Vec<Episode>) {
             url,
             date: element(item, "pubDate").map(|d| short_date(&d)).unwrap_or_default(),
             duration: element(item, "itunes:duration").map(|d| duration(&d)).unwrap_or_default(),
+            ts: element(item, "pubDate").and_then(|d| rfc2822_ts(&d)).unwrap_or(0),
+            notes: ["content:encoded", "itunes:summary", "description"]
+                .iter()
+                .find_map(|tag| element(item, tag).filter(|t| !t.is_empty()))
+                .map(|t| html_to_text(&t))
+                .unwrap_or_default(),
+            chapters: chapters(item),
+            transcript: attribute(item, "podcast:transcript", "url").unwrap_or_default(),
         });
     }
     (title, episodes)
@@ -268,6 +386,56 @@ mod tests {
         assert_eq!(eps[0].title, "Ep 1");
         assert_eq!(eps[0].date, "05 Oct 2026");
         assert_eq!(eps[0].duration, "1:02:05");
+    }
+
+    #[test]
+    fn clocks_and_dates_become_numbers() {
+        assert_eq!(clock_ms("90"), Some(90_000));
+        assert_eq!(clock_ms("01:30"), Some(90_000));
+        assert_eq!(clock_ms("00:01:30.500"), Some(90_500));
+        assert_eq!(clock_ms("00:00:01,250"), Some(1_250));
+        assert_eq!(clock_ms("x"), None);
+        assert_eq!(clock_ms(""), None);
+        assert_eq!(rfc2822_ts("Thu, 01 Jan 1970 00:00:01 +0000"), Some(1));
+        assert_eq!(rfc2822_ts("Sat, 01 Jan 2000 00:00:00 GMT"), Some(946_684_800));
+        assert_eq!(rfc2822_ts("Sat, 01 Jan 2000 01:00:00 +0100"), Some(946_684_800));
+        assert_eq!(rfc2822_ts("Fri, 31 Dec 1999 19:00:00 -0500"), Some(946_684_800));
+        let (a, b) = (rfc2822_ts("Mon, 05 Oct 2026 10:00:00 +0000").unwrap(), rfc2822_ts("Sun, 04 Oct 2026 10:00:00 +0000").unwrap());
+        assert_eq!(a - b, 86_400);
+        assert_eq!(rfc2822_ts("sometime"), None);
+    }
+
+    #[test]
+    fn notes_chapters_and_transcripts_are_read_from_items() {
+        let xml = r#"<rss><channel><title>S</title>
+<item><title>E</title><pubDate>Sat, 01 Jan 2000 00:00:00 GMT</pubDate>
+<description><![CDATA[<p>First &amp; second</p><p>Third<br/>line</p>]]></description>
+<podcast:transcript url="https://x.test/t.vtt" type="text/vtt"/>
+<psc:chapter start="00:01:00" title="Later"/><psc:chapter start="0" title="Intro"/>
+<enclosure url="https://x.test/1.mp3"/></item></channel></rss>"#;
+        let (_, eps) = parse(xml);
+        assert_eq!(eps[0].ts, 946_684_800);
+        assert_eq!(eps[0].notes, "First & second\nThird\nline");
+        assert_eq!(eps[0].transcript, "https://x.test/t.vtt");
+        assert_eq!(eps[0].chapters, [Chapter { start_ms: 0, title: "Intro".into() }, Chapter { start_ms: 60_000, title: "Later".into() }]);
+    }
+
+    #[test]
+    fn the_current_chapter_is_the_last_one_started() {
+        let ch = |ms| Chapter { start_ms: ms, title: String::new() };
+        let list = [ch(0), ch(60_000), ch(120_000)];
+        assert_eq!(current_chapter(&list, 0), Some(0));
+        assert_eq!(current_chapter(&list, 59_999), Some(0));
+        assert_eq!(current_chapter(&list, 60_000), Some(1));
+        assert_eq!(current_chapter(&list, 10_000_000), Some(2));
+        assert_eq!(current_chapter(&[ch(5_000)], 1_000), None);
+        assert_eq!(current_chapter(&[], 1_000), None);
+    }
+
+    #[test]
+    fn html_becomes_plain_text() {
+        assert_eq!(html_to_text("<b>Hi</b> &lt;you&gt;<br>\n\n\n<ul><li>a</li><li>b</li></ul>"), "Hi <you>\n\na\nb");
+        assert_eq!(html_to_text("plain"), "plain");
     }
 
     #[test]

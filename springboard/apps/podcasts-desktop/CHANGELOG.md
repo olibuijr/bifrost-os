@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.8.0 — 2026-10-13
+
+- Library: the sidebar has Search, New Episodes (unplayed episodes of every show, newest first), Up Next, Downloaded,
+  Shows and Settings. Unplayed episodes carry a dot; played ones are dimmed. Mark as Played or Unplayed from the Episode
+  menu, the context menu or the episode page; an episode that finishes is marked played.
+- Up Next: Play Next and Play Last put an episode in the queue; the queue plays on when an episode ends and Next Episode
+  skips ahead. Move episodes up or down and clear the queue from the Episode menu.
+- Episode page (Show Episode Details): notes as plain text, chapters, and buttons for Play, Download, Play Next and
+  Mark Played. The Now Playing sheet gains Chapters (tap one to jump) and Transcript panels; transcripts come from the
+  feed's transcript link (WebVTT, SubRip or plain text) and follow the playing position.
+- Downloads: Download and Remove Download for any episode, a Downloaded list, and a download queue.
+- Per-show settings (the toolbar button on a show): download new episodes automatically, how many downloads to keep, and
+  the episode order. App Settings: skip back and forward intervals (10 to 60 seconds) and the feed refresh period.
+- Search finds shows in an open podcast directory and follows them. File > Import Subscriptions and Export Subscriptions
+  read and write OPML. View > Refresh (and a toolbar button) updates every show; feeds also refresh on the chosen period.
+- Menus: File, View, Controls (play, skip, next, speed, sleep timer) and Episode, with key equivalents. Arrow keys move
+  the selection, Return plays, a second click on an episode plays it, Escape leaves a panel.
+- The app now asks for the documents permission (the import and export panels).
+
 ## 1.7.2 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

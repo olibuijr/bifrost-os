@@ -4,21 +4,41 @@
 mod feed;
 mod icon;
 mod info;
+mod library;
 mod media;
+mod opml;
 mod podcasts;
+mod prefs;
 mod refresh;
+mod search;
+mod transcript;
 mod transport;
+mod wrap;
 
 use bifrost_app::kit::{Damage, Event, Surface};
-use bifrost_app::{App, Ctx, Input, TouchKind, KeyInput};
+use bifrost_app::proto::DocMode;
+use bifrost_app::{App, AppMenu, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use bifrost_app::now_playing;
 use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// The largest subscriptions file the import reads.
+const IMPORT_MAX: u64 = 4 << 20;
+
 struct PodcastsApp {
     podcasts: Option<podcasts::Podcasts>,
+}
+
+/// Opens the file panel a menu command asked for (it needs the runtime context).
+fn open_file_panel(p: &mut podcasts::Podcasts, ctx: &Ctx) {
+    match p.take_file_job() {
+        Some(podcasts::FileJob::Import) => p.begin_import(ctx.open_document(DocMode::Read, "Import Subscriptions", &["opml", "xml"])),
+        Some(podcasts::FileJob::Export) => p.begin_export(ctx.save_document("Podcasts.opml", &["opml"])),
+        None => {}
+    }
 }
 
 fn shell_dir() -> PathBuf {
@@ -40,12 +60,32 @@ impl App for PodcastsApp {
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        match &ev {
+            Input::Context { x, y } => {
+                let Some(p) = &mut self.podcasts else { return false };
+                let items = p.context_items(&ctx.ui, *x, *y);
+                if !items.is_empty() {
+                    ctx.context_menu(*x, *y, items);
+                }
+                return true;
+            }
+            Input::ContextAction(id) => {
+                let Some(p) = &mut self.podcasts else { return false };
+                p.menu_action(&ctx.ui, *id);
+                open_file_panel(p, ctx);
+                return true;
+            }
+            _ => {}
+        }
         if let Input::Key(key) = &ev {
             let out = match key {
                 KeyInput::Text(text) => Out::Text(text.clone()),
                 KeyInput::Code(8) => Out::Backspace,
                 KeyInput::Code(13) => Out::Enter,
                 KeyInput::Code(9) => Out::Named("Tab"),
+                KeyInput::Code(27) => Out::Hide,
+                KeyInput::Code(38) => Out::Named("Up"),
+                KeyInput::Code(40) => Out::Named("Down"),
                 KeyInput::Code(37) => Out::Named("Left"),
                 KeyInput::Code(39) => Out::Named("Right"),
                 _ => return false,
@@ -65,6 +105,58 @@ impl App for PodcastsApp {
 
     fn controls(&self, ctx: &Ctx) -> Vec<bifrost_app::controls::Node> {
         self.podcasts.as_ref().map_or_else(Vec::new, |p| p.controls(&ctx.ui))
+    }
+
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        self.podcasts.as_ref().map_or_else(Vec::new, |p| p.main_menu())
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        let Some(p) = &mut self.podcasts else { return false };
+        p.menu_action(&ctx.ui, id);
+        open_file_panel(p, ctx);
+        true
+    }
+
+    /// The subscriptions file the user chose, or the place to write the export.
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        let Some(p) = &mut self.podcasts else { return false };
+        match ev {
+            DocumentEvent::Opened(mut doc) if p.is_import(doc.request) => {
+                let mut bytes = Vec::new();
+                let read = (&mut doc.file).take(IMPORT_MAX).read_to_end(&mut bytes);
+                // one import is one use of the file: the app keeps no grant to it
+                ctx.release_document(doc.grant);
+                match read {
+                    Ok(_) => p.imported(&bytes),
+                    Err(e) => {
+                        ctx.log(&format!("import: {e}"));
+                        p.file_failed(doc.request);
+                    }
+                }
+                true
+            }
+            DocumentEvent::SaveTo(mut doc) => {
+                let Some(bytes) = p.take_export(doc.request) else { return false };
+                match doc.file.write_all(&bytes) {
+                    Ok(()) => ctx.commit_document(doc.request),
+                    Err(e) => {
+                        ctx.log(&format!("export: {e}"));
+                        ctx.abort_document(doc.request);
+                    }
+                }
+                false
+            }
+            DocumentEvent::Saved(_) => {
+                p.exported();
+                true
+            }
+            DocumentEvent::Failed { request, .. } => {
+                p.file_failed(request);
+                false
+            }
+            _ => false,
+        }
     }
 
     fn suspend(&mut self, _ctx: &Ctx) {
