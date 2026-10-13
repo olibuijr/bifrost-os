@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Terminal: the More menu has Close Other Tabs, Paste Escaped Text, Paste Selection and a Terminal Help line.
 - Photos: the album picker can Delete Album, Sort Albums by name and set the slideshow slide length (2, 4, 6 or 10 seconds).
 - Photos: the editor has a Tools page with Rotate Left, Flip Horizontal, Flip Vertical, Auto Enhance (a tone stretch) and a luminance histogram, all kept in the saved edit. Tap the selection title to Select All or Deselect All. The grid has four zoom levels (8, 5, 3 and 2 columns), remembered. The share sheet can Duplicate a photo (its edit and rating come along). The Info sheet rates a photo with stars and can Hide it into a Hidden album that is kept out of All Photos, Recents, Favorites and Screenshots.
 

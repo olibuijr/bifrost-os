@@ -89,6 +89,18 @@ impl Sessions {
         }
         self.select(self.active);
     }
+    /// Closes every session except `keep` (each remembers its folder for Reopen Closed Tab); `keep` becomes active.
+    pub fn close_others(&mut self, keep: usize) {
+        if keep >= self.items.len() {
+            return;
+        }
+        self.select(keep);
+        for i in (0..self.items.len()).rev() {
+            if i != keep {
+                self.close(i);
+            }
+        }
+    }
     pub fn clear(&mut self) {
         self.items.clear();
         self.active = 0;

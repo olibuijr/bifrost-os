@@ -241,7 +241,31 @@ impl Shell {
                     None => "No link in selection".into(),
                 };
             }
+            24 => {
+                let keep = self.term.active_index();
+                self.term.close_others(keep);
+                self.terminal_close_panel(t);
+            }
+            25 => {
+                let text = clipboard::text().map(|text| extras::escape_paste(&text));
+                self.terminal_paste_or_say(text, "The clipboard has no text", t);
+            }
+            26 => {
+                let text = self.term.as_ref().and_then(|term| term.selected_text());
+                self.terminal_paste_or_say(text, "Select terminal text first", t);
+            }
+            27 => self.terminal_ui.message = extras::HELP.into(),
             _ => {}
+        }
+    }
+    /// Types `text` into the shell as a paste and closes the menu, or shows `missing` when there is none.
+    fn terminal_paste_or_say(&mut self, text: Option<String>, missing: &str, t: f64) {
+        match (text, self.term.as_mut()) {
+            (Some(text), Some(term)) => {
+                term.paste(&text);
+                self.terminal_close_panel(t);
+            }
+            _ => self.terminal_ui.message = missing.into(),
         }
     }
 }
