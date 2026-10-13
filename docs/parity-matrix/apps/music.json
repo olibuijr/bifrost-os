@@ -46,9 +46,9 @@
    "area": "panel",
    "apple": "Up Next panel, song context menu",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:1258",
-   "note": "Reorder is move-up only; no drag, no History",
-   "wire": "Add drag reorder and a History list (played ids recorded in Music::sync_now_playing) to draw_queue (music.rs:1821)"
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:2513",
+   "note": "built on parity/team-d-music; not yet verified on Midget. A drag handle on each upcoming row, and a History page of recently started songs",
+   "wire": "History is the last 100 starts and opens from the Up Next toolbar, not beside the queue"
   },
   {
    "feature": "Playlists: new, add to, remove from, rename, delete",
@@ -63,10 +63,10 @@
    "feature": "Smart Playlists with rules",
    "area": "menu",
    "apple": "File > New > Smart Playlist",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a rule model (field/op/value, live update) next to Playlists in music.rs; a New Smart Playlist row in draw_playlists (music.rs:1775); a rules editor sheet"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/smart.rs:262",
+   "note": "built on parity/team-d-music; not yet verified on Midget. Rules on title, artist, album, year, rating, plays, days since added or played and favourite, all or any, live from the library; edited in a rules page",
+   "wire": "No limit-to-N or \"selected by\" option and no nested rule groups"
   },
   {
    "feature": "Playlist folders",
@@ -91,9 +91,9 @@
    "area": "view",
    "apple": "View > Sort By, column headers",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:1472",
-   "note": "The Songs header cycles one sort key; no column table",
-   "wire": "Add a column table (title, artist, album, time, plays) with header-click sort in draw_song_rows"
+   "bifrost": "springboard/apps/music-desktop/src/music/browse.rs:9",
+   "note": "built on parity/team-d-music; not yet verified on Midget. Sort orders now include Rating, Plays and Recently Played besides Title, Artist, Album and Recently Added",
+   "wire": "Still one sort key cycled by the toolbar button (View > Sort Songs By picks one); no column table with header-click sort"
   },
   {
    "feature": "Get Info editor (tags, artwork, lyrics)",
@@ -109,18 +109,18 @@
    "area": "menu",
    "apple": "Song > Favorite",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:1456",
-   "note": "Favourites exist for radio stations only",
-   "wire": "Per-song favourite flag in the library store, a heart in song rows and a Favourite Songs list"
+   "bifrost": "springboard/apps/music-desktop/src/music/stats.rs:146",
+   "note": "built on parity/team-d-music; not yet verified on Midget. Per-song favourite flag from the song menu or the Song menu, a heart in song rows, a Favourite Songs list",
+   "wire": "No heart control in the row itself; favourites are not shared with the system"
   },
   {
    "feature": "Star ratings",
    "area": "menu",
    "apple": "Song > Rating",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Rating field per song set from the song menu, sortable column"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/stats.rs:139",
+   "note": "built on parity/team-d-music; not yet verified on Midget. Rating set from the song menu or the Song menu, stars in song rows, sort by Rating",
+   "wire": "No star control in the row itself and no rating column; ratings are kept in the app, not written to the file"
   },
   {
    "feature": "Internet radio stations",
@@ -136,9 +136,9 @@
    "area": "menu",
    "apple": "File > Import",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/app.rs:425",
-   "note": "Library is a scan of ~/Music; opening a file plays it without adding it",
-   "wire": "Add File > Import that copies files into the library root and calls start_scan (music.rs:1177)"
+   "bifrost": "springboard/apps/music-desktop/src/music/library.rs:228",
+   "note": "built on parity/team-d-music; not yet verified on Midget. File > Import copies chosen songs into Music/Imported and scans again",
+   "wire": "Folders cannot be chosen yet, and files cannot be dropped onto the window"
   },
   {
    "feature": "Full player and MiniPlayer",
@@ -153,10 +153,10 @@
    "feature": "Lyrics view",
    "area": "panel",
    "apple": "View > Lyrics",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Read embedded or .lrc lyrics in the library scan; a Lyrics panel in the player sheet with the current line highlighted"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/lyrics.rs:63",
+   "note": "built on parity/team-d-music; not yet verified on Midget. Reads .lrc files beside the song; a Lyrics switch on the Now Playing sheet highlights the current line",
+   "wire": "Embedded lyrics (ID3 USLT, MP4 lyrics) need tag support in the audio file reader; no lyrics in the mini player"
   },
   {
    "feature": "Equalizer",
@@ -180,10 +180,10 @@
    "feature": "Recently Added / Recently Played",
    "area": "view",
    "apple": "sidebar Recently Added",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Derive from library mtimes and a play history log; add sidebar rows in app.rs chrome"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/browse.rs:58",
+   "note": "built on parity/team-d-music; not yet verified on Midget. Source list rows Recently Added, Recently Played and Favourite Songs; started tracks are logged in stats.txt",
+   "wire": "Recently Added is the 100 newest files by modification time, not by the time they entered the library"
   },
   {
    "feature": "System Now Playing and media keys",
@@ -199,18 +199,18 @@
    "area": "integration",
    "apple": "output route picker",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/app.rs:139",
-   "note": "Follows route changes; no picker in the app",
-   "wire": "Add an output picker in the player bar that lists the audio devices service and sets the route"
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:1825",
+   "note": "built on parity/team-d-music; not yet verified on Midget. The route button on the Now Playing sheet lists the output devices and sets the default output",
+   "wire": "No picker in the mini player bar; the choice is the system default output, not per app"
   },
   {
    "feature": "App menus: Song, Controls, View with shortcuts",
    "area": "menu",
    "apple": "MainMenu Song/Controls/View",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The app declares no main_menu",
-   "wire": "Implement App::main_menu in app.rs: Controls (Play, Next, Previous, Shuffle, Repeat, Volume Up/Down) and Song (Play Next, Add to Playlist, Get Info), routed to Music actions"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/menus.rs:195",
+   "note": "built on parity/team-d-music; not yet verified on Midget. File > Import, Song, Controls, View with key equivalents",
+   "wire": "Song actions use the playing song (no list selection); Play/Pause has no Space key equivalent; no Get Info, Visualizer or Equalizer items"
   },
   {
    "feature": "Visualizer",

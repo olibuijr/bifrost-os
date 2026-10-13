@@ -3,6 +3,7 @@
 
 use crate::music;
 use crate::music::chrome::{BAR_SEARCH, BAR_TITLE, SIDE_TAB};
+use crate::music::menus::{self, Command};
 use crate::music::system;
 use bifrost_app::audio::Client;
 use bifrost_app::audio_devices::{self, Change};
@@ -15,7 +16,7 @@ use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::layout::{SIDEBAR_FRACTION, SIDEBAR_MAX_PT, SIDEBAR_MIN_PT, UNIFIED_BAR_PT};
 use bifrost_app::now_playing::{self, CommandState, PlaybackState, RemoteCommand};
 use bifrost_app::widgets;
-use bifrost_app::{App, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{App, AppMenu, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
 use bifrost_core::json::Json;
 use springboard::shell::music::radio::Http;
 use std::path::{Path, PathBuf};
@@ -26,9 +27,11 @@ use std::time::Instant;
 const SIDEBAR_SCROLL: f32 = -(UNIFIED_BAR_PT + 4.);
 /// The open search field's width, in points.
 const SEARCH_W: f32 = 180.;
-/// Accessibility ids of the Play and Shuffle buttons on the album and playlist pages (sidebar rows use 100 to 299).
-const NODE_PLAY: u64 = 300;
-const NODE_SHUFFLE: u64 = 301;
+/// Accessibility ids of the Play and Shuffle buttons on the album and playlist pages (sidebar rows use 100 up to these).
+const NODE_PLAY: u64 = 9000;
+const NODE_SHUFFLE: u64 = 9001;
+/// The file types File > Import offers: the formats the audio service plays, and MIDI files.
+const IMPORT_TYPES: [&str; 10] = ["mp3", "m4a", "m4b", "aac", "flac", "ogg", "oga", "wav", "mid", "midi"];
 
 /// What a pointer went down on.
 #[derive(Clone, Copy, PartialEq)]
@@ -59,6 +62,10 @@ pub struct MusicApp {
     devices_request: Option<u32>,
     /// the default output device id (`headphones`, `bluetooth`, `speaker`), as last reported
     output: Option<String>,
+    /// the `audio-devices` list request made for the output picker, until its reply arrives
+    picker_request: Option<u32>,
+    /// the open panel of File > Import, until the files arrive
+    import_request: Option<u32>,
     /// whether the Dock tile shows the library scan's progress
     dock_busy: bool,
 }
@@ -87,6 +94,8 @@ impl MusicApp {
             published: None,
             devices_request: None,
             output: None,
+            picker_request: None,
+            import_request: None,
             dock_busy: false,
         }
     }
@@ -346,6 +355,18 @@ impl App for MusicApp {
     }
 
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.picker_request == Some(request) {
+            self.picker_request = None;
+            // the output devices for the route button's menu; an error leaves the button without a menu
+            if let Ok(listing) = result.as_ref().map_err(|_| ()).and_then(|v| audio_devices::decode_list(v).map_err(|_| ())) {
+                let devices = listing.devices.iter().filter(|d| d.can_output && !d.hidden).map(|d| (d.id.clone(), d.name.clone())).collect();
+                self.output = listing.output.clone();
+                if let Some(m) = &mut self.app {
+                    m.show_outputs(devices, listing.output);
+                }
+            }
+            return true;
+        }
         if self.devices_request != Some(request) {
             return false;
         }
@@ -431,10 +452,61 @@ impl App for MusicApp {
         changed
     }
 
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        self.app.as_ref().map(|m| menus::build(&m.menu_state())).unwrap_or_default()
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        let Some(cmd) = Command::from_id(id) else { return false };
+        if cmd == Command::Import {
+            // the panel answers through `document`
+            let options = OpenOptions { title: "Import to Music".into(), filters: IMPORT_TYPES.iter().map(|t| t.to_string()).collect(), multiple: true, ..OpenOptions::default() };
+            self.import_request = Some(ctx.open_panel(&options));
+            return false;
+        }
+        let acted = self.app.as_mut().is_some_and(|m| m.run_command(cmd));
+        self.sync_keyboard(ctx);
+        acted
+    }
+
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        match ev {
+            DocumentEvent::OpenedMany { request, docs } if self.import_request == Some(request) => {
+                self.import_request = None;
+                let mut copied = 0;
+                for mut doc in docs {
+                    if let Some(m) = &mut self.app {
+                        if m.import_song(&doc.name, &mut doc.file) {
+                            copied += 1;
+                        }
+                    }
+                    // one import is one use of the file: the app keeps no grant to it
+                    ctx.release_document(doc.grant);
+                }
+                if let Some(m) = &mut self.app {
+                    m.imports_done(copied);
+                }
+                true
+            }
+            DocumentEvent::Failed { request, .. } if self.import_request == Some(request) => {
+                self.import_request = None;
+                false
+            }
+            _ => false,
+        }
+    }
+
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         let Some(m) = &mut self.app else { return false };
         m.pump(&ctx.ui);
         let due = m.tick(&ctx.ui, t);
+        // the route button asks for the output devices; a device the user picked becomes the default output
+        if m.take_output_request() {
+            self.picker_request = Some(audio_devices::list(ctx));
+        }
+        if let Some(id) = m.take_output_choice() {
+            let _ = audio_devices::set_default(ctx, audio_devices::Role::Output, &id);
+        }
         self.sync_keyboard(ctx);
         self.sync_system(ctx);
         due

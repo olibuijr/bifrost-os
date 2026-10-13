@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.7.0 — 2026-10-13
+
+- Ratings and favourites. A song's "..." menu steps its rating (none, 1 to 5 stars) and adds it to or takes it off the
+  favourites. Rated songs show their stars under the length and favourites show a heart. The sort button gains Rating,
+  Plays and Recently Played.
+- New lists under Songs in the source list: Recently Added, Recently Played and Favourite Songs. Music counts a play once
+  a song has been heard for 30 seconds (half of a shorter one) and keeps ratings, favourites, play counts and the history
+  in `stats.txt` next to the queue.
+- Smart playlists. "New Smart Playlist" in the Playlists list opens a rules editor: pick Title, Artist, Album, Year,
+  Rating, Plays, days since added or played, or Favourite, an operator and a value, and choose whether all rules or any
+  rule must match. The playlist fills itself from the library and follows new ratings and plays. Smart playlists are
+  files in `Smart/` and appear in the source list.
+- Up Next: drag a row by its handle to move it anywhere in the queue, and open History (the songs that played lately,
+  most recent first) from the Up Next toolbar or the View menu.
+- Lyrics. A song with a `.lrc` file beside it gets a Lyrics switch on the Now Playing sheet: the line being sung is
+  highlighted and follows the song. Plain text lyrics are listed without highlight.
+- App menus: File > Import, Song (Play Next, Play Last, Add to Playlist, Rating, Favourite), Controls (Play or Pause,
+  Next, Previous, Shuffle, Repeat, Volume) and View (Artists to Playlists, the new lists, Up Next, History, Lyrics, Sort
+  Songs By), with key equivalents.
+- File > Import copies chosen songs into `Music/Imported` and scans the library again.
+- The route button on the Now Playing sheet lists the output devices and makes the chosen one the default output.
+- Music asks for the `documents` permission, for the Import open panel.
+
 ## 1.6.2 — 2026-10-13
 
 - The Now Playing sheet slides on the shared `PanelReveal` motion from the SDK kit (`bifrost_app::kit::motion`), so it follows

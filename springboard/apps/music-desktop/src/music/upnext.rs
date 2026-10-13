@@ -202,9 +202,57 @@ impl UpNext {
     }
 }
 
+/// The row a dragged Up Next row would land on when the finger is `y` px below the top of the list. The list has
+/// `rows` rows of `row_h` px, the first being the song playing, which nothing can be dropped on. Clamped to the
+/// upcoming rows.
+pub fn drop_row(y: f32, row_h: f32, rows: usize) -> usize {
+    if rows < 2 || !(row_h > 0.0) {
+        return 1;
+    }
+    let at = if y.is_finite() && y > 0.0 { (y / row_h) as usize } else { 0 };
+    at.clamp(1, rows - 1)
+}
+
+/// The order the `n` rows are drawn in while row `from` is dragged to row `to`: a permutation of `0..n` that lists
+/// the original row shown at each place. Out-of-range rows leave the order alone.
+pub fn drag_order(n: usize, from: usize, to: usize) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..n).collect();
+    if from < n && to < n && from != to {
+        let row = order.remove(from);
+        order.insert(to, row);
+    }
+    order
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_dragged_row_lands_on_the_upcoming_row_under_the_finger() {
+        // five rows of 50 px: the playing song, then four upcoming
+        assert_eq!(drop_row(120.0, 50.0, 5), 2);
+        assert_eq!(drop_row(10.0, 50.0, 5), 1, "never on the playing song");
+        assert_eq!(drop_row(-30.0, 50.0, 5), 1);
+        assert_eq!(drop_row(900.0, 50.0, 5), 4, "past the end is the last row");
+        assert_eq!(drop_row(f32::NAN, 50.0, 5), 1);
+        assert_eq!(drop_row(100.0, 50.0, 1), 1);
+        assert_eq!(drop_row(100.0, 0.0, 5), 1);
+    }
+
+    #[test]
+    fn the_drag_preview_moves_one_row_and_matches_what_the_queue_does() {
+        assert_eq!(drag_order(5, 3, 1), [0, 3, 1, 2, 4]);
+        assert_eq!(drag_order(5, 1, 3), [0, 2, 3, 1, 4]);
+        assert_eq!(drag_order(5, 2, 2), [0, 1, 2, 3, 4]);
+        assert_eq!(drag_order(3, 1, 9), [0, 1, 2], "out of range changes nothing");
+        // row r of the page is upcoming song r - 1: dropping row 3 on row 1 is move_upcoming(2, 0)
+        let mut q = UpNext::new(paths(&["a", "b", "c", "d", "e"]), 0);
+        let before = names(q.items());
+        assert!(q.move_upcoming(2, 0));
+        let preview: Vec<String> = drag_order(5, 3, 1).into_iter().map(|i| before[i].clone()).collect();
+        assert_eq!(names(q.items()), preview);
+    }
 
     fn paths(names: &[&str]) -> Vec<PathBuf> {
         names.iter().map(|n| PathBuf::from(format!("/m/{n}.mp3"))).collect()
