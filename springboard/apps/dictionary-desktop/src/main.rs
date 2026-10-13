@@ -5,7 +5,7 @@
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::kit::canvas::{Canvas, RectF};
-use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON};
+use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON};
 use bifrost_app::kit::{Damage, Scroller};
 use bifrost_app::widgets;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Ctx, Input, KeyInput, TouchKind};
@@ -31,6 +31,8 @@ const MENU_CLEAR_HISTORY: u32 = 12;
 const MENU_BIGGER: u32 = 13;
 const MENU_SMALLER: u32 = 14;
 const MENU_ACTUAL_SIZE: u32 = 15;
+const MENU_PRINT: u32 = 16;
+const MENU_OPEN_FOLDER: u32 = 17;
 
 /// Most suggestions listed under the search field.
 const SUGGESTIONS: usize = 12;
@@ -99,6 +101,8 @@ struct Line {
     weight: Weight,
     colour: u32,
     h: f32,
+    /// A line of a definition: a tap on one of its words follows it as a cross-reference.
+    body: bool,
 }
 
 struct DictionaryApp {
@@ -121,6 +125,8 @@ struct DictionaryApp {
     /// The dictionary being renamed in the settings page, with the text typed so far.
     rename: Option<(usize, String)>,
     hot: Vec<Hot>,
+    /// The definition lines on screen in the last frame: top, height, text and size, in points.
+    body_rows: Vec<(f32, f32, String, f32)>,
 }
 
 /// Pointer position in points: input is in pixels, and the layout is in points.
@@ -146,6 +152,7 @@ impl DictionaryApp {
             settings: false,
             rename: None,
             hot: Vec::new(),
+            body_rows: Vec::new(),
         }
     }
 
@@ -271,6 +278,7 @@ impl DictionaryApp {
     /// The query changed: drop the lookup on screen and list the words that start with what is typed.
     fn edited(&mut self) -> bool {
         self.shown = None;
+        self.find = None;
         self.suggestions = self.library.as_ref().map(|l| l.suggest(&self.query, SUGGESTIONS)).unwrap_or_default();
         self.scroll.jump_top();
         true
@@ -323,6 +331,23 @@ impl DictionaryApp {
         ctx.set_pasteboard_string(&text);
     }
 
+    /// Sends the definitions on screen to the default printer on its own thread, so the window keeps drawing.
+    fn print_definition(&self) -> bool {
+        let Some(shown) = &self.shown else { return false };
+        let hits = self.visible_hits();
+        if hits.is_empty() {
+            return false;
+        }
+        let body = hits.iter().map(|h| format!("{}\n{}", h.dictionary, h.text)).collect::<Vec<_>>().join("\n\n");
+        let job = bifrost_app::print::PrintOperation::text(shown.word.clone(), format!("{}\n\n{body}", shown.word));
+        std::thread::spawn(move || {
+            if let Err(e) = job.run() {
+                eprintln!("Dictionary print: {e:?}");
+            }
+        });
+        false
+    }
+
     /// The text that explains an empty answer.
     fn no_answer(&self, word: &str) -> String {
         let Some(lib) = &self.library else { return String::new() };
@@ -339,7 +364,7 @@ impl DictionaryApp {
     fn lines(&self, ui: &Ui, width: f32) -> Vec<Line> {
         let mut out = Vec::new();
         let size = self.prefs.scaled(MAC_BODY_PT);
-        let body = |text: String, colour: u32| Line { text, pt: size, weight: Weight::Regular, colour, h: size * LEADING };
+        let body = |text: String, colour: u32| Line { text, pt: size, weight: Weight::Regular, colour, h: size * LEADING, body: false };
         let message = |out: &mut Vec<Line>, text: &str, colour: u32| {
             for line in ui.wrap(text, size, Weight::Regular, ui.pt(width - 2.0 * PAD)) {
                 out.push(body(line, colour));
@@ -351,21 +376,21 @@ impl DictionaryApp {
                 message(&mut out, &self.no_answer(&shown.word), LABEL_2.now());
             }
             for hit in &hits {
-                out.push(Line { text: hit.dictionary.clone(), pt: MAC_SUBHEAD_PT, weight: Weight::Semibold, colour: LABEL_2.now(), h: 24.0 });
+                out.push(Line { text: hit.dictionary.clone(), pt: MAC_SUBHEAD_PT, weight: Weight::Semibold, colour: LABEL_2.now(), h: 24.0, body: false });
                 for paragraph in hit.text.split('\n') {
                     if paragraph.is_empty() {
-                        out.push(Line { text: String::new(), pt: size, weight: Weight::Regular, colour: LABEL.now(), h: 8.0 });
+                        out.push(Line { text: String::new(), pt: size, weight: Weight::Regular, colour: LABEL.now(), h: 8.0, body: false });
                         continue;
                     }
                     for line in ui.wrap(paragraph, size, Weight::Regular, ui.pt(width - 2.0 * PAD)) {
-                        out.push(body(line, LABEL.now()));
+                        out.push(Line { body: true, ..body(line, LABEL.now()) });
                     }
                 }
-                out.push(Line { text: String::new(), pt: size, weight: Weight::Regular, colour: LABEL.now(), h: 18.0 });
+                out.push(Line { text: String::new(), pt: size, weight: Weight::Regular, colour: LABEL.now(), h: 18.0, body: false });
             }
         } else if !self.suggestions.is_empty() {
             for word in &self.suggestions {
-                out.push(Line { text: word.clone(), pt: size, weight: Weight::Regular, colour: LABEL.now(), h: ROW_H });
+                out.push(Line { text: word.clone(), pt: size, weight: Weight::Regular, colour: LABEL.now(), h: ROW_H, body: false });
             }
         } else if self.query.trim().is_empty() {
             message(&mut out, "Type a word to look it up.", LABEL_2.now());
@@ -392,6 +417,9 @@ impl DictionaryApp {
                     if let Some(act) = self.hit_test(px, py) {
                         return self.perform(act);
                     }
+                    if self.tap_definition(ctx, x, py) {
+                        return true;
+                    }
                     self.tap_row(py)
                 } else {
                     true
@@ -402,6 +430,43 @@ impl DictionaryApp {
                 true
             }
         }
+    }
+
+    /// A tap on a word of a definition looks that word up when some dictionary knows it (a cross-reference).
+    fn tap_definition(&mut self, ctx: &Ctx, x_px: f32, py: f32) -> bool {
+        if self.settings || self.shown.is_none() {
+            return false;
+        }
+        let Some((_, _, text, pt)) = self.body_rows.iter().find(|(y, h, _, _)| py >= *y && py < *y + *h).cloned() else { return false };
+        let tap = x_px - ctx.ui.pt(PAD);
+        let mut start = None;
+        let mut spans: Vec<(usize, usize)> = Vec::new();
+        for (i, c) in text.char_indices() {
+            match (c.is_whitespace(), start) {
+                (false, None) => start = Some(i),
+                (true, Some(s)) => {
+                    spans.push((s, i));
+                    start = None;
+                }
+                _ => {}
+            }
+        }
+        if let Some(s) = start {
+            spans.push((s, text.len()));
+        }
+        for (s, e) in spans {
+            let from = ctx.ui.measure(&text[..s], pt, Weight::Regular);
+            let to = ctx.ui.measure(&text[..e], pt, Weight::Regular);
+            if tap >= from && tap < to {
+                let word = text[s..e].trim_matches(|c: char| !c.is_alphanumeric()).to_string();
+                if word.is_empty() || self.shown.as_ref().is_some_and(|sh| sh.word.eq_ignore_ascii_case(&word)) {
+                    return false;
+                }
+                let known = self.library.as_ref().is_some_and(|l| !l.lookup(&word).is_empty());
+                return known && self.look_up(&word);
+            }
+        }
+        false
     }
 
     /// A tap at `py` (points) on the suggestion list looks that word up.
@@ -497,6 +562,8 @@ impl DictionaryApp {
         let dictionary = vec![
             AppMenuItem::new(MENU_LOOK_UP_CLIPBOARD, "Look Up Clipboard").key("cmd+l"),
             AppMenuItem::new(MENU_COPY_DEFINITION, "Copy Definition").enabled(has_answer),
+            AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(has_answer && bifrost_app::print::available()),
+            AppMenuItem::new(MENU_OPEN_FOLDER, "Open Dictionaries Folder"),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_FIND, "Find in Definition").key("cmd+f").enabled(self.shown.is_some() && !self.settings),
             AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(finding),
@@ -525,6 +592,148 @@ impl DictionaryApp {
             AppMenu { title: "Go".into(), items: go },
             AppMenu { title: "View".into(), items: view },
         ]
+    }
+}
+
+/// Draws a flat button of `w` by `h` points at (`x`, `y`) with a centred label. A button with an action is clickable;
+/// without one it is drawn dimmed. `strong` marks the selected segment.
+#[allow(clippy::too_many_arguments)]
+fn button(canvas: &mut dyn Canvas, ui: &Ui, hot: &mut Vec<Hot>, x: f32, y: f32, w: f32, h: f32, label: &str, act: Option<Act>, strong: bool) {
+    let r = RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h));
+    canvas.fill_rrect(r, ui.pt(6.0), if strong { SEGMENT_ON.now() } else { FIELD_BG.now() });
+    let colour = if act.is_some() { LABEL.now() } else { LABEL_3.now() };
+    let img = ui.text(&ui.fit(label, MAC_SUBHEAD_PT, r.w - ui.pt(4.0)), MAC_SUBHEAD_PT, Weight::Regular, colour);
+    widgets::blit(canvas, &img, (r.x + (r.w - img.w as f32) / 2.0) as i32, (r.y + (r.h - img.h as f32) / 2.0) as i32);
+    if let Some(act) = act {
+        hot.push(Hot { x, y, w, h, act });
+    }
+}
+
+/// Draws `text` in a settings row of `SETTINGS_ROW_H` points starting at `y`, vertically centred.
+#[allow(clippy::too_many_arguments)]
+fn text_at(canvas: &mut dyn Canvas, ui: &Ui, text: &str, pt: f32, weight: Weight, colour: u32, x: f32, y: f32, w: f32) {
+    let img = ui.text(&ui.fit(text, pt, ui.pt(w)), pt, weight, colour);
+    widgets::blit(canvas, &img, ui.pt(x) as i32, (ui.pt(y) + (ui.pt(SETTINGS_ROW_H) - img.h as f32) / 2.0) as i32);
+}
+
+impl DictionaryApp {
+    /// The settings page: which dictionaries are used, in what order and under what label, the text size and Done.
+    fn draw_settings(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, width_pt: f32, top: f32, view_h: f32) {
+        let ui = &ctx.ui;
+        let (cw, _) = canvas.size();
+        canvas.push_clip(RectF::new(0.0, ui.pt(top), cw as f32, ui.pt(view_h)), 0.0);
+        let mut y = top;
+        text_at(canvas, ui, "Dictionaries", MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now(), PAD, y, width_pt - 2.0 * PAD);
+        y += SETTINGS_ROW_H;
+        let count = self.prefs.dicts.len();
+        for i in 0..count {
+            let d = self.prefs.dicts[i].clone();
+            let renaming = self.rename.as_ref().and_then(|(r, buf)| (*r == i).then(|| buf.clone()));
+            button(canvas, ui, &mut self.hot, PAD, y + 4.0, 36.0, SETTINGS_ROW_H - 8.0, if d.enabled { "On" } else { "Off" }, Some(Act::Toggle(i)), d.enabled);
+            let buttons_w = 3.0 * 56.0 + 2.0 * 4.0;
+            let name_x = PAD + 36.0 + 12.0;
+            let name_w = (width_pt - PAD - buttons_w - name_x - 8.0).max(40.0);
+            match renaming {
+                Some(buf) => {
+                    let r = RectF::new(ui.pt(name_x), ui.pt(y + 3.0), ui.pt(name_w), ui.pt(SETTINGS_ROW_H - 6.0));
+                    canvas.fill_rrect(r, ui.pt(6.0), FIELD_BG.now());
+                    text_at(canvas, ui, &format!("{buf}|"), MAC_BODY_PT, Weight::Regular, LABEL.now(), name_x + 6.0, y, name_w - 12.0);
+                }
+                None => {
+                    let colour = if d.enabled { LABEL.now() } else { LABEL_3.now() };
+                    text_at(canvas, ui, d.shown_name(), MAC_BODY_PT, Weight::Regular, colour, name_x, y, name_w);
+                }
+            }
+            let bx = width_pt - PAD - buttons_w;
+            button(canvas, ui, &mut self.hot, bx, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "Up", (i > 0).then_some(Act::Up(i)), false);
+            button(canvas, ui, &mut self.hot, bx + 60.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "Down", (i + 1 < count).then_some(Act::Down(i)), false);
+            button(canvas, ui, &mut self.hot, bx + 120.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "Rename", Some(Act::Rename(i)), false);
+            y += SETTINGS_ROW_H;
+        }
+        if count == 0 {
+            text_at(canvas, ui, "No dictionary is installed yet.", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), PAD, y, width_pt - 2.0 * PAD);
+            y += SETTINGS_ROW_H;
+        }
+        y += SETTINGS_ROW_H / 2.0;
+        let size_text = format!("Text size: {}%", 100 + 10 * self.prefs.step);
+        text_at(canvas, ui, &size_text, MAC_BODY_PT, Weight::Regular, LABEL.now(), PAD, y, width_pt - 2.0 * PAD - 120.0);
+        let right = width_pt - PAD;
+        button(canvas, ui, &mut self.hot, right - 56.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "A+", (self.prefs.step < model::MAX_STEP).then_some(Act::Bigger), false);
+        button(canvas, ui, &mut self.hot, right - 116.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "A-", (self.prefs.step > model::MIN_STEP).then_some(Act::Smaller), false);
+        y += SETTINGS_ROW_H * 1.5;
+        button(canvas, ui, &mut self.hot, right - 80.0, y, 80.0, SETTINGS_ROW_H - 4.0, "Done", Some(Act::Done), true);
+        canvas.pop_clip();
+    }
+}
+
+/// Draws a flat button of `w` by `h` points at (`x`, `y`) with a centred label. A button with an action is clickable;
+/// without one it is drawn dimmed. `strong` marks the selected segment.
+#[allow(clippy::too_many_arguments)]
+fn button(canvas: &mut dyn Canvas, ui: &Ui, hot: &mut Vec<Hot>, x: f32, y: f32, w: f32, h: f32, label: &str, act: Option<Act>, strong: bool) {
+    let r = RectF::new(ui.pt(x), ui.pt(y), ui.pt(w), ui.pt(h));
+    canvas.fill_rrect(r, ui.pt(6.0), if strong { SEGMENT_ON.now() } else { FIELD_BG.now() });
+    let colour = if act.is_some() { LABEL.now() } else { LABEL_3.now() };
+    let img = ui.text(&ui.fit(label, MAC_SUBHEAD_PT, r.w - ui.pt(4.0)), MAC_SUBHEAD_PT, Weight::Regular, colour);
+    widgets::blit(canvas, &img, (r.x + (r.w - img.w as f32) / 2.0) as i32, (r.y + (r.h - img.h as f32) / 2.0) as i32);
+    if let Some(act) = act {
+        hot.push(Hot { x, y, w, h, act });
+    }
+}
+
+/// Draws `text` in a settings row of `SETTINGS_ROW_H` points starting at `y`, vertically centred.
+#[allow(clippy::too_many_arguments)]
+fn text_at(canvas: &mut dyn Canvas, ui: &Ui, text: &str, pt: f32, weight: Weight, colour: u32, x: f32, y: f32, w: f32) {
+    let img = ui.text(&ui.fit(text, pt, ui.pt(w)), pt, weight, colour);
+    widgets::blit(canvas, &img, ui.pt(x) as i32, (ui.pt(y) + (ui.pt(SETTINGS_ROW_H) - img.h as f32) / 2.0) as i32);
+}
+
+impl DictionaryApp {
+    /// The settings page: which dictionaries are used, in what order and under what label, the text size and Done.
+    fn draw_settings(&mut self, ctx: &Ctx, canvas: &mut dyn Canvas, width_pt: f32, top: f32, view_h: f32) {
+        let ui = &ctx.ui;
+        let (cw, _) = canvas.size();
+        canvas.push_clip(RectF::new(0.0, ui.pt(top), cw as f32, ui.pt(view_h)), 0.0);
+        let mut y = top;
+        text_at(canvas, ui, "Dictionaries", MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now(), PAD, y, width_pt - 2.0 * PAD);
+        y += SETTINGS_ROW_H;
+        let count = self.prefs.dicts.len();
+        for i in 0..count {
+            let d = self.prefs.dicts[i].clone();
+            let renaming = self.rename.as_ref().and_then(|(r, buf)| (*r == i).then(|| buf.clone()));
+            button(canvas, ui, &mut self.hot, PAD, y + 4.0, 36.0, SETTINGS_ROW_H - 8.0, if d.enabled { "On" } else { "Off" }, Some(Act::Toggle(i)), d.enabled);
+            let buttons_w = 3.0 * 56.0 + 2.0 * 4.0;
+            let name_x = PAD + 36.0 + 12.0;
+            let name_w = (width_pt - PAD - buttons_w - name_x - 8.0).max(40.0);
+            match renaming {
+                Some(buf) => {
+                    let r = RectF::new(ui.pt(name_x), ui.pt(y + 3.0), ui.pt(name_w), ui.pt(SETTINGS_ROW_H - 6.0));
+                    canvas.fill_rrect(r, ui.pt(6.0), FIELD_BG.now());
+                    text_at(canvas, ui, &format!("{buf}|"), MAC_BODY_PT, Weight::Regular, LABEL.now(), name_x + 6.0, y, name_w - 12.0);
+                }
+                None => {
+                    let colour = if d.enabled { LABEL.now() } else { LABEL_3.now() };
+                    text_at(canvas, ui, d.shown_name(), MAC_BODY_PT, Weight::Regular, colour, name_x, y, name_w);
+                }
+            }
+            let bx = width_pt - PAD - buttons_w;
+            button(canvas, ui, &mut self.hot, bx, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "Up", (i > 0).then_some(Act::Up(i)), false);
+            button(canvas, ui, &mut self.hot, bx + 60.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "Down", (i + 1 < count).then_some(Act::Down(i)), false);
+            button(canvas, ui, &mut self.hot, bx + 120.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "Rename", Some(Act::Rename(i)), false);
+            y += SETTINGS_ROW_H;
+        }
+        if count == 0 {
+            text_at(canvas, ui, "No dictionary is installed yet.", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), PAD, y, width_pt - 2.0 * PAD);
+            y += SETTINGS_ROW_H;
+        }
+        y += SETTINGS_ROW_H / 2.0;
+        let size_text = format!("Text size: {}%", 100 + 10 * self.prefs.step);
+        text_at(canvas, ui, &size_text, MAC_BODY_PT, Weight::Regular, LABEL.now(), PAD, y, width_pt - 2.0 * PAD - 120.0);
+        let right = width_pt - PAD;
+        button(canvas, ui, &mut self.hot, right - 56.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "A+", (self.prefs.step < model::MAX_STEP).then_some(Act::Bigger), false);
+        button(canvas, ui, &mut self.hot, right - 116.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "A-", (self.prefs.step > model::MIN_STEP).then_some(Act::Smaller), false);
+        y += SETTINGS_ROW_H * 1.5;
+        button(canvas, ui, &mut self.hot, right - 80.0, y, 80.0, SETTINGS_ROW_H - 4.0, "Done", Some(Act::Done), true);
+        canvas.pop_clip();
     }
 }
 
@@ -581,6 +790,12 @@ impl App for DictionaryApp {
             MENU_LOOK_UP_CLIPBOARD => self.look_up_clipboard(ctx),
             MENU_COPY_DEFINITION => {
                 self.copy_definition(ctx);
+                false
+            }
+            MENU_PRINT => self.print_definition(),
+            MENU_OPEN_FOLDER => {
+                let _ = std::fs::create_dir_all(&self.folder);
+                ctx.open_url(&format!("file://{}", self.folder));
                 false
             }
             MENU_CLEAR => {
@@ -653,43 +868,131 @@ impl App for DictionaryApp {
         let scale = ui.pt(1.0).max(0.001);
         let width_pt = cw as f32 / scale;
         let height_pt = ch as f32 / scale;
-        let view_h = (height_pt - LIST_TOP - FOOTER_H).max(0.0);
+        self.hot.clear();
+        self.body_rows.clear();
 
         canvas.fill_rect(RectF::new(0.0, 0.0, cw as f32, ch as f32), CONTENT_BG.now());
 
-        // the search field: a capsule with the query, or the placeholder while it is empty
-        let field = RectF::new(ui.pt(PAD), ui.pt(FIELD_TOP), ui.pt(width_pt - 2.0 * PAD), ui.pt(FIELD_H));
-        canvas.fill_rrect(field, ui.pt(FIELD_H / 2.0), FIELD_BG.now());
+        // the toolbar: Back and Forward, the search field, and the text size buttons
+        let gap = 4.0;
+        let can_back = self.history.can_back();
+        let can_forward = self.history.can_forward();
+        let can_smaller = self.prefs.step > model::MIN_STEP;
+        let can_bigger = self.prefs.step < model::MAX_STEP;
+        button(canvas, ui, &mut self.hot, PAD, FIELD_TOP, BTN_W, FIELD_H, "<", can_back.then_some(Act::Back), false);
+        button(canvas, ui, &mut self.hot, PAD + BTN_W + gap, FIELD_TOP, BTN_W, FIELD_H, ">", can_forward.then_some(Act::Forward), false);
+        let right = width_pt - PAD;
+        button(canvas, ui, &mut self.hot, right - BTN_W, FIELD_TOP, BTN_W, FIELD_H, "A+", can_bigger.then_some(Act::Bigger), false);
+        button(canvas, ui, &mut self.hot, right - 2.0 * BTN_W - gap, FIELD_TOP, BTN_W, FIELD_H, "A-", can_smaller.then_some(Act::Smaller), false);
+        let field_x = PAD + 2.0 * (BTN_W + gap);
+        let field_w = (right - 2.0 * (BTN_W + gap) - field_x).max(40.0);
+        let field = RectF::new(ui.pt(field_x), ui.pt(FIELD_TOP), ui.pt(field_w), ui.pt(FIELD_H));
+        canvas.fill_rrect(field, ui.pt(6.0), FIELD_BG.now());
         let (text, colour) = if self.query.is_empty() { ("Search Dictionary", LABEL_2.now()) } else { (self.query.as_str(), LABEL.now()) };
         let fitted = ui.fit(text, MAC_BODY_PT, field.w - ui.pt(PAD));
         let img = ui.text(&fitted, MAC_BODY_PT, Weight::Regular, colour);
         widgets::blit(canvas, &img, (field.x + ui.pt(PAD / 2.0)) as i32, (field.y + (field.h - img.h as f32) / 2.0) as i32);
 
-        // the list, clipped under the field and above the footer
-        let lines = self.lines(ui, width_pt);
-        let content_h: f32 = lines.iter().map(|l| l.h).sum();
-        self.scroll.set_max(content_h - view_h);
-        let offset = self.scroll.offset();
-        let clip = RectF::new(0.0, ui.pt(LIST_TOP), cw as f32, ui.pt(view_h));
-        canvas.push_clip(clip, 0.0);
-        let mut y = LIST_TOP - offset;
-        for line in &lines {
-            if y + line.h > LIST_TOP && y < LIST_TOP + view_h && !line.text.is_empty() {
-                let img = ui.text(&line.text, line.pt, line.weight, line.colour);
-                let top = ui.pt(y) + (ui.pt(line.h) - img.h as f32) / 2.0;
-                widgets::blit(canvas, &img, ui.pt(PAD) as i32, top as i32);
+        let mut top = LIST_TOP;
+        // the scope bar: All and each dictionary that answered
+        if !self.settings && self.show_scope_bar() {
+            let mut x = PAD;
+            let mut entries: Vec<(String, Option<String>)> = vec![("All".to_string(), None)];
+            entries.extend(self.scope_names().into_iter().map(|n| (n.clone(), Some(n))));
+            for (label, scope) in entries {
+                let w = ui.measure(&label, MAC_SUBHEAD_PT, Weight::Regular) / scale + 16.0;
+                if x + w > width_pt - PAD {
+                    break;
+                }
+                let on = self.scope == scope;
+                button(canvas, ui, &mut self.hot, x, top, w, SCOPE_H - 4.0, &label, Some(Act::Scope(scope)), on);
+                x += w + gap;
             }
-            y += line.h;
+            top += SCOPE_H;
         }
-        canvas.pop_clip();
+        // the find bar
+        if !self.settings {
+            if let Some(f) = &self.find {
+                let status = if f.query.trim().is_empty() {
+                    "Type to find in the definition".to_string()
+                } else if f.count == 0 {
+                    "No matches".to_string()
+                } else {
+                    format!("{} of {}", f.cur.map_or(0, |c| c + 1), f.count)
+                };
+                let text = format!("Find: {}  \u{b7}  {status}", f.query);
+                let img = ui.text(&ui.fit(&text, MAC_BODY_PT, ui.pt(width_pt - 2.0 * PAD)), MAC_BODY_PT, Weight::Regular, LABEL.now());
+                canvas.fill_rect(RectF::new(0.0, ui.pt(top), cw as f32, ui.pt(SCOPE_H)), ROW_PRESSED.now());
+                widgets::blit(canvas, &img, ui.pt(PAD) as i32, (ui.pt(top) + (ui.pt(SCOPE_H) - img.h as f32) / 2.0) as i32);
+                top += SCOPE_H;
+            }
+        }
+        let view_h = (height_pt - top - FOOTER_H).max(0.0);
+
+        if self.settings {
+            self.draw_settings(ctx, canvas, width_pt, top, view_h);
+        } else {
+            // the list, clipped under the field and above the footer
+            let lines = self.lines(ui, width_pt);
+            let content_h: f32 = lines.iter().map(|l| l.h).sum();
+            self.scroll.set_max(content_h - view_h);
+            let mut ys = Vec::with_capacity(lines.len());
+            let mut acc = 0.0;
+            for l in &lines {
+                ys.push(acc);
+                acc += l.h;
+            }
+            let matches: Vec<usize> = match &self.find {
+                Some(f) => {
+                    let texts: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
+                    model::find_lines(&texts, &f.query)
+                }
+                None => Vec::new(),
+            };
+            let mut current = None;
+            let mut scroll_target = None;
+            if let Some(f) = &mut self.find {
+                f.count = matches.len();
+                if f.cur.is_some_and(|c| c >= matches.len()) {
+                    f.cur = None;
+                }
+                current = f.cur.map(|c| matches[c]);
+                if f.scroll_to {
+                    f.scroll_to = false;
+                    scroll_target = current;
+                }
+            }
+            if let Some(i) = scroll_target {
+                self.scroll.jump_to((ys[i] - 8.0).max(0.0));
+            }
+            let offset = self.scroll.offset();
+            let clip = RectF::new(0.0, ui.pt(top), cw as f32, ui.pt(view_h));
+            canvas.push_clip(clip, 0.0);
+            for (i, line) in lines.iter().enumerate() {
+                let y = top + ys[i] - offset;
+                if y + line.h > top && y < top + view_h && !line.text.is_empty() {
+                    if matches.contains(&i) {
+                        let tint = if current == Some(i) { MATERIAL_SELECTION.now() } else { ROW_PRESSED.now() };
+                        canvas.fill_rect(RectF::new(0.0, ui.pt(y), cw as f32, ui.pt(line.h)), tint);
+                    }
+                    let img = ui.text(&line.text, line.pt, line.weight, line.colour);
+                    let ty = ui.pt(y) + (ui.pt(line.h) - img.h as f32) / 2.0;
+                    widgets::blit(canvas, &img, ui.pt(PAD) as i32, ty as i32);
+                    if line.body {
+                        self.body_rows.push((y, line.h, line.text.clone(), line.pt));
+                    }
+                }
+            }
+            canvas.pop_clip();
+        }
 
         // the footer: what is installed, and any dictionary that could not be opened
         let footer = match &self.library {
             Some(lib) if !lib.is_empty() => {
                 let names = lib.dictionaries.len();
-                let mut text = format!("{names} dictionar{} · {} words", if names == 1 { "y" } else { "ies" }, lib.word_count());
+                let mut text = format!("{names} dictionar{} \u{b7} {} words", if names == 1 { "y" } else { "ies" }, lib.word_count());
                 if !lib.problems.is_empty() {
-                    text.push_str(&format!(" · {} could not be opened", lib.problems.len()));
+                    text.push_str(&format!(" \u{b7} {} could not be opened", lib.problems.len()));
                 }
                 text
             }
