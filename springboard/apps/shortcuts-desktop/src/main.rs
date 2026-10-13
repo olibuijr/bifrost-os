@@ -1,9 +1,12 @@
-//! Shortcuts as an installed BifrOSt app. Actions that need the shell
-//! (Wi-Fi, Low Power, DND, brightness, open app, screenshot, timer) cannot be
-//! sent over the app protocol yet and are only logged.
+//! Shortcuts as an installed BifrOSt app. A run walks the steps with `springboard::shortcuts::flow`: text, variables,
+//! If and Repeat blocks, copying, notifications and results happen in the app (`runner`). Actions that need the shell
+//! (Wi-Fi, Low Power, DND, brightness, open app, screenshot, timer) cannot be sent over the app protocol yet; a run
+//! that reaches one stops there and says so.
 
 mod automation;
+mod menus;
 use springboard::shortcuts as model;
+mod runner;
 mod services;
 mod widget;
 
@@ -11,9 +14,15 @@ use bifrost_app::control::RpcError;
 use bifrost_app::intents::{self, Entity, EntityQuery, Intent, IntentResult};
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::login_items_approval as login;
-use bifrost_app::{App, Ctx, Input, TouchKind};
+use bifrost_app::proto::{DocErrorCode, DocMode};
+use bifrost_app::{App, AppMenu, Ctx, DocumentEvent, Input, TouchKind};
 use bifrost_core::json::Json;
+use springboard::shortcuts::flow;
+use std::io::{Read, Write};
 use std::path::Path;
+
+/// The most bytes read from a file chosen for import; a list of shortcuts is far smaller.
+const MAX_IMPORT_BYTES: u64 = 256 * 1024;
 
 struct ShortcutsApp {
     w: Option<widget::Shortcuts>,
@@ -23,6 +32,12 @@ struct ShortcutsApp {
     reminders: Option<Vec<services::Reminder>>,
     /// whether the Login Items status has been asked for
     asked_login: bool,
+    /// whether the shell was last told the app wants the keyboard
+    keyboard: bool,
+    /// the export in progress: the save panel's request and the bytes to write once it answers
+    export: Option<(u32, Vec<u8>)>,
+    /// the request of the open panel an import waits for
+    import: Option<u32>,
 }
 
 impl ShortcutsApp {
@@ -57,6 +72,48 @@ impl ShortcutsApp {
         }
     }
 
+    /// Does what the window asked for during the last input: runs the shortcuts it queued, opens the panels of an
+    /// import or an export, passes on the login toggle, tells the shell whether a field wants the keyboard, and runs
+    /// the intents it queued.
+    fn settle(&mut self, ctx: &Ctx) {
+        let Some(c) = self.w.as_mut() else { return };
+        let t = c.now();
+        for s in c.take_run_requests() {
+            let steps = flow::run(&s.actions, &mut runner::AppHost::new(ctx));
+            c.show_run(&s.name, &steps, t);
+        }
+        let requests = c.take_intent_requests();
+        let login_request = c.take_login_request();
+        let export = c.take_export_request();
+        let import = c.take_import_request();
+        let keyboard = c.wants_keyboard();
+        if let Some(on) = login_request {
+            services::set_login(ctx, on);
+        }
+        if let Some((name, text)) = export {
+            self.export = Some((ctx.save_document(&name, &["public.text"]), text.into_bytes()));
+        }
+        if import {
+            self.import = Some(ctx.open_document(DocMode::Read, "Import Shortcuts", &["public.text"]));
+        }
+        if keyboard != self.keyboard {
+            self.keyboard = keyboard;
+            ctx.wants_keyboard(keyboard);
+        }
+        self.sync(ctx);
+        for (id, params) in requests {
+            self.run_intent(&ctx.data_dir, &id, &params, t);
+        }
+    }
+
+    /// Shows `text` in the window for a few seconds.
+    fn say(&mut self, text: &str) {
+        if let Some(c) = self.w.as_mut() {
+            let t = c.now();
+            c.say(text, t);
+        }
+    }
+
     /// Brings the shell's reminders in line with the list. Sends only what changed, so it is cheap to call after each
     /// input or script change.
     fn sync(&mut self, ctx: &Ctx) {
@@ -84,24 +141,82 @@ impl App for ShortcutsApp {
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
-        let (Some(c), Input::Touch { kind, x, y, t, .. }) = (&mut self.w, ev) else { return false };
-        let e = match kind {
-            TouchKind::Down => Event::Down(x, y),
-            TouchKind::Move => Event::Move(x, y),
-            TouchKind::Up | TouchKind::Cancel => Event::Up(x, y),
-        };
-        c.touch(&ctx.ui, e, t);
-        if !c.take_runs().is_empty() {
-            c.show_run_unavailable(t);
+        let Some(c) = self.w.as_mut() else { return false };
+        match ev {
+            Input::Touch { kind, x, y, t, .. } => {
+                let e = match kind {
+                    TouchKind::Down => Event::Down(x, y),
+                    TouchKind::Move => Event::Move(x, y),
+                    TouchKind::Up | TouchKind::Cancel => Event::Up(x, y),
+                };
+                c.touch(&ctx.ui, e, t);
+            }
+            Input::Key(key) => {
+                if !c.key(key) {
+                    return false;
+                }
+            }
+            _ => return false,
         }
-        let requests = c.take_intent_requests();
-        let login_request = c.take_login_request();
-        if let Some(on) = login_request {
-            services::set_login(ctx, on);
+        self.settle(ctx);
+        true
+    }
+
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        match &self.w {
+            Some(c) => menus::build(c.list(), c.in_editor()),
+            None => Vec::new(),
         }
-        self.sync(ctx);
-        for (id, params) in requests {
-            self.run_intent(&ctx.data_dir, &id, &params, t);
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        let (Some(command), Some(c)) = (menus::command(id), self.w.as_mut()) else { return false };
+        c.command(command);
+        self.settle(ctx);
+        true
+    }
+
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        match ev {
+            DocumentEvent::SaveTo(mut doc) => match self.export.take() {
+                Some((request, bytes)) if request == doc.request => match doc.file.write_all(&bytes) {
+                    Ok(()) => ctx.commit_document(request),
+                    Err(e) => {
+                        ctx.log(&format!("export shortcuts: {e}"));
+                        ctx.abort_document(request);
+                        self.say("The shortcuts could not be written.");
+                    }
+                },
+                other => self.export = other,
+            },
+            DocumentEvent::Saved(_) => self.say("Exported"),
+            DocumentEvent::Opened(mut doc) if self.import == Some(doc.request) => {
+                self.import = None;
+                let mut text = String::new();
+                let read = (&mut doc.file).take(MAX_IMPORT_BYTES).read_to_string(&mut text);
+                match read {
+                    Ok(_) => {
+                        if let Some(c) = self.w.as_mut() {
+                            let t = c.now();
+                            c.import_text(&text, t);
+                        }
+                    }
+                    Err(_) => self.say("That file could not be read as text."),
+                }
+            }
+            DocumentEvent::Failed { request, code } => {
+                if self.import == Some(request) {
+                    self.import = None;
+                }
+                if self.export.as_ref().is_some_and(|(r, _)| *r == request) {
+                    self.export = None;
+                }
+                if code != DocErrorCode::Cancelled {
+                    ctx.log(&format!("document: {code:?}"));
+                    self.say("The file could not be used.");
+                }
+            }
+            _ => {}
         }
         true
     }
@@ -192,5 +307,13 @@ impl App for ShortcutsApp {
 }
 
 fn main() {
-    bifrost_app::run(ShortcutsApp { w: None, planner: automation::Planner::new(), reminders: None, asked_login: false });
+    bifrost_app::run(ShortcutsApp {
+        w: None,
+        planner: automation::Planner::new(),
+        reminders: None,
+        asked_login: false,
+        keyboard: false,
+        export: None,
+        import: None,
+    });
 }

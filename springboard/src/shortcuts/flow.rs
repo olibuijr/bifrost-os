@@ -161,6 +161,19 @@ fn block(actions: &[Action], open: usize) -> (Option<usize>, usize) {
     (otherwise, actions.len())
 }
 
+/// Removes step `k`. An If or Repeat takes its whole block with it, so no end is left without its opener. Returns how
+/// many steps went.
+pub fn remove_step(actions: &mut Vec<Action>, k: usize) -> usize {
+    if k >= actions.len() {
+        return 0;
+    }
+    let end = match actions[k] {
+        Action::If(_) | Action::Repeat(_) => block(actions, k).1.min(actions.len() - 1),
+        _ => k,
+    };
+    actions.drain(k..=end).count()
+}
+
 struct Run<'a> {
     actions: &'a [Action],
     host: &'a mut dyn Host,
@@ -537,6 +550,39 @@ mod tests {
             Action::Dnd(true),
         ];
         assert_eq!(depths(&list), vec![0, 0, 1, 2, 1, 0, 1, 0, 0, 0], "a stray end never goes below zero");
+    }
+
+    #[test]
+    fn removing_an_opener_removes_its_block_and_a_plain_step_only_itself() {
+        let mut list = vec![
+            Action::Text("a".into()),
+            Action::If(Cond::Empty),
+            Action::Repeat(2),
+            Action::Dnd(true),
+            Action::EndRepeat,
+            Action::Otherwise,
+            Action::Dnd(false),
+            Action::EndIf,
+            Action::Text("z".into()),
+        ];
+        assert_eq!(remove_step(&mut list, 0), 1);
+        assert_eq!(remove_step(&mut list, 0), 7, "the If, both branches and the nested Repeat");
+        assert_eq!(list, vec![Action::Text("z".into())]);
+        assert_eq!(remove_step(&mut list, 5), 0, "past the end removes nothing");
+    }
+
+    #[test]
+    fn removing_an_unclosed_opener_removes_what_follows_it() {
+        let mut list = vec![Action::Text("a".into()), Action::Repeat(2), Action::Dnd(true)];
+        assert_eq!(remove_step(&mut list, 1), 2);
+        assert_eq!(list, vec![Action::Text("a".into())]);
+    }
+
+    #[test]
+    fn a_stray_end_is_removed_alone() {
+        let mut list = vec![Action::EndIf, Action::Dnd(true)];
+        assert_eq!(remove_step(&mut list, 0), 1);
+        assert_eq!(list, vec![Action::Dnd(true)]);
     }
 
     #[test]
