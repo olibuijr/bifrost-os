@@ -95,3 +95,7 @@ zip
 zsh
 imagemagick
 ffmpeg
+apache
+gdb
+nfs-utils
+rdma-core
