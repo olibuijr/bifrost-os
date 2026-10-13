@@ -1261,7 +1261,8 @@ SDK module `bifrost_app::intents`, built on the control socket (`App::rpc`), so 
 | Apple | Ours |
 |---|---|
 | `AppIntent` (`title`, `description`, `@Parameter`) | `Intent::new(id, title, description).param(Param::new(name, title, ParamType::..))`, `.shortcut()` |
-| Parameter types | `ParamType::{String, Int, Bool, Date (ISO 8601 text), Url, Entity("Type")}`, `Param::optional()` |
+| Parameter types | `ParamType::{String, Int, Bool, Date (ISO 8601 text), Url, Entity("Type"), Enum(cases), Double, Currency, Placemark, Measurement, File}`, `Param::optional()`. `People` is `Entity("Person")` |
+| `IndexedEntity`, `hideInSpotlight` | `indexed_entity::IndexedEntity::new(entity).keyword(..).hide_in_spotlight()`; `indexed_entity::index(ctx, &[..])` writes Core Search items in the `entity.<type>` domain (`springboard/sdk/src/indexed_entity.rs`) |
 | `AppEntity` | `Entity::new(type, id, title).subtitle(..)` |
 | `EntityQuery`, `suggestedEntities`, `entities(for:)`, `entities(matching:)` | `EntityQuery::{Suggested, Ids, String}` |
 | `perform()` returning `IntentResult` (`ProvidesValue` + `ProvidesDialog`) | `IntentResult::value(json).with_dialog("..")` |
@@ -1294,12 +1295,21 @@ Gaps (Apple behaviour not matched yet):
 - No Siri or voice: `dialog` is returned to the caller but Spotlight neither shows nor speaks it (it is logged on failure).
 - No parameter resolution UI: Spotlight runs only parameterless shortcuts. Required parameters, disambiguation
   (`needsValueError`, `requestDisambiguation`) and confirmation (`requestConfirmation`) are not modelled; callers pass JSON.
-- `entity.query` is for callers and scripts; nothing in the shell shows entity pickers yet. `IndexedEntity` (Spotlight
-  indexing of entities), `OpenIntent`, intent donation and `ParameterSummary` are not implemented.
+- `entity.query` is for callers and scripts; nothing in the shell shows entity pickers yet. `OpenIntent` as a type of its
+  own and `ParameterSummary` are not implemented (`IntentResult::opens` covers the follow-on case).
+- Present in the SDK but not wired to the shell: `Intent::foreground` and `Intent::authentication` (checked by
+  `Intent::may_run` and `check_result`; the shell does not gate runs on the session), `IntentResult::with_snippet` (the
+  shell does not draw the snippet), `donation` and `donations` (stores; Search does not read them), `focus_filter`
+  (client of the shell's Do Not Disturb service only; there is no `SetFocusFilterIntent` model).
+- Parameter prompts: `controls::intent_resolve` plans ask, choose, confirm and block (`Plan`), but the control socket
+  replies with a plain error and the shell does not prompt for a value.
+- Not started: intents driving widgets, controls and Live Activities.
+- Shortcuts lists and runs its own intents only; intents of other apps (`intent.list` over their sockets) are not listed.
 - The Shortcuts app (`shortcuts-desktop`) does not list or run intents yet; it could read `intent.list` of running apps and
   the manifests of installed ones and offer them as actions, passing results between steps as the `value` JSON.
 - Intents are served on the control socket, so the app must be running; the shell launches it first.
-- `Date` is validated as ISO 8601 text only; no natural-language dates, durations, measurements or file parameters.
+- `Date` is validated as ISO 8601 text only; no natural-language dates or durations. Plural parameters (`[IntentFile]`,
+  `Doubles`, `[Placemark]`) are not modelled; `Placemark`, `Measurement` and `File` take one object each.
 drag and drop, no multi-line text view, and the
 accessibility `Node` is flat, so nesting is reported by `ax_tree()` and sent as `NodeExt` parents.
 
