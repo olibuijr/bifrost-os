@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.11 — 2026-10-13
+
+- Boot: `video-arg` now writes the mode in use into a unified-kernel-image command line (it refused any line without `initrd=`), so the next boot starts at the panel's refresh and is not modeset twice; it follows the Settings refresh choice. The session keys its shell-version stamp on the binary (one stat) instead of globbing pacman's database, which took 0.65 s on a cold boot. Desktop first frame 6.64 to 6.37 s after kernel start, userspace 4.45 to 3.37 s on the lab PC.
+
 ## 0.7.10 — 2026-10-13
 
 - Boot: the session starts the bus, the compositor and the portal as the account with `setpriv`, without a PAM session: `runuser`'s pam_systemd started the account's user manager synchronously first. The desktop's first frame comes 0.8 s sooner on the lab PC (7.60 to 6.77 s after the kernel starts).

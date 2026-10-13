@@ -103,7 +103,9 @@ mark compositor-ready
 # The shell's crash-loop guard latches after three starts that never stay up for 60 s. A new shell build must
 # not inherit that latch: reset it whenever the installed springboard-shell version changes.
 # (the pacman database directory names the version; `pacman -Q` costs ~100 ms on the boot path)
-shell_version=$(shopt -s nullglob; d=(/var/lib/pacman/local/springboard-shell-[0-9]*/); d=${d[0]%/}; printf '%s' "${d#/var/lib/pacman/local/springboard-shell-}")
+# a new shell binary resets the crash-loop counter: keyed on the binary itself (inode and mtime, one stat); the glob
+# over pacman's database it replaced took 0.65 s on a cold boot, right before the shell launch (round 75)
+shell_version=$(stat -c '%i:%Y' "$client" 2>/dev/null)
 stamp=/var/lib/springboard/shell-version
 if [[ -n "$shell_version" && "$(cat "$stamp" 2>/dev/null || true)" != "$shell_version" ]]; then
     rm -f /var/lib/springboard/boot_attempts
