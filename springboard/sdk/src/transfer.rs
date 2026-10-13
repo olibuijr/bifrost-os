@@ -312,16 +312,25 @@ pub fn from_pasteboard_item<T>(reps: &Representations<T>, item: &PasteItem) -> O
 /// the payload. `None` when neither is visible, since a drag item carries text, a link or a file grant only.
 pub fn drag_item<T>(reps: &Representations<T>, value: &T) -> Option<DragItem> {
     let types: Vec<String> = reps.types_for(Viewer::Other).iter().map(|t| t.to_string()).collect();
-    let mut payload = None;
+    Some(DragItem { types, payload: text_payload(reps, value)? })
+}
+
+/// The text (or, failing that, link) `value` exports to another app, as a drag or share payload.
+fn text_payload<T>(reps: &Representations<T>, value: &T) -> Option<Payload> {
     for uti in [TEXT_PAYLOAD, URL_PAYLOAD] {
         if let Some(bytes) = reps.export(value, uti, Viewer::Other) {
             if let Ok(text) = String::from_utf8(bytes) {
-                payload = Some(if uti == URL_PAYLOAD { Payload::Url(text) } else { Payload::Text(text) });
-                break;
+                return Some(if uti == URL_PAYLOAD { Payload::Url(text) } else { Payload::Text(text) });
             }
         }
     }
-    Some(DragItem { types, payload: payload? })
+    None
+}
+
+/// `ShareLink(item:)`: the items the share menu is shown for, taken from what `value` exports to another app. Empty when
+/// no visible representation is text or a link, since a share carries text, links and file grants only.
+pub fn share_items<T>(reps: &Representations<T>, value: &T) -> Vec<Payload> {
+    text_payload(reps, value).into_iter().collect()
 }
 
 /// Starts a drag of `value` (`beginDraggingSession`) and returns the session id. `None` when [`drag_item`] has nothing to
@@ -329,6 +338,11 @@ pub fn drag_item<T>(reps: &Representations<T>, value: &T) -> Option<DragItem> {
 pub fn begin_drag<T>(ctx: &Ctx, allowed: u8, value: &T, reps: &Representations<T>, preview: DragPreview) -> Option<u32> {
     let item = drag_item(reps, value)?;
     Some(dnd::begin(ctx, allowed, vec![item], preview))
+}
+
+/// The first available pasteboard item in `items`, read back through the model's preferred representation.
+pub fn paste_values<T>(reps: &Representations<T>, items: &[PasteItem]) -> Vec<T> {
+    items.iter().filter_map(|item| from_pasteboard_item(reps, item)).collect()
 }
 
 /// The values a drop carries, rebuilt by the model. An item is read through the representation its payload is natural as
@@ -471,6 +485,22 @@ mod tests {
         // a value with only own-process representations has nothing to drag
         let private = Representations::new().proxy(PRIVATE, Visibility::OwnProcess, export_private);
         assert!(drag_item(&private, &Note { text: "x".into() }).is_none());
+    }
+
+    #[test]
+    fn share_items_carry_the_exported_text() {
+        let reps = note_representations();
+        assert_eq!(share_items(&reps, &Note { text: "hi".into() }), vec![Payload::Text("hi".into())]);
+        let private = Representations::new().proxy(PRIVATE, Visibility::OwnProcess, export_private);
+        assert!(share_items(&private, &Note { text: "x".into() }).is_empty());
+    }
+
+    #[test]
+    fn paste_values_read_every_item_the_model_can_import() {
+        let reps = note_representations();
+        let items = [PasteItem::default().with(PLAIN, b"a"), PasteItem::default().with(HTML, b"<p>b</p>"), PasteItem::default().with(PLAIN, b"c")];
+        let texts: Vec<String> = paste_values(&reps, &items).into_iter().map(|n| n.text).collect();
+        assert_eq!(texts, ["a", "c"]);
     }
 
     #[test]

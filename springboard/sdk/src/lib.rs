@@ -136,6 +136,7 @@ pub mod dnd;
 pub mod review;
 pub mod app_transaction;
 pub mod transfer;
+pub mod transfer_drag;
 pub mod layout;
 pub mod control;
 pub mod intents;

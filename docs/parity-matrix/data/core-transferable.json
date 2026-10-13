@@ -10,9 +10,9 @@
     {
       "feature": "Transferable protocol and TransferRepresentation builder",
       "apple": "Transferable, TransferRepresentation, TransferRepresentationBuilder, TupleTransferRepresentation",
-      "bifrost": "springboard/sdk/src/transfer.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item, from_pasteboard_item, drag_item, begin_drag, drop_values); springboard/sdk/src/item_provider.rs",
+      "bifrost": "springboard/sdk/src/transfer.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item, from_pasteboard_item, drag_item, begin_drag, drop_values); springboard/sdk/src/item_provider.rs; springboard/sdk/src/transfer_drag.rs (draggable, DropTarget); springboard/sdk/src/transfer.rs (share_items, paste_values); springboard/sdk/src/share.rs (show_transferable, sharing_services_for_transferable)",
       "status": "partial",
-      "note": "Sprint 10: Transferable trait with Representations builder (data, codable, file, proxy, proxy_of), exportedContentType and importedContentTypes, NSItemProvider (item_provider.rs: loadTransferable). Host tests only (sdk/tests/transferable.rs); verify on Midget for parity."
+      "note": "Sprint 10: Transferable trait with Representations builder (data, codable, file, proxy, proxy_of), exportedContentType and importedContentTypes, NSItemProvider (item_provider.rs: loadTransferable). Host tests only (sdk/tests/transferable.rs); verify on Midget for parity. Sprint 11: declarative draggable and DropTarget over drag_session (isTargeted, negotiated operation), ShareLink by representation, multi-item paste_values. Shell multi-item pasteboard wire still flat. Host tests only."
     },
     {
       "feature": "Data transfer (Codable and binary data)",

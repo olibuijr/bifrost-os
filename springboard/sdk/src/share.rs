@@ -25,6 +25,16 @@ pub fn show_picker(ctx: &Ctx, items: &[Payload], anchor: UiRect) -> u32 {
     request
 }
 
+/// `ShareLink(item:)` for a `Transferable`: shows the share menu for the text or link `value` exports to another app. `None`
+/// (nothing shown) when no visible representation can be shared.
+pub fn show_transferable<T>(ctx: &Ctx, reps: &crate::transfer::Representations<T>, value: &T, anchor: UiRect) -> Option<u32> {
+    let items = crate::transfer::share_items(reps, value);
+    if items.is_empty() {
+        return None;
+    }
+    Some(show_picker(ctx, &items, anchor))
+}
+
 /// True when a document `request` was not asked for by this app: a file somebody shared or dropped on it.
 pub fn is_inbound(request: u32) -> bool {
     request & INBOUND != 0
@@ -76,6 +86,11 @@ impl SharingService {
                 }
             })
             .collect()
+    }
+
+    /// The services that take what a `Transferable` exports ([`crate::transfer::share_items`]), in menu order.
+    pub fn sharing_services_for_transferable<T>(reps: &crate::transfer::Representations<T>, value: &T, installed: &[Candidate]) -> Vec<SharingService> {
+        Self::sharing_services_for_items(&crate::transfer::share_items(reps, value), installed)
     }
 
     /// The service's identifier: an app id, `COPY` or `COMPOSE`.
@@ -257,6 +272,16 @@ mod tests {
         let table = table();
         let url = [Payload::Url("https://example.com/x".into())];
         assert_eq!(titles(&SharingService::sharing_services_for_items(&url, &candidates(&table))), ["Browser", "Compose Post", "Copy"]);
+    }
+
+    #[test]
+    fn services_for_a_transferable_follow_its_exported_text() {
+        let table = table();
+        let reps = crate::transfer::Representations::<String>::new().data("public.utf8-plain-text", crate::transfer::Visibility::All, |s| s.clone().into_bytes(), |b| String::from_utf8(b.to_vec()).ok());
+        let services = SharingService::sharing_services_for_transferable(&reps, &"hi".to_string(), &candidates(&table));
+        assert_eq!(titles(&services), ["Notes", "Compose Post", "Copy"]);
+        let none = crate::transfer::Representations::<String>::new();
+        assert!(SharingService::sharing_services_for_transferable(&none, &"hi".to_string(), &candidates(&table)).is_empty());
     }
 
     #[test]

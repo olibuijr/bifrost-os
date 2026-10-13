@@ -43,6 +43,8 @@ pub trait Destination {
     fn operation(&mut self, source_mask: u8) -> u8;
     /// `performDragOperation`: true when the drop was taken. Promised files are written to `written`.
     fn perform(&mut self, items: &[DraggingItem], written: &mut Vec<PromisedFile>) -> bool;
+    /// `draggingExited`: the pointer left this destination, or the drop ended on it. Default: nothing to reset.
+    fn exited(&mut self) {}
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -102,7 +104,14 @@ impl Session {
                 // a single operation: copy wins over link over move when several bits remain
                 self.operation = [op::COPY, op::LINK, op::MOVE].into_iter().find(|b| both & b != 0).unwrap_or(op::NONE);
             }
-            _ => self.leave(),
+            other => {
+                if let Some(d) = other {
+                    if self.over == Some(d.id()) {
+                        d.exited();
+                    }
+                }
+                self.leave();
+            }
         }
     }
 
@@ -123,6 +132,7 @@ impl Session {
                 let id = d.id();
                 self.log.push(Callback::Perform(id));
                 let ok = d.perform(&self.items, &mut self.written_files);
+                d.exited();
                 if ok {
                     self.log.push(Callback::Conclude(id));
                 }

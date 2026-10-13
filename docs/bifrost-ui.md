@@ -3576,3 +3576,13 @@ wiring.
 - `shape_ot`: An OpenType text shaper
 - `temporal_upscale`: Temporal upscaler model for CPU rasters
 - `video_transfer`: Pixel transfer and pixel rotation for decoded video pictures, as plain std code.
+
+#### Declarative drag and drop and share by representation (Sprint 11)
+
+`bifrost_app::transfer_drag` builds on `Transferable`. `draggable(&reps, &value)` returns a `Dragged` (the session items offering every type
+the value exports, a promised file for a file representation, and the data per type). `DropTarget::new(id, reps, action)` implements
+`bifrost_ui::drag_session::Destination`: it registers for the importable types, answers the operation set with `wanting`, exposes
+`is_targeted()` (the `isTargeted` binding, cleared by the new `Destination::exited`), and on drop rebuilds the values for `action`.
+`transfer::share_items` and `share::show_transferable` / `SharingService::sharing_services_for_transferable` drive the share menu from the
+exported representations; `transfer::paste_values` reads every pasteboard item a model can import.
+Not done yet: the shell pasteboard wire still carries one item, and the view kit has no modifier that attaches these to a view.
