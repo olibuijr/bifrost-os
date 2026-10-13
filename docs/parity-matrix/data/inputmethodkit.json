@@ -1,116 +1,137 @@
 {
-  "framework": "InputMethodKit",
-  "doc": "https://developer.apple.com/documentation/inputmethodkit",
-  "macos_since": "10.5",
-  "status": "partial",
-  "bifrost": "springboard/sdk/src/view/forms.rs (TextField), springboard/ui/src/text.rs (TextBuffer marked range), springboard/proto/src/lib.rs (ToApp 60-63, TextState, CaretRect, InputTraits), springboard/src/shell/textinput.rs (composition mapping, popup_origin), springboard/src/shell/keyboard.rs (Composition), springboard/sdk/src/lib.rs (text input Ctx hooks)",
-  "summary": "BifrOSt covers the client side of composition: an app text field draws marked text, reports its caret and text state to the shell, and takes SetMarkedText/UnmarkText from the on-screen keyboard. It has no input method provider side (no IMKServer, IMKInputController or candidates window), so a third-party IME cannot run, and nothing draws a candidate popup yet.",
-  "rea_evidence": "ev_d889a7762311f1422e0f0dd0cf934d9bdcf457bd459b3adb2cd0f2726112a81b",
-  "features": [
-    {
-      "feature": "Input method server and connections",
-      "apple": "IMKServer",
-      "bifrost": "springboard/ui/src/input_method.rs (Server)",
-      "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell serves no wl_seat text-input or input_method, so a provider process has nothing to connect to."
-    },
-    {
-      "feature": "Per-session input controller",
-      "apple": "IMKInputController",
-      "bifrost": "springboard/ui/src/input_method.rs (InputController); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
-      "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No base class that receives one controller per client input session. Sprint 2: InputController trait and ComposingController over a Composer, TextClient (set_marked_text, insert_text), new_controller(source id). Host tests only; not wired into kb_input.rs or tested on Midget."
-    },
-    {
-      "feature": "Marked text (composition) set and clear",
-      "apple": "IMKServerInput setMarkedText / unmarkText (via inputText and handle)",
-      "bifrost": "springboard/proto/src/lib.rs ToApp::SetMarkedText (60), ToApp::UnmarkText (61); springboard/ui/src/text.rs TextBuffer::has_marked_text; springboard/sdk/src/view/forms.rs draws marked text underlined; wired: springboard/src/shell/textfield.rs (set_marked, unmark, underline in draw); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
-      "status": "partial",
-      "note": "Only the on-screen keyboard can drive composition, and apps/keyboard does not yet send Preedit (docs/bifrost-ui.md section Text input client). Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Sprint 2: Composers report marked text through TextClient::set_marked_text(text, selection, replacement); an empty string clears it. Host tests only."
-    },
-    {
-      "feature": "Commit composition",
-      "apple": "IMKServerInput commitComposition, IMKServerInput unmark with commit",
-      "bifrost": "springboard/proto/src/lib.rs ToApp::UnmarkText { commit }; springboard/src/shell/keyboard.rs Composition::Unmark; wired: springboard/src/shell/textfield.rs (unmark with commit); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
-      "status": "partial",
-      "note": "Commit and cancel work at the field. No commitComposition request from a provider. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Sprint 2: commit_composition inserts the marked text and clears it; cancel_composition drops it; space, digits and punctuation commit then insert. Host tests only."
-    },
-    {
-      "feature": "Key binding and text events to the input method",
-      "apple": "IMKServerInput inputText(_:client:), didCommand(by:client:), inputText(_:key:modifiers:client:), handle(_:client:)",
-      "bifrost": "springboard/ui/src/input_method.rs (Event; wired: springboard/src/shell/compose_window.rs (compose_search_key); springboard/src/shell/hwkeys.rs (hw_type Search arm); springboard/ui/src/compose_method.rs (Compose::key); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
-      "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Key events reach the app's own text field directly. Nothing routes them through a provider first, and there is no didCommand-style hand-off. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Sprint 2: input_text(string, client) and handle(Key, client) route chars, Backspace, Return, Tab and Escape; modifiers and didCommand are not modelled. Host tests only."
-    },
-    {
-      "feature": "Composed, original string and candidate queries",
-      "apple": "IMKServerInput composedString, originalString, candidates",
-      "bifrost": "springboard/ui/src/input_method.rs (composed_string; wired: springboard/src/shell/compose_window.rs (compose_open, compose_finish); springboard/ui/src/imsession.rs (update, set_candidates, select_candidate, commit); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
-      "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The app reports its text and marked range, but there is no provider-side query for candidates. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Sprint 2: composed_string is answered by the composers (Hangul 2-set, Telex, VNI); original_string and candidates are not (no Hanja candidates)."
-    },
-    {
-      "feature": "Candidates window",
-      "apple": "IMKCandidates",
-      "bifrost": "springboard/ui/src/candidates.rs (Candidates; wired: springboard/src/shell/compose_window.rs (draw_compose, compose_open); springboard/ui/src/imsession.rs",
-      "status": "partial",
-      "note": "Wave 3 (w3-inputmethodkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No candidate popup is drawn. The placement helper just puts a popup below or above the caret. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Candidate panel types, location hints and opacity",
-      "apple": "IMKCandidatePanelType, IMKCandidatesLocationHint, IMKCandidatesOpacityAttributeName, IMKCandidatesSendServerKeyEventFirst",
-      "bifrost": "springboard/ui/src/candidates.rs (PanelType",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-inputmethodkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No panel type or location hint exists. The caret rectangle is available (ctx.caret_rect, springboard/sdk/src/lib.rs)."
-    },
-    {
-      "feature": "Mouse handling for input methods",
-      "apple": "IMKMouseHandling",
-      "bifrost": "springboard/ui/src/input_method.rs (Event::Mouse",
-      "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Pointer events go to the field only. No hook lets an input method handle clicks during composition."
-    },
-    {
-      "feature": "Input method state",
-      "apple": "IMKStateSetting (input mode, state values)",
-      "bifrost": "springboard/ui/src/input_method.rs (State; wired: springboard/src/shell/kb_layouts.rs (cycle, next_in) and the menu bar input menu (desktop_bar.rs Menu::Input)",
-      "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. InputTraits describe the field, not the input method state. No per-method mode is stored. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
-    },
-    {
-      "feature": "Input method registration and Info dictionary",
-      "apple": "IMK info dictionary keys (IMKControllerClass, IMKDelegateClass, IMKModeDictionary)",
-      "bifrost": "springboard/ui/src/input_method.rs (Registration",
-      "status": "partial",
-      "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No input source or input method registration exists."
-    },
-    {
-      "feature": "Text input client for apps (caret, text state, traits)",
-      "apple": "NSTextInputClient counterpart used with IMK (selectedRange, markedRange, firstRect)",
-      "bifrost": "springboard/sdk/src/lib.rs (text_state, caret_rect, input_traits); springboard/src/shell/apphost.rs (AppHost::text_state, caret_rect, input_traits); springboard/sdk/src/view/tests.rs marked_text test",
-      "status": "partial",
-      "note": "Apps report the state and the shell stores it. Secure and content traits are not yet used by the keyboard app."
-    },
-    {
-      "feature": "On-screen keyboard as composition source",
-      "apple": "IMK-hosted composition (no direct Apple equivalent beyond the input menu)",
-      "bifrost": "springboard/apps/keyboard; springboard/src/shell/keyboard.rs (Composition); docs/keyboard-system-app.md",
-      "status": "partial",
-      "note": "The shell forwards keyboard composition to the field as marked text. The keyboard app does not yet emit Preedit, so the path is unused in practice."
-    },
-    {
-      "feature": "Enumerations, constants and data types",
-      "apple": "IMKCandidatePanelType, IMKStyleType, InputMethodKit Enumerations and Constants",
-      "bifrost": "springboard/proto/src/lib.rs (InputTraits, ReturnKeyType, TextContentKind)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 34 tests. Text input traits are covered. No candidate or style enumerations exist."
-    }
-  ],
-  "gaps": [
-    "No input method provider: no IMKServer, IMKInputController or input method registration (springboard/src/shell/textinput.rs header).",
-    "No candidates window (IMKCandidates); popup_origin in springboard/src/shell/textinput.rs only places a popup, and nothing draws it.",
-    "The keyboard app does not send Preedit yet (springboard/apps/keyboard), so composition is not produced by anything in practice.",
-    "No IMKServerInput event routing (inputText, didCommand, handle) through a provider; no composedString, originalString or candidates queries.",
-    "No IMKMouseHandling hook and no IMKStateSetting input-mode state."
-  ]
+ "framework": "InputMethodKit",
+ "doc": "https://developer.apple.com/documentation/inputmethodkit",
+ "macos_since": "10.5",
+ "status": "partial",
+ "bifrost": "springboard/sdk/src/view/forms.rs (TextField), springboard/ui/src/text.rs (TextBuffer marked range), springboard/proto/src/lib.rs (ToApp 60-63, TextState, CaretRect, InputTraits), springboard/src/shell/textinput.rs (composition mapping, popup_origin), springboard/src/shell/keyboard.rs (Composition), springboard/sdk/src/lib.rs (text input Ctx hooks)",
+ "summary": "BifrOSt covers the client side of composition: an app text field draws marked text, reports its caret and text state to the shell, and takes SetMarkedText/UnmarkText from the on-screen keyboard. It has no input method provider side (no IMKServer, IMKInputController or candidates window), so a third-party IME cannot run, and nothing draws a candidate popup yet.",
+ "rea_evidence": "ev_d889a7762311f1422e0f0dd0cf934d9bdcf457bd459b3adb2cd0f2726112a81b",
+ "features": [
+  {
+   "feature": "Input method server and connections",
+   "apple": "IMKServer",
+   "bifrost": "springboard/ui/src/input_method.rs (Server)",
+   "status": "partial",
+   "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The shell serves no wl_seat text-input or input_method, so a provider process has nothing to connect to."
+  },
+  {
+   "feature": "Per-session input controller",
+   "apple": "IMKInputController",
+   "bifrost": "springboard/ui/src/input_method.rs (InputController); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
+   "status": "partial",
+   "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No base class that receives one controller per client input session. Sprint 2: InputController trait and ComposingController over a Composer, TextClient (set_marked_text, insert_text), new_controller(source id). Host tests only; not wired into kb_input.rs or tested on Midget."
+  },
+  {
+   "feature": "Marked text (composition) set and clear",
+   "apple": "IMKServerInput setMarkedText / unmarkText (via inputText and handle)",
+   "bifrost": "springboard/proto/src/lib.rs ToApp::SetMarkedText (60), ToApp::UnmarkText (61); springboard/ui/src/text.rs TextBuffer::has_marked_text; springboard/sdk/src/view/forms.rs draws marked text underlined; wired: springboard/src/shell/textfield.rs (set_marked, unmark, underline in draw); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
+   "status": "partial",
+   "note": "Only the on-screen keyboard can drive composition, and apps/keyboard does not yet send Preedit (docs/bifrost-ui.md section Text input client). Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Sprint 2: Composers report marked text through TextClient::set_marked_text(text, selection, replacement); an empty string clears it. Host tests only."
+  },
+  {
+   "feature": "Commit composition",
+   "apple": "IMKServerInput commitComposition, IMKServerInput unmark with commit",
+   "bifrost": "springboard/proto/src/lib.rs ToApp::UnmarkText { commit }; springboard/src/shell/keyboard.rs Composition::Unmark; wired: springboard/src/shell/textfield.rs (unmark with commit); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
+   "status": "partial",
+   "note": "Commit and cancel work at the field. No commitComposition request from a provider. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Sprint 2: commit_composition inserts the marked text and clears it; cancel_composition drops it; space, digits and punctuation commit then insert. Host tests only."
+  },
+  {
+   "feature": "Key binding and text events to the input method",
+   "apple": "IMKServerInput inputText(_:client:), didCommand(by:client:), inputText(_:key:modifiers:client:), handle(_:client:)",
+   "bifrost": "springboard/ui/src/input_method.rs (Event; wired: springboard/src/shell/compose_window.rs (compose_search_key); springboard/src/shell/hwkeys.rs (hw_type Search arm); springboard/ui/src/compose_method.rs (Compose::key); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
+   "status": "partial",
+   "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Key events reach the app's own text field directly. Nothing routes them through a provider first, and there is no didCommand-style hand-off. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Sprint 2: input_text(string, client) and handle(Key, client) route chars, Backspace, Return, Tab and Escape; modifiers and didCommand are not modelled. Host tests only."
+  },
+  {
+   "feature": "Composed, original string and candidate queries",
+   "apple": "IMKServerInput composedString, originalString, candidates",
+   "bifrost": "springboard/ui/src/input_method.rs (composed_string; wired: springboard/src/shell/compose_window.rs (compose_open, compose_finish); springboard/ui/src/imsession.rs (update, set_candidates, select_candidate, commit); springboard/src/shell/input_methods/mod.rs (hangul.rs, telex.rs)",
+   "status": "partial",
+   "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The app reports its text and marked range, but there is no provider-side query for candidates. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Sprint 2: composed_string is answered by the composers (Hangul 2-set, Telex, VNI); original_string and candidates are not (no Hanja candidates)."
+  },
+  {
+   "feature": "Candidates window",
+   "apple": "IMKCandidates",
+   "bifrost": "springboard/ui/src/candidates.rs (Candidates; wired: springboard/src/shell/compose_window.rs (draw_compose, compose_open); springboard/ui/src/imsession.rs",
+   "status": "partial",
+   "note": "Wave 3 (w3-inputmethodkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No candidate popup is drawn. The placement helper just puts a popup below or above the caret. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Candidate panel types, location hints and opacity",
+   "apple": "IMKCandidatePanelType, IMKCandidatesLocationHint, IMKCandidatesOpacityAttributeName, IMKCandidatesSendServerKeyEventFirst",
+   "bifrost": "springboard/ui/src/candidates.rs (PanelType",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 7 tests. Wave 3 (w3-inputmethodkit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No panel type or location hint exists. The caret rectangle is available (ctx.caret_rect, springboard/sdk/src/lib.rs)."
+  },
+  {
+   "feature": "Mouse handling for input methods",
+   "apple": "IMKMouseHandling",
+   "bifrost": "springboard/ui/src/input_method.rs (Event::Mouse",
+   "status": "partial",
+   "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Pointer events go to the field only. No hook lets an input method handle clicks during composition."
+  },
+  {
+   "feature": "Input method state",
+   "apple": "IMKStateSetting (input mode, state values)",
+   "bifrost": "springboard/ui/src/input_method.rs (State; wired: springboard/src/shell/kb_layouts.rs (cycle, next_in) and the menu bar input menu (desktop_bar.rs Menu::Input)",
+   "status": "partial",
+   "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. InputTraits describe the field, not the input method state. No per-method mode is stored. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+  },
+  {
+   "feature": "Input method registration and Info dictionary",
+   "apple": "IMK info dictionary keys (IMKControllerClass, IMKDelegateClass, IMKModeDictionary)",
+   "bifrost": "springboard/ui/src/input_method.rs (Registration",
+   "status": "partial",
+   "note": "Wave 4 (theme-17, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No input source or input method registration exists."
+  },
+  {
+   "feature": "Text input client for apps (caret, text state, traits)",
+   "apple": "NSTextInputClient counterpart used with IMK (selectedRange, markedRange, firstRect)",
+   "bifrost": "springboard/sdk/src/lib.rs (text_state, caret_rect, input_traits); springboard/src/shell/apphost.rs (AppHost::text_state, caret_rect, input_traits); springboard/sdk/src/view/tests.rs marked_text test",
+   "status": "partial",
+   "note": "Apps report the state and the shell stores it. Secure and content traits are not yet used by the keyboard app."
+  },
+  {
+   "feature": "On-screen keyboard as composition source",
+   "apple": "IMK-hosted composition (no direct Apple equivalent beyond the input menu)",
+   "bifrost": "springboard/apps/keyboard; springboard/src/shell/keyboard.rs (Composition); docs/keyboard-system-app.md",
+   "status": "partial",
+   "note": "The shell forwards keyboard composition to the field as marked text. The keyboard app does not yet emit Preedit, so the path is unused in practice."
+  },
+  {
+   "feature": "Enumerations, constants and data types",
+   "apple": "IMKCandidatePanelType, IMKStyleType, InputMethodKit Enumerations and Constants",
+   "bifrost": "springboard/proto/src/lib.rs (InputTraits, ReturnKeyType, TextContentKind)",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 34 tests. Text input traits are covered. No candidate or style enumerations exist."
+  },
+  {
+   "feature": "Text input client protocol (IMKTextInput)",
+   "apple": "IMKTextInput insertText, setMarkedText, selectedRange, markedRange, attributes(forCharacterIndex:lineHeightRectangle:)",
+   "bifrost": "springboard/ui/src/imk_client.rs (TextInputClient, apply, update_composition)",
+   "status": "partial",
+   "note": "Trait and outcome adapter with mock-client tests; no app text view implements it yet."
+  },
+  {
+   "feature": "Language composition engines",
+   "apple": "input methods built on IMKInputController",
+   "bifrost": "springboard/ui/src/hangul_method.rs, telex_method.rs, kana_method.rs",
+   "status": "partial",
+   "note": "Hangul jamo composition and Vietnamese Telex added, host tests only. No dictionary conversion (hanja, kanji, pinyin)."
+  },
+  {
+   "feature": "Input source enumeration and selection (TISInputSource)",
+   "apple": "TISCreateInputSourceList, TISSelectInputSource, TISEnableInputSource",
+   "bifrost": "springboard/ui/src/input_source.rs (InputSources)",
+   "status": "partial",
+   "note": "Model with persisted form; the shell does not use it yet."
+  }
+ ],
+ "gaps": [
+  "No input method provider: no IMKServer, IMKInputController or input method registration (springboard/src/shell/textinput.rs header).",
+  "No candidates window (IMKCandidates); popup_origin in springboard/src/shell/textinput.rs only places a popup, and nothing draws it.",
+  "The keyboard app does not send Preedit yet (springboard/apps/keyboard), so composition is not produced by anything in practice.",
+  "No IMKServerInput event routing (inputText, didCommand, handle) through a provider; no composedString, originalString or candidates queries.",
+  "No IMKMouseHandling hook and no IMKStateSetting input-mode state."
+ ]
 }
