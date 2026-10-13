@@ -50,6 +50,7 @@ mod layer_backed;
 mod style_props;
 mod layer_views;
 mod keyanim;
+mod overlay;
 mod scroll;
 pub use keyanim::ViewState;
 pub use animation::{mix_color, Prop, Timing, Transaction, DEFAULT_DURATION, REDUCED_DURATION};
@@ -62,6 +63,7 @@ pub use scroll::ScrollView;
 pub use layer_views::{EmitterView, GradientView, ReplicaSource, ReplicatorView, ScrollLayerView, ShapeView, TextLayerView, TiledView};
 pub use context::with_context;
 pub use controls::{Align, Button, Label, Segmented, Slider, Stack, Switch};
+pub use overlay::{Columns, Grid, ViewThatFits, ZStack};
 
 /// What a text-editing view tells the shell about itself while it is first responder (`NativeTextInputClient`,
 /// `NativeTextInput`): the text around the caret, the caret rectangle in window points `(x, y, w, h)` and the traits.
@@ -1076,6 +1078,8 @@ mod tests_layer_views;
 
 #[cfg(test)]
 mod tests_controls;
+#[cfg(test)]
+mod tests_overlay;
 
 /// Canvas drawing of the view tree: the image key, the image blit, backgrounds, group opacity and the display-list replay.
 #[cfg(test)]
