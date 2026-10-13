@@ -1,7 +1,8 @@
 //! `softwareupdate`: lists and installs OS and app updates through the update agent (`updated`), over its service socket.
 //! The agent does the checking, the download and the staging; this tool asks it and waits for its state.
 //! Supported: `-l` (check now and list what is offered), `-i <label>` and `-a` (download and stage the offered OS update;
-//! the desktop restarts to finish the install) and `--schedule on|off` (the background checks; manual checks always run).
+//! the desktop restarts to finish the install) and `--schedule` (prints the background check preference; `on|off` sets it,
+//! and manual checks always run).
 //! App updates have no install command on the agent's protocol yet, so `-i` names only the OS update.
 
 use bifrost_proto::svc::{self, update::{Cmd, Evt, Phase, State}};
@@ -25,6 +26,8 @@ pub enum Mode {
     Install { labels: Vec<String>, all: bool },
     /// `--schedule on|off`: whether the background checks run.
     Schedule { automatic: bool },
+    /// `--schedule` alone: prints whether the background checks run.
+    ScheduleQuery,
 }
 
 /// Reads the arguments.
@@ -32,8 +35,9 @@ pub fn parse(args: &[String]) -> Result<Mode, String> {
     let mut list = false;
     let mut all = false;
     let mut labels = Vec::new();
-    let mut schedule = None;
-    let mut it = args.iter();
+    // outer: `--schedule` was given; inner: the value, when `on` or `off` follows it
+    let mut schedule: Option<Option<bool>> = None;
+    let mut it = args.iter().peekable();
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "-h" | "-help" | "--help" => return Ok(Mode::Help),
@@ -41,20 +45,29 @@ pub fn parse(args: &[String]) -> Result<Mode, String> {
             "-a" => all = true,
             "-i" => labels.push(it.next().ok_or("-i needs an update label")?.clone()),
             "--schedule" => {
-                schedule = Some(match it.next().map(String::as_str) {
-                    Some("on") => true,
-                    Some("off") => false,
-                    _ => return Err("--schedule takes on or off".into()),
+                schedule = Some(match it.peek().map(|s| s.as_str()) {
+                    Some("on") => {
+                        it.next();
+                        Some(true)
+                    }
+                    Some("off") => {
+                        it.next();
+                        Some(false)
+                    }
+                    _ => None,
                 })
             }
             other => return Err(format!("option {other} is not supported yet")),
         }
     }
-    if let Some(automatic) = schedule {
+    if let Some(value) = schedule {
         if list || all || !labels.is_empty() {
             return Err("--schedule cannot be combined with -l, -i or -a".into());
         }
-        return Ok(Mode::Schedule { automatic });
+        return Ok(match value {
+            Some(automatic) => Mode::Schedule { automatic },
+            None => Mode::ScheduleQuery,
+        });
     }
     if list && (all || !labels.is_empty()) {
         return Err("-l lists updates; it cannot be combined with -i or -a".into());
@@ -164,7 +177,17 @@ pub fn schedule(path: &PathBuf, automatic: bool) -> Result<String, String> {
             Err(_) => return Err("the update agent sent a message this tool does not understand".into()),
         }
     }
-    Ok(format!("Automatic check is {}.\n", if automatic { "on" } else { "off" }))
+    Ok(schedule_text(automatic))
+}
+
+/// The line `--schedule` prints for the background check preference.
+pub fn schedule_text(automatic: bool) -> String {
+    format!("Automatic check is {}.\n", if automatic { "on" } else { "off" })
+}
+
+/// The preference `--schedule` alone prints, read from the switch file in the shell data folder.
+pub fn schedule_query(dir: &std::path::Path) -> String {
+    schedule_text(springboard::shell::ota::schedule_on(dir))
 }
 
 /// Downloads and stages the offered OS update. Returns the text to print when it is staged.
@@ -215,9 +238,10 @@ mod tests {
     fn schedule_switches_the_background_checks_and_takes_on_or_off() {
         assert_eq!(parse(&args(&["--schedule", "on"])), Ok(Mode::Schedule { automatic: true }));
         assert_eq!(parse(&args(&["--schedule", "off"])), Ok(Mode::Schedule { automatic: false }));
-        assert!(parse(&args(&["--schedule", "maybe"])).unwrap_err().contains("on or off"));
-        assert!(parse(&args(&["--schedule"])).unwrap_err().contains("on or off"));
+        assert_eq!(parse(&args(&["--schedule"])), Ok(Mode::ScheduleQuery));
+        assert!(parse(&args(&["--schedule", "maybe"])).unwrap_err().contains("maybe"));
         assert!(parse(&args(&["-l", "--schedule", "off"])).unwrap_err().contains("cannot be combined"));
+        assert!(parse(&args(&["--schedule", "-l"])).unwrap_err().contains("cannot be combined"));
     }
 
     #[test]
@@ -248,6 +272,18 @@ mod tests {
     fn an_empty_state_says_nothing_is_available() {
         assert_eq!(list_text(&state(None, vec![])), "No new software available.\n");
         assert_eq!(os_label(&state(None, vec![])), None);
+    }
+
+    #[test]
+    fn schedule_prints_the_switch_file_it_is_given() {
+        assert_eq!(schedule_text(true), "Automatic check is on.\n");
+        let dir = std::env::temp_dir().join(format!("softwareupdate-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        springboard::shell::ota::set_schedule(&dir, false).unwrap();
+        assert_eq!(schedule_query(&dir), "Automatic check is off.\n");
+        springboard::shell::ota::set_schedule(&dir, true).unwrap();
+        assert_eq!(schedule_query(&dir), "Automatic check is on.\n");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

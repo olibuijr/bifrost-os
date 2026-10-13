@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Software Update: `softwareupdate --schedule` prints whether the background checks run; `--schedule on|off` switches them.
+  Manual checks (`softwareupdate -l`, Settings > Check) still run. The switch is one file in the shell data folder that the
+  update agent and the shell's own checker both read.
 - Terminal: More menu row "Open link in selection" opens the first web link in the selected text in the browser
   (`terminal/links.rs`, reusing the URL detection in `profile_table.rs`).
 - SDK: text layout objects (`bifrost_ui::typeset`: typesetter, framesetter, frame, line, run) with Unicode line break and

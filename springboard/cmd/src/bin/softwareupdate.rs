@@ -29,5 +29,12 @@ fn main() {
             Ok(text) => print!("{text}"),
             Err(e) => die("softwareupdate", &e, 1),
         },
+        Mode::ScheduleQuery => {
+            let root = std::fs::metadata("/proc/self").is_ok_and(|m| std::os::unix::fs::MetadataExt::uid(&m) == 0);
+            let data = std::env::var("BIFROST_SHELL_DIR").unwrap_or_else(|_| {
+                springboard::bare::platform::data_dir(root, std::env::var("XDG_DATA_HOME").ok().as_deref(), std::env::var("HOME").ok().as_deref())
+            });
+            print!("{}", softwareupdate::schedule_query(std::path::Path::new(&data)));
+        }
     }
 }
