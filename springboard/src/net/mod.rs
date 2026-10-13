@@ -1,4 +1,5 @@
 //! Networking: rtnetlink, DHCP, wpa_supplicant control.
+pub mod captive;
 pub mod dhcp;
 pub mod netlink;
 pub mod ntp;
