@@ -23,12 +23,19 @@ feature rows, filled by agents from the official docs and this repo. This CLI re
   themes [--k N]                 cluster Gap rows across frameworks into work themes -> themes.json
   verify os-cli plan|run|closures
                                  assess the os/cli rows and verify each tool on Midget (tools/parity/os_cli.py)
+  apps [--gaps APP] [--json]     per-app feature inventories (docs/parity-matrix/apps/<slug>.json): one line per app sorted by
+                                 coverage ascending (app, BifrOSt app, features, parity/partial/gap/n/a counts, coverage %);
+                                 --gaps APP lists that app's gap and partial rows with their wire text (what to implement
+                                 and where); --json prints the same data as JSON. `check` validates these files too
+                                 (statuses, required keys, wire text on gap and partial rows, cited paths exist)
   apply FILE.json [--dry-run]    apply closures [{slug, feature, status, bifrost, note}]: each updates the row it
                                  matches (exact feature, else rerank) or is appended as a new row
   verify plan|run|closures       promote partial rows to parity from Midget test evidence (tools/parity/verify.py):
                                  plan [--group G] [--slug S] [--out plan.json] classifies rows logic/ui/hardware/untested;
                                  run PLAN --version X runs the logic rows' tests on Midget -> results.json;
                                  closures RESULTS --version X emits apply closures + needs-manual.md
+
+App coverage (apps): rows that apply (status not n/a) score parity 1, partial 0.5, gap 0.
 
 Coverage of a framework: rows that apply (status not n/a) score parity 1, partial 0.5, os 0.5, gap 0;
 coverage = score / applicable rows. A framework with no applicable rows has no coverage (n/a).
@@ -49,6 +56,10 @@ INDEX = os.path.join(BASE, "index.json")
 MATRIX_MD = os.path.join(ROOT, "docs", "apple-parity-matrix.md")
 RELATED = os.path.join(BASE, "related.json")
 THEMES = os.path.join(BASE, "themes.json")
+APPS = os.path.join(BASE, "apps")
+APP_STATUSES = ["parity", "partial", "gap", "n/a"]
+APP_WEIGHT = {"parity": 1.0, "partial": 0.5, "gap": 0.0}
+APP_KEYS = ["feature", "area", "apple", "status", "bifrost", "note", "wire"]
 STATUSES = ["parity", "partial", "os", "gap", "n/a"]
 LABEL = {"parity": "Parity", "partial": "Partial", "os": "OS only", "gap": "Gap", "n/a": "n/a"}
 WEIGHT = {"parity": 1.0, "partial": 0.5, "os": 0.5, "gap": 0.0}
@@ -298,6 +309,115 @@ def cited_paths(entries):
     return ok, missing
 
 
+def load_apps():
+    """Every docs/parity-matrix/apps/*.json as (slug, data or None, error or None), sorted by slug."""
+    out = []
+    if not os.path.isdir(APPS):
+        return out
+    for fn in sorted(os.listdir(APPS)):
+        if not fn.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(APPS, fn)) as fh:
+                out.append((fn[:-5], json.load(fh), None))
+        except (OSError, ValueError) as e:
+            out.append((fn[:-5], None, str(e)))
+    return out
+
+
+def app_counts(data):
+    """Counts per status for an app inventory, and its coverage percent (None when no row applies)."""
+    c = collections.Counter(r.get("status") for r in data.get("features", []))
+    n = sum(c[k] for k in APP_WEIGHT)
+    score = sum(APP_WEIGHT[k] * c[k] for k in APP_WEIGHT)
+    return {k: c[k] for k in APP_STATUSES}, (round(100.0 * score / n, 1) if n else None)
+
+
+def app_summaries():
+    rows = []
+    for slug, data, err in load_apps():
+        if data is None:
+            continue
+        counts, cov = app_counts(data)
+        rows.append({"slug": slug, "app": data.get("app", slug), "bifrost_app": data.get("bifrost_app", ""),
+                     "features": len(data.get("features", [])), "counts": counts, "coverage": cov})
+    return sorted(rows, key=lambda r: (-1 if r["coverage"] is None else r["coverage"], r["app"].lower()))
+
+
+def find_app(name):
+    """The one app summary that matches a slug or name (exact, else a unique substring), or None."""
+    k = key(name)
+    rows = app_summaries()
+    exact = [r for r in rows if k in (key(r["slug"]), key(r["app"]))]
+    if exact:
+        return exact[0]
+    hits = [r for r in rows if k and (k in key(r["slug"]) or k in key(r["app"]))]
+    return hits[0] if len(hits) == 1 else None
+
+
+def app_gap_rows(slug):
+    data = next(d for s, d, _ in load_apps() if s == slug)
+    return [r for r in data["features"] if r.get("status") in ("gap", "partial")]
+
+
+def check_apps():
+    """Problems in docs/parity-matrix/apps/*.json: unreadable files, missing keys, unknown statuses, gap and partial rows
+    without wire text, a summary that disagrees with the rows, cited repo paths that do not exist."""
+    problems = []
+    for slug, data, err in load_apps():
+        where = f"apps/{slug}.json"
+        if data is None:
+            problems.append(f"{where}: unreadable ({err})")
+            continue
+        for k in ("app", "bifrost_app", "evidence", "features"):
+            if k not in data:
+                problems.append(f"{where}: missing key {k}")
+        for i, r in enumerate(data.get("features", [])):
+            name = r.get("feature") or f"row {i}"
+            for k in APP_KEYS:
+                if k not in r:
+                    problems.append(f"{where}: {name}: missing key {k}")
+            st = r.get("status")
+            if st not in APP_STATUSES:
+                problems.append(f"{where}: {name}: status {st!r} is not one of {', '.join(APP_STATUSES)}")
+            elif st in ("gap", "partial") and not str(r.get("wire") or "").strip():
+                problems.append(f"{where}: {name}: a {st} row needs wire text")
+            for m in PATH_RE.finditer(str(r.get("bifrost") or "")):
+                path = m.group(1).rstrip(".,;:)").split(":")[0]
+                if not os.path.exists(os.path.join(ROOT, path)):
+                    problems.append(f"{where}: {name}: cited path not found: {path}")
+        counts, cov = app_counts(data)
+        sm = data.get("summary")
+        if sm and (sm.get("features") != len(data.get("features", [])) or any(sm.get(k) != counts[k] for k in APP_STATUSES if k in sm)):
+            problems.append(f"{where}: summary does not match the rows")
+    return problems
+
+
+def cmd_apps(a):
+    if a.gaps:
+        hit = find_app(a.gaps)
+        if not hit:
+            sys.exit(f"no single app matches {a.gaps!r}; run `apps` for the list")
+        rows = app_gap_rows(hit["slug"])
+        if a.json:
+            print(json.dumps({"app": hit["app"], "bifrost_app": hit["bifrost_app"], "rows": rows}, indent=2, ensure_ascii=False))
+            return
+        print(f"{hit['app']} ({hit['bifrost_app']}): {len(rows)} gap or partial rows, coverage {hit['coverage']}%")
+        for r in sorted(rows, key=lambda r: (r["status"] != "gap", r.get("area", ""))):
+            print(f"- [{r['status']}] {r['feature']} ({r.get('area', '')}): {r.get('note', '')}")
+            print(f"    wire: {r.get('wire', '')}")
+        return
+    rows = app_summaries()
+    if a.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return
+    print(f"{'app':<22} {'BifrOSt app':<30} {'feat':>4}  {'parity':>6} {'partial':>7} {'gap':>4} {'n/a':>4}  {'cover':>6}")
+    for r in rows:
+        c = r["counts"]
+        cov = "n/a" if r["coverage"] is None else f"{r['coverage']:.1f}%"
+        print(f"{r['app']:<22} {r['bifrost_app'][:30]:<30} {r['features']:>4}  {c['parity']:>6} {c['partial']:>7} {c['gap']:>4} {c['n/a']:>4}  {cov:>6}")
+
+
 def cmd_check(a):
     entries, bad = load_entries()
     problems = list(bad)
@@ -310,6 +430,7 @@ def cmd_check(a):
     problems += [f"{s}: cited path not found: {p}" for s, p in missing]
     miss = missing_slugs(entries)
     problems += os_check()
+    problems += check_apps()
     print(f"{len(entries)} entries, cited paths ok {ok}, not found {len(missing)}, not assessed {len(miss)}")
     if miss:
         print("not assessed: " + ", ".join(miss))
@@ -677,6 +798,9 @@ def main(argv=None):
     g.add_argument("--group")
     g.add_argument("--status")
     sub.add_parser("check")
+    ps = sub.add_parser("apps")
+    ps.add_argument("--gaps", metavar="APP")
+    ps.add_argument("--json", action="store_true")
     b = sub.add_parser("build")
     b.add_argument("out", nargs="?")
     i = sub.add_parser("import")
@@ -697,7 +821,7 @@ def main(argv=None):
     t = sub.add_parser("themes")
     t.add_argument("--k", type=int)
     a = p.parse_args(argv)
-    {"status": cmd_status, "os-status": cmd_os_status, "coverage": cmd_coverage, "show": cmd_show, "gaps": cmd_gaps, "check": cmd_check,
+    {"status": cmd_status, "os-status": cmd_os_status, "coverage": cmd_coverage, "show": cmd_show, "gaps": cmd_gaps, "apps": cmd_apps, "check": cmd_check,
      "build": cmd_build, "import": cmd_import, "db-export": cmd_db_export, "refresh-index": cmd_refresh_index,
      "search": cmd_search, "related": cmd_related, "themes": cmd_themes, "apply": cmd_apply}[a.cmd](a)
 
