@@ -3806,8 +3806,13 @@ impl Shell {
     }
 
     fn new_terminal_tab(&mut self, dir: Option<String>) -> bool {
+        self.spawn_terminal_tab(self.term_cmd, dir)
+    }
+
+    /// Opens a tab running `argv` (the login shell, or a New command line); `dir` is cd'd into first.
+    fn spawn_terminal_tab(&mut self, argv: &[&str], dir: Option<String>) -> bool {
         let size = self.ui.pt(termcore::zoom::SIZES[self.terminal_ui.settings.zoom] as f32);
-        match Terminal::spawn(self.mono, self.term_area(), size, self.term_cmd) {
+        match Terminal::spawn(self.mono, self.term_area(), size, argv) {
             Ok(mut term) => {
                 term.appearance(self.terminal_ui.settings.theme, size);
                 term.set_cursor(Some(self.terminal_ui.cursor.shape()), self.terminal_ui.blink);

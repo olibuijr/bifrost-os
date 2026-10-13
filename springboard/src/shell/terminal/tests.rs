@@ -1,4 +1,5 @@
 use super::super::tests::{pump_until, terminal};
+use super::super::{AppId, Screen};
 use super::*;
 fn tap_control(sh: &mut Shell, i: usize, t: f64) {
     sh.terminal_action(i, t + 20.0);
@@ -346,4 +347,50 @@ fn open_link_reports_when_the_selection_has_no_link() {
     tap_control(&mut sh, 7, 2000.0);
     tap_control(&mut sh, 15, 2100.0);
     assert_eq!(sh.terminal_ui.message, "No link in selection");
+}
+
+#[test]
+fn new_command_runs_in_its_own_tab_and_an_empty_line_stays_open() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(19, 2000.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Command);
+    sh.terminal_run_command(2100.0);
+    assert_eq!(sh.terminal_ui.message, "Type a command to run");
+    assert_eq!(sh.term.len(), 1);
+    sh.terminal_ui.command.as_mut().unwrap().set_text(&sh.ui, "echo ran-command; read y");
+    sh.terminal_run_command(2200.0);
+    assert_eq!(sh.term.len(), 2, "the command opened a tab");
+    assert_eq!(sh.term.active_index(), 1);
+    assert_eq!(sh.terminal_ui.panel, Panel::None, "the panel closes once it runs");
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("ran-command"));
+}
+
+#[test]
+fn secure_keyboard_entry_keeps_shell_shortcuts_out_of_the_terminal() {
+    use super::super::hwkeys::Shortcut;
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(18, 2000.0);
+    assert!(sh.terminal_ui.secure);
+    assert!(sh.terminal_ui.message.starts_with("Secure keyboard entry on"));
+    sh.hw_shortcut(Shortcut::AppSwitch, 2100.0);
+    assert!(matches!(sh.screen, Screen::App(AppId::Terminal)), "the switcher does not take the terminal's keys");
+    sh.terminal_menu_action(18, 2200.0);
+    assert!(!sh.terminal_ui.secure);
+    sh.hw_shortcut(Shortcut::AppSwitch, 2300.0);
+    assert!(matches!(sh.screen, Screen::Switcher), "without it the switcher opens as before");
+}
+
+#[test]
+fn cursor_style_and_blink_persist_and_reload() {
+    let mut sh = terminal(&["/bin/sh"]);
+    assert_eq!(MENU[16], "Cursor style");
+    sh.terminal_menu_action(16, 2000.0);
+    assert_eq!(sh.terminal_ui.cursor, profile_table::CursorStyle::Underline);
+    sh.terminal_menu_action(16, 2100.0);
+    sh.terminal_menu_action(17, 2200.0);
+    assert!(sh.terminal_ui.blink);
+    let mut reloaded = TerminalUi::default();
+    reloaded.load(&sh.prefs);
+    assert_eq!(reloaded.cursor, profile_table::CursorStyle::Bar);
+    assert!(reloaded.blink);
 }

@@ -26,6 +26,7 @@ use termcore::{
 use std::{fs, path::PathBuf};
 
 pub mod layout;
+mod command;
 mod control;
 mod find;
 mod input;
@@ -101,6 +102,8 @@ pub enum Panel {
     Form,
     Processes,
     More,
+    /// New command: a line typed here runs in a new tab that closes when the command ends
+    Command,
 }
 pub struct TerminalUi {
     pub settings: Settings,
@@ -134,6 +137,8 @@ pub struct TerminalUi {
     pub blink: bool,
     /// Secure Keyboard Entry: while the Terminal is in front, the shell's own shortcuts do not get its keys
     pub secure: bool,
+    /// the command line of the New command panel
+    command: Option<TextField>,
 }
 impl Default for TerminalUi {
     fn default() -> Self {
@@ -166,6 +171,7 @@ impl Default for TerminalUi {
             cursor: profile_table::CursorStyle::Block,
             blink: false,
             secure: false,
+            command: None,
         }
     }
 }

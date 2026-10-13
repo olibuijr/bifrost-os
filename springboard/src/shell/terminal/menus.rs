@@ -34,6 +34,14 @@ impl Shell {
                 }
                 true
             }
+            Panel::Command => {
+                if matches!(out, Out::Enter) {
+                    self.terminal_run_command(t);
+                } else if let Some(field) = &mut self.terminal_ui.command {
+                    field.edit(&self.ui, out, t);
+                }
+                true
+            }
             Panel::None => false,
             _ => true,
         }
@@ -217,6 +225,7 @@ impl Shell {
                 self.terminal_cursor_changed();
             }
             18 => self.terminal_toggle_secure(),
+            19 => self.terminal_open_command(t),
             // The first web link in the selection opens in the browser.
             15 => {
                 let link = self

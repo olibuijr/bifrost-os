@@ -104,7 +104,7 @@ impl Shell {
         };
         let modal = matches!(
             self.terminal_ui.panel,
-            Panel::Connections | Panel::Processes | Panel::Form | Panel::More
+            Panel::Connections | Panel::Processes | Panel::Form | Panel::More | Panel::Command
         );
         match ev {
             Event::Down(x, y)
