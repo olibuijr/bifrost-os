@@ -5,8 +5,8 @@
 //! page scale), and shows the first page in a preview with Previous and Next. The printer list comes from the printing
 //! service (`bifrost_ui::cups`); a stopped printer is left out, and "Save as PDF" is always last. The Pages row prints
 //! every page or only the one in the preview. Print writes the pages into one PDF
-//! ([`write_pdf`]; raw RGB image pages, std only) and sends it through `PrintOperation` to the chosen queue, or copies it
-//! to Documents for Save as PDF. Print submits in the background so the desktop does not wait for CUPS.
+//! ([`pdf_pages`]: one RGB image per page, written by the shared `cg::pdf` writer) and sends it through `PrintOperation`
+//! to the chosen queue, or saves it to Documents for Save as PDF. Print submits in the background so the desktop does not wait for CUPS.
 //!
 //! The sheet takes every touch while it is open (`modal_event` in `mod.rs`). Keyboard focus is not wired yet (gap).
 
@@ -14,8 +14,8 @@ use super::ui::{Ui, Weight, CARD_BG, FILL_GRAY, LABEL, LINK, MAC_BODY_PT, MAC_TI
 use super::Shell;
 use crate::gfx::{Image, Surface};
 use bifrost_ui::cups::{Client, Printer, PrinterState};
-use bifrost_ui::print::{Destination, Orientation, PaperSize, PrintError, PrintInfo, PrintOperation};
-use std::path::{Path, PathBuf};
+use bifrost_ui::print::{Destination, Orientation, PageImage, PaperSize, PdfPage, PrintError, PrintInfo, PrintOperation};
+use std::path::Path;
 
 /// The last printer choice; it writes a PDF rather than sending the job to a queue.
 pub const SAVE_AS_PDF: &str = "Save as PDF";
@@ -107,68 +107,32 @@ pub fn layout(img_w: usize, img_h: usize, info: &PrintInfo, scale_pct: u32) -> L
     Layout { pt_per_px, slices }
 }
 
-/// Writes `pages` as a PDF of `paper` points (width, height). Each page places its image at `origin` (left and top, in
-/// points) at `pt_per_px` points a pixel. Images are raw RGB, so the file needs no compressor and every reader opens it.
-pub fn write_pdf(pages: &[Image], paper: (f32, f32), origin: (f32, f32), pt_per_px: f32) -> Vec<u8> {
-    let n = pages.len();
-    let total = 2 + 3 * n;
-    let mut objects: Vec<Vec<u8>> = Vec::with_capacity(total);
-    objects.push(b"<< /Type /Catalog /Pages 2 0 R >>".to_vec());
-    let kids: Vec<String> = (0..n).map(|i| format!("{} 0 R", 3 + 3 * i)).collect();
-    objects.push(format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.join(" "), n).into_bytes());
-    for (i, img) in pages.iter().enumerate() {
-        let page_id = 3 + 3 * i;
-        let (content_id, image_id) = (page_id + 1, page_id + 2);
-        objects.push(
-            format!(
-                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.2} {:.2}] /Resources << /XObject << /Im{} {} 0 R >> >> /Contents {} 0 R >>",
-                paper.0, paper.1, i, image_id, content_id
-            )
-            .into_bytes(),
-        );
-        let w = img.w as f32 * pt_per_px;
-        let h = img.h as f32 * pt_per_px;
-        let y = paper.1 - origin.1 - h;
-        let content = format!("q {:.3} 0 0 {:.3} {:.3} {:.3} cm /Im{} Do Q", w, h, origin.0, y, i);
-        objects.push(format!("<< /Length {} >>\nstream\n{}\nendstream", content.len(), content).into_bytes());
-        let mut bytes = Vec::with_capacity(img.w * img.h * 3);
-        for &p in img.px.iter().take(img.w * img.h) {
-            bytes.extend([p as u8, (p >> 8) as u8, (p >> 16) as u8]);
-        }
-        let mut image = format!(
-            "<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length {} >>\nstream\n",
-            img.w,
-            img.h,
-            bytes.len()
-        )
-        .into_bytes();
-        image.extend(bytes);
-        image.extend(b"\nendstream");
-        objects.push(image);
-    }
-    let mut out = b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n".to_vec();
-    let mut offsets = Vec::with_capacity(total);
-    for (i, body) in objects.iter().enumerate() {
-        offsets.push(out.len());
-        out.extend(format!("{} 0 obj\n", i + 1).into_bytes());
-        out.extend(body);
-        out.extend(b"\nendobj\n");
-    }
-    let xref = out.len();
-    out.extend(format!("xref\n0 {}\n", total + 1).into_bytes());
-    out.extend(b"0000000000 65535 f \n");
-    for off in offsets {
-        out.extend(format!("{:010} 00000 n \n", off).into_bytes());
-    }
-    out.extend(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n", total + 1, xref).into_bytes());
-    out
+/// The PDF pages for `pages`: each page is one raster image placed at `origin` (left and top, in points) at `pt_per_px`
+/// points a pixel, on a page of `paper` points (width, height). The image is RGB; the PDF writer compresses it.
+pub fn pdf_pages(pages: &[Image], paper: (f32, f32), origin: (f32, f32), pt_per_px: f32) -> Vec<PdfPage> {
+    pages
+        .iter()
+        .map(|img| {
+            let w = img.w as f32 * pt_per_px;
+            let h = img.h as f32 * pt_per_px;
+            let y = paper.1 - origin.1 - h;
+            let content = format!("q {:.3} 0 0 {:.3} {:.3} {:.3} cm /Im0 Do Q", w, h, origin.0, y);
+            let rgb: Vec<u8> = img.px.iter().take(img.w * img.h).flat_map(|&p| [p as u8, (p >> 8) as u8, (p >> 16) as u8]).collect();
+            PdfPage {
+                width: paper.0 as f64,
+                height: paper.1 as f64,
+                content: content.into_bytes(),
+                images: vec![PageImage { width: img.w, height: img.h, rgb }],
+            }
+        })
+        .collect()
 }
 
 /// One print job, ready to run in the background.
 pub struct Job {
     pub target: Target,
     pub info: PrintInfo,
-    pub pdf: Vec<u8>,
+    pub pages: Vec<PdfPage>,
 }
 
 fn unix_now() -> u64 {
@@ -176,29 +140,23 @@ fn unix_now() -> u64 {
 }
 
 impl Job {
-    /// Sends the job. Save as PDF writes `Print <unix>.pdf` into `documents` and returns its path; a printer gets the PDF
-    /// through `lp` and returns CUPS' request line.
-    pub fn run(&self, documents: &Path) -> Result<String, String> {
+    /// Sends the job through the print operation. Save as PDF writes `Print <unix>.pdf` into `documents` and returns its
+    /// path; a printer gets the job from CUPS and returns the request id.
+    pub fn run(self, documents: &Path) -> Result<String, String> {
         let stamp = unix_now();
-        match &self.target {
+        let job_name = format!("Print {stamp}");
+        let destination = match &self.target {
             Target::Pdf => {
                 std::fs::create_dir_all(documents).map_err(|e| e.to_string())?;
-                let path = documents.join(format!("Print {stamp}.pdf"));
-                std::fs::write(&path, &self.pdf).map_err(|e| e.to_string())?;
-                Ok(path.to_string_lossy().into_owned())
+                Destination::Pdf(documents.join(format!("Print {stamp}.pdf")))
             }
-            Target::Printer(name) => {
-                let path: PathBuf = std::env::temp_dir().join(format!("bifrost-print-{stamp}.pdf"));
-                std::fs::write(&path, &self.pdf).map_err(|e| e.to_string())?;
-                let result = PrintOperation::new(path.clone())
-                    .with_info(self.info.clone())
-                    .to(Destination::Printer(Some(name.clone())))
-                    .run()
-                    .map_err(|e: PrintError| format!("{e:?}"));
-                let _ = std::fs::remove_file(&path);
-                result
-            }
-        }
+            Target::Printer(name) => Destination::Printer(Some(name.clone())),
+        };
+        PrintOperation::pages(job_name, self.pages, Vec::new())
+            .with_info(self.info)
+            .to(destination)
+            .run()
+            .map_err(|e: PrintError| format!("{e:?}"))
     }
 }
 
@@ -450,8 +408,8 @@ impl PrintSheet {
         };
         let pages: Vec<Image> = slices.iter().map(|&(y, h)| self.image.crop(0, y, self.image.w, h)).collect();
         let (l, t, _, _) = info.imageable();
-        let pdf = write_pdf(&pages, info.paper_size(), (l, t), self.layout.pt_per_px);
-        Job { target: self.targets[self.setup.target].clone(), info, pdf }
+        let pages = pdf_pages(&pages, info.paper_size(), (l, t), self.layout.pt_per_px);
+        Job { target: self.targets[self.setup.target].clone(), info, pages }
     }
 
     pub fn draw(&self, s: &mut Surface, ui: &Ui, w: i32, h: i32) {
@@ -594,17 +552,15 @@ mod tests {
     }
 
     #[test]
-    fn write_pdf_has_one_page_object_per_page_and_a_valid_xref() {
+    fn each_slice_is_one_page_with_its_image_placed_at_the_origin() {
         let pages = [Image::new(2, 2), Image::new(2, 1)];
-        let pdf = write_pdf(&pages, (595.0, 842.0), (36.0, 36.0), 1.0);
-        let text = String::from_utf8_lossy(&pdf).into_owned();
-        assert!(text.starts_with("%PDF-1.4"));
-        assert!(text.contains("/Count 2"));
-        assert!(text.contains("/Size 9"), "2 + 3 objects per page = 8, plus the free entry");
-        assert_eq!(text.matches("endobj").count(), 8);
-        let at = text.rfind("startxref\n").unwrap() + "startxref\n".len();
-        let xref: usize = text[at..].lines().next().unwrap().parse().unwrap();
-        assert!(pdf[xref..].starts_with(b"xref\n0 9\n"));
+        let out = pdf_pages(&pages, (595.0, 842.0), (36.0, 36.0), 1.0);
+        assert_eq!(out.len(), 2);
+        assert_eq!((out[0].width, out[0].height), (595.0, 842.0));
+        assert_eq!((out[1].images[0].width, out[1].images[0].height), (2, 1));
+        assert_eq!(out[1].images[0].rgb.len(), 2 * 1 * 3);
+        // the image's top edge sits 36 pt below the paper's top: y = 842 - 36 - 1
+        assert!(String::from_utf8_lossy(&out[1].content).contains("2.000 0 0 1.000 36.000 805.000 cm /Im0 Do"));
     }
 
     #[test]
@@ -625,7 +581,7 @@ mod tests {
         match sheet.tap(&ui, 1200, 780, g.print.0 + 1.0, g.print.1 + 1.0) {
             Outcome::Print(job) => {
                 assert_eq!(job.target, Target::Pdf);
-                assert!(job.pdf.starts_with(b"%PDF-1.4"));
+                assert_eq!(job.pages.len(), 1, "the preview page only");
             }
             _ => panic!("Print prints"),
         }
@@ -649,11 +605,11 @@ mod tests {
         // 400 px wide fits the 523 pt printable width at 100 %; 1684 rows then take three pages of 770 pt
         let mut sheet = PrintSheet::new(&ui, Image::new(400, 1684), &[]);
         assert_eq!(sheet.layout.slices.len(), 3);
-        assert!(sheet.job().pdf.windows(8).any(|w| w == b"/Count 3"), "all pages by default");
+        assert_eq!(sheet.job().pages.len(), 3, "all pages by default");
         sheet.page = 1;
         sheet.cycle(5);
         assert!(sheet.setup.this_page);
-        assert!(sheet.job().pdf.windows(8).any(|w| w == b"/Count 1"), "only the previewed page");
+        assert_eq!(sheet.job().pages.len(), 1, "only the previewed page");
         sheet.cycle(5);
         assert!(!sheet.setup.this_page, "the row toggles back to all pages");
     }

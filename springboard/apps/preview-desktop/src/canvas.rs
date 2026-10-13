@@ -69,6 +69,8 @@ pub enum Action {
     ExportAt50,
     ExportAt100,
     ExportAt200,
+    /// File > Print: the file as opened goes to the default printer. Menu only, not a toolbar button.
+    Print,
 }
 
 /// Every action. A menu item's id is its index here.
@@ -129,6 +131,7 @@ const TOOLBAR: &[Action] = &[
     Action::Saturate,
     Action::Desaturate,
     Action::ResetColour,
+    Action::Print,
 ];
 
 impl Action {
@@ -173,6 +176,7 @@ impl Action {
             Action::ExportAt50 => "Export at 50%",
             Action::ExportAt100 => "Export at 100%",
             Action::ExportAt200 => "Export at 200%",
+            Action::Print => "Print\u{2026}",
         }
     }
 

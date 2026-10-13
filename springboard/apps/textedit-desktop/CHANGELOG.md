@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1 — 2026-10-13
+
+- Printing goes through the shared print operation: the PDF is written by the shared PDF writer and submitted to CUPS
+  as a job with copies, paper, orientation and page range. The app's private PDF writer is gone.
+
 ## 1.1.0 — 2026-10-13
 
 - Documents open and save as RTF, HTML and plain text, chosen by the file's extension in Save As; a plain text document

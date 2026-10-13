@@ -1,17 +1,28 @@
-//! Printing (`NativePrintInfo` / `NativePrintOperation` / `NativePrintPanel`): describe a job and submit it with `lp`.
+//! Printing (`NativePrintInfo` / `NativePrintOperation` / `NativePrintPanel`): describe a job, write its pages as a PDF
+//! and submit it through the CUPS client.
 //!
-//! [`PrintInfo`] carries paper, orientation, margins, copies and page range. [`PrintOperation::new`] takes the document as
-//! a file (PDF or image; anything `lp` accepts). [`PrintOperation::run`] submits with the print info mapped to `lp`
-//! options, or, for [`Destination::Pdf`], copies the document to the chosen path (Save as PDF). The printers themselves
-//! come from [`crate::cups`] (`Client::printers`); this module does not list them. Everything shells out, so a machine
-//! without CUPS gets [`PrintError::NoCups`] and [`available`] is false.
+//! [`PrintInfo`] carries paper, orientation, margins, copies and page range. A [`PrintOperation`] has one of two sources:
+//! a file ([`PrintOperation::new`]: a PDF, or an image the scheduler can convert) or pages the app built
+//! ([`PrintOperation::pages`]: text laid out to [`PrintInfo::imageable`], or raster slices). Pages are written with
+//! [`bifrost_render::cg::pdf::writer`]. [`PrintOperation::run`] submits the job, or, for [`Destination::Pdf`], saves it
+//! (Save as PDF).
+//!
+//! Submission goes through [`crate::cups::Client::print_document_with`]: copies, media, orientation and page range are
+//! job-template attributes. Margins are not attributes, because the document is already laid out inside them. Plug-in
+//! panel options (`print_panel`) are added as job-template attributes too. The printers come from [`crate::cups`]; this
+//! module does not list them. Without a scheduler a print fails with [`PrintError::NoCups`], and [`available`] is false.
 //!
 //! Gap (see docs/bifrost-ui.md "Printing"): the print sheet is not shell-drawn yet, so there is no `run_modal(window)`;
-//! apps pick the printer and options with their own kit controls and call `run`. No shell proto tags are used.
-//! Print dialog plug-in panels (`print_panel`) feed extra `lp` options through [`PrintOperation::with_options`].
+//! apps pick the printer and options with their own kit controls and call `run`.
 
+use crate::cups::{self, Client, CupsError};
+use crate::ipp::{tag, Value};
+use bifrost_render::cg::pdf::writer::{self, text_literal};
+use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::time::Duration;
+
+pub use bifrost_render::cg::pdf::writer::{Page as PdfPage, PageImage};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PaperSize {
@@ -23,7 +34,7 @@ pub enum PaperSize {
 }
 
 impl PaperSize {
-    /// The CUPS `media=` name.
+    /// The paper's name as the print dialog shows it.
     pub fn media(self) -> &'static str {
         match self {
             PaperSize::A4 => "A4",
@@ -31,6 +42,16 @@ impl PaperSize {
             PaperSize::A5 => "A5",
             PaperSize::Letter => "Letter",
             PaperSize::Legal => "Legal",
+        }
+    }
+    /// The PWG media keyword the scheduler takes as the `media` job-template attribute.
+    pub fn pwg(self) -> &'static str {
+        match self {
+            PaperSize::A4 => "iso_a4_210x297mm",
+            PaperSize::A3 => "iso_a3_297x420mm",
+            PaperSize::A5 => "iso_a5_148x210mm",
+            PaperSize::Letter => "na_letter_8.5x11in",
+            PaperSize::Legal => "na_legal_8.5x14in",
         }
     }
     /// Width and height in points (portrait).
@@ -80,65 +101,177 @@ impl PrintInfo {
         let [t, l, b, r] = self.margins;
         (l, t, (w - l - r).max(0.0), (h - t - b).max(0.0))
     }
-    /// The `lp` option list for this info (everything after `lp`, before the file).
-    pub fn lp_options(&self) -> Vec<String> {
-        let mut o = vec!["-n".into(), self.copies.max(1).to_string(), "-o".into(), format!("media={}", self.paper.media())];
-        if self.orientation == Orientation::Landscape {
-            o.extend(["-o".into(), "landscape".into()]);
+    /// The job-template attributes for this info: copies, media, orientation and the page range (an IPP `rangeOfInteger`,
+    /// lower then upper bound).
+    pub fn attributes(&self) -> Vec<(String, Value)> {
+        let orientation = if self.orientation == Orientation::Landscape { 4 } else { 3 };
+        let mut a = vec![
+            ("copies".to_string(), Value::Integer(self.copies.max(1) as i32)),
+            ("media".to_string(), Value::keyword(self.paper.pwg())),
+            ("orientation-requested".to_string(), Value::Enum(orientation)),
+        ];
+        if let Some((first, last)) = self.pages {
+            let mut bytes = (first as i32).to_be_bytes().to_vec();
+            bytes.extend((last as i32).to_be_bytes());
+            a.push(("page-ranges".to_string(), Value::Other { tag: tag::RANGE_OF_INTEGER, bytes }));
         }
-        let [t, l, b, r] = self.margins;
-        for (name, v) in [("page-top", t), ("page-left", l), ("page-bottom", b), ("page-right", r)] {
-            o.extend(["-o".into(), format!("{name}={}", v.round() as i32)]);
-        }
-        if let Some((a, z)) = self.pages {
-            o.extend(["-P".into(), if a == z { a.to_string() } else { format!("{a}-{z}") }]);
-        }
-        o
+        a
     }
 }
 
-/// True when `lp` can be run (CUPS client tools are installed).
+/// True when a CUPS scheduler answers on the local port, so a job can be submitted.
 pub fn available() -> bool {
-    Command::new("lp").arg("-?").output().is_ok()
+    let addr = SocketAddr::from(([127, 0, 0, 1], cups::DEFAULT_PORT));
+    TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Destination {
-    /// A CUPS queue; `None` is the system default.
+    /// A CUPS queue; `None` is the scheduler's default printer.
     Printer(Option<String>),
-    /// Save as PDF: copy the document here.
+    /// Save as PDF: write the document to this path.
     Pdf(PathBuf),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PrintError {
+    /// The scheduler is not running or cannot be reached.
     NoCups,
+    /// No printer was named and the scheduler has no default.
+    NoPrinter,
     Failed(String),
+}
+
+/// What a job prints: a file the app already has, pages the app built (written as a PDF when the job runs), or plain text
+/// laid out to the job's page (see [`text_pages`]).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Source {
+    File(PathBuf),
+    Pages { pages: Vec<PdfPage>, fonts: Vec<&'static str> },
+    Text(String),
+}
+
+/// The size plain text prints at, in points.
+pub const TEXT_SIZE: f32 = 11.0;
+
+/// Helvetica advance widths for the printable ASCII characters 32 to 126, in thousandths of an em (the standard face's
+/// metrics).
+const HELVETICA: [u16; 95] = [
+    278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, //
+    556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, //
+    667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667,
+    667, 611, 278, 278, 278, 469, 556, 333, //
+    556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500,
+    500, 500, 334, 260, 334, 584,
+];
+
+/// The advance of a character in points at `size`. Characters outside printable ASCII count as a digit's width.
+fn advance(ch: char, size: f32) -> f32 {
+    let units = match ch {
+        ' '..='~' => HELVETICA[ch as usize - 32] as f32,
+        _ => 556.0,
+    };
+    units * size / 1000.0
+}
+
+/// One paragraph word-wrapped to `width` points. A word wider than a line is not broken: it runs past the edge.
+fn wrap(paragraph: &str, size: f32, width: f32) -> Vec<String> {
+    let space = advance(' ', size);
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    let mut line_w = 0.0;
+    for word in paragraph.split(' ') {
+        let word_w: f32 = word.chars().map(|c| advance(c, size)).sum();
+        if !line.is_empty() && line_w + space + word_w > width {
+            lines.push(std::mem::take(&mut line));
+            line_w = 0.0;
+        }
+        if !line.is_empty() {
+            line.push(' ');
+            line_w += space;
+        }
+        line.push_str(word);
+        line_w += word_w;
+    }
+    lines.push(line);
+    lines
+}
+
+/// Plain text laid out for `info`: Helvetica at `size` points, one line per line of `text` wrapped to the printable width,
+/// and pages of as many lines as the printable height holds. Tabs print as four spaces; line feeds start a new line.
+pub fn text_pages(text: &str, size: f32, info: &PrintInfo) -> Vec<PdfPage> {
+    let (left, top, width, height) = info.imageable();
+    let (w, h) = info.paper_size();
+    let leading = size * 1.25;
+    let per_page = ((height / leading).floor() as usize).max(1);
+    let normalized = text.replace('\t', "    ").replace('\r', "");
+    let lines: Vec<String> = normalized.split('\n').flat_map(|p| wrap(p, size, width)).collect();
+    lines
+        .chunks(per_page)
+        .map(|page| {
+            let mut content = Vec::new();
+            for (i, line) in page.iter().enumerate() {
+                let y = h - top - (i as f32 + 1.0) * leading;
+                content.extend(format!("BT /F0 {size} Tf {left:.2} {y:.2} Td ").into_bytes());
+                text_literal(line, &mut content);
+                content.extend(b" Tj ET\n");
+            }
+            PdfPage { width: w as f64, height: h as f64, content, images: Vec::new() }
+        })
+        .collect()
 }
 
 /// `NativePrintOperation`.
 #[derive(Debug, Clone)]
 pub struct PrintOperation {
-    pub document: PathBuf,
+    pub source: Source,
     pub info: PrintInfo,
     pub destination: Destination,
     pub job_name: String,
-    /// Extra `lp` option pairs (`-o key=value`) from print dialog plug-ins; see the SDK's `print_panel::PlugIns::lp_options`.
-    pub options: Vec<String>,
+    /// Extra job-template pairs from print dialog plug-ins; see the SDK's `print_panel::PlugIns::job_options`.
+    pub options: Vec<(String, String)>,
 }
 
 impl PrintOperation {
+    /// A job that prints a file. The job name is the file name.
     pub fn new(document: impl Into<PathBuf>) -> Self {
         let document: PathBuf = document.into();
         let job_name = document.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Untitled".into());
-        PrintOperation { document, info: PrintInfo::default(), destination: Destination::Printer(None), job_name, options: Vec::new() }
+        PrintOperation {
+            source: Source::File(document),
+            info: PrintInfo::default(),
+            destination: Destination::Printer(None),
+            job_name,
+            options: Vec::new(),
+        }
+    }
+    /// A job that prints pages the app built. `fonts` are standard font names, `/F0`.. in the order the pages' content uses
+    /// them (see [`writer::write`]).
+    pub fn pages(job_name: impl Into<String>, pages: Vec<PdfPage>, fonts: Vec<&'static str>) -> Self {
+        PrintOperation {
+            source: Source::Pages { pages, fonts },
+            info: PrintInfo::default(),
+            destination: Destination::Printer(None),
+            job_name: job_name.into(),
+            options: Vec::new(),
+        }
+    }
+    /// A job that prints `text` in Helvetica, laid out for the job's page info when it runs (see [`text_pages`]).
+    pub fn text(job_name: impl Into<String>, text: impl Into<String>) -> Self {
+        PrintOperation {
+            source: Source::Text(text.into()),
+            info: PrintInfo::default(),
+            destination: Destination::Printer(None),
+            job_name: job_name.into(),
+            options: Vec::new(),
+        }
     }
     pub fn with_info(mut self, info: PrintInfo) -> Self {
         self.info = info;
         self
     }
-    /// Sets the plug-in option pairs appended to the `lp` call.
-    pub fn with_options(mut self, options: Vec<String>) -> Self {
+    /// Sets the plug-in job-template pairs sent with the job.
+    pub fn with_options(mut self, options: Vec<(String, String)>) -> Self {
         self.options = options;
         self
     }
@@ -146,38 +279,83 @@ impl PrintOperation {
         self.destination = destination;
         self
     }
-    /// The full `lp` argument list for a printer destination.
-    pub fn lp_args(&self) -> Vec<String> {
-        let mut a = Vec::new();
-        if let Destination::Printer(Some(name)) = &self.destination {
-            a.extend(["-d".into(), name.clone()]);
-        }
-        a.extend(["-t".into(), self.job_name.clone()]);
-        a.extend(self.info.lp_options());
-        a.extend(self.options.iter().cloned());
-        a.push("--".into());
-        a.push(self.document.to_string_lossy().into_owned());
-        a
-    }
-    /// Submits the job. Returns the CUPS request line (`request id is ...`) or the saved path.
-    pub fn run(&self) -> Result<String, PrintError> {
-        match &self.destination {
-            Destination::Pdf(to) => save_copy(&self.document, to),
-            Destination::Printer(_) => {
-                let out = Command::new("lp").args(self.lp_args()).output().map_err(|_| PrintError::NoCups)?;
-                if out.status.success() {
-                    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-                } else {
-                    Err(PrintError::Failed(String::from_utf8_lossy(&out.stderr).trim().to_string()))
-                }
+    /// The document bytes this job sends, and their IPP format.
+    pub fn document(&self) -> Result<(&'static str, Vec<u8>), PrintError> {
+        match &self.source {
+            Source::File(path) => {
+                let data = std::fs::read(path).map_err(|e| PrintError::Failed(e.to_string()))?;
+                Ok((document_format(path), data))
             }
+            Source::Pages { pages, fonts } => Ok(("application/pdf", writer::write(pages, fonts))),
+            Source::Text(text) => {
+                let pages = text_pages(text, TEXT_SIZE, &self.info);
+                Ok(("application/pdf", writer::write(&pages, &["Helvetica"])))
+            }
+        }
+    }
+    /// Runs the job. Returns the request id (`printer-job`) for a printer, or the saved path for Save as PDF.
+    pub fn run(&self) -> Result<String, PrintError> {
+        let (format, data) = self.document()?;
+        match &self.destination {
+            Destination::Pdf(to) => {
+                std::fs::write(to, &data).map_err(|e| PrintError::Failed(e.to_string()))?;
+                Ok(to.to_string_lossy().into_owned())
+            }
+            Destination::Printer(name) => submit(&self.job_name, name.as_deref(), &self.info, &self.options, format, data),
         }
     }
 }
 
-fn save_copy(from: &Path, to: &Path) -> Result<String, PrintError> {
-    std::fs::copy(from, to).map_err(|e| PrintError::Failed(e.to_string()))?;
-    Ok(to.to_string_lossy().into_owned())
+/// The IPP document format for a file, from its extension. Unknown types go as `application/octet-stream`, which the
+/// scheduler detects itself.
+pub fn document_format(path: &Path) -> &'static str {
+    match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+        Some("pdf") => "application/pdf",
+        Some("png") => "image/png",
+        Some("jpg") | Some("jpeg") => "image/jpeg",
+        Some("txt") => "text/plain",
+        _ => "application/octet-stream",
+    }
+}
+
+fn from_cups(e: CupsError) -> PrintError {
+    match e {
+        CupsError::Io(_) | CupsError::Http(_) => PrintError::NoCups,
+        other => PrintError::Failed(other.to_string()),
+    }
+}
+
+/// The value of a plug-in option: a number or a boolean when it reads as one, otherwise a keyword.
+fn option_value(v: &str) -> Value {
+    if let Ok(n) = v.parse::<i32>() {
+        Value::Integer(n)
+    } else if v == "true" || v == "false" {
+        Value::Boolean(v == "true")
+    } else {
+        Value::keyword(v)
+    }
+}
+
+/// Sends a document to a queue (`None` is the default printer) through the CUPS client. Returns `printer-job`, the job's
+/// name in CUPS' request form (`<printer>-<id>`).
+fn submit(
+    job_name: &str,
+    printer: Option<&str>,
+    info: &PrintInfo,
+    options: &[(String, String)],
+    format: &str,
+    data: Vec<u8>,
+) -> Result<String, PrintError> {
+    let mut client = Client::local();
+    let printer = match printer {
+        Some(name) => name.to_string(),
+        None => client.default_printer().map_err(from_cups)?.ok_or(PrintError::NoPrinter)?,
+    };
+    let mut template = info.attributes();
+    template.extend(options.iter().map(|(k, v)| (k.clone(), option_value(v))));
+    let user = std::env::var("USER").unwrap_or_else(|_| "bifrost".to_string());
+    let id = client.print_document_with(&printer, job_name, &user, format, data, template).map_err(from_cups)?;
+    Ok(format!("{printer}-{id}"))
 }
 
 #[cfg(test)]
@@ -194,22 +372,42 @@ mod tests {
     }
 
     #[test]
-    fn lp_options_map_the_print_info() {
+    fn attributes_map_the_print_info_and_margins_stay_in_the_document() {
         let i = PrintInfo { copies: 2, pages: Some((3, 5)), orientation: Orientation::Landscape, ..Default::default() };
-        let o = i.lp_options().join(" ");
-        assert!(o.starts_with("-n 2 -o media=A4 -o landscape"));
-        assert!(o.contains("-o page-left=72"));
-        assert!(o.ends_with("-P 3-5"));
-        assert!(PrintInfo { copies: 0, ..Default::default() }.lp_options().contains(&"1".to_string()));
+        let a = i.attributes();
+        assert_eq!(a[0], ("copies".to_string(), Value::Integer(2)));
+        assert_eq!(a[1], ("media".to_string(), Value::keyword("iso_a4_210x297mm")));
+        assert_eq!(a[2], ("orientation-requested".to_string(), Value::Enum(4)));
+        let mut range = 3i32.to_be_bytes().to_vec();
+        range.extend(5i32.to_be_bytes());
+        assert_eq!(a[3], ("page-ranges".to_string(), Value::Other { tag: tag::RANGE_OF_INTEGER, bytes: range }));
+        assert!(a.iter().all(|(name, _)| !name.starts_with("page-top") && !name.starts_with("page-left")));
+        assert_eq!(PrintInfo { copies: 0, ..Default::default() }.attributes()[0].1, Value::Integer(1));
     }
 
     #[test]
-    fn operation_builds_lp_args_and_saves_a_pdf_copy() {
-        let op = PrintOperation::new("/tmp/a b.pdf").to(Destination::Printer(Some("Office".into())));
-        let a = op.lp_args();
-        assert_eq!(&a[..2], ["-d", "Office"]);
-        assert_eq!(a.last().unwrap(), "/tmp/a b.pdf");
-        assert_eq!(a[3], "a b.pdf");
+    fn every_paper_has_a_pwg_keyword_and_a_name() {
+        assert_eq!(PaperSize::Letter.pwg(), "na_letter_8.5x11in");
+        assert_eq!(PaperSize::A3.media(), "A3");
+    }
+
+    #[test]
+    fn document_formats_follow_the_extension() {
+        assert_eq!(document_format(Path::new("/x/a.PDF")), "application/pdf");
+        assert_eq!(document_format(Path::new("b.jpeg")), "image/jpeg");
+        assert_eq!(document_format(Path::new("c.bin")), "application/octet-stream");
+        assert_eq!(document_format(Path::new("noext")), "application/octet-stream");
+    }
+
+    #[test]
+    fn plug_in_values_are_numbers_booleans_or_keywords() {
+        assert_eq!(option_value("3"), Value::Integer(3));
+        assert_eq!(option_value("true"), Value::Boolean(true));
+        assert_eq!(option_value("two-sided-long-edge"), Value::keyword("two-sided-long-edge"));
+    }
+
+    #[test]
+    fn a_file_job_reads_the_file_and_saves_a_copy_for_save_as_pdf() {
         let dir = std::env::temp_dir().join(format!("bifrost-print-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("in.pdf"), b"%PDF").unwrap();
@@ -217,7 +415,63 @@ mod tests {
         let r = PrintOperation::new(dir.join("in.pdf")).to(Destination::Pdf(out.clone())).run();
         assert_eq!(r, Ok(out.to_string_lossy().into_owned()));
         assert_eq!(std::fs::read(&out).unwrap(), b"%PDF");
-        assert!(matches!(PrintOperation::new(dir.join("missing")).to(Destination::Pdf(dir.join("x"))).run(), Err(PrintError::Failed(_))));
+        let missing = PrintOperation::new(dir.join("missing")).to(Destination::Pdf(dir.join("x"))).run();
+        assert!(matches!(missing, Err(PrintError::Failed(_))));
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_page_job_writes_a_pdf_of_its_pages_and_saves_it() {
+        let page = PdfPage { width: 595.0, height: 842.0, content: b"BT ET".to_vec(), images: Vec::new() };
+        let dir = std::env::temp_dir().join(format!("bifrost-print-pages-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("pages.pdf");
+        let op = PrintOperation::pages("Notes", vec![page.clone(), page], vec!["Helvetica"]).to(Destination::Pdf(out.clone()));
+        assert_eq!(op.run(), Ok(out.to_string_lossy().into_owned()));
+        let bytes = std::fs::read(&out).unwrap();
+        assert!(bytes.starts_with(b"%PDF-1.4"));
+        assert!(String::from_utf8_lossy(&bytes).contains("/Count 2"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn helvetica_widths_cover_printable_ascii() {
+        assert_eq!(HELVETICA.len(), 95);
+        assert_eq!(advance('a', 1000.0), 556.0, "1000 pt makes one unit a point");
+        assert_eq!(advance('W', 1000.0), 944.0);
+        assert_eq!(advance('\u{e9}', 1000.0), 556.0, "outside ASCII counts as a digit");
+    }
+
+    #[test]
+    fn wrap_breaks_at_spaces_and_keeps_empty_paragraphs() {
+        // at 1000 pt a 'W' is 944 pt and a space 278 pt: "WW WW" does not fit on one 1000 pt line
+        assert_eq!(wrap("WW WW", 1000.0, 1000.0), vec!["WW".to_string(), "WW".to_string()]);
+        assert_eq!(wrap("a b", 11.0, 500.0), vec!["a b".to_string()]);
+        assert_eq!(wrap("", 11.0, 500.0), vec![String::new()]);
+    }
+
+    #[test]
+    fn text_pages_fill_pages_by_the_printable_height() {
+        let info = PrintInfo::default();
+        let (_, _, _, h) = info.imageable();
+        let per_page = (h / (TEXT_SIZE * 1.25)).floor() as usize;
+        let text = (0..per_page + 2).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
+        let pages = text_pages(&text, TEXT_SIZE, &info);
+        assert_eq!(pages.len(), 2);
+        assert_eq!((pages[0].width, pages[0].height), (595.0, 842.0));
+        let first = String::from_utf8_lossy(&pages[0].content).into_owned();
+        assert!(first.starts_with("BT /F0 11 Tf 72.00 "), "the first baseline sits inside the top margin");
+        assert!(first.contains("(line 0) Tj"));
+        assert!(String::from_utf8_lossy(&pages[1].content).contains("(line 51) Tj"), "the overflow lines start page 2");
+    }
+
+    #[test]
+    fn a_text_job_lays_out_for_its_page_info_when_it_runs() {
+        let op = PrintOperation::text("Notes", "hello").with_info(PrintInfo { orientation: Orientation::Landscape, ..Default::default() });
+        let (format, bytes) = op.document().unwrap();
+        assert_eq!(format, "application/pdf");
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        assert!(text.contains("/MediaBox [0 0 842 595]"));
+        assert!(text.contains("(hello) Tj"));
     }
 }

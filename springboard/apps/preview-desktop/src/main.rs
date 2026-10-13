@@ -13,6 +13,7 @@ mod pdfjob;
 mod pdfmarks;
 
 use bifrost_app::kit::{Damage, Surface, Ui};
+use bifrost_app::print::{PrintError, PrintOperation};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
 use canvas::{Action, Layout, PictureCache, Scene, Side, Tool};
 use document::Document;
@@ -289,6 +290,16 @@ impl Viewer {
             Action::Saturate => self.adjust.saturation = (self.adjust.saturation + 0.25).clamp(0.0, 2.0),
             Action::Desaturate => self.adjust.saturation = (self.adjust.saturation - 0.25).clamp(0.0, 2.0),
             Action::ResetColour => self.adjust = Adjust::default(),
+            Action::Print => {
+                if let Some(doc) = &self.doc {
+                    self.status = match PrintOperation::new(doc.path.clone()).run() {
+                        Ok(_) => "Sent to the printer".into(),
+                        Err(PrintError::NoCups) => "The printing service is not running".into(),
+                        Err(PrintError::NoPrinter) => "No printer is set up".into(),
+                        Err(PrintError::Failed(message)) => format!("Printing failed: {message}"),
+                    };
+                }
+            }
             Action::ExportPng => self.export_raster(Raster::Png),
             Action::ExportJpeg => self.export_raster(Raster::Jpeg),
             Action::ExportPdf => self.export_pdf(),
@@ -550,6 +561,7 @@ fn item(action: Action, enabled: bool, checked: bool) -> AppMenuItem {
         Action::RotateLeft => m.key("cmd+l"),
         Action::RotateRight => m.key("cmd+r"),
         Action::ExportPng => m.key("cmd+shift+e"),
+        Action::Print => m.key("cmd+p"),
         _ => m,
     };
     m
@@ -582,7 +594,8 @@ impl App for Viewer {
             .into_iter()
             .map(|a| item(a, open, a.export_scale() == Some(self.export_scale)))
             .collect();
-        let mut file_items = vec![item(Action::ExportPng, open, false), item(Action::ExportJpeg, open, false)];
+        let mut file_items = vec![item(Action::Print, open, false), AppMenuItem::separator()];
+        file_items.extend([item(Action::ExportPng, open, false), item(Action::ExportJpeg, open, false)]);
         file_items.push(AppMenuItem::separator());
         file_items.extend(scale_items);
         file_items.push(AppMenuItem::separator());

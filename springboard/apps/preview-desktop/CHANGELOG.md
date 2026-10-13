@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- File > Print... (Cmd+P) sends the open file to the default printer through the shared print operation. It prints the
+  file as opened: markup is not drawn into the printout yet.
+
 ## 0.4.0
 
 - A PDF opens on its own worker thread: the window stays responsive while the file is read, and pages and sidebar thumbnails are drawn by the worker when they are shown.
