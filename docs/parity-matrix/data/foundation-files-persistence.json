@@ -19,7 +19,14 @@
       "apple": "NSFileCoordinator, NSFilePresenter",
       "bifrost": "springboard/sdk/src/file_coordination.rs; wired: springboard/apps/files/src/ops.rs (transfer_now, compress_now, extract_now) via src/coordinate.rs (writing_in, refused)",
       "status": "partial",
-      "note": "Advisory flock; no relinquish or move negotiation, no versions. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Advisory flock; no relinquish or move negotiation; versions live in file_version.rs. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+    },
+    {
+      "feature": "File versions",
+      "apple": "NSFileVersion",
+      "bifrost": "springboard/sdk/src/file_version.rs",
+      "status": "partial",
+      "note": "Per-app store keyed by device and inode (renames keep history); current, other (newest first), add, replace, remove, discardable pruning by count and age. No conflict or iCloud versions; verify on Midget."
     },
     {
       "feature": "File change events",
@@ -97,7 +104,6 @@
     "Keyed archiver and binary plist",
     "Metadata query over files",
     "iCloud / cloud-synced documents and key-value store",
-    "Backup exclusion and on-disk purgeable data",
-    "File versions"
+    "Backup exclusion and on-disk purgeable data"
   ]
 }
