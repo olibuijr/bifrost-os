@@ -4,6 +4,17 @@
 
 - Terminal: More menu row "Open link in selection" opens the first web link in the selected text in the browser
   (`terminal/links.rs`, reusing the URL detection in `profile_table.rs`).
+- Input: a third input source, Japanese (Romaji), types the English keys and composes kana in the Search field: romaji
+  becomes marked hiragana as it is typed, Space opens a hiragana and katakana list and a digit picks from it
+  (`bifrost_ui::kana_method`). No kanji: no dictionary is shipped, and no CJK engine is installed.
+- Input: holding a letter that has accents (in the Search field) opens its accent list instead of repeating it.
+- Edit > Emoji & Symbols opens a character viewer: emoji in ten tabs, paged, shared with the keyboard's emoji page. A pick
+  types into the open Search field, or else copies to the clipboard. Escape or Done closes it.
+- Input Sources > Show Keyboard Viewer (the input menu, with two or more sources) draws the active source's keys, plain
+  and with Shift, from the keymap tables, and lights the key held down.
+- Help lists Input Source with Ctrl+Space.
+- On-screen keyboard 1.1.1: its emoji category catalogue now comes from the shared emoji module (no behaviour change).
+
 - SDK: text layout objects (`bifrost_ui::typeset`: typesetter, framesetter, frame, line, run) with Unicode line break and
   grapheme cluster rules, paragraph styles, tab stops, bidi line reordering, truncated and justified lines. Attributed
   strings gain font family and size, literal colours, baseline, superscript, kern, tracking, stroke, underline colour and
