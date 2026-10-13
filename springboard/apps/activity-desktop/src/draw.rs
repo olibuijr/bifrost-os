@@ -3,6 +3,7 @@
 //! tap lands on what is drawn. Colours are the kit's semantic tokens resolved with `now()`, so Light and Dark follow
 //! the appearance.
 
+use crate::inspect::Inspection;
 use crate::model::{bytes, energy, percent, rate, Column, SortKey, Tab, HISTORY};
 use crate::sample::{ProcSample, Snapshot};
 use crate::window::{Geo, Monitor, B_SEARCH, FOOT_PT, HEAD_PT, ROW_PT, SIDE_PT, SIDE_SCROLL};
@@ -54,6 +55,38 @@ struct Graph {
     detail: String,
     plots: Vec<(Vec<f32>, u32)>,
     scale: f32,
+}
+
+/// The inspector card, in place of the graph: the process's command, folder and counts, then its open files and its
+/// threads in two columns. Only the first few lines of each fit; the counts say how many there are.
+fn draw_inspector(labels: &mut TextCache, s: &mut Surface, ui: &Ui, r: Rect, pid: u32, data: &Inspection) {
+    let x = r.x + CARD_PAD;
+    let w = r.w - 2.0 * CARD_PAD;
+    let title = format!("Process {pid}");
+    text(labels, s, ui, &title, MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), x, r.y + 16.0, w);
+    let command = if data.command.is_empty() { &data.exe } else { &data.command };
+    text(labels, s, ui, command, MAC_SUBHEAD_PT, Weight::Regular, LABEL.now(), x, r.y + 34.0, w);
+    let counts = format!("Folder {}   Open Files {}   Sockets {}   Threads {}", data.cwd, data.files_total, data.sockets, data.threads_total);
+    text(labels, s, ui, &counts, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, r.y + 50.0, w);
+
+    let half = (w - CARD_PAD) / 2.0;
+    let right = x + half + CARD_PAD;
+    text(labels, s, ui, "Open Files", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), x, r.y + 66.0, half);
+    text(labels, s, ui, "Threads", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), right, r.y + 66.0, half);
+    const LINE: f32 = 12.5;
+    for i in 0..4 {
+        let mid = r.y + 80.0 + i as f32 * LINE;
+        let file = match data.files.get(i) {
+            Some(f) => f.clone(),
+            None if i == 0 && data.denied => "Open files are not readable for this process".into(),
+            None => String::new(),
+        };
+        text(labels, s, ui, &file, MAC_FOOTNOTE_PT, Weight::Regular, LABEL.now(), x, mid, half);
+        if let Some(t) = data.threads.get(i) {
+            let line = format!("{} ({})   {} ticks", t.name, t.state, t.ticks);
+            text(labels, s, ui, &line, MAC_FOOTNOTE_PT, Weight::Regular, LABEL.now(), right, mid, half);
+        }
+    }
 }
 
 /// The text of one table cell for a process row.
@@ -168,6 +201,10 @@ impl Monitor {
     fn draw_graph(&mut self, ui: &Ui, s: &mut Surface) {
         let r = self.graph_rect(ui);
         rounded(s, ui, r.x, r.y, r.w, r.h, CARD_RADIUS_PT, CARD_BG.now());
+        if let Some((pid, data)) = self.inspector.clone() {
+            draw_inspector(&mut self.labels, s, ui, r, pid, &data);
+            return;
+        }
         let graph = self.graph();
         let x = r.x + CARD_PAD;
         let w = r.w - 2.0 * CARD_PAD;

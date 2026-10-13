@@ -192,7 +192,15 @@ fn display_row(d: &Display) -> Row {
 
 fn net_row(n: &NetInterface) -> Row {
     let kind = if n.wireless { "Wi-Fi" } else { "Ethernet" };
-    (n.name.clone(), format!("{kind} · {} · {}", capitalize(&n.state), or_dash(&n.mac)))
+    let mut line = format!("{kind} · {} · {}", capitalize(&n.state), or_dash(&n.mac));
+    if n.default_route {
+        line.push_str(" · Default route");
+    }
+    if !n.addresses.is_empty() {
+        line.push_str(" · ");
+        line.push_str(&n.addresses.join(", "));
+    }
+    (n.name.clone(), line)
 }
 
 fn power_row(p: &PowerSource) -> Row {
