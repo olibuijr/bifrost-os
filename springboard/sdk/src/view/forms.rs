@@ -717,6 +717,12 @@ impl View for TextField {
             ToApp::DeleteSurrounding { before: b, after } => {
                 self.editor.delete_surrounding(*b as usize, *after as usize);
             }
+            // the accent hold of the letter typed at the press: the editor's own compose method opens its list
+            ToApp::AccentHold { letter } => {
+                if !self.editor.accent_hold(*letter) {
+                    return false;
+                }
+            }
             _ => return false,
         }
         self.edited(&before);
