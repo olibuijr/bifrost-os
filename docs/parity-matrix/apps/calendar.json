@@ -131,18 +131,18 @@
    "area": "document",
    "apple": "Info.plist CFBundleDocumentTypes ICS/vCal; File > Import; ImportProgress.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/exchange.rs:82",
-   "note": "import_ics runs only for CalDAV sync results (main.rs:186); no File > Import, no document open",
-   "wire": "Add File > Import... (open panel filtered to .ics) calling Calendar::import_ics with a count toast, and handle opening .ics files from Files via the app open-file hook in main.rs."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/archive.rs:175",
+   "note": "File > Import... (open panel for .ics, .vcs or an archive) and opening an .ics file from Files (manifest handles public.calendar-event) call import_file with a count notice; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Check File > Import... and opening an .ics from Files on Midget; recurring events are expanded one year ahead, as for CalDAV."
   },
   {
    "feature": "Calendar archive backup / restore",
    "area": "document",
    "apple": "BackupRestore.nib; File > Export > Calendar Archive",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add Export/Import Calendar Archive (one file holding events.tsv + calendar.ics) under File in main.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/archive.rs:162",
+   "note": "File > Export Archive... saves one .calarchive file (events.tsv and calendar.ics); Import Archive... merges it back; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Check File > Export Archive... and Import Archive... on Midget; an import adds what is missing and never removes, so a restore over a changed calendar is a merge."
   },
   {
    "feature": "Multiple calendars with colours: new, rename, delete, show/hide",

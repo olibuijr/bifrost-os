@@ -4,7 +4,11 @@
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::controls::internet_accounts::Service;
 use bifrost_app::widgets_timeline;
-use bifrost_app::{App, AppMenu, AppMenuItem, Commands, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::proto::{DocErrorCode, DocMode};
+use bifrost_app::{App, AppMenu, AppMenuItem, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
+use bifrost_calendar::calendar::archive;
+use std::collections::HashMap;
+use std::io::Write;
 use bifrost_calendar::calendar::connect::{self, Connect, Snap};
 use bifrost_calendar::calendar::prefs::{self, Setting};
 use bifrost_calendar::calendar::{self, Command};
@@ -19,6 +23,16 @@ struct CalendarApp {
     connect: Connect,
     /// Internet Accounts: the CalDAV calendars switched on for Calendars are read in the background.
     dav: bifrost_app::dav_sync::Sync,
+    /// Open and save panels waiting for the user's answer, by request.
+    jobs: HashMap<u32, Job>,
+}
+
+/// What an open or save panel is for.
+enum Job {
+    /// File > Import... or Import Archive...: the text of the chosen file goes to `Calendar::import_file`.
+    Import,
+    /// File > Export Archive...: the archive text, written to the chosen place.
+    Export(Vec<u8>),
 }
 
 /// Writes a phone number the editor asked to copy to the pasteboard.
@@ -85,7 +99,13 @@ impl App for CalendarApp {
         vec![
             AppMenu {
                 title: "File".into(),
-                items: vec![item(Command::NewEventFromText)],
+                items: vec![
+                    item(Command::NewEventFromText),
+                    AppMenuItem::separator(),
+                    item(Command::Import),
+                    item(Command::ImportArchive),
+                    item(Command::ExportArchive),
+                ],
             },
             AppMenu {
                 title: "Event".into(),
@@ -137,6 +157,27 @@ impl App for CalendarApp {
         let Some(cmd) = Command::from_id(id) else { return false };
         let t = bifrost_app::proto::sys::now_ms();
         match &mut self.cal {
+            Some(c) if matches!(cmd, Command::Import | Command::ImportArchive) => {
+                if !c.enabled(cmd) {
+                    return false;
+                }
+                let (title, filters): (&str, &[&str]) = if cmd == Command::Import {
+                    ("Import Calendar", &["ics", "vcs", archive::EXTENSION])
+                } else {
+                    ("Import Calendar Archive", &[archive::EXTENSION])
+                };
+                let request = ctx.open_document(DocMode::Read, title, filters);
+                self.jobs.insert(request, Job::Import);
+                false
+            }
+            Some(c) if cmd == Command::ExportArchive => {
+                if !c.enabled(cmd) {
+                    return false;
+                }
+                let request = ctx.save_document(&c.archive_name(), &[archive::EXTENSION]);
+                self.jobs.insert(request, Job::Export(c.archive_text().into_bytes()));
+                false
+            }
             // the sentence is the pasteboard's text, read when the command runs
             Some(c) if cmd == Command::NewEventFromText => {
                 let text = ctx.pasteboard_string().unwrap_or_default();
@@ -148,6 +189,17 @@ impl App for CalendarApp {
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        // a calendar file opened from Files, or dropped on the app: its events are imported
+        if let Input::Open(url) = &ev {
+            let (Some(c), Some(path)) = (&mut self.cal, archive::path_from_open(url)) else { return false };
+            match std::fs::File::open(&path).map_err(|e| e.to_string()).and_then(archive::read_text) {
+                Ok(text) => {
+                    c.import_file(&text);
+                }
+                Err(e) => c.show_error(&format!("Could not open the file: {e}")),
+            }
+            return true;
+        }
         // Edit menu commands: events are copied as .ics text and pasted from the pasteboard
         if let Input::Command(cmd) = &ev {
             let Some(c) = &mut self.cal else { return false };
@@ -239,6 +291,62 @@ impl App for CalendarApp {
         c.tick(&ctx.ui, t)
     }
 
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        let Some(c) = &mut self.cal else { return false };
+        match ev {
+            DocumentEvent::Opened(mut doc) => {
+                if !matches!(self.jobs.remove(&doc.request), Some(Job::Import)) {
+                    ctx.release_document(doc.grant);
+                    return false;
+                }
+                let text = archive::read_text(&mut doc.file);
+                // one import is one use of the file: the app keeps no grant to it
+                ctx.release_document(doc.grant);
+                match text {
+                    Ok(text) => {
+                        c.import_file(&text);
+                    }
+                    Err(e) => c.show_error(&format!("Could not read {}: {e}", doc.name)),
+                }
+                true
+            }
+            DocumentEvent::SaveTo(mut doc) => match self.jobs.remove(&doc.request) {
+                Some(Job::Export(bytes)) => {
+                    match doc.file.write_all(&bytes) {
+                        Ok(()) => ctx.commit_document(doc.request),
+                        Err(e) => {
+                            ctx.log(&format!("export archive: {e}"));
+                            ctx.abort_document(doc.request);
+                            c.show_error(&format!("Could not export: {e}"));
+                        }
+                    }
+                    true
+                }
+                other => {
+                    if let Some(job) = other {
+                        self.jobs.insert(doc.request, job);
+                    }
+                    false
+                }
+            },
+            DocumentEvent::Saved(doc) => {
+                ctx.release_document(doc.grant);
+                c.show_notice(&format!("Exported {}", doc.name));
+                true
+            }
+            DocumentEvent::Failed { request, code } => {
+                self.jobs.remove(&request);
+                if code != DocErrorCode::Cancelled {
+                    ctx.log(&format!("document: {code:?}"));
+                    c.show_error("The file could not be opened or saved");
+                    return true;
+                }
+                false
+            }
+            DocumentEvent::OpenedMany { .. } => false,
+        }
+    }
+
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
         if self.dav.reply(request, result) {
             return true;
@@ -277,5 +385,5 @@ impl App for CalendarApp {
 }
 
 fn main() {
-    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default(), dav: bifrost_app::dav_sync::Sync::new(Service::Calendars) });
+    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default(), dav: bifrost_app::dav_sync::Sync::new(Service::Calendars), jobs: HashMap::new() });
 }

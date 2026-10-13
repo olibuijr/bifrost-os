@@ -1,6 +1,7 @@
 //! Golden Gate Golden Gate Calendar: a full-size window with the unified toolbar (`chrome.rs`), a Mac month grid with
 //! each day's events in its cell, Day/Week/Year views and an event form. Colours follow Light and Dark.
 pub mod alerts;
+pub mod archive;
 mod chrome;
 pub mod clip;
 pub mod connect;
@@ -1363,10 +1364,15 @@ pub enum Command {
     ZoomOut,
     /// Go > Go to Date...
     GoToDate,
+    /// File > Import... (an .ics or .vcs file, or an archive), File > Export Archive... and File > Import Archive...:
+    /// the app runs the open and save panels (`main.rs`), the calendar reads and writes the text (`archive.rs`).
+    Import,
+    ExportArchive,
+    ImportArchive,
 }
 
 impl Command {
-    pub const ALL: [Command; 19] = [
+    pub const ALL: [Command; 22] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1386,6 +1392,9 @@ impl Command {
         Command::ZoomIn,
         Command::ZoomOut,
         Command::GoToDate,
+        Command::Import,
+        Command::ExportArchive,
+        Command::ImportArchive,
     ];
 
     pub fn id(self) -> u32 {
@@ -1417,6 +1426,9 @@ impl Command {
             Command::ZoomIn => "Zoom In",
             Command::ZoomOut => "Zoom Out",
             Command::GoToDate => "Go to Date...",
+            Command::Import => "Import...",
+            Command::ExportArchive => "Export Archive...",
+            Command::ImportArchive => "Import Archive...",
         }
     }
 
@@ -1507,7 +1519,8 @@ impl Calendar {
             // the app reads the pasteboard and calls `new_event_from_text`; this path is only a plain New Event
             Command::NewEventFromText => Target::Add,
             Command::GoToDate => Target::GoOpen,
-            Command::ZoomIn | Command::ZoomOut => return false,
+            // the app shows the panels and passes the file's text to `import_file` / reads `archive_text`
+            Command::ZoomIn | Command::ZoomOut | Command::Import | Command::ExportArchive | Command::ImportArchive => return false,
         };
         self.activate(ui, target, t);
         true

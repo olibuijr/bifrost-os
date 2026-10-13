@@ -895,3 +895,88 @@ fn the_sheet_publishes_its_controls() {
         assert!(labels.iter().any(|l| l == want), "{want} in {labels:?}");
     }
 }
+
+fn weekly_gym_ics() -> String {
+    let mut gym = ics::IcsEvent::new("gym@x", "Gym", ics::Local::new(date(2026, 10, 5), 600), ics::Local::new(date(2026, 10, 5), 660));
+    gym.rule = recur::parse_rrule("FREQ=WEEKLY;COUNT=4");
+    ics::write(&ics::IcsCalendar { name: String::new(), events: vec![gym], timezones: vec![] }, "20261004T000000Z")
+}
+
+#[test]
+fn an_archive_restores_events_and_the_sidecar_in_another_calendar() {
+    let (ta, tb) = (Temp::new(), Temp::new());
+    let ui = crate::test_ui();
+    let mut dentist = event(2, "Dentist");
+    dentist.location = "Laugavegur 5".into();
+    store::save(&ta.file(), &[event(1, "Standup"), dentist]).unwrap();
+    let mut a = new(&ui, ta.file());
+    a.import_ics(&weekly_gym_ics()).unwrap();
+    assert_eq!(a.events.len(), 6, "two saved events and four Gym days");
+    let text = a.archive_text();
+    assert!(archive::is_archive(&text));
+
+    let mut b = new(&ui, tb.file());
+    assert!(b.import_file(&text));
+    assert_eq!(b.notice.as_deref(), Some("Imported 6 events"));
+    assert_eq!(b.events.len(), 6);
+    assert_eq!(b.events.iter().find(|e| e.title == "Dentist").unwrap().location, "Laugavegur 5");
+    assert!(b.rich_events().events.iter().any(|e| e.uid == "gym@x" && e.rule.is_some()), "the repeat rule came along");
+    assert_eq!(new(&ui, tb.file()).events.len(), 6, "saved");
+
+    // the same archive again changes nothing
+    assert!(b.import_file(&text));
+    assert_eq!(b.notice.as_deref(), Some("Nothing new to import"));
+    assert_eq!(b.events.len(), 6);
+    assert_eq!(fs::read_dir(&tb.0).unwrap().filter(|e| e.as_ref().unwrap().file_name() == "events.import.tmp").count(), 0, "no scratch file left");
+}
+
+#[test]
+fn an_empty_calendar_archives_and_restores() {
+    let (ta, tb) = (Temp::new(), Temp::new());
+    let ui = crate::test_ui();
+    let a = new(&ui, ta.file());
+    let mut b = new(&ui, tb.file());
+    b.events = vec![event(1, "Kept")];
+    assert!(b.import_file(&a.archive_text()));
+    assert_eq!(b.notice.as_deref(), Some("Nothing new to import"));
+    assert_eq!(b.events.len(), 1, "an import never removes anything");
+}
+
+#[test]
+fn importing_an_ics_file_adds_its_events() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.import_file(&weekly_gym_ics()));
+    assert_eq!(c.notice.as_deref(), Some("Imported 4 events"));
+    assert_eq!(c.events.len(), 4);
+}
+
+#[test]
+fn a_file_that_is_not_a_calendar_is_reported() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(!c.import_file("shopping list"));
+    assert_eq!(c.error.as_deref(), Some("No events found in this file"));
+    assert!(!c.import_file(&format!("{}\nevents.tsv 99\nabc\n", archive::MAGIC)));
+    assert_eq!(c.error.as_deref(), Some("This calendar archive is damaged"));
+    assert!(c.events.is_empty());
+    c.show_error("Could not read it");
+    assert_eq!(c.error.as_deref(), Some("Could not read it"));
+}
+
+#[test]
+fn the_file_commands_are_menu_items_for_the_app_to_run() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    for cmd in [Command::Import, Command::ImportArchive, Command::ExportArchive] {
+        assert!(c.enabled(cmd), "{cmd:?}");
+        assert!(!c.perform(&ui, cmd, 0.0), "the app shows the panel, not the calendar");
+        assert_eq!(Command::from_id(cmd.id()), Some(cmd));
+    }
+    assert_eq!(c.archive_name(), "Calendar Archive 2026-10-04.calarchive");
+    c.activate(&ui, Target::Add, 0.0);
+    assert!(!c.enabled(Command::Import) && !c.enabled(Command::ExportArchive));
+}
