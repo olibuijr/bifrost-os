@@ -69,6 +69,10 @@ pub enum Request {
     Lock,
     /// `term <verb> key=value ...` (values percent-encoded): Term agent control, see `shell/terminal/control.rs`.
     Term(String, Vec<(String, String)>),
+    /// `image-attach ro|rw <absolute image path>`: binds the image to a loop device and mounts it (`shell::disk_image`).
+    ImageAttach { read_only: bool, path: String },
+    /// `image-detach <loop device or mount folder>`: unmounts the image and releases its loop device.
+    ImageDetach(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -121,6 +125,19 @@ pub fn parse(line: &str) -> Result<Request, String> {
     if let Some(rest) = line.trim_end().strip_prefix("open-folder ") {
         let (id, folder) = rest.split_once(' ').ok_or("Expected an app ID and a folder")?;
         return Ok(Request::OpenFolder(id.into(), folder.into()));
+    }
+    // the image path may contain spaces, so it takes the rest of the line
+    if let Some(rest) = line.trim_end().strip_prefix("image-attach ") {
+        let (mode, path) = rest.split_once(' ').ok_or("Expected ro or rw and an image path")?;
+        let read_only = match mode {
+            "ro" => true,
+            "rw" => false,
+            _ => return Err("Expected ro or rw".into()),
+        };
+        return Ok(Request::ImageAttach { read_only, path: path.into() });
+    }
+    if let Some(rest) = line.trim_end().strip_prefix("image-detach ") {
+        return Ok(Request::ImageDetach(rest.trim().into()));
     }
     let w: Vec<&str> = line.split_whitespace().collect();
     let num = |i: usize| -> Result<f32, String> { w.get(i).ok_or(format!("missing argument {i}"))?.parse::<f32>().map_err(|e| e.to_string()).and_then(|v| if v.is_finite() { Ok(v) } else { Err("not a finite number".to_string()) }) };
@@ -287,6 +304,18 @@ mod tests {
         );
         assert!(parse("open-folder is.olibuijr.files.desktop").is_err());
     }
+    #[test]
+    fn image_lines_take_the_mode_and_the_rest_of_the_path() {
+        assert_eq!(
+            parse("image-attach ro /home/me/My Disk.iso\n"),
+            Ok(Request::ImageAttach { read_only: true, path: "/home/me/My Disk.iso".into() })
+        );
+        assert_eq!(parse("image-attach rw /home/me/a.img"), Ok(Request::ImageAttach { read_only: false, path: "/home/me/a.img".into() }));
+        assert!(parse("image-attach maybe /home/me/a.img").is_err());
+        assert!(parse("image-attach ro").is_err());
+        assert_eq!(parse("image-detach /dev/loop3\n"), Ok(Request::ImageDetach("/dev/loop3".into())));
+    }
+
     #[test]
     fn parses_commands() {
         assert_eq!(parse("shot 2\n"), Ok(Request::Shot(2)));
