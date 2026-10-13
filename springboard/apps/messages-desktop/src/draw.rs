@@ -2,7 +2,7 @@
 //! sidebar; the timeline and the composer are the main pane; the sign-in form is a sheet over both. [`Layout`] holds the
 //! geometry for the painter and the hit test alike, so a tap lands on what is drawn.
 
-use crate::model::{preview, FIELD_LABELS, PASSWORD_FIELD};
+use crate::model::{day_label, day_of, preview, starts_day, typing_text, FIELD_LABELS, PASSWORD_FIELD};
 use crate::protocol::Body;
 use crate::window::MessagesWindow;
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, WHITE};
@@ -282,7 +282,9 @@ impl MessagesWindow {
         let area = lay.timeline();
         s.fill_rect(px(area[0]), px(area[1]), px(area[2]), px(area[3]), CONTENT_BG.now());
         let rows = self.timeline_rows(ui, lay);
-        let content: f32 = rows.iter().map(|r| r.height + lay.bubble_gap).sum::<f32>() + 2.0 * lay.pad;
+        let typing = self.model.selected_room().is_some_and(|r| !r.typing.is_empty());
+        let typing_h = if typing { typing_height(lay) } else { 0.0 };
+        let content: f32 = rows.iter().map(|r| r.height + lay.bubble_gap).sum::<f32>() + 2.0 * lay.pad + typing_h;
         let max = (content - area[3]).max(0.0);
         self.timeline_scroll.set_max(max);
         if self.stick_bottom {
@@ -306,10 +308,14 @@ impl MessagesWindow {
             if y < area[1] || top > area[1] + area[3] {
                 continue;
             }
+            if let Some(day) = &row.day {
+                let cy = top + lay.gap + lay.foot / 2.0;
+                put_centred(s, &mut self.labels, ui, day, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), area[0] + area[2] / 2.0, cy);
+            }
             let right = area[0] + area[2] - lay.pad;
             let bw = (row.widest + 2.0 * lay.bubble_pad).min(bubble_max);
             let x = if row.own { right - bw } else { area[0] + lay.pad };
-            let mut by = top;
+            let mut by = top + row.head;
             if let Some(name) = &row.sender {
                 put(s, &mut self.labels, ui, name, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), x, by);
                 by += lay.foot;
@@ -321,24 +327,33 @@ impl MessagesWindow {
                 put(s, &mut self.labels, ui, line, MAC_BODY_PT, Weight::Regular, ink, x + lay.bubble_pad, ly);
             }
         }
-        let _ = room;
+        if let Some(typing) = typing_text(&room.typing) {
+            let ty = area[1] + area[3] - typing_height(lay) + lay.gap;
+            put(s, &mut self.labels, ui, &typing, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), area[0] + lay.pad, ty);
+        }
     }
 
-    /// The bubbles of the selected room, wrapped for the timeline width. Built first so the scroll range is known.
+    /// The bubbles of the selected room, wrapped for the timeline width, with a day heading where a day starts. Built
+    /// first so the scroll range is known.
     fn timeline_rows(&self, ui: &Ui, lay: &Layout) -> Vec<TimelineRow> {
         let Some(room) = self.model.selected_room() else { return Vec::new() };
         let area_w = (lay.w - lay.side).max(0.0);
         let text_w = (area_w * BUBBLE_SHARE - 2.0 * lay.bubble_pad).max(0.0);
+        let today = day_of(now_ms());
+        let mut prev = None;
         room.timeline
             .iter()
             .map(|m| {
                 let own = m.sender == self.model.user_id;
+                let day = starts_day(prev, m.ts).then(|| day_label(day_of(m.ts), today));
+                prev = Some(m.ts);
+                let head = if day.is_some() { day_height(lay) } else { 0.0 };
                 let lines = wrap(ui, &full_text(&m.body), text_w, MAC_BODY_PT, Weight::Regular);
                 let widest = lines.iter().map(|l| ui.measure(l, MAC_BODY_PT, Weight::Regular)).fold(0.0, f32::max);
                 let sender = if own { None } else { Some(fit(ui, crate::protocol::display_name(&m.sender), MAC_FOOTNOTE_PT, Weight::Semibold, text_w)) };
                 let sender_h = if sender.is_some() { lay.foot } else { 0.0 };
                 let bubble_h = lines.len() as f32 * lay.line + 2.0 * lay.bubble_pad;
-                TimelineRow { own, sender, lines, widest, bubble_h, height: sender_h + bubble_h }
+                TimelineRow { own, day, head, sender, lines, widest, bubble_h, height: head + sender_h + bubble_h }
             })
             .collect()
     }
@@ -409,14 +424,32 @@ impl MessagesWindow {
     }
 }
 
-/// One conversation bubble, measured and wrapped.
+/// One conversation bubble, measured and wrapped. `day` is the heading of the day the message starts, with `head` the
+/// height that heading takes above the bubble.
 struct TimelineRow {
     own: bool,
+    day: Option<String>,
+    head: f32,
     sender: Option<String>,
     lines: Vec<String>,
     widest: f32,
     bubble_h: f32,
     height: f32,
+}
+
+/// The height of a day heading: its line and the space around it.
+fn day_height(lay: &Layout) -> f32 {
+    lay.foot + 2.0 * lay.gap
+}
+
+/// The height the typing line takes at the foot of the timeline.
+fn typing_height(lay: &Layout) -> f32 {
+    lay.foot + 2.0 * lay.gap
+}
+
+/// The wall clock in milliseconds since the epoch (0 when the clock is before it).
+fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
 /// The text of a message as the bubble shows it: the words of a text, or the preview of anything else.
