@@ -108,9 +108,9 @@
     {
       "feature": "Printing: printer discovery",
       "apple": "NSPrinter",
-      "bifrost": "springboard/ui/src/print.rs; wired: springboard/src/shell/print_sheet.rs (printers and targets) over springboard/ui/src/print.rs",
+      "bifrost": "springboard/ui/src/cups.rs, springboard/ui/src/printer_caps.rs; wired: springboard/src/shell/print_sheet.rs (printers and targets) over springboard/ui/src/print.rs",
       "status": "partial",
-      "note": "printers() reads CUPS via lpstat; no printer capabilities or paper list Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "cups::Client::printers() lists queues; get_printer_attributes() reads capabilities (printer_caps.rs: PWG paper list with PPD names, duplex, colour modes, default media, status and reasons, Letter/A4 fallback); print panel not yet using them. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Visual effect material catalogue and blending (sidebar, titlebar, menu, popover, HUD, sheet, header, window and content backgrounds; behind- and within-window)",
