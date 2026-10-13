@@ -158,6 +158,17 @@ impl Client {
         self.call("time.set_ntp", vec![("on", Json::Bool(on))]).map(|_| ())
     }
 
+    /// Binds a disk image in the account's home folder to a free loop device and returns the device path.
+    pub fn loop_attach(&self, path: &str, read_only: bool) -> Result<String, ClientError> {
+        let reply = self.call("disk.loop_attach", vec![("path", privd::s(path)), ("read_only", Json::Bool(read_only))])?;
+        reply.str_field("device").ok_or_else(|| ClientError { code: "internal".into(), message: "no loop device in the reply".into() })
+    }
+
+    /// Releases a loop device that holds one of the account's images.
+    pub fn loop_detach(&self, device: &str) -> Result<(), ClientError> {
+        self.call("disk.loop_detach", vec![("device", privd::s(device))]).map(|_| ())
+    }
+
     /// Settings > Users & Groups: creates an account (`admin` adds it to the administrators).
     pub fn user_add(&self, name: &str, full_name: &str, admin: bool, password: &str) -> Result<(), ClientError> {
         self.call("user.add", vec![("name", privd::s(name)), ("full_name", privd::s(full_name)), ("admin", Json::Bool(admin)), ("password", privd::s(password))]).map(|_| ())

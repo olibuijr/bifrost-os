@@ -67,6 +67,11 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
             install::uninstall_local(Path::new(STATE_DIR), id).map(|_| obj(vec![])).map_err(PErr::internal)
         }
         "system.boot_attempt" => boot_attempt(str_param(p, "event")?),
+        "disk.loop_attach" => {
+            let read_only = matches!(p.get("read_only"), Some(Json::Bool(true)));
+            super::loopdev::attach(str_param(p, "path")?, read_only)
+        }
+        "disk.loop_detach" => super::loopdev::detach(str_param(p, "device")?),
         "backup.restore_apply" => match crate::shell::backup::apply_pending(Path::new(STATE_DIR)) {
             None => Ok(obj(vec![("files", Json::Num(0.0))])),
             Some(Ok(n)) => Ok(obj(vec![("files", Json::Num(n as f64))])),
