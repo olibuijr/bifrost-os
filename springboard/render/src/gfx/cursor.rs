@@ -26,16 +26,19 @@ impl Spot {
     pub fn want(pos: (f32, f32), pressed: bool, present: bool, screen_on: bool, now: f64, last_motion: f64) -> Option<Spot> {
         (present && screen_on && now - last_motion < HIDE_MS).then(|| Spot { x: pos.0 as i32, y: pos.1 as i32, size: if pressed { SIZE_PRESSED } else { SIZE } })
     }
-
-    fn rect(&self) -> (i32, i32, i32, i32) {
-        (self.x - self.size / 2 - 1, self.y - self.size / 2 - 1, self.size + 2, self.size + 2)
-    }
 }
 
-#[derive(Default)]
+/// The pointer's shown spot and what it covers. `scale` is Cursor Size (1x to 2x): the disc grows with it.
 pub struct Cursor {
     shown: Option<Spot>,
     saved: Vec<u32>,
+    scale: f32,
+}
+
+impl Default for Cursor {
+    fn default() -> Self {
+        Cursor { shown: None, saved: Vec::new(), scale: 1.0 }
+    }
 }
 
 fn mix(under: u32, grey: u32, alpha: u32) -> u32 {
@@ -44,13 +47,35 @@ fn mix(under: u32, grey: u32, alpha: u32) -> u32 {
 }
 
 impl Cursor {
+    /// Cursor Size: the disc is the spot's size times `scale` (clamped to 1x to 2x). A new size forgets the shown
+    /// spot, since its old pixels are still on the panel: the caller redraws the panel. True when the size changed.
+    pub fn set_scale(&mut self, scale: f32) -> bool {
+        let scale = if scale.is_finite() { scale.clamp(1.0, 2.0) } else { 1.0 };
+        if scale == self.scale {
+            return false;
+        }
+        self.scale = scale;
+        self.shown = None;
+        true
+    }
+
+    /// The rectangle a spot covers at the current size, with a pixel of margin.
+    fn rect(&self, s: &Spot) -> (i32, i32, i32, i32) {
+        let size = self.diameter(s);
+        (s.x - size / 2 - 1, s.y - size / 2 - 1, size + 2, size + 2)
+    }
+
+    fn diameter(&self, s: &Spot) -> i32 {
+        (s.size as f32 * self.scale).round() as i32
+    }
+
     /// Moves to `want`, damaging the old and the new rectangle; true when anything changed.
     pub fn plan(&mut self, want: Option<Spot>, damage: &mut Damage) -> bool {
         if want == self.shown {
             return false;
         }
         for s in self.shown.iter().chain(want.iter()) {
-            let (x, y, w, h) = s.rect();
+            let (x, y, w, h) = self.rect(s);
             damage.add(x, y, w, h);
         }
         self.shown = want;
@@ -71,8 +96,8 @@ impl Cursor {
     pub fn stamp(&mut self, buf: &mut [u32], w: usize, h: usize) {
         let Some(s) = self.shown else { return };
         self.saved.clear();
-        let (rx, ry, rw, rh) = s.rect();
-        let r = s.size as f32 / 2.0;
+        let (rx, ry, rw, rh) = self.rect(&s);
+        let r = self.diameter(&s) as f32 / 2.0;
         for j in 0..rh {
             for i in 0..rw {
                 let (px, py) = (rx + i, ry + j);
@@ -95,7 +120,7 @@ impl Cursor {
     /// Puts back what `stamp` covered.
     pub fn restore(&mut self, buf: &mut [u32], w: usize, h: usize) {
         let Some(s) = self.shown else { return };
-        let (rx, ry, rw, rh) = s.rect();
+        let (rx, ry, rw, rh) = self.rect(&s);
         let mut it = self.saved.iter();
         for j in 0..rh {
             for i in 0..rw {
@@ -238,6 +263,30 @@ mod tests {
         assert_ne!(buf[15 * w + 20], clean[0]);
         c.restore(&mut buf, w, h);
         assert_eq!(buf, clean);
+    }
+
+    #[test]
+    fn cursor_size_grows_the_disc_and_a_new_size_forgets_the_spot() {
+        let (w, h) = (60, 60);
+        let at = Spot::want((30.0, 30.0), false, true, true, 0.0, 0.0).unwrap();
+        let mut c = Cursor::default();
+        let mut d = Damage::new(w, h);
+        c.plan(Some(at), &mut d);
+        let small = d.pixels();
+        assert!(c.set_scale(2.0), "a new size is a change");
+        assert!(!c.set_scale(2.0), "the same size is not");
+        assert!(!c.is_shown(), "the old spot is forgotten until it is planned again");
+        let mut d = Damage::new(w, h);
+        c.plan(Some(at), &mut d);
+        assert!(d.pixels() > small, "twice the disc damages more");
+        let mut buf = vec![0xff10_2030u32; w * h];
+        let clean = buf.clone();
+        c.stamp(&mut buf, w, h);
+        assert_ne!(buf[30 * w + 30 + 10], clean[0], "the grown disc covers 10 px from the centre");
+        c.restore(&mut buf, w, h);
+        assert_eq!(buf, clean);
+        assert!(c.set_scale(f32::NAN), "a non-finite size falls back to 1x, a change from 2x");
+        assert!(!c.set_scale(1.0), "1x is already the size");
     }
 
     #[test]

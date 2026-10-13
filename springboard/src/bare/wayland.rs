@@ -53,7 +53,8 @@ const GPU_WINDOW: u32 = 0x1000_0000;
 use super::input::Event;
 use wayland_protocols::wp::cursor_shape::v1::client::{wp_cursor_shape_manager_v1 as cursor_manager, wp_cursor_shape_device_v1 as cursor_device};
 use wayland_protocols::wp::linux_dmabuf::zv1::client::{zwp_linux_dmabuf_v1 as dmabuf, zwp_linux_buffer_params_v1 as dmabuf_params};
-use crate::gpu::wl::{Backdrop, BufferInfo, Presenter};
+use crate::gpu::wl::{Backdrop, BufferInfo, Magnify, Presenter};
+use crate::shell::accessibility::zoom::{self as zoom_model, Mode, ScreenZoom};
 use bifrost_render::glass::Rect as Glass;
 use super::material_client::{args as material_args, protocol::{bifrost_material_manager_v1 as mat_manager, bifrost_material_surface_v1 as mat_surface}};
 /// The presenter's key for the desktop background (and the lock surface, which shares its drawables).
@@ -93,7 +94,19 @@ struct State {
     dmabuf: Option<dmabuf::ZwpLinuxDmabufV1>, dmabuf_formats: Vec<(u32,u64)>, gpu_slots: HashMap<u32,Vec<GpuSlot>>,
 }
 /// The GPU presenter and what it needs between frames.
-struct Gpu { p: Presenter, glass: Vec<Glass>, log: (std::time::Instant, usize, f64, f64, usize), draw: (usize, f64), last_frame: std::time::Instant }
+struct Gpu { p: Presenter, glass: Vec<Glass>, log: (std::time::Instant, usize, f64, f64, usize), draw: (usize, f64), last_frame: std::time::Instant, zoom: ScreenZoom, pointer: (f32, f32), zoomed: bool }
+
+/// The Screen Zoom pass for a `w` x `h` screen with the pointer at `pointer`, in the presenter's terms: the Full
+/// Screen source rect, or the Picture in Picture lens and the part of the frame it shows. None while zoom is off.
+fn magnify_for(z: ScreenZoom, pointer: (f32, f32), (w, h): (usize, usize)) -> Option<Magnify> {
+    let screen = (w as f32, h as f32);
+    let source = z.source_rect(pointer, screen)?;
+    let uv = zoom_model::uv(source, screen);
+    Some(match z.mode {
+        Mode::Full => Magnify { full: Some(uv), lens: None },
+        Mode::Lens => Magnify { full: None, lens: z.lens_rect(pointer, screen).map(|rect| (rect, uv)) },
+    })
+}
 pub struct Display { conn: Connection, queue: EventQueue<State>, state: State,
     stats: Option<(std::time::Instant,usize,usize)>, gpu: Option<Gpu>,
     /// the GPU presenter gave up and the SHM path took over: the shell must draw a full frame (`take_gpu_fallback`)
@@ -161,7 +174,7 @@ impl Display {
                 Ok(p) => {
                     bifrost_core::log::shell_logger("presenter").notice(format!("Wayland dma-buf presenter on {} ({}x{}, {}..{} drawables)", p.renderer, w, h, GPU_POOL_MIN, GPU_POOL_MAX));
                     bifrost_render::glass::enable(true);
-                    Some(Gpu { p, glass: Vec::new(), log: (std::time::Instant::now(), 0, 0., 0., 0), draw: (0, 0.), last_frame: std::time::Instant::now() })
+                    Some(Gpu { p, glass: Vec::new(), log: (std::time::Instant::now(), 0, 0., 0., 0), draw: (0, 0.), last_frame: std::time::Instant::now(), zoom: ScreenZoom::default(), pointer: (0.0, 0.0), zoomed: false })
                 }
                 Err(e) => { bifrost_core::log::shell_logger("presenter").error(format!("presenter unavailable, SHM path: {e}")); state.gpu_slots.clear(); None }
             }
@@ -645,12 +658,23 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
         let _ = self.conn.flush();
     }
     pub fn note_draw(&mut self, ms: f64) { if let Some(g) = &mut self.gpu { g.draw.0 += 1; g.draw.1 += ms; } }
+    /// Screen Zoom for the next present: the shell's zoom state and the pointer in screen px. The presenter magnifies
+    /// the composed frame around the pointer. Without a GPU presenter (the CPU path) zoom is not drawn.
+    pub fn set_zoom(&mut self, zoom: ScreenZoom, pointer: (f32, f32)) {
+        if let Some(g) = &mut self.gpu { g.zoom = zoom; g.pointer = pointer; }
+    }
     pub fn present(&mut self, pixels: &[u32], damage: &Damage) -> io::Result<()> {
         if self.state.lock_wanted && !self.state.lock.as_ref().is_some_and(|l|l.configured) { return Ok(()); }
         // after an unlock the desktop surface takes no buffer until its new configure (the configure asks for a full redraw)
         if !self.state.lock_wanted && !self.state.main.may_attach() { return Ok(()); }
         if let Some(g) = &mut self.gpu {
             let (w,h) = (self.state.size.0 as usize, self.state.size.1 as usize);
+            // a magnified frame changes every pixel, and the frame after zoom turns off still holds magnified pixels:
+            // while zoom is on, or on the frame it goes off, the whole screen is presented
+            let magnify = magnify_for(g.zoom, g.pointer, (w, h));
+            let whole = (magnify.is_some() || g.zoomed).then(|| { let mut d = Damage::new(w, h); d.all(); d });
+            g.zoomed = magnify.is_some();
+            let damage = whole.as_ref().unwrap_or(damage);
             let fresh = bifrost_render::glass::take();
             if damage.pixels() >= w*h { g.glass = fresh; } else { let areas: Vec<_> = damage.areas().iter().map(|a| (a.x0 as f32, a.y0 as f32, a.x1 as f32, a.y1 as f32)).collect(); bifrost_render::glass::merge(&mut g.glass, fresh, &areas); }
             // always consume the flush flag, so an owed glass refresh is not left for a later empty present
@@ -682,6 +706,10 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
             };
             let areas = g.p.draw(GPU_BG, slot, pixels, w, damage, Backdrop::Full{x:0,y:0}, &g.glass);
             if let Some(why) = g.p.failure().map(str::to_owned) { self.fall_back(&why); return Ok(()); }
+            // only a slot drawn this frame holds this frame's composition; an undrawn one must not be magnified again
+            if let Some(m) = magnify.filter(|_| !areas.is_empty()) {
+                if let Err(e) = g.p.magnify(GPU_BG, slot, m) { eprintln!("springboard: screen zoom: {e}"); }
+            }
             let st = g.p.stats;
             g.log.1 += 1; g.log.2 += st.upload_ms; g.log.3 += st.render_ms; g.log.4 += st.uploaded_px;
             if g.log.0.elapsed().as_secs() >= 10 {
@@ -1293,5 +1321,34 @@ mod material_tests {
         let g = Glass { x: 0.0, y: 30.5, w: 200.2, h: 400.0, r: 0.0, kind: Kind::Sidebar, active: None, detail: None };
         assert_eq!(blur_rects(&[g], 40), vec![[40, 70, 201, 400]]);
         assert!(blur_rects(&[], 40).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod zoom_tests {
+    use super::*;
+
+    const SCREEN: (usize, usize) = (1920, 1080);
+
+    #[test]
+    fn zoom_off_magnifies_nothing() {
+        assert_eq!(magnify_for(ScreenZoom::default(), (960.0, 540.0), SCREEN), None);
+    }
+
+    #[test]
+    fn full_screen_samples_the_pointer_centred_quarter_at_two_x() {
+        let z = ScreenZoom { on: true, factor: 2.0, mode: Mode::Full };
+        let m = magnify_for(z, (960.0, 540.0), SCREEN).unwrap();
+        assert_eq!(m, Magnify { full: Some([0.25, 0.25, 0.75, 0.75]), lens: None });
+    }
+
+    #[test]
+    fn lens_draws_its_rect_and_shows_the_same_factor() {
+        let z = ScreenZoom { on: true, factor: 2.0, mode: Mode::Lens };
+        let m = magnify_for(z, (500.0, 400.0), SCREEN).unwrap();
+        assert_eq!(m.full, None);
+        let (rect, uv) = m.lens.unwrap();
+        assert_eq!(Some(rect), z.lens_rect((500.0, 400.0), (1920.0, 1080.0)));
+        assert!((uv[2] - uv[0] - 180.0 / 1920.0).abs() < 1e-5, "the lens shows half its width");
     }
 }

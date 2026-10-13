@@ -148,6 +148,15 @@ pub struct Stats {
     pub drawn_px: usize,
 }
 
+/// One frame's Screen Zoom (see `Presenter::magnify`). `full` is the normalised rect `(u0, v0, u1, v1)` of the composed
+/// frame that fills the whole drawable (Full Screen). `lens` is the lens's rect in drawable px `[x, y, w, h]` and the
+/// normalised rect it shows (Picture in Picture). Either may be None.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Magnify {
+    pub full: Option<[f32; 4]>,
+    pub lens: Option<([f32; 4], [f32; 4])>,
+}
+
 /// Bumped by the shell whenever it installs a new wallpaper, so a new picture that reuses the
 /// freed allocation of the old one (same address and size) is still uploaded (PR-5).
 static WALLPAPER_GEN: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
@@ -198,6 +207,8 @@ pub struct Presenter {
     /// the first GPU failure (lost context, GL error, a pass that never finished): once set, nothing is drawn and
     /// the shell moves to the SHM path (`failure`)
     health: Health,
+    /// the composed frame copied aside by Screen Zoom (a drawable cannot be sampled while it is the target)
+    zoom_copy: Option<Tex>,
 }
 
 const VS: &str = "#version 300 es
@@ -410,6 +421,7 @@ impl Presenter {
             stats: Stats::default(),
             implicit_sync,
             health: Health::default(),
+            zoom_copy: None,
         })
     }
 
@@ -1114,18 +1126,75 @@ impl Presenter {
         gl!(gl, draw_arrays(GL_TRIANGLES, 0, 6));
     }
 
-    /// The final-frame zoom (Settings > Accessibility > Zoom): draws the composed frame `src` magnified into the
-    /// framebuffer `dst_fbo`, showing only the normalised rect `uv` = (u0, v0, u1, v1) of it. The shell supplies
-    /// the rect from `shell::accessibility::zoom`; with zoom off the caller skips this pass.
-    pub fn zoom_into(&mut self, src: u32, dst_fbo: u32, dst_w: usize, dst_h: usize, uv: [f32; 4]) {
+    /// Screen Zoom: magnifies the composed frame that `draw` just put in drawable `slot` of surface `id`, in place.
+    /// The frame is copied aside first, since a drawable cannot be sampled while it is the target. A lens leaves the
+    /// rest of the drawable as it was. Nothing is drawn once the presenter has failed (`failure`).
+    pub fn magnify(&mut self, id: u32, slot: usize, m: Magnify) -> io::Result<()> {
+        if m.full.is_none() && m.lens.is_none() || !self.health.is_ok() {
+            return Ok(());
+        }
+        let Some((w, h, src, dst)) = self.surfaces.get(&id).and_then(|s| s.ring.get(slot).map(|d| (s.w, s.h, d.tex, d.fbo))) else {
+            return Ok(());
+        };
+        let copy = match self.zoom_copy.take() {
+            Some(t) if t.w == w && t.h == h => t,
+            old => {
+                if let Some(t) = old {
+                    self.free(t);
+                }
+                self.texture(w, h, GL_LINEAR, None)?
+            }
+        };
         self.current();
-        let gl = self.gl;
-        gl!(gl, bind_framebuffer(GL_FRAMEBUFFER, dst_fbo));
-        gl!(gl, viewport(0, 0, dst_w as i32, dst_h as i32));
-        gl!(gl, uniform2f(self.prog.view, dst_w as f32, dst_h as f32));
-        gl!(gl, uniform1i(self.prog.mode, 0));
-        self.quad_uv(src, [0.0, 0.0, dst_w as f32, dst_h as f32], uv, 1.0, None);
+        self.zoom_pass(src, copy.fbo, w, h, [0.0, 0.0, 1.0, 1.0]);
+        if let Some(uv) = m.full {
+            self.zoom_pass(copy.tex, dst, w, h, uv);
+        }
+        if let Some((rect, uv)) = m.lens {
+            self.zoom_lens(copy.tex, dst, w, h, rect, uv);
+        }
         self.finish();
+        self.zoom_copy = Some(copy);
+        Ok(())
+    }
+
+    /// The state every zoom pass draws with: the textured program over a `w` x `h` target, blended over it.
+    fn zoom_state(&self, w: usize, h: usize) {
+        let gl = self.gl;
+        gl!(gl, use_program(self.prog.id));
+        gl!(gl, bind_vertex_array(self.vao));
+        gl!(gl, viewport(0, 0, w as i32, h as i32));
+        gl!(gl, uniform2f(self.prog.view, w as f32, h as f32));
+        gl!(gl, uniform1i(self.prog.mode, 0));
+        gl!(gl, uniform4f(self.prog.hole, 0.0, 0.0, 0.0, 0.0));
+        gl!(gl, uniform1f(self.prog.glass, 0.0));
+        gl!(gl, active_texture(GL_TEXTURE0));
+        gl!(gl, disable(GL_SCISSOR_TEST));
+        gl!(gl, enable(GL_BLEND));
+        gl!(gl, blend_func(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
+    }
+
+    /// Full Screen: draws `src` (a `w` x `h` frame) over all of `dst`, showing only the normalised rect `uv`.
+    fn zoom_pass(&self, src: u32, dst: u32, w: usize, h: usize, uv: [f32; 4]) {
+        gl!(self.gl, bind_framebuffer(GL_FRAMEBUFFER, dst));
+        self.zoom_state(w, h);
+        self.quad_uv(src, [0.0, 0.0, w as f32, h as f32], uv, 1.0, None);
+    }
+
+    /// Picture in Picture: draws the magnified `uv` of `src` into the lens rect `rect` of `dst`, with a light 2 px rim.
+    fn zoom_lens(&self, src: u32, dst: u32, w: usize, h: usize, rect: [f32; 4], uv: [f32; 4]) {
+        let gl = self.gl;
+        gl!(gl, bind_framebuffer(GL_FRAMEBUFFER, dst));
+        self.zoom_state(w, h);
+        let [x, y, lw, lh] = rect;
+        let rim = [x - 2.0, y - 2.0, lw + 4.0, lh + 4.0];
+        gl!(gl, uniform1i(self.prog.mode, 4));
+        gl!(gl, uniform4f(self.prog.color, 0.92, 0.92, 0.92, 1.0));
+        gl!(gl, uniform4f(self.prog.rrect, rim[0], rim[1], rim[2], rim[3]));
+        gl!(gl, uniform1f(self.prog.radius, 0.0));
+        self.quad_raw(rim);
+        gl!(gl, uniform1i(self.prog.mode, 0));
+        self.quad_uv(src, rect, uv, 1.0, None);
     }
 
     /// One blur pass from `src` into `dst`.
@@ -1227,6 +1296,9 @@ impl Drop for Presenter {
             self.free(t);
         }
         for t in std::mem::take(&mut self.blur) {
+            self.free(t);
+        }
+        if let Some(t) = self.zoom_copy.take() {
             self.free(t);
         }
         let unders: Vec<Live> = self.under.drain().filter_map(|(_, u)| u.live).collect();
