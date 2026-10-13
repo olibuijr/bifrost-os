@@ -121,6 +121,10 @@ impl Shell {
 }
 #[cfg(feature="desktop-wayland")]
 impl Shell {
+    /// Advance width of a bar label (`Ui::measure`), from the chrome text cache: the bar lays its menus out on every frame.
+    pub(super) fn measure_chrome(&self,text:&str,pt:f32,weight:Weight)->f32 {self.chrome_text.borrow_mut().width(&self.ui,text,pt,weight)}
+    /// A bar label fitted into `max_px` (`Ui::fit`), from the chrome text cache.
+    pub(super) fn fit_chrome(&self,text:&str,pt:f32,max_px:f32)->String {self.chrome_text.borrow_mut().fit(&self.ui,text,pt,max_px)}
     fn foreign_active(&self)->Option<u32> {
         self.desk.as_ref().and_then(|d|d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).find(|w|w.active).map(|w|w.id))
     }
@@ -157,33 +161,33 @@ impl Shell {
     pub(super) fn menu_buttons(&self)->Vec<(Menu,f32,f32,String)> {
         let mut buttons=vec![(Menu::System,self.ui.pt(6.),self.ui.pt(SYSTEM_MENU_PT),String::from("system"))];let mut x=self.ui.pt(6.+SYSTEM_MENU_PT);
         let name=self.app_menu_name();
-        let name=self.ui.fit(&name,13.,self.ui.pt(160.));
+        let name=self.fit_chrome(&name,13.,self.ui.pt(160.));
         // the order of the Golden Gate menu bar: App, File, Edit, View, Window, then Help at the trailing end
         // the app's own menus follow its name menu (`NativeApp.mainMenu`), before the shell's File, Edit, View, Window and Help
         let mut bar:Vec<(Menu,String)>=vec![(Menu::App,name.clone())];
-        bar.extend(self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title).is_none()).map(|(i,m)|(Menu::Custom(i as u8),self.ui.fit(&m.title,13.,self.ui.pt(120.)))));
+        bar.extend(self.app_menus().iter().enumerate().filter(|(_,m)|shell_menu(&m.title).is_none()).map(|(i,m)|(Menu::Custom(i as u8),self.fit_chrome(&m.title,13.,self.ui.pt(120.)))));
         bar.extend([(Menu::File,"File"),(Menu::Edit,"Edit"),(Menu::View,"View"),(Menu::Window,"Window"),(Menu::Help,"Help")].map(|(m,l)|(m,l.to_string())));
         for (kind,label) in bar.iter().map(|(k,l)|(*k,l.as_str())) {
-            let width=self.ui.measure(label,13.,Weight::Semibold)+self.ui.pt(24.);buttons.push((kind,x,width,label.into()));x+=width;
+            let width=self.measure_chrome(label,13.,Weight::Semibold)+self.ui.pt(24.);buttons.push((kind,x,width,label.into()));x+=width;
         }
         let network=self.info.desktop_network.as_ref();let wired=network.is_some_and(|n|n.interfaces.iter().any(|i|i.kind=="ethernet"&&i.connected()));
-        let nw=self.ui.pt(STATUS_ICON_PT);let pw=self.ui.pt(STATUS_ICON_PT);let clock=self.ui.measure(&self.clock_text(),12.,Weight::Medium);let right=self.w as f32-self.ui.pt(16.)-clock-self.ui.pt(2.);
+        let nw=self.ui.pt(STATUS_ICON_PT);let pw=self.ui.pt(STATUS_ICON_PT);let clock=self.measure_chrome(&self.clock_text(),12.,Weight::Medium);let right=self.w as f32-self.ui.pt(16.)-clock-self.ui.pt(2.);
         // Golden Gate menu extras, placed from the clock leftwards: Control Center, Wi-Fi or ethernet, battery or power; an item that would run into the app menus is left out
         let limit=x+self.ui.pt(8.);let mut edge=right;let mut tail=Vec::new();
         // the owner's CPU and RAM readouts sit left of the system extras (like iStat Menus), dropped first when space runs out
         let cpu=format!("CPU {:.0}%",self.desktop_metrics.cpu);let memory=format!("RAM {:.0}%",self.desktop_metrics.memory_percent());
-        let cw=self.ui.measure(&cpu,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);let mw=self.ui.measure(&memory,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);
+        let cw=self.measure_chrome(&cpu,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);let mw=self.measure_chrome(&memory,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);
         // the input source sits left of Control Center (the extras are placed from the clock leftwards)
-        let source=super::kb_layouts::active().short_name();let input=self.ui.measure(source,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);
+        let source=super::kb_layouts::active().short_name();let input=self.measure_chrome(source,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);
         let mut extras=vec![(Menu::ControlCenter,self.ui.pt(STATUS_ICON_PT),String::from("control")),(Menu::Input,input,source.to_string()),(Menu::Network,nw,if wired {"ethernet"}else{"wifi"}.into()),(Menu::Power,pw,String::from("power")),(Menu::Memory,mw,memory),(Menu::Cpu,cw,cpu)];
         // the recording stop item sits left of Control Center while a screen recording runs
         if self.recording_active() {extras.insert(1,(Menu::Recording,self.ui.pt(STATUS_ICON_PT),String::from("stop")));}
         // the Bluetooth extra sits left of Wi-Fi, once the radio exists (it stays hidden without a controller)
         if self.info.bt.state!=crate::bare::bluetooth::State::Unavailable {extras.insert(2,(Menu::Bluetooth,self.ui.pt(STATUS_ICON_PT),String::from("bluetooth")));}
         // the Now Playing extra sits left of the system extras while an app has a session, and right of the app extras
-        if let Some(p)=super::now_playing_menu::panel(){let label=self.ui.fit(&p.label,12.,self.ui.pt(160.));let w=self.ui.measure(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::NowPlaying,w,label));}
+        if let Some(p)=super::now_playing_menu::panel(){let label=self.fit_chrome(&p.label,12.,self.ui.pt(160.));let w=self.measure_chrome(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::NowPlaying,w,label));}
         // menu extras of running apps (`NativeStatusItem`) sit left of the system extras; an empty title shows the app's initial
-        for (i,e) in self.status_entries_now().iter().enumerate() {let label=if e.title.is_empty(){super::apphost::installed().get(e.slot as usize).and_then(|a|a.manifest.name.chars().next()).unwrap_or('•').to_string()}else{e.title.clone()};let w=self.ui.measure(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::Status(i as u8),w,label));}
+        for (i,e) in self.status_entries_now().iter().enumerate() {let label=if e.title.is_empty(){super::apphost::installed().get(e.slot as usize).and_then(|a|a.manifest.name.chars().next()).unwrap_or('•').to_string()}else{e.title.clone()};let w=self.measure_chrome(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::Status(i as u8),w,label));}
         for (menu,width,label) in extras {
             if !self.menu_extra_shown(menu){continue;}
             if edge-width<limit {break;}
@@ -255,7 +259,7 @@ impl Shell {
             // View holds the Dock's display options (also in the Dock menu), as Files and Mail keep theirs in View
             Menu::View=>{use super::desktop_dock::Change;let autohide=self.desk.as_ref().is_some_and(|d|d.dock_preferences.autohide);let mut v=vec![Row::action(format!("{} Automatically Hide Dock",if autohide{"✓"}else{" "}),Action::Dock(Change::Autohide)),Row::action("Smaller Icons",Action::Dock(Change::Size(-8.))),Row::action("Larger Icons",Action::Dock(Change::Size(8.)))];if self.term_front(){v.splice(0..0,[Row::action("Actual Size",Action::Term(TermKey::ActualSize)).key("cmd+0"),Row::action("Bigger",Action::Term(TermKey::Bigger)).key("cmd+="),Row::action("Smaller",Action::Term(TermKey::Smaller)).key("cmd+-"),Row::separator()]);}v},
             // Window: Minimize and Zoom (also in File), Bring All to Front, then every open window by name, the front one checked
-            Menu::Window=>{let Some(d)=self.desk.as_ref() else{return Vec::new();};let enabled=self.foreign_active().is_some()||d.front().is_some();let front=d.front().map(|w|w.app);let mut rows=vec![(if enabled{Row::action("Minimize",Action::Minimize)}else{Row::label("Minimize")}).key("cmd+m"),if enabled{Row::action("Zoom",Action::Zoom)}else{Row::label("Zoom")},Row::separator(),if d.wins.iter().any(|w|w.minimized){Row::action("Bring All to Front",Action::ShowAll)}else{Row::label("Bring All to Front")},Row::action("Show Desktop",Action::Desktop)];let tile_on=self.foreign_active().is_none()&&d.front().is_some();rows.push(Row::separator());rows.extend([("Left Half",super::desk::Tile::Left,"ctrl+cmd+left"),("Right Half",super::desk::Tile::Right,"ctrl+cmd+right"),("Fill",super::desk::Tile::Fill,"ctrl+cmd+up"),("Center",super::desk::Tile::Center,"ctrl+cmd+down")].map(|(l,t,k)|if tile_on&&(t==super::desk::Tile::Fill||!super::desk::compositor_places_windows()){Row::action(l,Action::Tile(t)).key(k)}else{Row::label(l).key(k)}));rows.push(if tile_on{Row::action("Return to Previous Size",Action::RestoreSize)}else{Row::label("Return to Previous Size")});rows.push(if d.wins.len()>=2{Row::action("Next Window",Action::CycleWindow).key("cmd+`")}else{Row::label("Next Window")});let mut open:Vec<(String,super::AppId)>=d.wins.iter().map(|w|(super::apps().iter().find(|a|a.id==w.app).map(|a|a.name).unwrap_or("Window").to_string(),w.app)).collect();open.sort_by_key(|(name,_)|name.to_lowercase());let foreign:Vec<&crate::bare::wayland::ForeignWindow>=d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).collect();if !open.is_empty()||!foreign.is_empty(){rows.push(Row::separator());}rows.extend(open.into_iter().take(12).map(|(name,app)|Row::action(format!("{} {}",if front==Some(app)&&self.foreign_active().is_none(){"✓"}else{" "},name),Action::Open(app))));rows.extend(foreign.into_iter().take(12).map(|w|Row::action(format!("{} {}",if w.active{"✓"}else{" "},self.ui.fit(if w.title.is_empty(){w.app_id.as_str()}else{w.title.as_str()},13.,self.ui.pt(300.))),Action::Foreign(w.id))));rows},
+            Menu::Window=>{let Some(d)=self.desk.as_ref() else{return Vec::new();};let enabled=self.foreign_active().is_some()||d.front().is_some();let front=d.front().map(|w|w.app);let mut rows=vec![(if enabled{Row::action("Minimize",Action::Minimize)}else{Row::label("Minimize")}).key("cmd+m"),if enabled{Row::action("Zoom",Action::Zoom)}else{Row::label("Zoom")},Row::separator(),if d.wins.iter().any(|w|w.minimized){Row::action("Bring All to Front",Action::ShowAll)}else{Row::label("Bring All to Front")},Row::action("Show Desktop",Action::Desktop)];let tile_on=self.foreign_active().is_none()&&d.front().is_some();rows.push(Row::separator());rows.extend([("Left Half",super::desk::Tile::Left,"ctrl+cmd+left"),("Right Half",super::desk::Tile::Right,"ctrl+cmd+right"),("Fill",super::desk::Tile::Fill,"ctrl+cmd+up"),("Center",super::desk::Tile::Center,"ctrl+cmd+down")].map(|(l,t,k)|if tile_on&&(t==super::desk::Tile::Fill||!super::desk::compositor_places_windows()){Row::action(l,Action::Tile(t)).key(k)}else{Row::label(l).key(k)}));rows.push(if tile_on{Row::action("Return to Previous Size",Action::RestoreSize)}else{Row::label("Return to Previous Size")});rows.push(if d.wins.len()>=2{Row::action("Next Window",Action::CycleWindow).key("cmd+`")}else{Row::label("Next Window")});let mut open:Vec<(String,super::AppId)>=d.wins.iter().map(|w|(super::apps().iter().find(|a|a.id==w.app).map(|a|a.name).unwrap_or("Window").to_string(),w.app)).collect();open.sort_by_key(|(name,_)|name.to_lowercase());let foreign:Vec<&crate::bare::wayland::ForeignWindow>=d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).collect();if !open.is_empty()||!foreign.is_empty(){rows.push(Row::separator());}rows.extend(open.into_iter().take(12).map(|(name,app)|Row::action(format!("{} {}",if front==Some(app)&&self.foreign_active().is_none(){"✓"}else{" "},name),Action::Open(app))));rows.extend(foreign.into_iter().take(12).map(|w|Row::action(format!("{} {}",if w.active{"✓"}else{" "},self.fit_chrome(if w.title.is_empty(){w.app_id.as_str()}else{w.title.as_str()},13.,self.ui.pt(300.))),Action::Foreign(w.id))));rows},
             Menu::File=>{let enabled=self.foreign_active().is_some()||self.desk.as_ref().and_then(|d|d.front()).is_some();let mut rows=vec![(if enabled{Row::action("Close Window",Action::Close)}else{Row::label("Close Window")}).key("cmd+w"),(if enabled{Row::action("Minimize Window",Action::Minimize)}else{Row::label("Minimize Window")}).key("cmd+m"),if enabled {Row::action("Maximize / Restore Window",Action::Zoom)}else{Row::label("Maximize / Restore Window")}];if self.term_front(){rows.splice(0..0,[Row::action("New Tab",Action::Term(TermKey::NewTab)).key("cmd+t"),Row::separator()]);rows[2]=Row::action("Close Tab",Action::Term(TermKey::CloseTab)).key("cmd+w");}if self.foreign_active().is_none(){rows.push(Row::separator());rows.push((if enabled{Row::action("Print\u{2026}",Action::Print)}else{Row::label("Print\u{2026}")}).key("cmd+p"));}rows},
             // Undo and Redo first, as in every Golden Gate Edit menu. Native Linux apps get the shortcut (Ctrl+key); Redo has no
             // single key, so it stays a disabled label for them.
@@ -349,7 +353,7 @@ impl Shell {
     pub(super) fn clock_text(&self)->String {self.clock_style.text(self.info.wday,self.info.mday,self.info.mon,self.info.hour,self.info.min)}
     /// The date and time at the right end of the bar; a tap toggles Notification Center.
     fn clock_hit(&self,x:f32,y:f32)->bool {
-        let width=self.ui.measure(&self.clock_text(),12.,Weight::Medium);let left=self.w as f32-self.ui.pt(16.)-width;
+        let width=self.measure_chrome(&self.clock_text(),12.,Weight::Medium);let left=self.w as f32-self.ui.pt(16.)-width;
         y<self.desktop_bar_height() as f32&&x>=left-self.ui.pt(8.)&&x<self.w as f32
     }
     pub(super) fn draw_desktop_popup(&self,s:&mut Surface) {
@@ -406,7 +410,7 @@ impl Shell {
         let width=self.menu_width_measured(rows);self.desktop_menu_width.set(Some((key,width)));width
     }
     fn menu_width_measured(&self,rows:&[Row])->usize {
-        let lead=if rows.iter().any(|r|r.symbol.is_some()){self.ui.pt(20.)}else{0.};let need=rows.iter().map(|r|{let t=self.ui.measure(&r.text,13.,Weight::Regular);let k=r.key.as_ref().map_or(0.,|k|self.ui.pt(24.)+self.ui.measure(&shortcut_spaced(k),13.,Weight::Regular));t+k}).fold(0.,f32::max)+self.ui.pt(32.)+lead;
+        let lead=if rows.iter().any(|r|r.symbol.is_some()){self.ui.pt(20.)}else{0.};let need=rows.iter().map(|r|{let t=self.measure_chrome(&r.text,13.,Weight::Regular);let k=r.key.as_ref().map_or(0.,|k|self.ui.pt(24.)+self.measure_chrome(&shortcut_spaced(k),13.,Weight::Regular));t+k}).fold(0.,f32::max)+self.ui.pt(32.)+lead;
         need.max(self.ui.pt(264.)).ceil() as usize
     }
     /// The row under `rel` px below the popup's top edge (separators count as rows, but have no action).
@@ -681,6 +685,20 @@ mod menu_damage_tests {
 fn panel_overlay_rect((x,y,w,h):(f32,f32,f32,f32),g:f32)->(usize,usize,usize,usize) {
     let (x0,y0)=((x-g).max(0.),(y-g).max(0.));
     (x0 as usize,y0 as usize,(x+w+g-x0).max(0.).ceil() as usize,(y+h+g-y0).max(0.).ceil() as usize)
+}
+
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod chrome_cache_tests {
+    use crate::shell::ui::Weight;
+
+    #[test]
+    fn the_bar_lays_out_from_cached_widths_the_same_way_twice() {
+        let sh = crate::shell::tests::desktop_shell();
+        let first = sh.menu_buttons();
+        assert_eq!(first, sh.menu_buttons(), "a frame that lays the bar out again gets the same menus");
+        assert_eq!(sh.measure_chrome("Control", 13.0, Weight::Semibold), sh.ui.measure("Control", 13.0, Weight::Semibold));
+        assert_eq!(sh.fit_chrome("a very long network name indeed", 13.0, 40.0), sh.ui.fit("a very long network name indeed", 13.0, 40.0));
+    }
 }
 
 #[cfg(test)]

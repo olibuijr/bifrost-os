@@ -65,6 +65,12 @@ pub struct TextCache {
     emoji_gen: u32,
     /// `Ui::text_epoch()` the entries were rendered under
     epoch: u64,
+    /// advance widths (`Ui::measure`) per (pt bits, weight) -> text -> px
+    widths: HashMap<(u32, u8), HashMap<String, f32>>,
+    /// fitted strings (`Ui::fit`) per (pt bits, max px bits) -> text -> fitted text
+    fits: HashMap<(u32, u32), HashMap<String, String>>,
+    /// widths and fits held, bounded like the images
+    metrics: usize,
 }
 
 impl Default for TextCache {
@@ -72,6 +78,9 @@ impl Default for TextCache {
         TextCache::with_budget(DEFAULT_BUDGET)
     }
 }
+
+/// Widths and fits kept before they start over; they are cheap, so there are more of them.
+const MAX_METRICS: usize = 2048;
 
 impl TextCache {
     /// An empty cache holding at most `bytes` of pixels.
@@ -99,8 +108,8 @@ impl TextCache {
         self.budget / 2
     }
 
-    /// `text` at `pt` points in `weight` and `color`, rendering on a miss.
-    pub fn get(&mut self, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32) -> &Image {
+    /// Drops the entries rendered under another emoji font or Dynamic Type, bold or contrast setting.
+    fn sync(&mut self, ui: &Ui) {
         // a reloaded emoji font invalidates every cached image that may hold emoji
         let g = crate::emoji::generation();
         let epoch = ui.text_epoch();
@@ -109,6 +118,48 @@ impl TextCache {
             self.epoch = epoch;
             self.clear();
         }
+    }
+
+    /// `Ui::measure` of `text`, memoised: a bar or a menu that lays out its labels every frame shapes each one once.
+    pub fn width(&mut self, ui: &Ui, text: &str, pt: f32, weight: Weight) -> f32 {
+        self.sync(ui);
+        let style = (pt.to_bits(), weight as u8);
+        if let Some(&w) = self.widths.get(&style).and_then(|m| m.get(text)) {
+            return w;
+        }
+        let w = ui.measure(text, pt, weight);
+        self.room_for_metric();
+        self.widths.entry(style).or_default().insert(text.to_string(), w);
+        self.metrics += 1;
+        w
+    }
+
+    /// `Ui::fit` of `text` into `max_px`, memoised like `width`.
+    pub fn fit(&mut self, ui: &Ui, text: &str, pt: f32, max_px: f32) -> String {
+        self.sync(ui);
+        let style = (pt.to_bits(), max_px.to_bits());
+        if let Some(s) = self.fits.get(&style).and_then(|m| m.get(text)) {
+            return s.clone();
+        }
+        let s = ui.fit(text, pt, max_px);
+        self.room_for_metric();
+        self.fits.entry(style).or_default().insert(text.to_string(), s.clone());
+        self.metrics += 1;
+        s
+    }
+
+    /// Starts the widths and fits over once they fill up.
+    fn room_for_metric(&mut self) {
+        if self.metrics >= MAX_METRICS {
+            self.widths.clear();
+            self.fits.clear();
+            self.metrics = 0;
+        }
+    }
+
+    /// `text` at `pt` points in `weight` and `color`, rendering on a miss.
+    pub fn get(&mut self, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32) -> &Image {
+        self.sync(ui);
         let style = ((pt * 10.0) as u32, weight as u8, color);
         if self.young.get(style, text).is_none() {
             let img = match self.old.take(style, text) {
@@ -151,6 +202,9 @@ impl TextCache {
     pub fn clear(&mut self) {
         self.young = Generation::default();
         self.old = Generation::default();
+        self.widths.clear();
+        self.fits.clear();
+        self.metrics = 0;
     }
 
     pub fn len(&self) -> usize {
@@ -223,6 +277,37 @@ mod tests {
         let mut s = Surface { w: 600, h: 80, stride: 600, px: &mut buf, y0: 0 };
         let w = c.draw_chars(&mut s, &ui, "0123", 30.0, Weight::Bold, WHITE, 10.0, 5.0);
         assert!((w - ui.measure("0123", 30.0, Weight::Bold)).abs() < 0.01);
+    }
+
+    #[test]
+    fn widths_and_fits_match_the_ui_and_are_remembered() {
+        let _emoji = crate::tests::emoji_lock();
+        let ui = crate::tests::ui();
+        let mut c = TextCache::default();
+        let w = c.width(&ui, "Wi-Fi", 13.0, Weight::Semibold);
+        assert_eq!(w, ui.measure("Wi-Fi", 13.0, Weight::Semibold));
+        assert_eq!(c.width(&ui, "Wi-Fi", 13.0, Weight::Semibold), w);
+        assert_eq!(c.metrics, 1, "the second width is a hit");
+        let fit = c.fit(&ui, "a very long network name indeed", 13.0, 40.0);
+        assert_eq!(fit, ui.fit("a very long network name indeed", 13.0, 40.0));
+        assert_eq!(c.fit(&ui, "a very long network name indeed", 13.0, 40.0), fit);
+        assert_eq!(c.metrics, 3);
+        assert_eq!(c.len(), 0, "widths and fits leave the images alone");
+    }
+
+    #[test]
+    fn widths_follow_dynamic_type_and_the_metric_cache_is_bounded() {
+        let _emoji = crate::tests::emoji_lock();
+        let mut ui = crate::tests::ui();
+        let mut c = TextCache::default();
+        let normal = c.width(&ui, "Settings", 13.0, Weight::Regular);
+        ui.text_scale = 1.5;
+        let larger = c.width(&ui, "Settings", 13.0, Weight::Regular);
+        assert!(larger > normal, "Dynamic Type must not serve the old width ({larger} vs {normal})");
+        for i in 0..MAX_METRICS + 10 {
+            c.width(&ui, &i.to_string(), 12.0, Weight::Regular);
+        }
+        assert!(c.metrics <= MAX_METRICS);
     }
 
     #[test]
