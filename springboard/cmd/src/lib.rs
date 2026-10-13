@@ -15,6 +15,7 @@ pub mod mdutil;
 pub mod hdiutil;
 pub mod iconutil;
 pub mod open;
+pub mod plistbuddy;
 pub mod plutil;
 pub mod pasteboard;
 pub mod pmset;
