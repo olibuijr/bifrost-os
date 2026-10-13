@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "Date & Time page (datetime_page.rs)",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DateTimeIntentsExtension.appex",
@@ -39,11 +38,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DesktopSettings.appex",
@@ -61,10 +59,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "Desktop & Dock page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DesktopSettingsIntents.appex",
@@ -81,11 +78,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DisplaysExt.appex",
@@ -103,10 +99,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "Displays page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DisplaysSettingsIntentsExtension.appex",
@@ -123,11 +118,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/FaceTimeNotificationExtension.appex",
@@ -144,11 +138,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple calling service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/FamilySettings.appex",
@@ -165,11 +158,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Family Sharing service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/FocusSettingsExtension.appex",
@@ -186,11 +178,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/focus.rs",
+   "status": "partial",
+   "note": "Focus modes",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/FollowUpSettingsExtension.appex",
@@ -207,11 +198,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no follow-up reminders settings",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/DateAndTime.prefPane",
@@ -229,10 +219,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "Date & Time page (datetime_page.rs)",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/DesktopScreenEffectsPref.prefPane",
@@ -249,11 +238,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/screensaver.rs",
+   "status": "partial",
+   "note": "screen saver and desktop effects",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/DigiHubDiscs.prefPane",
@@ -270,11 +258,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "optical disc media settings, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Displays.prefPane",
@@ -293,9 +280,8 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Displays page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Dock.prefPane",
@@ -314,9 +300,8 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Desktop & Dock page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/EnergySaver.prefPane",
@@ -334,10 +319,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "Energy page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/EnergySaverPref.prefPane",
@@ -355,10 +339,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "Energy page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Expose.prefPane",
@@ -375,11 +358,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/overview.rs",
+   "status": "partial",
+   "note": "Overview and hot corners",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Extensions.prefPane",
@@ -396,11 +378,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no extension manager page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/FamilySharingPrefPane.prefPane",
@@ -417,11 +398,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Family Sharing service",
+   "rea": []
   }
  ]
 }

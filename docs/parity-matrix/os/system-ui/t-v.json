@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Wallet ticket viewer",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/TextInputMenuAgent.app",
@@ -39,11 +38,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/kb_layouts.rs",
+   "status": "partial",
+   "note": "keyboard layouts and input menu",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/TextInputSwitcher.app",
@@ -60,11 +58,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/kb_layouts.rs",
+   "status": "partial",
+   "note": "input source switching",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/ThermalTrap.app",
@@ -82,10 +79,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "os",
+   "note": "thermal event trap, the Linux kernel manages thermal control",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/TipsSpotlightHandler.app",
@@ -104,9 +100,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no tips app",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/UIKitSystem.app",
@@ -124,10 +119,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "iOS UI kit system service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/UniversalAccessControl.app",
@@ -144,11 +138,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/accessibility/mod.rs",
+   "status": "partial",
+   "note": "accessibility controls",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/UniversalControl.app",
@@ -167,9 +160,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "cross-device control, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/UnmountAssistantAgent.app",
@@ -187,10 +179,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "os",
+   "note": "unmount assistant, the Linux base unmounts volumes",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/UserNotificationCenter.app",
@@ -207,11 +198,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/usernotif.rs",
+   "status": "partial",
+   "note": "user notifications",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/VoiceOver.app",
@@ -228,11 +218,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/atspi/mod.rs",
+   "status": "partial",
+   "note": "AT-SPI bridge, screen reader support",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TGOnDeviceInferenceProviderService.appex",
@@ -250,10 +239,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TestFileGeneratorDE.appex",
@@ -271,10 +259,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple internal test tool",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TextThumbnailExtension.appex",
@@ -293,9 +280,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TransferResetExtension.appex",
@@ -313,10 +299,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple device transfer",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TransferResetIntentsExtension.appex",
@@ -335,9 +320,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TranslationAPIExtension.appex",
@@ -356,9 +340,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TranslationAPISupportExtension.appex",
@@ -377,9 +360,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/TranslationAppIntentsExtension.appex",
@@ -398,9 +380,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/USDAppIntents.appex",
@@ -419,9 +400,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/UnilogAnalytics.appex",
@@ -439,10 +419,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/UnilogTelemetryWorker.appex",
@@ -460,10 +439,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/VPN.appex",
@@ -480,11 +458,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "VPN page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/VPNAppIntentWidgetExtension.appex",
@@ -503,9 +480,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Ventura.appex",
@@ -523,10 +499,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Vermillion.appex",
@@ -544,10 +519,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/VisionAppIntents.appex",
@@ -566,9 +540,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/VisionInferenceProvider.appex",
@@ -586,10 +559,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/VisualGenerationInference.appex",
@@ -607,10 +579,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   }
  ]
 }

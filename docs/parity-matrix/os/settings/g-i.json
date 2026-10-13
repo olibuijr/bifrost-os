@@ -18,11 +18,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Game Center service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GameCenterSettingsDeviceExpertExtension.appex",
@@ -39,11 +38,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Game Center service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GameCenterSettingsSearchExtension.appex",
@@ -60,11 +58,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Game Center service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GameControllerMacSettings.appex",
@@ -81,11 +78,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/game_controllers_page.rs",
+   "status": "partial",
+   "note": "game controller settings",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GameControllerSettingsIntents.appex",
@@ -102,11 +98,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/game_controllers_page.rs",
+   "status": "partial",
+   "note": "game controller settings",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GeneralSettings.appex",
@@ -124,10 +119,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "General page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GenerativePartnerSettingsExtension.appex",
@@ -144,11 +138,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple generative service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/HeadphoneSettingsExtension.appex",
@@ -165,11 +158,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no headphone settings page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/HomePrivacySettingsExtension.appex",
@@ -186,11 +178,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple HomeKit privacy",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/InternationalSettingsExtension.appex",
@@ -208,10 +199,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "Language & Region page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/InternetAccountsSettingsExtension.appex",
@@ -228,11 +218,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no internet accounts page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/InternetAccounts.prefPane",
@@ -249,11 +238,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no internet accounts page",
+   "rea": []
   }
  ]
 }

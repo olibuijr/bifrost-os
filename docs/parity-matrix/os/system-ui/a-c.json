@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple pane launcher, the Settings app covers it",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/AVB Configuration.app",
@@ -40,10 +39,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple audio video bridging hardware configuration",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Accessibility Reader.app",
@@ -60,11 +58,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/accessibility/reader.rs",
+   "status": "partial",
+   "note": "reader view",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/AccessibilityUIServer.app",
@@ -81,11 +78,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/accessibility/mod.rs",
+   "status": "partial",
+   "note": "accessibility tree and actions",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/AddPrinter.app",
@@ -104,9 +100,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/AddressBookUrlForwarder.app",
@@ -124,10 +119,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Contacts URL handler",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/AirDropUI.app",
@@ -145,10 +139,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple device-to-device sharing protocol",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/AirPlayUIAgent.app",
@@ -167,9 +160,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no AirPlay receiver",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Apple Diagnostics.app",
@@ -187,10 +179,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple hardware diagnostics",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/AppleScript Utility.app",
@@ -208,10 +199,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "AppleScript runtime",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/AuthorizationPromptService.app",
@@ -228,11 +218,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/permission_sheet.rs",
+   "status": "partial",
+   "note": "permission sheet in the shell",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Automator Application Stub.app",
@@ -250,10 +239,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Automator support, no Automator on PC",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Automator Installer.app",
@@ -271,10 +259,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Automator support, no Automator on PC",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Batteries.app",
@@ -291,11 +278,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/battery.rs",
+   "status": "partial",
+   "note": "battery status",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/BluetoothSetupAssistant.app",
@@ -314,9 +300,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no Bluetooth setup assistant",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/BluetoothUIServer.app",
@@ -333,11 +318,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/services/bluetooth_service.rs",
+   "status": "partial",
+   "note": "Bluetooth service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/BluetoothUIService.app",
@@ -354,11 +338,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/services/bluetooth_service.rs",
+   "status": "partial",
+   "note": "Bluetooth service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/CalendarFileHandler.app",
@@ -377,9 +360,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Captive Network Assistant.app",
@@ -398,9 +380,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Certificate Assistant.app",
@@ -419,9 +400,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/ClockAngel.app",
@@ -440,9 +420,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "clock screen saver, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/ControlCenter.app",
@@ -461,9 +440,8 @@
    "doc": "",
    "bifrost": "springboard/src/shell/control_center.rs",
    "status": "partial",
-   "note": "heuristic: shell counterpart by name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Control Centre",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/ControlStrip.app",
@@ -481,10 +459,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Touch Bar control strip",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/CoreLocationAgent.app",
@@ -501,11 +478,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/ui/src/location_auth.rs",
+   "status": "partial",
+   "note": "location authorisation",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/CoreServicesUIAgent.app",
@@ -524,9 +500,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Coverage Details.app",
@@ -544,10 +519,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AVCPlugin.appex",
@@ -566,9 +540,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AccessKey.appex",
@@ -587,9 +560,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AirDropHandoffExtension.appex",
@@ -607,10 +579,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AirDropHandoffIntentsExtension.appex",
@@ -629,9 +600,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AlarmIntentsExtension.appex",
@@ -650,9 +620,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Album Artwork.appex",
@@ -671,9 +640,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AlchemistInferenceProvider.appex",
@@ -691,10 +659,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AppExtensionManagement.appex",
@@ -713,9 +680,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no extension manager",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AppleIntelligenceReportingSELFIngestor.appex",
@@ -733,10 +699,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Arabesque.appex",
@@ -754,10 +719,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AskPermissionAskToResponseExtension.appex",
@@ -775,10 +739,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Family Sharing approvals",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AskToExtension.appex",
@@ -796,10 +759,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Family Sharing approvals",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AskToTestResponseUIExtension.appex",
@@ -817,10 +779,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Family Sharing approvals",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AskToViewExtension.appex",
@@ -838,10 +799,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Family Sharing approvals",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AssetMetrics.appex",
@@ -859,10 +819,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AssetMetricsExtension.appex",
@@ -880,10 +839,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AudioAppIntentsExtension.appex",
@@ -902,9 +860,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AudiovisualThumbnailExtension.appex",
@@ -923,9 +880,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/BiomeSELFIngestor.appex",
@@ -943,10 +899,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/BitacoraWorker.appex",
@@ -964,10 +919,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/BlackPowderInferenceExtension.appex",
@@ -985,10 +939,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/CalendarThumbnailExtension.appex",
@@ -1007,9 +960,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ChallengesMessageExtension.appex",
@@ -1027,10 +979,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Messages challenges",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ClassKitAppIntents.appex",
@@ -1049,9 +1000,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ClassroomDeviceExpert.appex",
@@ -1069,10 +1019,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ClippingsThumbnailExtension.appex",
@@ -1091,9 +1040,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/CloudWorker.appex",
@@ -1111,10 +1059,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ComposeReviewExtension.appex",
@@ -1132,10 +1079,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Mail compose review",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Computer Name.appex",
@@ -1154,9 +1100,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no computer name page; About page shows the name",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ConfigurationProfilesFollowUpExtension.appex",
@@ -1175,9 +1120,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no configuration profiles",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ContactThumbnailExtension.appex",
@@ -1196,9 +1140,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ContactsAppIntentsExtension.appex",
@@ -1217,9 +1160,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/CoreMotionFoundationModelExtension.appex",
@@ -1237,10 +1179,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple machine learning model service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/com.apple.fskit.exfat.appex",
@@ -1258,10 +1199,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "os",
+   "note": "filesystem extension, the Linux kernel provides the filesystem",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/com.apple.fskit.ftp.appex",
@@ -1279,10 +1219,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "os",
+   "note": "filesystem extension, no FSKit on PC",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/com.apple.fskit.msdos.appex",
@@ -1300,10 +1239,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "os",
+   "note": "filesystem extension, the Linux kernel provides the filesystem",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/com.apple.mlhost.SampleWorker.appex",
@@ -1321,10 +1259,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/com.apple.mlhost.TelemetryWorker.appex",
@@ -1342,10 +1279,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   }
  ]
 }

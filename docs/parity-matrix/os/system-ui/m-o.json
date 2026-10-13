@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "device management migration",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/MTLReplayer.app",
@@ -41,9 +40,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/ManagedClient.app",
@@ -62,9 +60,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/MediaRemoteUI.app",
@@ -81,11 +78,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/music/nowplaying.rs",
+   "status": "partial",
+   "note": "now playing",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/MediaRemoteUIService.app",
@@ -102,11 +98,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/services/now_playing.rs",
+   "status": "partial",
+   "note": "now playing service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Medical Imaging Calibrator.app",
@@ -124,10 +119,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple hardware display calibration",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Memory Slot Utility.app",
@@ -145,10 +139,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple hardware memory diagnostics",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/MenuBarAgent.app",
@@ -165,11 +158,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/desktop_bar.rs",
+   "status": "partial",
+   "note": "menu bar and menu extras",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/MusicRecognitionMac.app",
@@ -188,9 +180,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "song recognition, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/NetAuthAgent.app",
@@ -208,10 +199,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "os",
+   "note": "network authentication agent, the Linux base supplies 802.1X",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/NotificationCenter.app",
@@ -228,11 +218,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/notify/center.rs",
+   "status": "partial",
+   "note": "notification centre",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/NowPlayingTouchUI.app",
@@ -250,10 +239,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "touch-only now playing UI",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/OBEXAgent.app",
@@ -272,9 +260,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/OSDUIHelper.app",
@@ -291,11 +278,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/volume_hud.rs",
+   "status": "partial",
+   "note": "volume and brightness HUD",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MADViewServiceExtension.appex",
@@ -313,10 +299,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Maps view service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MKRemoteUI.appex",
@@ -334,10 +319,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Maps remote UI",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MacMailSearchLogProcessor.appex",
@@ -355,10 +339,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Mail search log",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MailDiagnosticExtension.appex",
@@ -376,10 +359,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Mail diagnostics",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MapsIntents.appex",
@@ -398,9 +380,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MediaMLExtension.appex",
@@ -418,10 +399,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MediaRemoteAppIntentsExtension.appex",
@@ -440,9 +420,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/MessagesAnalyticsWorker.appex",
@@ -460,10 +439,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Monterey.appex",
@@ -481,10 +459,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/NewDeviceOutreachIntents_macOS.appex",
@@ -502,10 +479,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple new device outreach",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/NullPoster.appex",
@@ -523,10 +499,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/OBCEngagePlugin.appex",
@@ -544,10 +519,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple diagnostics and telemetry",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ODDFeatureDigestsExtension.appex",
@@ -565,10 +539,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple diagnostics and telemetry",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ODDIExperimentationExtension.appex",
@@ -586,10 +559,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ODDIMetricsExtension.appex",
@@ -607,10 +579,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ODDIPoirotExperimentationExtension.appex",
@@ -628,10 +599,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ODDIPoirotMetricsExtension.appex",
@@ -649,10 +619,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/OfficeThumbnailExtension.appex",
@@ -671,9 +640,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   }
  ]
 }

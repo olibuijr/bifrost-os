@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Game Center service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/GameOverlayUI.app",
@@ -41,9 +40,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no game overlay",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/GameTrampoline.app",
@@ -62,9 +60,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/IOUIAgent.app",
@@ -82,10 +79,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "os",
+   "note": "IO device UI agent, the Linux base handles device prompts",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Image Events.app",
@@ -104,9 +100,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Install Command Line Developer Tools.app",
@@ -124,10 +119,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple developer tools installer",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Install in Progress.app",
@@ -146,9 +140,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "installer progress UI in the installer, not in the desktop",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Installer Progress.app",
@@ -167,9 +160,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "installer progress UI in the installer, not in the desktop",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Installer.app",
@@ -188,9 +180,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "the native installer is not a desktop component",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/iCloud+.app",
@@ -208,10 +199,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple iCloud service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/iCloud.app",
@@ -229,10 +219,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple iCloud service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GMSSELFIngestor.appex",
@@ -250,10 +239,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GPNonUIExtension.appex",
@@ -272,9 +260,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GPUIExtension.appex",
@@ -293,9 +280,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GameCenterDiagnosticExtension.appex",
@@ -313,10 +299,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GameCenterMessageExtension.appex",
@@ -334,10 +319,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GenerativeAssistantExtension.appex",
@@ -355,10 +339,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GenerativeExperiencesSafetyInferenceProvider.appex",
@@ -376,10 +359,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GenerativePartnerPrototypeExtension.appex",
@@ -397,10 +379,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GradientBackgroundPosterExtension.appex",
@@ -419,9 +400,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Hello.appex",
@@ -439,10 +419,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple onboarding",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/HomeAppIntentsExtension.appex",
@@ -461,9 +440,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/HostInferenceProviderService.appex",
@@ -481,10 +459,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/IFTelemetrySELFIngestor.appex",
@@ -502,10 +479,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/IFTranscriptSELFIngestor.appex",
@@ -523,10 +499,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ImageThumbnailExtension.appex",
@@ -545,9 +520,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/InferenceProviderService.appex",
@@ -565,10 +539,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/IntelligenceFlowAppIntentsExtension.appex",
@@ -587,9 +560,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/IntelligencePlatformDataActionsAppIntentsExtension.appex",
@@ -608,9 +580,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/iLifeSlideshows.appex",
@@ -628,10 +599,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple iLife slideshow",
+   "rea": []
   }
  ]
 }

@@ -18,11 +18,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no settings import from another system",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ScreenTimeAppIntentsExtension.appex",
@@ -39,11 +38,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ScreenTimePreferencesExtension.appex",
@@ -60,11 +58,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/screentime/page.rs",
+   "status": "partial",
+   "note": "Screen Time page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ScreenTimeSettingsResponseExtension.appex",
@@ -81,11 +78,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/screentime/page.rs",
+   "status": "partial",
+   "note": "Screen Time page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SecurityImprovementsExtension.appex",
@@ -102,11 +98,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "security improvements, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SecurityPrivacyExtension.appex",
@@ -124,10 +119,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "Privacy page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SecurityPrivacyIntentsExtension.appex",
@@ -144,11 +138,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SettingsSystemExtensionController.appex",
@@ -165,11 +158,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "settings controller, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Sharing.appex",
@@ -186,11 +178,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "gap",
+   "note": "the share sheet exists (shell/share); no sharing settings page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SharingIntents.appex",
@@ -207,11 +198,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriAttentionAndInvocationExtension.appex",
@@ -228,11 +218,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Siri invocation settings, no Siri settings page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriAutoEvalPlugin.appex",
@@ -249,11 +238,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Siri evaluation service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriCoreMetricsWorker.appex",
@@ -270,11 +258,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriCrisisAppIntentsExtension.appex",
@@ -291,11 +278,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriGeoAppIntentExtension.appex",
@@ -312,11 +298,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriInferenceRuntimeDiagnostics.appex",
@@ -333,11 +318,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriMessagesAppIntentsExtension.appex",
@@ -354,11 +338,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriNotebookAppIntentsExtension.appex",
@@ -375,11 +358,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriNotificationsAppIntentsExtension.appex",
@@ -396,11 +378,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriPhoneAppIntentsExtension.appex",
@@ -417,11 +398,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriPhotosAppIntentsExtension.appex",
@@ -438,11 +418,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriPlaybackControlAppIntentsExtension.appex",
@@ -459,11 +438,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriPreferenceExtension.appex",
@@ -480,11 +458,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "assistant app exists, no Siri settings page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriSetupSettingsIntents.appex",
@@ -501,11 +478,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriSuggestionsLightHousePlugin.appex",
@@ -522,11 +498,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Siri suggestions service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriTurnRestatementExtension.appex",
@@ -543,11 +518,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Siri settings, no Siri settings page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriUploadWorker.appex",
@@ -564,11 +538,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriUserSegmentation.appex",
@@ -585,11 +558,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Siri user segmentation service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SiriVideoAppIntents.appex",
@@ -606,11 +578,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SoftwareUpdateSettingsExtension.appex",
@@ -627,11 +598,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/update.rs",
+   "status": "partial",
+   "note": "Software Update",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SoftwareUpdateSettingsExtensionIntents.appex",
@@ -648,11 +618,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Sound.appex",
@@ -669,11 +638,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/sound_page.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Sound page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SoundIntentsExtension.appex",
@@ -690,11 +658,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SpotlightPreferenceExtension.appex",
@@ -711,11 +678,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "status": "partial",
+   "note": "search and index; no Spotlight settings page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SpotlightSettingsIntentsExtension.appex",
@@ -732,11 +698,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Storage.appex",
@@ -753,11 +718,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/storage_page.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Storage page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/StorageDESDXC.appex",
@@ -774,11 +738,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "encrypted disk settings, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/StorageDESSD.appex",
@@ -795,11 +758,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "encrypted disk settings, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/StorageSettingsIntentsExtension.appex",
@@ -816,11 +778,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/ScreenTime.prefPane",
@@ -837,11 +798,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/screentime/page.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Screen Time page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Security.prefPane",
@@ -860,9 +820,8 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Privacy page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/SharingPref.prefPane",
@@ -879,11 +838,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "the share sheet exists (shell/share); no sharing settings page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/SoftwareUpdate.prefPane",
@@ -900,11 +858,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/update.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Software Update",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Sound.prefPane",
@@ -921,11 +878,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/sound_page.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Sound page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Speech.prefPane",
@@ -942,11 +898,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no speech settings page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Spotlight.prefPane",
@@ -963,11 +918,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "status": "partial",
+   "note": "search and index; no Spotlight settings page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/StartupDisk.prefPane",
@@ -984,11 +938,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple boot picker, PC uses the firmware boot menu",
+   "rea": []
   }
  ]
 }

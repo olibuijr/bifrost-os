@@ -18,11 +18,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Wallet service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Wallpaper.appex",
@@ -39,11 +38,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/wallpaper_page.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Wallpaper page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperAerialsExtension.appex",
@@ -60,11 +58,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple streamed aerial video wallpapers",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperDynamicExtension.appex",
@@ -81,11 +78,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no dynamic wallpapers",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperGradientExtension.appex",
@@ -102,11 +98,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/wallpaper_page.rs",
+   "status": "partial",
+   "note": "Wallpaper page, gradients",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperImageExtension.appex",
@@ -123,11 +118,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/wallpaper_page.rs",
+   "status": "partial",
+   "note": "Wallpaper page, image wallpapers",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperLegacyExtension.appex",
@@ -144,11 +138,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Apple wallpaper resource bundle, inventory only",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperMacintoshExtension.appex",
@@ -165,11 +158,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Apple wallpaper resource bundle, inventory only",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperMontereyExtension.appex",
@@ -186,11 +178,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Apple wallpaper resource bundle, inventory only",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperSequoiaExtension.appex",
@@ -207,11 +198,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Apple wallpaper resource bundle, inventory only",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperSettingsIntents.appex",
@@ -228,11 +218,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperSonomaExtension.appex",
@@ -249,11 +238,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Apple wallpaper resource bundle, inventory only",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperVenturaExtension.appex",
@@ -270,11 +258,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Apple wallpaper resource bundle, inventory only",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WiFiMacSettingsIntents.appex",
@@ -291,11 +278,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Wi-Fi intents, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Wallet.prefPane",
@@ -312,11 +298,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Wallet service",
+   "rea": []
   }
  ]
 }

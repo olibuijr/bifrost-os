@@ -20,9 +20,8 @@
    "doc": "",
    "bifrost": "springboard/apps/weather-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Weather app",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Wireless Diagnostics.app",
@@ -41,9 +40,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no wireless diagnostics app",
+   "rea": []
   }
  ]
 }

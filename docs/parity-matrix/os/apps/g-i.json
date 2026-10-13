@@ -20,9 +20,8 @@
    "doc": "",
    "bifrost": "springboard/apps/games-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Games app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Home.app",
@@ -40,10 +39,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple HomeKit home app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Image Capture.app",
@@ -60,11 +58,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/camera/import.rs",
+   "status": "partial",
+   "note": "camera import, device image transfer",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Image Playground.app",
@@ -82,10 +79,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple generative image service",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Grapher.app",
@@ -104,9 +100,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no graphing app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/iPhone Mirroring.app",
@@ -124,10 +119,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "iPhone device mirroring",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/iOS App Installer.app",
@@ -145,10 +139,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "installs iOS apps on Apple silicon",
+   "rea": []
   }
  ]
 }

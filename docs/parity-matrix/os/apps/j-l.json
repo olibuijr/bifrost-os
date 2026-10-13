@@ -20,9 +20,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no journal app",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Keychain Access.app",
@@ -39,11 +38,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/keychain.rs",
+   "status": "partial",
+   "note": "keychain store, no keychain viewer app",
+   "rea": []
   }
  ]
 }

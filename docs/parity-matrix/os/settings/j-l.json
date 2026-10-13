@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "Keyboard page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/KeyboardSettingsIntents.appex",
@@ -39,11 +38,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LoginItems.appex",
@@ -60,11 +58,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/login_items_page.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Login Items page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LoginItemsIntentsExtension.appex",
@@ -81,11 +78,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Keyboard.prefPane",
@@ -104,9 +100,8 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Keyboard page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Localization.prefPane",
@@ -124,10 +119,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "Language & Region page",
+   "rea": []
   }
  ]
 }
