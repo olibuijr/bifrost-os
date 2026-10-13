@@ -182,7 +182,7 @@ pub fn fetch_pairs(untagged: &str) -> Option<(u32, Vec<(String, Value)>)> {
     Some((seq, pairs))
 }
 
-/// Parses untagged `SEARCH n n n` into message numbers (UIDs when the search was a `UID SEARCH`).
+/// Parses untagged `SEARCH n n n` into message numbers (UID values when the search was a `UID SEARCH`).
 pub fn parse_search(untagged: &str) -> Option<Vec<u32>> {
     let rest = untagged.strip_prefix("SEARCH")?;
     rest.split_whitespace().map(|n| n.parse().ok()).collect()
@@ -227,7 +227,7 @@ pub fn select(mailbox: &str) -> String {
     format!("SELECT {}", quote(mailbox))
 }
 
-/// Flags and UIDs for every message in the selected mailbox.
+/// Flags and UID values for every message in the selected mailbox.
 pub fn fetch_flags_all() -> String {
     "UID FETCH 1:* (UID FLAGS)".to_string()
 }

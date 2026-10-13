@@ -1,4 +1,7 @@
 # Changelog
+## 0.3.1 — 2026-10-13
+
+- Internal: IMAP UID comments reworded (UID values); no behaviour change.
 ## 0.3.0 — 2026-10-13
 
 - Live Mail: account setup sheet (password in the keychain), IMAP over TLS or STARTTLS for mailboxes, the newest
