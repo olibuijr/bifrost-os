@@ -4,6 +4,7 @@
 
 pub mod account;
 pub mod body;
+pub mod accounts;
 pub mod codec;
 pub mod draw;
 pub mod flags;

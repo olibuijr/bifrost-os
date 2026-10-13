@@ -306,6 +306,8 @@ pub struct Settings {
     pw_pending: Option<(String, String)>,
     /// the login whose password the Passwords page shows: site, account, password
     pw_revealed: Option<(String, String, String)>,
+    /// Settings > Internet Accounts: why the last change did not happen
+    ia_note: String,
     /// Screen Time: weekly chart shown, the Downtime row the time picker edits (true = From), and the passcode prompt guarding an edit
     st_weekly: bool,
     st_edge: Option<bool>,
@@ -462,6 +464,7 @@ impl Settings {
             alert: None,
             pw_pending: None,
             pw_revealed: None,
+            ia_note: String::new(),
             pressed: None,
             pressed_thumb: None,
             pressed_sheet: None,
@@ -577,6 +580,10 @@ impl Settings {
                 let revealed = self.pw_revealed.as_ref().map(|(site, account, password)| super::passwords_page::Shown { site: site.as_str(), account: account.as_str(), password: password.as_str() });
                 super::passwords_page::spec(&super::passwords_page::PageState { logins: &logins, revealed, offset: crate::bare::sys::wall_time().1, passcode_on })
             }
+            PageId::InternetAccounts => {
+                let accounts = super::internet_accounts_page::load();
+                super::internet_accounts_page::spec(&super::internet_accounts_page::PageState { accounts: &accounts, note: &self.ia_note })
+            }
             PageId::Diagnostics => {
                 let crashes = diag::load(&self.data_dir);
                 diagnostics_page::spec(&diagnostics_page::PageState { crashes: &crashes, offset: crate::bare::sys::wall_time().1, note: &self.diag_note, sharing: self.diag_rx.is_some() })
@@ -632,6 +639,33 @@ impl Settings {
             }
         }
         self.rebuild(ui);
+        vec![]
+    }
+
+    /// Settings > Internet Accounts: Add opens the first prompt of the flow; a service switch or Remove changes the
+    /// shared list at once. A change that fails shows its reason on the page.
+    fn ia_act(&mut self, ui: &Ui, act: super::internet_accounts_page::Act, t: f64) -> Vec<Effect> {
+        use super::internet_accounts_page::{self as ia, Act};
+        match act {
+            Act::Add(kind) => {
+                self.ia_note.clear();
+                self.sheet = Some(Sheet::form(ui, self.w, t, super::forms::Prompt::new_account_address(kind)));
+                return vec![];
+            }
+            Act::Toggle { id, service } => {
+                self.ia_note = match ia::list_path() {
+                    Ok(path) => ia::toggle(&path, &id, service).err().unwrap_or_default(),
+                    Err(e) => e,
+                };
+            }
+            Act::Remove { id } => {
+                self.ia_note = match ia::list_path() {
+                    Ok(path) => ia::remove(&path, &super::apphost::root(), &id).err().unwrap_or_default(),
+                    Err(e) => e,
+                };
+            }
+        }
+        self.rebuild_visible(ui);
         vec![]
     }
 
@@ -1029,7 +1063,7 @@ impl Settings {
         self.stack.truncate(usize::from(self.side_w == 0));
         for name in path.split('>') {
             let id = [Network, Wifi, Bluetooth, Sounds, Focus, Notifications, General, About, SoftwareUpdate, Storage, DateTime, Keyboard, Language, Fonts, Dictionary, DefaultApps, LoginItems,
-                HomeScreen, Battery, ControlCentre, MenuBar, Accessibility, Privacy, Passcode, Passwords, Developer, ScreenTime, Backup, Wallpaper, Nearby, NightShift, InterfaceScale, Graphics, AutoLock, Energy, Vpn, Legal,
+                HomeScreen, Battery, ControlCentre, MenuBar, Accessibility, Privacy, Passcode, Passwords, InternetAccounts, Developer, ScreenTime, Backup, Wallpaper, Nearby, NightShift, InterfaceScale, Graphics, AutoLock, Energy, Vpn, Legal,
                 BackgroundRefresh, Display, Appearance, Diagnostics, DisplayZoom, TouchHold]
             .into_iter()
             .find(|id| format!("{id:?}") == name);
@@ -1562,6 +1596,16 @@ impl Settings {
 
     /// A one-field prompt was submitted: privd gets the change, or the flow opens its next prompt.
     fn form_done(&mut self, ui: &Ui, purpose: &super::forms::Purpose, text: &str, t: f64) -> Vec<Effect> {
+        if super::internet_accounts_page::owns(purpose) {
+            let r = super::internet_accounts_page::list_path().and_then(|path| super::internet_accounts_page::finish(&path, &super::apphost::root(), purpose, text));
+            match r {
+                Ok(Some(next)) => self.sheet = Some(Sheet::form(ui, self.w, t, next)),
+                Ok(None) => self.ia_note.clear(),
+                Err(e) => self.ia_note = e,
+            }
+            self.rebuild_visible(ui);
+            return vec![];
+        }
         match super::users_page::finish(purpose, text) {
             Ok(Some(next)) => self.sheet = Some(Sheet::form(ui, self.w, t, next)),
             Ok(None) => self.users_note.clear(),
@@ -1891,6 +1935,7 @@ impl Settings {
                 vec![]
             }
             Action::Passwords(act) => self.passwords_act(ui, act),
+            Action::InternetAccounts(act) => self.ia_act(ui, act, t),
             Action::Pick(pick) => {
                 self.list_mut().expect("list").set_check(g, i);
                 match pick {
@@ -2858,6 +2903,7 @@ mod tests {
             (vec!["General", "Backup"], PageId::Backup),
             (vec!["Passcode"], PageId::Passcode),
             (vec!["Passwords"], PageId::Passwords),
+            (vec!["Internet Accounts"], PageId::InternetAccounts),
             (vec!["Developer"], PageId::Developer),
             (vec!["Wi-Fi", "Home"], PageId::WifiDetail),
         ];

@@ -2,6 +2,7 @@
 //! hosted through the SDK. The calendar itself is the library (`bifrost_calendar::calendar`).
 
 use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::controls::internet_accounts::Service;
 use bifrost_app::widgets_timeline;
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
 use bifrost_calendar::calendar::connect::{self, Connect, Snap};
@@ -15,6 +16,8 @@ struct CalendarApp {
     last_wall: f64,
     /// Shell services: alert requests, the Up Next timeline and the Dock badge.
     connect: Connect,
+    /// Internet Accounts: the CalDAV calendars switched on for Calendars are read in the background.
+    dav: bifrost_app::dav_sync::Sync,
 }
 
 /// Writes a phone number the editor asked to copy to the pasteboard.
@@ -182,11 +185,22 @@ impl App for CalendarApp {
                 ctx.notify(&alert.title, &alert.body);
             }
         }
+        // Internet Accounts: a finished CalDAV sync imports its calendar objects into the store.
+        if let Some(done) = self.dav.poll(ctx, t, now) {
+            if let Ok(texts) = done.result {
+                for text in &texts {
+                    let _ = c.import_ics(text);
+                }
+            }
+        }
         share_copy(c, ctx);
         c.tick(&ctx.ui, t)
     }
 
-    fn service_reply(&mut self, _ctx: &Ctx, _request: u32, result: &Result<Json, String>) -> bool {
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.dav.reply(request, result) {
+            return true;
+        }
         self.connect.on_reply(result);
         true
     }
@@ -221,5 +235,5 @@ impl App for CalendarApp {
 }
 
 fn main() {
-    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default() });
+    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default(), dav: bifrost_app::dav_sync::Sync::new(Service::Calendars) });
 }

@@ -2,6 +2,7 @@
 //! The sheet is the Wi-Fi password sheet drawn with a different title, label and validity rule (`Sheet::form`); the
 //! `Purpose` it carries says what the typed text is for and holds what earlier prompts of the same flow collected.
 use crate::privd::accounts;
+use bifrost_ui::internet_accounts::{self as shared, Kind};
 
 /// What a prompt's text is for.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -21,6 +22,12 @@ pub enum Purpose {
     NewGroup,
     /// Print & Scan: the device address of a printer to add (`ipp://`, `socket://`, `usb://`)
     PrinterAddress,
+    /// Internet Accounts step 1 of 3: the email address (mail) or the server URL (CalDAV, CardDAV)
+    NewAccountAddress { kind: Kind },
+    /// step 2: the user name of the account
+    NewAccountUser { kind: Kind, address: String },
+    /// step 3: the password, which is saved in Passwords when the account is added
+    NewAccountPassword { kind: Kind, address: String, username: String },
 }
 
 /// What the sheet shows.
@@ -70,6 +77,41 @@ impl Prompt {
         Prompt { max: 32, ..Prompt::new(Purpose::NewGroup, "New Group", "Lowercase letters, digits, hyphens and underscores.", "Name", "Add") }
     }
 
+    /// Internet Accounts step 1: the address of the account.
+    pub fn new_account_address(kind: Kind) -> Prompt {
+        let (title, message, label) = match kind {
+            Kind::Mail => ("Add Mail Account", "Enter the email address. The IMAP and SMTP servers are taken from its domain.", "Email Address"),
+            Kind::CalDav => ("Add Calendar Account", "Enter the CalDAV server address, such as https://dav.example.com/.", "Server Address"),
+            Kind::CardDav => ("Add Contacts Account", "Enter the CardDAV server address, such as https://dav.example.com/.", "Server Address"),
+        };
+        Prompt { max: 255, ..Prompt::new(Purpose::NewAccountAddress { kind }, title, message, label, "Next") }
+    }
+
+    /// Internet Accounts step 2: the user name. A mail account starts with its address.
+    pub fn new_account_user(kind: Kind, address: &str) -> Prompt {
+        let initial = if kind == Kind::Mail { address.to_string() } else { String::new() };
+        Prompt {
+            max: 128,
+            initial,
+            ..Prompt::new(Purpose::NewAccountUser { kind, address: address.to_string() }, "Add Account", "Enter the user name for the account.", "User Name", "Next")
+        }
+    }
+
+    /// Internet Accounts step 3: the password, kept in Passwords.
+    pub fn new_account_password(kind: Kind, address: &str, username: &str) -> Prompt {
+        Prompt {
+            secure: true,
+            max: 128,
+            ..Prompt::new(
+                Purpose::NewAccountPassword { kind, address: address.to_string(), username: username.to_string() },
+                "Add Account",
+                "Enter the password. It is saved in Passwords, not in the account list.",
+                "Password",
+                "Add",
+            )
+        }
+    }
+
     /// The prompt that follows `purpose` once `text` was accepted, when the flow has more steps.
     pub fn next(purpose: &Purpose, text: &str) -> Option<Prompt> {
         match purpose {
@@ -107,6 +149,10 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
         Purpose::NewUserName { .. } | Purpose::NewGroup => accounts::valid_user(text),
         Purpose::PrinterAddress => bifrost_ui::cups::valid_device_uri(text.trim()),
         Purpose::NewUserPassword { .. } | Purpose::ChangePassword { .. } | Purpose::CurrentPassword { .. } => accounts::valid_password(text),
+        Purpose::NewAccountAddress { kind: Kind::Mail } => shared::valid_address(text.trim()),
+        Purpose::NewAccountAddress { .. } => shared::valid_dav_url(text.trim()),
+        Purpose::NewAccountUser { .. } => !text.trim().is_empty() && !text.contains(['\r', '\n']),
+        Purpose::NewAccountPassword { .. } => !text.is_empty(),
     }
 }
 

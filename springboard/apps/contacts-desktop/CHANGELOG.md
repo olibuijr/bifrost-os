@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.8.0 — 2026-10-13
+
+- Internet Accounts: the CardDAV address books switched on for Contacts are read in the background and merged into the
+  contacts (a duplicate card is skipped). The password comes from the passwords group; the sync runs at start and every
+  15 minutes. The file import uses the same merge.
+
 ## 1.7.1 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

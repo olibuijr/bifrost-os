@@ -11,6 +11,7 @@ mod names;
 mod services;
 
 use bifrost_app::kit::{Damage, Event, Surface};
+use bifrost_app::controls::internet_accounts::Service;
 use bifrost_app::controls::Node;
 use bifrost_app::{App, AppMenu, Commands, Ctx, Input, KeyInput, TouchKind};
 use springboard::shell::keyboard::Out;
@@ -24,6 +25,8 @@ struct ContactsApp {
     index: services::SearchIndex,
     /// Copies waiting for the pasteboard's reply, by request id, with the contact's label for the status line.
     copies: BTreeMap<u32, String>,
+    /// Internet Accounts: the CardDAV address books switched on for Contacts are read in the background.
+    dav: bifrost_app::dav_sync::Sync,
 }
 
 impl ContactsApp {
@@ -139,6 +142,12 @@ impl App for ContactsApp {
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         self.sync_termination(ctx);
+        // Internet Accounts: a finished CardDAV sync merges its cards into the contacts.
+        if let Some(done) = self.dav.poll(ctx, t, bifrost_app::dav_sync::unix_now()) {
+            if let (Ok(texts), Some(c)) = (done.result, self.app.as_mut()) {
+                c.merge_card_texts(&ctx.ui, texts.into_iter().map(Some).collect());
+            }
+        }
         self.app.as_mut().is_some_and(|c| c.tick(&ctx.ui, t))
     }
 
@@ -153,6 +162,9 @@ impl App for ContactsApp {
     }
 
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
+        if self.dav.reply(request, result) {
+            return true;
+        }
         let Some(label) = self.copies.remove(&request) else { return false };
         if let Some(c) = &mut self.app {
             c.show_status(services::copy_reply_text(&label, result.is_ok()));
@@ -171,5 +183,11 @@ impl App for ContactsApp {
 }
 
 fn main() {
-    bifrost_app::run(ContactsApp { app: None, terminable: false, index: Default::default(), copies: BTreeMap::new() });
+    bifrost_app::run(ContactsApp {
+        app: None,
+        terminable: false,
+        index: Default::default(),
+        copies: BTreeMap::new(),
+        dav: bifrost_app::dav_sync::Sync::new(Service::Contacts),
+    });
 }

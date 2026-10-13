@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.12.0 — 2026-10-13
+
+- Internet Accounts: the CalDAV accounts switched on for Calendars are read in the background (discovery, then the events
+  of the last 31 days to the next year) and imported into the calendar. The password comes from the passwords group; the
+  sync runs at start and every 15 minutes. Reminders over CalDAV are not read yet.
+
 ## 1.11.2 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

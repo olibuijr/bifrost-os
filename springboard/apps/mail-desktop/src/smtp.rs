@@ -57,7 +57,7 @@ pub fn ehlo(domain: &str) -> String {
     format!("EHLO {domain}\r\n")
 }
 
-/// `MAIL FROM:<addr>`; the address must already be checked with [`crate::account::valid_address`].
+/// `MAIL FROM:<addr>`; the address must already be checked with [`bifrost_app::controls::internet_accounts::valid_address`].
 pub fn mail_from(addr: &str) -> String {
     format!("MAIL FROM:<{addr}>\r\n")
 }
