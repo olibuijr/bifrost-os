@@ -33,7 +33,7 @@
       "apple": "IOBluetoothObjectPushUIController: init(objectPushWith:withFiles:delegate:), init(objectPushWithBluetoothDevice:...), runModal, runPanel, beginSheetModal(for:...), stop, isTransferInProgress, getDevice, setIconImage, setTitle",
       "bifrost": "springboard/ui/src/object_push.rs",
       "status": "partial",
-      "note": "Wave 5 (theme-09, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Bluetooth OBEX object push. The nearby sharing path works over the local network only, so it has no Bluetooth transfer counterpart."
+      "note": "Wave 5 (theme-09, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Bluetooth OBEX object push. The nearby sharing path works over the local network only, so it has no Bluetooth transfer counterpart. round 75, host only: model; LAN only."
     },
     {
       "feature": "Passkey and confirmation display (IOBluetoothPasskeyDisplay)",

@@ -18,9 +18,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs; springboard/src/shell/pages.rs, settings.rs, kb_input.rs, options.rs",
    "status": "partial",
-   "note": "Keyboard page",
+   "note": "Keyboard page round 75, host only: Keyboard pane drives repeat, modifiers, function keys, shortcuts.",
    "rea": []
   },
   {
@@ -98,9 +98,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs; springboard/src/shell/pages.rs (PageId::Keyboard)",
    "status": "partial",
-   "note": "Keyboard page",
+   "note": "Keyboard page round 75, host only: same Keyboard page.",
    "rea": []
   },
   {

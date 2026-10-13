@@ -89,7 +89,7 @@
       "apple": "Switch Control (AccessibilityTechnology.switchControl)",
       "bifrost": "springboard/ui/src/switch_scan.rs",
       "status": "partial",
-      "note": "Wave 2 (accessibility, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No switch scanning code found in springboard/ (search for switch control and dwell returned nothing)."
+      "note": "Wave 2 (accessibility, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No switch scanning code found in springboard/ (search for switch control and dwell returned nothing). round 75, host only: scan model (Scanner), not yet wired to the shell."
     },
     {
       "feature": "Voice Control",
@@ -103,7 +103,7 @@
       "apple": "Accessibility Inspector developer tool",
       "bifrost": "springboard/ui/src/ax_audit.rs",
       "status": "partial",
-      "note": "Wave 2 (accessibility, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The element map in ui/src/ax.rs serves agents, not developers. No app-facing inspector shows an app's accessibility tree. The Web Inspector in springboard/apps/browser/src/inspector.rs covers web content only."
+      "note": "Wave 2 (accessibility, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The element map in ui/src/ax.rs serves agents, not developers. No app-facing inspector shows an app's accessibility tree. The Web Inspector in springboard/apps/browser/src/inspector.rs covers web content only. round 75, host only: audit checks (Audit::run), pure model."
     },
     {
       "feature": "Braille displays and Braille translation",

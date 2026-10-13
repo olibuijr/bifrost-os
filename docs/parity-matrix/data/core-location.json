@@ -45,9 +45,9 @@
     {
       "feature": "Region monitoring and conditions",
       "apple": "CLMonitor, CLCondition, CLRegion, Monitoring the user's proximity to geographic regions",
-      "bifrost": "springboard/ui/src/geofence.rs (CircularRegion",
+      "bifrost": "springboard/ui/src/geofence.rs (CircularRegion; springboard/ui/src/geofence.rs (CircularRegion, Condition, Monitor)",
       "status": "partial",
-      "note": "Wave 2 (core-location, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No geofence or condition monitor. docs/bifrost-ui.md (Notifications gaps paragraph) lists calendar and location triggers for notifications as not implemented."
+      "note": "Wave 2 (core-location, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No geofence or condition monitor. docs/bifrost-ui.md (Notifications gaps paragraph) lists calendar and location triggers for notifications as not implemented. round 75, host only: circular geofence monitor fed by the caller, no position source."
     },
     {
       "feature": "iBeacon ranging and broadcasting",

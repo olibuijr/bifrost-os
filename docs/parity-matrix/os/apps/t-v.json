@@ -38,9 +38,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no plain text editor app",
+   "bifrost": "springboard/apps/textedit-desktop",
+   "status": "partial",
+   "note": "no plain text editor app round 75, host only: rich text editing, spelling, print; was gap.",
    "rea": []
   },
   {

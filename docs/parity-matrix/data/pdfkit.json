@@ -24,9 +24,9 @@
     {
       "feature": "PDFDocument loading (URL, data)",
       "apple": "PDFDocument init(url:), init(data:), init()",
-      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs:300 (load(data: Vec<u8>) -> Result<Book, String>)",
+      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs:300 (load(data: Vec<u8>) -> Result<Book, String>); springboard/render/src/cg/pdf/doc.rs (Doc::open)",
       "status": "partial",
-      "note": "Loads from bytes inside Books only; no SDK call, and no PDFDocument-like object for apps"
+      "note": "Loads from bytes inside Books only; no SDK call, and no PDFDocument-like object for apps round 75, host only: shared loader for Books and Viewer."
     },
     {
       "feature": "Document structure: xref repair, objects",
@@ -45,9 +45,9 @@
     {
       "feature": "PDFPage: rendering and drawing",
       "apple": "PDFPage draw(with:to:), transformContext(for:), thumbnail, display boxes, rotation",
-      "bifrost": "springboard/ui/src/pdfpage.rs",
+      "bifrost": "springboard/ui/src/pdfpage.rs; springboard/render/src/cg/pdf/interpret.rs, draw.rs; springboard/apps/preview-desktop/src/document.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-21, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No page rasterisation or drawing into a context. Books draws reflowed content, and JPEG 2000, CCITT and JBIG2 images are not shown"
+      "note": "Wave 2 (theme-21, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No page rasterisation or drawing into a context. Books draws reflowed content, and JPEG 2000, CCITT and JBIG2 images are not shown round 75, host only: engine renders pages; no SDK PDF page API."
     },
     {
       "feature": "PDFPage: page image and PDF creation",

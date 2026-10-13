@@ -178,9 +178,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no print queue app; print_sheet.rs only",
+   "bifrost": "springboard/apps/printers-desktop, springboard/ui/src/cups.rs",
+   "status": "partial",
+   "note": "no print queue app; print_sheet.rs only round 75, host only: app 0.1.0, job hold and release; was gap.",
    "rea": []
   }
  ]

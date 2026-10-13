@@ -58,9 +58,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no sticky notes app yet",
+   "bifrost": "springboard/apps/stickies-desktop",
+   "status": "partial",
+   "note": "no sticky notes app yet round 75, host only: app 0.2.0; was gap.",
    "rea": []
   },
   {
