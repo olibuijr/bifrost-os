@@ -612,7 +612,7 @@ fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[
     let mut run_x = 0.0;
     for cell in &cells[line.start..line.end] {
         let step = layout::advance(rel, cell, lines.tab, &measure);
-        let breaks = cell.ch == '\t' || run_style.is_some_and(|s| !same_run(&s, &cell.style));
+        let breaks = cell.ch == '\t' || run_style.is_some_and(|s| !s.same_run(&cell.style));
         if breaks {
             if let Some(s) = run_style.take() {
                 flush_run(c, ui, &run, &s, base + run_x, y, line.height);
@@ -631,11 +631,6 @@ fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[
     if let Some(s) = run_style {
         flush_run(c, ui, &run, &s, base + run_x, y, line.height);
     }
-}
-
-/// Two characters share a run when they draw alike.
-fn same_run(a: &Style, b: &Style) -> bool {
-    a.bold == b.bold && a.italic == b.italic && a.underline == b.underline && a.size == b.size && a.font == b.font && a.color == b.color
 }
 
 /// Draws one run and returns the x after it. Underlines are a rule under the run.

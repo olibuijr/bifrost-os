@@ -86,6 +86,18 @@ impl Default for Style {
     }
 }
 
+impl Style {
+    /// Whether two characters draw alike, so they can share one run of text (and one run in a file).
+    pub fn same_run(&self, other: &Style) -> bool {
+        self.bold == other.bold
+            && self.italic == other.italic
+            && self.underline == other.underline
+            && self.size == other.size
+            && self.font == other.font
+            && self.color == other.color
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Cell {
     pub ch: char,
