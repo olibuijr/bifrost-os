@@ -2066,3 +2066,21 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## PhotoKit: change requests, albums, change observation (`bifrost_ui::photo_library`)
+
+`PhotoLibrary` mirrors `PHPhotoLibrary`. `perform_changes(|r| ...)` (`performChanges`) runs the closure on a copy of the
+library: an `Err` throws the copy away (atomic), an `Ok` keeps it and tells every observer once with a `Change`.
+`ChangeRequests` holds the requests: `creation_request_for_asset_from_image`, `creation_request_for_asset_from_video`
+(duration from `video_duration`, which reads `mvhd` from MP4 or QuickTime bytes), `creation_request_with_resources` and
+`add_resource` (`PHAssetCreationRequest.addResource`), `set_favorite`, `set_hidden`, `delete_assets`, and for albums
+`create_album`, `rename_album`, `delete_album`, `add_assets`, `remove_assets`, plus `create_collection_list` and
+`add_child_album` (`PHCollectionList`).
+Fetching: `fetch_assets` and `fetch_assets_in` take `FetchOptions` (`predicate`, `sort_descriptors`,
+`include_hidden_assets`, `fetch_limit`) and return a `FetchResult`. `Change::change_details(&fetch)` returns
+`FetchResultChangeDetails` (`removed_indexes`, `inserted_indexes`, `changed_indexes`, `moves`) or `None` when the
+result is unaffected. Access: `AccessLevel::AddOnly` may create but not read or edit; `Status::Limited` (from
+`photo_access`) hides unchosen assets, and assets the app creates join the selection.
+Gaps: not wired to the shell or an app yet, no `requestAVAsset` / `requestPlayerItem`, no editing or project
+extensions, trash is not exposed as a change request. Host tests only; a Midget check is still needed before the
+matrix rows can become parity.

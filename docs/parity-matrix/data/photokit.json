@@ -10,16 +10,16 @@
     {
       "feature": "Shared photo library access (PHPhotoLibrary)",
       "apple": "PHPhotoLibrary, PHPhotosError, PHPhotosErrorDomain",
-      "bifrost": "springboard/ui/src/photo_access.rs",
+      "bifrost": "springboard/ui/src/photo_access.rs; springboard/ui/src/photo_library.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK object manages access or changes to the library; Notes calls the springboard library module directly. No permission or authorization flow for apps."
+      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK object manages access or changes to the library; Notes calls the springboard library module directly. No permission or authorization flow for apps. Sprint 9: photo_library.rs adds PhotoLibrary.perform_changes (atomic, rolls back on error), AccessLevel add-only and read-write, and observer registration. Host tests only; needs a Midget check."
     },
     {
       "feature": "Asset retrieval and fetch options",
       "apple": "PHAsset, PHAssetCollection, PHCollectionList, PHFetchResult, PHFetchOptions, PHObject",
-      "bifrost": "springboard/ui/src/photo_fetch.rs; wired: springboard/src/shell/photos/models.rs (fetch model of springboard/ui/src/photo_fetch.rs; Sort by Date row in the album picker)",
+      "bifrost": "springboard/ui/src/photo_fetch.rs; wired: springboard/src/shell/photos/models.rs (fetch model of springboard/ui/src/photo_fetch.rs; Sort by Date row in the album picker); springboard/ui/src/photo_library.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Album logic exists in the shell only. Apps cannot fetch assets or collections. Moments, Years and user albums are not modelled; the sections are month groups in library.rs. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Album logic exists in the shell only. Apps cannot fetch assets or collections. Moments, Years and user albums are not modelled; the sections are month groups in library.rs. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Sprint 9: photo_library.rs fetch_assets / fetch_assets_in with FetchOptions (predicate, sort descriptors, include_hidden_assets, fetch_limit), asset collections and collection lists. Host tests only."
     },
     {
       "feature": "Smart albums (screenshots, recents, recently deleted)",
@@ -31,9 +31,9 @@
     {
       "feature": "Favorites",
       "apple": "PHAsset.isFavorite, favorite change requests",
-      "bifrost": "springboard/src/shell/photos/mod.rs (favorites list, is_favourite); springboard/src/shell/photos/favorites_tests.rs",
+      "bifrost": "springboard/src/shell/photos/mod.rs (favorites list, is_favourite); springboard/src/shell/photos/favorites_tests.rs; springboard/ui/src/photo_library.rs",
       "status": "os",
-      "note": "Works in the Photos app viewer. No app-facing read or write of favourite state."
+      "note": "Works in the Photos app viewer. No app-facing read or write of favourite state. Sprint 9: ChangeRequests.set_favorite and set_hidden through performChanges. Host tests only."
     },
     {
       "feature": "Image and thumbnail loading and caching",
@@ -52,9 +52,9 @@
     {
       "feature": "Asset resources and creating assets",
       "apple": "PHAssetResource, PHAssetCreationRequest, PHAssetResourceCreationOptions, PHAssetResourceManager",
-      "bifrost": "springboard/ui/src/photo_request.rs",
+      "bifrost": "springboard/ui/src/photo_request.rs; springboard/ui/src/photo_library.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Edits save as copies inside the Photos app. There is no create-asset request for apps and no resource manager. Apps write files into ~/Pictures themselves."
+      "note": "Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Edits save as copies inside the Photos app. There is no create-asset request for apps and no resource manager. Apps write files into ~/Pictures themselves. Sprint 9: creation_request_for_asset_from_image / _from_video, creation_request_with_resources, add_resource, delete_assets; albums create/rename/delete/add_assets/remove_assets. Host tests only."
     },
     {
       "feature": "Editing a photo (rotate, crop, brightness, contrast, filters)",
@@ -87,9 +87,9 @@
     {
       "feature": "Video assets",
       "apple": "PHAsset video media type, PHVideoRequestOptions, AVAsset delivery",
-      "bifrost": "springboard/ui/src/photo_media.rs",
+      "bifrost": "springboard/ui/src/photo_media.rs; springboard/ui/src/photo_library.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No video assets in the Photos app. Media playback is a separate app (springboard/src/media/)."
+      "note": "Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No video assets in the Photos app. Media playback is a separate app (springboard/src/media/). Sprint 9: Asset.media_type video with duration; video_duration reads mvhd from MP4/QuickTime bytes. requestAVAsset and requestPlayerItem are still gaps."
     },
     {
       "feature": "Slideshow",
@@ -108,9 +108,9 @@
     {
       "feature": "Change observation of the library",
       "apple": "PHPhotoLibraryChangeObserver, PHPhotoLibraryPersistentChangesObserver, PHChange",
-      "bifrost": "springboard/ui/src/photo_changes.rs",
+      "bifrost": "springboard/ui/src/photo_changes.rs; springboard/ui/src/photo_library.rs",
       "status": "partial",
-      "note": "Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No photo-library change callbacks for apps. Apps can watch folders but get no asset-level diffs."
+      "note": "Wave 3 (w3-photokit, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No photo-library change callbacks for apps. Apps can watch folders but get no asset-level diffs. Sprint 9: Change.change_details(fetch) gives inserted, removed, changed and moved indexes; observers are told once per transaction. Host tests only."
     },
     {
       "feature": "Background upload of asset resources",
@@ -129,9 +129,9 @@
     {
       "feature": "Enhanced privacy and limited library access",
       "apple": "Delivering an Enhanced Privacy Experience in Your Photos App; PHPickerFilter scope",
-      "bifrost": "springboard/ui/src/photo_access.rs",
+      "bifrost": "springboard/ui/src/photo_access.rs; springboard/ui/src/photo_library.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps can read ~/Pictures without a prompt through the springboard library module. No per-asset grants are issued."
+      "note": "Wave 4 (w4-photokit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apps can read ~/Pictures without a prompt through the springboard library module. No per-asset grants are issued. Sprint 9: add-only access refuses reads and edits; limited access hides unchosen assets and includes assets the app creates. Host tests only."
     }
   ],
   "gaps": [

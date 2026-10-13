@@ -989,6 +989,7 @@ pub mod photo_fetch;
 pub mod photo_access;
 pub mod photo_smart_albums;
 pub mod photo_caching;
+pub mod photo_library;
 pub mod fs_volume;
 pub mod fs_probe;
 pub mod fs_maintenance;
