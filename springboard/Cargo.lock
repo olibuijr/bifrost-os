@@ -699,7 +699,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-notes"
-version = "1.14.1"
+version = "1.15.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -838,7 +838,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-textedit"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "bifrost-app",
  "springboard",

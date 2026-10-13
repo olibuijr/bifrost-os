@@ -1,4 +1,10 @@
 # Changelog
+
+## 0.5.0 — 2026-10-13
+
+- Message > Print... (Cmd+P) prints the open message's headers and decoded body as plain text, through the shared print
+  operation. The job is submitted on its own thread.
+
 ## 0.4.0 — 2026-10-13
 
 - Accounts come only from the shared Internet Accounts list now: Mail reads and writes `internet-accounts.ini` through

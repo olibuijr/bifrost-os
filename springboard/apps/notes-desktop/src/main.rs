@@ -121,6 +121,7 @@ const MENU_NEW: u32 = 1;
 const MENU_DELETE: u32 = 2;
 const MENU_IMPORT: u32 = 3;
 const MENU_FIND: u32 = 4;
+const MENU_PRINT: u32 = 5;
 /// evdev Z (the Undo and Redo chords are the editor's: Cmd+Z, Cmd+Shift+Z).
 const KEY_Z: u32 = 44;
 /// evdev C: Cmd+C copies the editor's selection to the pasteboard (rich text with a plain fallback).
@@ -210,6 +211,8 @@ impl App for NotesApp {
                 AppMenuItem::new(MENU_IMPORT, "Import to Notes...").key("cmd+o"),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_FIND, "Find").key("cmd+f"),
+                AppMenuItem::separator(),
+                AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(n.is_editing()),
             ],
         }]
     }
@@ -232,6 +235,19 @@ impl App for NotesApp {
         let now = bifrost_app::proto::sys::now_ms();
         let Some(n) = &mut self.notes else { return false };
         match id {
+            MENU_PRINT => {
+                if let Some(text) = n.printable_text() {
+                    let title: String = text.lines().next().unwrap_or("Note").chars().take(60).collect();
+                    // the job goes to CUPS on its own thread, so the window keeps drawing while the scheduler answers
+                    let job = bifrost_app::print::PrintOperation::text(title, text);
+                    std::thread::spawn(move || {
+                        if let Err(e) = job.run() {
+                            eprintln!("Notes print: {e:?}");
+                        }
+                    });
+                }
+                false
+            }
             MENU_NEW => {
                 n.compose(&ctx.ui, now);
                 true

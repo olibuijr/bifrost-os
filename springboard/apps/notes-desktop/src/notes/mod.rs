@@ -1124,6 +1124,14 @@ impl Notes {
         Some(self.editor.text().chars().skip(r.start).take(r.end - r.start).collect())
     }
 
+    /// The open note's text for printing: what the editor holds, or `None` when no note is open.
+    pub fn printable_text(&self) -> Option<String> {
+        if !self.is_editing() {
+            return None;
+        }
+        Some(self.editor.text().to_string())
+    }
+
     /// Whether Edit > Undo and Redo have something to do in the open note.
     pub fn can_undo_redo(&self) -> (bool, bool) {
         (self.is_editing() && self.editor.can_undo(), self.is_editing() && self.editor.can_redo())

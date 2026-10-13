@@ -16,7 +16,7 @@ mod text;
 mod view;
 
 use bifrost_app::controls::undo::ChangeCount;
-use bifrost_app::document::{is_menu_id, DocId, DocumentController, DocumentHost, Notice};
+use bifrost_app::document::{is_menu_id, DocId, DocumentController, Notice};
 use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::kit::ui::Ui;
 use bifrost_app::kit::{clipboard, Damage, Surface};
@@ -430,8 +430,8 @@ impl TextEditApp {
         true
     }
 
-    /// Print: the document is laid out for the page setup, written as a PDF in the app's data folder, and sent to the
-    /// default printer. The answer is the status row's note.
+    /// Print: the document is laid out for the page setup and sent to the default printer through the print operation.
+    /// The answer is the status row's note.
     fn print_document(&mut self, ctx: &Ctx) -> bool {
         let info = self.print_info.clone();
         let Some(doc) = active_doc(&self.docs) else { return false };
@@ -439,18 +439,12 @@ impl TextEditApp {
         let measure = |ch: char, style: &Style| view::char_width(&ctx.ui, ch, style);
         let cells = doc.text.cells();
         let layout = layout::layout_tabs(cells, width, &measure, doc.text.tab_width());
-        let bytes = print::pdf(cells, &layout, &info, &measure);
-        let dir = DocumentHost::data_dir(ctx).join("print");
-        let path = dir.join("print.pdf");
-        if let Err(e) = std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&path, &bytes)) {
-            self.note = Some(format!("Could not print: {e}"));
-            return true;
-        }
-        let mut job = PrintOperation::new(path).with_info(info);
-        job.job_name = "Text Editor document".into();
+        let pages = print::document(cells, &layout, &info, &measure);
+        let job = PrintOperation::pages("Text Editor document", pages, print::FACES.to_vec()).with_info(info);
         self.note = Some(match job.run() {
             Ok(_) => "Sent to the printer".into(),
-            Err(PrintError::NoCups) => "No printer is set up".into(),
+            Err(PrintError::NoCups) => "The printing service is not running".into(),
+            Err(PrintError::NoPrinter) => "No printer is set up".into(),
             Err(PrintError::Failed(message)) => format!("Printing failed: {message}"),
         });
         true
