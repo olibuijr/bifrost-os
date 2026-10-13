@@ -187,6 +187,8 @@ fn run() -> std::io::Result<()> {
     // time zone and network time: the saved choices, then the sync task
     {
         let saved = springboard::shell::prefs::Prefs::load(format!("{dir}/settings.ini"));
+        // Language & Region: the saved choice formats the menu bar clock and dates from the first frame
+        bifrost_ui::region::publish(bifrost_ui::region::Region::from_lookup(|k| saved.get(k)));
         // the machine's own zone (/etc/localtime) wins over the saved one
         let system_tz = springboard::bare::timezone::system_name();
         if !system_tz.as_deref().or(saved.get("tz")).is_some_and(springboard::bare::timezone::set) {

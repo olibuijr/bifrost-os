@@ -1653,6 +1653,26 @@ impl Settings {
         }
     }
 
+    /// Saves a Language & Region change to `settings.ini`, publishes it for the menu bar clock and the
+    /// pages, and asks privd to set the system locale (best effort: a locale that is not generated
+    /// leaves the system as it was, and the shell and apps still use the saved choice).
+    fn change_region(&mut self, prefs: &mut Prefs, edit: impl FnOnce(&mut bifrost_ui::region::Region)) {
+        let mut r = bifrost_ui::region::current();
+        edit(&mut r);
+        let languages = r.languages.join(",");
+        let region = r.region.clone();
+        let weekday = r.first_weekday.map(|d| d.to_string()).unwrap_or_default();
+        let currency = r.currency.clone().unwrap_or_default();
+        if let Err(e) = prefs.set_many(&[("languages", languages.as_str()), ("region", region.as_str()), ("first_weekday", weekday.as_str()), ("currency", currency.as_str())]) {
+            eprintln!("springboard: settings.ini: {e}");
+        }
+        let locale = r.identifier();
+        bifrost_ui::region::publish(r);
+        crate::bare::sys::spawn_named("set-locale", move || {
+            let _ = crate::privd_client::connect().set_locale(&locale, &locale);
+        });
+    }
+
     /// Applies a zone chosen in the picker: the clock and the page follow at once.
     fn pick_zone(&mut self, ui: &Ui, prefs: &mut Prefs, zone: &str) {
         self.zone_picker = None;
@@ -2107,6 +2127,33 @@ impl Settings {
                     Pick::Nearby(k) => {
                         self.opts.nearby = k.min(2);
                         self.opts.save(prefs);
+                        vec![]
+                    }
+                    Pick::Language(k) => {
+                        let code = bifrost_ui::region::LANGUAGES[k.min(bifrost_ui::region::LANGUAGES.len() - 1)].0;
+                        self.change_region(prefs, |r| {
+                            r.languages.retain(|l| l.as_str() != code);
+                            r.languages.insert(0, code.to_string());
+                        });
+                        self.rebuild_visible(ui);
+                        vec![]
+                    }
+                    Pick::Region(k) => {
+                        let code = bifrost_ui::region::REGIONS[k.min(bifrost_ui::region::REGIONS.len() - 1)].0;
+                        self.change_region(prefs, |r| r.region = code.to_string());
+                        let name = bifrost_ui::region::current().region_name();
+                        self.set_parent_value(ui, "Region", &name);
+                        self.rebuild_visible(ui);
+                        vec![]
+                    }
+                    Pick::FirstWeekday(k) => {
+                        let day = match k {
+                            1 => Some(0),
+                            2 => Some(1),
+                            _ => None,
+                        };
+                        self.change_region(prefs, |r| r.first_weekday = day);
+                        self.rebuild_visible(ui);
                         vec![]
                     }
                     Pick::DockPosition(k) => {
@@ -2939,6 +2986,7 @@ mod tests {
             (vec!["General", "Keyboard", "Text Replacements"], PageId::TextReplacements),
             (vec!["General", "Keyboard", "Modifier Keys"], PageId::ModifierKeys),
             (vec!["General", "Language & Region"], PageId::Language),
+            (vec!["General", "Language & Region", "Region"], PageId::Region),
             (vec!["General", "Transfer or Reset Tab"], PageId::Reset),
             (vec!["Control Centre"], PageId::ControlCentre),
             (vec!["Menu Bar"], PageId::MenuBar),

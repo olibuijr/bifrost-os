@@ -56,6 +56,8 @@ pub enum PageId {
     /// Keyboard > Text Replacements: shortcuts that expand to a phrase
     TextReplacements,
     Language,
+    /// General > Language & Region > Region: the list of regions (see `bifrost_ui::region`)
+    Region,
     Reset,
     Display,
     NightShift,
@@ -228,6 +230,12 @@ pub enum Pick {
     /// Appearance > Liquid Glass style: 0 Clear, 1 Tinted
     GlassStyle(usize),
     Nearby(usize),
+    /// Language & Region > Preferred Language: the index into `bifrost_ui::region::LANGUAGES`
+    Language(usize),
+    /// Language & Region > Region: the index into `bifrost_ui::region::REGIONS`
+    Region(usize),
+    /// Language & Region > First Day of Week: 0 Automatic, 1 Sunday, 2 Monday
+    FirstWeekday(usize),
     /// Desktop & Dock › Position: index into Bottom, Left, Right
     DockPosition(usize),
     /// Desktop & Dock > Minimize Windows Using: index into `MINIMIZE_EFFECTS`
@@ -1007,7 +1015,55 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 vec![Group::new(items).footer("Tap an entry to remove it. An app expands a shortcut when it asks the text service.")],
             )
         }
-        PageId::Language => page("Language & Region", false, vec![rows(vec![("Language", "English".into()), ("Region", "Iceland".into()), ("Calendar", "Gregorian".into())])]),
+        PageId::Language => {
+            let r = bifrost_ui::region::current();
+            let lang = r.language().to_string();
+            let first = r.first_weekday;
+            page(
+                "Language & Region",
+                false,
+                vec![
+                    Group::new(
+                        bifrost_ui::region::LANGUAGES
+                            .iter()
+                            .enumerate()
+                            .map(|(i, (code, name))| Item::new(*name).check(*code == lang.as_str(), Action::Pick(Pick::Language(i))))
+                            .collect(),
+                    )
+                    .header("PREFERRED LANGUAGE")
+                    .footer("The first language is the one the system and apps use."),
+                    Group::new(vec![Item::new("Region").value(r.region_name()).link(PageId::Region)])
+                        .footer("The region sets how dates, numbers and currency are shown."),
+                    Group::new(vec![
+                        Item::new("Automatic").check(first.is_none(), Action::Pick(Pick::FirstWeekday(0))),
+                        Item::new("Sunday").check(first == Some(0), Action::Pick(Pick::FirstWeekday(1))),
+                        Item::new("Monday").check(first == Some(1), Action::Pick(Pick::FirstWeekday(2))),
+                    ])
+                    .header("FIRST DAY OF WEEK")
+                    .footer("Calendars start each week on this day. Automatic follows the region."),
+                    Group::new(vec![
+                        Item::new("Date").value(bifrost_ui::region::short_date(&r, info.wday, info.mday, info.mon)),
+                        Item::new("Currency").value(r.currency()),
+                    ])
+                    .header("FORMATS"),
+                ],
+            )
+        }
+        PageId::Region => {
+            let current = bifrost_ui::region::current().region_code();
+            page(
+                "Region",
+                false,
+                vec![Group::new(
+                    bifrost_ui::region::REGIONS
+                        .iter()
+                        .enumerate()
+                        .map(|(i, (code, name))| Item::new(*name).check(*code == current.as_str(), Action::Pick(Pick::Region(i))))
+                        .collect(),
+                )
+                .footer("The region sets the date, number, currency and first day of the week formats that apps use.")],
+            )
+        }
         PageId::Reset => page(
             "Reset",
             false,
@@ -1778,9 +1834,27 @@ mod tests {
         let acc = spec(PageId::Accessibility, &m);
         assert_eq!(acc.groups[0].items[1].value, "130%");
         assert_eq!(acc.groups[0].items[6].accessory, super::super::list::Accessory::Switch(false));
-        for id in [PageId::General, PageId::About, PageId::Keyboard, PageId::Language, PageId::Reset, PageId::ControlCentre, PageId::Privacy] {
+        for id in [PageId::General, PageId::About, PageId::Keyboard, PageId::Language, PageId::Region, PageId::Reset, PageId::ControlCentre, PageId::Privacy] {
             assert!(!spec(id, &m).groups.is_empty(), "{id:?}");
         }
+    }
+
+    #[test]
+    fn language_and_region_mark_the_fresh_install_defaults() {
+        // nothing is published in this test, so the page shows the defaults: English, Iceland, automatic weeks
+        use super::super::list::Accessory;
+        let opts = Options::default();
+        let info = info();
+        let lang = spec(PageId::Language, &model(&info, &opts));
+        assert_eq!(lang.groups[0].items[0].accessory, Accessory::Check(true));
+        assert_eq!(lang.groups[0].items[1].accessory, Accessory::Check(false));
+        assert_eq!(lang.groups[1].items[0].value, "Iceland");
+        assert_eq!(lang.groups[1].items[0].action, Action::Push(PageId::Region));
+        assert_eq!(lang.groups[2].items[0].accessory, Accessory::Check(true));
+        assert_eq!(lang.groups[2].items[2].accessory, Accessory::Check(false));
+        let region = spec(PageId::Region, &model(&info, &opts));
+        assert_eq!(region.groups[0].items[0].accessory, Accessory::Check(true));
+        assert_eq!(region.groups[0].items[1].action, Action::Pick(Pick::Region(1)));
     }
 
     fn bt_device(addr: &str, name: &str, paired: bool, connected: bool) -> crate::bare::bluetooth::Device {
