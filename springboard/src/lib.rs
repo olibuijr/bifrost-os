@@ -34,6 +34,8 @@ pub mod term;
 pub mod deildu;
 #[cfg(target_os = "linux")]
 pub mod files;
+#[cfg(target_os = "linux")]
+pub mod thumbs;
 
 
 #[cfg(target_os = "linux")]
