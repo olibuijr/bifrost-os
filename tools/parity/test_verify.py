@@ -51,30 +51,30 @@ class Planning(unittest.TestCase):
             return verify.plan_row("slug", {"feature": "F", "bifrost": bifrost})
 
     def test_logic_with_unit_tests(self):
-        r = self.plan({"ui/Cargo.toml": CARGO, "ui/src/calc.rs": LOGIC}, "ui/src/calc.rs")
+        r = self.plan({"springboard/ui/Cargo.toml": CARGO, "springboard/ui/src/calc.rs": LOGIC}, "springboard/ui/src/calc.rs")
         self.assertEqual((r["class"], r["crate"], r["test_filters"]), ("logic", "kit-ui", ["lib:calc::tests::adds"]))
 
     def test_untested_without_tests(self):
-        r = self.plan({"ui/Cargo.toml": CARGO, "ui/src/calc.rs": "pub fn f() {}\n"}, "ui/src/calc.rs")
+        r = self.plan({"springboard/ui/Cargo.toml": CARGO, "springboard/ui/src/calc.rs": "pub fn f() {}\n"}, "springboard/ui/src/calc.rs")
         self.assertEqual(r["class"], "untested")
 
     def test_ui_wins_over_tests(self):
-        r = self.plan({"ui/Cargo.toml": CARGO, "ui/src/paint.rs": LOGIC}, "ui/src/paint.rs")
+        r = self.plan({"springboard/ui/Cargo.toml": CARGO, "springboard/ui/src/paint.rs": LOGIC}, "springboard/ui/src/paint.rs")
         self.assertEqual(r["class"], "ui")
 
     def test_hardware_from_use_lines(self):
-        r = self.plan({"ui/Cargo.toml": CARGO, "ui/src/calc.rs": "use crate::alsa::Pcm;\n" + LOGIC}, "ui/src/calc.rs")
+        r = self.plan({"springboard/ui/Cargo.toml": CARGO, "springboard/ui/src/calc.rs": "use crate::alsa::Pcm;\n" + LOGIC}, "springboard/ui/src/calc.rs")
         self.assertEqual(r["class"], "hardware")
 
     def test_integration_tests_that_use_the_module(self):
-        files = {"ui/Cargo.toml": CARGO, "ui/src/calc.rs": "pub fn f() {}\n",
-                 "ui/tests/calc_it.rs": "use kit_ui::calc;\n#[test]\nfn works() {}\n",
-                 "ui/tests/other.rs": "#[test]\nfn unrelated() {}\n"}
-        r = self.plan(files, "ui/src/calc.rs")
+        files = {"springboard/ui/Cargo.toml": CARGO, "springboard/ui/src/calc.rs": "pub fn f() {}\n",
+                 "springboard/ui/tests/calc_it.rs": "use kit_ui::calc;\n#[test]\nfn works() {}\n",
+                 "springboard/ui/tests/other.rs": "#[test]\nfn unrelated() {}\n"}
+        r = self.plan(files, "springboard/ui/src/calc.rs")
         self.assertEqual((r["class"], r["test_filters"]), ("logic", ["calc_it:works"]))
 
     def test_missing_path_is_untested_without_crate(self):
-        r = self.plan({}, "ui/src/gone.rs")
+        r = self.plan({}, "springboard/ui/src/gone.rs")
         self.assertEqual((r["class"], r["crate"], r["test_filters"]), ("untested", None, []))
 
     def test_summary_counts_and_gain(self):

@@ -532,6 +532,7 @@ fn trim_eol(d: &[u8], start: usize, mut end: usize) -> usize {
 /// Small PDF builders for tests here and in the apps that read PDFs (`testkit` feature).
 #[cfg(any(test, feature = "testkit"))]
 pub mod tests {
+    #[allow(unused_imports)] // the #[test]s below use the parent items; the testkit builders alone do not
     use super::*;
 
     /// A tiny two-page-capable PDF with a classic xref table; returns the bytes.
