@@ -101,9 +101,9 @@
     {
       "feature": "Dispatch I/O channels",
       "apple": "DispatchIO, dispatch_io_t, barrier, setLimit",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "file and descriptor I/O uses std::io on the caller's thread or the pool; no channel with low and high water marks"
+      "bifrost": "springboard/sdk/src/dispatch_io.rs (DispatchIO, StreamType)",
+      "status": "partial",
+      "note": "Stream and random-access channels over a file or pipe with chunked read/write handlers, set_limit, low water and close; no barrier operations or cleanup handlers. Host unit tests only, not yet checked on Midget."
     },
     {
       "feature": "DispatchData",
