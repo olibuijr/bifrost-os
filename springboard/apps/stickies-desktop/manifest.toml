@@ -10,20 +10,6 @@ architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
 window = "full-size"
 
-[[intent]]
-id = "new-sticky"
-title = "New Sticky Note"
-description = "Adds an empty sticky note to the board."
-shortcut = true
-params = []
-
-[[intent]]
-id = "create-sticky"
-title = "Create Sticky Note"
-description = "Adds a sticky note with the given text."
-shortcut = false
-params = ["text:string?"]
-
 [[log.subsystem]]
 id = "is.olibuijr.stickies"
 categories = ["save", "import"]
