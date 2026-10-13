@@ -88,3 +88,36 @@ second image until a busy buffer blocks a changed frame. Shell PSS increased
 217 → 236 MiB across the restart (245 MiB after resize), so this measurement supports lower SHM
 allocation, not lower total shell RAM. Native browser/session state also changed.
 Equal-area Files reshape 1200x825 → 1100x900 was visually checked after update.
+
+## Frame-time regression tests (host)
+
+Five desktop scenes are timed on the host at 1920x1080 (Files at 1200x1920, the window body), each as a forced repaint
+of the whole shell or of the Files page. Every scene prints `BENCH frame_<scene>_median` and `BENCH frame_<scene>_p95`
+in ms, and its test fails when the 95th-percentile frame is over **16.7 ms** (one 60 Hz frame):
+
+| Scene | Test | What is timed |
+| --- | --- | --- |
+| Desktop idle | `bench_frame_desktop_idle` | desktop, no windows |
+| Settings open | `bench_frame_settings_open` | Settings window open |
+| Window menu open | `bench_frame_menu_open` | Window menu popup open over the desktop |
+| Window drag | `bench_frame_window_drag` | Settings dragged by its title bar; each frame is one pointer move plus the repaint |
+| Files, 5,000 items | `bench_frame_files_5k` | Files folder page with 5,000 rows (`springboard/src/files/bench.rs`) |
+
+Scenes live in `springboard/src/shell/frame_budget.rs`; the budget is `FRAME_BUDGET_MS` there.
+
+Run them (from the repo root):
+
+```sh
+python3 tools/bench.py --frames --no-record   # only the frame scenes; exit 1 names the scene over budget
+python3 tools/bench.py --frames               # same, and appends the keys to docs/perf-history.jsonl
+python3 tools/bench.py --no-record            # every host bench, including these
+```
+
+Or directly, in `springboard/`:
+`cargo test --profile fast --features desktop-wayland,testkit --lib bench_frame_ -- --ignored --nocapture`.
+The window-menu and window-drag scenes need `desktop-wayland`; without it they are skipped.
+
+These run the same drawing code as the shell, but on the host CPU, not on the lab PC's Intel GPU. A pass here does not
+prove the Midget frame time: check the device numbers with `tools/bench.py --midget --graphics`.
+The budget is a ceiling, not a tuned target. Lower `FRAME_BUDGET_MS` only after a measured run shows headroom; never
+raise it to make a regression pass.

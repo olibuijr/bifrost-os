@@ -1207,3 +1207,5 @@ fn spawn_listing(pool: &Pool<Done>, gen: u64, page: &mut DirPage) {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod bench;
