@@ -104,9 +104,9 @@ fn paint_detail(w: &mut DiskUtility, s: &mut Surface, ui: &Ui, node: &Node) {
         }
     }
     let note = if node.kind == Kind::Disk {
-        "Erase formats the whole disk as FAT32. First Aid checks a volume."
+        "Erase formats the whole disk in the format chosen in the Disk menu. First Aid checks a volume."
     } else {
-        "Mount and unmount act on this volume only. Erase formats it; First Aid checks it."
+        "Mount and unmount act on this volume only. Erase formats it in the format chosen in the Disk menu; First Aid checks it."
     };
     text_mid(&mut w.labels, s, ui, note, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_3.now(), x + 16.0, card.y + card.h + 18.0, cw - 32.0);
 }

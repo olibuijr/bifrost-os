@@ -227,6 +227,47 @@ pub fn info_rows(node: &Node) -> Vec<(&'static str, String)> {
     ]
 }
 
+/// Every fact the Get Info sheet lists: the info pane's rows, then the model, the disk a volume sits on, the volume
+/// label and the image file where there are any.
+pub fn detail_rows(node: &Node) -> Vec<(&'static str, String)> {
+    let mut rows = info_rows(node);
+    if !node.model.is_empty() {
+        rows.push(("Model", node.model.clone()));
+    }
+    if let Some(parent) = &node.parent {
+        rows.push(("Disk", format!("/dev/{parent}")));
+    }
+    rows.push(("Removable", if node.removable { "Yes".to_string() } else { "No".to_string() }));
+    if let Some(image) = &node.image_file {
+        rows.push(("Image file", image.clone()));
+    }
+    rows
+}
+
+/// The volume name an erase keeps: the old label cut to what the new file system stores, or empty when it holds a
+/// character the format tools refuse.
+pub fn erase_label(label: Option<&str>, limit: usize) -> String {
+    let Some(label) = label else { return String::new() };
+    let ok = label.bytes().all(|b| b.is_ascii_alphanumeric() || b == b' ' || b == b'-' || b == b'_');
+    if !ok {
+        return String::new();
+    }
+    label.chars().take(limit).collect::<String>().trim().to_string()
+}
+
+/// The sizes for `count` equal partitions of a disk of `bytes`, in MiB: the last takes the rest (0). Empty when the
+/// disk is too small to give each part at least 1 MiB past a 2 MiB table margin, or `count` is 0.
+pub fn equal_parts_mib(bytes: u64, count: usize) -> Vec<u64> {
+    let total = (bytes / (1024 * 1024)).saturating_sub(2);
+    if count == 0 || total < count as u64 {
+        return Vec::new();
+    }
+    let each = total / count as u64;
+    let mut sizes = vec![each; count];
+    sizes[count - 1] = 0;
+    sizes
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -336,5 +377,33 @@ mod tests {
         let p = Node { name: "sdb1".into(), kind: Kind::Partition, label: Some("Games".into()), ..Node::default() };
         assert_eq!(display_name(&p), "Games");
         assert_eq!(display_name(&disk("sdc")), "sdc");
+    }
+
+    #[test]
+    fn detail_rows_extend_the_info_rows() {
+        let n = Node { name: "sdb1".into(), kind: Kind::Partition, parent: Some("sdb".into()), removable: true, ..Node::default() };
+        let rows = detail_rows(&n);
+        assert_eq!(rows.len(), info_rows(&n).len() + 2);
+        assert!(rows.contains(&("Disk", "/dev/sdb".to_string())));
+        let img = Node { name: "loop0".into(), image_file: Some("/a.iso".into()), model: "Loop".into(), ..Node::default() };
+        let rows = detail_rows(&img);
+        assert!(rows.contains(&("Image file", "/a.iso".to_string())) && rows.contains(&("Model", "Loop".to_string())));
+    }
+
+    #[test]
+    fn the_erase_label_is_kept_only_when_the_format_accepts_it() {
+        assert_eq!(erase_label(Some("Games"), 11), "Games");
+        assert_eq!(erase_label(Some("A very long volume"), 11), "A very long");
+        assert_eq!(erase_label(Some("Caf\u{e9}"), 11), "");
+        assert_eq!(erase_label(None, 11), "");
+        assert_eq!(erase_label(Some("Ab cdefghi jk"), 11), "Ab cdefghi");
+    }
+
+    #[test]
+    fn equal_parts_leave_the_rest_to_the_last() {
+        assert_eq!(equal_parts_mib(8 * 1024 * 1024 * 1024, 2), vec![4095, 0]);
+        assert_eq!(equal_parts_mib(10 * 1024 * 1024, 3), vec![2, 2, 0]);
+        assert!(equal_parts_mib(3 * 1024 * 1024, 3).is_empty());
+        assert!(equal_parts_mib(1 << 30, 0).is_empty());
     }
 }

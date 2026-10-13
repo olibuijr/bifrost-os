@@ -13,7 +13,7 @@ use bifrost_app::controls::Rect;
 use bifrost_app::kit::{TextCache, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
-use bifrost_core::disk_format::Personality;
+use bifrost_core::disk_format::{PartitionSpec, Personality};
 use bifrost_core::disk_request::DiskRequest;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -65,6 +65,10 @@ pub enum Target {
 pub enum Ask {
     Erase,
     FirstAid,
+    /// Get Info: every fact about the row in a sheet.
+    Info,
+    /// Partition the selected disk into this many equal parts.
+    Partition(usize),
 }
 
 /// A confirmation sheet and the requests its buttons start, by button id.
@@ -94,6 +98,10 @@ pub struct DiskUtility {
     /// SMART health by device name, read once per disk (Refresh clears it).
     pub smart: BTreeMap<String, String>,
     pub labels: TextCache,
+    /// View > Show All Devices (disks with their volumes) or Show Only Volumes.
+    pub show_all: bool,
+    /// The file system Erase and Partition write.
+    pub erase_fs: Personality,
     /// The window size in points.
     pub size: (f32, f32),
     pub last_refresh: f64,
@@ -114,6 +122,8 @@ impl DiskUtility {
             sheet: None,
             smart: BTreeMap::new(),
             labels: TextCache::default(),
+            show_all: true,
+            erase_fs: Personality::Fat32,
             size: (1200.0, 780.0),
             last_refresh: f64::NEG_INFINITY,
             last_usage: f64::NEG_INFINITY,
@@ -233,13 +243,32 @@ impl DiskUtility {
         let name = node.name.clone();
         let (title, message, buttons, requests) = match ask {
             Ask::Erase => {
+                let fs = self.erase_fs;
                 let request = if node.kind == Kind::Disk {
-                    DiskRequest::EraseDisk { device: name.clone(), fs: Personality::Fat32, label: String::new() }
+                    DiskRequest::EraseDisk { device: name.clone(), fs, label: String::new() }
                 } else {
-                    DiskRequest::EraseVolume { device: name.clone(), fs: Personality::Fat32, label: String::new() }
+                    let label = model::erase_label(node.label.as_deref(), fs.label_limit());
+                    DiskRequest::EraseVolume { device: name.clone(), fs, label }
                 };
                 let buttons = vec![SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel), SheetButton::new(SHEET_CONFIRM, "Erase", ButtonRole::Destructive)];
                 (format!("Erase {name}?"), request.confirm_text(), buttons, vec![(SHEET_CONFIRM, request)])
+            }
+            Ask::Info => {
+                let message = model::detail_rows(&node).iter().map(|(k, v)| format!("{k}: {v}")).collect::<Vec<_>>().join("\n");
+                self.error = None;
+                self.sheet = Some(Pending { sheet: Sheet::alert(&format!("Info for {name}"), &message, vec![SheetButton::new(SHEET_CANCEL, "Done", ButtonRole::Cancel)]), requests: Vec::new() });
+                return true;
+            }
+            Ask::Partition(count) => {
+                let sizes = model::equal_parts_mib(node.size, count);
+                if node.kind != Kind::Disk || sizes.is_empty() {
+                    self.error = Some(format!("{name} cannot be split into {count} partitions."));
+                    return true;
+                }
+                let partitions = sizes.into_iter().map(|size_mib| PartitionSpec { size_mib, fs: self.erase_fs, label: String::new() }).collect();
+                let request = DiskRequest::PartitionDisk { device: name.clone(), partitions };
+                let buttons = vec![SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel), SheetButton::new(SHEET_CONFIRM, "Partition", ButtonRole::Destructive)];
+                (format!("Partition {name}?"), request.confirm_text(), buttons, vec![(SHEET_CONFIRM, request)])
             }
             Ask::FirstAid => {
                 let buttons = vec![
@@ -338,6 +367,16 @@ impl DiskUtility {
     /// `ROW_BASE + index`.
     pub fn sidebar(&self) -> SourceList {
         let mut items = Vec::new();
+        if !self.show_all {
+            items.push(SidebarItem::header("Volumes"));
+            for i in self.volume_indices() {
+                let v = &self.nodes[i];
+                items.push(SidebarItem::row(ROW_BASE as u32 + i as u32, &model::display_name(v)).with_symbol("folder").with_trailing(&model::format_size(v.size)));
+            }
+            let mut list = SourceList::new(items, ROW_PT, HEAD_PT);
+            list.set_selected(self.selected_index().map(|i| ROW_BASE as u32 + i as u32));
+            return list;
+        }
         for (removable, header) in [(false, "Internal"), (true, "External")] {
             let disks: Vec<usize> = (0..self.nodes.len()).filter(|&i| self.nodes[i].kind == Kind::Disk && self.nodes[i].removable == removable).collect();
             if disks.is_empty() {
@@ -358,6 +397,48 @@ impl DiskUtility {
         let mut list = SourceList::new(items, ROW_PT, HEAD_PT);
         list.set_selected(self.selected_index().map(|i| ROW_BASE as u32 + i as u32));
         list
+    }
+
+    /// The rows Show Only Volumes lists: every partition, and a disk that holds a file system itself and has no partitions.
+    pub fn volume_indices(&self) -> Vec<usize> {
+        (0..self.nodes.len())
+            .filter(|&i| {
+                let n = &self.nodes[i];
+                n.kind == Kind::Partition || (n.fs_type.is_some() && !self.nodes.iter().any(|p| p.parent.as_deref() == Some(n.name.as_str())))
+            })
+            .collect()
+    }
+
+    /// Switches between Show Only Volumes and Show All Devices. A selected disk is dropped when volumes-only hides it.
+    pub fn set_show_all(&mut self, all: bool) -> bool {
+        if self.show_all == all {
+            return false;
+        }
+        self.show_all = all;
+        if !all {
+            let hidden = self.selected_index().is_some_and(|i| !self.volume_indices().contains(&i));
+            if hidden {
+                self.selected = None;
+            }
+        }
+        true
+    }
+
+    /// Chooses the file system Erase and Partition write.
+    pub fn set_erase_fs(&mut self, fs: Personality) -> bool {
+        let changed = self.erase_fs != fs;
+        self.erase_fs = fs;
+        changed
+    }
+
+    /// Opens the Get Info, erase, first-aid or partition sheet from a menu command.
+    pub fn ask_menu(&mut self, ask: Ask) -> bool {
+        self.ask(ask)
+    }
+
+    /// Starts Mount, Unmount or Eject from a menu command.
+    pub fn run_action(&mut self, action: Action) -> bool {
+        self.start(action)
     }
 
     /// The window's rectangles in points.
@@ -530,5 +611,54 @@ mod tests {
         let pending = w.sheet.as_ref().expect("sheet");
         let (cx, cy) = pending.sheet.layout(parent, UNIFIED_BAR_PT, 1.0).buttons.iter().find(|(id, _)| *id == SHEET_REPAIR).map(|(_, r)| (r.x + r.w / 2.0, r.y + r.h / 2.0)).expect("repair button");
         assert_eq!(pending.sheet.hit(parent, UNIFIED_BAR_PT, 1.0, cx, cy), Hit::Button(SHEET_REPAIR));
+    }
+
+    #[test]
+    fn show_only_volumes_lists_partitions_and_drops_a_hidden_selection() {
+        let mut w = one_stick();
+        w.selected = Some("sdb".into());
+        assert!(w.set_show_all(false));
+        assert!(!w.set_show_all(false));
+        assert_eq!(w.volume_indices(), vec![1]);
+        assert!(w.selected.is_none());
+        let ids: Vec<u32> = w.sidebar().items.iter().filter_map(|i| if let SidebarItem::Row { id, .. } = i { Some(*id) } else { None }).collect();
+        assert_eq!(ids, vec![ROW_BASE as u32 + 1]);
+        assert!(w.set_show_all(true));
+    }
+
+    #[test]
+    fn get_info_opens_a_sheet_without_a_request() {
+        let mut w = one_stick();
+        w.selected = Some("sdb1".into());
+        assert!(w.ask_menu(Ask::Info));
+        let pending = w.sheet.as_ref().expect("sheet");
+        assert!(pending.requests.is_empty() && pending.sheet.message.contains("Device: /dev/sdb1"));
+    }
+
+    #[test]
+    fn erase_uses_the_chosen_format_and_keeps_a_valid_label() {
+        let mut w = one_stick();
+        w.nodes[1].label = Some("Games".into());
+        w.selected = Some("sdb1".into());
+        assert!(w.set_erase_fs(Personality::ExFat));
+        assert!(w.ask_menu(Ask::Erase));
+        let (_, request) = &w.sheet.as_ref().expect("sheet").requests[0];
+        assert_eq!(*request, DiskRequest::EraseVolume { device: "sdb1".into(), fs: Personality::ExFat, label: "Games".into() });
+    }
+
+    #[test]
+    fn partition_splits_a_disk_equally_and_refuses_a_volume() {
+        let mut w = one_stick();
+        w.selected = Some("sdb".into());
+        assert!(w.ask_menu(Ask::Partition(2)));
+        let (_, request) = &w.sheet.as_ref().expect("sheet").requests[0];
+        match request {
+            DiskRequest::PartitionDisk { partitions, .. } => assert_eq!(partitions.len(), 2),
+            other => panic!("{other:?}"),
+        }
+        w.sheet = None;
+        w.selected = Some("sdb1".into());
+        assert!(w.ask_menu(Ask::Partition(2)));
+        assert!(w.sheet.is_none() && w.error.is_some());
     }
 }
