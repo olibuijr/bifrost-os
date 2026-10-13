@@ -208,6 +208,21 @@ impl Shell {
                 self.terminal_close_panel(t);
             }
             14 => self.terminal_action(0, t),
+            // The first web link in the selection opens in the browser.
+            15 => {
+                let link = self
+                    .term
+                    .as_ref()
+                    .and_then(|term| term.selected_text())
+                    .and_then(|text| links::first_link(&text));
+                self.terminal_ui.message = match link {
+                    Some(url) => match self.desktop_open_url(&url, t) {
+                        Ok(()) => "Opened link".into(),
+                        Err(e) => format!("Could not open link: {e}"),
+                    },
+                    None => "No link in selection".into(),
+                };
+            }
             _ => {}
         }
     }
