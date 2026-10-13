@@ -75,6 +75,7 @@ ncompress
 net-snmp
 nethogs
 nfs-utils
+ntp
 openbsd-netcat
 openldap
 patch
@@ -90,9 +91,11 @@ rpcbind
 rsync
 ruby
 ruby-rake
+samba
 screen
 sharutils
 s-nail
+smbclient
 sox
 strace
 sysstat
