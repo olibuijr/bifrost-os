@@ -81,6 +81,7 @@ pub mod entropy;
 pub mod passkey;
 pub mod password_gen;
 pub mod digest;
+pub mod crypto_key;
 pub mod trust;
 pub mod gss_status;
 pub mod gss_oid;
