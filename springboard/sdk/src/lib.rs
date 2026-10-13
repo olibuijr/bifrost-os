@@ -212,6 +212,7 @@ pub mod passkey_client_data;
 pub mod credential_exchange;
 pub mod web_extension;
 pub mod web_auth;
+pub mod browser_settings;
 pub mod app_links;
 pub mod reading_list;
 pub mod content_rules;
