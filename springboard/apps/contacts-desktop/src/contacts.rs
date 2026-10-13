@@ -2980,7 +2980,7 @@ impl Contacts {
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
         self.dirty = true;
         let Some(i) = self.focus else {
-            if matches!(out, Out::Hide | Out::Named("Escape")) && matches!(self.screen, Screen::Editor(_)) {
+            if matches!(out, Out::Hide | Out::Named("Escape")) && self.editing() {
                 self.cancel_editor(ui);
             } else if matches!(out, Out::Hide | Out::Named("Escape")) && self.screen == Screen::Settings {
                 self.screen = Screen::List;
