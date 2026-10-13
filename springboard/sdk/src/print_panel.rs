@@ -2,17 +2,16 @@
 //!
 //! A [`PlugIn`] is a named bundle of [`PrintPanel`]s. Each panel lists typed [`PanelOption`]s: a choice from a list, a
 //! toggle, or a bounded number. [`PlugIns::register`] keeps panel ids and option keys unique across every plug-in and
-//! refuses any key that [`PrintInfo`](crate::print::PrintInfo) already writes (paper, copies, margins, pages). The values
-//! render as CUPS `-o key=value` pairs through [`PlugIns::lp_options`], which
-//! [`PrintOperation::with_options`](crate::print::PrintOperation::with_options) appends to the `lp` call.
+//! refuses any key that [`PrintInfo`](crate::print::PrintInfo) already writes (paper, copies, orientation, pages). The
+//! values go out as job-template pairs through [`PlugIns::job_options`], which
+//! [`PrintOperation::with_options`](crate::print::PrintOperation::with_options) sends with the Print-Job request.
 //!
 //! [`Placement`] says which dialog hosts a panel: the print dialog or the page setup dialog. The shell does not draw
 //! either dialog yet (see docs/bifrost-ui.md "Printing"), so an app shows its panels with its own kit controls and reads
 //! and writes values by key. Nothing here touches the system: it is a pure model with host tests.
 
-/// Keys that [`PrintInfo::lp_options`](crate::print::PrintInfo::lp_options) already writes. A plug-in cannot set them.
-pub const RESERVED_KEYS: [&str; 9] =
-    ["media", "landscape", "portrait", "copies", "page-top", "page-left", "page-bottom", "page-right", "page-ranges"];
+/// Keys that [`PrintInfo::attributes`](crate::print::PrintInfo::attributes) already writes. A plug-in cannot set them.
+pub const RESERVED_KEYS: [&str; 4] = ["media", "orientation-requested", "copies", "page-ranges"];
 
 /// The dialog that hosts a panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -149,7 +148,7 @@ pub struct PrintPanel {
     pub id: String,
     pub title: String,
     pub placement: Placement,
-    /// The options in display order. Their order is the order of [`PlugIns::lp_options`].
+    /// The options in display order. Their order is the order of [`PlugIns::job_options`].
     pub options: Vec<PanelOption>,
 }
 
@@ -271,16 +270,10 @@ impl PlugIns {
         Err(PanelError::UnknownKey(key.into()))
     }
 
-    /// Every option as `-o key=value` pairs, in registration order, ready for [`PrintOperation::with_options`](crate::print::PrintOperation::with_options).
-    pub fn lp_options(&self) -> Vec<String> {
-        let mut out = Vec::new();
-        for panel in self.all_panels() {
-            for o in &panel.options {
-                out.push("-o".into());
-                out.push(format!("{}={}", o.key, o.lp_value()));
-            }
-        }
-        out
+    /// Every option as a `(key, value)` job-template pair, in registration order, ready for
+    /// [`PrintOperation::with_options`](crate::print::PrintOperation::with_options).
+    pub fn job_options(&self) -> Vec<(String, String)> {
+        self.all_panels().flat_map(|panel| panel.options.iter().map(|o| (o.key.clone(), o.lp_value()))).collect()
     }
 }
 
@@ -337,14 +330,15 @@ mod tests {
     }
 
     #[test]
-    fn lp_options_follow_registration_and_panel_order() {
+    fn job_options_follow_registration_and_panel_order() {
         let mut p = PlugIns::new();
         p.register(layout_plugin()).unwrap();
-        assert_eq!(p.lp_options().join(" "), "-o sides=one-sided -o quality=3 -o fit=false");
+        let pairs = |p: &PlugIns| -> Vec<String> { p.job_options().into_iter().map(|(k, v)| format!("{k}={v}")).collect() };
+        assert_eq!(pairs(&p), ["sides=one-sided", "quality=3", "fit=false"]);
         p.set("sides", Value::Choice(1)).unwrap();
         p.set("quality", Value::Number(4)).unwrap();
         p.set("fit", Value::Toggle(true)).unwrap();
-        assert_eq!(p.lp_options().join(" "), "-o sides=two-sided-long-edge -o quality=4 -o fit=true");
+        assert_eq!(pairs(&p), ["sides=two-sided-long-edge", "quality=4", "fit=true"]);
     }
 
     #[test]
@@ -372,12 +366,12 @@ mod tests {
     }
 
     #[test]
-    fn plug_in_options_reach_the_lp_call_before_the_document() {
+    fn plug_in_options_are_sent_with_the_job_template() {
         let mut p = PlugIns::new();
         p.register(layout_plugin()).unwrap();
         p.set("fit", Value::Toggle(true)).unwrap();
-        let args = PrintOperation::new("/tmp/report.pdf").with_options(p.lp_options()).lp_args();
-        let tail: Vec<&str> = args[args.len() - 8..].iter().map(|s| s.as_str()).collect();
-        assert_eq!(tail, ["-o", "sides=one-sided", "-o", "quality=3", "-o", "fit=true", "--", "/tmp/report.pdf"]);
+        let op = PrintOperation::new("/tmp/report.pdf").with_options(p.job_options());
+        assert!(op.options.contains(&("fit".to_string(), "true".to_string())));
+        assert_eq!(op.options.len(), 3);
     }
 }
