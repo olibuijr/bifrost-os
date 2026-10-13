@@ -134,6 +134,7 @@ pub mod peek;
 pub mod quick_look;
 pub mod permission_kit;
 pub mod authorization;
+pub mod audio_session;
 pub mod now_playing;
 pub mod thumbnails;
 pub mod webview;

@@ -10,9 +10,9 @@
     {
       "feature": "Audio session (AVAudioSession)",
       "apple": "AVAudioSession: setCategory, setMode, setActive, activate/deactivate",
-      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
-      "status": "gap",
-      "note": "The pure model had no caller and was removed. no app-facing session category or mode; the service decides ownership, apps cannot declare intent"
+      "bifrost": "springboard/sdk/src/audio_session.rs (bifrost_app::audio_session::SessionHub, pure model)",
+      "status": "partial",
+      "note": "category, mode, options (mixWithOthers, duckOthers), setActive and interruption began/ended with shouldResume modelled; not wired to audiod yet, needs a Midget check"
     },
     {
       "feature": "Audio application and recording permission",
@@ -24,16 +24,16 @@
     {
       "feature": "Audio interruptions",
       "apple": "AVAudioSession interruption notifications",
-      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
-      "status": "gap",
-      "note": "The pure model had no caller and was removed. no interruption event in svc::audio Evt (only State, Record, RecordDone)"
+      "bifrost": "springboard/sdk/src/audio_session.rs (bifrost_app::audio_session::SessionHub, pure model)",
+      "status": "partial",
+      "note": "category, mode, options (mixWithOthers, duckOthers), setActive and interruption began/ended with shouldResume modelled; not wired to audiod yet, needs a Midget check"
     },
     {
       "feature": "Route changes",
       "apple": "AVAudioSession route-change notifications, routing to specific devices",
       "bifrost": "springboard/src/media/route.rs (jack, Route::Speaker and Route::Headphones); springboard/src/shell/mod.rs:1318; springboard/src/shell/volume_hud.rs",
       "status": "os",
-      "note": "the shell switches speaker and headphones through card switches; apps get no route notification and cannot pick a device"
+      "note": "the shell switches speaker and headphones through card switches; apps get no route notification and cannot pick a device; audio_session::SessionHub::set_route models routeChangeNotification (reason, previous route), not wired to the shell yet"
     },
     {
       "feature": "AirPods automatic switching (AVAudioRoutingArbiter)",

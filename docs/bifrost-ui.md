@@ -1986,6 +1986,25 @@ Apple reference: `AVAudioPlayer` (volume, `setVolume(_:fadeDuration:)`, `pan`, `
 
 Tests: unit tests in `ui/src/audio_player.rs` (not run in this round).
 
+## AVFAudio: audio sessions and interruptions (`bifrost_app::audio_session`)
+
+Apple reference: `AVAudioSession` (`setCategory(_:mode:options:)`, `setActive(_:)`), `interruptionNotification` and
+`routeChangeNotification`. `SessionHub` is the pure model: `register`, `set_category` (Category, Mode, Options with
+`mix_with_others` and `duck_others`), `set_active`, `set_route`, `take_events` per client. Decisions:
+
+- Nothing is active until `set_active(client, true)`; apps never take audio on launch or focus.
+- Ambient, `mix_with_others` and `duck_others` sessions mix: they never interrupt and are never interrupted. Ducking
+  only flags the others (`is_ducked`).
+- Activating a non-mixing session interrupts the other active non-mixing sessions (`Began`). Deactivating it, or
+  `unregister` on quit, sends `Ended { should_resume: true }`; the app reactivates itself. Chains resume in order.
+- `set_route` posts `RouteChange` (raw reasons as in the framework) with the previous route to every client; a category
+  change posts `CategoryChange` to that client.
+- Not done: the arbitration is not in `audiod` and no wire messages exist yet, the shell does not call `set_route`, and
+  the other modes and options (`interruptSpokenAudioAndMixWithOthers`, `allowBluetooth`) are not modelled. Rows stay
+  partial until a Midget check.
+
+Tests: unit tests in `sdk/src/audio_session.rs` (not run in this round).
+
 ## Image analysis: subject lifting and Visual Look Up (`bifrost_app::image_analysis`)
 
 Models: `springboard/ui/src/subject_lift.rs` (subjects, hit test, highlight, cutout) and
