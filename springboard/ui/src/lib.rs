@@ -1093,3 +1093,4 @@ pub mod print;
 pub mod ipp;
 pub mod cups;
 pub mod material_style;
+pub mod thumb_service;
