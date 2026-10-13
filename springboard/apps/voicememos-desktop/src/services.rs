@@ -24,6 +24,8 @@ pub enum Want {
     Publish(Json),
     /// Withdraw this app's session from the media tile.
     Withdraw,
+    /// Make this input device (by id) the default one for recording.
+    SetInput(String),
 }
 
 /// The question a service reply answers.
@@ -54,6 +56,11 @@ impl Bus {
             }
             Want::Withdraw => {
                 now_playing::clear(ctx);
+                None
+            }
+            Want::SetInput(id) => {
+                // the shell answers with a route event, which makes the app list the devices again
+                audio_devices::set_default(ctx, audio_devices::Role::Input, &id);
                 None
             }
         };
@@ -139,6 +146,19 @@ mod tests {
         let ToShell::ServiceCall { service, method, body, .. } = &sent[2] else { panic!("a service call") };
         assert_eq!((service.as_str(), method.as_str()), ("now_playing", "publish"));
         assert!(body.contains("Standup"), "{body}");
+    }
+
+    #[test]
+    fn choosing_an_input_sets_the_default_input_device_and_needs_no_reply() {
+        let ctx = ctx();
+        let mut bus = Bus::default();
+        bus.send(&ctx, Want::SetInput("usb-mic".into()));
+        let sent = ctx.take_sent();
+        assert_eq!(sent.len(), 1);
+        let ToShell::ServiceCall { request, service, method, body } = &sent[0] else { panic!("a service call") };
+        assert_eq!((service.as_str(), method.as_str()), ("audio-devices", "set_default"));
+        assert!(body.contains("usb-mic") && body.contains("input"), "{body}");
+        assert_eq!(bus.take(*request), None, "the reply is not tracked");
     }
 
     #[test]
