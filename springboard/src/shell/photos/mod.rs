@@ -201,6 +201,10 @@ pub enum Target {
     AddKeywordOpen,
     PasteEdits,
     MergeDuplicates,
+    /// the More page's rows for smart albums: save the search as one, change the rules of one, delete one
+    SaveSmart,
+    EditRules,
+    DeleteSmart,
     /// the Info sheet's Edit Details row, and a row of the Details sheet
     InfoDetails,
     Detail(DetailRow),
@@ -368,10 +372,22 @@ pub enum Album {
     Duplicates,
     /// a user album: index into the album list
     User(u8),
+    /// a smart album: the slot of its saved rules
+    Smart(u8),
 }
 
 /// At most this many user albums.
 const MAX_USER_ALBUMS: usize = 8;
+/// At most this many smart albums.
+const MAX_SMART_ALBUMS: usize = 8;
+
+/// A smart album: a name, the rules it was saved with (a search, see `meta::Query`) and the photos that match them.
+struct SmartEntry {
+    slot: u8,
+    name: String,
+    rules: String,
+    photos: Vec<Photo>,
+}
 
 impl Album {
 
@@ -385,6 +401,7 @@ impl Album {
             Self::Hidden => "Hidden",
             Self::Duplicates => "Duplicates",
             Self::User(_) => "Album",
+            Self::Smart(_) => "Smart Album",
         }
     }
 }
@@ -459,6 +476,8 @@ pub struct Photos {
     screenshots: Vec<Photo>,
     /// user albums: name and members, by `ua.<i>.` prefs
     user_albums: Vec<(String, Vec<Photo>)>,
+    /// smart albums, by `sa.<slot>.` prefs
+    smart_albums: Vec<SmartEntry>,
     /// the current album after the date filter: what the grid and viewer index
     view: Vec<Photo>,
     /// the active month filter: its title and `[start, end)` in Unix seconds
@@ -585,6 +604,7 @@ impl Photos {
             recents: vec![],
             screenshots: vec![],
             user_albums: vec![],
+            smart_albums: vec![],
             view: vec![],
             filter: None,
             selection: Selection::default(),
@@ -712,6 +732,7 @@ impl Photos {
             Album::Screenshots => &self.screenshots,
             Album::Trash => &self.trash,
             Album::User(i) => self.user_albums.get(i as usize).map_or(&[][..], |u| &u.1),
+            Album::Smart(slot) => self.smart_albums.iter().find(|a| a.slot == slot).map_or(&[][..], |a| &a.photos),
         }
     }
 
@@ -726,6 +747,7 @@ impl Photos {
         }
         let names: Vec<(usize, String)> = self.user_albums.iter().enumerate().map(|(i, u)| (i, u.0.clone())).collect();
         v.extend(albums::album_order(&names, self.albums_by_name()).into_iter().map(|i| Album::User(i as u8)));
+        v.extend(self.smart_albums.iter().map(|a| Album::Smart(a.slot)));
         v
     }
 
@@ -769,6 +791,12 @@ impl Photos {
         if matches!(self.album, Album::User(_)) {
             v.push(Target::RenameAlbum);
         }
+        if !self.search.is_empty() && self.smart_albums.len() < MAX_SMART_ALBUMS {
+            v.push(Target::SaveSmart);
+        }
+        if matches!(self.album, Album::Smart(_)) {
+            v.extend([Target::EditRules, Target::DeleteSmart]);
+        }
         if self.selection.active && !self.selection.is_empty() {
             v.push(Target::AddKeywordOpen);
             if self.edit_clip.is_some() {
@@ -805,6 +833,7 @@ impl Photos {
     fn album_title(&self, album: Album) -> String {
         match album {
             Album::User(i) => self.user_albums.get(i as usize).map_or_else(|| album.title().to_string(), |u| u.0.clone()),
+            Album::Smart(slot) => self.smart_albums.iter().find(|a| a.slot == slot).map_or_else(|| album.title().to_string(), |a| a.name.clone()),
             _ => album.title().to_string(),
         }
     }
@@ -891,7 +920,7 @@ impl Photos {
     }
 
     /// The photos of `photos` that the search in force matches.
-    fn search_filter(&self, photos: Vec<Photo>) -> Vec<Photo> {
+    fn search_filter(&self, photos: Vec<Photo>, query: &meta::Query) -> Vec<Photo> {
         let members: Vec<(&str, HashSet<&Path>)> = self.user_albums.iter().map(|(name, list)| (name.as_str(), list.iter().map(|p| p.path.as_path()).collect())).collect();
         let shots: HashSet<&Path> = self.screenshots.iter().map(|p| p.path.as_path()).collect();
         photos
@@ -910,7 +939,7 @@ impl Photos {
                     albums: &albums,
                     details: &details,
                 };
-                self.query.matches(&subject, self.offset)
+                query.matches(&subject, self.offset)
             })
             .collect()
     }
@@ -996,13 +1025,27 @@ impl Photos {
             .collect();
         self.recents = models::smart_album(SmartAlbum::RecentlyAdded, &self.visible, |p| self.is_favourite(p), now);
         self.screenshots = models::smart_album(SmartAlbum::Screenshots, &self.visible, |p| self.is_favourite(p), now);
+        self.smart_albums = (0..MAX_SMART_ALBUMS)
+            .filter_map(|slot| {
+                let name = self.prefs.get(&format!("sa.{slot}.name")).filter(|n| !n.is_empty())?.to_string();
+                let rules = self.prefs.get(&format!("sa.{slot}.q")).unwrap_or("").to_string();
+                let query = meta::Query::parse(&rules, self.offset, now);
+                let photos = if query.is_empty() { Vec::new() } else { self.search_filter(self.visible.clone(), &query) };
+                Some(SmartEntry { slot: slot as u8, name, rules, photos })
+            })
+            .collect();
+        if let Album::Smart(slot) = self.album {
+            if !self.smart_albums.iter().any(|a| a.slot == slot) {
+                self.album = Album::All;
+            }
+        }
         let view = {
             let base = self.album_list(self.album);
             let filtered = match &self.filter {
                 Some((_, range)) => albums::in_range(base, *range),
                 None => base.to_vec(),
             };
-            let searched = if self.query.is_empty() { filtered } else { self.search_filter(filtered) };
+            let searched = if self.query.is_empty() { filtered } else { self.search_filter(filtered, &self.query) };
             models::by_date(&searched, self.newest_first)
         };
         self.view = view;
@@ -1907,6 +1950,19 @@ impl Photos {
             Target::AddKeywordOpen => self.open_entry(ui, Purpose::AddKeyword, "", None, t),
             Target::PasteEdits => self.paste_to_selection(ui),
             Target::MergeDuplicates => self.merge_duplicates(ui),
+            Target::SaveSmart => {
+                let slot = (0..MAX_SMART_ALBUMS).find(|slot| self.prefs.get(&format!("sa.{slot}.name")).is_none_or(str::is_empty));
+                if let Some(slot) = slot {
+                    self.open_entry(ui, Purpose::SmartName(slot as u8), &format!("Smart Album {}", slot + 1), None, t);
+                }
+            }
+            Target::EditRules => {
+                if let Album::Smart(slot) = self.album {
+                    let rules = self.smart_albums.iter().find(|a| a.slot == slot).map(|a| a.rules.clone()).unwrap_or_default();
+                    self.open_entry(ui, Purpose::SmartRules(slot), &rules, None, t);
+                }
+            }
+            Target::DeleteSmart => self.delete_smart(ui),
             Target::ChooseAlbum(album) => self.select_album(ui, album),
             Target::AlbumCancel => self.album_menu = false,
             Target::SortOrder => {
@@ -2438,6 +2494,7 @@ impl Photos {
                     (Album::Hidden, _) => ("No Hidden Photos", "Photos you hide from All Photos appear here."),
                     (Album::Duplicates, _) => ("No Duplicates", "Pictures that are the same file appear here."),
                     (Album::User(_), _) => ("No Photos", "Open a photo and tap Album to add it here."),
+                    (Album::Smart(_), _) => ("No Photos", "No photo matches the rules of this smart album."),
                 };
                 self.label(s, ui, title, 22.0, Weight::Bold, WHITE, cx, cy - ui.pt(14.0));
                 self.label(s, ui, hint, 15.0, Weight::Regular, SECONDARY, cx, cy + ui.pt(14.0));

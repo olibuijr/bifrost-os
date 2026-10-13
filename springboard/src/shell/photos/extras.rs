@@ -306,6 +306,7 @@ impl Photos {
                 meta::parse_taken(text, self.offset, unix_now(), current).is_none().then_some("That is not a date or a time. Try 2026-10-04 14:30.")
             }
             Purpose::ImportFolder => (!Path::new(text.trim()).is_dir()).then_some("That folder does not exist."),
+            Purpose::SmartRules(_) => meta::Query::parse(text, self.offset, unix_now()).is_empty().then_some("Add at least one rule, such as #beach or is:favorite."),
             _ => None,
         }
     }
@@ -375,6 +376,19 @@ impl Photos {
                 let writes = meta::add_keyword_writes(&self.prefs, &chosen, text);
                 self.write_many("Add Keyword", writes);
                 self.selection.end();
+                self.rebuild(ui);
+            }
+            Purpose::SmartName(slot) => {
+                let name = meta::clean(text, meta::MAX_TEXT);
+                let name = if name.is_empty() { format!("Smart Album {}", slot + 1) } else { name };
+                let writes = vec![(format!("sa.{slot}.name"), name), (format!("sa.{slot}.q"), self.search.clone())];
+                if self.write_many("New Smart Album", writes) {
+                    self.set_search(ui, "");
+                    self.select_album(ui, Album::Smart(slot));
+                }
+            }
+            Purpose::SmartRules(slot) => {
+                self.write_many("Smart Album Rules", vec![(format!("sa.{slot}.q"), text.trim().to_string())]);
                 self.rebuild(ui);
             }
             Purpose::ImportFolder => {
@@ -624,6 +638,9 @@ impl Photos {
             Target::UndoLast => (format!("Undo {}", self.stack.undo_label().unwrap_or("")), BLUE, String::new()),
             Target::RedoLast => (format!("Redo {}", self.stack.redo_label().unwrap_or("")), BLUE, String::new()),
             Target::RenameAlbum => ("Rename Album".to_string(), WHITE, String::new()),
+            Target::SaveSmart => ("Save Search as Smart Album".to_string(), BLUE, String::new()),
+            Target::EditRules => ("Edit Smart Album Rules".to_string(), WHITE, String::new()),
+            Target::DeleteSmart => ("Delete Smart Album".to_string(), RED, String::new()),
             Target::AddKeywordOpen => ("Add Keyword to Selection".to_string(), WHITE, String::new()),
             Target::PasteEdits => ("Paste Edits to Selection".to_string(), WHITE, String::new()),
             _ => ("Merge Duplicates".to_string(), RED, self.duplicates.len().to_string()),
@@ -685,6 +702,17 @@ impl Photos {
             self.rescan();
         }
         self.rebuild(ui);
+    }
+
+    /// Deletes the open smart album; its rules go with it, and Undo brings them back.
+    pub(super) fn delete_smart(&mut self, ui: &Ui) {
+        self.more_menu = false;
+        if let Album::Smart(slot) = self.album {
+            let writes = vec![(format!("sa.{slot}.name"), String::new()), (format!("sa.{slot}.q"), String::new())];
+            if self.write_many("Delete Smart Album", writes) {
+                self.select_album(ui, Album::All);
+            }
+        }
     }
 
     /// Paste Edits: puts the copied adjustments on every selected photo.
@@ -921,6 +949,62 @@ mod tests {
         let (x, y, w, _) = p.sheet_rect(ui, Sheet::Export);
         let h = ui.pt(INFO_ROW_PT);
         tap(p, ui, x + w / 2.0, y + h * (i + 1) as f32 + h / 2.0, t);
+    }
+
+    #[test]
+    fn a_search_is_saved_as_a_smart_album_whose_rules_can_change() {
+        let (mut p, dir, ui) = photos("smart", 12);
+        // saving needs a search to save
+        open_more(&mut p, &ui, 500.0);
+        assert!(!p.more_rows().contains(&Target::SaveSmart));
+        assert!(p.hw_back(&ui, 600.0));
+        p.set_search(&ui, "October 2026");
+        open_more(&mut p, &ui, 1000.0);
+        more_tap(&mut p, &ui, Target::SaveSmart, 1200.0);
+        assert_eq!(p.entry.as_ref().map(|e| e.field.text().to_string()), Some("Smart Album 1".to_string()));
+        for _ in 0.."Smart Album 1".len() {
+            p.key(&ui, Out::Backspace, 1300.0);
+        }
+        type_text(&mut p, &ui, "Autumn", 1400.0);
+        p.key(&ui, Out::Enter, 1500.0);
+        assert_eq!(p.album(), Album::Smart(0));
+        assert_eq!(p.search(), "", "the search became the album");
+        assert_eq!(p.album_title(p.album()), "Autumn");
+        assert_eq!(p.photos().len(), 2);
+        assert_eq!(p.prefs.get("sa.0.q"), Some("October 2026"));
+        assert!(p.menu_albums().contains(&Album::Smart(0)));
+        frame(&mut p, &ui);
+        // the album follows the library: a favourite rule picks up what is marked later
+        open_more(&mut p, &ui, 2000.0);
+        more_tap(&mut p, &ui, Target::EditRules, 2200.0);
+        assert_eq!(p.entry.as_ref().map(|e| e.field.text().to_string()), Some("October 2026".to_string()));
+        for _ in 0.."October 2026".len() {
+            p.key(&ui, Out::Backspace, 2250.0);
+        }
+        p.key(&ui, Out::Enter, 2300.0);
+        assert!(p.entry.is_some() && p.entry_error.is_some(), "an empty rule is refused");
+        type_text(&mut p, &ui, "is:favorite", 2350.0);
+        p.key(&ui, Out::Enter, 2400.0);
+        assert!(p.entry.is_none());
+        assert!(p.photos().is_empty());
+        let first = p.all[0].clone();
+        p.write_favourite(&first, true);
+        p.rebuild(&ui);
+        assert_eq!(p.photos().iter().map(|q| q.path.clone()).collect::<Vec<_>>(), [first.path.clone()]);
+        // a search inside the album narrows it further
+        p.set_search(&ui, "img_9999");
+        assert!(p.photos().is_empty());
+        p.set_search(&ui, "");
+        // deleting leaves the library alone, and Undo brings the album back
+        open_more(&mut p, &ui, 3000.0);
+        more_tap(&mut p, &ui, Target::DeleteSmart, 3200.0);
+        assert_eq!(p.album(), Album::All);
+        assert!(!p.menu_albums().contains(&Album::Smart(0)));
+        assert_eq!(p.photos().len(), 12);
+        p.key(&ui, Out::Named("Undo"), 3300.0);
+        assert!(p.menu_albums().contains(&Album::Smart(0)));
+        assert_eq!(p.album_title(Album::Smart(0)), "Autumn");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
