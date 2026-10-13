@@ -4,15 +4,15 @@
   "macos_since": "10.0",
   "status": "partial",
   "bifrost": "bifrost_app::defaults, coding, file_coordination, fswatch, workspace, quicksearch, document; docbroker file grants",
-  "summary": "Settings, JSON and plist coding, file coordination, change events and Spotlight-style indexing have SDK APIs. FileManager has an SDK type for item operations, atomic writes, replaceItemAt, standard user directories and option-driven enumeration. There is no FileWrapper, no keyed archiver or binary plist, and no iCloud.",
+  "summary": "Settings, JSON, XML and binary plist coding, keyed archives with secure coding, FileWrapper, bookmarks, FileManager item operations with replaceItemAt and enumerators, file metadata queries, backup exclusion, file coordination, change events and Spotlight-style indexing have SDK APIs. No iCloud and no file versions.",
   "rea_evidence": "ev_177296a326822b32e03af061d208f36da74e7e78f5ede1bf1a127a910c832240",
   "features": [
     {
       "feature": "File System (create, read, write, examine files)",
       "apple": "FileManager, FileHandle, URL file APIs, FileWrapper, bookmarks",
-      "bifrost": "springboard/sdk/src/file_manager.rs (NativeFileManager: item operations, write_atomically, replace_item_at, url_for, enumerator); springboard/src/bare/docbroker.rs; docs/file-portal-design.md; springboard/sdk/src/document.rs; wired: springboard/apps/files/src/info.rs (get_info reads the item status for the panel)",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 37 tests. FileManager item operations, Data-style atomic write, replaceItemAt with backup, standard directories and enumerator options are host unit-tested; no FileWrapper, and user files still go through the file portal grants. Not yet wired into apps; verify on Midget for parity."
+      "bifrost": "springboard/src/bare/docbroker.rs; docs/file-portal-design.md; springboard/sdk/src/document.rs; wired: springboard/apps/files/src/info.rs (get_info reads the item status for the panel); springboard/sdk/src/file_manager.rs (replace_item_at, enumerator, resource_values), springboard/sdk/src/file_wrapper.rs, springboard/sdk/src/bookmark.rs",
+      "status": "partial",
+      "note": "verified on Midget 0.7.25 by 37 tests (earlier part). Added later, host tests only: NativeFileManager has item operations, replaceItemAt (keeps permissions and xattrs, backup name), a directory enumerator with prefetched resource keys, and URLResourceKey values (name, size, dates, identifier, volume capacity incl. important usage). FileWrapper (regular/directory/symlink, matchesContents, atomic write with originalContents hard links) and bookmarks (inode+path resolution, stale flag, relative-to, cached resource values, security-scoped gate) are new. Host tests only (tests/files_persistence.rs); verify on Midget for parity. Gaps: bookmark scope is enforced by the API only, no network volumes, no file versions."
     },
     {
       "feature": "File coordination and presenters",
@@ -38,16 +38,16 @@
     {
       "feature": "Archives and Serialization: JSON and property lists",
       "apple": "JSONEncoder/Decoder, PropertyListEncoder/Decoder, JSONSerialization",
-      "bifrost": "springboard/sdk/src/coding.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 11 tests. JSON and XML plist only; no binary plist, Data unsupported, few strategies."
+      "bifrost": "springboard/sdk/src/coding.rs, springboard/sdk/src/binary_plist.rs",
+      "status": "partial",
+      "note": "verified on Midget 0.7.25 by 11 tests (earlier part). Added later, host tests only: JSON, XML plist and binary plist (bplist00 read and write: all int widths, real, date, data, ascii/utf-16 strings, uid, arrays, dicts; PropertyListEncoder.encode_binary and decode_binary). Data has no Codable form yet, few strategies. Host tests only."
     },
     {
       "feature": "Archives and Serialization: keyed archiving",
       "apple": "NSKeyedArchiver, NSKeyedUnarchiver, NSSecureCoding",
       "bifrost": "springboard/sdk/src/keyed_archive.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 8 tests. Wave 5 (theme-07, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Codable-style traits exist; no keyed archive format."
+      "status": "partial",
+      "note": "verified on Midget 0.7.25 by 8 tests (earlier part). Added later, host tests only: Pure model plus a binary form in the keyed-archive layout ($archiver, $version, $top, $objects, $class descriptions) and secure coding (requiresSecureCoding, decodeObject(of:forKey:) with a per-call class list). The archiver name is this system's own, so archives from other implementations are not read. Not wired into apps; host tests only."
     },
     {
       "feature": "Settings",
@@ -73,9 +73,9 @@
     {
       "feature": "Spotlight: metadata queries",
       "apple": "NSMetadataQuery, MDQuery",
-      "bifrost": "springboard/sdk/src/file_manager.rs, springboard/ui/src/metaquery.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 17 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No file-system-wide metadata query API for apps."
+      "bifrost": "springboard/sdk/src/metadata_query.rs (file system), springboard/ui/src/metaquery.rs",
+      "status": "partial",
+      "note": "verified on Midget 0.7.25 by 17 tests (earlier part). Added later, host tests only: MetadataQuery over search scopes: predicate (compare, like, and, or, not on name, path, size, change date, content type, is-directory), gathering then update notifications through fswatch, MetadataItem attributes, disable and enable updates. Host tests only; no sort descriptors, grouping, predicate parser or content attributes."
     },
     {
       "feature": "iCloud documents and key-value store",
@@ -87,9 +87,9 @@
     {
       "feature": "Backup exclusion and purgeable data",
       "apple": "URLResourceKey isExcludedFromBackup, purgeable",
-      "bifrost": "springboard/render/src/purgeable.rs",
+      "bifrost": "springboard/sdk/src/file_metadata.rs (xattr, set_excluded_from_backup, backup_items), springboard/sdk/src/file_manager.rs (IsExcludedFromBackup key), springboard/render/src/purgeable.rs",
       "status": "partial",
-      "note": "Memory caches purge on pressure; no on-disk purgeable or backup exclusion flags."
+      "note": "isExcludedFromBackup is stored as the user.bifrost.exclude-from-backup xattr and honoured by backup_items (an excluded directory is skipped with its contents). Memory caches purge on pressure; no on-disk purgeable data yet. Host tests only."
     },
     {
       "feature": "File versions",
@@ -100,11 +100,10 @@
     }
   ],
   "gaps": [
-    "FileManager gaps: FileWrapper, bookmarks, replaceItemAt metadata-only and backup-deletion options, enumerator resource keys",
-    "Keyed archiver and binary plist",
-    "Metadata query over files",
+    "Midget check of the new file APIs (all rows stay partial until then)",
+    "On-disk purgeable data",
     "iCloud / cloud-synced documents and key-value store",
-    "Backup exclusion and on-disk purgeable data",
-    "File versions"
+    "File versions",
+    "Metadata query sort descriptors, grouping and predicate parser"
   ]
 }

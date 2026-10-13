@@ -2,10 +2,168 @@
 //!
 //! The model keeps an attribute snapshot per path and diffs two snapshots into the events a monitor would
 //! report for the change: mode, owner and group (one event carries both), flags, extended attribute set and
-//! delete, and access control list set or clear. It is pure: nothing reads the file system, and no shell path
+//! delete, and access control list set or clear. The diff is pure: it reads nothing, and no shell path
 //! produces these events yet. Stat and directory-listing records are not events and are not modelled here.
+//!
+//! The second half of the module reads and writes real extended attributes (never following a link) and builds
+//! backup exclusion on top: an item marked with [`BACKUP_EXCLUDED_XATTR`] is skipped, with everything below it,
+//! by [`backup_items`], which is the walk a backup job uses.
 
 use std::collections::BTreeMap;
+use std::ffi::CString;
+use std::io;
+use std::os::raw::{c_char, c_int, c_void};
+use std::os::unix::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
+
+extern "C" {
+    fn lgetxattr(path: *const c_char, name: *const c_char, value: *mut c_void, size: usize) -> isize;
+    fn lsetxattr(path: *const c_char, name: *const c_char, value: *const c_void, size: usize, flags: c_int) -> c_int;
+    fn lremovexattr(path: *const c_char, name: *const c_char) -> c_int;
+    fn llistxattr(path: *const c_char, list: *mut c_char, size: usize) -> isize;
+}
+
+/// `ENODATA`: the attribute is not set.
+const ENODATA: i32 = 61;
+
+/// The attribute that marks an item as excluded from backup (`URLResourceValues.isExcludedFromBackup`).
+pub const BACKUP_EXCLUDED_XATTR: &str = "user.bifrost.exclude-from-backup";
+
+fn c_path(path: &Path) -> io::Result<CString> {
+    CString::new(path.as_os_str().as_bytes()).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "path contains a NUL"))
+}
+
+fn c_name(name: &str) -> io::Result<CString> {
+    CString::new(name).map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "attribute name contains a NUL"))
+}
+
+/// The value of extended attribute `name` on `path`, or `None` when it is not set.
+pub fn xattr(path: &Path, name: &str) -> io::Result<Option<Vec<u8>>> {
+    let (p, n) = (c_path(path)?, c_name(name)?);
+    // SAFETY: both strings are live NUL-terminated buffers; a null buffer with size 0 asks for the length.
+    let size = unsafe { lgetxattr(p.as_ptr(), n.as_ptr(), std::ptr::null_mut(), 0) };
+    if size < 0 {
+        return missing_or_error();
+    }
+    let mut buf = vec![0u8; size as usize];
+    // SAFETY: `buf` is a live buffer of the length passed.
+    let got = unsafe { lgetxattr(p.as_ptr(), n.as_ptr(), buf.as_mut_ptr() as *mut c_void, buf.len()) };
+    if got < 0 {
+        return missing_or_error();
+    }
+    buf.truncate(got as usize);
+    Ok(Some(buf))
+}
+
+fn missing_or_error() -> io::Result<Option<Vec<u8>>> {
+    let e = io::Error::last_os_error();
+    if e.raw_os_error() == Some(ENODATA) {
+        Ok(None)
+    } else {
+        Err(e)
+    }
+}
+
+/// Sets extended attribute `name` on `path`, replacing any value.
+pub fn set_xattr(path: &Path, name: &str, value: &[u8]) -> io::Result<()> {
+    let (p, n) = (c_path(path)?, c_name(name)?);
+    // SAFETY: the strings and `value` are live for the call.
+    let rc = unsafe { lsetxattr(p.as_ptr(), n.as_ptr(), value.as_ptr() as *const c_void, value.len(), 0) };
+    if rc < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+/// Removes extended attribute `name`. An attribute that is not set is not an error.
+pub fn remove_xattr(path: &Path, name: &str) -> io::Result<()> {
+    let (p, n) = (c_path(path)?, c_name(name)?);
+    // SAFETY: both strings are live NUL-terminated buffers.
+    let rc = unsafe { lremovexattr(p.as_ptr(), n.as_ptr()) };
+    if rc < 0 {
+        let e = io::Error::last_os_error();
+        if e.raw_os_error() != Some(ENODATA) {
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
+/// The names of the extended attributes set on `path`, sorted.
+pub fn list_xattrs(path: &Path) -> io::Result<Vec<String>> {
+    let p = c_path(path)?;
+    // SAFETY: a null buffer with size 0 asks for the length.
+    let size = unsafe { llistxattr(p.as_ptr(), std::ptr::null_mut(), 0) };
+    if size < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let mut buf = vec![0u8; size as usize];
+    // SAFETY: `buf` is a live buffer of the length passed.
+    let got = unsafe { llistxattr(p.as_ptr(), buf.as_mut_ptr() as *mut c_char, buf.len()) };
+    if got < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    buf.truncate(got as usize);
+    let mut names: Vec<String> =
+        buf.split(|b| *b == 0).filter(|s| !s.is_empty()).map(|s| String::from_utf8_lossy(s).into_owned()).collect();
+    names.sort();
+    Ok(names)
+}
+
+/// Copies every extended attribute of `from` onto `to`. Attributes the target refuses are skipped.
+pub fn copy_xattrs(from: &Path, to: &Path) -> io::Result<()> {
+    for name in list_xattrs(from)? {
+        if let Some(value) = xattr(from, &name)? {
+            let _ = set_xattr(to, &name, &value);
+        }
+    }
+    Ok(())
+}
+
+/// `URLResourceValues.isExcludedFromBackup` setter: marks or unmarks `path`.
+pub fn set_excluded_from_backup(path: &Path, excluded: bool) -> io::Result<()> {
+    if excluded {
+        set_xattr(path, BACKUP_EXCLUDED_XATTR, b"1")
+    } else {
+        remove_xattr(path, BACKUP_EXCLUDED_XATTR)
+    }
+}
+
+/// `URLResourceValues.isExcludedFromBackup` getter. An item whose attributes cannot be read counts as included.
+pub fn is_excluded_from_backup(path: &Path) -> bool {
+    matches!(xattr(path, BACKUP_EXCLUDED_XATTR), Ok(Some(_)))
+}
+
+/// The items a backup of `root` covers: `root`'s descendants in depth-first order, names sorted within each level.
+/// An excluded item is left out together with everything below it. Symbolic links are listed, never entered. An
+/// excluded `root` gives an empty list.
+pub fn backup_items(root: &Path) -> io::Result<Vec<PathBuf>> {
+    let mut out = Vec::new();
+    if is_excluded_from_backup(root) {
+        return Ok(out);
+    }
+    collect_backup_items(root, &mut out)?;
+    Ok(out)
+}
+
+fn collect_backup_items(dir: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(dir)? {
+        names.push(entry?.file_name());
+    }
+    names.sort();
+    for name in names {
+        let path = dir.join(name);
+        if is_excluded_from_backup(&path) {
+            continue;
+        }
+        out.push(path.clone());
+        if std::fs::symlink_metadata(&path)?.file_type().is_dir() {
+            collect_backup_items(&path, out)?;
+        }
+    }
+    Ok(())
+}
 
 /// The attributes of one path that a metadata event can change.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
