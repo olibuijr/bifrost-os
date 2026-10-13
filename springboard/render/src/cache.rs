@@ -85,7 +85,7 @@ const MAX_METRICS: usize = 2048;
 impl TextCache {
     /// An empty cache holding at most `bytes` of pixels.
     pub fn with_budget(bytes: usize) -> Self {
-        TextCache { young: Generation::default(), old: Generation::default(), budget: bytes, emoji_gen: 0, epoch: 0 }
+        TextCache { young: Generation::default(), old: Generation::default(), budget: bytes, emoji_gen: 0, epoch: 0, widths: HashMap::new(), fits: HashMap::new(), metrics: 0 }
     }
 
     /// An empty cache sized to a `w` x `h` screen (see `budget_for_screen`).

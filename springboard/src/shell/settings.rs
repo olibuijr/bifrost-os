@@ -3052,7 +3052,7 @@ mod tests {
     /// Lets the Fonts read on its worker land, as the frames would.
     fn settle_fonts(st: &mut Settings, ui: &Ui) {
         let end = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while st.fonts.busy() && std::time::Instant::now() < end {
+        while st.loads.fonts.busy() && std::time::Instant::now() < end {
             st.tick(ui, 0.0);
             std::thread::sleep(std::time::Duration::from_millis(2));
         }

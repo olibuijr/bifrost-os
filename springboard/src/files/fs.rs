@@ -561,7 +561,7 @@ pub fn recent_in(roots: &[PathBuf], limit: usize) -> Vec<Entry> {
 
 /// Entries of the Recently Deleted folder, shown under their original names.
 fn list_trash(dir: &Path) -> io::Result<Vec<Entry>> {
-    let mut out = list_dir(dir)?;
+    let mut out = list_batched(dir, |_| {})?;
     for e in &mut out {
         if let Some((_, name)) = super::trash::parse(&e.name) {
             let name = name.to_string();

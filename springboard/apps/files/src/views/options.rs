@@ -305,7 +305,7 @@ impl Files {
             out.push(e);
             depth.push(d);
             if open {
-                if let Some(mut kids) = self.kids_of(&path) {
+                if let Some(mut kids) = self.vo.kids_of(&path) {
                     self.order(&mut kids);
                     self.splice(kids, d + 1, out, depth);
                 }

@@ -1904,7 +1904,7 @@ mod tests {
         assert!(items.iter().any(|i| i.action == Action::Push(PageId::LockScreen)), "Lock Screen is in the root list");
 
         // the computer name and the sharing services come first; Nearby Share and AirPlay & Handoff are the last group
-        let view = super::sharing_page::View { computer: "Midget".into(), services: Vec::new() };
+        let view = super::super::sharing_page::View { computer: "Midget".into(), services: Vec::new() };
         let sharing = sharing_spec(&opts, Some(&view));
         assert_eq!(sharing.groups[0].items[0].action, Action::Sharing(super::super::sharing_page::Edit::ComputerName));
         assert_eq!(sharing.groups[2].items[0].action, Action::Push(PageId::Nearby));
