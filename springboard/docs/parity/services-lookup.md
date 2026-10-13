@@ -30,8 +30,8 @@ Look Up popover with dictionary and quick search results on Ctrl+Cmd+D and three
 
 ### Look Up in Dictionary
 
-- BifrOSt path: route `Intent { app: DICTIONARY_APP, intent: "look-up", param: "word" }`, run by
-  `shell/intents.rs::run_with` over the app's control socket (`intent.look-up` with `{"word": ...}`).
+- BifrOSt path: route `Route::LookUp(term)`, opening the popover. Its Open in Dictionary row runs the `look-up` intent
+  (`Shell::run_intent` over `shell/intents.rs::run_with`, `intent.look-up` with `{"word": ...}`).
 - Done: the term is the first line of the selection, trimmed, up to 64 characters (`ui/src/look_up.rs::term_of`).
 - Needs Midget: the Dictionary app opens and answers the intent (it returns the definition as the reply's dialog).
   The reply is not yet shown anywhere except the Dictionary app itself.
@@ -75,8 +75,8 @@ Look Up popover with dictionary and quick search results on Ctrl+Cmd+D and three
 - BifrOSt path: `springboard/ui/src/look_up.rs` (`LookUp`, `Row`, `rows`, `HITS_SHOWN` = 5). The rows are a Dictionary
   section (the definition, or "No definition in the installed dictionaries."), a Search section with up to five quick
   search hits, and a Search row.
-- Gap: the model is not drawn and the shell does not fill it yet. Ctrl+Cmd+D shows the definition in the Dictionary app,
-  not in a popover. The drawing needs the shell's popup surface and the quick search results for the term.
+- Done in round 75 (see `docs/parity/look-up-popover.md`): drawn by `shell/look_up_popover.rs` and filled with the
+  definition and the Quick Search titles. Ctrl+Cmd+D and Services > Look Up open it; Escape closes it. Needs Midget.
 
 ### Three-finger tap
 
