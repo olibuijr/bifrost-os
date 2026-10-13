@@ -167,7 +167,7 @@ impl Effect {
 
     /// The preset applied to `img`: the colour chain, then the warp.
     pub fn apply(self, img: &Image) -> Image {
-        let coloured = if self.steps().is_empty() { img.clone() } else { self.chain().apply(img).unwrap_or_else(|_| img.clone()) };
+        let coloured = if self.steps().is_empty() { img.clone() } else { self.chain().apply(img).unwrap_or_else(|| img.clone()) };
         match self.warp() {
             Some(warp) => warp_image(&coloured, warp),
             None => coloured,
