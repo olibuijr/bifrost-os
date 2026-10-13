@@ -65,8 +65,8 @@
       "area": "map",
       "apple": "Download an area to use without a connection",
       "status": "partial",
-      "bifrost": "springboard/apps/maps-desktop/src/loader.rs:196",
-      "note": "View > Download Map: the visible area for the zoom level on screen and two more levels, a tile count and size estimate before it starts (state.rs:854), a progress bar and Cancel. Capped at 300 tiles by the tile usage policy; no list of saved areas or per-area delete yet.",
+      "bifrost": "springboard/apps/maps-desktop/src/areas.rs:1",
+      "note": "View > Download Map: the visible area for the zoom level on screen and two more levels, a tile count and size estimate before it starts (state.rs), a progress bar and Cancel. Finished downloads are kept in a saved-areas list (areas.json) shown in the same card with a Delete button that removes the area's tiles unless another area still needs them. Capped at 300 tiles by the tile usage policy; areas cannot be renamed yet.",
       "wire": "Add cache::prefetch(bounds, zoom_range) in cache.rs enumerating tiles_in_view for a rectangle, a Download Map selection UI and a size estimate before it starts."
     },
     {

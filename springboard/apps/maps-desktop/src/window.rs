@@ -580,6 +580,14 @@ impl Window {
                     v.push(Item::Gap(4.0));
                     v.push(Item::Buttons(vec![("Download".into(), Act::StartDownload, false), ("Done".into(), Act::ClosePanel, false)]));
                 }
+                if !m.areas.list.is_empty() {
+                    v.push(Item::Rule);
+                    v.push(Item::Sub("Saved for offline use".into()));
+                    for (i, a) in m.areas.list.iter().enumerate() {
+                        v.push(Item::Line(a.line()));
+                        v.push(Item::Buttons(vec![("Delete".into(), Act::DeleteArea(i), false)]));
+                    }
+                }
             }
         }
         v
