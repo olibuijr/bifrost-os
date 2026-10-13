@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn compound_finals_join_and_split_on_a_vowel() {
-        assert_eq!(typed("dkqt").marked(), "없");
+        assert_eq!(typed("djqt").marked(), "없");
         assert_eq!(typed("dkqtk").marked(), "압사", "the second half of a compound final moves to the next block");
         assert_eq!(typed("rkfr").marked(), "갉");
     }
@@ -257,12 +257,12 @@ mod tests {
 
     #[test]
     fn backspace_undoes_one_jamo_at_a_time() {
-        let mut m = typed("dkqt");
+        let mut m = typed("djqt");
         assert_eq!(m.marked(), "없");
         assert!(m.backspace());
-        assert_eq!(m.marked(), "압");
+        assert_eq!(m.marked(), "업");
         assert!(m.backspace());
-        assert_eq!(m.marked(), "아");
+        assert_eq!(m.marked(), "어");
         assert!(m.backspace());
         assert_eq!(m.marked(), "ㅇ");
         assert!(m.backspace());

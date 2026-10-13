@@ -228,7 +228,7 @@ mod tests {
     fn the_tone_goes_where_the_orthography_puts_it() {
         assert_eq!(word("vieetj"), "việt", "a marked vowel takes the tone");
         assert_eq!(word("tieengs"), "tiếng");
-        assert_eq!(word("hoaf"), "hòa", "oa open takes the second vowel");
+        assert_eq!(word("hoaf"), "hoà", "oa open takes the second vowel");
         assert_eq!(word("toans"), "toán", "a closed pair takes the second vowel");
         assert_eq!(word("maij"), "mại", "other open pairs take the first vowel");
         assert_eq!(word("quas"), "quá", "the u after q is a consonant");

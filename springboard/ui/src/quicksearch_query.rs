@@ -598,7 +598,7 @@ mod tests {
             (r#"(title == "Bread" || title == "Mjólk") && description == "*milk*""#, &["3"]),
             (r#"date < 1000"#, &["1"]),
             (r#"date >= $time.now"#, &["2"]),
-            (r#"date > $time.now(-5000)"#, &["2"]),
+            (r#"date > $time.now(-500)"#, &["2"]),
         ];
         for (q, want) in cases {
             assert_eq!(ids(q, 1000.0).unwrap(), *want, "{q}");

@@ -404,11 +404,18 @@ impl ChangeRequests {
 
     /// `creationRequestForAsset(from:)`: a new image asset from a file name; returns the placeholder identifier.
     pub fn creation_request_for_asset_from_image(&mut self, file: &str) -> Result<String, Error> {
+        // the file must be an image: a text file is refused (and the whole change block rolls back)
+        if kind_for_name(file) != Kind::Image {
+            return Err(Error::UnsupportedResource(file.to_string()));
+        }
         self.create_asset(file, Kind::Image, None)
     }
 
     /// `creationRequestForAssetFromVideo(atFileURL:)`; `duration` comes from `video_duration`.
     pub fn creation_request_for_asset_from_video(&mut self, file: &str, duration: Option<f64>) -> Result<String, Error> {
+        if kind_for_name(file) != Kind::Video {
+            return Err(Error::UnsupportedResource(file.to_string()));
+        }
         self.create_asset(file, Kind::Video, duration)
     }
 
