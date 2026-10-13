@@ -54,6 +54,18 @@ impl TimeZone {
         Some(TimeZone { backend: Backend::Named { identifier: identifier.to_string(), zone } })
     }
 
+    /// Coordinated Universal Time: offset 0, abbreviation "UTC", no daylight saving. Needs no tz database.
+    pub fn utc() -> TimeZone {
+        TimeZone::from_posix_rule("UTC", "UTC0").expect("UTC0 is a valid rule")
+    }
+
+    /// A zone from a POSIX rule such as `EST5EDT,M3.2.0,M11.1.0`, named `identifier`, with no tz database file behind
+    /// it. None when the rule does not parse.
+    pub fn from_posix_rule(identifier: &str, rule: &str) -> Option<TimeZone> {
+        let zone = Zone::from_posix_rule(rule)?;
+        Some(TimeZone { backend: Backend::Named { identifier: identifier.to_string(), zone } })
+    }
+
     /// `TimeZone(secondsFromGMT:)`: None outside -18 to +18 hours.
     pub fn from_seconds_from_gmt(seconds: i32) -> Option<TimeZone> {
         (seconds.abs() <= MAX_FIXED_SECONDS).then_some(TimeZone { backend: Backend::Fixed(seconds) })
@@ -96,6 +108,23 @@ impl TimeZone {
     /// `isDaylightSavingTime(for:)`.
     pub fn is_daylight_saving_time(&self, date: Date) -> bool {
         self.state(unix(date)).1
+    }
+
+    /// `daylightSavingTimeOffset(for:)`: the extra seconds in force at `date`, 0 in standard time. The standard
+    /// offset is read at the nearest standard-time sample within a year either side (30-minute shifts such as
+    /// Lord Howe work); 3600 when the zone has none in that window.
+    pub fn daylight_saving_time_offset(&self, date: Date) -> i32 {
+        let t = unix(date);
+        let (offset, daylight) = self.state(t);
+        if !daylight {
+            return 0;
+        }
+        let standard = (1..=14i64)
+            .flat_map(|k| [t - k * 30 * DAY, t + k * 30 * DAY])
+            .map(|s| self.state(s))
+            .find(|&(_, dst)| !dst)
+            .map(|(o, _)| o);
+        standard.map_or(3600, |s| offset - s)
     }
 
     /// `nextDaylightSavingTimeTransition(after:)`: the first instant after `date` at which daylight saving starts or
@@ -339,5 +368,37 @@ mod tests {
         assert_eq!(zone("Asia/Dubai").localized_name(NameStyle::DaylightSaving, &en), None, "no summer season");
         let plus_one = TimeZone::from_seconds_from_gmt(3600).expect("in range");
         assert_eq!(plus_one.localized_name(NameStyle::Standard, &en), None, "\"GMT+0100\" has no long name");
+    }
+
+    #[test]
+    fn a_posix_rule_zone_switches_at_the_right_instants() {
+        let ny = TimeZone::from_posix_rule("America/New_York", "EST5EDT,M3.2.0,M11.1.0").expect("valid rule");
+        let spring = utc(2026, 3, 8, 7, 0);
+        assert_eq!(ny.seconds_from_gmt(Date(spring.0 - 1.0)), -18_000);
+        assert_eq!(ny.seconds_from_gmt(spring), -14_400);
+        let fall = utc(2026, 11, 1, 6, 0);
+        assert_eq!(ny.abbreviation(Date(fall.0 - 1.0)), "EDT");
+        assert_eq!(ny.abbreviation(fall), "EST");
+        assert_eq!(ny.next_daylight_saving_time_transition(utc(2026, 1, 1, 0, 0)), Some(spring));
+        assert_eq!(ny.next_daylight_saving_time_transition(spring), Some(fall));
+        assert_eq!(ny.identifier(), "America/New_York");
+        assert_eq!(TimeZone::from_posix_rule("X", "EST5EDT,J60,J300"), None);
+    }
+
+    #[test]
+    fn utc_has_no_offset_or_transitions() {
+        let u = TimeZone::utc();
+        assert_eq!((u.identifier(), u.seconds_from_gmt(Date(123.0)), u.abbreviation(Date(0.0))), ("UTC".to_string(), 0, "UTC".to_string()));
+        assert_eq!(u.next_daylight_saving_time_transition(Date(0.0)), None);
+    }
+
+    #[test]
+    fn daylight_saving_offset_is_the_extra_seconds() {
+        let ny = zone("America/New_York");
+        assert_eq!(ny.daylight_saving_time_offset(utc(2026, 7, 1, 12, 0)), 3600);
+        assert_eq!(ny.daylight_saving_time_offset(utc(2026, 1, 1, 12, 0)), 0);
+        let lord_howe = zone("Australia/Lord_Howe");
+        assert_eq!(lord_howe.daylight_saving_time_offset(utc(2026, 1, 15, 0, 0)), 1800);
+        assert_eq!(lord_howe.daylight_saving_time_offset(utc(2026, 7, 15, 0, 0)), 0);
     }
 }
