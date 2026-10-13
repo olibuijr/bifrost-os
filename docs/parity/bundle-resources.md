@@ -51,3 +51,22 @@ The format keys are `tracking`, `tracking_domains`, `[[collected]]` and `[[acces
 ## Verification status
 
 Not built or tested in this round by design; the build and test stage runs `cargo test` for `bifrost-ui`.
+
+## Universal links: association file model
+
+`springboard/sdk/src/bundle_resources.rs`, built on parity/team-a-06 (not yet verified on Midget).
+
+- `AssociationFile::parse(text)` reads a domain association file (the well-known file a host serves over https). It takes the `applinks.details` entries: app ids (`appIDs` or
+  `appID`), path rules (`components` with a `/` pattern and `exclude`), and the older `paths` list where a leading
+  `NOT ` excludes. Details without an app id or a usable rule are dropped.
+- `AssociationFile::route(path, installed)` returns the first installed bundle id that a detail names and whose path
+  rules allow. Details are tried in file order; within a detail the first matching rule decides. A pattern uses `*`
+  for any run of characters and `?` for one character. A component that also has a query or fragment rule is
+  dropped when it includes and kept as a path rule when it excludes.
+- App ids match a bare bundle id, or a ten-character team id followed by a dot and the bundle id.
+- `split_https(url)` returns the lowercased host and the path of an https URL (port and user info dropped, parsing shared
+  with `AppLinks` in `springboard/core/src/app_links.rs`), and None for other schemes. `AppLinks` is a separate registry of
+  host and prefix claims and is not connected to this model.
+
+Not done: fetching the file over https, checking that the host serves the file for the app, query-item rules, and
+routing https links to apps in the shell. The browser still claims http and https (springboard/src/shell/defaultapps.rs).
