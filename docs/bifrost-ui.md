@@ -2335,3 +2335,25 @@ Decision and gaps: `CIDetector` stays a gap (the only QR decoder is in the shell
 text detection exists). `CIRenderDestination` and depth effects stay gaps (need the CIImage/CIContext model).
 Perspective and triangle tiles, displacement, circle splash and torus lens are not built. Falloffs are linear
 in the distance from the centre, which may differ from the reference curve; check on Midget before promoting.
+
+## Foundation and Core Foundation small gaps (`predicate_validating`, `cf_bundle`, `dispatch_io`, `apple_events`)
+
+- **Foundation: `bifrost_app::predicate_validating`** (`NSPredicateValidating`). `Predicate` (comparison, `And`, `Or`, `Not`),
+  `PredicateVisitor`, `ValidationPolicy::new().allow("title", &[Operator::Contains]).allow_key("date")` and the
+  `PredicateValidating::validate` trait method. Unknown keys give `DisallowedKey`, an operator outside the list gives
+  `DisallowedOperator`, an empty compound gives `Empty`. There is no predicate parser or evaluator yet.
+- **Core Foundation: `bifrost_app::cf_bundle`**. `CfBundle::create(dir)` (`CFBundleCreate`) reads the top-level keys of
+  `manifest.toml`; `value_for_info_dictionary_key("CFBundleName")` maps the CF names to manifest keys (`id`, `name`,
+  `version`, `exec`, `icon`, `category`, `min_shell`) and also takes the manifest spelling; `resource_url` defers to
+  `bundle_resources`. `PlugInRegistry` holds `CFPlugIn` factories (`register_factory`, `register_type`,
+  `create_instance`, `factories_for_type`, `unregister_factory`). Plug-ins are in-process; nothing is loaded dynamically.
+- **Dispatch: `bifrost_app::dispatch_io`** (`DispatchIO`). `DispatchIO::new(StreamType::Stream | RandomAccess, file)`
+  over a file or pipe end. `read(offset, length, queue, handler)` calls `handler(done, data, error)` per chunk, then once
+  with `done == true`; `write(offset, data, queue, handler)` hands back the unwritten remainder. `set_limit` is the
+  high-water chunk size, `set_low_water` batches chunks, `close` ends operations with `ECANCELED` (125).
+- **Core Services: `bifrost_app::apple_events`** (`AEDesc`, `AESendMessage`, `AEInstallEventHandler`). `AppleEvent::new(class,
+  id, record)` travels as the control-socket method `ae.<class>.<id>`; `send_message(socket, &event, timeout)` returns an
+  `AppleEventReply` (`error_number` 0 on success, `-1708` not handled, `-1712` timeout, `-609` unreachable).
+  `AppleEventHandlers::install(class, id, handler)` and `rpc(method, params)` serve events from `Application::rpc`.
+
+All four are host-tested only; rows stay `partial` until checked on Midget.

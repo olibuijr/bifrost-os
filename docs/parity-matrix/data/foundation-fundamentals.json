@@ -87,9 +87,9 @@
     {
       "feature": "NSPredicateValidating",
       "apple": "protocol listed on the landing page",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "depends on a predicate engine"
+      "bifrost": "springboard/sdk/src/predicate_validating.rs (PredicateValidating, ValidationPolicy, PredicateVisitor)",
+      "status": "partial",
+      "note": "Validation of a predicate tree against allowed keys and operators; no predicate parser or evaluator yet. Host unit tests only, not yet checked on Midget."
     }
   ],
   "gaps": [
