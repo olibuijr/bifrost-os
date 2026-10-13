@@ -1,4 +1,5 @@
-//! The privileged disk requests: erase a disk or a volume, partition a disk, and first-aid a volume (verify or repair).
+//! The privileged disk requests: erase a disk or a volume, partition a disk, rename or restore a volume, and first-aid a
+//! volume (verify or repair).
 //! This is the one contract the privileged helper (`privd`), the `diskutil` tool and the Disk Utility app share: the
 //! method names, the parameters on the wire, the confirmation sentence and the plan. A request is planned against a
 //! fresh snapshot of the disks (`disk_scan`), and the plan comes from `disk_format`. Nothing here runs a command.
@@ -17,6 +18,8 @@ pub const M_ERASE_VOLUME: &str = "disk.erase_volume";
 pub const M_PARTITION_DISK: &str = "disk.partition_disk";
 pub const M_VERIFY_VOLUME: &str = "disk.verify_volume";
 pub const M_REPAIR_VOLUME: &str = "disk.repair_volume";
+pub const M_RENAME_VOLUME: &str = "disk.rename_volume";
+pub const M_RESTORE_VOLUME: &str = "disk.restore_volume";
 
 /// The most MiB one partition may ask for (1 PiB), so a size cannot overflow the command words.
 pub const MAX_SIZE_MIB: u64 = 1 << 30;
@@ -36,6 +39,10 @@ pub enum DiskRequest {
     VerifyVolume { device: String },
     /// A file system check that fixes what it finds, of an unmounted partition.
     RepairVolume { device: String },
+    /// Sets the label of the file system on an unmounted volume.
+    RenameVolume { device: String, label: String },
+    /// Copies the block device `source` onto `device` (Restore). The data on `device` is lost.
+    RestoreVolume { device: String, source: String },
 }
 
 impl DiskRequest {
@@ -46,7 +53,9 @@ impl DiskRequest {
             | DiskRequest::EraseVolume { device, .. }
             | DiskRequest::PartitionDisk { device, .. }
             | DiskRequest::VerifyVolume { device }
-            | DiskRequest::RepairVolume { device } => device.as_str(),
+            | DiskRequest::RepairVolume { device }
+            | DiskRequest::RenameVolume { device, .. }
+            | DiskRequest::RestoreVolume { device, .. } => device.as_str(),
         }
     }
 
@@ -58,6 +67,8 @@ impl DiskRequest {
             DiskRequest::PartitionDisk { .. } => M_PARTITION_DISK,
             DiskRequest::VerifyVolume { .. } => M_VERIFY_VOLUME,
             DiskRequest::RepairVolume { .. } => M_REPAIR_VOLUME,
+            DiskRequest::RenameVolume { .. } => M_RENAME_VOLUME,
+            DiskRequest::RestoreVolume { .. } => M_RESTORE_VOLUME,
         }
     }
 
@@ -68,6 +79,8 @@ impl DiskRequest {
             DiskRequest::PartitionDisk { .. } => "Partitioning",
             DiskRequest::VerifyVolume { .. } => "Checking",
             DiskRequest::RepairVolume { .. } => "Repairing",
+            DiskRequest::RenameVolume { .. } => "Renaming",
+            DiskRequest::RestoreVolume { .. } => "Restoring",
         }
     }
 
@@ -85,6 +98,10 @@ impl DiskRequest {
             }
             DiskRequest::VerifyVolume { device } => format!("Check {device} for errors without changing it?"),
             DiskRequest::RepairVolume { device } => format!("Check {device} and repair the errors it finds?"),
+            DiskRequest::RenameVolume { device, label } => format!("Rename {device} to \u{201c}{label}\u{201d}?"),
+            DiskRequest::RestoreVolume { device, source } => {
+                format!("Copy {source} onto {device}? All data on {device} will be lost.")
+            }
         }
     }
 
@@ -110,6 +127,8 @@ impl DiskRequest {
                     .collect();
                 fields.push(("partitions".into(), Json::Arr(specs)));
             }
+            DiskRequest::RenameVolume { label, .. } => fields.push(("label".into(), Json::Str(label.clone()))),
+            DiskRequest::RestoreVolume { source, .. } => fields.push(("source".into(), Json::Str(source.clone()))),
             DiskRequest::VerifyVolume { .. } | DiskRequest::RepairVolume { .. } => {}
         }
         Json::Obj(fields)
@@ -136,6 +155,11 @@ impl DiskRequest {
             }
             M_VERIFY_VOLUME => Ok(DiskRequest::VerifyVolume { device }),
             M_REPAIR_VOLUME => Ok(DiskRequest::RepairVolume { device }),
+            M_RENAME_VOLUME => Ok(DiskRequest::RenameVolume { device, label: text("label")? }),
+            M_RESTORE_VOLUME => {
+                let source = device_param_key(params, "source")?;
+                Ok(DiskRequest::RestoreVolume { device, source })
+            }
             other => Err(format!("unknown disk method {other}")),
         }
     }
@@ -174,6 +198,23 @@ pub fn plan(request: &DiskRequest, entries: &[Entry], probed_type: &str) -> Resu
             let mode = if matches!(request, DiskRequest::RepairVolume { .. }) { CheckMode::Repair } else { CheckMode::Verify };
             disk_format::check_volume(disk, probed_type, mode, &approvals, &claims, OWNER)
         }
+        DiskRequest::RenameVolume { label, .. } => {
+            partition()?;
+            disk_format::rename_volume(disk, probed_type, label, &approvals, &claims, OWNER)
+        }
+        DiskRequest::RestoreVolume { source, .. } => {
+            let from = entries.iter().find(|e| &e.disk.bsd_name == source).ok_or_else(|| Refusal::NoDisk(source.clone()))?;
+            if from.parent.is_some() != entry.parent.is_some() {
+                return Err(Refusal::InvalidOption("a disk and a volume cannot be copied onto each other".to_string()));
+            }
+            for n in [name, source.as_str()] {
+                let child = entries.iter().filter(|e| e.parent.as_deref() == Some(n)).find_map(|e| e.disk.mount_point.clone());
+                if let Some(point) = child {
+                    return Err(Refusal::Mounted(point));
+                }
+            }
+            disk_format::restore_volume(&from.disk, disk, &approvals, &claims, OWNER)
+        }
     }
 }
 
@@ -187,6 +228,8 @@ fn fs_word(fs: Personality) -> &'static str {
         Personality::Ext4 => "ext4",
         Personality::ExFat => "exfat",
         Personality::Fat32 => "fat32",
+        Personality::Ntfs => "ntfs",
+        Personality::Btrfs => "btrfs",
     }
 }
 
@@ -195,6 +238,8 @@ fn fs_name(fs: Personality) -> &'static str {
         Personality::Ext4 => "Ext4",
         Personality::ExFat => "ExFAT",
         Personality::Fat32 => "FAT32",
+        Personality::Ntfs => "NTFS",
+        Personality::Btrfs => "Btrfs",
     }
 }
 
@@ -204,7 +249,11 @@ fn label_clause(label: &str) -> String {
 
 /// A device name is a plain alphanumeric word, so it names a path under `/dev` and nothing else.
 fn device_param(params: &Json) -> Result<String, String> {
-    let name = params.get("device").and_then(Json::as_str).ok_or("missing device")?;
+    device_param_key(params, "device")
+}
+
+fn device_param_key(params: &Json, key: &str) -> Result<String, String> {
+    let name = params.get(key).and_then(Json::as_str).ok_or_else(|| format!("missing {key}"))?;
     if name.is_empty() || name.len() > MAX_DEVICE_LEN || !name.bytes().all(|b| b.is_ascii_alphanumeric()) {
         return Err(format!("{name} is not a device name"));
     }
@@ -268,6 +317,8 @@ mod tests {
             },
             DiskRequest::VerifyVolume { device: "sdb1".into() },
             DiskRequest::RepairVolume { device: "sdb1".into() },
+            DiskRequest::RenameVolume { device: "sdb1".into(), label: "Games".into() },
+            DiskRequest::RestoreVolume { device: "sdb1".into(), source: "sdc1".into() },
         ];
         for r in requests {
             assert_eq!(DiskRequest::from_wire(r.method(), &r.to_params()), Ok(r.clone()), "{}", r.method());
@@ -283,7 +334,7 @@ mod tests {
 
     #[test]
     fn bad_file_systems_and_partition_sizes_are_refused() {
-        let bad_fs = obj(vec![("device", text("sdb")), ("fs", text("ntfs"))]);
+        let bad_fs = obj(vec![("device", text("sdb")), ("fs", text("zfs"))]);
         assert!(DiskRequest::from_wire(M_ERASE_DISK, &bad_fs).unwrap_err().contains("unknown file system"));
         let huge = obj(vec![("device", text("sdb")), ("partitions", Json::Arr(vec![obj(vec![("size_mib", Json::Num(2e15)), ("fs", text("ext4"))])]))]);
         assert!(DiskRequest::from_wire(M_PARTITION_DISK, &huge).unwrap_err().contains("too large"));
@@ -326,7 +377,7 @@ mod tests {
         let repair = DiskRequest::RepairVolume { device: "sdb1".into() };
         assert_eq!(words(&plan(&repair, &snapshot(), "ext4").unwrap()), vec![("e2fsck", vec!["-p".to_string(), "/dev/sdb1".to_string()])]);
         assert!(is_repair(&repair) && !is_repair(&verify));
-        assert!(plan(&repair, &snapshot(), "ntfs").is_err());
+        assert!(plan(&repair, &snapshot(), "xfs").is_err());
     }
 
     #[test]
@@ -336,5 +387,26 @@ mod tests {
         assert!(text.contains("sdb") && text.contains("FAT32") && text.contains("STICK") && text.contains("lost"), "{text}");
         assert_eq!(r.progress_word(), "Erasing");
         assert!(DiskRequest::RepairVolume { device: "sdb1".into() }.confirm_text().contains("repair"));
+    }
+
+    #[test]
+    fn a_rename_plans_the_label_tool_of_the_probed_type() {
+        let r = DiskRequest::RenameVolume { device: "sdb1".into(), label: "Games".into() };
+        assert_eq!(words(&plan(&r, &snapshot(), "ext4").unwrap()), vec![("e2label", vec!["/dev/sdb1".to_string(), "Games".to_string()])]);
+        let on_disk = DiskRequest::RenameVolume { device: "sdb".into(), label: "Games".into() };
+        assert_eq!(plan(&on_disk, &snapshot(), "ext4"), Err(Refusal::NotPartition("sdb".into())));
+        assert!(r.confirm_text().contains("Games") && r.progress_word() == "Renaming");
+    }
+
+    #[test]
+    fn a_restore_needs_two_devices_of_the_same_kind() {
+        let ok = DiskRequest::RestoreVolume { device: "sdb1".into(), source: "sdc".into() };
+        assert!(matches!(plan(&ok, &snapshot(), ""), Err(Refusal::InvalidOption(_))));
+        let missing = DiskRequest::RestoreVolume { device: "sdb1".into(), source: "sdz1".into() };
+        assert_eq!(plan(&missing, &snapshot(), ""), Err(Refusal::NoDisk("sdz1".into())));
+        let mounted = DiskRequest::RestoreVolume { device: "sdb1".into(), source: "sdc1".into() };
+        assert_eq!(plan(&mounted, &snapshot(), ""), Err(Refusal::Mounted("/media/c".into())));
+        let fine = DiskRequest::RestoreVolume { device: "sdc".into(), source: "sdb".into() };
+        assert_eq!(plan(&fine, &snapshot(), "").unwrap_err(), Refusal::Mounted("/media/c".into()));
     }
 }

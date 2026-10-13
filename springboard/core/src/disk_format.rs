@@ -16,6 +16,8 @@ pub enum Personality {
     Ext4,
     ExFat,
     Fat32,
+    Ntfs,
+    Btrfs,
 }
 
 /// Verify is read-only; repair fixes what it finds.
@@ -32,6 +34,8 @@ impl Personality {
             "ext4" => Some(Personality::Ext4),
             "exfat" => Some(Personality::ExFat),
             "fat32" => Some(Personality::Fat32),
+            "ntfs" => Some(Personality::Ntfs),
+            "btrfs" => Some(Personality::Btrfs),
             _ => None,
         }
     }
@@ -42,6 +46,8 @@ impl Personality {
             "ext4" => Some(Personality::Ext4),
             "exfat" => Some(Personality::ExFat),
             "vfat" => Some(Personality::Fat32),
+            "ntfs" => Some(Personality::Ntfs),
+            "btrfs" => Some(Personality::Btrfs),
             _ => None,
         }
     }
@@ -52,14 +58,16 @@ impl Personality {
             Personality::Ext4 => 16,
             Personality::ExFat => 15,
             Personality::Fat32 => 11,
+            Personality::Ntfs => 32,
+            Personality::Btrfs => 255,
         }
     }
 
     /// The GPT partition type code for a new partition of this file system (Linux data, or Microsoft basic data).
     fn gpt_code(self) -> &'static str {
         match self {
-            Personality::Ext4 => "8300",
-            Personality::ExFat | Personality::Fat32 => "0700",
+            Personality::Ext4 | Personality::Btrfs => "8300",
+            Personality::ExFat | Personality::Fat32 | Personality::Ntfs => "0700",
         }
     }
 
@@ -82,6 +90,17 @@ impl Personality {
                 push_label(&mut args, "-n", label);
                 "mkfs.vfat"
             }
+            Personality::Ntfs => {
+                // -F: write to a plain device without asking; -Q: skip the full zeroing pass.
+                args.extend(["-F", "-Q"].map(String::from));
+                push_label(&mut args, "-L", label);
+                "mkfs.ntfs"
+            }
+            Personality::Btrfs => {
+                args.push("-f".to_string());
+                push_label(&mut args, "-L", label);
+                "mkfs.btrfs"
+            }
         };
         args.push(dev.to_string());
         Command { program, args }
@@ -89,15 +108,36 @@ impl Personality {
 
     /// The check command for `dev`: verify is a read-only pass, repair fixes errors without asking.
     fn check_command(self, dev: &str, mode: CheckMode) -> Command {
-        let (program, flag) = match (self, mode) {
-            (Personality::Ext4, CheckMode::Verify) => ("e2fsck", "-n"),
-            (Personality::Ext4, CheckMode::Repair) => ("e2fsck", "-p"),
-            (Personality::ExFat, CheckMode::Verify) => ("fsck.exfat", "-n"),
-            (Personality::ExFat, CheckMode::Repair) => ("fsck.exfat", "-a"),
-            (Personality::Fat32, CheckMode::Verify) => ("fsck.fat", "-n"),
-            (Personality::Fat32, CheckMode::Repair) => ("fsck.fat", "-a"),
+        let (program, flags): (&'static str, &[&str]) = match (self, mode) {
+            (Personality::Ext4, CheckMode::Verify) => ("e2fsck", &["-n"]),
+            (Personality::Ext4, CheckMode::Repair) => ("e2fsck", &["-p"]),
+            (Personality::ExFat, CheckMode::Verify) => ("fsck.exfat", &["-n"]),
+            (Personality::ExFat, CheckMode::Repair) => ("fsck.exfat", &["-a"]),
+            (Personality::Fat32, CheckMode::Verify) => ("fsck.fat", &["-n"]),
+            (Personality::Fat32, CheckMode::Repair) => ("fsck.fat", &["-a"]),
+            (Personality::Ntfs, CheckMode::Verify) => ("ntfsfix", &["-n"]),
+            (Personality::Ntfs, CheckMode::Repair) => ("ntfsfix", &["-d"]),
+            (Personality::Btrfs, CheckMode::Verify) => ("btrfs", &["check", "--readonly"]),
+            (Personality::Btrfs, CheckMode::Repair) => ("btrfs", &["check", "--repair"]),
         };
-        Command { program, args: vec![flag.to_string(), dev.to_string()] }
+        let mut args: Vec<String> = flags.iter().map(|f| f.to_string()).collect();
+        args.push(dev.to_string());
+        Command { program, args }
+    }
+
+    /// The command that sets the label of the file system on `dev`.
+    fn label_command(self, dev: &str, label: &str) -> Command {
+        let (program, head): (&'static str, &[&str]) = match self {
+            Personality::Ext4 => ("e2label", &[]),
+            Personality::ExFat => ("exfatlabel", &[]),
+            Personality::Fat32 => ("fatlabel", &[]),
+            Personality::Ntfs => ("ntfslabel", &[]),
+            Personality::Btrfs => ("btrfs", &["filesystem", "label"]),
+        };
+        let mut args: Vec<String> = head.iter().map(|f| f.to_string()).collect();
+        args.push(dev.to_string());
+        args.push(label.to_string());
+        Command { program, args }
     }
 }
 
@@ -255,6 +295,60 @@ pub fn partition_disk(
     Ok(plan)
 }
 
+/// Plans a new label for the file system on an unmounted volume. `fs_type` is the type the volume reports; a type this
+/// module has no label tool for is refused, and so is an empty label.
+pub fn rename_volume(
+    disk: &Disk,
+    fs_type: &str,
+    label: &str,
+    approvals: &Approvals,
+    claims: &Claims,
+    owner: &str,
+) -> Result<Vec<Command>, Refusal> {
+    let dev = gate(disk, Operation::Repair, approvals, claims, owner)?;
+    let fs = Personality::from_probe_type(fs_type).ok_or_else(|| Refusal::InvalidOption(fs_type.to_string()))?;
+    if disk.read_only {
+        return Err(Refusal::ReadOnly);
+    }
+    if let Some(point) = &disk.mount_point {
+        return Err(Refusal::Mounted(point.clone()));
+    }
+    if label.is_empty() {
+        return Err(Refusal::InvalidLabel(String::new()));
+    }
+    check_label(label, fs)?;
+    Ok(vec![fs.label_command(&dev, label)])
+}
+
+/// Plans a block copy of `source` onto `target` (Restore). Neither may be mounted, the target must be writable, and the
+/// target must be at least as large as the source. Everything on the target is lost.
+pub fn restore_volume(
+    source: &Disk,
+    target: &Disk,
+    approvals: &Approvals,
+    claims: &Claims,
+    owner: &str,
+) -> Result<Vec<Command>, Refusal> {
+    let to = gate(target, Operation::Erase, approvals, claims, owner)?;
+    let from = disk_commands::device_path(source)?;
+    if source.bsd_name == target.bsd_name {
+        return Err(Refusal::InvalidOption("the source and the target are the same device".to_string()));
+    }
+    if target.read_only {
+        return Err(Refusal::ReadOnly);
+    }
+    for d in [source, target] {
+        if let Some(point) = &d.mount_point {
+            return Err(Refusal::Mounted(point.clone()));
+        }
+    }
+    if source.size > target.size {
+        return Err(Refusal::InvalidOption("the source is larger than the target".to_string()));
+    }
+    let args = [format!("if={from}"), format!("of={to}"), "bs=4M".to_string(), "conv=fsync".to_string(), "status=none".to_string()];
+    Ok(vec![Command { program: "dd", args: args.to_vec() }])
+}
+
 /// Plans a file system check (first aid) of an unmounted volume. `fs_type` is the type the volume reports; a type this
 /// module has no checker for is refused.
 pub fn check_volume(
@@ -303,7 +397,8 @@ mod tests {
     #[test]
     fn personalities_parse_and_keep_their_label_limits() {
         assert_eq!(Personality::parse("fat32"), Some(Personality::Fat32));
-        assert_eq!(Personality::parse("ntfs"), None);
+        assert_eq!(Personality::parse("ntfs"), Some(Personality::Ntfs));
+        assert_eq!(Personality::parse("zfs"), None);
         assert_eq!(Personality::from_probe_type("vfat"), Some(Personality::Fat32));
         assert_eq!(Personality::Fat32.label_limit(), 11);
         assert_eq!(Personality::ExFat.label_limit(), 15);
@@ -480,8 +575,48 @@ mod tests {
             Err(Refusal::Mounted("/media/a".into()))
         );
         assert_eq!(
-            check_volume(&disk("sdb1", None), "ntfs", CheckMode::Verify, &approvals, &claims, "disk"),
-            Err(Refusal::InvalidOption("ntfs".into()))
+            check_volume(&disk("sdb1", None), "xfs", CheckMode::Verify, &approvals, &claims, "disk"),
+            Err(Refusal::InvalidOption("xfs".into()))
         );
+    }
+
+    #[test]
+    fn ntfs_and_btrfs_volumes_are_made_with_their_own_tools() {
+        let ntfs = erase_volume(&disk("sdb1", None), Personality::Ntfs, "Data", &Approvals::new(), &Claims::new(), "disk").unwrap();
+        assert_eq!(words(&ntfs), vec![("mkfs.ntfs", s(&["-F", "-Q", "-L", "Data", "/dev/sdb1"]))]);
+        let btrfs = erase_volume(&disk("sdb1", None), Personality::Btrfs, "", &Approvals::new(), &Claims::new(), "disk").unwrap();
+        assert_eq!(words(&btrfs), vec![("mkfs.btrfs", s(&["-f", "/dev/sdb1"]))]);
+        let check = check_volume(&disk("sdb1", None), "btrfs", CheckMode::Repair, &Approvals::new(), &Claims::new(), "disk").unwrap();
+        assert_eq!(words(&check), vec![("btrfs", s(&["check", "--repair", "/dev/sdb1"]))]);
+    }
+
+    #[test]
+    fn a_rename_picks_the_label_tool_of_the_file_system() {
+        let plan = |fs: &str| rename_volume(&disk("sdb1", None), fs, "Games", &Approvals::new(), &Claims::new(), "disk").unwrap();
+        assert_eq!(words(&plan("ext4")), vec![("e2label", s(&["/dev/sdb1", "Games"]))]);
+        assert_eq!(words(&plan("vfat")), vec![("fatlabel", s(&["/dev/sdb1", "Games"]))]);
+        assert_eq!(words(&plan("exfat")), vec![("exfatlabel", s(&["/dev/sdb1", "Games"]))]);
+        assert_eq!(words(&plan("btrfs")), vec![("btrfs", s(&["filesystem", "label", "/dev/sdb1", "Games"]))]);
+    }
+
+    #[test]
+    fn a_rename_refuses_a_mounted_volume_an_empty_label_and_a_label_too_long() {
+        let (a, c) = (Approvals::new(), Claims::new());
+        assert_eq!(rename_volume(&disk("sdb1", Some("/m")), "ext4", "X", &a, &c, "disk"), Err(Refusal::Mounted("/m".into())));
+        assert!(rename_volume(&disk("sdb1", None), "ext4", "", &a, &c, "disk").is_err());
+        assert!(rename_volume(&disk("sdb1", None), "vfat", "TWELVE CHARS", &a, &c, "disk").is_err());
+        assert!(rename_volume(&disk("sdb1", None), "xfs", "X", &a, &c, "disk").is_err());
+    }
+
+    #[test]
+    fn a_restore_copies_one_device_onto_a_larger_or_equal_one() {
+        let (a, c) = (Approvals::new(), Claims::new());
+        let (src, mut dst) = (disk("sdb1", None), disk("sdc1", None));
+        let plan = restore_volume(&src, &dst, &a, &c, "disk").unwrap();
+        assert_eq!(words(&plan), vec![("dd", s(&["if=/dev/sdb1", "of=/dev/sdc1", "bs=4M", "conv=fsync", "status=none"]))]);
+        dst.size = 1 << 20;
+        assert!(restore_volume(&src, &dst, &a, &c, "disk").is_err());
+        assert!(restore_volume(&src, &src, &a, &c, "disk").is_err());
+        assert_eq!(restore_volume(&disk("sdb1", Some("/m")), &disk("sdc1", None), &a, &c, "disk"), Err(Refusal::Mounted("/m".into())));
     }
 }

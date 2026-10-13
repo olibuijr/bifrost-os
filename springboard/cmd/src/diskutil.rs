@@ -15,7 +15,7 @@ use bifrost_core::disk_request::DiskRequest;
 use bifrost_core::disk_scan::Entry;
 use bifrost_core::disk_session::Session;
 
-pub const USAGE: &str = "usage: diskutil [list | info <device> | mount <device> | unmount <device> | eject <device>\n       | eraseDisk <device> <fs> [label] | eraseVolume <device> <fs> [label]\n       | partitionDisk <device> <fs[:size_mib[:label]]>... | verifyVolume <device> | repairVolume <device>]\n       fs is ext4, exfat or fat32; size 0 or none takes the rest of the disk. The erase, partition and check verbs need root.";
+pub const USAGE: &str = "usage: diskutil [list | info <device> | mount <device> | unmount <device> | eject <device>\n       | eraseDisk <device> <fs> [label] | eraseVolume <device> <fs> [label]\n       | partitionDisk <device> <fs[:size_mib[:label]]>... | verifyVolume <device> | repairVolume <device>\n       | renameVolume <device> <label> | restoreVolume <device> <source-device>]\n       fs is ext4, exfat, fat32, ntfs or btrfs; size 0 or none takes the rest of the disk. The erase, partition and check verbs need root.";
 /// The owner name this tool claims devices under.
 pub const OWNER: &str = "is.olibuijr.diskutil.cli";
 
@@ -38,7 +38,7 @@ pub enum Cmd {
     Request(DiskRequest),
 }
 
-const REQUEST_VERBS: [&str; 5] = ["eraseDisk", "eraseVolume", "partitionDisk", "verifyVolume", "repairVolume"];
+const REQUEST_VERBS: [&str; 7] = ["eraseDisk", "eraseVolume", "partitionDisk", "verifyVolume", "repairVolume", "renameVolume", "restoreVolume"];
 
 /// Reads the arguments.
 pub fn parse(args: &[String]) -> Result<Cmd, String> {
@@ -69,6 +69,8 @@ pub fn parse(args: &[String]) -> Result<Cmd, String> {
         }
         ["verifyVolume", name] => Ok(Cmd::Request(DiskRequest::VerifyVolume { device: device(name)? })),
         ["repairVolume", name] => Ok(Cmd::Request(DiskRequest::RepairVolume { device: device(name)? })),
+        ["renameVolume", name, label] => Ok(Cmd::Request(DiskRequest::RenameVolume { device: device(name)?, label: label.to_string() })),
+        ["restoreVolume", name, source] => Ok(Cmd::Request(DiskRequest::RestoreVolume { device: device(name)?, source: device(source)? })),
         [verb, ..] if ["info", "mount", "unmount", "eject"].contains(verb) => Err(format!("{verb} needs one device name\n{USAGE}")),
         [verb, ..] if REQUEST_VERBS.contains(verb) => Err(format!("{verb}: wrong arguments\n{USAGE}")),
         [other, ..] => Err(format!("unknown verb {other}\n{USAGE}")),
@@ -76,7 +78,7 @@ pub fn parse(args: &[String]) -> Result<Cmd, String> {
 }
 
 fn fs_arg(word: &str) -> Result<Personality, String> {
-    Personality::parse(word).ok_or_else(|| format!("\u{201c}{word}\u{201d} is not a file system: use ext4, exfat or fat32"))
+    Personality::parse(word).ok_or_else(|| format!("\u{201c}{word}\u{201d} is not a file system: use ext4, exfat, fat32, ntfs or btrfs"))
 }
 
 /// One partition of `partitionDisk`: `fs`, `fs:size_mib` or `fs:size_mib:label`.
@@ -191,6 +193,8 @@ pub fn request_verb(req: &DiskRequest) -> &'static str {
         DiskRequest::PartitionDisk { .. } => "partitionDisk",
         DiskRequest::VerifyVolume { .. } => "verifyVolume",
         DiskRequest::RepairVolume { .. } => "repairVolume",
+        DiskRequest::RenameVolume { .. } => "renameVolume",
+        DiskRequest::RestoreVolume { .. } => "restoreVolume",
     }
 }
 
@@ -202,6 +206,8 @@ pub fn request_done_text(req: &DiskRequest) -> String {
         DiskRequest::PartitionDisk { .. } => format!("Partitioned {device}."),
         DiskRequest::VerifyVolume { .. } => format!("Checked {device}."),
         DiskRequest::RepairVolume { .. } => format!("Repaired {device}."),
+        DiskRequest::RenameVolume { .. } => format!("Renamed {device}."),
+        DiskRequest::RestoreVolume { .. } => format!("Restored {device}."),
     }
 }
 
@@ -262,7 +268,7 @@ mod tests {
 
     #[test]
     fn bad_file_systems_sizes_and_arity_are_refused_with_usage() {
-        assert!(parse(&args(&["eraseDisk", "sdb", "ntfs"])).unwrap_err().contains("not a file system"));
+        assert!(parse(&args(&["eraseDisk", "sdb", "zfs"])).unwrap_err().contains("not a file system"));
         assert!(parse(&args(&["partitionDisk", "sdb", "ext4:big"])).unwrap_err().contains("not a size"));
         assert!(parse(&args(&["eraseDisk", "sdb"])).unwrap_err().contains("wrong arguments"));
         assert!(parse(&args(&["verifyVolume"])).unwrap_err().contains("wrong arguments"));
