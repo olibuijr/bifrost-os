@@ -213,9 +213,10 @@ mod tests {
 
     #[test]
     fn the_straight_line_distance_is_about_right() {
-        // Reykjavik to Akureyri is about 228 km as the crow flies
+        // Reykjavik to Akureyri is about 248 km as the crow flies (about 171 km north-south and 177 km east-west at 65 N);
+        // the earlier 228 km figure was a wrong expectation, the great-circle formula is right.
         let d = haversine_m(REYKJAVIK, AKUREYRI);
-        assert!((d - 228_000.0).abs() < 4_000.0, "{d}");
+        assert!((d - 248_000.0).abs() < 4_000.0, "{d}");
         assert_eq!(haversine_m(REYKJAVIK, REYKJAVIK), 0.0);
     }
 

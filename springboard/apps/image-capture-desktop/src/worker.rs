@@ -78,7 +78,8 @@ pub fn handle(request: Request) -> Reply {
             volumes: devices::volume_devices(),
             scanners: scanner::list().map_err(|e| e.to_string()),
         },
-        Request::Contents { volume } => match devices::volume_path(&volume) {
+        // volume_path only strips the id prefix, so a camera that was unplugged still has a path; its mount must exist.
+        Request::Contents { volume } => match devices::volume_path(&volume).filter(|root| root.is_dir()) {
             Some(root) => {
                 let contents = devices::contents_of(&root);
                 Reply::Contents { files: model::camera_files(&root, &contents), volume }
