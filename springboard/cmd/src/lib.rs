@@ -23,6 +23,7 @@ pub mod scutil;
 pub mod sw_vers;
 pub mod softwareupdate;
 pub mod tmutil;
+pub mod what;
 
 /// Prints `msg` to stderr prefixed with the tool name and exits with `code`.
 pub fn die(tool: &str, msg: &str, code: i32) -> ! {
