@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.17 — 2026-10-13
+
+- The memory-pressure (PSI) watcher runs on the shell's `sys-watch` thread (`purgeable::hosted_watcher`); `sys-watch` polls POLLPRI and drops a watcher whose fd fails instead of spinning.
+
 ## 0.7.16 — 2026-10-13
 
 - Fewer shell threads: volume and sound share one audio worker; the SIGTERM and stall watchers share one `sys-watch` poll thread (`bare/sys_watch.rs`).

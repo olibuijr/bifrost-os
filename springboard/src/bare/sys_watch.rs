@@ -10,7 +10,8 @@ use super::sys;
 use std::os::raw::c_int;
 use std::sync::Mutex;
 
-/// Handler: `ready[i]` says whether `fds[i]` is readable (or hung up); `now` is `sys::now_ms()`.
+/// Handler: `ready[i]` says whether `fds[i]` is readable, has priority data (PSI triggers) or hung up; `now` is
+/// `sys::now_ms()`. A watcher whose fd reports an error (POLLERR, POLLNVAL) is dropped, so a dead fd never spins.
 /// Returns the next deadline, or `None` to wait for fds only.
 pub type Run = Box<dyn FnMut(&[bool], f64) -> Option<f64> + Send>;
 
@@ -37,7 +38,7 @@ pub fn start() {
 }
 
 fn run(mut watches: Vec<Watch>) {
-    let (mut fds, mut ready) = (Vec::new(), Vec::new());
+    let (mut fds, mut ready, mut revents) = (Vec::new(), Vec::new(), Vec::new());
     loop {
         fds.clear();
         let spans: Vec<std::ops::Range<usize>> = watches
@@ -55,13 +56,24 @@ fn run(mut watches: Vec<Watch>) {
             .filter_map(|w| w.due)
             .reduce(f64::min)
             .map_or(-1, |due| (due - now).ceil().max(0.0) as i32);
-        sys::wait_into(&fds, timeout, &mut ready);
+        sys::poll_revents(&fds, sys::POLLIN | sys::POLLPRI, timeout, &mut revents);
         let now = sys::now_ms();
-        for (w, span) in watches.iter_mut().zip(spans) {
-            let due = w.due.is_some_and(|d| now >= d);
-            if due || ready[span.clone()].iter().any(|&r| r) {
-                w.due = (w.run)(&ready[span], now);
+        let mut dead = Vec::new();
+        for (i, (w, span)) in watches.iter_mut().zip(spans).enumerate() {
+            if revents[span.clone()].iter().any(|&r| r & (sys::POLLERR | sys::POLLNVAL) != 0) {
+                dead.push(i);
+                continue;
             }
+            ready.clear();
+            ready.extend(revents[span].iter().map(|&r| r & (sys::POLLIN | sys::POLLPRI | sys::POLLHUP) != 0));
+            let due = w.due.is_some_and(|d| now >= d);
+            if due || ready.iter().any(|&r| r) {
+                w.due = (w.run)(&ready, now);
+            }
+        }
+        for i in dead.into_iter().rev() {
+            eprintln!("springboard: sys-watch: dropping a watcher whose fd failed");
+            watches.swap_remove(i);
         }
     }
 }

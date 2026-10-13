@@ -230,12 +230,59 @@ fn notify_pressure(level: MemoryPressure) {
 }
 
 #[cfg(target_os = "linux")]
-fn start_watcher() {
+static WATCH_ONCE: std::sync::Once = std::sync::Once::new();
+
+/// The memory PSI triggers on one window of 2 s (unprivileged windows are multiples of 2 s):
+/// warning: 150 ms of "some" stall; critical: 100 ms of "full" stall.
+#[cfg(target_os = "linux")]
+fn open_triggers() -> Option<(std::fs::File, std::fs::File)> {
     use std::fs::OpenOptions;
     use std::io::Write;
+    let open = |trigger: &[u8]| {
+        let mut f = OpenOptions::new().read(true).write(true).open("/proc/pressure/memory").ok()?;
+        f.write_all(trigger).ok()?;
+        Some(f)
+    };
+    Some((open(b"some 150000 2000000\0")?, open(b"full 100000 2000000\0")?))
+}
+
+/// The pressure watcher as fds plus a handler, for a host that already blocks in `poll(2)` on its own thread
+/// (the shell's sys-watch), instead of a thread of its own. `ready[i]` says whether `fds[i]` signalled (POLLPRI
+/// or an error); the handler returns its next deadline in ms on the caller's clock, `now` (after an event, two
+/// quiet windows, 4 s, mean the pressure is gone). None when the watcher already runs or PSI is missing.
+#[cfg(target_os = "linux")]
+pub fn hosted_watcher() -> Option<(Vec<i32>, Box<dyn FnMut(&[bool], f64) -> Option<f64> + Send>)> {
     use std::os::fd::AsRawFd;
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
+    let mut out = None;
+    WATCH_ONCE.call_once(|| {
+        let Some((warn, crit)) = open_triggers() else { return };
+        let fds = vec![warn.as_raw_fd(), crit.as_raw_fd()];
+        let mut level = MemoryPressure::Normal;
+        let run = move |ready: &[bool], now: f64| -> Option<f64> {
+            let _keep = (&warn, &crit);
+            let next = if ready[1] {
+                MemoryPressure::Critical
+            } else if ready[0] {
+                MemoryPressure::Warning
+            } else {
+                // the quiet deadline passed
+                MemoryPressure::Normal
+            };
+            if next != MemoryPressure::Normal || level != MemoryPressure::Normal {
+                level = next;
+                notify_pressure(level);
+            }
+            (level != MemoryPressure::Normal).then_some(now + 4000.0)
+        };
+        out = Some((fds, Box::new(run) as Box<dyn FnMut(&[bool], f64) -> Option<f64> + Send>));
+    });
+    out
+}
+
+#[cfg(target_os = "linux")]
+fn start_watcher() {
+    use std::os::fd::AsRawFd;
+    WATCH_ONCE.call_once(|| {
         #[repr(C)]
         struct PollFd {
             fd: i32,
@@ -247,14 +294,7 @@ fn start_watcher() {
         }
         const POLLPRI: i16 = 0x2;
         const POLLERR: i16 = 0x8;
-        // Two PSI triggers on one window of 2 s (unprivileged windows are multiples of 2 s):
-        // warning: 150 ms of "some" stall; critical: 100 ms of "full" stall.
-        let open = |trigger: &[u8]| {
-            let mut f = OpenOptions::new().read(true).write(true).open("/proc/pressure/memory").ok()?;
-            f.write_all(trigger).ok()?;
-            Some(f)
-        };
-        let (Some(warn), Some(crit)) = (open(b"some 150000 2000000\0"), open(b"full 100000 2000000\0")) else { return };
+        let Some((warn, crit)) = open_triggers() else { return };
         let _ = std::thread::Builder::new().name("memory-pressure".into()).spawn(move || {
             let mut fds = [PollFd { fd: warn.as_raw_fd(), events: POLLPRI, revents: 0 }, PollFd { fd: crit.as_raw_fd(), events: POLLPRI, revents: 0 }];
             let mut level = MemoryPressure::Normal;

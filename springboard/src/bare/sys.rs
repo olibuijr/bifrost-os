@@ -48,6 +48,8 @@ pub const O_CLOEXEC: c_int = 0o2000000;
 pub const POLLIN: i16 = 1;
 pub const POLLERR: i16 = 8;
 pub const POLLHUP: i16 = 0x10;
+pub const POLLPRI: i16 = 2;
+pub const POLLNVAL: i16 = 0x20;
 pub const PROT_RW: c_int = 3;
 pub const MAP_SHARED: c_int = 1;
 pub const CLOCK_MONOTONIC: c_int = 1;
@@ -162,6 +164,14 @@ pub fn wait_into(fds: &[c_int], timeout_ms: i32, out: &mut Vec<bool>) {
         out.clear();
         out.extend(p.iter().map(|f| f.revents & (POLLIN | POLLHUP | POLLERR) != 0));
     });
+}
+
+/// `poll(2)` over `fds` for `events` (one mask for all); `out` gets each fd's `revents` (cleared first).
+pub fn poll_revents(fds: &[c_int], events: i16, timeout_ms: i32, out: &mut Vec<i16>) {
+    let mut p: Vec<pollfd> = fds.iter().map(|&fd| pollfd { fd, events, revents: 0 }).collect();
+    unsafe { poll(p.as_mut_ptr(), p.len() as nfds_t, timeout_ms) };
+    out.clear();
+    out.extend(p.iter().map(|f| f.revents));
 }
 
 pub fn now_ms() -> f64 {
