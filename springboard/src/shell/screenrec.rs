@@ -683,7 +683,8 @@ mod tests {
         assert_eq!(&bytes[0..4], b"RIFF");
         assert_eq!(u32_at(4) as usize, bytes.len() - 8, "the RIFF size");
         assert_eq!(&bytes[8..12], b"AVI ");
-        assert_eq!(&bytes[32..36], b"avih");
+        // the `avih` chunk header is at 24; its fields start at 32 (the frame rate is at 32, the frame count at 48)
+        assert_eq!(&bytes[24..28], b"avih");
         assert_eq!(u32_at(48), 2, "total frames");
         assert_eq!(&bytes[100..104], b"strh");
         assert_eq!(u32_at(140), 2, "stream length");
@@ -740,7 +741,7 @@ mod tests {
         s.finish().unwrap();
         let bytes = std::fs::read(&path).unwrap();
         assert_eq!(u32::from_le_bytes(bytes[48..52].try_into().unwrap()), 3, "three frames were due");
-        assert_eq!(u32::from_le_bytes(bytes[32 + 8..32 + 12].try_into().unwrap()), 1_000_000 / 60, "the header says 60 a second");
+        assert_eq!(u32::from_le_bytes(bytes[32..36].try_into().unwrap()), 1_000_000 / 60, "the header says 60 a second");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
