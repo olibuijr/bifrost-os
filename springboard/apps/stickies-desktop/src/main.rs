@@ -60,7 +60,7 @@ const MENU_COLLAPSE_ALL: u32 = 47;
 const MENU_EXPAND_ALL: u32 = 48;
 const MENU_TRANSLUCENT: u32 = 49;
 const MENU_ZOOM: u32 = 50;
-const MENU_ARRANGE_BASE: u32 = 52; // 52..=55, one per Arrange
+const MENU_ARRANGE_BASE: u32 = 52; // 52..=56, one per Arrange
 const MENU_INK_BASE: u32 = 60; // 60..=64, one per Ink
 const MENU_INFO_CREATED: u32 = 70;
 const MENU_INFO_MODIFIED: u32 = 71;
@@ -125,7 +125,7 @@ fn undo_name(id: u32) -> Option<&'static str> {
         MENU_UPPER | MENU_LOWER | MENU_CAPITALISE => "Transformation",
         MENU_TRANSLUCENT => "Translucent",
         MENU_ZOOM => "Zoom",
-        MENU_ARRANGE_BASE..=55 => "Arrange",
+        MENU_ARRANGE_BASE..=56 => "Arrange",
         _ => return None,
     })
 }
@@ -630,7 +630,7 @@ impl StickiesApp {
                 note.toggle_zoom();
                 self.changed()
             }
-            MENU_ARRANGE_BASE..=55 => {
+            MENU_ARRANGE_BASE..=56 => {
                 let by = Arrange::ALL[(id - MENU_ARRANGE_BASE) as usize];
                 let width = Self::window_rect(ctx).w;
                 self.board.as_mut().is_some_and(|b| b.arrange(by, width)) && self.changed()
