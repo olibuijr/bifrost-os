@@ -1,9 +1,12 @@
 //! `NativeAttributedString` / `NativeMutableAttributedString` parity plus a rich text editing model (`NativeTextView` rich mode).
 //!
-//! Ranges are in characters (uses UTF-16 units; see the gap in `docs/bifrost-ui.md`, "Attributed strings").
+//! The classic range methods count characters; the `*_utf16` methods take ranges in UTF-16 units, the unit of the
+//! platform's range type, and are what the layout objects in `richlayout` use.
 //! Sizes are the Golden Gate text styles ([`SizeClass`], from `render/src/ui.rs` `MAC_*_PT`), colours are named tokens
 //! ([`ColorToken`], resolved with `Pair::now()` so they follow Light and Dark). No literal sizes or colours.
-use bifrost_render::ui::{self, system, Weight};
+use bifrost_render::ui::{self, system};
+use bifrost_ui::paragraph::ParagraphStyle;
+use bifrost_ui::typeset::UnderlineStyle;
 use bifrost_ui::undo::UndoManager;
 use std::ops::Range;
 
@@ -137,6 +140,29 @@ pub struct Attrs {
     pub link: Option<String>,
     /// Font feature settings (ligatures and kerning are on by default; this overrides them).
     pub features: FontFeatures,
+    /// A font family by name; `None` is the system font. Layout and the line metrics use the name; drawing uses the
+    /// system face until the renderer can select a face per run.
+    pub font_family: Option<String>,
+    /// A point size overriding `size`.
+    pub font_size: Option<f32>,
+    /// A literal text colour, in the renderer's colour format, overriding `color`.
+    pub foreground: Option<u32>,
+    pub background: Option<u32>,
+    /// Raises (positive) or lowers the baseline, in points.
+    pub baseline_offset: f32,
+    /// 1 superscript, -1 subscript, 0 neither.
+    pub superscript: i8,
+    /// Extra space after each character in points, and as a fraction of the font size.
+    pub kern: f32,
+    pub tracking: f32,
+    /// Outline width as a percentage of the font size; negative strokes and fills.
+    pub stroke_width: f32,
+    pub stroke_color: Option<u32>,
+    pub underline_color: Option<u32>,
+    /// `None` with `underline` set is a single line.
+    pub underline_style: UnderlineStyle,
+    /// The paragraph style, read from the first character of each paragraph.
+    pub paragraph: Option<ParagraphStyle>,
 }
 
 /// One attribute and its value (`NativeAttributedString.Key` plus value).
@@ -150,6 +176,19 @@ pub enum Attribute {
     Strikethrough(bool),
     Link(Option<String>),
     Features(FontFeatures),
+    FontFamily(Option<String>),
+    FontSize(Option<f32>),
+    Foreground(Option<u32>),
+    Background(Option<u32>),
+    BaselineOffset(f32),
+    Superscript(i8),
+    Kern(f32),
+    Tracking(f32),
+    StrokeWidth(f32),
+    StrokeColor(Option<u32>),
+    UnderlineColor(Option<u32>),
+    UnderlineStyle(UnderlineStyle),
+    Paragraph(Option<ParagraphStyle>),
 }
 
 /// Which attribute to enumerate (`enumerateAttribute(_:in:)`).
@@ -163,6 +202,19 @@ pub enum AttributeKey {
     Strikethrough,
     Link,
     Features,
+    FontFamily,
+    FontSize,
+    Foreground,
+    Background,
+    BaselineOffset,
+    Superscript,
+    Kern,
+    Tracking,
+    StrokeWidth,
+    StrokeColor,
+    UnderlineColor,
+    UnderlineStyle,
+    Paragraph,
 }
 
 impl Attrs {
@@ -176,6 +228,19 @@ impl Attrs {
             Attribute::Strikethrough(v) => self.strikethrough = v,
             Attribute::Link(v) => self.link = v,
             Attribute::Features(v) => self.features = v,
+            Attribute::FontFamily(v) => self.font_family = v,
+            Attribute::FontSize(v) => self.font_size = v,
+            Attribute::Foreground(v) => self.foreground = v,
+            Attribute::Background(v) => self.background = v,
+            Attribute::BaselineOffset(v) => self.baseline_offset = v,
+            Attribute::Superscript(v) => self.superscript = v,
+            Attribute::Kern(v) => self.kern = v,
+            Attribute::Tracking(v) => self.tracking = v,
+            Attribute::StrokeWidth(v) => self.stroke_width = v,
+            Attribute::StrokeColor(v) => self.stroke_color = v,
+            Attribute::UnderlineColor(v) => self.underline_color = v,
+            Attribute::UnderlineStyle(v) => self.underline_style = v,
+            Attribute::Paragraph(v) => self.paragraph = v,
         }
     }
     pub fn get(&self, k: AttributeKey) -> Attribute {
@@ -188,6 +253,19 @@ impl Attrs {
             AttributeKey::Strikethrough => Attribute::Strikethrough(self.strikethrough),
             AttributeKey::Link => Attribute::Link(self.link.clone()),
             AttributeKey::Features => Attribute::Features(self.features.clone()),
+            AttributeKey::FontFamily => Attribute::FontFamily(self.font_family.clone()),
+            AttributeKey::FontSize => Attribute::FontSize(self.font_size),
+            AttributeKey::Foreground => Attribute::Foreground(self.foreground),
+            AttributeKey::Background => Attribute::Background(self.background),
+            AttributeKey::BaselineOffset => Attribute::BaselineOffset(self.baseline_offset),
+            AttributeKey::Superscript => Attribute::Superscript(self.superscript),
+            AttributeKey::Kern => Attribute::Kern(self.kern),
+            AttributeKey::Tracking => Attribute::Tracking(self.tracking),
+            AttributeKey::StrokeWidth => Attribute::StrokeWidth(self.stroke_width),
+            AttributeKey::StrokeColor => Attribute::StrokeColor(self.stroke_color),
+            AttributeKey::UnderlineColor => Attribute::UnderlineColor(self.underline_color),
+            AttributeKey::UnderlineStyle => Attribute::UnderlineStyle(self.underline_style),
+            AttributeKey::Paragraph => Attribute::Paragraph(self.paragraph.clone()),
         }
     }
 }
@@ -927,63 +1005,31 @@ impl RichTextView {
         }
         true
     }
-    /// Draws the styled runs wrapped to `width` px at (`x`, `y`); returns the height used. Bold uses
-    /// `Weight::Bold`; links, underline and strikethrough are lines in the run colour. There is no italic face in
-    /// the system font, so italic lives in the model and in RTF/HTML export but is drawn upright (documented gap).
-    pub fn draw(&self, ui: &ui::Ui, s: &mut bifrost_render::gfx::Surface, x: i32, y: i32, width: i32) -> i32 {
-        let (mut cx, mut cy, mut line_h) = (0i32, 0i32, 0i32);
-        for (text, a) in self.text.content.runs() {
-            let weight = if a.bold { Weight::Bold } else { Weight::Regular };
-            let color = if a.link.is_some() { system::LINK.now() } else { a.color.map_or_else(|| system::LABEL.now(), ColorToken::now) };
-            let pt = a.size.pt();
-            for word in split_words(text) {
-                if word == "\n" {
-                    cy += line_h.max(ui.pt(pt) as i32);
-                    cx = 0;
-                    line_h = 0;
-                    continue;
-                }
-                let img = if a.features.is_empty() { ui.text(word, pt, weight, color) } else { ui.text_features(word, pt, weight, color, &a.features) };
-                let (w, h) = (img.w as i32, img.h as i32);
-                if cx > 0 && cx + w > width {
-                    cy += line_h;
-                    cx = 0;
-                    line_h = 0;
-                }
-                s.blit_colored(&img, x + cx, y + cy, color, 255);
-                if a.underline || a.link.is_some() {
-                    s.fill_rect((x + cx).max(0) as usize, (y + cy + h - 2).max(0) as usize, w.max(0) as usize, 1, color);
-                }
-                if a.strikethrough {
-                    s.fill_rect((x + cx).max(0) as usize, (y + cy + h / 2).max(0) as usize, w.max(0) as usize, 1, color);
-                }
-                cx += w;
-                line_h = line_h.max(h);
-            }
-        }
-        cy + line_h
+    /// Lays the content out in `width` px with the typesetter (paragraph styles, tabs, kerning, baseline and the other
+    /// attributes apply). The layout answers caret, selection and hit-testing queries in pixels.
+    pub fn layout(&self, ui: &ui::Ui, width: i32) -> crate::richlayout::TextLayout {
+        crate::richlayout::TextLayout::new(&self.text.content, ui, width as f32)
     }
-}
-
-fn split_words(t: &str) -> Vec<&str> {
-    let mut v = Vec::new();
-    let mut start = 0;
-    for (i, c) in t.char_indices() {
-        if c == '\n' {
-            if start < i {
-                v.push(&t[start..i]);
-            }
-            v.push("\n");
-            start = i + 1;
-        } else if c == ' ' {
-            v.push(&t[start..i + 1]);
-            start = i + 1;
-        }
+    /// Draws the content wrapped to `width` px at (`x`, `y`) with the selection highlighted and, when `focused`, the
+    /// caret; returns the height used. Bold uses `Weight::Bold`; links, underline and strikethrough are lines in the
+    /// run colour. There is no italic face in the system font, so italic lives in the model and in RTF/HTML export
+    /// but is drawn upright (documented gap).
+    pub fn draw(&self, ui: &ui::Ui, s: &mut bifrost_render::gfx::Surface, x: i32, y: i32, width: i32, focused: bool) -> i32 {
+        let layout = self.layout(ui, width);
+        let sel = self.text.selection.clone();
+        let caret = (focused && sel.is_empty()).then_some(sel.start);
+        layout.draw(ui, s, x, y, Some(sel), caret);
+        layout.height_px()
     }
-    if start < t.len() {
-        v.push(&t[start..]);
+    /// The character index under the pixel (`px`, `py`), measured from the content origin (`mouseDown` hit-testing).
+    pub fn index_at_point(&self, ui: &ui::Ui, width: i32, px: i32, py: i32) -> usize {
+        self.layout(ui, width).index_at_px(px as f32, py as f32)
     }
-    v
+    /// Selects from `anchor` to the character under the pixel, as a drag does.
+    pub fn drag_selection(&mut self, ui: &ui::Ui, width: i32, anchor: usize, px: i32, py: i32) {
+        let at = self.index_at_point(ui, width, px, py);
+        self.set_selection(anchor.min(at)..anchor.max(at));
+    }
 }
 
 #[cfg(test)]

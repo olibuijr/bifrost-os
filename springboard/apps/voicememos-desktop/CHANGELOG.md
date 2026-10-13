@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.3 — 2026-10-13
+
+- Notes text wraps with the SDK typesetter: line breaks follow the Unicode line breaking rules (after hyphens and
+  dashes, between ideographs, no break before closing punctuation) and keep emoji and combining marks together.
+
 ## 1.6.2 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

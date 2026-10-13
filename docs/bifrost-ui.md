@@ -187,9 +187,9 @@ springs with a damping ratio, retargeting without a jump).
 Foundation and UIKit kits (round 7): `diff` (`NSDiffableDataSourceSnapshot`), `cache` (`NSCache`, cost-limited LRU),
 `fuzzy` (match with highlight positions), `format` (byte counts, positional durations, relative times, grouped
 numbers), `gesture` (`Tap`, `LongPress`, `Pan` with velocity), `focus` (key-view loop and arrow focus), `uttype`
-(`UTType` conformance), `textfit` (truncation modes, word wrap, any font through a measure closure), `observe`
+(`UTType` conformance), `typeset` (typesetter, framesetter, frame, line and run objects with UAX 14/29 breaking and paragraph styles; any font through a `GlyphSource`), `observe`
 (`Observable<T>`), `calendar` (Gregorian arithmetic and month grids). Costs are in `docs/perf-history.jsonl`
-(`ui_diff_*`, `ui_cache_*`, `ui_fuzzy_*`, `ui_textfit_*`, `ui_calendar_*`, `ui_focus_*`).
+(`ui_diff_*`, `ui_cache_*`, `ui_fuzzy_*`, `ui_typeset_*`, `ui_calendar_*`, `ui_focus_*`).
 
 Round 8: `dockdrag` (`slot_at`, `preview_order`, `Slide`: eased per-icon offsets for reordering a row of icons, used by the
 Dock) and `menu` (`NSMenu` / `NSPopUpButton`: `Menu`, `MenuItem`, keyboard stepping, type-to-select, hit testing,
@@ -1247,13 +1247,18 @@ after a change to read a new value; the harness drives one window, not the shell
   HTML (`to_html`/`from_html`): `b strong i em u s del a h1-h3 small br p`, colour as `span data-color`, entities.
 - `RichTextView`: `RichText` (content, selection, typing attributes) with `insert_text`, `delete_backward`, `toggle(Trait)`,
   `key_command(char, shift)` for Cmd+B/I/U and Cmd+Z / Cmd+Shift+Z, every edit one step on an `UndoManager`. `draw` renders
-  wrapped styled runs into a `Surface`.
+  the content through the framesetter (`richlayout::TextLayout`) with selection and caret; `layout(ui, width)` gives pixel
+  queries (`index_at_px`, `caret_px`, `selection_px`), `index_at_point` and `drag_selection` do mouse hit-testing.
+- Extended `Attrs`: font family and size, literal foreground and background colours, baseline offset, superscript, kern,
+  tracking, stroke width and colour, underline colour and style, and a paragraph style (alignment, indents, tab stops,
+  line break mode, line height multiple and limits, line and paragraph spacing, base direction). `*_utf16` range
+  methods take UTF-16 ranges. See `docs/parity/ct-layout.md`.
 - Contract tests live in `sdk/src/attributed.rs` (pure model, no shell calls, so no `Ctx::testing`/`take_sent`).
 
-Gaps (not matched yet): ranges are characters, not UTF-16 units; italic is stored and exported but drawn upright (no italic
-face in the system font); `Caption` and `Footnote` share 10 pt so Caption reads back as Footnote from RTF; no arbitrary RGB
-colours, fonts, paragraph styles, attachments, lists or tables; no caret/mouse hit-testing in `draw` yet, so the Notes
-adoption is deferred. The `TextArea` control stays plain text.
+Gaps (not matched yet): the classic range methods count characters (use the `*_utf16` ones for UTF-16); italic is stored and exported but drawn upright (no italic
+face in the system font); `Caption` and `Footnote` share 10 pt so Caption reads back as Footnote from RTF; a font family is
+stored and laid out but drawn with the system face; attachments, lists and tables are missing; the Notes adoption is
+open. The `TextArea` control stays plain text.
 
 ## Sudden termination (ProcessInfo parity)
 

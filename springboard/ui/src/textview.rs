@@ -2,7 +2,7 @@
 //! a goal column in points, hit testing from a point, and scrolling that keeps the caret on screen. Editing goes through
 //! `text::TextEditor`, so typing, undo and the key bindings are the ones the single-line field already uses.
 //!
-//! Layout is greedy word wrap against a caller-supplied `measure` (points for a string), the same rule as `textfit::wrap`,
+//! Layout is greedy word wrap against a caller-supplied `measure` (points for a string), the typesetter's rule (`typeset::Typesetter::suggest_line_break`),
 //! but each line is kept as a byte range of the text so that carets and hit tests map back to offsets. A line excludes its
 //! newline and the space that a wrap consumed. Positions are UTF-8 byte offsets, as in `text::TextBuffer`.
 //!
@@ -10,8 +10,11 @@
 //! model has no drawing: a caller draws `visible_lines`, the caret from `caret_point` and the `Highlight`s.
 
 use std::ops::Range;
+use std::rc::Rc;
 
 use crate::text::TextEditor;
+use crate::textmetrics::{CharTable, FontMetrics, GlyphSource};
+use crate::typeset::{Typesetter, TypesetterOptions};
 
 /// Undo levels kept for the view's editor.
 const UNDO_LEVELS: usize = 100;
@@ -34,61 +37,43 @@ pub struct TextView {
     goal_x: Option<f32>,
 }
 
-/// Greedy word wrap of the whole text. Returns one byte range per visual line, in order. An empty paragraph is an empty
-/// line, and a word wider than `width` is split by characters.
+/// Word wrap of the whole text with the typesetter (line break opportunities, hanging spaces, long words split between
+/// characters). Returns one byte range per visual line, in order. An empty paragraph is an empty line. A line excludes
+/// its newline and, when it was wrapped, its trailing spaces.
 pub fn layout(text: &str, width: f32, measure: &dyn Fn(&str) -> f32) -> Vec<Range<usize>> {
+    // One font, measured by the caller: the metrics only need to be positive.
+    let metrics = FontMetrics { ascent: 1.0, descent: 0.0, leading: 0.0, underline_position: 0.0, underline_thickness: 0.0 };
+    let source: Rc<dyn GlyphSource> = Rc::new(CharTable::measure(text, measure, metrics));
+    let ts = Typesetter::new(text, &[], &[], TypesetterOptions::default(), source);
+    // Byte offset of every UTF-16 offset (the low half of a pair maps to the next boundary).
+    let mut byte_at_u16: Vec<usize> = Vec::with_capacity(ts.len() + 1);
+    for (b, c) in text.char_indices() {
+        byte_at_u16.push(b);
+        if c.len_utf16() == 2 {
+            byte_at_u16.push(b + c.len_utf8());
+        }
+    }
+    byte_at_u16.push(text.len());
     let mut lines = Vec::new();
-    let mut base = 0usize;
-    for para in text.split('\n') {
-        wrap_paragraph(para, base, width, measure, &mut lines);
-        base += para.len() + 1;
+    let mut pos = 0usize;
+    while pos < ts.len() {
+        let n = ts.suggest_line_break(pos, width).max(1);
+        let (s, e) = (byte_at_u16[pos], byte_at_u16[(pos + n).min(ts.len())]);
+        let line = &text[s..e];
+        let end = if let Some(stripped) = line.strip_suffix('\n') {
+            s + stripped.len()
+        } else if e < text.len() {
+            s + line.trim_end_matches(' ').len()
+        } else {
+            e
+        };
+        lines.push(s..end);
+        pos += n;
+    }
+    if text.is_empty() || text.ends_with('\n') {
+        lines.push(text.len()..text.len());
     }
     lines
-}
-
-fn wrap_paragraph(para: &str, base: usize, width: f32, measure: &dyn Fn(&str) -> f32, out: &mut Vec<Range<usize>>) {
-    if para.is_empty() {
-        out.push(base..base);
-        return;
-    }
-    // Offsets are relative to `para`; `base` is added when a line is pushed.
-    let mut start = 0usize;
-    let mut i = 0usize;
-    // Offset just after the most recent space on the current line, where a word wrap can break.
-    let mut after_space: Option<usize> = None;
-    while i < para.len() {
-        let ch = para[i..].chars().next().unwrap_or(' ');
-        let next = i + ch.len_utf8();
-        if i > start && measure(&para[start..next]) > width {
-            if ch == ' ' {
-                // The space itself is the break: the line ends before it and the space is consumed.
-                out.push(base + start..base + i);
-                start = next;
-                after_space = None;
-                i = next;
-                continue;
-            }
-            match after_space.filter(|&b| b > start) {
-                Some(b) => {
-                    // Break after the last space; that space (one byte) is consumed.
-                    out.push(base + start..base + b - 1);
-                    start = b;
-                }
-                None => {
-                    // No space to break at: split the word before this character.
-                    out.push(base + start..base + i);
-                    start = i;
-                }
-            }
-            after_space = None;
-            continue;
-        }
-        if ch == ' ' {
-            after_space = Some(next);
-        }
-        i = next;
-    }
-    out.push(base + start..base + para.len());
 }
 
 /// The index of the visual line that holds byte offset `byte`: the last line that starts at or before it.
