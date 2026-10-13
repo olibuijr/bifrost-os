@@ -2,6 +2,7 @@
 //! [`crate::layout`], the message list and the reader scroll, and the sheets are panels centred over the window. The
 //! layout functions here are shared by the painter and the hit test, so a tap lands on what is drawn.
 
+use crate::attachments;
 use crate::flags::Flag;
 use crate::layout;
 use crate::state::{Mail, Sheet};
@@ -478,6 +479,18 @@ impl MailWindow {
         y += ui.pt(SPACE_M);
         s.fill_rect(px(x), px(y), px(text_w), (ui.pt(1.0) as usize).max(1), SEPARATOR_C.now());
         y += ui.pt(SPACE_M);
+
+        let files: Option<String> = self.mail.attachments.get(&uid).filter(|f| !f.is_empty()).map(|files| {
+            let parts: Vec<String> = files.iter().map(|a| format!("{} ({})", a.name, attachments::size_text(a.bytes.len()))).collect();
+            format!("Attachments: {}", parts.join(", "))
+        });
+        if let Some(text) = files {
+            for line in wrap(ui, &text, text_w, MAC_FOOTNOTE_PT, Weight::Regular) {
+                put(s, &mut self.labels, ui, &line, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, y);
+                y += ui.pt(FOOT_LINE_PT);
+            }
+            y += ui.pt(SPACE_M);
+        }
 
         if !loaded {
             put(s, &mut self.labels, ui, "Loading...", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x, y);

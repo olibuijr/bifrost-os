@@ -3,6 +3,7 @@
 //! input; drawing and hit-testing are in [`crate::draw`].
 
 use crate::accounts;
+use crate::attachments;
 use crate::flags::Flag;
 use crate::message;
 use crate::state::{Mail, Notice, Sheet, ARCHIVE_NAMES, INBOX, TRASH_NAMES};
@@ -35,6 +36,7 @@ pub const MENU_TRASH: u32 = 9;
 pub const MENU_FIND: u32 = 10;
 pub const MENU_SHOW_ALL: u32 = 11;
 pub const MENU_THREADS: u32 = 12;
+pub const MENU_SAVE: u32 = 13;
 
 /// How often the inbox of every account is checked for new mail, in milliseconds.
 pub const POLL_MS: f64 = 60_000.0;
@@ -327,6 +329,8 @@ impl MailWindow {
                     AppMenuItem::new(MENU_UNREAD, "Mark as Unread").enabled(self.mail.open.is_some()),
                     AppMenuItem::new(MENU_ARCHIVE, "Archive").key("cmd+shift+a").enabled(self.mail.open.is_some()),
                     AppMenuItem::new(MENU_TRASH, "Move to Trash").enabled(self.mail.open.is_some()),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_SAVE, "Save Attachments...").key("cmd+shift+s").enabled(self.open_has_files()),
                 ],
             },
             AppMenu {
@@ -356,6 +360,7 @@ impl MailWindow {
             MENU_ARCHIVE => self.move_open(&ARCHIVE_NAMES, "Archive"),
             MENU_TRASH => self.move_open(&TRASH_NAMES, "Trash"),
             MENU_FIND => self.mail.open_search(),
+            MENU_SAVE => self.save_attachments(ctx),
             MENU_SHOW_ALL => self.mail.apply_search(""),
             MENU_THREADS => {
                 self.mail.threaded = !self.mail.threaded;
@@ -488,6 +493,28 @@ impl MailWindow {
         };
         self.mail.remove_row(uid);
         self.change_message(uid, Change::Move { to });
+    }
+
+    /// True when the open message carries files.
+    fn open_has_files(&self) -> bool {
+        self.mail.open.and_then(|uid| self.mail.attachments.get(&uid)).is_some_and(|files| !files.is_empty())
+    }
+
+    /// Writes the open message's files into the app's data directory, one folder per message.
+    fn save_attachments(&mut self, ctx: &Ctx) {
+        let Some(uid) = self.mail.open else { return };
+        let dir = ctx.data_dir.join("attachments").join(uid.to_string());
+        let result = match self.mail.attachments.get(&uid) {
+            Some(files) if !files.is_empty() => attachments::save_all(&dir, files),
+            _ => {
+                self.mail.status = "This message has no attachments".into();
+                return;
+            }
+        };
+        self.mail.status = match result {
+            Ok(n) => format!("Saved {n} attachment{} to {}", if n == 1 { "" } else { "s" }, dir.display()),
+            Err(e) => format!("The attachments could not be saved: {e}"),
+        };
     }
 
     /// Runs one change to a message of the shown mailbox on the server.

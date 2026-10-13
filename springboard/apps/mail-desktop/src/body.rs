@@ -2,7 +2,7 @@
 //! with base64 and quoted-printable transfer encodings undone and ISO-8859-1 read as Latin-1. Headers are read with
 //! [`crate::message::parse_headers`], so folded lines and case are handled the same way as in the list.
 
-use crate::codec::base64_decode;
+use crate::codec::{base64_decode, decode_words};
 use crate::html;
 use crate::message::parse_headers;
 
@@ -18,6 +18,72 @@ pub fn readable(raw: &str) -> String {
 struct Part {
     html: bool,
     text: String,
+}
+
+/// A file carried by a message: a part with a file name or an attachment disposition, with its transfer encoding
+/// undone. `mime` is the media type, `application/octet-stream` when the part names none.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Attachment {
+    pub name: String,
+    pub mime: String,
+    pub bytes: Vec<u8>,
+}
+
+/// Every file of a raw message, in order, nested multipart parts included. Text parts with no file name are the body
+/// (see [`readable`]), not attachments.
+pub fn attachments(raw: &str) -> Vec<Attachment> {
+    let mut out = Vec::new();
+    collect_attachments(raw, &mut out);
+    out
+}
+
+fn collect_attachments(raw: &str, out: &mut Vec<Attachment>) {
+    let (head, body) = split_head(raw);
+    let headers = parse_headers(head);
+    let kind = content_type(&headers);
+    if kind.starts_with("multipart/") {
+        if let Some(boundary) = boundary(&headers) {
+            for part in split_parts(body, &boundary) {
+                collect_attachments(part, out);
+            }
+        }
+        return;
+    }
+    let disposition = headers.iter().find(|(n, _)| n == "content-disposition").map(|(_, v)| v.to_ascii_lowercase()).unwrap_or_default();
+    let name = file_name(&headers);
+    if !disposition.trim_start().starts_with("attachment") && name.is_none() {
+        return;
+    }
+    let name = name.unwrap_or_else(|| format!("attachment-{}", out.len() + 1));
+    let mime = if kind.is_empty() { "application/octet-stream".to_string() } else { kind };
+    out.push(Attachment { name, mime, bytes: part_bytes(&headers, body) });
+}
+
+/// The file name of a part: the `filename` of its Content-Disposition, else the `name` of its Content-Type. Encoded
+/// words are decoded.
+fn file_name(headers: &[(String, String)]) -> Option<String> {
+    ["content-disposition", "content-type"]
+        .iter()
+        .find_map(|header| {
+            let value = headers.iter().find(|(n, _)| n == header).map(|(_, v)| v.as_str())?;
+            value.split(';').skip(1).find_map(|part| {
+                let (key, val) = part.split_once('=')?;
+                let key = key.trim().to_ascii_lowercase();
+                (key == "filename" || key == "name").then(|| val.trim().trim_matches('"').to_string())
+            })
+        })
+        .filter(|name| !name.is_empty())
+        .map(|name| decode_words(&name))
+}
+
+/// The part's bytes with its transfer encoding undone (no charset: attachments are kept as bytes).
+fn part_bytes(headers: &[(String, String)], body: &str) -> Vec<u8> {
+    let encoding = headers.iter().find(|(n, _)| n == "content-transfer-encoding").map(|(_, v)| v.trim().to_ascii_lowercase());
+    match encoding.as_deref() {
+        Some("base64") => base64_decode(body).unwrap_or_default(),
+        Some("quoted-printable") => quoted_printable(body),
+        _ => body.as_bytes().to_vec(),
+    }
 }
 
 /// The best text part of one entity: a text/plain part, else a text/html part. Multipart entities are searched in
@@ -194,6 +260,28 @@ mod tests {
         let raw = "Content-Type: text/html; charset=utf-8\r\n\r\n<html><script>x()</script><p>Salut</p></html>";
         assert!(readable(raw).contains("Salut"));
         assert!(!readable(raw).contains("x()"));
+    }
+
+    #[test]
+    fn attachments_are_the_named_parts_with_their_bytes() {
+        let raw = concat!(
+            "Content-Type: multipart/mixed; boundary=\"B\"\r\n\r\n",
+            "--B\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nSee the file\r\n",
+            "--B\r\nContent-Type: application/pdf; name=\"skjal.pdf\"\r\n",
+            "Content-Disposition: attachment; filename=\"skjal.pdf\"\r\nContent-Transfer-Encoding: base64\r\n\r\n",
+            "aGk=\r\n",
+            "--B\r\nContent-Type: text/plain\r\nContent-Disposition: attachment\r\n\r\nnotes\r\n--B--\r\n",
+        );
+        let files = attachments(raw);
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[0], Attachment { name: "skjal.pdf".into(), mime: "application/pdf".into(), bytes: b"hi".to_vec() });
+        assert_eq!(files[1].name, "attachment-2");
+        assert_eq!(files[1].bytes, b"notes".to_vec());
+    }
+
+    #[test]
+    fn a_plain_message_has_no_attachments() {
+        assert!(attachments("Content-Type: text/plain\r\n\r\nhello\r\n").is_empty());
     }
 
     #[test]

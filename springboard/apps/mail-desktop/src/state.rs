@@ -2,6 +2,7 @@
 //! the sheets (account setup and compose) and the arrival baseline for new-mail notices. Nothing here touches the
 //! network, the passwords or the window; `window.rs` runs the jobs and feeds their results in.
 
+use crate::body::Attachment;
 use crate::flags::{Flag, Flags};
 use crate::message::{self, Draft, Summary};
 use crate::search::{Doc, Query};
@@ -147,6 +148,8 @@ pub struct Mail {
     pub search: String,
     /// The threaded view: the list groups conversations together.
     pub threaded: bool,
+    /// The files of each message loaded for the shown mailbox, by UID.
+    pub attachments: HashMap<u32, Vec<Attachment>>,
 }
 
 impl Mail {
@@ -165,6 +168,7 @@ impl Mail {
             status: String::new(),
             search: String::new(),
             threaded: false,
+            attachments: HashMap::new(),
         }
     }
 
@@ -190,6 +194,7 @@ impl Mail {
         self.mailbox = name.to_string();
         self.rows.clear();
         self.bodies.clear();
+        self.attachments.clear();
         self.open = None;
     }
 
@@ -250,6 +255,7 @@ impl Mail {
     pub fn remove_row(&mut self, uid: u32) {
         self.rows.retain(|r| r.uid != uid);
         self.bodies.remove(&uid);
+        self.attachments.remove(&uid);
         if self.open == Some(uid) {
             self.open = None;
         }
@@ -288,6 +294,7 @@ impl Mail {
     /// The text of a message arrived. It is kept only when it belongs to the shown account and mailbox.
     pub fn body_arrived(&mut self, account_id: &str, mailbox: &str, uid: u32, text: String) {
         if self.current().is_some_and(|a| a.id == account_id) && self.mailbox == mailbox {
+            self.attachments.insert(uid, crate::body::attachments(&text));
             self.bodies.insert(uid, text);
         }
     }
@@ -571,6 +578,18 @@ mod tests {
         let lines = mail.visible_lines();
         assert_eq!(lines.iter().map(|l| l.row.uid).collect::<Vec<_>>(), vec![3, 1, 2]);
         assert_eq!(lines.iter().map(|l| l.thread).collect::<Vec<_>>(), vec![2, 2, 1]);
+    }
+
+    #[test]
+    fn a_loaded_message_keeps_its_files_until_the_mailbox_changes() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(3, "Skjöl")]);
+        let raw = "Content-Type: multipart/mixed; boundary=B\r\n\r\n--B\r\nContent-Type: text/plain\r\n\r\nSee attached\r\n--B\r\nContent-Type: text/csv; name=\"tolur.csv\"\r\nContent-Disposition: attachment; filename=\"tolur.csv\"\r\n\r\na,b\r\n--B--\r\n";
+        mail.body_arrived("work", INBOX, 3, raw.to_string());
+        let files = mail.attachments.get(&3).expect("the files of the loaded message");
+        assert_eq!(files.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), vec!["tolur.csv"]);
+        mail.show_mailbox("Sent");
+        assert!(mail.attachments.is_empty());
     }
 
     #[test]

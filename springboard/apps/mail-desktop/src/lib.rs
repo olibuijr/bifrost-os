@@ -3,6 +3,7 @@
 //! through background jobs (`sync`) and Passwords.
 
 pub mod accounts;
+pub mod attachments;
 pub mod body;
 pub mod codec;
 pub mod draw;
