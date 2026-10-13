@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+- File > Print... (Cmd+P) prints the document as it is marked up: a PDF's page order, turns, markup and deletions are
+  written to a copy under the app's data folder by the PDF worker, and that copy is sent to the default printer. A
+  picture prints its marked up page, with Adjust Color and turns, as a PNG. The original file is not changed.
+
 ## 0.5.0
 
 - File > Print... (Cmd+P) sends the open file to the default printer through the shared print operation. It prints the

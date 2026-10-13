@@ -11,9 +11,9 @@ mod export;
 mod model;
 mod pdfjob;
 mod pdfmarks;
+mod printjob;
 
 use bifrost_app::kit::{Damage, Surface, Ui};
-use bifrost_app::print::{PrintError, PrintOperation};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
 use canvas::{Action, Layout, PictureCache, Scene, Side, Tool};
 use document::Document;
@@ -129,12 +129,16 @@ impl Viewer {
             let (arrived, replies) = doc.take_replies();
             changed |= arrived;
             for reply in replies {
-                if let Reply::Written(result) = reply {
-                    self.status = match result {
-                        Ok(path) if path.extension().is_some_and(|e| e == "pdf") => format!("Saved {}", path.display()),
-                        Ok(path) => format!("Exported {}", path.display()),
-                        Err(e) => format!("Save failed: {e}"),
-                    };
+                match reply {
+                    Reply::Written(result) => {
+                        self.status = match result {
+                            Ok(path) if path.extension().is_some_and(|e| e == "pdf") => format!("Saved {}", path.display()),
+                            Ok(path) => format!("Exported {}", path.display()),
+                            Err(e) => format!("Save failed: {e}"),
+                        };
+                    }
+                    Reply::Printed(status) => self.status = status,
+                    _ => {}
                 }
             }
         }
@@ -290,16 +294,7 @@ impl Viewer {
             Action::Saturate => self.adjust.saturation = (self.adjust.saturation + 0.25).clamp(0.0, 2.0),
             Action::Desaturate => self.adjust.saturation = (self.adjust.saturation - 0.25).clamp(0.0, 2.0),
             Action::ResetColour => self.adjust = Adjust::default(),
-            Action::Print => {
-                if let Some(doc) = &self.doc {
-                    self.status = match PrintOperation::new(doc.path.clone()).run() {
-                        Ok(_) => "Sent to the printer".into(),
-                        Err(PrintError::NoCups) => "The printing service is not running".into(),
-                        Err(PrintError::NoPrinter) => "No printer is set up".into(),
-                        Err(PrintError::Failed(message)) => format!("Printing failed: {message}"),
-                    };
-                }
-            }
+            Action::Print => self.print(),
             Action::ExportPng => self.export_raster(Raster::Png),
             Action::ExportJpeg => self.export_raster(Raster::Jpeg),
             Action::ExportPdf => self.export_pdf(),
@@ -310,6 +305,32 @@ impl Viewer {
             }
         }
         true
+    }
+
+    /// Prints the document as it is marked up: a PDF's edited copy (the worker writes and sends it), or a picture's
+    /// marked up page written as a PNG and sent from here.
+    fn print(&mut self) {
+        let Some(doc) = &self.doc else { return };
+        if doc.is_pdf {
+            let target = printjob::scratch_file(&self.data_dir, &doc.path, "pdf");
+            let job = printjob::pdf_job(doc.path.clone(), target, doc.order.clone(), doc.turns.clone(), doc.marks.clone());
+            self.status = if doc.send(job) { "Printing".into() } else { "The document is not open.".into() };
+            return;
+        }
+        let page = self.view.page;
+        let Some(src) = doc.source_of(page) else { return };
+        let Some(img) = doc.picture(page) else { return };
+        let out = export::finish(&img, &doc.marks, src, doc.turn_of(page), &self.adjust, 1.0);
+        let target = printjob::scratch_file(&self.data_dir, &doc.path, "png");
+        let written = match target.parent() {
+            Some(dir) => std::fs::create_dir_all(dir).map_err(|e| e.to_string()),
+            None => Ok(()),
+        }
+        .and_then(|()| export::write_image(&out, Raster::Png, &target));
+        self.status = match written {
+            Ok(()) => printjob::print_file(target),
+            Err(e) => format!("Printing failed: {e}"),
+        };
     }
 
     /// Writes the shown page as a PNG or JPEG at the export size. A PDF page is drawn by its worker first.
