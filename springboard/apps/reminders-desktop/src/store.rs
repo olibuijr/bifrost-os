@@ -1,14 +1,19 @@
-//! Bounded, escaped, atomically written store. Format v2 keeps lists and
-//! full reminders; the v1 date-only format still loads (all in one list).
-use crate::model::{Data, ListDef, Reminder, MAX_NAME, MAX_NOTES, MAX_TITLE, MAX_URL};
+//! Bounded, escaped, atomically written store. Format v2 keeps lists, list groups, sections, templates and
+//! full reminders; the v1 date-only format still loads (all in one list). A line starts with its kind: `L` list,
+//! `G` group, `S` section, `T` template, `U` template item, `R` reminder. Older files have shorter `L` and `R`
+//! lines; the missing fields read as unset.
+use crate::model::{
+    Data, ListDef, ListGroup, Reminder, Section, Template, TemplateItem, MAX_GROUPS, MAX_ITEMS, MAX_LISTS, MAX_NAME, MAX_NOTES,
+    MAX_SECTIONS, MAX_TEMPLATES, MAX_TEMPLATE_ITEMS, MAX_TITLE, MAX_URL,
+};
 use crate::repeat::Repeat;
 use springboard::shell::prefs::{escape_field as escaped, unescape_field};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-const MAX_ITEMS: usize = 10_000;
-const MAX_LISTS: usize = 100;
 pub const MAX_BYTES: usize = 8 * 1024 * 1024;
+/// Lines read after the header: reminders, lists, groups, sections, templates and their items.
+const MAX_LINES: usize = 25_000;
 const HEADER: &str = "springboard-reminders-v2";
 const HEADER_V1: &str = "springboard-reminders-v1";
 const DAY_RANGE: std::ops::RangeInclusive<i64> = -719_162..=2_932_896;
@@ -44,8 +49,8 @@ fn flag(field: &str) -> Option<bool> {
 }
 
 fn parse_item(fields: &[&str]) -> Option<Reminder> {
-    // R id list parent due time done flag prio repeat early title notes url
-    if fields.len() != 14 {
+    // R id list parent due time done flag prio repeat early title notes url [created [section]]
+    if !(14..=16).contains(&fields.len()) {
         return None;
     }
     let due: Option<i64> = opt_num(fields[4]).ok()?;
@@ -72,6 +77,14 @@ fn parse_item(fields: &[&str]) -> Option<Reminder> {
         title: unescape(fields[11], MAX_TITLE, false)?,
         notes: unescape(fields[12], MAX_NOTES, true)?,
         url: unescape(fields[13], MAX_URL, true)?,
+        created: match fields.get(14) {
+            Some(f) => opt_num(f).ok()?,
+            None => None,
+        },
+        section: match fields.get(15) {
+            Some(f) => opt_num(f).ok()?,
+            None => None,
+        },
     })
 }
 
@@ -90,6 +103,43 @@ fn parse_v1(line: &str) -> Option<Reminder> {
     Some(r)
 }
 
+fn parse_list(fields: &[&str]) -> Option<(ListDef, Option<u64>)> {
+    // L id color icon name [pinned group]
+    if fields.len() != 5 && fields.len() != 7 {
+        return None;
+    }
+    let mut list = ListDef::new(
+        fields[1].parse().ok()?,
+        unescape(fields[4], MAX_NAME, false)?,
+        fields[2].parse().ok()?,
+        fields[3].parse().ok()?,
+    );
+    let mut group = None;
+    if fields.len() == 7 {
+        list.pinned = flag(fields[5])?;
+        group = opt_num(fields[6]).ok()?;
+    }
+    Some((list, group))
+}
+
+fn parse_template_item(fields: &[&str]) -> Option<(u64, TemplateItem)> {
+    // U template sub flagged priority title notes url
+    if fields.len() != 8 {
+        return None;
+    }
+    Some((
+        fields[1].parse().ok()?,
+        TemplateItem {
+            sub: flag(fields[2])?,
+            flagged: flag(fields[3])?,
+            priority: fields[4].parse().ok().filter(|p| *p <= 3)?,
+            title: unescape(fields[5], MAX_TITLE, false)?,
+            notes: unescape(fields[6], MAX_NOTES, true)?,
+            url: unescape(fields[7], MAX_URL, true)?,
+        },
+    ))
+}
+
 pub fn parse(text: &str) -> Data {
     let mut lines = text.lines();
     let v1 = match lines.next() {
@@ -99,9 +149,15 @@ pub fn parse(text: &str) -> Data {
     };
     let mut lists: Vec<ListDef> = vec![];
     let mut items: Vec<Reminder> = vec![];
+    let mut groups: Vec<ListGroup> = vec![];
+    let mut templates: Vec<Template> = vec![];
+    // (section id, list id, name) in file order; attached to their lists once every list is known
+    let mut sections: Vec<(u64, u64, String)> = vec![];
     let mut list_ids = HashSet::new();
+    let mut group_ids = HashSet::new();
     let mut ids = HashSet::new();
-    for line in lines.take(MAX_ITEMS + MAX_LISTS) {
+    let mut list_group: HashMap<u64, u64> = HashMap::new();
+    for line in lines.take(MAX_LINES) {
         if v1 {
             if let Some(r) = parse_v1(line).filter(|r| ids.insert(r.id)) {
                 items.push(r);
@@ -110,13 +166,41 @@ pub fn parse(text: &str) -> Data {
         }
         let fields: Vec<_> = line.split('\t').collect();
         match fields.first().copied() {
-            Some("L") if fields.len() == 5 && lists.len() < MAX_LISTS => {
-                let (Ok(id), Ok(color), Ok(icon)) = (fields[1].parse::<u64>(), fields[2].parse::<u8>(), fields[3].parse::<u8>()) else {
+            Some("L") if lists.len() < MAX_LISTS => {
+                if let Some((list, group)) = parse_list(&fields).filter(|(l, _)| list_ids.insert(l.id)) {
+                    if let Some(g) = group {
+                        list_group.insert(list.id, g);
+                    }
+                    lists.push(list);
+                }
+            }
+            Some("G") if fields.len() == 3 && groups.len() < MAX_GROUPS => {
+                let (Ok(id), Some(name)) = (fields[1].parse::<u64>(), unescape(fields[2], MAX_NAME, false)) else { continue };
+                if group_ids.insert(id) {
+                    groups.push(ListGroup { id, name });
+                }
+            }
+            Some("S") if fields.len() == 4 => {
+                let (Ok(id), Ok(list), Some(name)) = (fields[1].parse::<u64>(), fields[2].parse::<u64>(), unescape(fields[3], MAX_NAME, false)) else {
                     continue;
                 };
-                let Some(name) = unescape(fields[4], MAX_NAME, false) else { continue };
-                if list_ids.insert(id) {
-                    lists.push(ListDef { id, name, color, icon });
+                sections.push((id, list, name));
+            }
+            Some("T") if fields.len() == 5 && templates.len() < MAX_TEMPLATES => {
+                let (Ok(id), Ok(color), Ok(icon), Some(name)) =
+                    (fields[1].parse::<u64>(), fields[2].parse::<u8>(), fields[3].parse::<u8>(), unescape(fields[4], MAX_NAME, false))
+                else {
+                    continue;
+                };
+                if templates.iter().all(|t| t.id != id) {
+                    templates.push(Template { id, name, color, icon, items: vec![] });
+                }
+            }
+            Some("U") => {
+                if let Some((tid, item)) = parse_template_item(&fields) {
+                    if let Some(t) = templates.iter_mut().find(|t| t.id == tid).filter(|t| t.items.len() < MAX_TEMPLATE_ITEMS) {
+                        t.items.push(item);
+                    }
                 }
             }
             Some("R") if items.len() < MAX_ITEMS => {
@@ -131,6 +215,18 @@ pub fn parse(text: &str) -> Data {
         lists = Data::default().lists;
     }
     let first = lists[0].id;
+    // Groups must exist; sections need their list, a unique id and room.
+    for l in &mut lists {
+        l.group = list_group.get(&l.id).copied().filter(|g| group_ids.contains(g));
+    }
+    let mut section_ids = HashSet::new();
+    for (id, list, name) in sections {
+        if let Some(l) = lists.iter_mut().find(|l| l.id == list).filter(|l| l.sections.len() < MAX_SECTIONS) {
+            if section_ids.insert(id) {
+                l.sections.push(Section { id, name });
+            }
+        }
+    }
     let list_of: HashMap<u64, u64> = items.iter().map(|r| (r.id, r.list)).collect();
     let top: HashSet<u64> = items.iter().filter(|r| r.parent.is_none()).map(|r| r.id).collect();
     for r in &mut items {
@@ -144,8 +240,15 @@ pub fn parse(text: &str) -> Data {
                 r.parent = None;
             }
         }
+        // A section belongs to the reminder's own list.
+        if let Some(s) = r.section {
+            let ok = lists.iter().any(|l| l.id == r.list && l.sections.iter().any(|x| x.id == s));
+            if !ok {
+                r.section = None;
+            }
+        }
     }
-    Data { lists, items }
+    Data { lists, items, groups, templates }
 }
 
 pub fn load_checked(path: &Path) -> std::io::Result<Data> {
@@ -177,36 +280,99 @@ fn invalid(msg: &'static str) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::InvalidInput, msg)
 }
 
-pub fn save(path: &Path, data: &Data) -> std::io::Result<()> {
+/// Whether `data` is within every limit the store enforces and every reference in it resolves.
+fn valid(data: &Data) -> bool {
+    let name_ok = |name: &str| unescape(&escaped(name), MAX_NAME, false).is_some();
     let mut list_ids = HashSet::new();
     let mut ids = HashSet::new();
-    if data.items.len() > MAX_ITEMS
-        || data.lists.is_empty()
-        || data.lists.len() > MAX_LISTS
-        || data.lists.iter().any(|l| !list_ids.insert(l.id) || unescape(&escaped(&l.name), MAX_NAME, false).is_none())
-        || data.items.iter().any(|r| {
-            !ids.insert(r.id)
-                || !list_ids.contains(&r.list)
-                || r.priority > 3
-                || r.time.is_some_and(|t| t >= 1440)
-                || unescape(&escaped(&r.title), MAX_TITLE, false).is_none()
-                || unescape(&escaped(&r.notes), MAX_NOTES, true).is_none()
-                || unescape(&escaped(&r.url), MAX_URL, true).is_none()
-                || r.due.is_some_and(|d| !DAY_RANGE.contains(&d))
+    let mut group_ids = HashSet::new();
+    let mut section_ids = HashSet::new();
+    let mut template_ids = HashSet::new();
+    data.items.len() <= MAX_ITEMS
+        && !data.lists.is_empty()
+        && data.lists.len() <= MAX_LISTS
+        && data.groups.len() <= MAX_GROUPS
+        && data.templates.len() <= MAX_TEMPLATES
+        && data.groups.iter().all(|g| group_ids.insert(g.id) && name_ok(&g.name))
+        && data.lists.iter().all(|l| {
+            list_ids.insert(l.id)
+                && name_ok(&l.name)
+                && l.group.is_none_or(|g| group_ids.contains(&g))
+                && l.sections.len() <= MAX_SECTIONS
+                && l.sections.iter().all(|s| section_ids.insert(s.id) && name_ok(&s.name))
         })
-    {
+        && data.templates.iter().all(|t| {
+            template_ids.insert(t.id)
+                && name_ok(&t.name)
+                && t.items.len() <= MAX_TEMPLATE_ITEMS
+                && t.items.iter().all(|i| {
+                    i.priority <= 3
+                        && unescape(&escaped(&i.title), MAX_TITLE, false).is_some()
+                        && unescape(&escaped(&i.notes), MAX_NOTES, true).is_some()
+                        && unescape(&escaped(&i.url), MAX_URL, true).is_some()
+                })
+        })
+        && data.items.iter().all(|r| {
+            ids.insert(r.id)
+                && list_ids.contains(&r.list)
+                && r.priority <= 3
+                && r.time.is_none_or(|t| t < 1440)
+                && unescape(&escaped(&r.title), MAX_TITLE, false).is_some()
+                && unescape(&escaped(&r.notes), MAX_NOTES, true).is_some()
+                && unescape(&escaped(&r.url), MAX_URL, true).is_some()
+                && r.due.is_none_or(|d| DAY_RANGE.contains(&d))
+                && r.section.is_none_or(|s| data.lists.iter().any(|l| l.id == r.list && l.sections.iter().any(|x| x.id == s)))
+        })
+}
+
+pub fn save(path: &Path, data: &Data) -> std::io::Result<()> {
+    if !valid(data) {
         return Err(invalid("Invalid reminder"));
     }
     // Validate serialized bytes before touching disk: multibyte text and
     // escaping can grow beyond the reader's limit despite valid item counts.
+    let num = |v: Option<String>| v.unwrap_or_else(|| "-".into());
     let mut out = format!("{HEADER}\n");
     for l in &data.lists {
-        out.push_str(&format!("L\t{}\t{}\t{}\t{}\n", l.id, l.color, l.icon, escaped(&l.name)));
+        out.push_str(&format!(
+            "L\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            l.id,
+            l.color,
+            l.icon,
+            escaped(&l.name),
+            u8::from(l.pinned),
+            num(l.group.map(|g| g.to_string())),
+        ));
     }
-    let num = |v: Option<String>| v.unwrap_or_else(|| "-".into());
+    for g in &data.groups {
+        out.push_str(&format!("G\t{}\t{}\n", g.id, escaped(&g.name)));
+    }
+    for l in &data.lists {
+        for s in &l.sections {
+            out.push_str(&format!("S\t{}\t{}\t{}\n", s.id, l.id, escaped(&s.name)));
+        }
+    }
+    for t in &data.templates {
+        out.push_str(&format!("T\t{}\t{}\t{}\t{}\n", t.id, t.color, t.icon, escaped(&t.name)));
+        for i in &t.items {
+            out.push_str(&format!(
+                "U\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+                t.id,
+                u8::from(i.sub),
+                u8::from(i.flagged),
+                i.priority,
+                escaped(&i.title),
+                escaped(&i.notes),
+                escaped(&i.url),
+            ));
+        }
+        if out.len() > MAX_BYTES {
+            return Err(invalid("Reminders file too large"));
+        }
+    }
     for r in &data.items {
         out.push_str(&format!(
-            "R\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            "R\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
             r.id,
             r.list,
             num(r.parent.map(|p| p.to_string())),
@@ -220,6 +386,8 @@ pub fn save(path: &Path, data: &Data) -> std::io::Result<()> {
             escaped(&r.title),
             escaped(&r.notes),
             escaped(&r.url),
+            num(r.created.map(|c| c.to_string())),
+            num(r.section.map(|s| s.to_string())),
         ));
         if out.len() > MAX_BYTES {
             return Err(invalid("Reminders file too large"));
@@ -249,7 +417,22 @@ mod tests {
     fn v2_round_trips_every_field() {
         let path = scratch("roundtrip");
         let mut data = Data::default();
-        data.lists.push(ListDef { id: 2, name: "Work\tTab".into(), color: 3, icon: 2 });
+        let mut work = ListDef::new(2, "Work\tTab", 3, 2);
+        work.pinned = true;
+        work.group = Some(4);
+        work.sections = vec![Section { id: 9, name: "Cold\nfood".into() }, Section { id: 12, name: "Dry".into() }];
+        data.lists.push(work);
+        data.groups.push(ListGroup { id: 4, name: "Home\tlife".into() });
+        data.templates.push(Template {
+            id: 3,
+            name: "Trip".into(),
+            color: 2,
+            icon: 1,
+            items: vec![
+                TemplateItem { title: "Pack \"bags\"".into(), notes: "line1\nline2".into(), url: "https://example.com".into(), flagged: true, priority: 3, sub: false },
+                TemplateItem { title: "Passports".into(), notes: String::new(), url: String::new(), flagged: false, priority: 0, sub: true },
+            ],
+        });
         let mut a = Reminder::new(1, "Call \"Dad\"\\home\n世界");
         a.notes = "line1\nline2".into();
         a.url = "https://example.com/a?b=1".into();
@@ -260,6 +443,8 @@ mod tests {
         a.priority = 2;
         a.repeat = Some(Repeat::new(Unit::Week, 2));
         a.early = Some(60);
+        a.created = Some(1_791_000_000);
+        a.section = Some(9);
         let mut b = Reminder::new(2, "Sub");
         b.list = 2;
         b.parent = Some(1);
@@ -269,6 +454,63 @@ mod tests {
         assert_eq!(load_checked(&path).unwrap(), data);
         assert!(!path.with_extension("tsv.tmp").exists());
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+    #[test]
+    fn files_from_before_groups_sections_and_creation_dates_still_load() {
+        let text = format!(
+            "{HEADER}\nL\t1\t0\t0\tReminders\nL\t2\t1\t1\tWork\nR\t1\t1\t-\t-\t-\t0\t0\t0\t-\t-\tOld\t\t\nR\t2\t1\t-\t100\t-\t1\t0\t0\t-\t-\tOlder\t\t\t500\n"
+        );
+        let data = parse(&text);
+        assert_eq!(data.lists.len(), 2);
+        assert!(data.lists.iter().all(|l| !l.pinned && l.group.is_none() && l.sections.is_empty()));
+        assert_eq!((data.items[0].created, data.items[0].section), (None, None));
+        assert_eq!((data.items[1].created, data.items[1].section), (Some(500), None));
+        assert!(data.groups.is_empty() && data.templates.is_empty());
+    }
+    #[test]
+    fn broken_references_in_the_new_fields_are_repaired() {
+        let text = format!(
+            "{HEADER}\nL\t1\t0\t0\tOne\t1\t7\nL\t2\t0\t0\tTwo\t0\t5\nG\t5\tHome\nG\t5\tDup\nG\tx\tBad\n\
+             S\t10\t1\tA\nS\t10\t2\tDuplicate id\nS\t11\t99\tNo list\nS\t12\t2\tB\n\
+             T\t1\t0\t0\tTrip\nT\t1\t0\t0\tDup\nU\t1\t0\t1\t3\tPack\t\t\nU\t1\t0\t0\t9\tBad priority\t\t\nU\t8\t0\t0\t0\tNo template\t\t\n\
+             R\t1\t1\t-\t-\t-\t0\t0\t0\t-\t-\tIn A\t\t\t-\t10\n\
+             R\t2\t1\t-\t-\t-\t0\t0\t0\t-\t-\tIn the other list's B\t\t\t-\t12\n\
+             R\t3\t2\t-\t-\t-\t0\t0\t0\t-\t-\tBad created\t\t\tx\t-\n"
+        );
+        let data = parse(&text);
+        assert!(data.lists[0].pinned);
+        assert_eq!(data.lists[0].group, None, "group 7 does not exist");
+        assert_eq!(data.lists[1].group, Some(5));
+        assert_eq!(data.groups.len(), 1);
+        assert_eq!(data.lists[0].sections.len(), 1, "a duplicate id and an unknown list are dropped");
+        assert_eq!(data.lists[1].sections[0].name, "B");
+        assert_eq!(data.templates.len(), 1);
+        assert_eq!(data.templates[0].items.len(), 1, "a bad priority and an unknown template are dropped");
+        assert_eq!(data.items.iter().map(|r| r.id).collect::<Vec<_>>(), [1, 2]);
+        assert_eq!(data.items[0].section, Some(10));
+        assert_eq!(data.items[1].section, None, "a section of another list is dropped");
+    }
+    #[test]
+    fn save_rejects_dangling_references_and_over_limit_collections() {
+        let path = scratch("dangling");
+        let mut data = Data::default();
+        data.lists[0].group = Some(9);
+        assert!(save(&path, &data).is_err(), "a group that does not exist");
+        data.lists[0].group = None;
+        let mut r = Reminder::new(1, "x");
+        r.section = Some(3);
+        data.items = vec![r];
+        assert!(save(&path, &data).is_err(), "a section that does not exist");
+        data.items.clear();
+        data.lists[0].sections = (0..=MAX_SECTIONS as u64).map(|id| Section { id: id + 1, name: format!("S{id}") }).collect();
+        assert!(save(&path, &data).is_err(), "too many sections");
+        data.lists[0].sections.truncate(2);
+        data.lists[0].sections[1].id = data.lists[0].sections[0].id;
+        assert!(save(&path, &data).is_err(), "a duplicate section id");
+        data.lists[0].sections.clear();
+        data.templates = vec![Template { id: 1, name: "  ".into(), color: 0, icon: 0, items: vec![] }];
+        assert!(save(&path, &data).is_err(), "a blank template name");
+        assert!(!path.exists());
     }
     #[test]
     fn v1_files_still_load_into_the_default_list() {

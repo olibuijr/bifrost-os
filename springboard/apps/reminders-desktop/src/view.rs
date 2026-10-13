@@ -136,6 +136,14 @@ impl Reminders {
         }
     }
 
+    /// A pinned list tile's glyph: a white disc with the list's icon in the tile's colour.
+    pub(super) fn list_glyph(&mut self, c: &mut Surface, ui: &Ui, list: u64, (cx, cy): (f32, f32), color: u32) {
+        let r = ui.pt(SPACE_M);
+        paint(c, (cx - r - 1.0, cy - r - 1.0, 2.0 * r + 2.0, 2.0 * r + 2.0), WHITE, disc((cx, cy), r));
+        let icon = self.data.lists.iter().find(|l| l.id == list).map_or(0, |l| l.icon as usize);
+        self.center(c, ui, ICONS[icon % ICONS.len()], MAC_BODY_PT, Weight::Bold, color, cx, cy);
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn draw_item(&mut self, c: &mut Surface, ui: &Ui, r: &Reminder, x: f32, y: f32, w: f32, depth: u8, shift: f32, last: bool) {
         let h = ui.pt(ITEM_H);
@@ -234,6 +242,16 @@ impl Reminders {
             match row {
                 Row::Header(label) => {
                     self.text(&mut c, ui, label, MAC_BODY_PT, Weight::Bold, LABEL.now(), x + ui.pt(SPACE_XS), y + ui.pt(SPACE_L));
+                }
+                Row::Section { name, .. } => {
+                    // a section header: the name in the list's colour over a rule, and the number of reminders in it
+                    let accent = match self.view {
+                        View::List(id) => list_color(&self.data, id),
+                        _ => LABEL.now(),
+                    };
+                    let name = ui.fit(name, MAC_BODY_PT, w - ui.pt(SPACE_HUGE));
+                    self.text(&mut c, ui, &name, MAC_BODY_PT, Weight::Bold, accent, x + ui.pt(SPACE_XS), y + ui.pt(SPACE_L));
+                    c.fill_rrect(x, y + h - 1.0, w, 1.0, 0.0, SEPARATOR_C.now());
                 }
                 Row::Item { idx, depth } => {
                     let r = self.data.items[*idx].clone();
@@ -455,9 +473,25 @@ impl Reminders {
                 self.cell(c, ui, rect);
                 self.center(c, ui, "Duplicate Reminder", MAC_BODY_PT, Weight::Regular, LINK, x + w / 2.0, y + h / 2.0);
             }
+            Target::PinList => {
+                self.cell(c, ui, rect);
+                self.text(c, ui, "Pin in Sidebar", MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
+                let on = self.list_edit.as_ref().is_some_and(|e| e.pinned);
+                self.toggle(c, ui, rect, on);
+            }
+            Target::ListGroup => {
+                let group = self.list_edit.as_ref().and_then(|e| e.group);
+                let name = group.and_then(|g| self.data.groups.iter().find(|x| x.id == g)).map_or("None".to_string(), |g| g.name.clone());
+                self.value_row(c, ui, rect, "Group", &name, LABEL_2.now());
+            }
             Target::Delete => {
                 self.cell(c, ui, rect);
-                let label = if self.editor.is_some() { "Delete Reminder" } else { "Delete List" };
+                let label = match (self.editor.is_some(), self.list_edit.as_ref().map(|e| e.mode)) {
+                    (true, _) => "Delete Reminder",
+                    (false, Some(EditMode::Section(_))) => "Delete Section",
+                    (false, Some(EditMode::Group)) => "Delete Group",
+                    (false, _) => "Delete List",
+                };
                 self.center(c, ui, label, MAC_BODY_PT, Weight::Regular, DESTRUCTIVE, x + w / 2.0, y + h / 2.0);
             }
             Target::Colors => {

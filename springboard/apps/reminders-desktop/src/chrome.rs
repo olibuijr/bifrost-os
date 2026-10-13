@@ -26,7 +26,9 @@ const ADD_LIST_H: f32 = 36.0;
 const LIST_ROW: u32 = 1000;
 /// Source-list row ids of the Tags section: `TAG_ROW + index` in the sorted tag list (`model::tag_counts`).
 const TAG_ROW: u32 = 2000;
-/// Accessibility ids of the sidebar's smart tiles and Add List (the toolbar uses 1 to 9).
+/// Source-list section ids of the list groups: `GROUP_ROW + index` in `Data::groups`.
+const GROUP_ROW: u32 = 5000;
+/// Accessibility ids of the sidebar's tiles and Add List (the toolbar uses 1 to 9).
 const SIDEBAR_TILE: u64 = 100;
 const SIDEBAR_ADD: u64 = 200;
 
@@ -58,6 +60,13 @@ fn band(x: f32, w: f32) -> Rect {
     Rect { x, y: (UNIFIED_BAR_PT - CAPSULE_PT) / 2.0, w: w.max(0.0), h: CAPSULE_PT }
 }
 
+/// A tile in the sidebar's top block: a smart list the View menu shows, or a pinned list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Tile {
+    Smart(Smart),
+    List(u64),
+}
+
 /// A smart list's tile colour (Golden Gate Reminders).
 pub(super) fn smart_colour(s: Smart) -> u32 {
     match s {
@@ -79,6 +88,44 @@ impl Reminders {
 
     fn k(ui: &Ui) -> f32 {
         ui.pt(1.0)
+    }
+
+    /// The tiles above My Lists: the shown smart lists, then the pinned lists.
+    pub(super) fn tiles(&self) -> Vec<Tile> {
+        Smart::ALL
+            .iter()
+            .copied()
+            .filter(|s| self.opts.smart_shown(*s))
+            .map(Tile::Smart)
+            .chain(self.data.lists.iter().filter(|l| l.pinned).map(|l| Tile::List(l.id)))
+            .collect()
+    }
+
+    /// A tile's name, open count and colour.
+    fn tile_info(&self, tile: Tile) -> (String, usize, u32) {
+        match tile {
+            Tile::Smart(s) => (s.label().to_string(), s.count(&self.data.items, self.today), smart_colour(s)),
+            Tile::List(id) => match self.data.lists.iter().find(|l| l.id == id) {
+                Some(l) => (l.name.clone(), model::list_count(&self.data.items, id), view::COLORS[l.color as usize % view::COLORS.len()]),
+                None => (String::new(), 0, GRAY_DIM),
+            },
+        }
+    }
+
+    fn tile_target(tile: Tile) -> Target {
+        match tile {
+            Tile::Smart(s) => Target::Smart(s),
+            Tile::List(id) => Target::List(id),
+        }
+    }
+
+    fn tile_selected(&self, tile: Tile) -> bool {
+        !self.searching
+            && self.view
+                == match tile {
+                    Tile::Smart(s) => View::Smart(s),
+                    Tile::List(id) => View::List(id),
+                }
     }
 
     fn list_view(&self) -> bool {
@@ -103,10 +150,8 @@ impl Reminders {
         if matches!(self.screen, Screen::Editor | Screen::ListEditor) {
             let title = if self.screen == Screen::Editor {
                 if self.editor.as_ref().is_some_and(|e| e.id.is_some()) { "Details" } else { "New Reminder" }
-            } else if self.list_edit.as_ref().is_some_and(|e| e.id.is_some()) {
-                "List Info"
             } else {
-                "New List"
+                self.list_edit_title()
             };
             let can_save = !self.title.text().trim().is_empty();
             bars.push((
@@ -199,23 +244,21 @@ impl Reminders {
         }
         // the sidebar: smart tiles (label, count), My Lists rows (name, count) and Add List
         if self.x0 > 0.0 {
-            for (i, smart) in Smart::ALL.iter().enumerate() {
-                let value = smart.count(&self.data.items, self.today).to_string();
-                nodes.push(Node { id: SIDEBAR_TILE + i as u64, role: Role::Button, label: smart.label().to_string(), value, bounds: self.tile_rect(ui, i), enabled: true });
+            for (i, tile) in self.tiles().into_iter().enumerate() {
+                let (label, count, _) = self.tile_info(tile);
+                nodes.push(Node { id: SIDEBAR_TILE + i as u64, role: Role::Button, label, value: count.to_string(), bounds: self.tile_rect(ui, i), enabled: true });
             }
+            // My Lists (the ungrouped lists, then each group with its lists) and the Tags section: one node per row
+            // of the source list, with the row's id (`LIST_ROW + list index`, `TAG_ROW + tag index`)
             let lists = self.lists_source();
             let area = self.lists_bounds(ui);
-            for (i, list) in self.data.lists.iter().enumerate() {
-                // the header is item 0 of the source list
-                let bounds = lists.item_rect(i + 1, area, 0.0);
-                let value = model::list_count(&self.data.items, list.id).to_string();
-                nodes.push(Node { id: LIST_ROW as u64 + i as u64, role: Role::Row, label: list.name.clone(), value, bounds, enabled: true });
-            }
-            // the Tags section follows My Lists: its header is item `lists + 1`, then one row per tag
-            let tags = model::tag_counts(&self.data.items);
-            for (i, (name, open)) in tags.iter().enumerate() {
-                let bounds = lists.item_rect(self.data.lists.len() + 2 + i, area, 0.0);
-                nodes.push(Node { id: TAG_ROW as u64 + i as u64, role: Role::Row, label: format!("#{name}"), value: open.to_string(), bounds, enabled: true });
+            for (index, item) in lists.items.iter().enumerate() {
+                let SidebarItem::Row { id, label, count, .. } = item else { continue };
+                let bounds = lists.item_rect(index, area, 0.0);
+                if bounds.h <= 0.0 {
+                    continue; // folded into a closed group
+                }
+                nodes.push(Node { id: *id as u64, role: Role::Row, label: label.clone(), value: count.map_or_else(String::new, |c| c.to_string()), bounds, enabled: true });
             }
             nodes.push(Node { id: SIDEBAR_ADD, role: Role::Button, label: "Add List".into(), value: String::new(), bounds: self.add_list_rect(ui), enabled: true });
         }
@@ -225,13 +268,13 @@ impl Reminders {
     // ---- sidebar ---------------------------------------------------------
 
     /// Smart tile `i` in points (two to a row under the toolbar band).
-    fn tile_rect(&self, ui: &Ui, i: usize) -> Rect {
+    pub(super) fn tile_rect(&self, ui: &Ui, i: usize) -> Rect {
         let w = (self.x0 / Self::k(ui) - 2.0 * SIDE_INSET - TILE_GAP) / 2.0;
         Rect { x: SIDE_INSET + (w + TILE_GAP) * (i % 2) as f32, y: self.top_pt + UNIFIED_BAR_PT + 4.0 + (TILE_H + TILE_GAP) * (i / 2) as f32, w, h: TILE_H }
     }
 
     fn lists_bounds(&self, ui: &Ui) -> Rect {
-        let rows = Smart::ALL.len().div_ceil(2) as f32;
+        let rows = self.tiles().len().div_ceil(2) as f32;
         let top = self.top_pt + UNIFIED_BAR_PT + 4.0 + (TILE_H + TILE_GAP) * rows + 4.0;
         Rect { x: 0.0, y: top, w: self.x0 / Self::k(ui), h: (self.h as f32 / Self::k(ui) - top - ADD_LIST_H).max(0.0) }
     }
@@ -243,10 +286,20 @@ impl Reminders {
 
     /// My Lists: each list with its colour dot and open count, the open list selected.
     fn lists_source(&self) -> SourceList {
-        let mut items = vec![SidebarItem::header("My Lists")];
-        for (i, l) in self.data.lists.iter().enumerate() {
+        let row = |i: usize, l: &ListDef| {
             let colour = view::COLORS[l.color as usize % view::COLORS.len()];
-            items.push(SidebarItem::row(LIST_ROW + i as u32, &l.name).with_dot(colour).with_count(model::list_count(&self.data.items, l.id) as u32));
+            SidebarItem::row(LIST_ROW + i as u32, &l.name).with_dot(colour).with_count(model::list_count(&self.data.items, l.id) as u32)
+        };
+        let mut items = vec![SidebarItem::header("My Lists")];
+        for (i, l) in self.data.lists.iter().enumerate().filter(|(_, l)| l.group.is_none()) {
+            items.push(row(i, l));
+        }
+        // each list group is a collapsible section followed by its lists
+        for (gi, g) in self.data.groups.iter().enumerate() {
+            items.push(SidebarItem::section(GROUP_ROW + gi as u32, &g.name, self.collapsed_groups.contains(&g.id)));
+            for (i, l) in self.data.lists.iter().enumerate().filter(|(_, l)| l.group == Some(g.id)) {
+                items.push(row(i, l));
+            }
         }
         // Tags: a section only when some reminder carries a #tag, so the default sidebar is unchanged
         let tags = model::tag_counts(&self.data.items);
@@ -273,13 +326,16 @@ impl Reminders {
         if py < self.top_pt + UNIFIED_BAR_PT {
             return None;
         }
-        for (i, smart) in Smart::ALL.iter().enumerate() {
+        for (i, tile) in self.tiles().into_iter().enumerate() {
             if self.tile_rect(ui, i).contains(px, py) {
-                return Some(Target::Smart(*smart));
+                return Some(Self::tile_target(tile));
             }
         }
         if self.add_list_rect(ui).contains(px, py) {
             return Some(Target::NewList);
+        }
+        if let Some(section) = self.lists_source().hit_section(self.lists_bounds(ui), 0.0, px, py) {
+            return self.data.groups.get((section - GROUP_ROW) as usize).map(|g| Target::ToggleGroup(g.id));
         }
         let id = self.lists_source().hit(self.lists_bounds(ui), 0.0, px, py)?;
         if id >= TAG_ROW {
@@ -296,18 +352,22 @@ impl Reminders {
         let side = self.x0;
         s.fill_rect(0, 0, side as usize, self.h as usize, SIDEBAR_BG.now());
         let today = self.today;
-        for (i, smart) in Smart::ALL.iter().enumerate() {
+        for (i, tile) in self.tiles().into_iter().enumerate() {
             let r = self.tile_rect(ui, i);
             let (x, y, w, h) = (ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h));
-            let colour = smart_colour(*smart);
+            let (label, count, colour) = self.tile_info(tile);
             s.fill_rrect(x, y, w, h, ui.pt(bifrost_app::controls::prefs_layout::m::SELECTION_RADIUS + 2.0), colour);
-            if self.view == View::Smart(*smart) && !self.searching {
+            if self.tile_selected(tile) {
                 s.stroke_rrect(x - ui.pt(SPACE_XXS), y - ui.pt(SPACE_XXS), w + ui.pt(SPACE_XS), h + ui.pt(SPACE_XS), ui.pt(bifrost_app::controls::prefs_layout::m::SELECTION_RADIUS + 4.0), ui.pt(SPACE_XXS), LABEL.now());
             }
-            self.smart_glyph(s, ui, *smart, (x + ui.pt(SPACE_L + 2.0), y + ui.pt(SPACE_L + 2.0)), colour, today);
-            let count = smart.count(&self.data.items, today).to_string();
-            self.right(s, ui, &count, MAC_TITLE2_PT, Weight::Bold, WHITE, x + w - ui.pt(SPACE_M), y + ui.pt(SPACE_S));
-            self.text(s, ui, smart.label(), MAC_BODY_PT, Weight::Semibold, WHITE, x + ui.pt(SPACE_M), y + h - ui.pt(SPACE_XL + 2.0));
+            let glyph_at = (x + ui.pt(SPACE_L + 2.0), y + ui.pt(SPACE_L + 2.0));
+            match tile {
+                Tile::Smart(smart) => self.smart_glyph(s, ui, smart, glyph_at, colour, today),
+                Tile::List(id) => self.list_glyph(s, ui, id, glyph_at, colour),
+            }
+            self.right(s, ui, &count.to_string(), MAC_TITLE2_PT, Weight::Bold, WHITE, x + w - ui.pt(SPACE_M), y + ui.pt(SPACE_S));
+            let label = ui.fit(&label, MAC_BODY_PT, w - ui.pt(2.0 * SPACE_M));
+            self.text(s, ui, &label, MAC_BODY_PT, Weight::Semibold, WHITE, x + ui.pt(SPACE_M), y + h - ui.pt(SPACE_XL + 2.0));
         }
         widgets::source_list(s, ui, self.lists_bounds(ui), &self.lists_source(), 0.0, None);
         // the tiles' column above My Lists keeps the sidebar colour (source_list painted only its bounds)

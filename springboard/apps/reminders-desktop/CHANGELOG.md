@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.14.0 — 2026-10-13
+
+- Mark Due Date As (Reminder menu): Today, Tomorrow, This Weekend and Next Week set the selected reminder's due day and keep its time. Mark All Overdue as Today moves every open overdue reminder in one undo step.
+- Indent and Outdent (Cmd+] and Cmd+[) nest the selected reminder under the one above it, or lift a subtask back to the top level. View > Hide All Subtasks and Show All Subtasks fold every parent at once.
+- Sections: a list can be split into named sections (List > New Section). Choose a section header to rename or delete it, use Reminder > Move to Section, or drag a reminder onto another section. Deleting a section keeps its reminders.
+- List > Auto-Categorize sorts the loose reminders of a list into grocery sections (Produce, Dairy and Eggs, Bakery and so on) from the words in their titles, reusing sections you already have.
+- List groups: List > New List Group makes a collapsible group in the sidebar; the list form has a Group row to put a list in one. Deleting a group keeps its lists.
+- Pinned lists: List > Pin List (or the Pin in Sidebar switch in the list form) adds a tile for the list beside the smart lists. Up to eight lists can be pinned.
+- View > Show Smart List hides or shows each smart list tile in the sidebar. View > Sort By offers the sort orders from the menu bar, and a new Creation Date order lists the oldest reminders first. Reminders now record when they were created.
+- Templates: List > Save List as Template keeps a list's reminders without dates or completion; New List from Template makes an open list from one, and Delete Template removes it.
+- File > Import List reads a Markdown checklist (the Export List format, with subtasks, due days and `## section` headings) into a new list. File > Print List prints the open list. Export List now writes each section as a `## heading`.
+- Quick Reminder: a menu bar extra with New Quick Reminder (opens the new reminder form) and Add Reminder from Clipboard, which reads the copied text as a quick-add line such as "pay rent every month !!" and adds it to the default list.
+- Shortcuts: new Add Quick Reminder, Create List, Open List, Open Smart List and Search Reminders actions next to Add Reminder.
+- The store keeps list groups, sections, templates, pinned lists and creation dates in the same file. Files written by older versions still open; a file saved by this version has extra fields that older versions skip.
+
 ## 1.13.3 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

@@ -11,6 +11,15 @@ pub const MAX_NOTES: usize = 2000;
 pub const MAX_URL: usize = 500;
 pub const MAX_NAME: usize = 40;
 pub const DEFAULT_LIST: u64 = 1;
+/// Limits the store enforces on load and save.
+pub const MAX_ITEMS: usize = 10_000;
+pub const MAX_LISTS: usize = 100;
+pub const MAX_GROUPS: usize = 50;
+/// Sections one list may hold.
+pub const MAX_SECTIONS: usize = 20;
+pub const MAX_TEMPLATES: usize = 30;
+/// Reminders one template may hold.
+pub const MAX_TEMPLATE_ITEMS: usize = 200;
 /// Alert time of a reminder that has a date but no time of day.
 pub const DEFAULT_ALERT_MIN: u16 = 9 * 60;
 
@@ -34,6 +43,10 @@ pub struct Reminder {
     pub repeat: Option<Repeat>,
     /// Extra alert this many minutes before the due moment.
     pub early: Option<u32>,
+    /// Unix second the reminder was created; `None` for one made before the app kept it.
+    pub created: Option<i64>,
+    /// The id of a section of its list (`ListDef::sections`); only a top-level reminder is placed in one.
+    pub section: Option<u64>,
 }
 
 impl Reminder {
@@ -52,6 +65,8 @@ impl Reminder {
             priority: 0,
             repeat: None,
             early: None,
+            created: None,
+            section: None,
         }
     }
 
@@ -141,6 +156,13 @@ impl Record for Reminder {
     }
 }
 
+/// A named part of a list; reminders of the list are placed in one (`Reminder::section`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Section {
+    pub id: u64,
+    pub name: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListDef {
     pub id: u64,
@@ -149,24 +171,63 @@ pub struct ListDef {
     pub color: u8,
     /// Index into the icon set.
     pub icon: u8,
+    /// A pinned list has a tile beside the smart lists.
+    pub pinned: bool,
+    /// The list group the list sits in, in the sidebar.
+    pub group: Option<u64>,
+    pub sections: Vec<Section>,
+}
+
+impl ListDef {
+    pub fn new(id: u64, name: impl Into<String>, color: u8, icon: u8) -> Self {
+        Self { id, name: name.into(), color, icon, pinned: false, group: None, sections: vec![] }
+    }
+}
+
+/// A named, collapsible group of lists in the sidebar.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ListGroup {
+    pub id: u64,
+    pub name: String,
+}
+
+/// One reminder of a template: the content without dates, repeat or completion.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TemplateItem {
+    pub title: String,
+    pub notes: String,
+    pub url: String,
+    pub flagged: bool,
+    pub priority: u8,
+    /// A subtask of the nearest earlier item that is not one.
+    pub sub: bool,
+}
+
+/// A saved list that new lists can be made from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Template {
+    pub id: u64,
+    pub name: String,
+    pub color: u8,
+    pub icon: u8,
+    pub items: Vec<TemplateItem>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Data {
     pub lists: Vec<ListDef>,
     pub items: Vec<Reminder>,
+    pub groups: Vec<ListGroup>,
+    pub templates: Vec<Template>,
 }
 
 impl Default for Data {
     fn default() -> Self {
         Self {
-            lists: vec![ListDef {
-                id: DEFAULT_LIST,
-                name: "Reminders".into(),
-                color: 0,
-                icon: 0,
-            }],
+            lists: vec![ListDef::new(DEFAULT_LIST, "Reminders", 0, 0)],
             items: vec![],
+            groups: vec![],
+            templates: vec![],
         }
     }
 }
@@ -177,6 +238,16 @@ impl Data {
     }
     pub fn next_list_id(&self) -> Option<u64> {
         self.lists.iter().map(|l| l.id).max().unwrap_or(0).checked_add(1)
+    }
+    pub fn next_group_id(&self) -> Option<u64> {
+        self.groups.iter().map(|g| g.id).max().unwrap_or(0).checked_add(1)
+    }
+    pub fn next_template_id(&self) -> Option<u64> {
+        self.templates.iter().map(|t| t.id).max().unwrap_or(0).checked_add(1)
+    }
+    /// Section ids are unique across all lists.
+    pub fn next_section_id(&self) -> Option<u64> {
+        self.lists.iter().flat_map(|l| l.sections.iter()).map(|s| s.id).max().unwrap_or(0).checked_add(1)
     }
     /// Deleting a list removes its reminders; the last list cannot go.
     pub fn delete_list(&mut self, id: u64) -> bool {
@@ -198,6 +269,17 @@ impl Data {
         self.lists.swap(i, j as usize);
         true
     }
+    /// Deleting a group keeps its lists; they move out of any group.
+    pub fn delete_group(&mut self, id: u64) -> bool {
+        if !self.groups.iter().any(|g| g.id == id) {
+            return false;
+        }
+        self.groups.retain(|g| g.id != id);
+        for l in self.lists.iter_mut().filter(|l| l.group == Some(id)) {
+            l.group = None;
+        }
+        true
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -211,6 +293,10 @@ pub enum Smart {
 
 impl Smart {
     pub const ALL: [Self; 5] = [Self::Today, Self::Scheduled, Self::All, Self::Flagged, Self::Completed];
+    /// The position in [`Smart::ALL`].
+    pub fn index(self) -> usize {
+        Self::ALL.iter().position(|s| *s == self).unwrap_or(0)
+    }
     pub fn label(self) -> &'static str {
         match self {
             Self::Today => "Today",
@@ -259,16 +345,19 @@ pub enum Sort {
     Due,
     Priority,
     Title,
+    /// Oldest first; a reminder from before creation dates were kept counts as the oldest.
+    Created,
 }
 
 impl Sort {
-    pub const ALL: [Self; 4] = [Self::Manual, Self::Due, Self::Priority, Self::Title];
+    pub const ALL: [Self; 5] = [Self::Manual, Self::Due, Self::Priority, Self::Title, Self::Created];
     pub fn label(self) -> &'static str {
         match self {
             Self::Manual => "Manual",
             Self::Due => "Due Date",
             Self::Priority => "Priority",
             Self::Title => "Title",
+            Self::Created => "Creation Date",
         }
     }
 }
@@ -300,6 +389,8 @@ pub struct Options {
     pub show_completed: bool,
     /// The list new reminders from a smart list go to; None is the first list.
     pub default_list: Option<u64>,
+    /// Bit `Smart::index` is set for a smart list whose tile is hidden in the sidebar.
+    pub hidden_smart: u8,
 }
 
 impl Default for Options {
@@ -309,13 +400,27 @@ impl Default for Options {
             group: Group::None,
             show_completed: false,
             default_list: None,
+            hidden_smart: 0,
         }
+    }
+}
+
+impl Options {
+    /// Whether the sidebar shows the tile of smart list `s`.
+    pub fn smart_shown(&self, s: Smart) -> bool {
+        self.hidden_smart & (1 << s.index()) == 0
+    }
+    /// Shows a hidden smart list tile, or hides a shown one.
+    pub fn toggle_smart(&mut self, s: Smart) {
+        self.hidden_smart ^= 1 << s.index();
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Row {
     Header(String),
+    /// The header of a section of the open list; choosing it edits the section.
+    Section { id: u64, name: String },
     Item { idx: usize, depth: u8 },
 }
 
@@ -358,6 +463,7 @@ fn sort_key(r: &Reminder, sort: Sort) -> (i64, i64, String) {
         ),
         Sort::Priority => (if r.priority == 0 { 9 } else { 4 - r.priority as i64 }, 0, String::new()),
         Sort::Title => (0, 0, r.title.to_lowercase()),
+        Sort::Created => (r.created.unwrap_or(i64::MIN), 0, String::new()),
     }
 }
 
@@ -417,6 +523,26 @@ pub fn visible(
         tops.sort_by_cached_key(|&i| group_key(&items[i]).0);
     }
     let mut rows = vec![];
+    // The open list's sections: unplaced reminders first, then each section under its header (empty ones too).
+    let sections: &[Section] = match view {
+        View::List(l) if !searching && opts.group == Group::None => {
+            data.lists.iter().find(|d| d.id == l).map_or(&[][..], |d| d.sections.as_slice())
+        }
+        _ => &[],
+    };
+    if !sections.is_empty() {
+        let known = |r: &Reminder| r.section.is_some_and(|s| sections.iter().any(|x| x.id == s));
+        for &i in tops.iter().filter(|&&i| !known(&items[i])) {
+            push_item(&mut rows, items, &passing, nested, collapsed, i);
+        }
+        for sec in sections {
+            rows.push(Row::Section { id: sec.id, name: sec.name.clone() });
+            for &i in tops.iter().filter(|&&i| items[i].section == Some(sec.id)) {
+                push_item(&mut rows, items, &passing, nested, collapsed, i);
+            }
+        }
+        return rows;
+    }
     let mut last: Option<(usize, String)> = None;
     for i in tops {
         if opts.group != Group::None {
@@ -426,16 +552,21 @@ pub fn visible(
                 last = Some(key);
             }
         }
-        rows.push(Row::Item { idx: i, depth: 0 });
-        if nested && !collapsed.contains(&items[i].id) {
-            for &c in &passing {
-                if items[c].parent == Some(items[i].id) {
-                    rows.push(Row::Item { idx: c, depth: 1 });
-                }
+        push_item(&mut rows, items, &passing, nested, collapsed, i);
+    }
+    rows
+}
+
+/// A top-level reminder's row, and its subtasks' rows under it unless it is collapsed.
+fn push_item(rows: &mut Vec<Row>, items: &[Reminder], passing: &[usize], nested: bool, collapsed: &HashSet<u64>, i: usize) {
+    rows.push(Row::Item { idx: i, depth: 0 });
+    if nested && !collapsed.contains(&items[i].id) {
+        for &c in passing {
+            if items[c].parent == Some(items[i].id) {
+                rows.push(Row::Item { idx: c, depth: 1 });
             }
         }
     }
-    rows
 }
 
 pub fn has_children(items: &[Reminder], id: u64) -> bool {
@@ -565,7 +696,7 @@ pub fn move_before(items: &mut Vec<Reminder>, id: u64, before: Option<u64>) -> b
 pub type OffsetAt<'a> = &'a dyn Fn(i64) -> i32;
 
 /// A list as Markdown checklist lines: `- [ ]` and `- [x]`, subtasks indented, the
-/// due day (and time) in brackets.
+/// due day (and time) in brackets. Each section of the list is a `## heading` over its reminders.
 pub fn export_markdown(data: &Data, list: u64) -> String {
     fn line(out: &mut String, r: &Reminder, indent: &str) {
         let mark = if r.completed { 'x' } else { ' ' };
@@ -581,13 +712,26 @@ pub fn export_markdown(data: &Data, list: u64) -> String {
         }
         out.push('\n');
     }
-    let name = data.lists.iter().find(|l| l.id == list).map_or("Reminders", |l| l.name.as_str());
-    let mut out = format!("# {name}\n\n");
-    for r in data.items.iter().filter(|r| r.list == list && r.parent.is_none()) {
-        line(&mut out, r, "");
-        for c in data.items.iter().filter(|c| c.parent == Some(r.id)) {
-            line(&mut out, c, "  ");
+    // the top-level reminders of one section (or of none), each followed by its subtasks
+    fn block(out: &mut String, data: &Data, list: u64, known: &[Section], section: Option<u64>) {
+        let placed = |r: &Reminder| r.section.filter(|s| known.iter().any(|k| k.id == *s));
+        for r in data.items.iter().filter(|r| r.list == list && r.parent.is_none() && placed(r) == section) {
+            line(out, r, "");
+            for c in data.items.iter().filter(|c| c.parent == Some(r.id)) {
+                line(out, c, "  ");
+            }
         }
+    }
+    let name = data.lists.iter().find(|l| l.id == list).map_or("Reminders", |l| l.name.as_str());
+    let known: &[Section] = data.lists.iter().find(|l| l.id == list).map_or(&[][..], |l| l.sections.as_slice());
+    let mut out = format!("# {name}\n\n");
+    block(&mut out, data, list, known, None);
+    for s in known {
+        if !out.ends_with("\n\n") {
+            out.push('\n');
+        }
+        out.push_str(&format!("## {}\n\n", s.name));
+        block(&mut out, data, list, known, Some(s.id));
     }
     out
 }
@@ -809,7 +953,7 @@ mod tests {
         let c = r(3, "cherry");
         let d = data(vec![a, b, c]);
         let none = HashSet::new();
-        let o = |sort, group| Options { sort, group, show_completed: false, default_list: None };
+        let o = |sort, group| Options { sort, group, ..Options::default() };
         let rows = visible(&d, View::List(1), o(Sort::Title, Group::None), TODAY, "", &none);
         assert_eq!(ids(&rows, &d.items), vec![(2, 0), (1, 0), (3, 0)]);
         let rows = visible(&d, View::List(1), o(Sort::Due, Group::None), TODAY, "", &none);
@@ -896,7 +1040,7 @@ mod tests {
     #[test]
     fn list_management() {
         let mut d = Data::default();
-        d.lists.push(ListDef { id: 2, name: "Work".into(), color: 1, icon: 1 });
+        d.lists.push(ListDef::new(2, "Work", 1, 1));
         let mut x = r(1, "w");
         x.list = 2;
         d.items = vec![x, r(2, "h")];
