@@ -298,6 +298,8 @@ pub struct AppHost {
     exec: PathBuf,
     /// The appearance flags the app last received (`u32::MAX` until the first send).
     appearance_sent: u32,
+    /// The input source the app last received (`ToApp::InputSource`); `None` until the first send.
+    input_japanese: Option<bool>,
     child: Option<Child>,
     chan: Channel,
     bufs: Vec<Buf>,
@@ -417,6 +419,7 @@ impl AppHost {
             id: id.to_string(),
             exec: PathBuf::new(),
             appearance_sent: u32::MAX,
+            input_japanese: None,
             child,
             chan,
             bufs: Vec::new(),
@@ -488,6 +491,14 @@ impl AppHost {
         if self.appearance_sent != flags {
             self.appearance_sent = flags;
             self.send(&ToApp::Appearance { flags });
+        }
+    }
+
+    /// Tells the app whether the kana (Romaji) input source is active, on first contact and whenever it changes.
+    pub fn sync_input_source(&mut self, japanese: bool) {
+        if self.input_japanese != Some(japanese) {
+            self.input_japanese = Some(japanese);
+            self.send(&ToApp::InputSource { japanese });
         }
     }
 
@@ -1334,6 +1345,7 @@ impl Shell {
         let mut traits = None;
         let cfg = self.ext_cfg();
         let appearance = appearance_flags();
+        let japanese = super::kb_layouts::active() == super::kb_layouts::Layout::Japanese;
         let mut clip = None;
         let mut pb_from: Option<usize> = None;
         let mut context=None;
@@ -1349,6 +1361,7 @@ impl Shell {
         for (slot, h) in self.ext.iter_mut().enumerate() {
             let Some(h) = h else { continue };
             h.sync_appearance(appearance);
+            h.sync_input_source(japanese);
             if fg == Some(slot as u8) && h.running() && h.size() != (cfg.w as usize, cfg.h as usize) {
                 h.configure(cfg);
             }
@@ -1541,6 +1554,23 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn the_input_source_is_sent_on_first_contact_and_on_each_change() {
+        let (channel, peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+        let next = |peer: &Channel| match peer.recv(false).unwrap() {
+            sys::Recv::Packet(p, _) => Some(ToApp::decode(&p).unwrap()),
+            _ => None,
+        };
+        host.sync_input_source(false);
+        assert_eq!(next(&peer), Some(ToApp::InputSource { japanese: false }), "first contact sends the source");
+        host.sync_input_source(false);
+        assert_eq!(next(&peer), None, "unchanged: nothing sent");
+        host.sync_input_source(true);
+        assert_eq!(next(&peer), Some(ToApp::InputSource { japanese: true }));
+    }
 
     #[test]
     fn appearance_is_sent_on_first_contact_and_only_when_it_changes() {
