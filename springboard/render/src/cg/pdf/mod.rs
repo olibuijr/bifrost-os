@@ -8,12 +8,14 @@
 pub mod color;
 pub mod crypt;
 pub mod doc;
+pub mod draw;
 pub mod extract;
 pub mod filter;
 pub mod font;
 pub mod function;
 pub mod image;
 pub mod inflate;
+pub mod interpret;
 pub mod obj;
 pub mod page;
 pub mod shading;
