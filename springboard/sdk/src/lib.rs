@@ -96,6 +96,7 @@ pub mod accounts;
 pub mod testing;
 pub mod usernotif;
 pub mod contacts;
+pub mod calendar;
 pub mod notification_schedule;
 pub mod messaging;
 pub mod service_management;
