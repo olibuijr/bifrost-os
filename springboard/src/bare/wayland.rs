@@ -52,6 +52,9 @@ const TITLE_PT: f32 = 30.0;
 const GPU_WINDOW: u32 = 0x1000_0000;
 use super::input::Event;
 use super::wl_touch::{self as touch_model, Placement};
+use crate::shell::textinput::{ImBatch, ImOut};
+use wayland_protocols_misc::zwp_input_method_v2::client::{zwp_input_method_manager_v2 as im_manager, zwp_input_method_v2 as im};
+use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{zwp_virtual_keyboard_manager_v1 as vk_manager, zwp_virtual_keyboard_v1 as vk};
 use wayland_protocols::wp::cursor_shape::v1::client::{wp_cursor_shape_manager_v1 as cursor_manager, wp_cursor_shape_device_v1 as cursor_device};
 use wayland_protocols::wp::linux_dmabuf::zv1::client::{zwp_linux_dmabuf_v1 as dmabuf, zwp_linux_buffer_params_v1 as dmabuf_params};
 use crate::gpu::wl::{Backdrop, BufferInfo, Magnify, Presenter};
@@ -95,6 +98,10 @@ struct State {
     slots: Vec<Slot>, size: (u32,u32), configured: bool, closed: bool, main: MainMap, starved: Starved,
     pending: bool, desktop_flip: Option<f64>, inputs: Vec<Event>, xy: (f32,f32), pressed: bool,
     dmabuf: Option<dmabuf::ZwpLinuxDmabufV1>, dmabuf_formats: Vec<(u32,u64)>, gpu_slots: HashMap<u32,Vec<GpuSlot>>,
+    /// the input method (the keyboard types into the focused client's field) and the virtual keyboard (named keys);
+    /// the batch being received until its `done`, the completed batches, and the serial the next commit carries
+    im_manager: Option<im_manager::ZwpInputMethodManagerV2>, im: Option<im::ZwpInputMethodV2>, im_pending: ImBatch, im_batches: Vec<ImBatch>, im_serial: u32,
+    vk_manager: Option<vk_manager::ZwpVirtualKeyboardManagerV1>, vk: Option<vk::ZwpVirtualKeyboardV1>,
 }
 /// The GPU presenter and what it needs between frames.
 struct Gpu { p: Presenter, glass: Vec<Glass>, log: (std::time::Instant, usize, f64, f64, usize), draw: (usize, f64), last_frame: std::time::Instant, zoom: ScreenZoom, pointer: (f32, f32), zoomed: bool }
@@ -114,6 +121,20 @@ pub struct Display { conn: Connection, queue: EventQueue<State>, state: State,
     stats: Option<(std::time::Instant,usize,usize)>, gpu: Option<Gpu>,
     /// the GPU presenter gave up and the SHM path took over: the shell must draw a full frame (`take_gpu_fallback`)
     fell_back: bool,
+}
+/// Uploads the named-key keymap to the virtual keyboard: an anonymous file holding the NUL-terminated xkb text.
+fn send_keymap(keyboard: &vk::ZwpVirtualKeyboardV1) -> io::Result<()> {
+    use std::io::Write;
+    let map = crate::shell::textinput::virtual_keymap();
+    let mut file = tempfile::tempfile()?;
+    file.write_all(map.as_bytes())?;
+    file.write_all(&[0])?;
+    keyboard.keymap(1, file.as_fd(), (map.len() + 1) as u32);
+    Ok(())
+}
+/// The event time the virtual keyboard's key events carry: milliseconds of the wall clock, truncated.
+fn event_time() -> u32 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u32)
 }
 /// Wraps presenter drawables in `wl_buffer`s; fails when the compositor does not list the format.
 fn gpu_buffers(state:&State, infos:&[BufferInfo], qh:&QueueHandle<State>) -> io::Result<Vec<GpuSlot>> {
@@ -142,6 +163,17 @@ impl Display {
         let seat=state.seat.as_ref().ok_or_else(||err("Wayland seat unavailable"))?;
         state.idle_notifier.as_ref().ok_or_else(||err("Wayland idle notifier unavailable"))?.get_idle_notification(1000,seat,&qh,());
         if let (Some(manager),Some(output))=(state.power_manager.as_ref(),state.output.as_ref()) {state.output_power=Some(manager.get_output_power(output,&qh,()));}
+        // The shell is the window server's input method: a focused client's text field raises the on-screen keyboard,
+        // and the keyboard types into it. The virtual keyboard sends the named keys. Without either protocol the
+        // keyboard has nothing to type into, as before.
+        if let Some(seat) = state.seat.as_ref() {
+            if let Some(manager) = state.im_manager.as_ref() { state.im = Some(manager.get_input_method(seat, &qh, ())); }
+            if let Some(manager) = state.vk_manager.as_ref() {
+                let vk = manager.create_virtual_keyboard(seat, &qh, ());
+                send_keymap(&vk)?;
+                state.vk = Some(vk);
+            }
+        }
         let s = state.compositor.as_ref().ok_or_else(|| err("Wayland compositor unavailable"))?.create_surface(&qh, ());
         let ls = state.layer.as_ref().ok_or_else(|| err("wlr-layer-shell unavailable"))?.get_layer_surface(&s, None, layer::Layer::Background, "bifrost-desktop".into(), &qh, ());
         ls.set_size(0, 0);
@@ -259,6 +291,30 @@ impl Display {
         Ok(())
     }
     pub fn window_events(&mut self) -> Vec<WindowEvent> { std::mem::take(&mut self.state.window_events) }
+    /// The input method batches received since the last call; each one ended with its `done`.
+    pub fn input_method_batches(&mut self) -> Vec<ImBatch> { std::mem::take(&mut self.state.im_batches) }
+    /// Sends the keyboard's output for the focused client's field: text, preedit and deletions go to the input method
+    /// (ended by `commit` with the serial of the `done`s so far), named keys go through the virtual keyboard. Without
+    /// the input method the output is dropped, as before the protocol was bound.
+    pub fn input_method_commit(&mut self, out: &[ImOut]) -> io::Result<()> {
+        let Some(im) = self.state.im.as_ref() else { return Ok(()) };
+        let time = event_time();
+        for o in out {
+            match o {
+                ImOut::Commit(text) => im.commit_string(text.clone()),
+                ImOut::Preedit { text, begin, end } => im.set_preedit_string(text.clone(), *begin, *end),
+                ImOut::Delete { before, after } => im.delete_surrounding_text(*before, *after),
+                ImOut::Key(code) => {
+                    if let Some(keyboard) = self.state.vk.as_ref() {
+                        keyboard.key(time, *code, 1);
+                        keyboard.key(time, *code, 0);
+                    }
+                }
+            }
+        }
+        im.commit(self.state.im_serial);
+        transient(self.conn.flush())
+    }
     pub fn windows(&mut self, frames: Vec<WindowFrame>) -> io::Result<()> {
         let ids:Vec<u32> = frames.iter().map(|f|f.id).collect();
         let front=ids.last().copied();
@@ -754,6 +810,8 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
             "wl_seat" => s.seat = Some(reg.bind(name,version.min(5),q,())),
             "xdg_activation_v1" => s.activation=Some(reg.bind(name,1,q,())),
             "xdg_wm_base" => s.wm = Some(reg.bind(name,version.min(6),q,())),
+            "zwp_input_method_manager_v2" => s.im_manager = Some(reg.bind(name,1,q,())),
+            "zwp_virtual_keyboard_manager_v1" => s.vk_manager = Some(reg.bind(name,1,q,())),
             _ => {}
         }}
     }
@@ -1317,6 +1375,36 @@ fn blur_rects(materials:&[Glass], margin:i32) -> Vec<[i32;4]> {
 impl Dispatch<bg_manager::ExtBackgroundEffectManagerV1,()> for State {
     fn event(s:&mut Self,_:&bg_manager::ExtBackgroundEffectManagerV1,e:bg_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {
         if let bg_manager::Event::Capabilities{flags}=e { s.bg_blur=matches!(flags,WEnum::Value(f) if f.contains(bg_manager::Capability::Blur)); }
+    }
+}
+impl Dispatch<im_manager::ZwpInputMethodManagerV2,()> for State {
+    fn event(_:&mut Self,_:&im_manager::ZwpInputMethodManagerV2,_:im_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {}
+}
+impl Dispatch<vk_manager::ZwpVirtualKeyboardManagerV1,()> for State {
+    fn event(_:&mut Self,_:&vk_manager::ZwpVirtualKeyboardManagerV1,_:vk_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {}
+}
+impl Dispatch<vk::ZwpVirtualKeyboardV1,()> for State {
+    fn event(_:&mut Self,_:&vk::ZwpVirtualKeyboardV1,_:vk::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {}
+}
+/// Input method events accumulate into the batch being received; `done` ends it. The serial counts the `done`s, as
+/// `commit` requires. `unavailable` means another input method holds the seat: the shell stops using it.
+impl Dispatch<im::ZwpInputMethodV2,()> for State {
+    fn event(s:&mut Self,_:&im::ZwpInputMethodV2,e:im::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {
+        match e {
+            im::Event::Activate => s.im_pending.focus = Some(true),
+            im::Event::Deactivate => s.im_pending.focus = Some(false),
+            im::Event::SurroundingText { text, cursor, anchor } => s.im_pending.surrounding = Some((text, cursor, anchor)),
+            im::Event::ContentType { purpose, .. } => s.im_pending.purpose = Some(match purpose {
+                WEnum::Value(p) => p as u32,
+                WEnum::Unknown(raw) => raw,
+            }),
+            im::Event::Done => {
+                s.im_serial = s.im_serial.wrapping_add(1);
+                s.im_batches.push(std::mem::take(&mut s.im_pending));
+            }
+            im::Event::Unavailable => s.im = None,
+            _ => {}
+        }
     }
 }
 impl Dispatch<mat_manager::BifrostMaterialManagerV1,()> for State {

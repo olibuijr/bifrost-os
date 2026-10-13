@@ -823,6 +823,17 @@ impl Display {
     pub fn wayland_inputs(&mut self, out: &mut Vec<super::input::Event>) {
         if let Some(w) = &mut self.wayland { w.inputs(out); }
     }
+    /// The window server's input method batches since the last call (a focused client's text field).
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_input_method_batches(&mut self) -> Vec<crate::shell::textinput::ImBatch> {
+        self.wayland.as_mut().map(|w| w.input_method_batches()).unwrap_or_default()
+    }
+    /// The keyboard's output for the focused client's field, through the input method (see `wayland::Display`).
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_input_method_commit(&mut self, out: &[crate::shell::textinput::ImOut]) -> io::Result<()> {
+        if let Some(w) = &mut self.wayland { w.input_method_commit(out)?; }
+        Ok(())
+    }
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_chrome(&mut self,frames:Vec<super::wayland::ChromeFrame>)->io::Result<()> {if let Some(w)=&mut self.wayland {w.chrome(frames)?;}Ok(())}
     /// The CPU draw time of the frame just presented, for the GPU presenter's averages.
