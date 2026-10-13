@@ -30,6 +30,36 @@ pub struct TextTab {
     pub location: f32,
 }
 
+/// How a paragraph is cut into lines and what happens to text that does not fit (`NativeLineBreakMode`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum LineBreakMode {
+    /// Break at line break opportunities (word wrap).
+    #[default]
+    WordWrap,
+    /// Break between any two characters.
+    CharWrap,
+    /// One line per paragraph, cut off at the edge.
+    Clip,
+    /// One line per paragraph, the start replaced by an ellipsis.
+    TruncateHead,
+    /// One line per paragraph, the end replaced by an ellipsis.
+    TruncateTail,
+    /// One line per paragraph, the middle replaced by an ellipsis.
+    TruncateMiddle,
+}
+
+/// The base writing direction of a paragraph. `Natural` follows the first strong character.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BaseDirection {
+    #[default]
+    Natural,
+    LeftToRight,
+    RightToLeft,
+}
+
+/// The distance between default tab stops when a style sets none, in points.
+pub const DEFAULT_TAB_INTERVAL: f32 = 28.0;
+
 /// Paragraph attributes (`NativeParagraphStyle`). The default value is the plain style: natural alignment, no indents,
 /// no tab stops and no spacing. Zero in a line-height or spacing field means unset.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -51,6 +81,12 @@ pub struct ParagraphStyle {
     /// Space before the paragraph and after it, in points.
     pub paragraph_spacing_before: f32,
     pub paragraph_spacing: f32,
+    /// Extra space added below every line, in points.
+    pub line_spacing: f32,
+    /// Distance between the default tab stops past the last explicit stop. Zero means `DEFAULT_TAB_INTERVAL`.
+    pub default_tab_interval: f32,
+    pub line_break_mode: LineBreakMode,
+    pub base_direction: BaseDirection,
 }
 
 impl ParagraphStyle {
