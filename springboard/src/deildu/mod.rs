@@ -46,6 +46,8 @@ pub fn data_dir() -> std::path::PathBuf {
 }
 const WORKERS: usize = 3;
 const COMPAT_FILE: &str = "compat";
+/// Item details kept in memory before the map starts over (each one is re-fetched on demand).
+const DETAILS_CACHED: usize = 256;
 
 /// Something a touch can land on, across all screens.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -758,6 +760,9 @@ impl Deildu {
     }
 
     fn apply_details(&mut self, ui: &Ui, id: &str, d: Details) {
+        if self.details.len() >= DETAILS_CACHED && !self.details.contains_key(id) {
+            self.details.clear();
+        }
         self.details.insert(id.to_string(), d.clone());
         if let Some(det) = self.detail.as_mut().filter(|det| det.item.id == id) {
             let w = self.w;

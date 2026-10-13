@@ -915,7 +915,7 @@ impl Shell {
             #[cfg(feature = "desktop-wayland")]
             doc_broker:None,
             quick_look:Default::default(),
-            bar_backdrop:std::cell::RefCell::new(None),chrome_text:Default::default(),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,desk_drawn:false,
+            bar_backdrop:std::cell::RefCell::new(None),chrome_text:std::cell::RefCell::new(bifrost_render::cache::TextCache::for_screen(w.max(0) as usize, h.max(0) as usize)),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,desk_drawn:false,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
             multi: None,
