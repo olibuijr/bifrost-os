@@ -15,3 +15,5 @@ author; the lead compiles and tests. All rows still need a Midget check before t
 | Variation axes | `variation_axes()`, `variations()` | Exposed to apps | |
 
 Not done in this slice: shaping, paragraph styles, bidi, vertical text, ruby.
+
+Superseded by ct-fonts: render/src/fontregistry.rs was deleted; FontManager in fontobj.rs replaces it.

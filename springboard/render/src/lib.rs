@@ -18,7 +18,6 @@ pub mod glass;
 pub mod motion;
 pub mod assets;
 pub mod fontprefs;
-pub mod fontregistry;
 pub mod fontinfo;
 pub mod fontobj;
 pub mod kern;
