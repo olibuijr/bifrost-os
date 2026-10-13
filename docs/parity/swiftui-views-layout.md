@@ -56,11 +56,17 @@ unchanged.
 
 ## Remaining gaps
 
-- No declarative `View` protocol, modifiers, environment or state-driven body (unchanged).
+- No declarative `View` protocol, generic modifiers or state-driven body. Environment values exist (see below).
 - No `ZStack` or `ViewThatFits` view types; only the layout and selection models exist.
 - No `Shape` protocol for apps, no stroke or fill style, no renderer for `Path`.
 - No `Canvas`, no `LazyVGrid`, no `Layout` protocol.
 - `ScrollViewReader`, `TabView`, `GroupBox`, `ControlGroup` and swipe-action lists are untouched.
+
+## Team A8 round: view configuration
+
+- Environment values (`EnvironmentValues`): `springboard/ui/src/environment.rs` (`Environment`, `EnvValue`). A node sets
+  a value, its descendants read it, and a nested scope overrides it until the scope is left. The parity row now
+  points there as `partial`. Generic modifiers and state-driven bindings are still missing, so the row is not `parity`.
 
 ## Verification
 
