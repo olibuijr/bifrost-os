@@ -1,0 +1,117 @@
+{
+ "framework": "UIKit (Pointer, menus and shortcuts, focus, Pencil)",
+ "doc": "https://developer.apple.com/documentation/uikit/menus-and-shortcuts",
+ "macos_since": "",
+ "status": "partial",
+ "bifrost": "springboard/ui/src/menu.rs, springboard/ui/src/keys.rs, springboard/ui/src/tracking.rs, springboard/ui/src/cursor.rs, springboard/ui/src/focus.rs, springboard/src/shell/editmenu.rs",
+ "summary": "Menus, pop-up buttons, key equivalents, a context menu request from apps, tracking areas, a cursor stack, a key-view loop and an on-screen edit bubble exist. Context menu interactions with previews, edit menu interactions for SDK views, pointer effects, band selection, focus effects and pencil interactions are missing.",
+ "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+ "features": [
+  {
+   "feature": "Menu elements",
+   "apple": "UIMenu, UIAction, UICommand, UIMenuElement, UIDeferredMenuElement",
+   "bifrost": "springboard/ui/src/menu.rs",
+   "status": "partial",
+   "note": "items with checkmarks, separators, disabled rows and keyboard stepping; no submenus as nested elements, no deferred elements, no inline or destructive display styles"
+  },
+  {
+   "feature": "App menu system",
+   "apple": "UIMenuBuilder, UIMainMenuSystem",
+   "bifrost": "springboard/sdk/src/view/app.rs",
+   "status": "partial",
+   "note": "ViewApp::set_menus and MenuEntry publish the app's menus to the shell menu bar; the tablet UI has no menu bar, so the menus have nowhere to show unless an app menu is drawn in-app"
+  },
+  {
+   "feature": "Key commands",
+   "apple": "UIKeyCommand, keyboard shortcuts, discoverability HUD",
+   "bifrost": "springboard/ui/src/keys.rs, springboard/src/shell/hwkeys.rs",
+   "status": "partial",
+   "note": "parse, display and conflict-checked registry; no shortcut discoverability overlay for held Cmd"
+  },
+  {
+   "feature": "Edit menu",
+   "apple": "UIEditMenuInteraction, UIResponderStandardEditActions",
+   "bifrost": "springboard/src/shell/editmenu.rs, springboard/src/shell/edit.rs",
+   "status": "partial",
+   "note": "a dark bubble with Cut, Copy, Paste for shell text controls; SDK views use the responder actions but cannot ask for the bubble"
+  },
+  {
+   "feature": "Context menus",
+   "apple": "UIContextMenuInteraction, UITargetedPreview, UIPreviewParameters",
+   "bifrost": "springboard/sdk/src/runtime.rs, springboard/ui/src/context_element.rs",
+   "status": "partial",
+   "note": "Ctx::context_menu sends items for the shell to show at a point; no long-press trigger on touch, no preview, no per-view interaction"
+  },
+  {
+   "feature": "Find and replace",
+   "apple": "UIFindInteraction",
+   "bifrost": "springboard/ui/src/textfind.rs",
+   "status": "partial",
+   "note": "model only, no panel"
+  },
+  {
+   "feature": "Pointer interactions and effects",
+   "apple": "UIPointerInteraction, UIPointerStyle, UIPointerEffect, UIPointerRegion",
+   "bifrost": "springboard/ui/src/tracking.rs, springboard/ui/src/cursor.rs",
+   "status": "partial",
+   "note": "tracking areas and cursor shapes exist; no hover or highlight lift effects on controls, and the app protocol has no pointer move without a button"
+  },
+  {
+   "feature": "Pointer settings and shapes",
+   "apple": "UIPointerShape, pointer accessories",
+   "bifrost": "springboard/src/bare/pointer_prefs.rs, springboard/src/shell/mouse_page.rs",
+   "status": "os",
+   "note": "tracking speed and button settings; shape morphing is not offered"
+  },
+  {
+   "feature": "Pointer lock",
+   "apple": "UIPointerLockState",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "relative pointer capture for games and drawing"
+  },
+  {
+   "feature": "Band selection",
+   "apple": "UIBandSelectionInteraction",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "rubber band selection with a pointer"
+  },
+  {
+   "feature": "Focus system",
+   "apple": "UIFocusSystem, UIFocusEnvironment, UIFocusItem, UIFocusGuide, UIFocusUpdateContext",
+   "bifrost": "springboard/ui/src/focus.rs",
+   "status": "partial",
+   "note": "key-view loop in reading order and nearest-view arrow movement; no focus environment tree, no guides, no focus groups"
+  },
+  {
+   "feature": "Focus effects",
+   "apple": "UIFocusHaloEffect",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "a halo drawn around the keyboard-focused control; needed for full keyboard access on the tablet"
+  },
+  {
+   "feature": "Pencil interactions",
+   "apple": "UIPencilInteraction (double tap, squeeze), hover pose",
+   "bifrost": "springboard/ui/src/stylus.rs",
+   "status": "gap",
+   "note": "stylus samples exist; the pen's side button and tap gestures are not delivered to apps"
+  },
+  {
+   "feature": "Quick actions",
+   "apple": "UIApplicationShortcutItem",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "see uikit-app-scene-lifecycle"
+  }
+ ],
+ "gaps": [
+  "Long-press context menu with preview for touch",
+  "Edit menu invocation from SDK views",
+  "Hover events and pointer effects for controls",
+  "Focus halo and focus groups for keyboard navigation",
+  "Pencil tap, squeeze and hover pose",
+  "Shortcut discoverability overlay"
+ ]
+}

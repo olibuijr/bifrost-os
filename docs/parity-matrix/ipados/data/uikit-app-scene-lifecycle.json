@@ -1,0 +1,131 @@
+{
+ "framework": "UIKit (App and environment, scenes)",
+ "doc": "https://developer.apple.com/documentation/uikit/app-and-environment",
+ "macos_since": "",
+ "status": "partial",
+ "bifrost": "springboard/sdk/src/lib.rs, springboard/sdk/src/runtime.rs, springboard/sdk/src/restoration.rs, springboard/sdk/src/layout.rs, springboard/src/shell/apphost.rs",
+ "summary": "Apps have configure, suspend and resume callbacks, state restoration, launch URLs and documents, and a size-derived layout model with a top safe inset. There is no scene concept (several UI instances per app), no trait collection, no device idiom query, no orientation API and no status bar control for apps.",
+ "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+ "features": [
+  {
+   "feature": "Application object and delegate",
+   "apple": "UIApplication, UIApplicationDelegate, UIApplicationMain",
+   "bifrost": "springboard/sdk/src/lib.rs, springboard/sdk/src/runtime.rs",
+   "status": "partial",
+   "note": "the App trait has configure, event, draw, suspend, resume, menus and commands; background task time and remote notification callbacks are only partly covered by the notification services"
+  },
+  {
+   "feature": "Launch handling",
+   "apple": "Responding to the launch of your app, launch options, URL schemes",
+   "bifrost": "springboard/sdk/src/runtime.rs, springboard/sdk/src/launch_services.rs, springboard/sdk/src/bundle_resources.rs",
+   "status": "partial",
+   "note": "Input::Open delivers URL and file launches; URL types are registered through bundle resources"
+  },
+  {
+   "feature": "Foreground and background",
+   "apple": "Managing your app's life cycle",
+   "bifrost": "springboard/proto/src/lib.rs, springboard/src/bare/app_manager.rs",
+   "status": "partial",
+   "note": "ToApp::Suspend and Resume exist, with cgroup control for background apps; no background modes or execution time requests beyond begin_activity (springboard/sdk/src/process_info.rs)"
+  },
+  {
+   "feature": "Scenes",
+   "apple": "UIScene, UIWindowScene, UISceneSession, UISceneDelegate, multiple instances",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "one app owns one surface in the shell protocol; there is no scene session, no request for a second window and no per-scene restoration. Needed for multi-window apps on the tablet"
+  },
+  {
+   "feature": "State restoration",
+   "apple": "Preserving your app's UI across launches, NSUserActivity",
+   "bifrost": "springboard/sdk/src/restoration.rs",
+   "status": "partial",
+   "note": "save and restore of window state across relaunch, logout, update and crash; no user activity handoff"
+  },
+  {
+   "feature": "Device environment",
+   "apple": "UIDevice (userInterfaceIdiom, orientation, battery, proximity)",
+   "bifrost": "springboard/sdk/src/device_registry.rs, springboard/sdk/src/power_sources.rs, springboard/sdk/src/sensors.rs",
+   "status": "partial",
+   "note": "battery and sensors are reachable; apps have no form-factor query (desktop or tablet idiom), which B3 defines"
+  },
+  {
+   "feature": "Traits and trait environment",
+   "apple": "UITraitCollection (size classes, display scale, userInterfaceStyle, preferred content size)",
+   "bifrost": "springboard/sdk/src/layout.rs, springboard/ui/src/environment.rs, springboard/sdk/src/runtime.rs",
+   "status": "partial",
+   "note": "Layout derives margins and size classes from the window size and Ctx::appearance is queryable; no trait collection object with change callbacks, no horizontal and vertical size class pair as a type"
+  },
+  {
+   "feature": "Status bar and home indicator",
+   "apple": "UIStatusBarManager, prefersStatusBarHidden, prefersHomeIndicatorAutoHidden",
+   "bifrost": "springboard/sdk/src/layout.rs",
+   "status": "partial",
+   "note": "top_inset exposes the top safe inset; apps cannot hide the status bar or the home indicator"
+  },
+  {
+   "feature": "Interface orientation",
+   "apple": "supportedInterfaceOrientations, viewWillTransition(to:)",
+   "bifrost": "springboard/src/shell/rotate.rs",
+   "status": "os",
+   "note": "the shell rotates on accelerometer data and apps see only a new Configure size; apps cannot declare supported orientations and the turn plays as a shell animation (area B7)"
+  },
+  {
+   "feature": "Observation tracking",
+   "apple": "automatic observation tracking in UIKit",
+   "bifrost": "springboard/sdk/src/observable.rs, springboard/ui/src/observe.rs",
+   "status": "partial",
+   "note": "observable values; views are not invalidated automatically from reads"
+  },
+  {
+   "feature": "Desktop-class iPad features",
+   "apple": "tab bar and sidebar, document launch, multitasking",
+   "bifrost": "springboard/ui/src/sidebar.rs, springboard/sdk/src/document.rs",
+   "status": "partial",
+   "note": "sidebar and documents exist; no tab bar (see uikit-views-controls)"
+  },
+  {
+   "feature": "Guided Access",
+   "apple": "UIGuidedAccessRestrictionDelegate",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "single-app lock with custom restrictions"
+  },
+  {
+   "feature": "App extensions",
+   "apple": "NSExtensionContext, NSExtensionRequestHandling, document provider",
+   "bifrost": "springboard/sdk/src/extension.rs, springboard/sdk/src/file_provider.rs",
+   "status": "partial",
+   "note": "extension points declared by hosts and a file provider; no keyboard or share extension runtime"
+  },
+  {
+   "feature": "Resource management",
+   "apple": "UIStoryboard, UINib, UIImageAsset, NSDataAsset",
+   "bifrost": "springboard/sdk/src/bundle_resources.rs",
+   "status": "partial",
+   "note": "bundle resources and asset lookup; no storyboards or nibs, by design (views are built in code)"
+  },
+  {
+   "feature": "Mac Catalyst",
+   "apple": "Mac Catalyst",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "porting path for the vendor's own apps"
+  },
+  {
+   "feature": "Application shortcut items",
+   "apple": "UIApplicationShortcutItem, Home Screen quick actions",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "no way for an app to publish quick actions that the shell shows on long press of its icon; the shell has icon edit mode only (springboard/src/shell/jiggle.rs)"
+  }
+ ],
+ "gaps": [
+  "Scene sessions: a way for an app to open and close several windows, with per-scene restoration",
+  "Trait collection object with size class pair and change callback",
+  "Form-factor idiom query for apps (B3 owns the definition)",
+  "Supported orientations declared by apps (B7)",
+  "Home icon quick actions",
+  "Status bar and home indicator hiding"
+ ]
+}

@@ -1,0 +1,88 @@
+{
+ "framework": "UIKit (Drag and drop)",
+ "doc": "https://developer.apple.com/documentation/uikit/drag-and-drop",
+ "macos_since": "",
+ "status": "partial",
+ "bifrost": "springboard/src/shell/dnd.rs, springboard/sdk/src/dnd.rs, springboard/ui/src/drag_session.rs, springboard/sdk/src/item_provider.rs, springboard/sdk/src/pasteboard.rs",
+ "summary": "Typed drag and drop between app windows works through the shell with operation negotiation, file grants and a preview image, and item providers carry typed data. The interactions are not attached to views, a touch lift gesture, spring-loading, drop proposals with progress and previews targeting are missing.",
+ "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+ "features": [
+  {
+   "feature": "Drag sources",
+   "apple": "UIDragInteraction, UIDragInteractionDelegate, UIDragItem, UIDragSession",
+   "bifrost": "springboard/sdk/src/dnd.rs, springboard/src/shell/dnd.rs",
+   "status": "partial",
+   "note": "an app sends DragBegin with items, allowed operations and a preview; the shell owns the pointer afterwards. No view-attached interaction and no lift-on-long-press for touch"
+  },
+  {
+   "feature": "Drop destinations",
+   "apple": "UIDropInteraction, UIDropInteractionDelegate, UIDropProposal, UIDropOperation, UIDropSession",
+   "bifrost": "springboard/sdk/src/dnd.rs, springboard/ui/src/drag_session.rs",
+   "status": "partial",
+   "note": "register types, receive Entered, Updated, Exited and Perform, answer with copy, link or move; no proposal with progress indicator style and no per-item acceptance"
+  },
+  {
+   "feature": "Drag across scenes and apps",
+   "apple": "dragging between apps in Split View",
+   "bifrost": "springboard/src/shell/dnd.rs",
+   "status": "partial",
+   "note": "the shell hit-tests app windows in the desktop; whether Split View and Slide Over panes of handheld mode act as separate destinations is not covered by code or tests"
+  },
+  {
+   "feature": "Item providers",
+   "apple": "NSItemProvider, NSItemProviderReading, NSItemProviderWriting, drag item as promise",
+   "bifrost": "springboard/sdk/src/item_provider.rs, springboard/sdk/src/pasteboard_promise.rs",
+   "status": "partial",
+   "note": "typed representations, registered up front or lazily; file representations travel as read-only grants"
+  },
+  {
+   "feature": "Drag previews",
+   "apple": "UIDragPreview, UIDragPreviewParameters, UITargetedDragPreview, UIDragAnimating",
+   "bifrost": "springboard/sdk/src/dnd.rs",
+   "status": "partial",
+   "note": "a small preview image is sent at the start; no preview parameters, no lift or drop animation hooks, no multi-item stack"
+  },
+  {
+   "feature": "Spring-loaded interactions",
+   "apple": "UISpringLoadedInteraction and effects",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "hover over a button or folder activates it after a delay; needs a hover timer in the drag session state machine"
+  },
+  {
+   "feature": "Paste configuration",
+   "apple": "UIPasteConfiguration, UIPasteConfigurationSupporting",
+   "bifrost": "springboard/sdk/src/pasteboard.rs",
+   "status": "partial",
+   "note": "typed pasteboard items by UTType; no declared accepted types on a responder"
+  },
+  {
+   "feature": "Paste control",
+   "apple": "UIPasteControl",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "system paste button that avoids a permission prompt; depends on a pasteboard access prompt policy that BifrOSt does not have"
+  },
+  {
+   "feature": "Text drag and drop",
+   "apple": "text view drag and drop customization",
+   "bifrost": "springboard/ui/src/textview.rs",
+   "status": "gap",
+   "note": "text selection is not draggable"
+  },
+  {
+   "feature": "Pasteboard",
+   "apple": "UIPasteboard",
+   "bifrost": "springboard/sdk/src/pasteboard.rs, springboard/sdk/src/pasteboard_types.rs",
+   "status": "partial",
+   "note": "named pasteboards with typed items, mapped to Wayland MIME types by the shell"
+  }
+ ],
+ "gaps": [
+  "Attach drag and drop interactions to views, with touch lift on long press",
+  "Drop proposals with progress style and per-item acceptance",
+  "Spring-loaded interactions",
+  "Drag preview parameters and animation hooks",
+  "Check Split View and Slide Over panes as drop targets"
+ ]
+}

@@ -1,0 +1,152 @@
+{
+ "framework": "UIKit (Views and controls)",
+ "doc": "https://developer.apple.com/documentation/uikit/views-and-controls",
+ "macos_since": "",
+ "status": "partial",
+ "bifrost": "springboard/sdk/src/view/ (View, ViewBase, controls.rs, forms.rs, scroll.rs), bifrost_ui::values, springboard/ui/src/visual_effect.rs",
+ "summary": "A retained view tree with buttons, switches, sliders, segmented controls, steppers, a text field, progress indicators, stacks, forms and a vertical scroll view exists and is shared by form factors. Per-view bounds and transforms, control events and states, pickers, a calendar picker control, bar items and the large content viewer are missing.",
+ "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+ "features": [
+  {
+   "feature": "View fundamentals",
+   "apple": "UIView (frame, bounds, center, transform, hit testing, subviews, tag, alpha, clipsToBounds)",
+   "bifrost": "springboard/sdk/src/view/mod.rs",
+   "status": "partial",
+   "note": "View trait with ViewBase: frame, hidden, enabled, opacity, background, hit_test, children, optional backing layer. Frames are in window points; there is no bounds origin, no transform and no per-view clipping flag (only ScrollView clips)"
+  },
+  {
+   "feature": "Target-action and control events",
+   "apple": "UIControl, UIControl.Event, UIControl.State, addTarget(_:action:for:)",
+   "bifrost": "springboard/sdk/src/view/mod.rs",
+   "status": "partial",
+   "note": "ViewBase::send_action queues a named action that travels up the responder chain; there is no event mask (touchDown, touchUpInside, valueChanged), no highlighted or selected control state and no touch-inside tracking"
+  },
+  {
+   "feature": "Buttons",
+   "apple": "UIButton, UIButton.Configuration, UIBarButtonItem content",
+   "bifrost": "springboard/sdk/src/view/controls.rs",
+   "status": "partial",
+   "note": "Button with title, symbol and pressed state; no configuration styles (plain, tinted, filled, glass), no menu button, no toggle button"
+  },
+  {
+   "feature": "Switch, slider, stepper, segmented control, page control",
+   "apple": "UISwitch, UISlider, UIStepper, UISegmentedControl, UIPageControl",
+   "bifrost": "springboard/sdk/src/view/controls.rs, springboard/sdk/src/view/forms.rs, springboard/ui/src/values.rs",
+   "status": "partial",
+   "note": "switch, slider, segmented control and stepper have SDK views; the page control has a model only. Sizes follow the desktop control metrics; touch-size variants (44 pt targets, drag-to-toggle on the switch) are not set up"
+  },
+  {
+   "feature": "Progress and activity",
+   "apple": "UIActivityIndicatorView, UIProgressView",
+   "bifrost": "springboard/sdk/src/view/forms.rs",
+   "status": "partial",
+   "note": "ProgressIndicator draws a bar, an indeterminate bar and a spinner, animated from View::tick"
+  },
+  {
+   "feature": "Date and time input",
+   "apple": "UIDatePicker, UICalendarView",
+   "bifrost": "springboard/ui/src/calendar.rs, springboard/sdk/src/widgets.rs",
+   "status": "partial",
+   "note": "month grid and a mini month calendar drawing exist; no wheel or compact date picker, no time picker, no multi-date selection or per-day decorations as a view"
+  },
+  {
+   "feature": "Wheel picker",
+   "apple": "UIPickerView",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "no spinning-wheel value picker. Needed on touch for dates, times and short option lists; build on the scroll physics in springboard/sdk/src/view/scroll.rs with snap-to-row"
+  },
+  {
+   "feature": "Colour well",
+   "apple": "UIColorWell",
+   "bifrost": "springboard/ui/src/panels.rs",
+   "status": "partial",
+   "note": "a colour panel model exists; no well control that opens it from a touch UI"
+  },
+  {
+   "feature": "Content unavailable view",
+   "apple": "UIContentUnavailableView",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "an empty-state view with symbol, title, text and an action is not a shared component; apps draw their own"
+  },
+  {
+   "feature": "Image view",
+   "apple": "UIImageView (content modes, animated images)",
+   "bifrost": "springboard/sdk/src/image_source.rs, springboard/render/src/imgdec.rs",
+   "status": "partial",
+   "note": "PNG and JPEG decoding and drawing into a rect; no content-mode (aspect fit, fill) view and no animated image sequence view"
+  },
+  {
+   "feature": "Stack views",
+   "apple": "UIStackView (axis, alignment, distribution, spacing)",
+   "bifrost": "springboard/sdk/src/view/controls.rs, springboard/ui/src/stack.rs",
+   "status": "partial",
+   "note": "vertical and horizontal stacks with spacing, insets and alignment; no fill-equally or equal-spacing distribution modes, no arranged-subview hiding animation"
+  },
+  {
+   "feature": "Scroll views",
+   "apple": "UIScrollView (contentOffset, zoomScale, paging, bounces, indicators, keyboard dismiss)",
+   "bifrost": "springboard/sdk/src/view/scroll.rs, springboard/ui/src/scroll.rs",
+   "status": "partial",
+   "note": "vertical drag, fling with exponential deceleration, rubber band and a thin indicator. No horizontal or two-axis scrolling, no pinch zoom, no paging, no scroll-to-top tap, no interactive keyboard dismiss"
+  },
+  {
+   "feature": "Text views",
+   "apple": "UILabel, UITextField, UITextView",
+   "bifrost": "springboard/sdk/src/view/controls.rs, springboard/sdk/src/view/forms.rs, springboard/ui/src/textview.rs",
+   "status": "partial",
+   "note": "Label and a single-line TextField with editing, undo and text input client wiring; the multi-line text view is a model without an SDK view. See uikit-text-input-keyboards"
+  },
+  {
+   "feature": "Search field and tokens",
+   "apple": "UISearchTextField, UISearchToken, UISearchBar",
+   "bifrost": "springboard/ui/src/search.rs",
+   "status": "partial",
+   "note": "search field geometry with a clear button; no tokens, no scope bar, no cancel button behaviour"
+  },
+  {
+   "feature": "Visual effects",
+   "apple": "UIVisualEffectView, UIBlurEffect, UIVibrancyEffect, UIGlassEffect",
+   "bifrost": "springboard/ui/src/visual_effect.rs, springboard/ui/src/vibrancy.rs, springboard/ui/src/material_style.rs, springboard/render/src/glass.rs",
+   "status": "partial",
+   "note": "material catalogue, vibrancy and glass styles reach apps through the window server; independent of input device"
+  },
+  {
+   "feature": "Bars",
+   "apple": "UINavigationBar, UIToolbar, UITabBar, UISearchBar, UIBarButtonItem",
+   "bifrost": "springboard/ui/src/nav.rs, springboard/ui/src/sidebar.rs",
+   "status": "partial",
+   "note": "toolbar with validation and overflow, and a source list sidebar. There is no bottom tab bar and no navigation bar with large-title collapse. A tab bar is the main top-level navigation on a touch tablet"
+  },
+  {
+   "feature": "Large content viewer",
+   "apple": "UILargeContentViewerInteraction",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "accessibility aid for large text sizes; depends on dynamic type, which does not exist yet"
+  },
+  {
+   "feature": "Private click measurement",
+   "apple": "UIEventAttributionView, UIEventAttribution",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "advertising attribution tied to the vendor's ad services"
+  },
+  {
+   "feature": "Geometry value types",
+   "apple": "UIEdgeInsets, NSDirectionalEdgeInsets, UIOffset, UIAxis, NSDirectionalRectEdge",
+   "bifrost": "springboard/ui/src/geometry.rs",
+   "status": "partial",
+   "note": "EdgeInsets and Rect helpers; no directional (leading and trailing) insets, so right-to-left layout is not mirrored"
+  }
+ ],
+ "gaps": [
+  "Per-view bounds, transform and clipping (needed for zoom, rotation and scrolling in both axes)",
+  "Horizontal and pinch-zoom scrolling, paging",
+  "Control events and control states (highlighted, selected)",
+  "Bottom tab bar and large-title navigation bar",
+  "Wheel picker, date and time picker controls",
+  "Touch-size control metrics (44 pt targets) selected by form factor"
+ ]
+}

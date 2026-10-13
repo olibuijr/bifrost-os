@@ -1,0 +1,109 @@
+{
+ "framework": "UIKit (Collection views and table views)",
+ "doc": "https://developer.apple.com/documentation/uikit/collection-views",
+ "macos_since": "",
+ "status": "partial",
+ "bifrost": "springboard/ui/src/collection.rs, springboard/ui/src/table.rs, springboard/ui/src/diff.rs, springboard/ui/src/sidebar.rs, springboard/ui/src/stack.rs",
+ "summary": "Diffable snapshots, a card grid with adaptive columns, a column-based table model, a source list and visible-row windowing exist as pure models. There are no SDK list or collection views with cells, reuse, selection modes, swipe actions, pull to refresh or drag and drop integration.",
+ "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+ "features": [
+  {
+   "feature": "Collection view and layouts",
+   "apple": "UICollectionView, UICollectionViewLayout, compositional layout",
+   "bifrost": "springboard/ui/src/collection.rs, springboard/ui/src/stack.rs",
+   "status": "partial",
+   "note": "adaptive columns from a minimum item width, an optional hero item and fixed-height rows; frames and hit testing only. No custom layout objects, no sections with supplementary views, no orthogonal scrolling sections"
+  },
+  {
+   "feature": "Diffable data sources and snapshots",
+   "apple": "UICollectionViewDiffableDataSource, NSDiffableDataSourceSnapshot, section snapshots",
+   "bifrost": "springboard/ui/src/diff.rs",
+   "status": "partial",
+   "note": "snapshot diff with inserts, deletes and moves; no section snapshots for hierarchical data"
+  },
+  {
+   "feature": "Cell reuse and prefetching",
+   "apple": "dequeueReusableCell, UICollectionViewDataSourcePrefetching",
+   "bifrost": "springboard/ui/src/split.rs",
+   "status": "partial",
+   "note": "visible_rows computes a window with overscan; no reuse pool and no prefetch callbacks"
+  },
+  {
+   "feature": "Cells and list cells",
+   "apple": "UICollectionViewCell, UICollectionViewListCell, UITableViewCell, content configurations",
+   "bifrost": "springboard/sdk/src/view/forms.rs",
+   "status": "partial",
+   "note": "Section and Form draw inset grouped rows; no cell classes, no accessories (disclosure, detail) and no content configuration objects"
+  },
+  {
+   "feature": "Table view",
+   "apple": "UITableView, UITableViewDataSource, UITableViewDelegate, section index",
+   "bifrost": "springboard/ui/src/table.rs, springboard/ui/src/sidebar.rs",
+   "status": "partial",
+   "note": "column model with sort descriptors, header clicks, resize and reorder, and a source list with sections; no touch row editing, no section index, no estimated heights"
+  },
+  {
+   "feature": "Row selection",
+   "apple": "allowsMultipleSelection, selection follows focus, two-finger pan multiselect",
+   "bifrost": "springboard/ui/src/sidebar.rs",
+   "status": "partial",
+   "note": "single selection with keyboard movement; no multi-select mode, no band selection"
+  },
+  {
+   "feature": "Swipe actions",
+   "apple": "UISwipeActionsConfiguration, UIContextualAction",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "leading and trailing row actions revealed by a horizontal swipe. Needs the swipe recognizer and a row view; a common touch pattern"
+  },
+  {
+   "feature": "Refresh control",
+   "apple": "UIRefreshControl",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "pull to refresh needs overscroll events from the scroll view (springboard/sdk/src/view/scroll.rs has the rubber band)"
+  },
+  {
+   "feature": "Reordering and editing",
+   "apple": "moveRowAt, isEditing, insert and delete styles",
+   "bifrost": "springboard/ui/src/dockdrag.rs",
+   "status": "partial",
+   "note": "reordering a row of icons by dragging; no table editing mode"
+  },
+  {
+   "feature": "Drag and drop in lists",
+   "apple": "UITableViewDragDelegate, UICollectionViewDropDelegate, drop placeholders",
+   "bifrost": "springboard/ui/src/drag_session.rs",
+   "status": "partial",
+   "note": "session state machine exists; list integration (drop proposals, placeholders) does not"
+  },
+  {
+   "feature": "Self-sizing cells",
+   "apple": "automatic row heights, Dynamic Type",
+   "bifrost": "springboard/ui/src/typeset.rs",
+   "status": "partial",
+   "note": "text measure is available; no self-sizing pass and no dynamic type"
+  },
+  {
+   "feature": "Focus in lists",
+   "apple": "UITableViewFocusUpdateContext",
+   "bifrost": "springboard/ui/src/focus.rs",
+   "status": "partial",
+   "note": "arrow-key focus to the nearest view in a direction"
+  },
+  {
+   "feature": "Asynchronous image loading",
+   "apple": "prefetching images into cells",
+   "bifrost": "springboard/ui/src/thumb_service.rs",
+   "status": "partial",
+   "note": "thumbnail service with caching; not tied to a cell lifecycle"
+  }
+ ],
+ "gaps": [
+  "SDK list and collection views with cell reuse, accessories and selection modes",
+  "Swipe actions and pull to refresh",
+  "Section snapshots and compositional layout sections",
+  "Drop proposals and placeholders for lists",
+  "Section index and editing mode for tables"
+ ]
+}

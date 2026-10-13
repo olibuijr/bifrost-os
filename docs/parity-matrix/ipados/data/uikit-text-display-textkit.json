@@ -1,0 +1,129 @@
+{
+ "framework": "UIKit (Text display, fonts, TextKit, Writing Tools, handwriting)",
+ "doc": "https://developer.apple.com/documentation/uikit/textkit",
+ "macos_since": "",
+ "status": "partial",
+ "bifrost": "springboard/ui/src/text_layout_manager.rs, springboard/ui/src/textlayout.rs, springboard/sdk/src/attributed.rs, springboard/sdk/src/richlayout.rs, springboard/ui/src/writing_assist.rs",
+ "summary": "Attributed strings, a TextKit 2 style layout model, paragraph styles, lists, tables, attachments, a find bar model, spell checking and writing assistance models exist. Dynamic type scaling, handwriting recognition, the text formatting controller and a text view in the SDK that joins these are missing.",
+ "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+ "features": [
+  {
+   "feature": "Attributed strings",
+   "apple": "NSAttributedString, NSMutableAttributedString",
+   "bifrost": "springboard/sdk/src/attributed.rs",
+   "status": "partial",
+   "note": "attributes, ranges and a rich editing model"
+  },
+  {
+   "feature": "Text content and layout managers",
+   "apple": "NSTextContentStorage, NSTextLayoutManager, NSTextLayoutFragment, NSTextLineFragment, NSTextContainer",
+   "bifrost": "springboard/ui/src/text_layout_manager.rs, springboard/ui/src/textlayout.rs",
+   "status": "partial",
+   "note": "pure model with storage, containers and fragments; no viewport layout controller"
+  },
+  {
+   "feature": "Selection and navigation",
+   "apple": "NSTextRange, NSTextSelection, NSTextSelectionNavigation, NSTextLocation",
+   "bifrost": "springboard/ui/src/text_layout_manager.rs, springboard/ui/src/text_marker.rs",
+   "status": "partial",
+   "note": "selection and navigation by granularity; logical, not visual, movement for bidirectional text"
+  },
+  {
+   "feature": "Paragraph styles, lists, tabs",
+   "apple": "NSParagraphStyle, NSTextTab, NSTextList",
+   "bifrost": "springboard/ui/src/paragraph.rs, springboard/ui/src/textlist.rs",
+   "status": "partial",
+   "note": "paragraph style fields and list markers"
+  },
+  {
+   "feature": "Tables in text",
+   "apple": "NSTextTable, NSTextTableBlock, NSTextBlock",
+   "bifrost": "springboard/ui/src/text_table.rs",
+   "status": "partial",
+   "note": "absolute, percentage and share column widths with spans"
+  },
+  {
+   "feature": "Attachments",
+   "apple": "NSTextAttachment, NSTextAttachmentViewProvider, NSAdaptiveImageGlyph",
+   "bifrost": "springboard/ui/src/text_attachment.rs",
+   "status": "partial",
+   "note": "attachments take part in layout; no view-provider attachments and no adaptive image glyphs"
+  },
+  {
+   "feature": "Typesetting",
+   "apple": "Core Text frames, lines, runs",
+   "bifrost": "springboard/ui/src/typeset.rs, springboard/sdk/src/richlayout.rs",
+   "status": "partial",
+   "note": "typesetter, framesetter and line breaking with any font through a glyph source"
+  },
+  {
+   "feature": "Fonts and font metrics",
+   "apple": "UIFont, UIFontDescriptor, UIFontMetrics, scaling fonts automatically",
+   "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/render/src/fontobj.rs, springboard/render/src/ui.rs",
+   "status": "partial",
+   "note": "descriptor matching and a type scale; no dynamic type content size categories and no UIFontMetrics scaling, which touch UIs rely on for accessibility"
+  },
+  {
+   "feature": "Vertical text and bidi",
+   "apple": "layout orientation providers",
+   "bifrost": "springboard/ui/src/vertical_text.rs, springboard/ui/src/bidi.rs",
+   "status": "partial",
+   "note": "vertical layout and bidi reordering models"
+  },
+  {
+   "feature": "Spell checking",
+   "apple": "UITextChecker",
+   "bifrost": "springboard/sdk/src/spellcheck.rs",
+   "status": "partial",
+   "note": "word and sentence checks; no grammar checking type"
+  },
+  {
+   "feature": "Text view with TextKit",
+   "apple": "UITextView, UITextViewDelegate, UITextItem menus",
+   "bifrost": "springboard/ui/src/textview.rs, springboard/src/shell/textarea.rs",
+   "status": "partial",
+   "note": "wrapped text view model with caret and selection, and a shell-only touch editor. No SDK view that combines layout manager, editing, links and text item menus"
+  },
+  {
+   "feature": "Text formatting controller",
+   "apple": "UITextFormattingViewController, UITextFormattingCoordinator",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "no formatting popover; rich text commands exist in the attributed string editor"
+  },
+  {
+   "feature": "Writing Tools",
+   "apple": "UIWritingToolsCoordinator, UIWritingToolsBehavior",
+   "bifrost": "springboard/ui/src/writing_assist.rs",
+   "status": "partial",
+   "note": "behaviour levels, context and a suggestion session as a model; no UI and no model backend wired"
+  },
+  {
+   "feature": "Handwriting input",
+   "apple": "UIScribbleInteraction, UIIndirectScribbleInteraction",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "pen-to-text in fields needs stylus input in apps plus a recognizer; the drawing model exists (springboard/ui/src/drawing.rs) but there is no recognition"
+  },
+  {
+   "feature": "Find in text",
+   "apple": "UIFindInteraction, UITextSearching, UIFindSession",
+   "bifrost": "springboard/ui/src/textfind.rs",
+   "status": "partial",
+   "note": "query, options, matches and counter as a model; no find panel view on the touch UI"
+  },
+  {
+   "feature": "Look up and references",
+   "apple": "UIReferenceLibraryViewController",
+   "bifrost": "springboard/ui/src/look_up.rs",
+   "status": "partial",
+   "note": "popover model for definitions and quick search hits"
+  }
+ ],
+ "gaps": [
+  "Dynamic type: content size categories and font metrics scaling",
+  "SDK text view that joins the layout manager, selection UI and text input client",
+  "Handwriting recognition for stylus input",
+  "Text formatting popover"
+ ]
+}
