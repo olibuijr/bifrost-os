@@ -753,6 +753,11 @@ impl Settings {
         &self.a11y
     }
 
+    /// Replaces the accessibility settings (the Accessibility Shortcut switches them while Settings is open).
+    pub(in crate::shell) fn set_accessibility(&mut self, a: AccessibilitySettings) {
+        self.a11y = a;
+    }
+
     /// Synchronizes a Control Centre Focus change while retaining the open page.
     pub(super) fn set_dnd(&mut self, ui: &Ui, on: bool) {
         self.opts.dnd = on;
