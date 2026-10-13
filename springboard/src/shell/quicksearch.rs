@@ -392,6 +392,15 @@ pub fn cached_titles(dir: &Path) -> Vec<String> {
     titles
 }
 
+/// What the sources worker read: a fresh list only where its file changed (`None` where it did not),
+/// with the stamps those reads were taken at.
+struct SourcesRead {
+    contacts: Option<Vec<super::contactstore::Contact>>,
+    contacts_stamp: Option<(PathBuf, std::time::SystemTime)>,
+    titles: Option<Vec<String>>,
+    deildu_stamp: Option<(PathBuf, std::time::SystemTime)>,
+}
+
 /// What a touch on the home screen turned out to be.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Pull {
@@ -504,6 +513,8 @@ pub struct QuickSearch {
     files_folded: Vec<String>,
     /// the background file scan started at open, until its result is taken
     files_rx: Option<std::sync::mpsc::Receiver<Vec<crate::files::fs::Entry>>>,
+    /// the background read of the contacts and Deildu titles, until its result is taken
+    sources_rx: Option<std::sync::mpsc::Receiver<SourcesRead>>,
     /// modification times the contacts and Deildu title caches were read at
     contacts_stamp: Option<(PathBuf, std::time::SystemTime)>,
     deildu_stamp: Option<(PathBuf, std::time::SystemTime)>,
@@ -565,6 +576,7 @@ impl QuickSearch {
             files: vec![],
             files_folded: vec![],
             files_rx: None,
+            sources_rx: None,
             contacts_stamp: None,
             deildu_stamp: None,
             suggestions: ui.text("Assistant Suggestions", 20.0, Weight::Semibold, WHITE),
@@ -652,20 +664,29 @@ impl QuickSearch {
         self.deildu_titles = titles;
     }
 
-    /// Re-reads the contacts and cached Deildu titles only when their files changed, and
-    /// scans `root` for files on a worker thread; the list fills in on a later tick.
+    /// Re-reads the contacts and cached Deildu titles only when their files changed, on a worker
+    /// thread (a cache can hold many torrents), and scans `root` for files on another one; the
+    /// lists fill in on a later tick.
     pub fn refresh_sources(&mut self, contacts: &Path, deildu_dir: &Path, root: PathBuf) {
         let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
-        let stamp = mtime(contacts).map(|t| (contacts.to_path_buf(), t));
-        if stamp.is_none() || stamp != self.contacts_stamp {
-            self.contacts = super::contactstore::load_checked(contacts).unwrap_or_default();
-            self.contacts_stamp = stamp;
-        }
+        let contacts_stamp = mtime(contacts).map(|t| (contacts.to_path_buf(), t));
+        let want_contacts = contacts_stamp.is_none() || contacts_stamp != self.contacts_stamp;
         let cache = deildu_dir.join("cache");
-        let stamp = mtime(&cache).map(|t| (cache.clone(), t));
-        if stamp.is_none() || stamp != self.deildu_stamp {
-            self.set_deildu_titles(cached_titles(deildu_dir));
-            self.deildu_stamp = stamp;
+        let deildu_stamp = mtime(&cache).map(|t| (cache.clone(), t));
+        let want_titles = deildu_stamp.is_none() || deildu_stamp != self.deildu_stamp;
+        if (want_contacts || want_titles) && self.sources_rx.is_none() {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let contacts = contacts.to_path_buf();
+            let deildu_dir = deildu_dir.to_path_buf();
+            crate::bare::sys::spawn_named("quicksearch-sources", move || {
+                let _ = tx.send(SourcesRead {
+                    contacts: want_contacts.then(|| super::contactstore::load_checked(&contacts).unwrap_or_default()),
+                    contacts_stamp,
+                    titles: want_titles.then(|| cached_titles(&deildu_dir)),
+                    deildu_stamp,
+                });
+            });
+            self.sources_rx = Some(rx);
         }
         if self.files_rx.is_none() {
             let (tx, rx) = std::sync::mpsc::channel();
@@ -674,6 +695,30 @@ impl QuickSearch {
             });
             self.files_rx = Some(rx);
         }
+    }
+
+    /// Takes the contacts and Deildu titles a worker read; true when they changed.
+    fn take_sources(&mut self) -> bool {
+        let Some(rx) = &self.sources_rx else { return false };
+        let read = match rx.try_recv() {
+            Ok(read) => read,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return false,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                self.sources_rx = None;
+                return false;
+            }
+        };
+        self.sources_rx = None;
+        let changed = read.contacts.is_some() || read.titles.is_some();
+        if let Some(contacts) = read.contacts {
+            self.contacts = contacts;
+        }
+        if let Some(titles) = read.titles {
+            self.set_deildu_titles(titles);
+        }
+        self.contacts_stamp = read.contacts_stamp;
+        self.deildu_stamp = read.deildu_stamp;
+        changed
     }
 
     /// Takes a finished file scan; true when the list changed.
@@ -775,7 +820,9 @@ impl QuickSearch {
     /// Finishes a settle and repeats held keys; true when a frame is needed.
     pub fn tick(&mut self, ui: &Ui, h: i32, t: f64) -> bool {
         let mut dirty = false;
-        if self.take_files() && self.active() && !self.field.text().is_empty() {
+        let files = self.take_files();
+        let sources = self.take_sources();
+        if (files || sources) && self.active() && !self.field.text().is_empty() {
             self.search(ui, h);
             dirty = true;
         }
@@ -809,7 +856,7 @@ impl QuickSearch {
         if self.keyboard.animating() {
             return Some(t);
         }
-        if self.files_rx.is_some() {
+        if self.files_rx.is_some() || self.sources_rx.is_some() {
             return Some(t + 50.0);
         }
         self.is_shown().then(|| self.field.next_blink(t)).flatten()

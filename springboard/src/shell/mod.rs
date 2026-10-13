@@ -484,6 +484,8 @@ pub struct Shell {
     st_cfg: Option<(screentime::config::Config, Option<std::time::SystemTime>)>,
     /// trims the caches while /data is nearly full
     storage_guard: storage::Guard,
+    /// the Login Items page's extension model, re-read only when the installed apps change
+    login_ext_cache: login_items_page::ExtensionsCache,
     /// slides the Today View over the lock screen (one page plus the leading one)
     lock_pager: Pager,
     /// the Today View on page -1 of the home screen and the lock screen
@@ -582,6 +584,8 @@ pub struct Shell {
     shot: Option<Overlay>,
     /// the Markup editor opened from the screenshot thumbnail
     markup: Option<markup::Markup>,
+    /// a picture being read and decoded on a worker for the Markup editor, with the path it came from
+    markup_load: Option<(PathBuf, std::sync::mpsc::Receiver<Option<crate::gfx::Image>>)>,
     /// a touch that started on the screenshot thumbnail
     shot_tap: bool,
     /// The screenshot toolbar's capture session, open while it is on screen.
@@ -792,6 +796,7 @@ impl Shell {
             st_blocked_at: 0,
             st_cfg: None,
             storage_guard: storage::Guard::default(),
+            login_ext_cache: login_items_page::ExtensionsCache::default(),
             lock_pager,
             today,
             today_touch: false,
@@ -855,6 +860,7 @@ impl Shell {
             data_dir: deildu::data_dir().parent().map(Path::to_path_buf).unwrap_or_default(),
             shot: None,
             markup: None,
+            markup_load: None,
             shot_tap: false,
             capture: None,
             rec: None,
@@ -1443,6 +1449,9 @@ impl Shell {
         }
         if let Some(w) = self.cc.next_wake().filter(|_| self.screen_on) {
             due.add(Some(w));
+        }
+        if self.markup_load.is_some() {
+            due = Some(due.map_or(t + 50.0, |d| d.min(t + 50.0)));
         }
         if self.screen_on {
             if let Some(w) = self.quicksearch.next_wake(t) {
@@ -2596,7 +2605,7 @@ impl Shell {
                 self.ensure_defaults();
                 let logins = self.login_item_views();
                 let pending = self.login_pending_views();
-                let ext = login_items_page::scan_installed();
+                let ext = self.login_ext_cache.get();
                 let background_off = login_items_page::background_off_from_pref(self.prefs.get(login_items_page::BACKGROUND_OFF_KEY));
                 let Some(st) = &mut self.settings else { return vec![] };
                 st.set_login_items(logins, pending);
@@ -2737,6 +2746,7 @@ impl Shell {
             self.dirty = true;
         }
         self.split_tick();
+        self.markup_tick();
         self.ota_tick(t);
         if self.screen_on && !self.is_locked() {
             self.dirty |= self.assistive_touch.tick(t);
@@ -4286,9 +4296,28 @@ impl Shell {
     /// Preview's Markup button: opens a picture in the editor; Done saves
     /// a PNG (a copy named "... Markup.png" unless it already is a PNG).
     fn markup_file(&mut self, path: &Path) {
-        let Some(img) = std::fs::read(path).ok().and_then(|b| crate::cg::imageio::decode(&b)) else { return };
+        // the file read and the decode can take a while on a large picture, so they run on a worker;
+        // `markup_tick` opens the editor when the picture lands
+        let source = path.to_path_buf();
+        let (tx, rx) = std::sync::mpsc::channel();
+        crate::bare::sys::spawn_named("markup-load", move || {
+            let _ = tx.send(std::fs::read(&source).ok().and_then(|b| crate::cg::imageio::decode(&b)));
+        });
+        self.markup_load = Some((path.to_path_buf(), rx));
+    }
+
+    /// Opens the Markup editor once the worker has decoded the picture (a failed read or decode opens nothing).
+    fn markup_tick(&mut self) {
+        let Some((_, rx)) = &self.markup_load else { return };
+        let decoded = match rx.try_recv() {
+            Ok(decoded) => decoded,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => None,
+        };
+        let Some((path, _)) = self.markup_load.take() else { return };
+        let Some(img) = decoded else { return };
         let target = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) {
-            path.to_path_buf()
+            path
         } else {
             let stem = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
             path.with_file_name(format!("{stem} Markup.png"))
