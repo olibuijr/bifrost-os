@@ -737,6 +737,8 @@ mod tests {
         let img = Image { w: 4, h: 2, px: vec![pack(9, 9, 9, 255); 8] };
         // due at 0, 16.7 and 33.3 ms; the frame at 10 ms is too early
         for t in [0.0, 10.0, 17.0, 34.0] {
+            // a full queue skips a frame, and these pushes come faster than the encoder thread drains it, so pace them
+            std::thread::sleep(std::time::Duration::from_millis(20));
             s.push(&img, t);
         }
         s.finish().unwrap();
