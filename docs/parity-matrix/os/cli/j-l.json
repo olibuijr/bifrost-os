@@ -606,9 +606,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "/usr/bin/lastcomm",
-   "status": "partial",
-   "note": "provided by Arch package acct; not yet verified on Midget",
+   "bifrost": "",
+   "status": "gap",
+   "note": "process accounting (acct) is not in the Arch repositories; needs packaging or a BifrOSt tool",
    "rea": [],
    "method": "assessed"
   },

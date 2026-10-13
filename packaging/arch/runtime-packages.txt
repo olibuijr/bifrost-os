@@ -30,7 +30,6 @@ ttf-liberation
 ttf-croscore
 gsfonts
 systemd-ukify
-acct
 alsa-utils
 apache
 at
@@ -115,7 +114,5 @@ zip
 zsh
 imagemagick
 ffmpeg
-apache
 gdb
-nfs-utils
 rdma-core
