@@ -49,10 +49,12 @@ pub enum Action {
     ResetColour,
     ExportPng,
     ExportJpeg,
+    /// File > Print: the file as opened goes to the default printer. Menu only, not a toolbar button.
+    Print,
 }
 
-/// Every action, in toolbar order. A menu item's id is its index here.
-pub const ACTIONS: [Action; 20] = [
+/// Every action, in toolbar order, then the menu-only ones. A menu item's id is its index here.
+pub const ACTIONS: [Action; 21] = [
     Action::Previous,
     Action::Next,
     Action::ZoomOut,
@@ -73,6 +75,7 @@ pub const ACTIONS: [Action; 20] = [
     Action::ResetColour,
     Action::ExportPng,
     Action::ExportJpeg,
+    Action::Print,
 ];
 
 impl Action {
@@ -106,12 +109,13 @@ impl Action {
             Action::ResetColour => "Reset Colour",
             Action::ExportPng => "Export PNG",
             Action::ExportJpeg => "Export JPEG",
+            Action::Print => "Print\u{2026}",
         }
     }
 
-    /// The toolbar buttons, in the order of `ACTIONS`.
-    pub fn toolbar() -> [Action; 20] {
-        ACTIONS
+    /// The toolbar buttons, in the order of `ACTIONS`: every action except the menu-only ones.
+    pub fn toolbar() -> Vec<Action> {
+        ACTIONS.iter().copied().filter(|a| *a != Action::Print).collect()
     }
 }
 

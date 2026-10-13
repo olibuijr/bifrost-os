@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+- File > Print... (Cmd+P) sends the open file to the default printer through the shared print operation. It prints the
+  file as opened: markup is not drawn into the printout yet.
+
 ## 0.3.0
 
 - Opening a PDF reads its page list only. Thumbnails are drawn the first time the sidebar shows them and kept after that, so a long document opens at once.
