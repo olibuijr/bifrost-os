@@ -101,6 +101,7 @@ pub enum Action {
     /// Substitutions and automatic spelling
     SmartQuotes,
     SmartDashes,
+    SmartLinks,
     SpellAuto,
     /// Print: page header and footer
     HeaderFooter,
@@ -198,6 +199,7 @@ impl Action {
             Action::ActualSize => MENU_BASE + 0x85,
             Action::SmartQuotes => MENU_BASE + 0x86,
             Action::SmartDashes => MENU_BASE + 0x87,
+            Action::SmartLinks => MENU_BASE + 0xb8,
             Action::SpellAuto => MENU_BASE + 0x88,
             Action::HeaderFooter => MENU_BASE + 0x89,
             Action::NewPlain(false) => MENU_BASE + 0x8a,
@@ -286,6 +288,7 @@ impl Action {
             0x85 => Action::ActualSize,
             0x86 => Action::SmartQuotes,
             0x87 => Action::SmartDashes,
+            0xb8 => Action::SmartLinks,
             0x88 => Action::SpellAuto,
             0x89 => Action::HeaderFooter,
             0x8a => Action::NewPlain(false),
@@ -1046,6 +1049,7 @@ mod tests {
             Action::ActualSize,
             Action::SmartQuotes,
             Action::SmartDashes,
+            Action::SmartLinks,
             Action::SpellAuto,
             Action::HeaderFooter,
             Action::NewPlain(false),

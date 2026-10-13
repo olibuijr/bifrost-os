@@ -12,6 +12,8 @@
 - Edit > Add Link (Cmd+K), Open Link and Remove Link: text can link to a web, mail, phone or file transfer address. Links
   are drawn in the link colour with an underline, are kept by RTF (hyperlink fields), HTML, `.docx` and `.odt`, print,
   and open with a click in a document that cannot be edited. Addresses that run code or read local files are refused.
+- Edit > Substitutions > Smart Links: a web address (`http://`, `https://`, `www.`), a `mailto:` address or a mail address
+  becomes a link when the word ends with a blank. Kept in the preferences.
 - Edit > Insert: Page Break, Line Break and Paragraph Break. A line break starts a new line inside the paragraph, and a
   page break starts a new page when printing (RTF `\line` and `\page`, a docx break). A plain text document writes a line
   break as a line ending. HTML and `.odt` files write both as a line break, which those readers take as a paragraph

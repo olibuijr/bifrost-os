@@ -65,6 +65,49 @@ pub fn normalize(input: &str) -> Option<String> {
     host_like.then(|| format!("https://{text}"))
 }
 
+/// Smart Links: the address in a word the user has just finished typing. Returns where the address starts in the word and
+/// how long it is (in characters, so quotes or brackets around it and punctuation after it are left out), with the
+/// address to link to. Web addresses (`http://`, `https://`, `ftp://`, `www.`), `mailto:` addresses and mail addresses
+/// are recognised; a bare word like `example.com` is not, since it may be a file name or a sentence end.
+pub fn smart_link(word: &str) -> Option<(usize, usize, String)> {
+    let chars: Vec<char> = word.chars().collect();
+    let opening = |c: char| matches!(c, '(' | '[' | '{' | '<' | '"' | '\'');
+    let closing = |c: char| matches!(c, '.' | ',' | ';' | ':' | '!' | '?' | ')' | ']' | '}' | '>' | '"' | '\'');
+    let mut start = 0;
+    while start < chars.len() && opening(chars[start]) {
+        start += 1;
+    }
+    let mut end = chars.len();
+    while end > start && closing(chars[end - 1]) {
+        end -= 1;
+    }
+    if end <= start {
+        return None;
+    }
+    let candidate: String = chars[start..end].iter().collect();
+    let lower = candidate.to_ascii_lowercase();
+    let address = if ["http://", "https://", "ftp://", "mailto:", "www."].iter().any(|p| lower.starts_with(p)) {
+        normalize(&candidate)?
+    } else if is_mail_address(&candidate) {
+        normalize(&candidate)?
+    } else {
+        return None;
+    };
+    Some((start, end - start, address))
+}
+
+/// Whether text is one mail address: a name, an at sign and a dotted host.
+fn is_mail_address(text: &str) -> bool {
+    let Some((name, host)) = text.split_once('@') else { return false };
+    !name.is_empty()
+        && !host.contains('@')
+        && !text.contains('/')
+        && host.contains('.')
+        && !host.starts_with('.')
+        && !host.ends_with('.')
+        && !host.contains("..")
+}
+
 /// The address of an RTF hyperlink field instruction (`HYPERLINK "address"`), when it is one Text Editor links to.
 pub fn from_field_instruction(instruction: &str) -> Option<String> {
     let text = instruction.trim();
@@ -133,6 +176,23 @@ mod tests {
             assert_eq!(normalize(bad), None, "{bad:?}");
         }
         assert_eq!(normalize(&format!("https://a.example/{}", "x".repeat(MAX_LEN))), None, "too long");
+    }
+
+    #[test]
+    fn smart_links_find_the_address_in_a_finished_word() {
+        let found = smart_link;
+        assert_eq!(found("https://example.com/a"), Some((0, 21, "https://example.com/a".to_string())));
+        assert_eq!(found("www.example.com"), Some((0, 15, "https://www.example.com".to_string())));
+        assert_eq!(found("ada@example.com"), Some((0, 15, "mailto:ada@example.com".to_string())));
+        assert_eq!(found("mailto:ada@example.com"), Some((0, 22, "mailto:ada@example.com".to_string())));
+        // punctuation around the address is not part of it
+        assert_eq!(found("(https://example.com/a)."), Some((1, 21, "https://example.com/a".to_string())));
+        assert_eq!(found("\"www.example.com\","), Some((1, 15, "https://www.example.com".to_string())));
+        // a bare host, a plain word and a half-typed address are left alone
+        for word in ["example.com", "hello", "www.", "https://", "a@b", "@example.com", "ada@@example.com", "ada@example.", "", "()"] {
+            assert_eq!(found(word), None, "{word:?}");
+        }
+        assert_eq!(found("javascript:alert(1)"), None);
     }
 
     #[test]

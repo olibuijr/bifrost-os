@@ -420,6 +420,11 @@ impl TextEditApp {
                 self.save_options(ctx);
                 return true;
             }
+            Action::SmartLinks => {
+                self.opts.smart_links = !self.opts.smart_links;
+                self.save_options(ctx);
+                return true;
+            }
             Action::SmartDashes => {
                 self.opts.smart_dashes = !self.opts.smart_dashes;
                 self.save_options(ctx);
@@ -1075,11 +1080,40 @@ impl TextEditApp {
             doc.text.type_text(s);
         }
         self.edited();
+        // a blank ends a word, which Smart Links turns into a link when it is an address
+        if self.opts.smart_links && s.chars().last().is_some_and(char::is_whitespace) {
+            self.autolink();
+        }
         // a space or punctuation ends a word, which Correct Spelling Automatically then checks
         if self.opts.spell_auto && s.chars().last().is_some_and(|c| !c.is_alphanumeric() && c != '\'') {
             self.autocorrect();
         }
         true
+    }
+
+    /// Smart Links: the word before the blank just typed becomes a link when it is a web or mail address (and is not
+    /// linked already). Rich text only.
+    fn autolink(&mut self) {
+        let Some(doc) = active_doc(&self.docs) else { return };
+        let Some(boundary) = doc.text.head().checked_sub(1) else { return };
+        let cells = doc.text.cells();
+        if !doc.rich || !cells[boundary].ch.is_whitespace() {
+            return;
+        }
+        let start = cells[..boundary].iter().rposition(|c| c.ch.is_whitespace()).map_or(0, |i| i + 1);
+        let word: String = cells[start..boundary].iter().map(|c| c.ch).collect();
+        let Some((offset, len, url)) = links::smart_link(&word) else { return };
+        let range = start + offset..start + offset + len;
+        if cells[range.clone()].iter().any(|c| c.style.link != 0) {
+            return;
+        }
+        let id = links::intern(&url);
+        if id == 0 {
+            return;
+        }
+        if active_doc_mut(&mut self.docs).is_some_and(|d| d.text.set_link(range, id)) {
+            self.edited();
+        }
     }
 
     /// Correct Spelling Automatically: the word just ended by the typed boundary is replaced by the checker's guess, and
@@ -1282,6 +1316,7 @@ impl TextEditApp {
             AppMenuItem::submenu("Substitutions"),
             menu_item(Action::SmartQuotes, "Smart Quotes", "", true).checked(self.opts.smart_quotes).depth(1),
             menu_item(Action::SmartDashes, "Smart Dashes", "", true).checked(self.opts.smart_dashes).depth(1),
+            menu_item(Action::SmartLinks, "Smart Links", "", true).checked(self.opts.smart_links).depth(1),
             AppMenuItem::submenu("Transformations"),
             menu_item(Action::Transform(Transform::Upper), "Make Upper Case", "", has_sel).depth(1),
             menu_item(Action::Transform(Transform::Lower), "Make Lower Case", "", has_sel).depth(1),
@@ -1897,6 +1932,33 @@ mod tests {
         active_doc_mut(&mut locked.docs).unwrap().read_only = true;
         assert!(locked.open_link_sheet());
         assert!(locked.link.is_none());
+    }
+
+    #[test]
+    fn smart_links_link_an_address_when_the_word_ends() {
+        let mut app = app_with_text("", 0..0);
+        app.opts.smart_links = true;
+        assert!(app.insert_raw("see www.example.com"));
+        assert_eq!(active_doc(&app.docs).unwrap().text.link_at(8), 0, "no link until the word ends");
+        assert!(app.insert_raw(" "));
+        let doc = active_doc(&app.docs).unwrap();
+        assert_eq!(links::url(doc.text.link_at(8)).as_deref(), Some("https://www.example.com"));
+        assert_eq!(doc.text.link_at(3), 0);
+        assert_eq!(doc.text.link_at(19), 0, "the blank after it is not part of the link");
+        assert_eq!(doc.text.style().link, 0, "typing goes on outside the link");
+        // a plain word, and an address that is already a link, are left alone
+        assert!(app.insert_raw("hello "));
+        assert!(active_doc(&app.docs).unwrap().text.cells()[20..].iter().all(|c| c.style.link == 0));
+        // with the option off nothing is linked
+        let mut off = app_with_text("", 0..0);
+        off.insert_raw("www.example.com ");
+        assert_eq!(active_doc(&off.docs).unwrap().text.link_at(2), 0);
+        // a plain text document is never linked
+        let mut plain = app_with_text("", 0..0);
+        plain.opts.smart_links = true;
+        active_doc_mut(&mut plain.docs).unwrap().rich = false;
+        plain.insert_raw("www.example.com ");
+        assert_eq!(active_doc(&plain.docs).unwrap().text.link_at(2), 0);
     }
 
     #[test]

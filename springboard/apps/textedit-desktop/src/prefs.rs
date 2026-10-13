@@ -14,6 +14,8 @@ pub struct Options {
     /// Edit > Substitutions > Smart Quotes and Smart Dashes
     pub smart_quotes: bool,
     pub smart_dashes: bool,
+    /// Edit > Substitutions > Smart Links: a web or mail address becomes a link when the word ends
+    pub smart_links: bool,
     /// View > Show Ruler, and View > Wrap to Window
     pub show_ruler: bool,
     pub wrap_window: bool,
@@ -29,19 +31,20 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options { spell_enabled: true, spell_auto: false, smart_quotes: false, smart_dashes: false, show_ruler: true, wrap_window: false, header_footer: false, new_plain: false, default_encoding: Encoding::Utf8, markup_as_code: false }
+        Options { spell_enabled: true, spell_auto: false, smart_quotes: false, smart_dashes: false, smart_links: false, show_ruler: true, wrap_window: false, header_footer: false, new_plain: false, default_encoding: Encoding::Utf8, markup_as_code: false }
     }
 }
 
 impl Options {
     /// The options as stored: each key with "1" or "0".
-    pub fn entries(&self) -> [(&'static str, &'static str); 10] {
+    pub fn entries(&self) -> [(&'static str, &'static str); 11] {
         let v = |on: bool| if on { "1" } else { "0" };
         [
             ("options.spell_enabled", v(self.spell_enabled)),
             ("options.spell_auto", v(self.spell_auto)),
             ("options.smart_quotes", v(self.smart_quotes)),
             ("options.smart_dashes", v(self.smart_dashes)),
+            ("options.smart_links", v(self.smart_links)),
             ("options.show_ruler", v(self.show_ruler)),
             ("options.wrap_window", v(self.wrap_window)),
             ("options.header_footer", v(self.header_footer)),
@@ -64,6 +67,7 @@ impl Options {
             spell_auto: flag("options.spell_auto", d.spell_auto),
             smart_quotes: flag("options.smart_quotes", d.smart_quotes),
             smart_dashes: flag("options.smart_dashes", d.smart_dashes),
+            smart_links: flag("options.smart_links", d.smart_links),
             show_ruler: flag("options.show_ruler", d.show_ruler),
             wrap_window: flag("options.wrap_window", d.wrap_window),
             header_footer: flag("options.header_footer", d.header_footer),
@@ -94,7 +98,7 @@ mod tests {
 
     #[test]
     fn options_survive_a_write_and_a_read() {
-        let on = Options { spell_enabled: false, spell_auto: true, smart_quotes: true, smart_dashes: true, show_ruler: false, wrap_window: true, header_footer: true, new_plain: true, default_encoding: Encoding::Roman, markup_as_code: true };
+        let on = Options { spell_enabled: false, spell_auto: true, smart_quotes: true, smart_dashes: true, smart_links: true, show_ruler: false, wrap_window: true, header_footer: true, new_plain: true, default_encoding: Encoding::Roman, markup_as_code: true };
         let stored: HashMap<String, String> = on.entries().iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         assert_eq!(Options::read(&|k| stored.get(k).cloned()), on);
     }
