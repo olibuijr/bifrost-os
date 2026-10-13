@@ -72,7 +72,7 @@ impl Filesystem {
 const VOLUME_TOOL: &str = "udisksctl";
 
 /// The device path for a name, when the name is a plain alphanumeric device name such as `sdb1` or `nvme0n1p1`.
-fn device_path(disk: &Disk) -> Result<String, Refusal> {
+pub(crate) fn device_path(disk: &Disk) -> Result<String, Refusal> {
     let name = &disk.bsd_name;
     if name.is_empty() || !name.bytes().all(|b| b.is_ascii_alphanumeric()) {
         return Err(Refusal::InvalidDevice(name.clone()));
@@ -84,13 +84,13 @@ fn is_token(word: &str) -> bool {
     !word.is_empty() && word.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
 
-fn gate_claim(claims: &Claims, disk: &Disk, owner: &str) -> Result<(), Refusal> {
+pub(crate) fn gate_claim(claims: &Claims, disk: &Disk, owner: &str) -> Result<(), Refusal> {
     claims
         .check(&disk.bsd_name, owner)
         .map_err(|c| Refusal::Claimed { device: c.device, owner: c.owner })
 }
 
-fn gate_approval(approvals: &Approvals, op: Operation, disk: &Disk) -> Result<(), Refusal> {
+pub(crate) fn gate_approval(approvals: &Approvals, op: Operation, disk: &Disk) -> Result<(), Refusal> {
     approvals.approve(op, disk).map_err(|d| Refusal::Vetoed(d.reason))
 }
 

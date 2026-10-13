@@ -52,6 +52,7 @@ pub mod disk_claim;
 pub mod disk_claims;
 pub mod disk_commands;
 pub mod disk_session;
+pub mod disk_format;
 pub mod txt_record;
 pub mod dnssd;
 pub mod dnssd_ref;

@@ -94,6 +94,12 @@ pub enum Operation {
     Mount,
     Unmount,
     Eject,
+    /// Writing a new partition map or file system (erase).
+    Erase,
+    /// A read-only file system check (first aid, verify).
+    Verify,
+    /// A file system check that repairs (first aid, repair).
+    Repair,
 }
 
 /// Why a request was refused.
