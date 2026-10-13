@@ -90,9 +90,9 @@ impl ThumbRequest {
         Ok(ThumbRequest { path: path.to_string(), size, scale, kind })
     }
 
-    /// The edge of the thumbnail in pixels: `size` times `scale`, rounded, between [`MIN_PX`] and [`MAX_PX`].
+    /// The edge of the thumbnail in pixels (see [`edge_px`]).
     pub fn px(&self) -> u32 {
-        ((self.size as f32 * self.scale).round() as u32).clamp(MIN_PX, MAX_PX)
+        edge_px(self.size, self.scale)
     }
 }
 
@@ -102,6 +102,12 @@ pub struct FileStamp {
     /// Modification time, Unix seconds.
     pub mtime: i64,
     pub size: u64,
+}
+
+/// The edge in pixels of a thumbnail of `size` points at `scale` pixels per point: rounded, between [`MIN_PX`] and
+/// [`MAX_PX`]. Apps use it to match a reply with the picture they asked for.
+pub fn edge_px(size: u32, scale: f32) -> u32 {
+    ((size as f32 * scale).round() as u32).clamp(MIN_PX, MAX_PX)
 }
 
 /// The cache key of a thumbnail: path, modification time and size of the file, the pixel edge and the kind. 16 hex

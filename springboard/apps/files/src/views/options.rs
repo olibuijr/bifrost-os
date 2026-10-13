@@ -4,49 +4,27 @@ use crate::*;
 use springboard::gfx::Image;
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
+use bifrost_app::thumbnails;
 
-/// A picture's thumbnail for a box of `max_w` x `max_h` pixels, through the SDK image source. The header is read first,
-/// so a picture too large to decode is refused before any pixel is allocated; the decode is then scaled down to fit
-/// the box (never enlarged). None for bytes the decoder does not read (only PNG and JPEG).
-pub(crate) fn picture_thumb(bytes: &[u8], max_w: usize, max_h: usize) -> Option<Image> {
-    bifrost_app::image_source::ImageSource::new(bytes).ok()?.thumbnail(max_w, max_h).ok()
+/// What the thumbnails service answered for one file at one pixel edge.
+pub(crate) enum Thumb {
+    /// Asked for; the answer has not come yet.
+    Asked,
+    /// The picture the service drew.
+    Picture(Rc<Image>),
+    /// The service has only the file's type icon, or could not draw the file: the view draws the icon.
+    Icon,
 }
 
-#[cfg(test)]
-mod thumb_tests {
-    use super::*;
-    use bifrost_app::image_source::{ImageSource, SourceError};
-
-    /// The 29 bytes a PNG header takes: the signature, the IHDR chunk with `width` x `height`, and 8-bit RGB.
-    fn png_header(width: u32, height: u32) -> Vec<u8> {
-        let mut b = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, b'I', b'H', b'D', b'R'];
-        b.extend_from_slice(&width.to_be_bytes());
-        b.extend_from_slice(&height.to_be_bytes());
-        b.extend_from_slice(&[8, 2, 0, 0, 0]);
-        b
-    }
-
-    #[test]
-    fn a_header_gives_the_thumbnail_size_before_any_decode() {
-        // 4000 x 3000 in a 200 x 200 box: the scale is 0.05, so 200 x 150
-        let hdr = png_header(4000, 3000);
-        assert_eq!(ImageSource::new(&hdr).unwrap().thumbnail_size(200, 200), Ok((200, 150)));
-    }
-
-    #[test]
-    fn a_picture_wider_than_the_decode_limit_is_refused_from_its_header() {
-        // 8193 is one past MAX_SIDE (8192)
-        let hdr = png_header(8193, 100);
-        assert_eq!(ImageSource::new(&hdr).err(), Some(SourceError::TooLarge { width: 8193, height: 100 }));
-        assert!(picture_thumb(&hdr, 200, 200).is_none());
-    }
-
-    #[test]
-    fn bytes_that_are_not_a_png_or_a_jpeg_have_no_thumbnail() {
-        assert!(picture_thumb(b"GIF89a....", 200, 200).is_none());
-        assert!(picture_thumb(&[], 200, 200).is_none());
-    }
+/// A thumbnail slot: the file's modification time when it was asked for, and the answer.
+pub(crate) struct ThumbSlot {
+    pub(crate) mtime: i64,
+    pub(crate) art: Thumb,
 }
+
+/// Slots kept; past this the view forgets them all and asks again as it paints.
+const MAX_THUMB_SLOTS: usize = 4096;
 
 /// Group By choices (Files: None, Kind, Date Modified).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -170,8 +148,10 @@ pub(crate) struct ViewOpts {
     /// List view: folders opened inline, and the nesting depth of every row (parallel to `rows`).
     pub(crate) expanded: BTreeSet<PathBuf>,
     pub(crate) depth: Vec<usize>,
-    /// Decoded thumbnails by (path, mtime, width px, height px); None when the file is not a decodable picture.
-    pub(crate) thumbs: RefCell<HashMap<(PathBuf, i64, usize, usize), Option<Image>>>,
+    /// Thumbnails of the system thumbnails service by (path, pixel edge); see [`ViewOpts::thumb`].
+    pub(crate) thumbs: RefCell<HashMap<(PathBuf, u32), ThumbSlot>>,
+    /// The thumbnails the views asked for while painting: (path, size in pt, scale). `Files::request_thumbnails` sends them.
+    pub(crate) thumb_asks: RefCell<Vec<(PathBuf, u32, f32)>>,
 }
 
 impl Default for ViewOpts {
@@ -188,7 +168,37 @@ impl Default for ViewOpts {
             expanded: BTreeSet::new(),
             depth: vec![],
             thumbs: RefCell::new(HashMap::new()),
+            thumb_asks: RefCell::new(Vec::new()),
         }
+    }
+}
+
+impl ViewOpts {
+    /// The picture the thumbnails service drew for `path` at `side` pt and `scale` pixels per point, or None while it
+    /// has none. The first ask for a file (and an ask for a file whose modification time changed) is queued for the
+    /// service; its answer comes back as a reply or an event, and the view repaints then.
+    pub(crate) fn thumb(&self, path: &std::path::Path, mtime: i64, side: u32, scale: f32) -> Option<Rc<Image>> {
+        let key = (path.to_path_buf(), thumbnails::edge_px(side, scale));
+        let mut map = self.thumbs.borrow_mut();
+        if let Some(slot) = map.get(&key) {
+            if slot.mtime == mtime {
+                return match &slot.art {
+                    Thumb::Picture(im) => Some(im.clone()),
+                    Thumb::Asked | Thumb::Icon => None,
+                };
+            }
+        }
+        if map.len() >= MAX_THUMB_SLOTS {
+            map.clear();
+        }
+        map.insert(key, ThumbSlot { mtime, art: Thumb::Asked });
+        self.thumb_asks.borrow_mut().push((path.to_path_buf(), side, scale));
+        None
+    }
+
+    /// The asks made since the last call.
+    pub(crate) fn take_thumb_asks(&self) -> Vec<(PathBuf, u32, f32)> {
+        std::mem::take(&mut *self.thumb_asks.borrow_mut())
     }
 }
 
@@ -272,25 +282,38 @@ impl Files {
             }
         }
     }
-    /// A picture's thumbnail fitted into the box (x, y, w, h in pt) and centred in it; false when the file is not a
-    /// decodable picture or is bigger than `max_bytes`.
-    pub(crate) fn blit_thumb(&self, s: &mut Surface, ui: &Ui, e: &Entry, b: (f32, f32, f32, f32), max_bytes: u64) -> bool {
-        if e.is_dir || e.size > max_bytes || !springboard::cg::imageio::is_image_name(&e.name) {
+    /// A file's thumbnail from the system thumbnails service, fitted into the box (x, y, w, h in pt) and centred in it.
+    /// False while the service has no picture for the file (it draws it in the background), for folders, and for a file
+    /// the service only has the type icon of.
+    pub(crate) fn blit_thumb(&self, s: &mut Surface, ui: &Ui, e: &Entry, b: (f32, f32, f32, f32)) -> bool {
+        if e.is_dir {
             return false;
         }
-        let (pw, ph) = (ui.pt(b.2) as usize, ui.pt(b.3) as usize);
-        let mut cache = self.vo.thumbs.borrow_mut();
-        if cache.len() > 96 {
-            cache.clear();
-        }
-        let img = cache.entry((e.path.clone(), e.mtime, pw, ph)).or_insert_with(|| {
-            std::fs::read(&e.path).ok().and_then(|bytes| picture_thumb(&bytes, pw, ph))
-        });
-        match img {
-            Some(im) => {
-                let x = ui.pt(b.0) as i32 + (pw as i32 - im.w as i32) / 2;
-                let y = ui.pt(b.1) as i32 + (ph as i32 - im.h as i32) / 2;
-                s.blit(im, x, y, 255, 255);
+        let side = b.2.max(b.3).round().max(1.0) as u32;
+        let Some(im) = self.vo.thumb(&e.path, e.mtime, side, ui.pt(1.0)) else {
+            return false;
+        };
+        let (pw, ph) = (ui.pt(b.2) as i32, ui.pt(b.3) as i32);
+        let x = ui.pt(b.0) as i32 + (pw - im.w as i32) / 2;
+        let y = ui.pt(b.1) as i32 + (ph - im.h as i32) / 2;
+        s.blit(&im, x, y, 255, 255);
+        true
+    }
+    /// A thumbnail answer from the service (a reply to a request, or a `ready` or `failed` event): the picture when the
+    /// service has one, else the icon. True when a slot changed, so a frame is needed.
+    pub(crate) fn thumb_answer(&mut self, reply: &thumbnails::Reply) -> bool {
+        let art = match &reply.state {
+            thumbnails::State::Pending => return false,
+            thumbnails::State::Pixels { image, .. } => match thumbnails::load_pixels(image) {
+                Some(im) => Thumb::Picture(Rc::new(im)),
+                None => Thumb::Icon,
+            },
+            thumbnails::State::Icon { .. } | thumbnails::State::Failed(_) => Thumb::Icon,
+        };
+        let key = (PathBuf::from(&reply.file), reply.px);
+        match self.vo.thumbs.borrow_mut().get_mut(&key) {
+            Some(slot) => {
+                slot.art = art;
                 true
             }
             None => false,
@@ -298,7 +321,7 @@ impl Files {
     }
     /// An entry's icon (folder or file type) in a square of `side` pt, or its picture thumbnail.
     pub(crate) fn paint_entry_icon(&self, ui: &Ui, s: &mut Surface, e: &Entry, x: f32, y: f32, side: f32, thumbs: bool) {
-        if thumbs && self.blit_thumb(s, ui, e, (x + 2., y + 2., side - 4., side - 4.), 4 << 20) {
+        if thumbs && self.blit_thumb(s, ui, e, (x + 2., y + 2., side - 4., side - 4.)) {
             return;
         }
         if e.is_dir {
@@ -351,7 +374,7 @@ impl Files {
         let info_h = 56.;
         let box_h = (y1 - y0 - info_h - 16.).max(32.);
         let cx = (x0 + x1) / 2.;
-        let shown = self.blit_thumb(s, ui, e, (x0 + 8., y0 + 8., x1 - x0 - 16., box_h), 32 << 20);
+        let shown = self.blit_thumb(s, ui, e, (x0 + 8., y0 + 8., x1 - x0 - 16., box_h));
         if !shown {
             let side = box_h.min(128.).min(x1 - x0 - 16.);
             self.paint_entry_icon(ui, s, e, cx - side / 2., y0 + 8. + (box_h - side) / 2., side, false);
@@ -408,7 +431,7 @@ impl Files {
         }
         rect(s, ui, x, HEADER_H, 1., self.bottom() - HEADER_H, SEPARATOR_C.now());
         let side = (w - 24.).min(160.);
-        let shown = self.blit_thumb(s, ui, e, (x + 12., ROWS_TOP + 8., w - 24., side), 32 << 20);
+        let shown = self.blit_thumb(s, ui, e, (x + 12., ROWS_TOP + 8., w - 24., side));
         if !shown {
             let icon = side.min(96.);
             self.paint_entry_icon(ui, s, e, x + 12. + (w - 24. - icon) / 2., ROWS_TOP + 8., icon, false);

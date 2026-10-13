@@ -131,6 +131,11 @@ impl Generator {
         if is_dir {
             return Ok((key, Some(Answer::Icon { type_id: "public.folder".into(), badge: None })));
         }
+        // a type no provider draws is answered with its icon at once, without a worker
+        let file = SourceFile::new(path.to_path_buf(), stamp);
+        if self.registry.provider_for(&file.type_id).is_none() {
+            return Ok((key, Answer::of_art(icon_for(&file))));
+        }
         let cached = self.cache.path(&key);
         if let Some((w, h)) = raw_size(&cached) {
             return Ok((key.clone(), Some(Answer::Pixels { key, path: cached, w, h })));

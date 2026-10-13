@@ -20,7 +20,7 @@ use crate::service;
 use bifrost_core::json::Json;
 use bifrost_render::gfx::Image;
 
-pub use bifrost_ui::thumb_service::{cache_key, icon_for, FileStamp, RequestError, ThumbArt, ThumbKind, ThumbRequest, MAX_PX, MIN_PX};
+pub use bifrost_ui::thumb_service::{edge_px, FileStamp, RequestError, ThumbArt, ThumbKind, ThumbRequest, MAX_PX, MIN_PX};
 
 /// The shell service name.
 pub const SERVICE: &str = "thumbnails";
