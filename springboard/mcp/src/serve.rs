@@ -173,6 +173,7 @@ fn read_bounded_line<R: BufRead>(r: &mut R, max: usize) -> io::Result<String> {
     String::from_utf8(buf).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "line is not UTF-8"))
 }
 
+#[derive(Debug)]
 struct Head {
     method: String,
     path: String,
