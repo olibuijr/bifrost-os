@@ -8,7 +8,7 @@ cases. The stream-error and exception-mask rows stay open (see "Not built").
 
 - `springboard/sdk/src/service_management.rs`: `ServiceError`, the eleven error cases of the Service Management
   Errors reference, with `code()` (1 to 11 in declaration order), `from_code()`, `all()`, `Display` text from the
-  reference abstracts, and `to_error()` returning an `AppError` in `ERROR_DOMAIN` (`bifrost.service-management`).
+  reference abstracts, and `to_error()` returning an `AppError` in `ERROR_DOMAIN` (`SMAppServiceErrorDomain`).
   The reference gives no numeric values, so the numbers are BifrOSt's own. Five new tests, plus the existing one.
 - `springboard/sdk/src/crash_report.rs` (new, one `pub mod` line in `springboard/sdk/src/lib.rs`):
   `BinaryImageInfo` (name, load address, size, sorted symbol table with inline chains), `ProcessCrash` (reason and

@@ -14,10 +14,18 @@
 pub use crate::proto::LoginStatus as Status;
 use crate::proto::{LoginOp, ToShell};
 use crate::Ctx;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 static LAST: AtomicU8 = AtomicU8::new(0);
+
+type Completion = Box<dyn FnOnce(Option<ServiceError>)>;
+
+thread_local! {
+    static PENDING: RefCell<HashMap<u32, Completion>> = RefCell::new(HashMap::new());
+}
 
 impl std::error::Error for ServiceError {}
 
@@ -58,6 +66,7 @@ impl SMAppService {
     /// `register()` as a `Result`: `Ok` with the request id for the main app, otherwise the error the reference gives.
     pub fn try_register(&self, ctx: &Ctx) -> Result<u32, ServiceError> {
         self.precheck()?;
+        check_main_app(&self.0, LoginOp::Register, self.status())?;
         Ok(send(ctx, LoginOp::Register))
     }
     /// `unregister()`. Returns 0 when no request was sent; `try_unregister` says why.
@@ -67,7 +76,22 @@ impl SMAppService {
     /// `unregister()` as a `Result`, like `try_register`.
     pub fn try_unregister(&self, ctx: &Ctx) -> Result<u32, ServiceError> {
         self.precheck()?;
+        check_main_app(&self.0, LoginOp::Unregister, self.status())?;
         Ok(send(ctx, LoginOp::Unregister))
+    }
+    /// `unregister(completionHandler:)`: `done(None)` when the item is gone, `done(Some(error))` when not. A call that
+    /// fails before reaching the shell (unknown item, no plist) calls `done` at once and returns 0.
+    pub fn unregister_with(&self, ctx: &Ctx, done: impl FnOnce(Option<ServiceError>) + 'static) -> u32 {
+        match self.try_unregister(ctx) {
+            Err(e) => {
+                done(Some(e));
+                0
+            }
+            Ok(request) => {
+                PENDING.with(|p| p.borrow_mut().insert(request, Box::new(done)));
+                request
+            }
+        }
     }
     /// Asks the shell for the current status again (it can change in Settings). Only the main app has a shell status;
     /// for the other kinds nothing is sent and 0 is returned.
@@ -98,6 +122,42 @@ impl SMAppService {
                 }
             }
         }
+    }
+}
+
+/// `openSystemSettingsLoginItems()`: the shell opens Settings on the Login Items page, where the user approves or removes
+/// login items. Returns the request id (the shell answers with the current status).
+pub fn open_system_settings_login_items(ctx: &Ctx) -> u32 {
+    send(ctx, LoginOp::OpenSettings)
+}
+
+/// The errors the main app's `register` and `unregister` give from the last status alone: registering when already
+/// registered or waiting for approval is `AlreadyRegistered`; unregistering when not registered is `JobNotFound`.
+fn check_main_app(kind: &Kind, op: LoginOp, status: Status) -> Result<(), ServiceError> {
+    if *kind != Kind::MainApp {
+        return Ok(());
+    }
+    match (op, status) {
+        (LoginOp::Register, Status::Enabled | Status::RequiresApproval) => Err(ServiceError::AlreadyRegistered),
+        (LoginOp::Unregister, Status::NotRegistered | Status::NotFound) => Err(ServiceError::JobNotFound),
+        _ => Ok(()),
+    }
+}
+
+/// The error a shell reply to `op` means: a `register` answered `NotRegistered` was refused in Login Items
+/// (`LaunchDeniedByUser`), answered `NotFound` it names no item (`JobNotFound`).
+pub fn error_for_reply(op: LoginOp, status: Status) -> Option<ServiceError> {
+    match (op, status) {
+        (LoginOp::Register, Status::NotRegistered) => Some(ServiceError::LaunchDeniedByUser),
+        (LoginOp::Register, Status::NotFound) => Some(ServiceError::JobNotFound),
+        _ => None,
+    }
+}
+
+/// Finishes the `unregister_with` call of `request` when the shell's reply arrives.
+pub(crate) fn complete(request: u32, status: Status) {
+    if let Some(done) = PENDING.with(|p| p.borrow_mut().remove(&request)) {
+        done(if status == Status::NotRegistered { None } else { Some(ServiceError::InternalFailure) });
     }
 }
 
@@ -155,11 +215,11 @@ pub(crate) fn mirror(status: Status) {
 }
 
 /// The error domain of [`ServiceError::to_error`].
-pub const ERROR_DOMAIN: &str = "bifrost.service-management";
+pub const ERROR_DOMAIN: &str = "SMAppServiceErrorDomain";
 
 /// The errors a registration or removal can report (the cases of the Service Management Errors reference).
-/// The reference lists the cases and their meaning but not their numeric values, so [`ServiceError::code`] numbers
-/// them 1 to 11 in declaration order. That numbering is stable for this build only, and apps should compare cases.
+/// [`ServiceError::code`] is the `kSMError*` value of macOS 27 (`kSMErrorInternalFailure` 1 to
+/// `kSMErrorAlreadyRegistered` 11).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ServiceError {
     /// The app is already registered.
@@ -209,17 +269,26 @@ impl ServiceError {
         &ALL_ERRORS
     }
 
-    /// The stable number of this case, 1 to 11 (see the type's note on numbering).
+    /// The `kSMError*` value of this case.
     pub fn code(self) -> i64 {
-        ALL_ERRORS.iter().position(|e| *e == self).map_or(0, |i| i as i64 + 1)
+        match self {
+            ServiceError::InternalFailure => 1,
+            ServiceError::InvalidSignature => 2,
+            ServiceError::AuthorizationFailure => 3,
+            ServiceError::ToolNotValid => 4,
+            ServiceError::JobNotFound => 5,
+            ServiceError::ServiceUnavailable => 6,
+            ServiceError::JobPlistNotFound => 7,
+            ServiceError::JobMustBeEnabled => 8,
+            ServiceError::InvalidPlist => 9,
+            ServiceError::LaunchDeniedByUser => 10,
+            ServiceError::AlreadyRegistered => 11,
+        }
     }
 
-    /// The case with this number, or `None` for a number outside 1 to 11.
+    /// The case with this `kSMError*` value, or `None` for a number outside 1 to 11.
     pub fn from_code(code: i64) -> Option<ServiceError> {
-        if code < 1 {
-            return None;
-        }
-        ALL_ERRORS.get((code - 1) as usize).copied()
+        ALL_ERRORS.iter().copied().find(|e| e.code() == code)
     }
 
     /// The case as an [`AppError`] in [`ERROR_DOMAIN`], with its text as the description.
@@ -249,13 +318,88 @@ impl fmt::Display for ServiceError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::Cell;
+    use std::rc::Rc;
+    use std::sync::Mutex;
+
+    /// The last status is process-wide, so the tests that read or set it run one at a time.
+    static GUARD: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn registering_twice_is_already_registered_and_sends_nothing() {
+        let _g = GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        let ctx = crate::runtime::test_ctx();
+        for status in [Status::Enabled, Status::RequiresApproval] {
+            mirror(status);
+            assert_eq!(SMAppService::main_app().try_register(&ctx), Err(ServiceError::AlreadyRegistered));
+        }
+        mirror(Status::NotRegistered);
+        assert!(ctx.take_sent().is_empty());
+    }
+
+    #[test]
+    fn unregistering_an_item_that_is_not_registered_is_job_not_found() {
+        let _g = GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        let ctx = crate::runtime::test_ctx();
+        mirror(Status::NotRegistered);
+        assert_eq!(SMAppService::main_app().try_unregister(&ctx), Err(ServiceError::JobNotFound));
+        let seen = Rc::new(Cell::new(None));
+        let sink = seen.clone();
+        assert_eq!(SMAppService::main_app().unregister_with(&ctx, move |e| sink.set(Some(e))), 0);
+        assert_eq!(seen.get(), Some(Some(ServiceError::JobNotFound)));
+        assert!(ctx.take_sent().is_empty());
+    }
+
+    #[test]
+    fn unregister_with_completes_when_the_shell_answers() {
+        let _g = GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        let ctx = crate::runtime::test_ctx();
+        mirror(Status::Enabled);
+        let seen = Rc::new(Cell::new(None));
+        let sink = seen.clone();
+        let request = SMAppService::main_app().unregister_with(&ctx, move |e| sink.set(Some(e)));
+        assert_eq!(ctx.take_sent(), [ToShell::LoginItem { request, op: LoginOp::Unregister }]);
+        assert_eq!(seen.get(), None, "not before the reply");
+        complete(request, Status::NotRegistered);
+        assert_eq!(seen.get(), Some(None));
+        mirror(Status::NotRegistered);
+    }
+
+    #[test]
+    fn a_register_the_user_refused_is_launch_denied_by_user() {
+        assert_eq!(error_for_reply(LoginOp::Register, Status::NotRegistered), Some(ServiceError::LaunchDeniedByUser));
+        assert_eq!(error_for_reply(LoginOp::Register, Status::NotFound), Some(ServiceError::JobNotFound));
+        assert_eq!(error_for_reply(LoginOp::Register, Status::RequiresApproval), None);
+        assert_eq!(error_for_reply(LoginOp::Unregister, Status::NotRegistered), None);
+    }
+
+    #[test]
+    fn open_system_settings_login_items_sends_the_open_pane_request() {
+        let ctx = crate::runtime::test_ctx();
+        let id = open_system_settings_login_items(&ctx);
+        assert_eq!(ctx.take_sent(), [ToShell::LoginItem { request: id, op: LoginOp::OpenSettings }]);
+    }
+
+    #[test]
+    fn a_plist_name_without_the_suffix_is_invalid_plist() {
+        let ctx = crate::runtime::test_ctx();
+        assert_eq!(SMAppService::agent("com.example.agent").try_register(&ctx), Err(ServiceError::InvalidPlist));
+    }
 
     #[test]
     fn service_error_codes_are_one_to_eleven_and_round_trip() {
         assert_eq!(ServiceError::all().len(), 11);
-        assert_eq!(ServiceError::AlreadyRegistered.code(), 1);
-        assert_eq!(ServiceError::JobNotFound.code(), 7);
-        assert_eq!(ServiceError::ToolNotValid.code(), 11);
+        assert_eq!(ServiceError::InternalFailure.code(), 1);
+        assert_eq!(ServiceError::InvalidSignature.code(), 2);
+        assert_eq!(ServiceError::AuthorizationFailure.code(), 3);
+        assert_eq!(ServiceError::ToolNotValid.code(), 4);
+        assert_eq!(ServiceError::JobNotFound.code(), 5);
+        assert_eq!(ServiceError::ServiceUnavailable.code(), 6);
+        assert_eq!(ServiceError::JobPlistNotFound.code(), 7);
+        assert_eq!(ServiceError::JobMustBeEnabled.code(), 8);
+        assert_eq!(ServiceError::InvalidPlist.code(), 9);
+        assert_eq!(ServiceError::LaunchDeniedByUser.code(), 10);
+        assert_eq!(ServiceError::AlreadyRegistered.code(), 11);
         for e in ServiceError::all() {
             assert_eq!(ServiceError::from_code(e.code()), Some(*e));
         }
@@ -267,8 +411,8 @@ mod tests {
     #[test]
     fn to_error_carries_domain_code_and_text() {
         let e = ServiceError::LaunchDeniedByUser.to_error();
-        assert!(e.is(ERROR_DOMAIN, 9));
-        assert!(!e.is(ERROR_DOMAIN, 8));
+        assert!(e.is(ERROR_DOMAIN, 10));
+        assert!(!e.is(ERROR_DOMAIN, 9));
         assert_eq!(e.localized_description(), "The user denied the app's launch request.");
     }
 
@@ -290,18 +434,21 @@ mod tests {
     }
 
     #[test]
-    fn the_domain_is_the_bifrost_service_domain() {
-        assert_eq!(ServiceError::InternalFailure.to_error().domain(), "bifrost.service-management");
-        assert_eq!(ServiceError::InternalFailure.to_error().code(), 3);
+    fn the_domain_is_the_apple_service_domain() {
+        assert_eq!(ServiceError::InternalFailure.to_error().domain(), "SMAppServiceErrorDomain");
+        assert_eq!(ServiceError::InternalFailure.to_error().code(), 1);
     }
 
     #[test]
     fn calls_go_to_the_shell_and_status_follows_the_report() {
+        let _g = GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        mirror(Status::NotRegistered);
         let ctx = crate::runtime::test_ctx();
         let s = SMAppService::main_app();
         assert_eq!(s.status(), Status::NotRegistered);
         let a = s.register(&ctx);
         let b = s.refresh(&ctx);
+        mirror(Status::Enabled);
         let c = s.unregister(&ctx);
         assert_eq!(
             ctx.take_sent(),
@@ -314,6 +461,8 @@ mod tests {
 
     #[test]
     fn main_app_try_register_returns_the_request_id_it_sent() {
+        let _g = GUARD.lock().unwrap_or_else(|e| e.into_inner());
+        mirror(Status::NotRegistered);
         let ctx = crate::runtime::test_ctx();
         let id = SMAppService::main_app().try_register(&ctx).unwrap();
         assert_eq!(ctx.take_sent(), [ToShell::LoginItem { request: id, op: LoginOp::Register }]);

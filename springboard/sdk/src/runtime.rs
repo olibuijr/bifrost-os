@@ -736,6 +736,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 }
                 ToApp::LoginItemStatus { request, status } => {
                     crate::service_management::mirror(status);
+                    crate::service_management::complete(request, status);
                     if let Some(c) = &ctx {
                         need_frame |= app.login_item_status(c, request, status);
                     }

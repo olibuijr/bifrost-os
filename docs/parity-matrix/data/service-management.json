@@ -4,7 +4,7 @@
   "macos_since": "10.6",
   "status": "partial",
   "bifrost": "springboard/sdk/src/service_management.rs (SMAppService.mainApp), springboard/proto/src/extras.rs, springboard/src/shell/extras.rs, springboard/src/shell/pages.rs (Settings > General > Login Items)",
-  "summary": "Login items for the app itself are covered: register, unregister, refresh and a four-case status enum, with the shell keeping the list and starting the apps at session start. Launch agents, launch daemons, embedded helper executables, the completion-handler and legacy APIs, the error constants and the deprecated SMJob/SMLoginItemSetEnabled calls have no BifrOSt counterpart.",
+  "summary": "Login items for the app itself are covered: register, unregister, refresh and a four-case status enum, with the shell keeping the list and starting the apps at session start. Error values (kSMError*), unregister(completionHandler:) and openSystemSettingsLoginItems() are built (host-tested). Launch agents, launch daemons, embedded helper executables, the deprecated SMJob/SMLoginItemSetEnabled calls have no BifrOSt counterpart.",
   "rea_evidence": "ev_2e998ed710ee6f18ac8c032c6df24db1fcdd3a0624632be9a80d07f655334958",
   "features": [
     {
@@ -24,9 +24,9 @@
     {
       "feature": "Unregister with completion handler",
       "apple": "unregister(completionHandler:)",
-      "bifrost": "springboard/sdk/src/service_management.rs (unregister)",
+      "bifrost": "springboard/sdk/src/service_management.rs (unregister_with, complete)",
       "status": "partial",
-      "note": "only the request-id form exists; the error value is not returned to the app"
+      "note": "unregister_with(ctx, done) calls done(None) when the shell reports NotRegistered and done(Some(ServiceError)) otherwise; unknown items fail at once with JobNotFound. Host unit tests only; verify on Midget for parity."
     },
     {
       "feature": "Login item by bundle identifier",
@@ -59,9 +59,9 @@
     {
       "feature": "Settings page for login items",
       "apple": "SMAppService.openSystemSettingsLoginItems()",
-      "bifrost": "springboard/src/shell/pages.rs (Login Items page, LoginItemRemove action); springboard/src/shell/extras.rs (login.items pref); wired: springboard/src/shell/login_items_page.rs (order_group); springboard/src/shell/pages.rs (Login Items page); springboard/src/shell/extras.rs (Registry::move_earlier, login.items pref)",
+      "bifrost": "springboard/src/shell/pages.rs (Login Items page, LoginItemRemove action); springboard/src/shell/extras.rs (login.items pref); wired: springboard/src/shell/login_items_page.rs (order_group); springboard/src/shell/pages.rs (Login Items page); springboard/src/shell/extras.rs (Registry::move_earlier, login.items pref); springboard/sdk/src/service_management.rs (open_system_settings_login_items); springboard/proto/src/extras.rs (LoginOp::OpenSettings)",
       "status": "partial",
-      "note": "the page exists and lets the user remove items, but apps cannot open it through an SDK call Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "the page exists, lets the user remove items, and apps open it with open_system_settings_login_items (LoginOp::OpenSettings, handled in shell/extras.rs and the login-items service). Host unit tests only; verify on Midget for parity."
     },
     {
       "feature": "Legacy login item authorization check",
@@ -73,9 +73,9 @@
     {
       "feature": "Service Management error constants",
       "apple": "kSMErrorAlreadyRegistered, kSMErrorJobNotFound, kSMErrorLaunchDeniedByUser and the other kSMError values, SMAppServiceErrorDomain",
-      "bifrost": "springboard/sdk/src/service_management.rs",
+      "bifrost": "springboard/sdk/src/service_management.rs (ServiceError, ERROR_DOMAIN, error_for_reply); springboard/src/shell/services/login_items_approval.rs (call_error, reply_body)",
       "status": "partial",
-      "note": "Wave 3 (theme-14, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the SDK has no error type; the shell reply carries only a status, so failures cannot be reported with Apple's codes"
+      "note": "ServiceError carries the kSMError* values 1 to 11 in SMAppServiceErrorDomain; AlreadyRegistered, JobNotFound, LaunchDeniedByUser and InvalidPlist are produced by register/unregister, and the login-items service reply carries error and code. Host unit tests only; verify on Midget for parity."
     },
     {
       "feature": "Privileged helper authorization",
@@ -102,10 +102,7 @@
   "gaps": [
     "Launch agents and launch daemons: SMAppService.agent(plistName:) and daemon(plistName:) (the SDK doc states none exist)",
     "Embedded helper executables registered from the app bundle, including loginItem(identifier:)",
-    "Service Management error values (kSMError*, SMAppServiceErrorDomain): the SDK has no error type and the shell reply carries no error",
-    "unregister(completionHandler:) and the error value it returns",
     "statusForLegacyPlist(at:) for earlier login-item plists",
-    "openSystemSettingsLoginItems(): the shell page exists but no SDK call opens it",
     "Deprecated SMJobBless, SMLoginItemSetEnabled and the SMJob* launchd functions have no counterpart"
   ]
 }
