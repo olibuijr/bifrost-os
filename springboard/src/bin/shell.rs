@@ -219,6 +219,7 @@ fn run() -> std::io::Result<()> {
     let mac_text = fs::read_to_string(format!("/sys/class/net/{mac_iface}/address")).map(|m| m.trim().to_uppercase()).unwrap_or_default();
     let slow: std::cell::RefCell<(f64, (u64, u64), Vec<(String, String)>)> = std::cell::RefCell::new((f64::NEG_INFINITY, (0, 0), Vec::new()));
     let panel_mode = (w as u32, h as u32, disp.mode.vrefresh);
+    let panel_rates = disp.rates.clone();
     let brightness_supported = power::find_backlight(std::path::Path::new("/sys/class/backlight")).is_some();
     let battery_present=power::find_battery(std::path::Path::new("/sys/class/power_supply")).is_some();
     // timedatectl spawns (NTP state, timezone) and the uptime read: at most every 15 s, not on every info tick
@@ -255,6 +256,7 @@ fn run() -> std::io::Result<()> {
         let networks = ws.scan.iter().map(|r| Network { ssid: r.ssid.clone(), bars: r.bars(), secure: r.secure, saved: ws.saved.contains(&r.ssid) }).collect();
         Info {
             display_mode: Some(panel_mode),
+            display_rates: panel_rates.clone(),
             brightness_supported,
             battery_present,
             desktop_network: None,

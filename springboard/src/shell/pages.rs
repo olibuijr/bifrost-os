@@ -15,6 +15,7 @@ use super::{Info, WifiAction};
 use bifrost_render::fontprefs::{FontRole, Installed};
 use bifrost_ui::capture_access::Media;
 use super::services::privacy_permissions::{self, Row};
+use super::services::display_services::{rate_label, RefreshChoice};
 use crate::bare::bluetooth::{Cmd, State as BtState};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -61,6 +62,8 @@ pub enum PageId {
     Region,
     Reset,
     Display,
+    /// Displays > Refresh Rate: Highest Available or one of the panel's rates (see `refresh_rate_page`)
+    RefreshRate,
     NightShift,
     AutoLock,
     /// Lock Screen > Require Password: the grace after the display goes off (see `options::REQUIRE_AFTER`)
@@ -269,6 +272,8 @@ pub enum Pick {
     ScreenSaverPreview,
     /// Trackpad > Secondary Click: index into `TRACKPAD_SECONDARY`
     TrackpadSecondary(usize),
+    /// Displays > Refresh Rate: 0 is Highest Available, n the (n-1)th rate the panel offers (see `services::display_services::choice_at`)
+    RefreshRate(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -435,6 +440,8 @@ pub struct Model<'a> {
     pub ext: &'a super::login_items_page::LoginExtensions,
     /// the Fonts pages: each role's default and override, and the font library
     pub fonts: &'a FontsView,
+    /// Displays > Refresh Rate: the choice kept in the display-refresh file (Highest Available when missing)
+    pub refresh: RefreshChoice,
     /// Settings > Sound: the device lists from the audio object model
     pub sound: &'a super::sound_page::SoundView,
     /// the Sharing page: the computer name and the service states (read off the UI thread, see `settings_load`)
@@ -1024,6 +1031,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, m.users, m.detail, "", o),
         PageId::Fonts => fonts_page(m),
         PageId::FontPick(role) => font_pick_page(m, role),
+        PageId::RefreshRate => refresh_rate_page(m),
         PageId::Dictionary => page(
             "Dictionary",
             false,
@@ -1619,15 +1627,15 @@ pub fn shortcuts_page(o: &Options) -> Spec {
 pub fn desktop_display(m: &Model<'_>) -> Spec {
     let page = |title: &str, large, groups| Spec { id: PageId::Display, title: title.into(), large, groups };
     let mut display = vec![];
-    if let Some((w, h, hz)) = m.info.display_mode {
+    if let Some((w, h, _)) = m.info.display_mode {
         display.push(Item::new("Resolution").value(format!("{w} × {h}")));
-        display.push(Item::new("Refresh Rate").value(format!("{hz} Hz")));
+        display.push(Item::new("Refresh Rate").value(m.refresh.label()).link(PageId::RefreshRate));
     }
     display.push(Item::new("Appearance").value(bifrost_render::appearance::mode_label(bifrost_render::appearance::mode())).link(PageId::Appearance));
     display.push(Item::new("Interface Scale").value(scale_label(crate::layout::user_scale())).link(PageId::InterfaceScale));
     display.push(Item::new("Graphics").link(PageId::Graphics));
     let mut groups = vec![Group::new(display).header("CONNECTED DISPLAY")
-        .footer("The native resolution and refresh rate are selected automatically. Interface Scale changes the size of windows, menus and controls.")];
+        .footer("The native resolution is selected automatically. The highest refresh rate is used unless another is chosen. Interface Scale changes the size of windows, menus and controls.")];
     if m.info.brightness_supported {
         groups.push(Group::new(vec![Item::slider(Ends::Brightness, m.brightness, Action::Slider(Slider::Brightness))]).header("BRIGHTNESS"));
     }
@@ -1640,6 +1648,18 @@ pub fn desktop_display(m: &Model<'_>) -> Spec {
     ]).header("TEXT SIZE"));
     groups.push(Group::new(vec![Item::new("Lock After Inactivity").value(m.opts.auto_lock_label()).link(PageId::AutoLock)]));
     page("Displays", false, groups)
+}
+
+/// Displays > Refresh Rate: Highest Available (the default) and each rate the panel offers at its size, the chosen one checked.
+pub fn refresh_rate_page(m: &Model<'_>) -> Spec {
+    let mut rows = vec![Item::new(RefreshChoice::Max.label()).check(m.refresh == RefreshChoice::Max, Action::Pick(Pick::RefreshRate(0)))];
+    rows.extend(m.info.display_rates.iter().enumerate().map(|(i, &hz)| {
+        let rate = RefreshChoice::Hz(hz);
+        Item::new(rate_label(hz)).check(m.refresh.same(rate), Action::Pick(Pick::RefreshRate(i + 1)))
+    }));
+    Spec { id: PageId::RefreshRate, title: "Refresh Rate".into(), large: false, groups: vec![
+        Group::new(rows).footer("The highest refresh rate is used unless another is chosen. Rates are the ones the display offers at its resolution."),
+    ] }
 }
 
 #[cfg(test)]
@@ -1721,7 +1741,7 @@ mod tests {
     static A11Y_DEFAULT: AccessibilitySettings = AccessibilitySettings::DEFAULT;
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &NO_USERS }
+        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, refresh: RefreshChoice::Max, sound: &crate::shell::sound_page::NO_SOUND, sharing: None, printers: None, users: &NO_USERS }
     }
 
     #[test]
@@ -1884,7 +1904,8 @@ mod tests {
         let s = desktop_display(&model(&info, &opts));
         assert_eq!(s.title, "Displays");
         assert_eq!(s.groups[0].items[0].value, "2048 × 1152");
-        assert_eq!(s.groups[0].items[1].value, "60 Hz");
+        assert_eq!(s.groups[0].items[1].value, "Highest Available", "the row shows the choice, Highest Available by default");
+        assert_eq!(s.groups[0].items[1].action, Action::Push(PageId::RefreshRate));
         assert!(s.groups[0].items.iter().any(|i| i.label == "Graphics" && i.action == Action::Push(PageId::Graphics)), "the Graphics page is reachable");
         assert!(!s.groups.iter().flat_map(|g| &g.items).any(|i| i.label == "Use as" || i.label == "Brightness"));
         assert_eq!(s.groups[1].items[0].label, "Night Shift");
@@ -1892,6 +1913,39 @@ mod tests {
         info.brightness_supported = true;
         let s = desktop_display(&model(&info, &opts));
         assert!(matches!(s.groups[1].items[0].body, super::super::list::Body::Slider { ends: Ends::Brightness, .. }));
+    }
+
+    #[test]
+    fn the_refresh_row_shows_the_chosen_rate_and_opens_the_picker() {
+        let mut info = info();
+        info.display_mode = Some((2560, 1600, 165));
+        info.display_rates = vec![164.85, 144.0, 60.0];
+        let opts = Options::default();
+        let m = Model { refresh: RefreshChoice::Hz(144.0), ..model(&info, &opts) };
+        let s = desktop_display(&m);
+        let row = &s.groups[0].items[1];
+        assert_eq!((row.label.as_str(), row.value.as_str()), ("Refresh Rate", "144 Hz"));
+        assert_eq!(row.action, Action::Push(PageId::RefreshRate));
+        assert!(s.groups[0].footer.as_deref().unwrap_or("").contains("highest refresh rate is used unless another is chosen"));
+    }
+
+    #[test]
+    fn the_refresh_picker_lists_highest_available_and_each_rate_with_the_choice_checked() {
+        let mut info = info();
+        info.display_mode = Some((2560, 1600, 165));
+        info.display_rates = vec![164.85, 144.0, 120.0, 100.0, 60.0];
+        let opts = Options::default();
+        let p = spec(PageId::RefreshRate, &Model { refresh: RefreshChoice::Hz(120.0), ..model(&info, &opts) });
+        assert_eq!(p.title, "Refresh Rate");
+        let rows = &p.groups[0].items;
+        let labels: Vec<&str> = rows.iter().map(|i| i.label.as_str()).collect();
+        assert_eq!(labels, ["Highest Available", "164.85 Hz", "144 Hz", "120 Hz", "100 Hz", "60 Hz"]);
+        let checked: Vec<bool> = rows.iter().map(|i| i.accessory == Accessory::Check(true)).collect();
+        assert_eq!(checked, [false, false, false, true, false, false], "only the chosen rate is checked");
+        assert_eq!(rows[0].action, Action::Pick(Pick::RefreshRate(0)));
+        assert_eq!(rows[2].action, Action::Pick(Pick::RefreshRate(2)));
+        let max = spec(PageId::RefreshRate, &Model { refresh: RefreshChoice::Max, ..model(&info, &opts) });
+        assert_eq!(max.groups[0].items[0].accessory, Accessory::Check(true), "Highest Available is checked by default");
     }
 
     #[test]

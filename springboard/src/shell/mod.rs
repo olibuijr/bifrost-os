@@ -200,6 +200,8 @@ use wallpaper_page::Wallpaper;
 pub struct Info {
     /// Active physical panel mode, independent of app window geometry.
     pub display_mode: Option<(u32, u32, u32)>,
+    /// the refresh rates the panel offers at its current size, fastest first (Settings > Displays > Refresh Rate)
+    pub display_rates: Vec<f32>,
     pub brightness_supported: bool,
     pub battery_present: bool,
     pub desktop_network: Option<desktop_network::Snapshot>,

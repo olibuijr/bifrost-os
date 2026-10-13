@@ -62,6 +62,92 @@ pub fn mode_request(target: &DisplayMode, hz: f32) -> ModeRequest {
     ModeRequest { width: target.pixel_width, height: target.pixel_height, refresh_mhz: (hz * 1000.0).round() as i32 }
 }
 
+/// The file (in the shell's data directory) that keeps the Refresh Rate choice.
+pub const REFRESH_CHOICE_FILE: &str = "display-refresh";
+
+/// Settings > Displays > Refresh Rate: the fastest refresh the panel offers at its size (the default), the panel's
+/// preferred mode, or one rate in hertz.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum RefreshChoice {
+    Max,
+    Native,
+    Hz(f32),
+}
+
+impl RefreshChoice {
+    /// The choice file's text: `max`, `native`, or the rate with three decimals (`164.850`).
+    pub fn text(self) -> String {
+        match self {
+            RefreshChoice::Max => "max".into(),
+            RefreshChoice::Native => "native".into(),
+            RefreshChoice::Hz(hz) => format!("{hz:.3}"),
+        }
+    }
+
+    /// Reads the file's text. Anything missing or not a positive rate is `max`.
+    pub fn parse(text: &str) -> RefreshChoice {
+        match text.trim() {
+            "native" => RefreshChoice::Native,
+            t => match t.parse::<f32>() {
+                Ok(hz) if hz.is_finite() && hz > 0.0 => RefreshChoice::Hz(hz),
+                _ => RefreshChoice::Max,
+            },
+        }
+    }
+
+    /// The choice kept in `dir` (`max` when the file is missing).
+    pub fn load(dir: &std::path::Path) -> RefreshChoice {
+        std::fs::read_to_string(dir.join(REFRESH_CHOICE_FILE)).map_or(RefreshChoice::Max, |t| RefreshChoice::parse(&t))
+    }
+
+    /// Writes the choice into `dir`.
+    pub fn save(self, dir: &std::path::Path) -> std::io::Result<()> {
+        std::fs::write(dir.join(REFRESH_CHOICE_FILE), self.text())
+    }
+
+    /// Whether two choices are the same (rates match to the millihertz).
+    pub fn same(self, other: RefreshChoice) -> bool {
+        match (self, other) {
+            (RefreshChoice::Hz(a), RefreshChoice::Hz(b)) => (a - b).abs() < 0.0005,
+            (a, b) => a == b,
+        }
+    }
+
+    /// The row's text: `Highest Available`, `Native`, or the rate (`164.85 Hz`, `144 Hz`).
+    pub fn label(self) -> String {
+        match self {
+            RefreshChoice::Max => "Highest Available".into(),
+            RefreshChoice::Native => "Native".into(),
+            RefreshChoice::Hz(hz) => rate_label(hz),
+        }
+    }
+}
+
+/// A refresh rate as the picker shows it: two decimals at most, no trailing zeros (`164.85 Hz`, `60 Hz`).
+pub fn rate_label(hz: f32) -> String {
+    let s = format!("{hz:.2}");
+    format!("{} Hz", s.trim_end_matches('0').trim_end_matches('.'))
+}
+
+/// The choice picked from the Refresh Rate page: row 0 is Highest Available, row n the (n-1)th rate the panel offers.
+pub fn choice_at(row: usize, rates: &[f32]) -> RefreshChoice {
+    match row.checked_sub(1).and_then(|i| rates.get(i)) {
+        Some(&hz) => RefreshChoice::Hz(hz),
+        None => RefreshChoice::Max,
+    }
+}
+
+/// Applies a Refresh Rate choice to the running output at `width` x `height` through the output-management request
+/// (`MODE_REQUEST`, the same path as `set_mode`). Highest Available is refresh 0, the fastest the window server has at
+/// that size.
+pub fn request_refresh(choice: RefreshChoice, width: u32, height: u32) {
+    let refresh_mhz = match choice {
+        RefreshChoice::Hz(hz) => (hz * 1000.0).round() as i32,
+        RefreshChoice::Max | RefreshChoice::Native => 0,
+    };
+    post(&MODE_REQUEST, Some(ModeRequest { width, height, refresh_mhz }));
+}
+
 /// An applied display change waiting to be kept: the mode it replaced, and the time it goes back.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Confirm {
@@ -381,6 +467,35 @@ pub fn require_screen_recording(app_id: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_refresh_choice_file_defaults_to_highest_and_round_trips_a_picked_rate() {
+        let dir = std::env::temp_dir().join(format!("display-refresh-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(RefreshChoice::load(&dir), RefreshChoice::Max, "a missing file is the highest rate");
+        let rates = [164.85, 144.0, 120.0, 100.0, 60.0];
+        let picked = choice_at(1, &rates);
+        assert_eq!(picked, RefreshChoice::Hz(164.85));
+        picked.save(&dir).unwrap();
+        assert_eq!(std::fs::read_to_string(dir.join(REFRESH_CHOICE_FILE)).unwrap(), "164.850", "the rate with three decimals");
+        assert_eq!(RefreshChoice::load(&dir), RefreshChoice::Hz(164.85));
+        choice_at(0, &rates).save(&dir).unwrap();
+        assert_eq!(std::fs::read_to_string(dir.join(REFRESH_CHOICE_FILE)).unwrap(), "max");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn refresh_text_and_labels_read_back_as_the_picker_shows_them() {
+        assert_eq!(RefreshChoice::parse("native\n"), RefreshChoice::Native);
+        assert_eq!(RefreshChoice::parse("bogus"), RefreshChoice::Max, "anything unreadable is the highest rate");
+        assert_eq!(RefreshChoice::parse("-5"), RefreshChoice::Max);
+        assert_eq!(RefreshChoice::Hz(60.0).label(), "60 Hz");
+        assert_eq!(RefreshChoice::Hz(164.85).label(), "164.85 Hz");
+        assert_eq!(RefreshChoice::Max.label(), "Highest Available");
+        assert!(RefreshChoice::Hz(144.0).same(RefreshChoice::Hz(144.0004)));
+        assert!(!RefreshChoice::Hz(144.0).same(RefreshChoice::Hz(120.0)));
+        assert!(!RefreshChoice::Max.same(RefreshChoice::Native));
+    }
 
     fn inputs() -> Inputs {
         Inputs {

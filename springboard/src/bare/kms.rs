@@ -509,6 +509,20 @@ fn refresh_max_requested() -> bool {
     std::fs::read_to_string("/etc/bifrost/display.conf").is_ok_and(|c| c.split_whitespace().any(|t| t == "refresh=max"))
 }
 
+/// The refresh rates the panel offers at a size, fastest first, from the mode timings (164.85 Hz is not a whole
+/// `vrefresh`). Interlaced modes are left out.
+fn refresh_rates(modes: &[ModeInfo], w: u16, h: u16) -> Vec<f32> {
+    const INTERLACE: u32 = 1 << 4;
+    let mut rates: Vec<f32> = modes
+        .iter()
+        .filter(|m| m.hdisplay == w && m.vdisplay == h && m.clock != 0 && m.htotal != 0 && m.vtotal != 0 && m.flags & INTERLACE == 0)
+        .map(|m| ((m.clock as f64 * 1000.0 / (m.htotal as f64 * m.vtotal as f64)) * 100.0).round() as f32 / 100.0)
+        .collect();
+    rates.sort_by(|a, b| b.total_cmp(a));
+    rates.dedup();
+    rates
+}
+
 /// The inherited mode stays only when it is the selected size at the selected refresh or faster.
 /// Identical timings count as the same mode whatever the rounded `vrefresh` says (59.951 Hz reads as 60).
 fn keeps_inherited(inherited: &ModeInfo, selected: &ModeInfo) -> bool {
@@ -538,6 +552,8 @@ pub struct Display {
     /// the connector's "DPMS" property id
     dpms: Option<u32>,
     pub mode: ModeInfo,
+    /// the refresh rates the panel offers at the current size, fastest first (Settings > Displays > Refresh Rate)
+    pub rates: Vec<f32>,
     bufs: [Buffer; 2],
     owed: Owed,
     back: usize,
@@ -654,11 +670,12 @@ impl Display {
                 && active.mode.hdisplay != 0
                 && keeps_inherited(&active.mode, &mode);
             let mode = if inherited { active.mode } else { mode };
+            let rates = refresh_rates(&modes, mode.hdisplay, mode.vdisplay);
             eprintln!("springboard: display mode {}x{}@{} ({})", mode.hdisplay, mode.vdisplay, mode.vrefresh, if inherited { "inherited" } else { "selected" });
-            found = Some((id, crtc, mode, dpms, (c.mm_w, c.mm_h)));
+            found = Some((id, crtc, mode, dpms, (c.mm_w, c.mm_h), rates));
             break;
         }
-        let (conn, crtc, mode, dpms, mm) = found.ok_or_else(|| io::Error::other("no connected display"))?;
+        let (conn, crtc, mode, dpms, mm, rates) = found.ok_or_else(|| io::Error::other("no connected display"))?;
         let (w, h) = (mode.hdisplay as u32, mode.vdisplay as u32);
 
         let mut swap_rb = false;
@@ -686,7 +703,7 @@ impl Display {
         };
         let bufs = [make()?, make()?];
         let owed = Owed::new(w as usize, h as usize);
-        let mut disp = Display { #[cfg(feature = "desktop-wayland")] wayland: None, boot_fade: None, virt: false, virt_last: None, mm: Some(mm), fd, crtc, conn, dpms, mode, bufs, owed, back: 1, swap_rb, flip_pending: false, flip_at: None, use_flip: true, cursor: None, cursor_on: false };
+        let mut disp = Display { #[cfg(feature = "desktop-wayland")] wayland: None, boot_fade: None, virt: false, virt_last: None, mm: Some(mm), fd, crtc, conn, dpms, mode, rates, bufs, owed, back: 1, swap_rb, flip_pending: false, flip_at: None, use_flip: true, cursor: None, cursor_on: false };
         disp.set_crtc(0)?;
         Ok(disp)
     }
@@ -835,7 +852,7 @@ impl Display {
     pub fn virtual_panel(w: usize, h: usize, hz: u32) -> Self {
         let mode = ModeInfo { hdisplay: w as u16, vdisplay: h as u16, vrefresh: hz.max(1), ..Default::default() };
         let none = || Buffer { fb: 0, pitch: 0, map: std::ptr::null_mut() };
-        Display { #[cfg(feature = "desktop-wayland")] wayland: None, boot_fade: None, virt: true, virt_last: None, mm: None, fd: -1, crtc: 0, conn: 0, dpms: None, cursor: None, cursor_on: false, mode, bufs: [none(), none()], owed: Owed::new(w, h), back: 0, swap_rb: false, flip_pending: false, flip_at: None, use_flip: false }
+        Display { #[cfg(feature = "desktop-wayland")] wayland: None, boot_fade: None, virt: true, virt_last: None, mm: None, fd: -1, crtc: 0, conn: 0, dpms: None, cursor: None, cursor_on: false, mode, rates: Vec::new(), bufs: [none(), none()], owed: Owed::new(w, h), back: 0, swap_rb: false, flip_pending: false, flip_at: None, use_flip: false }
     }
 
     /// The panel's physical size in mm, when the connector reported one (never for a virtual panel).
@@ -1227,6 +1244,22 @@ mod tests {
         let mut cards = [(0u32, "simpledrm"), (1, "i915")];
         cards.sort_by_key(|(n, d)| (is_firmware_fb(d), *n));
         assert_eq!(cards[0].1, "i915", "the real driver is tried first even though simpledrm is card0");
+    }
+
+    #[test]
+    fn refresh_rates_come_from_the_timings_at_the_native_size() {
+        // htotal x vtotal = 10^6, so clock (kHz) / 1000 is the rate in hertz
+        let mode = |hdisplay, vdisplay, clock, flags| ModeInfo { hdisplay, vdisplay, clock, htotal: 1000, vtotal: 1000, flags, ..Default::default() };
+        let modes = [
+            mode(2560, 1600, 164_850, 0),
+            mode(2560, 1600, 144_000, 0),
+            mode(2560, 1600, 144_000, 0),
+            mode(2560, 1600, 200_000, 0x10),
+            mode(1920, 1080, 60_000, 0),
+            mode(2560, 1600, 0, 0),
+        ];
+        assert_eq!(refresh_rates(&modes, 2560, 1600), vec![164.85, 144.0], "fastest first, no repeats, interlaced and other sizes left out");
+        assert!(refresh_rates(&modes, 800, 600).is_empty());
     }
 
     #[test]
