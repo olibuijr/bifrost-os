@@ -72,7 +72,8 @@ Verified against the official documentation pages (rendered through `docc.py`):
 - App Store transaction sync (`AppStore.sync`): `Ledger::sync` in `springboard/ui/src/entitlement.rs` takes
   `RemoteRecord` values from the store and returns a `SyncReport`. A record matches a local purchase by product and
   purchase day. Unknown records are added, renewal facts are refreshed, and a revocation day is taken only when it is
-  earlier. Local purchases the store does not list are kept.
+  earlier. Each local purchase matches at most one record per sync, so two same-day purchases of a product stay two.
+  Local purchases the store does not list are kept. Nothing calls `Ledger::sync` yet: no code fetches the store records.
 - Still missing from the App Store interactions row: manage subscriptions, device verification and an SDK query
   for the store environment (`AppTransaction` holds the environment, but apps have no call for it).
 

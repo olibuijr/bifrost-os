@@ -66,7 +66,7 @@ unchanged.
 
 - Environment values (`EnvironmentValues`): `springboard/ui/src/environment.rs` (`Environment`, `EnvValue`). A node sets
   a value, its descendants read it, and a nested scope overrides it until the scope is left. The parity row now
-  points there as `partial`. Generic modifiers and state-driven bindings are still missing, so the row is not `parity`.
+  points there as `partial`. No view reads the environment yet. Generic modifiers and state-driven bindings are still missing, so the row is not `parity`.
 
 ## Verification
 

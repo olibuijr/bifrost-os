@@ -54,7 +54,7 @@
       "apple": "PurchaseIntent, Product.PromotionInfo",
       "bifrost": "springboard/ui/src/promotion.rs",
       "status": "partial",
-      "note": "built on parity/team-a-08; not yet verified on Midget. App-side queue of purchase intents (first in, first out, no duplicates, bounded) and the store-side order of promoted products. Nothing shows a promotion yet; the store page does not send intents."
+      "note": "built on parity/team-a-08; not yet verified on Midget. App-side queue of purchase intents (first in, first out, no duplicates, bounded) and the store-side order of promoted products. The model has no caller yet: nothing shows a promotion and the store page does not send intents."
     },
     {
       "feature": "App Store product page and overlay",
@@ -82,7 +82,7 @@
       "apple": "AppStore: manage subscriptions, sync transactions, environment, device verification",
       "bifrost": "springboard/ui/src/entitlement.rs (Ledger::sync); springboard/sdk/src/app_transaction.rs",
       "status": "partial",
-      "note": "built on parity/team-a-08; not yet verified on Midget. Transaction sync merges the store records into the ledger (sync transactions). Manage subscriptions, the store environment as a query and device verification have no SDK API."
+      "note": "built on parity/team-a-08; not yet verified on Midget. Ledger::sync merges store records into the entitlement ledger (sync transactions), but it has no caller: nothing fetches the records from the store and no SDK call exposes it. Manage subscriptions, the store environment as a query and device verification have no SDK API."
     },
     {
       "feature": "Storefront information",
