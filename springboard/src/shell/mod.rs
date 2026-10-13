@@ -523,6 +523,8 @@ pub struct Shell {
     disk_check_ms: f64,
     /// Display & Brightness › Auto-Lock, ms; 0 never sleeps
     idle_off_ms: f64,
+    /// Lock Screen > Require Password: when the display went off with a grace, and the screen it returns to (see `display_off`)
+    grace_from: Option<(f64, Screen)>,
     /// Settings > Screen Saver: idle activation and the saver on screen (see `screensaver`)
     saver: screensaver::ScreenSaver,
     clock_24h: bool,
@@ -790,6 +792,7 @@ impl Shell {
             ota: None,
             disk_check_ms: 0.0,
             idle_off_ms: Options::default().auto_lock_ms as f64,
+            grace_from: None,
             saver: screensaver::ScreenSaver::new(),
             clock_24h: true,
             lock_time: None,
@@ -2114,6 +2117,7 @@ impl Shell {
         if wake {
             self.dark_tap = None;
             self.screen_on = true;
+            self.screen_woke(t);
             return vec![Effect::ScreenOn];
         }
         vec![]
@@ -2125,6 +2129,7 @@ impl Shell {
     }
 
     fn sleep_screen(&mut self) -> Vec<Effect> {
+        self.grace_from = None;
         self.power_menu = None;
         self.shield = None;
         self.screentime.flush();
@@ -2145,6 +2150,26 @@ impl Shell {
         self.notify_sleep();
         self.leave_today();
         vec![Effect::ScreenOff]
+    }
+
+    /// The display goes off from idle or the power key. With a Require Password grace the screen is not locked yet:
+    /// it stays as it was until `screen_woke` sees the display come back after the grace. A lock already on stays.
+    fn display_off(&mut self, t: f64) -> Vec<Effect> {
+        let before = self.screen;
+        let grace = self.options().lock_grace_s;
+        let fx = self.sleep_screen();
+        if grace > 0 && before != Screen::Lock {
+            self.grace_from = Some((t, before));
+            self.screen = before;
+        }
+        fx
+    }
+
+    /// The display came on: inside the grace the screen returns as it was, after it the screen is locked.
+    fn screen_woke(&mut self, t: f64) {
+        let Some((off, before)) = self.grace_from.take() else { return };
+        let grace_ms = self.options().lock_grace_s as f64 * 1000.0;
+        self.screen = if t - off <= grace_ms { before } else { Screen::Lock };
     }
 
     /// Puts both pagers back on their first page and resets the Today View.
@@ -2170,9 +2195,10 @@ impl Shell {
         self.size_current_player_app();
         if ev == Event::Power {
             return if self.screen_on {
-                self.sleep_screen()
+                self.display_off(t)
             } else {
                 self.screen_on = true;
+                self.screen_woke(t);
                 vec![Effect::ScreenOn]
             };
         }
@@ -2635,7 +2661,7 @@ impl Shell {
         }
         self.saver_tick(t);
         if self.screen_on && self.idle_off_ms > 0.0 && t - self.last_input > self.idle_off_ms && self.last_input > 0.0 {
-            return self.sleep_screen();
+            return self.display_off(t);
         }
         self.lock_pad_tick(t);
         self.login_tick(t);
@@ -2765,6 +2791,7 @@ impl Shell {
             self.last_input = t;
             if !self.screen_on {
                 self.screen_on = true;
+                self.screen_woke(t);
                 effects.push(Effect::ScreenOn);
             }
             self.notify_alarm();
