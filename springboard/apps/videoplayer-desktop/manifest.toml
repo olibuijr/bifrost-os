@@ -1,0 +1,11 @@
+id = "is.olibuijr.videoplayer.desktop"
+name = "Video Player"
+version = "0.1.0"
+exec = "bifrost-videoplayer"
+icon = "icon.png"
+min_shell = "0.6.5"
+summary = "Plays movie files with captions, trim marks and audio recording."
+category = "Photo & Video"
+architecture = "x86_64-linux"
+permissions = ["storage", "documents", "audio"]
+window = "full-size"
