@@ -86,7 +86,16 @@ fn content(cells: &[Cell], layout: &Layout, lines: Range<usize>, info: &PrintInf
         let mut run: Option<(String, f32, crate::text::Style)> = None;
         let flush = |out: &mut Vec<u8>, run: &mut Option<(String, f32, crate::text::Style)>, end: f32| {
             if let Some((text, start, s)) = run.take() {
+                if s.highlight > 0 {
+                    let [r, g, b] = highlight_rgb(s.highlight);
+                    out.extend(format!("{r:.3} {g:.3} {b:.3} rg {:.2} {:.2} {:.2} {:.2} re f\n", left + origin + start, y - s.size * 0.25, end - start, s.size * 1.2).bytes());
+                }
                 show(out, &s, &text, left + origin + start, y);
+                if s.strike {
+                    let w = (s.size / 24.0).max(0.4);
+                    let sy = y + s.size * 0.3;
+                    out.extend(format!("{w} w {:.2} {:.2} m {:.2} {:.2} l S\n", left + origin + start, sy, left + origin + end, sy).bytes());
+                }
                 if s.underline {
                     let w = (s.size / 24.0).max(0.4);
                     let uy = y - s.size * 0.12;
@@ -111,25 +120,71 @@ fn content(cells: &[Cell], layout: &Layout, lines: Range<usize>, info: &PrintInf
     out
 }
 
+/// The fill of a highlight as red, green and blue fractions: the palette colour, lightened as on screen.
+fn highlight_rgb(index: u8) -> [f32; 3] {
+    let [r, g, b] = COLORS[(index as usize).min(COLORS.len() - 1)].1;
+    let lighten = |c: u8| (c as f32 * 2.0 + 255.0) / 3.0 / 255.0;
+    [lighten(r), lighten(g), lighten(b)]
+}
+
 fn show(out: &mut Vec<u8>, s: &crate::text::Style, text: &str, x: f32, y: f32) {
     let face = (s.font as usize).min(FAMILIES.len() - 1) * 4 + s.bold as usize + 2 * s.italic as usize;
-    out.extend(format!("BT /F{face} {} Tf {} {:.2} {:.2} Td ", s.size, color_words(s.color), x, y).bytes());
+    // raised and lowered text is smaller and moves off the baseline (`Ts` is the text rise)
+    let (size, rise) = match s.script {
+        1 => (s.size * crate::view::SCRIPT_SCALE, s.size * 0.35),
+        -1 => (s.size * crate::view::SCRIPT_SCALE, -s.size * 0.12),
+        _ => (s.size, 0.0),
+    };
+    // text on a highlight is black, as on screen
+    let color = if s.highlight > 0 && s.color == 0 { "0 0 0 rg 0 0 0 RG".to_string() } else { color_words(s.color) };
+    out.extend(format!("BT /F{face} {size} Tf {rise:.2} Ts {} {:.2} {:.2} Td ", color, x, y).bytes());
     text_literal(text, out);
     out.extend(b" Tj ET\n");
 }
 
 /// The document as pages for `info`, ready for the print operation with [`FACES`]. `layout` must have been made for the
 /// printable width of `info`.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn document(cells: &[Cell], layout: &Layout, info: &PrintInfo, measure: &Measure) -> Vec<PdfPage> {
+    document_with(cells, layout, info, measure, None)
+}
+
+/// The words of a page's header (the document's title, top left) and footer ("Page 2 of 5", bottom right), in the
+/// print margins. Helvetica 9 pt grey, the first face of [`FACES`].
+fn header_footer(title: &str, page: usize, pages: usize, info: &PrintInfo) -> Vec<u8> {
+    let (left, top, width, height) = info.imageable();
+    let (_, page_h) = info.paper_size();
+    let mut out = Vec::new();
+    let header_y = page_h - (top / 2.0).max(10.0);
+    out.extend(format!("BT /F0 9 Tf 0 Ts 0.4 0.4 0.4 rg {:.2} {:.2} Td ", left, header_y).bytes());
+    text_literal(title, &mut out);
+    out.extend(b" Tj ET\n");
+    let bottom = (page_h - top - height).max(0.0);
+    let footer_y = (bottom / 2.0 - 4.0).max(6.0);
+    let label = format!("Page {page} of {pages}");
+    // Helvetica digits and letters average about half an em
+    let x = left + width - label.chars().count() as f32 * 4.5;
+    out.extend(format!("BT /F0 9 Tf 0 Ts 0.4 0.4 0.4 rg {x:.2} {footer_y:.2} Td ").bytes());
+    text_literal(&label, &mut out);
+    out.extend(b" Tj ET\n");
+    out
+}
+
+/// Like [`document`], with the title in each page's header and "Page n of m" in its footer when `title` is given.
+pub fn document_with(cells: &[Cell], layout: &Layout, info: &PrintInfo, measure: &Measure, title: Option<&str>) -> Vec<PdfPage> {
     let (_, _, _, printable_h) = info.imageable();
     let (w, h) = info.paper_size();
-    split(layout, printable_h)
+    let ranges = split(layout, printable_h);
+    let pages = ranges.len();
+    ranges
         .into_iter()
-        .map(|range| PdfPage {
-            width: w as f64,
-            height: h as f64,
-            content: content(cells, layout, range, info, measure),
-            images: Vec::new(),
+        .enumerate()
+        .map(|(i, range)| {
+            let mut content = content(cells, layout, range, info, measure);
+            if let Some(title) = title {
+                content.extend(header_footer(title, i + 1, pages, info));
+            }
+            PdfPage { width: w as f64, height: h as f64, content, images: Vec::new() }
         })
         .collect()
 }
@@ -173,6 +228,33 @@ mod tests {
         let many = cells(&"x\n".repeat((h / l.lines[0].height) as usize * 2));
         let l2 = layout(&many, w, &six);
         assert!(document(&many, &l2, &info, &six).len() >= 2);
+    }
+
+    #[test]
+    fn a_header_and_footer_name_the_document_and_the_page() {
+        let c = cells("a\nb\nc");
+        let info = PrintInfo { margins: [72.0; 4], ..PrintInfo::default() };
+        let (_, _, w, _) = info.imageable();
+        let l = layout(&c, w, &six);
+        let plain = document(&c, &l, &info, &six);
+        let titled = document_with(&c, &l, &info, &six, Some("Notes (draft)"));
+        let text = String::from_utf8_lossy(&titled[0].content).into_owned();
+        assert!(text.contains("(Notes \\(draft\\))"));
+        assert!(text.contains("(Page 1 of 1)"));
+        assert!(!String::from_utf8_lossy(&plain[0].content).contains("Page 1 of"));
+    }
+
+    #[test]
+    fn strikethrough_highlight_and_baseline_shift_reach_the_page() {
+        let style = Style { strike: true, highlight: 3, script: 1, ..Style::default() };
+        let c = vec![Cell { ch: 'x', style }];
+        let info = PrintInfo { margins: [72.0; 4], ..PrintInfo::default() };
+        let (_, _, w, _) = info.imageable();
+        let l = layout(&c, w, &six);
+        let text = String::from_utf8_lossy(&document(&c, &l, &info, &six)[0].content).into_owned();
+        assert!(text.contains(" re f"), "the highlight plate");
+        assert!(text.contains(" l S"), "the strike rule");
+        assert!(text.contains(" Ts "), "the text rise");
     }
 
     #[test]

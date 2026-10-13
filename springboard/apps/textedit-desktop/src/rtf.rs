@@ -120,6 +120,17 @@ fn character_words(style: &Style) -> String {
     if style.underline {
         words += "\\ul ";
     }
+    if style.strike {
+        words += "\\strike ";
+    }
+    match style.script {
+        1 => words += "\\super ",
+        -1 => words += "\\sub ",
+        _ => {}
+    }
+    if style.highlight > 0 {
+        words += &format!("\\highlight{} ", style.highlight);
+    }
     words
 }
 
@@ -325,7 +336,20 @@ impl Reader {
             "i" => self.cur.italic = on,
             "ul" => self.cur.underline = on,
             "ulnone" => self.cur.underline = false,
+            "strike" | "striked" => self.cur.strike = on,
+            "super" => self.cur.script = if on { 1 } else { 0 },
+            "sub" => self.cur.script = if on { -1 } else { 0 },
+            "nosupersub" => self.cur.script = 0,
+            "highlight" => {
+                self.cur.highlight = match param {
+                    Some(n) if n > 0 => self.colors.get(n as usize).copied().flatten().unwrap_or(0),
+                    _ => 0,
+                };
+            }
             "plain" => {
+                self.cur.strike = false;
+                self.cur.script = 0;
+                self.cur.highlight = 0;
                 self.cur.color = 0;
                 self.cur.bold = false;
                 self.cur.italic = false;
@@ -509,6 +533,16 @@ pub fn nearest_spacing(multiple: f32) -> u8 {
     best as u8
 }
 
+/// The palette index for a colour another program wrote: black (and near black) is the default text colour, anything
+/// else the closest palette colour.
+pub fn text_color(rgb: [i32; 3]) -> u8 {
+    if rgb.iter().all(|&c| c < 48) {
+        0
+    } else {
+        nearest_color(rgb)
+    }
+}
+
 /// The palette colour (never the default entry) closest to an rgb value.
 pub fn nearest_color(rgb: [i32; 3]) -> u8 {
     let dist = |c: &[u8; 3]| (0..3).map(|k| (c[k] as i32 - rgb[k]).pow(2)).sum::<i32>();
@@ -556,6 +590,27 @@ mod tests {
         let (back, tab) = read_doc(&write_doc(&cells, 54.0));
         assert_eq!(back, cells);
         assert_eq!(tab, 54.0);
+    }
+
+    #[test]
+    fn strike_baseline_shift_and_highlight_round_trip() {
+        let struck = Style { strike: true, highlight: 3, ..Style::default() };
+        let raised = Style { script: 1, ..Style::default() };
+        let lowered = Style { script: -1, ..Style::default() };
+        let cells = vec![cell('a', struck), cell('b', raised), cell('c', lowered), cell('d', Style::default())];
+        let back = read(&write(&cells));
+        assert_eq!(back, cells);
+        let plain = read(b"{\\rtf1 \\strike \\super x\\plain y}");
+        assert!(plain[0].style.strike && plain[0].style.script == 1);
+        assert!(!plain[1].style.strike && plain[1].style.script == 0);
+    }
+
+    #[test]
+    fn black_is_the_default_colour_and_other_colours_the_nearest_palette_entry() {
+        assert_eq!(text_color([0, 0, 0]), 0);
+        assert_eq!(text_color([20, 30, 10]), 0);
+        assert_eq!(text_color([255, 0, 0]), 1);
+        assert_eq!(text_color([0, 120, 255]), 5);
     }
 
     #[test]

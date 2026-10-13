@@ -3,7 +3,7 @@
 //! text file is saved as plain text, an RTF file as RTF and an HTML file as HTML.
 
 use crate::text::Text;
-use crate::{html, rtf};
+use crate::{docx, html, odt, rtf};
 use bifrost_app::document::{Document, DocumentError};
 
 /// The file types Text Editor reads and writes (uniform type identifiers).
@@ -17,6 +17,9 @@ pub struct TextDocument {
     /// Whether the document is rich text. A plain text document has one style throughout and its formatting commands
     /// are off; Format > Make Plain Text and Make Rich Text switch it.
     pub rich: bool,
+    /// Format > Prevent Editing: text commands and typing leave the document alone. A window setting, not kept in
+    /// the file.
+    pub read_only: bool,
 }
 
 impl TextDocument {
@@ -36,7 +39,12 @@ impl Document for TextDocument {
     fn read(bytes: &[u8], _uttype: &str) -> Result<Self, DocumentError> {
         // the bytes decide: an RTF header or an HTML prologue means rich text, anything else is plain text
         let mut text = Text::new();
-        let rich = if rtf::is_rtf(bytes) {
+        let rich = if docx::is_docx(bytes) || odt::is_odt(bytes) {
+            let cells = if docx::is_docx(bytes) { docx::read(bytes) } else { odt::read(bytes) };
+            let Some(cells) = cells else { return Err(DocumentError::new("The document could not be read")) };
+            text.load(cells);
+            true
+        } else if rtf::is_rtf(bytes) {
             let (cells, tab) = rtf::read_doc(bytes);
             text.load(cells);
             text.set_tab_width(tab);
@@ -50,24 +58,26 @@ impl Document for TextDocument {
             text.load(rtf::read_plain(bytes));
             false
         };
-        Ok(TextDocument { text, rich })
+        Ok(TextDocument { text, rich, read_only: false })
     }
 
     fn write(&self, uttype: &str) -> Result<Vec<u8>, DocumentError> {
         match uttype {
             RTF_TYPE => Ok(rtf::write_doc(self.text.cells(), self.text.tab_width())),
             HTML_TYPE => Ok(html::write(self.text.cells(), self.text.tab_width())),
+            docx::TYPE => Ok(docx::write(self.text.cells())),
+            odt::TYPE => Ok(odt::write(self.text.cells())),
             PLAIN_TYPE | "public.utf8-plain-text" => Ok(rtf::write_plain(self.text.cells())),
             other => Err(DocumentError::new(&format!("Text Editor cannot write {other}"))),
         }
     }
 
     fn untitled() -> Self {
-        TextDocument { text: Text::new(), rich: true }
+        TextDocument { text: Text::new(), rich: true, read_only: false }
     }
 
     fn readable_types() -> &'static [&'static str] {
-        &[RTF_TYPE, PLAIN_TYPE, HTML_TYPE]
+        &[RTF_TYPE, PLAIN_TYPE, HTML_TYPE, docx::TYPE, odt::TYPE]
     }
 
     fn default_type() -> &'static str {
@@ -104,6 +114,21 @@ mod tests {
         let back = TextDocument::read(&out, HTML_TYPE).unwrap();
         assert_eq!(back.text.cells(), doc.text.cells());
         assert_eq!(back.text.tab_width(), 60.0);
+    }
+
+    #[test]
+    fn word_processing_packages_open_as_rich_text_and_save_back() {
+        let mut doc = TextDocument::untitled();
+        // a paragraph break carries paragraph properties only, so it is not bold
+        doc.text.load("one\ntwo".chars().map(|ch| crate::text::Cell { ch, style: crate::text::Style { bold: ch != '\n', ..Default::default() } }).collect());
+        for kind in [docx::TYPE, odt::TYPE] {
+            let bytes = doc.write(kind).unwrap();
+            let back = TextDocument::read(&bytes, kind).unwrap();
+            assert!(back.rich, "{kind}");
+            assert_eq!(back.text.cells(), doc.text.cells(), "{kind}");
+        }
+        assert!(TextDocument::readable_types().contains(&docx::TYPE));
+        assert!(TextDocument::readable_types().contains(&odt::TYPE));
     }
 
     #[test]

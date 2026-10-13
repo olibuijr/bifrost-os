@@ -67,6 +67,22 @@ impl Spelling {
         self.checker.correction(&text, bytes)
     }
 
+    /// Correct Spelling Automatically: when the word that ends right before the cell `boundary` (a space or punctuation
+    /// just typed) is misspelled and the dictionary has a correction, the word's range and the correction.
+    pub fn autocorrect(&self, cells: &[Cell], boundary: usize) -> Option<(Range<usize>, String)> {
+        let range = word_at(cells, boundary)?;
+        if range.end != boundary {
+            return None;
+        }
+        let word = &cells[range.clone()];
+        let len = word.len();
+        if self.misspelled(word) != vec![0..len] {
+            return None;
+        }
+        let guess = self.correction(word, 0..len)?;
+        Some((range, guess))
+    }
+
     /// Adds the word to the user's dictionary and keeps it.
     pub fn learn(&mut self, host: &dyn DocumentHost, word: &str) {
         self.checker.learn_word(word, &mut Prefs(host));
@@ -138,6 +154,15 @@ mod tests {
     fn a_correction_comes_from_the_dictionary() {
         let c = cells("hello wrld");
         assert_eq!(small().correction(&c, 6..10), Some("world".to_string()));
+    }
+
+    #[test]
+    fn a_misspelled_word_before_a_boundary_is_corrected_automatically() {
+        let c = cells("hello wrld ");
+        assert_eq!(small().autocorrect(&c, 10), Some((6..10, "world".to_string())));
+        let right = cells("hello world ");
+        assert_eq!(small().autocorrect(&right, 11), None, "a correct word is left alone");
+        assert_eq!(small().autocorrect(&c, 5), None, "hello is spelled right");
     }
 
     #[test]

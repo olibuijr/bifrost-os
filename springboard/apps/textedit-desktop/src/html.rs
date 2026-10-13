@@ -83,6 +83,14 @@ pub fn write(cells: &[Cell], tab: f32) -> Vec<u8> {
             }
             out += &format!("<span style=\"{span}\">");
             let (b, it, u) = (s.bold, s.italic, s.underline);
+            if s.strike {
+                out += "<s>";
+            }
+            match s.script {
+                1 => out += "<sup>",
+                -1 => out += "<sub>",
+                _ => {}
+            }
             if b {
                 out += "<b>";
             }
@@ -103,6 +111,14 @@ pub fn write(cells: &[Cell], tab: f32) -> Vec<u8> {
             }
             if b {
                 out += "</b>";
+            }
+            match s.script {
+                1 => out += "</sup>",
+                -1 => out += "</sub>",
+                _ => {}
+            }
+            if s.strike {
+                out += "</s>";
             }
             out += "</span>";
             i = j;
@@ -281,6 +297,9 @@ impl Reader {
             "b" | "strong" => self.cur.bold = true,
             "i" | "em" => self.cur.italic = true,
             "u" => self.cur.underline = true,
+            "s" | "strike" | "del" => self.cur.strike = true,
+            "sup" => self.cur.script = 1,
+            "sub" => self.cur.script = -1,
             "ul" | "ol" => {
                 self.flush();
                 self.lists.push(if name == "ul" { ListKind::Bullet } else { ListKind::Numbered });
@@ -554,6 +573,16 @@ mod tests {
         let (back, tab) = read(&write(&cells, 48.0));
         assert_eq!(back, cells);
         assert_eq!(tab, 48.0);
+    }
+
+    #[test]
+    fn strikethrough_and_baseline_shift_round_trip() {
+        let struck = Style { strike: true, ..Style::default() };
+        let raised = Style { script: 1, ..Style::default() };
+        let lowered = Style { script: -1, ..Style::default() };
+        let cells = vec![cell('a', struck), cell('b', raised), cell('c', lowered), cell('d', Style::default())];
+        let (back, _) = read(&write(&cells, 36.0));
+        assert_eq!(back, cells);
     }
 
     #[test]

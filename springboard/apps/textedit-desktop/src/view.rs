@@ -3,7 +3,7 @@
 //! reached in device pixels through `Ui::pt`. Colours and type come from the shared tokens only.
 
 use crate::layout::{self, Layout, Line, Marker};
-use crate::text::{Align, Cell, ListKind, Style, COLORS, FAMILIES, SPACINGS};
+use crate::text::{Align, Cell, ListKind, Style, Transform, COLORS, FAMILIES, SPACINGS};
 use bifrost_app::controls::Rect;
 use bifrost_app::document::item;
 use bifrost_app::kit::canvas::{Canvas, ImageRef, RectF};
@@ -72,6 +72,39 @@ pub enum Action {
     SpellLearn,
     SpellIgnore,
     SpellCorrect,
+    /// File: Save All and Export as PDF
+    SaveAll,
+    ExportPdf,
+    /// Edit: Paste and Match Style, Delete, Complete, Use Selection for Find, Jump to Selection, Select Line
+    PasteMatch,
+    Delete,
+    Complete,
+    UseSelection,
+    JumpToSelection,
+    SelectLine,
+    Transform(Transform),
+    /// Format > Font: strikethrough, baseline shift, highlight colour (index into `COLORS`), Copy and Paste Style
+    Strike,
+    Superscript,
+    Subscript,
+    Highlight(u8),
+    CopyStyle,
+    PasteStyle,
+    /// Format > Prevent Editing; View: ruler, wrap to window, zoom
+    PreventEditing,
+    ShowRuler,
+    WrapToWindow,
+    ZoomIn,
+    ZoomOut,
+    ActualSize,
+    /// Substitutions and automatic spelling
+    SmartQuotes,
+    SmartDashes,
+    SpellAuto,
+    /// Print: page header and footer
+    HeaderFooter,
+    /// Preferences: whether new documents are plain text (true) or rich text (false)
+    NewPlain(bool),
 }
 
 /// The first menu id of Text Editor's own items. Ids are stable: they are the values a menu sends back.
@@ -118,6 +151,35 @@ impl Action {
             Action::SpellLearn => MENU_BASE + 0x6c,
             Action::SpellIgnore => MENU_BASE + 0x6d,
             Action::SpellCorrect => MENU_BASE + 0x6e,
+            Action::SaveAll => MENU_BASE + 0x70,
+            Action::ExportPdf => MENU_BASE + 0x71,
+            Action::PasteMatch => MENU_BASE + 0x72,
+            Action::Delete => MENU_BASE + 0x73,
+            Action::Complete => MENU_BASE + 0x74,
+            Action::UseSelection => MENU_BASE + 0x75,
+            Action::JumpToSelection => MENU_BASE + 0x76,
+            Action::SelectLine => MENU_BASE + 0x77,
+            Action::Transform(Transform::Upper) => MENU_BASE + 0x78,
+            Action::Transform(Transform::Lower) => MENU_BASE + 0x79,
+            Action::Transform(Transform::Capitalize) => MENU_BASE + 0x7a,
+            Action::Strike => MENU_BASE + 0x7b,
+            Action::Superscript => MENU_BASE + 0x7c,
+            Action::Subscript => MENU_BASE + 0x7d,
+            Action::CopyStyle => MENU_BASE + 0x7e,
+            Action::PasteStyle => MENU_BASE + 0x7f,
+            Action::ShowRuler => MENU_BASE + 0x80,
+            Action::PreventEditing => MENU_BASE + 0x81,
+            Action::WrapToWindow => MENU_BASE + 0x82,
+            Action::ZoomIn => MENU_BASE + 0x83,
+            Action::ZoomOut => MENU_BASE + 0x84,
+            Action::ActualSize => MENU_BASE + 0x85,
+            Action::SmartQuotes => MENU_BASE + 0x86,
+            Action::SmartDashes => MENU_BASE + 0x87,
+            Action::SpellAuto => MENU_BASE + 0x88,
+            Action::HeaderFooter => MENU_BASE + 0x89,
+            Action::NewPlain(false) => MENU_BASE + 0x8a,
+            Action::NewPlain(true) => MENU_BASE + 0x8b,
+            Action::Highlight(i) => MENU_BASE + 0x90 + i as u32,
         })
     }
 
@@ -161,6 +223,35 @@ impl Action {
             0x6c => Action::SpellLearn,
             0x6d => Action::SpellIgnore,
             0x6e => Action::SpellCorrect,
+            0x70 => Action::SaveAll,
+            0x71 => Action::ExportPdf,
+            0x72 => Action::PasteMatch,
+            0x73 => Action::Delete,
+            0x74 => Action::Complete,
+            0x75 => Action::UseSelection,
+            0x76 => Action::JumpToSelection,
+            0x77 => Action::SelectLine,
+            0x78 => Action::Transform(Transform::Upper),
+            0x79 => Action::Transform(Transform::Lower),
+            0x7a => Action::Transform(Transform::Capitalize),
+            0x7b => Action::Strike,
+            0x7c => Action::Superscript,
+            0x7d => Action::Subscript,
+            0x7e => Action::CopyStyle,
+            0x7f => Action::PasteStyle,
+            0x80 => Action::ShowRuler,
+            0x81 => Action::PreventEditing,
+            0x82 => Action::WrapToWindow,
+            0x83 => Action::ZoomIn,
+            0x84 => Action::ZoomOut,
+            0x85 => Action::ActualSize,
+            0x86 => Action::SmartQuotes,
+            0x87 => Action::SmartDashes,
+            0x88 => Action::SpellAuto,
+            0x89 => Action::HeaderFooter,
+            0x8a => Action::NewPlain(false),
+            0x8b => Action::NewPlain(true),
+            0x90..=0x97 => Action::Highlight((offset - 0x90) as u8),
             _ => return None,
         })
     }
@@ -237,7 +328,13 @@ pub struct Geometry {
     pub replace_field: Rect,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn geometry(width: f32, height: f32, find_open: bool, ruler: bool) -> Geometry {
+    geometry_with(width, height, find_open, ruler, false)
+}
+
+/// The regions, with the text column as wide as the window (`wrap_to_window`) instead of the readable width.
+pub fn geometry_with(width: f32, height: f32, find_open: bool, ruler: bool, wrap_to_window: bool) -> Geometry {
     let bar = UNIFIED_BAR_PT;
     let format_top = bar;
     let ruler_top = format_top + FORMAT_H;
@@ -245,7 +342,7 @@ pub fn geometry(width: f32, height: f32, find_open: bool, ruler: bool) -> Geomet
     let find_top = ruler_top + ruler_h;
     let body_top = find_top + if find_open { FIND_H } else { 0.0 };
     let body_bottom = (height - STATUS_H).max(body_top);
-    let text_w = (width - 2.0 * MARGIN_PT).min(READABLE_MAX_PT).max(0.0);
+    let text_w = if wrap_to_window { (width - 2.0 * MARGIN_PT).max(0.0) } else { (width - 2.0 * MARGIN_PT).min(READABLE_MAX_PT).max(0.0) };
     let text_x = ((width - text_w) / 2.0).max(0.0);
     let x0 = traffic_lights_trailing();
     let row_y = find_top + (FIND_H - BUTTON_H) / 2.0;
@@ -268,7 +365,26 @@ pub fn geometry(width: f32, height: f32, find_open: bool, ruler: bool) -> Geomet
 /// The width of one character in a style, in points.
 pub fn char_width(ui: &Ui, ch: char, style: &Style) -> f32 {
     let mut buf = [0u8; 4];
-    ui.measure(ch.encode_utf8(&mut buf), style.size, weight_of(style)) / ui.s
+    ui.measure(ch.encode_utf8(&mut buf), drawn_size(style), weight_of(style)) / ui.s
+}
+
+/// How much smaller superscript and subscript text is drawn.
+pub const SCRIPT_SCALE: f32 = 0.65;
+
+/// The size a style's text is drawn in: smaller when it is raised or lowered.
+pub fn drawn_size(style: &Style) -> f32 {
+    if style.script != 0 {
+        style.size * SCRIPT_SCALE
+    } else {
+        style.size
+    }
+}
+
+/// The fill behind highlighted text: the palette colour, lightened so dark text reads on it.
+pub fn highlight_color(index: u8) -> u32 {
+    let [r, g, b] = COLORS[(index as usize).min(COLORS.len() - 1)].1;
+    let lighten = |c: u8| ((c as u32 * 2 + 255) / 3) as u8;
+    pack(lighten(r), lighten(g), lighten(b), 255)
 }
 
 /// The weight a style draws in: bold text is heavier, everything else regular.
@@ -633,7 +749,8 @@ fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[
     }
 }
 
-/// Draws one run and returns the x after it. Underlines are a rule under the run.
+/// Draws one run and returns the x after it. Underlines and strikethrough are a rule through the run, a highlight is
+/// a plate behind it, and raised or lowered text is smaller and shifted.
 fn flush_run(c: &mut dyn Canvas, ui: &Ui, text: &str, style: &Style, x: f32, y: f32, line_height: f32) -> f32 {
     if text.is_empty() {
         return x;
@@ -642,10 +759,26 @@ fn flush_run(c: &mut dyn Canvas, ui: &Ui, text: &str, style: &Style, x: f32, y: 
     if shown.is_empty() {
         return x;
     }
-    let color = text_color(style.color);
-    let width = text_at(c, ui, &shown, style.size, weight_of(style), color, x, y);
+    // text on a highlight is dark whatever the appearance, as the plate is light
+    let color = if style.highlight > 0 && style.color == 0 { pack(0, 0, 0, 255) } else { text_color(style.color) };
+    let size = drawn_size(style);
+    let shift = match style.script {
+        1 => 0.0,
+        -1 => style.size * 0.3,
+        _ => 0.0,
+    };
+    let width = ui.measure(&shown, size, weight_of(style)) / ui.s;
+    if style.highlight > 0 {
+        let plate = Rect { x, y, w: width, h: line_height };
+        c.fill_rect(to_px(ui, plate), highlight_color(style.highlight));
+    }
+    text_at(c, ui, &shown, size, weight_of(style), color, x, y + shift);
     if style.underline {
         let rule = Rect { x, y: y + line_height.min(style.size * 1.25) - 2.0, w: width, h: 1.0 };
+        c.fill_rect(to_px(ui, rule), color);
+    }
+    if style.strike {
+        let rule = Rect { x, y: y + line_height.min(style.size * 1.25) * 0.55, w: width, h: 1.0 };
         c.fill_rect(to_px(ui, rule), color);
     }
     x + width
@@ -747,7 +880,41 @@ mod tests {
             Action::SpellLearn,
             Action::SpellIgnore,
             Action::SpellCorrect,
+            Action::SaveAll,
+            Action::ExportPdf,
+            Action::PasteMatch,
+            Action::Delete,
+            Action::Complete,
+            Action::UseSelection,
+            Action::JumpToSelection,
+            Action::SelectLine,
+            Action::Transform(Transform::Upper),
+            Action::Transform(Transform::Lower),
+            Action::Transform(Transform::Capitalize),
+            Action::Strike,
+            Action::Superscript,
+            Action::Subscript,
+            Action::Highlight(0),
+            Action::Highlight(7),
+            Action::CopyStyle,
+            Action::PasteStyle,
+            Action::PreventEditing,
+            Action::ShowRuler,
+            Action::WrapToWindow,
+            Action::ZoomIn,
+            Action::ZoomOut,
+            Action::ActualSize,
+            Action::SmartQuotes,
+            Action::SmartDashes,
+            Action::SpellAuto,
+            Action::HeaderFooter,
+            Action::NewPlain(false),
+            Action::NewPlain(true),
         ];
+        let mut ids: Vec<u32> = all.iter().filter_map(|a| a.id()).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), all.len(), "every action has its own menu id");
         for a in all {
             let id = a.id().expect("own action has an id");
             assert_eq!(Action::from_id(id), Some(a));

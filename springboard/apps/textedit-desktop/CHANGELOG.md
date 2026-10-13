@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.0 — 2026-10-13
+
+- File: Save All, Export as PDF (a save panel, then the same PDF the printer gets), and Print Header and Footer (the
+  title and "Page n of m" in the margins).
+- Word processing files: documents open and save as `.docx` and `.odt` (paragraphs, runs, bold, italic, underline,
+  strikethrough, size, colour, highlight, baseline shift, font family, alignment, line spacing, bullet and numbered
+  lists), chosen by the file's extension in Save As.
+- Edit: Paste and Match Style, Delete, Complete (steps through the words of the document that start the same), Use
+  Selection for Find (Cmd+E), Jump to Selection (Cmd+J), Select Line (Cmd+L, a number or a range such as 12-20 typed in
+  the find field), Transformations (upper case, lower case, capitalize), Substitutions (Smart Quotes, Smart Dashes) and
+  Correct Spelling Automatically.
+- Format: Strikethrough, Baseline (superscript, subscript), Highlight colours, Copy Style and Paste Style, and Prevent
+  Editing / Allow Editing. RTF and HTML carry the new character styles.
+- View menu: Show or Hide Ruler, Wrap to Window or Page, Zoom In, Zoom Out and Actual Size.
+- Preferences menu: the format of new documents; the spelling, substitution, ruler, wrapping and header options are kept
+  between launches.
+
 ## 1.1.1 — 2026-10-13
 
 - Printing goes through the shared print operation: the PDF is written by the shared PDF writer and submitted to CUPS

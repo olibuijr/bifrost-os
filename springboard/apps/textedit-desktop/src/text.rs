@@ -8,6 +8,23 @@ use std::ops::Range;
 
 /// The font families a document can use. Index 0 is the default. The names are the ones RTF files carry.
 pub const FAMILIES: [&str; 3] = ["Helvetica", "Times", "Courier"];
+/// The names other programs know the families by (a document written for them names these), in `FAMILIES` order.
+pub const FAMILY_NAMES: [&str; 3] = ["Arial", "Times New Roman", "Courier New"];
+
+/// The family a font name from another program is closest to: serif faces map to Times, fixed-width faces to Courier,
+/// everything else to the default.
+pub fn family_for_name(name: &str) -> u8 {
+    let lower = name.to_ascii_lowercase();
+    let has = |words: &[&str]| words.iter().any(|w| lower.contains(w));
+    if has(&["courier", "mono", "consolas", "menlo", "typewriter"]) {
+        2
+    } else if has(&["times", "serif", "georgia", "garamond", "cambria", "palatino", "book antiqua"]) && !has(&["sans"]) {
+        1
+    } else {
+        0
+    }
+}
+
 /// The point size of new text.
 pub const DEFAULT_SIZE: f32 = 12.0;
 /// The sizes Bigger and Smaller step through.
@@ -54,6 +71,14 @@ pub enum ListKind {
     Numbered,
 }
 
+/// Edit > Transformations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Transform {
+    Upper,
+    Lower,
+    Capitalize,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Style {
     pub bold: bool,
@@ -68,6 +93,11 @@ pub struct Style {
     /// Paragraph properties, stored on every cell of the paragraph like `align`: index into `SPACINGS`, and the list.
     pub spacing: u8,
     pub list: ListKind,
+    /// Strikethrough, the baseline shift (1 superscript, -1 subscript, 0 none) and the highlight (index into
+    /// `COLORS`, 0 for none).
+    pub strike: bool,
+    pub script: i8,
+    pub highlight: u8,
 }
 
 impl Default for Style {
@@ -82,6 +112,9 @@ impl Default for Style {
             color: 0,
             spacing: 0,
             list: ListKind::None,
+            strike: false,
+            script: 0,
+            highlight: 0,
         }
     }
 }
@@ -95,6 +128,9 @@ impl Style {
             && self.size == other.size
             && self.font == other.font
             && self.color == other.color
+            && self.strike == other.strike
+            && self.script == other.script
+            && self.highlight == other.highlight
     }
 }
 
@@ -480,6 +516,136 @@ impl Text {
         self.typing = Style::default();
     }
 
+    /// Strikethrough on when the first selected character has none, off otherwise.
+    pub fn toggle_strike(&mut self) {
+        let on = !self.style().strike;
+        self.restyle(|s| s.strike = on);
+    }
+
+    /// Superscript (1) or subscript (-1); the same shift again puts the text back on the baseline.
+    pub fn toggle_script(&mut self, script: i8) {
+        let script = if self.style().script == script { 0 } else { script.clamp(-1, 1) };
+        self.restyle(|s| s.script = script);
+    }
+
+    /// Highlight (background) colour: an index into `COLORS`, 0 for none.
+    pub fn set_highlight(&mut self, color: u8) {
+        let color = color.min(COLORS.len() as u8 - 1);
+        self.restyle(|s| s.highlight = color);
+    }
+
+    /// Copy Style: the character formatting at the selection or caret.
+    pub fn char_style(&self) -> Style {
+        self.style()
+    }
+
+    /// Paste Style: gives the selection (or the typing style) the character formatting of `from`. Paragraph
+    /// properties are left alone.
+    pub fn apply_char_style(&mut self, from: &Style) {
+        let f = *from;
+        self.restyle(move |s| {
+            s.bold = f.bold;
+            s.italic = f.italic;
+            s.underline = f.underline;
+            s.size = f.size;
+            s.font = f.font;
+            s.color = f.color;
+            s.strike = f.strike;
+            s.script = f.script;
+            s.highlight = f.highlight;
+        });
+    }
+
+    /// Edit > Transformations: the selected text in upper case, lower case or capitalised words, in one undo entry.
+    /// Returns whether anything changed.
+    pub fn transform(&mut self, how: Transform) -> bool {
+        let range = self.selection();
+        if range.is_empty() {
+            return false;
+        }
+        let mut word_start = range.start == 0 || !self.cells[range.start - 1].ch.is_alphanumeric();
+        let mapped: Vec<char> = self.cells[range.clone()]
+            .iter()
+            .map(|c| {
+                let out = match how {
+                    Transform::Upper => single(c.ch.to_uppercase(), c.ch),
+                    Transform::Lower => single(c.ch.to_lowercase(), c.ch),
+                    Transform::Capitalize => {
+                        if word_start {
+                            single(c.ch.to_uppercase(), c.ch)
+                        } else {
+                            single(c.ch.to_lowercase(), c.ch)
+                        }
+                    }
+                };
+                word_start = !c.ch.is_alphanumeric() && c.ch != '\'';
+                out
+            })
+            .collect();
+        if mapped.iter().zip(&self.cells[range.clone()]).all(|(m, c)| *m == c.ch) {
+            return false;
+        }
+        self.record(Kind::Replacing);
+        for (cell, ch) in self.cells[range].iter_mut().zip(mapped) {
+            cell.ch = ch;
+        }
+        true
+    }
+
+    /// Lines of the page (paragraphs, ending at a newline), counting an empty last one.
+    pub fn line_count(&self) -> usize {
+        1 + self.cells.iter().filter(|c| c.ch == '\n').count()
+    }
+
+    /// The 1-based line number of the paragraph that holds `pos`.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn line_at(&self, pos: usize) -> usize {
+        1 + self.cells[..pos.min(self.len())].iter().filter(|c| c.ch == '\n').count()
+    }
+
+    /// Selects lines `first..=last` (1-based, `last` clamped to the end), without their last newline. False when
+    /// `first` is not a line of the document.
+    pub fn select_lines(&mut self, first: usize, last: usize) -> bool {
+        let mut starts = vec![0];
+        for (i, c) in self.cells.iter().enumerate() {
+            if c.ch == '\n' {
+                starts.push(i + 1);
+            }
+        }
+        if first == 0 || first > starts.len() {
+            return false;
+        }
+        let last = last.clamp(first, starts.len());
+        let start = starts[first - 1];
+        let end = if last < starts.len() { starts[last] - 1 } else { self.len() };
+        self.select(start, end);
+        true
+    }
+
+    /// Typed text with the substitutions on: straight quotes become curly ones, and a second hyphen turns `--` into an
+    /// em dash. Typing stays one undo entry.
+    pub fn type_smart(&mut self, s: &str, quotes: bool, dashes: bool) {
+        for ch in s.chars() {
+            let at = self.selection().start;
+            let prev = at.checked_sub(1).map(|i| self.cells[i].ch);
+            if dashes && ch == '-' && !self.has_selection() && prev == Some('-') {
+                self.record(Kind::Typing);
+                self.cells[at - 1].ch = '\u{2014}';
+                continue;
+            }
+            let out = if quotes && (ch == '"' || ch == '\'') { smart_quote(prev, ch) } else { ch };
+            let mut buf = [0u8; 4];
+            self.type_text(out.encode_utf8(&mut buf));
+        }
+    }
+
+    /// Replaces `range` with `s` as one undo entry and selects the new text (word completion).
+    pub fn replace_range(&mut self, range: Range<usize>, s: &str) {
+        self.select(range.start, range.end);
+        self.insert(s, Kind::Replacing);
+        self.select(range.start, range.start + s.chars().count());
+    }
+
     /// Sets the alignment of every paragraph the selection touches.
     pub fn set_align(&mut self, align: Align) {
         self.record(Kind::Formatting);
@@ -614,6 +780,68 @@ impl Text {
         words
     }
 
+}
+
+/// The one character a case mapping gives, or `ch` when it maps to several (a German sharp s becomes two letters).
+fn single(mut mapped: impl Iterator<Item = char>, ch: char) -> char {
+    match (mapped.next(), mapped.next()) {
+        (Some(c), None) => c,
+        _ => ch,
+    }
+}
+
+/// The curly quote for a straight one typed after `prev`: opening at the start, after a space or after an opening
+/// bracket or dash, closing otherwise.
+pub fn smart_quote(prev: Option<char>, quote: char) -> char {
+    let opening = prev.map_or(true, |p| p.is_whitespace() || matches!(p, '(' | '[' | '{' | '\u{2014}' | '\u{2013}' | '\u{201c}' | '\u{2018}'));
+    match (quote, opening) {
+        ('"', true) => '\u{201c}',
+        ('"', false) => '\u{201d}',
+        (_, true) => '\u{2018}',
+        (_, false) => '\u{2019}',
+    }
+}
+
+/// Words of the text that start with `prefix` (ignoring case) and are longer than it, each once, most common first
+/// and then alphabetical: Edit > Complete.
+pub fn completions(cells: &[Cell], prefix: &str) -> Vec<String> {
+    if prefix.is_empty() {
+        return Vec::new();
+    }
+    let lower = prefix.to_lowercase();
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    let mut word = String::new();
+    let flush = |word: &mut String, counts: &mut Vec<(String, usize)>| {
+        if word.chars().count() > prefix.chars().count() && word.to_lowercase().starts_with(&lower) {
+            match counts.iter_mut().find(|(w, _)| w == word) {
+                Some((_, n)) => *n += 1,
+                None => counts.push((word.clone(), 1)),
+            }
+        }
+        word.clear();
+    };
+    for c in cells {
+        if c.ch.is_alphanumeric() || c.ch == '\'' {
+            word.push(c.ch);
+        } else {
+            flush(&mut word, &mut counts);
+        }
+    }
+    flush(&mut word, &mut counts);
+    counts.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    counts.into_iter().map(|(w, _)| w).collect()
+}
+
+/// A line range typed in Select Line: "12" or "12-20" (1-based).
+pub fn parse_line_spec(spec: &str) -> Option<(usize, usize)> {
+    let spec = spec.trim();
+    let (a, b) = match spec.split_once('-') {
+        Some((a, b)) => (a.trim(), b.trim()),
+        None => (spec, spec),
+    };
+    let first: usize = a.parse().ok()?;
+    let last: usize = b.parse().ok()?;
+    (first > 0 && last >= first).then_some((first, last))
 }
 
 /// The char that a cell stands for when searching, folded to lower case unless the search is case sensitive.
@@ -809,6 +1037,100 @@ mod tests {
         let t = plain("two words\nthree more  words");
         assert_eq!(t.word_count(), 5);
         assert_eq!(t.char_count(), 26);
+    }
+
+    #[test]
+    fn transformations_change_case_in_one_undo() {
+        let mut t = plain("hello wORLD it's");
+        t.select_all();
+        assert!(t.transform(Transform::Capitalize));
+        assert_eq!(t.text(), "Hello World It's");
+        assert!(t.transform(Transform::Upper));
+        assert_eq!(t.text(), "HELLO WORLD IT'S");
+        assert!(!t.transform(Transform::Upper), "nothing changed");
+        assert!(t.transform(Transform::Lower));
+        assert_eq!(t.text(), "hello world it's");
+        assert_eq!(t.undo_name(), Some("Replacing"));
+        t.select(2, 2);
+        assert!(!t.transform(Transform::Upper), "needs a selection");
+    }
+
+    #[test]
+    fn strike_script_highlight_and_copied_style_apply_to_characters() {
+        let mut t = plain("abc");
+        t.select(0, 2);
+        t.toggle_strike();
+        t.toggle_script(1);
+        t.set_highlight(3);
+        assert!(t.cells()[1].style.strike && t.cells()[1].style.script == 1 && t.cells()[1].style.highlight == 3);
+        assert!(!t.cells()[2].style.strike);
+        t.toggle_script(1);
+        assert_eq!(t.cells()[0].style.script, 0, "the same shift again clears it");
+        t.toggle_script(-1);
+        assert_eq!(t.cells()[0].style.script, -1);
+        let copied = t.char_style();
+        t.select(2, 3);
+        t.apply_char_style(&copied);
+        assert!(t.cells()[2].style.strike && t.cells()[2].style.highlight == 3);
+    }
+
+    #[test]
+    fn lines_are_selected_by_number_and_range() {
+        let mut t = plain("one\ntwo\nthree");
+        assert_eq!(t.line_count(), 3);
+        assert_eq!(t.line_at(5), 2);
+        assert!(t.select_lines(2, 2));
+        assert_eq!(t.selection(), 4..7);
+        assert!(t.select_lines(2, 9));
+        assert_eq!(t.selection(), 4..13);
+        assert!(t.select_lines(1, 1));
+        assert_eq!(t.selection(), 0..3);
+        assert!(!t.select_lines(4, 4));
+        assert!(!t.select_lines(0, 1));
+        assert_eq!(parse_line_spec(" 3 "), Some((3, 3)));
+        assert_eq!(parse_line_spec("2-5"), Some((2, 5)));
+        assert_eq!(parse_line_spec("5-2"), None);
+        assert_eq!(parse_line_spec("x"), None);
+    }
+
+    #[test]
+    fn smart_quotes_and_dashes_substitute_while_typing() {
+        let mut t = plain("");
+        t.type_smart("\"hi\" it's a--b", true, true);
+        assert_eq!(t.text(), "\u{201c}hi\u{201d} it\u{2019}s a\u{2014}b");
+        assert!(t.undo());
+        assert_eq!(t.text(), "", "the whole run is one undo entry");
+        let mut raw = plain("");
+        raw.type_smart("\"x\"--", false, false);
+        assert_eq!(raw.text(), "\"x\"--");
+        assert_eq!(smart_quote(Some('('), '"'), '\u{201c}');
+        assert_eq!(smart_quote(Some('a'), '\''), '\u{2019}');
+    }
+
+    #[test]
+    fn completion_lists_longer_words_with_the_prefix_by_frequency() {
+        let t = plain("cable cabin cable cabinet ca");
+        let found = completions(t.cells(), "cab");
+        assert_eq!(found, vec!["cable", "cabin", "cabinet"]);
+        assert!(completions(t.cells(), "").is_empty());
+        assert!(completions(t.cells(), "zzz").is_empty());
+        let mut e = plain("hello help");
+        e.replace_range(6..10, "helping");
+        assert_eq!(e.text(), "hello helping");
+        assert_eq!(e.selection(), 6..13);
+    }
+
+    #[test]
+    fn font_names_from_other_programs_map_to_a_family() {
+        assert_eq!(family_for_name("Times New Roman"), 1);
+        assert_eq!(family_for_name("Courier New"), 2);
+        assert_eq!(family_for_name("Liberation Mono"), 2);
+        assert_eq!(family_for_name("DejaVu Sans"), 0);
+        assert_eq!(family_for_name("Noto Sans Mono"), 2);
+        assert_eq!(family_for_name("Arial"), 0);
+        for (i, name) in FAMILY_NAMES.iter().enumerate() {
+            assert_eq!(family_for_name(name) as usize, i);
+        }
     }
 
     #[test]
