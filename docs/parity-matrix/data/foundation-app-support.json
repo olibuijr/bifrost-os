@@ -12,7 +12,7 @@
    "apple": "ProcessInfo, NSUserActivity, Progress, ProgressManager",
    "bifrost": "springboard/sdk/src/process_info.rs; springboard/sdk/src/intents.rs; springboard/sdk/src/runtime.rs; springboard/ui/src/progress.rs",
    "status": "partial",
-   "note": "Activity tracker, sudden termination and thermal state exist. Progress is a tree of unit counts with child shares, fraction, finish, cancel and pause (bifrost_ui::progress, reached as bifrost_app::controls::progress). No ProgressManager, no publishing progress to other processes, no Handoff.",
+   "note": "Activity tracker, sudden termination and thermal state exist. Progress is a tree of unit counts with child shares, fraction, finish, cancel, pause and resume that reach children with cancellation, pausing and resuming handlers, addChild, and current/becomeCurrent/resignCurrent (bifrost_ui::progress, reached as bifrost_app::controls::progress). No ProgressManager, no publishing progress to other processes, no Handoff.",
    "rea_evidence": "ev_e2ff5d55d77a4e9024c3fe26224756e2a348cab8ef8b4488a19a55f20b160e51"
   },
   {
@@ -55,7 +55,6 @@
  "gaps": [
   "ProgressManager and publishing progress to other processes; value observation of progress for views",
   "Per-domain error user info providers and a recovery attempter that runs the chosen option",
-  "Cancelling a progress object does not reach its children",
   "NSUserActivity Handoff between devices",
   "Generic app extension host and NSItemProvider",
   "Scripting dictionaries / AppleScript-like automation",

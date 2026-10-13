@@ -2066,3 +2066,14 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## Progress tree: cancel, pause and handlers (`bifrost_ui::progress`, Foundation `Progress`)
+
+- `ProgressTree::cancel` reaches every descendant (cancellable or not), flagging each and firing its
+  `set_cancellation_handler` once; `pause` and `resume` do the same with `set_pausing_handler` and
+  `set_resuming_handler`. The root still needs `set_cancellable` / `set_pausable`, as in Foundation.
+- `add_child(parent, child, pending)` (`addChild(_:withPendingUnitCount:)`) attaches a root; cycles and re-parenting are refused.
+- `become_current(id, pending)`, `current()`, `implicit_child(total)` and `resign_current(id)` mirror
+  `becomeCurrent(withPendingUnitCount:)`, `Progress.current()` and `resignCurrent()`: the first implicit child takes the pending
+  units, otherwise resigning completes them on the object.
+- Gap: publishing progress to other processes. Row status stays partial until checked on Midget.
