@@ -13,10 +13,10 @@
  "summary": {
   "features": 46,
   "parity": 10,
-  "partial": 10,
-  "gap": 24,
+  "partial": 24,
+  "gap": 10,
   "n/a": 2,
-  "coverage_pct": 34.1
+  "coverage_pct": 50.0
  },
  "features": [
   {
@@ -32,9 +32,9 @@
    "feature": "Save All",
    "area": "menu",
    "apple": "Edit.nib: File > Save All",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No save-all across open documents.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:303",
+   "note": "File > Save All (cmd+alt+s) saves every edited document; untitled ones each open their save panel. Not checked on the lab machine.",
    "wire": "Add \"Save All\" to file_menu (main.rs:668) iterating self.docs open documents and calling the controller save for each edited one."
   },
   {
@@ -77,9 +77,9 @@
    "feature": "Word .docx / .doc / Word XML / ODT / web archive",
    "area": "document",
    "apple": "Info.plist CFBundleDocumentTypes: Word 2007/2003 XML/97, OpenDocument Text, Web archive",
-   "status": "gap",
-   "bifrost": "",
-   "note": "None of these formats.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/docx.rs:1, springboard/apps/textedit-desktop/src/odt.rs:1, springboard/apps/textedit-desktop/src/document.rs:44",
+   "note": ".docx and .odt open and save (paragraphs, runs, bold/italic/underline/strike, size, colour, highlight, baseline, font family, alignment, spacing, lists) through a ZIP reader/writer (zipdoc.rs). Not carried: pictures, tables, headers/footers, comments, styles.xml defaults; .doc, Word XML and web archive are still missing.",
    "wire": "Start with .docx and .odt (zip + XML): new docx.rs/odt.rs mapping paragraphs, runs (b/i/u, font, size, colour) and alignment to text.rs cells; add types in document.rs read/write."
   },
   {
@@ -96,8 +96,8 @@
    "area": "menu",
    "apple": "Edit.nib: File > Export as PDF…",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/print.rs:1",
-   "note": "print.rs already renders PDF for printing; no Export as PDF menu item.",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:724",
+   "note": "File > Export as PDF... asks through a save panel and writes the same PDF the printer gets (main.rs export_event). Not checked on the lab machine.",
    "wire": "Add File > Export as PDF… in file_menu (main.rs:668) that runs print.rs PDF generation and writes it through ctx.save_document with public.pdf."
   },
   {
@@ -105,8 +105,8 @@
    "area": "menu",
    "apple": "Edit.nib: File > Page Setup…, Print…; PrintAccessory: header and footer, rewrap to fit page",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:672",
-   "note": "Print, paper size and orientation exist; no header/footer or rewrap options.",
+   "bifrost": "springboard/apps/textedit-desktop/src/print.rs:174, springboard/apps/textedit-desktop/src/main.rs:1089",
+   "note": "Header and Footer is a checked item under File (title top left, \"Page n of m\" bottom right). The Rewrap toggle is not done: the layout is always wrapped to the printable width.",
    "wire": "Add Header and Footer (title, page n of m) and Rewrap toggles to the print path in print.rs and as checked items under the Print submenu."
   },
   {
@@ -140,18 +140,18 @@
    "feature": "Paste and Match Style",
    "area": "menu",
    "apple": "Edit.nib: Edit > Paste and Match Style",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Paste behaviour only.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:483",
+   "note": "Edit > Paste and Match Style (cmd+alt+shift+v) runs the paste path. The clipboard carries plain text only, so a paste already takes the style at the caret; rich pasteboard content will need a separate path.",
    "wire": "Add Edit > Paste and Match Style (cmd+alt+shift+v) inserting plain text with the caret style; Action variant in view.rs."
   },
   {
    "feature": "Delete / Complete / Insert (page break, line break, paragraph break)",
    "area": "menu",
    "apple": "Edit.nib: Edit > Delete, Complete, Insert submenu",
-   "status": "gap",
-   "bifrost": "",
-   "note": "None.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:494, springboard/apps/textedit-desktop/src/main.rs:675",
+   "note": "Edit > Delete and Edit > Complete (alt+escape) work: Complete offers the words of the document that start with the typed prefix and steps through them on repeat. Insert (page break, line break, paragraph break) is not done: the layout has no break characters other than the paragraph newline.",
    "wire": "Add Insert submenu items inserting break characters via insert_raw (main.rs:470); Complete = word completion from the document vocabulary."
   },
   {
@@ -176,9 +176,9 @@
    "feature": "Use Selection for Find / Jump to Selection",
    "area": "menu",
    "apple": "Edit.nib: Edit > Find > Use Selection for Find, Jump to Selection",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Missing.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:314, springboard/apps/textedit-desktop/src/main.rs:324",
+   "note": "Edit > Find > Use Selection for Find (cmd+E) fills the find field; Jump to Selection (cmd+J) scrolls the caret into view. The selection is not put on the shared find pasteboard.",
    "wire": "Add both to the Find group in edit_menu: Cmd+E copies the selection into self.find; Cmd+J scrolls to caret."
   },
   {
@@ -186,26 +186,26 @@
    "area": "menu",
    "apple": "Edit.nib: Edit > Spelling and Grammar",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:613",
-   "note": "No grammar check, no Correct Spelling Automatically, no Show Spelling and Grammar panel.",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:821, springboard/apps/textedit-desktop/src/spell.rs:72",
+   "note": "Correct Spelling Automatically replaces a misspelled word with the checker guess when a space or punctuation ends it (kept in the preferences). Still missing: grammar and the Show Spelling and Grammar panel.",
    "wire": "Add a \"Correct Spelling Automatically\" checked item applying spell.rs best guess on word end in type_into (main.rs:454); grammar is out of scope."
   },
   {
    "feature": "Substitutions (smart quotes, dashes, links, text replacement, data detectors)",
    "area": "menu",
    "apple": "Edit.nib: Edit > Substitutions; Preferences.nib: Smart quotes/dashes/links",
-   "status": "gap",
-   "bifrost": "",
-   "note": "None.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/text.rs:627, springboard/apps/textedit-desktop/src/main.rs:800",
+   "note": "Edit > Substitutions has Smart Quotes and Smart Dashes (curly quotes, -- to an em dash), applied while typing and kept in the preferences. Smart Links, Text Replacement and data detectors are not done.",
    "wire": "Add an Edit > Substitutions submenu with checked Smart Quotes / Smart Dashes; apply in type_into (main.rs:454) when typing quotes or \"--\"; persist in preferences."
   },
   {
    "feature": "Transformations (uppercase, lowercase, capitalise)",
    "area": "menu",
    "apple": "Edit.nib: Edit > Transformations",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Missing.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/text.rs:561, springboard/apps/textedit-desktop/src/main.rs:502",
+   "note": "Edit > Transformations: Make Upper Case, Make Lower Case and Capitalize act on the selection as one undo entry.",
    "wire": "Add three items in edit_menu that replace the selection with its transformed string through the text.rs undoable replace."
   },
   {
@@ -230,9 +230,9 @@
    "feature": "Outline / Strikethrough / Kern / Ligatures / Baseline (super/subscript)",
    "area": "menu",
    "apple": "Edit.nib: Format > Font > Outline, Kern, Ligatures, Baseline",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Missing.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/text.rs:520, springboard/apps/textedit-desktop/src/view.rs:754, springboard/apps/textedit-desktop/src/rtf.rs:111",
+   "note": "Strikethrough, Superscript and Subscript are character styles (RTF \\strike \\super \\sub, HTML s/sup/sub, docx, odt, print). Outline, Kern and Ligatures are not done.",
    "wire": "Add strikethrough and super/subscript flags to the cell style in text.rs, RTF \\strike \\super \\sub in rtf.rs, draw in view.rs; Format > Font items."
   },
   {
@@ -249,17 +249,17 @@
    "area": "menu",
    "apple": "Edit.nib: Format > Font > Show Colours, Highlight",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:651",
-   "note": "Fixed colour palette only; no background highlight.",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1001, springboard/apps/textedit-desktop/src/text.rs:532",
+   "note": "Format > Highlight sets a background colour from the palette (RTF \\highlight, docx, odt, print). The colour panel for custom colours is not done.",
    "wire": "Add a highlight (background colour) attribute in text.rs with RTF \\highlight/\\cb; open SDK colour panel for custom colours."
   },
   {
    "feature": "Copy Style / Paste Style",
    "area": "menu",
    "apple": "Edit.nib: Format > Font > Copy Style, Paste Style",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Missing.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:329, springboard/apps/textedit-desktop/src/main.rs:519",
+   "note": "Format > Copy Style (cmd+alt+c) keeps the character formatting at the caret; Paste Style (cmd+alt+v) applies it to the selection or the typing style. Paragraph formatting is not copied.",
    "wire": "Store the caret style in the app on Copy Style; apply to the selection on Paste Style (format_menu)."
   },
   {
@@ -312,8 +312,8 @@
    "area": "menu",
    "apple": "Edit.nib: Format > Text > Show Ruler, Copy Ruler, Paste Ruler; Preferences: Show ruler",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/view.rs:656",
-   "note": "Tab ruler always shown in rich text; no toggle, no copy/paste ruler, only tab distance (no indents).",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:340, springboard/apps/textedit-desktop/src/view.rs:337",
+   "note": "View > Show Ruler / Hide Ruler (cmd+R) toggles the ruler and is kept in the preferences. Copy Ruler, Paste Ruler and first-line/left indent markers are not done.",
    "wire": "Add Format > Text > Show Ruler (cmd+r) toggling geometry(..., ruler) in main.rs:125; add first-line/left indent markers."
   },
   {
@@ -329,18 +329,18 @@
    "feature": "Prevent Editing (read-only)",
    "area": "menu",
    "apple": "Edit.nib: Format > Prevent Editing / Allow Editing",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Missing.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:335, springboard/apps/textedit-desktop/src/document.rs:15",
+   "note": "Format > Prevent Editing / Allow Editing sets read_only on the window document: typing, deleting, paste, undo, replace, transformations and formatting refuse with a status note. It is not stored in the file.",
    "wire": "Add a read_only flag on TextDocument; Format > Prevent Editing toggles it; type_into/backspace/perform refuse edits when set."
   },
   {
    "feature": "Wrap to Page / Wrap to Window",
    "area": "menu",
    "apple": "Edit.nib: Format > Wrap to Page; Localizable: Wrap to Window",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Always wraps to the page width.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:345, springboard/apps/textedit-desktop/src/view.rs:337",
+   "note": "View > Wrap to Window / Wrap to Page widens the text column to the window; kept in the preferences.",
    "wire": "Add a wrap mode to the layout width in ensure_layout (main.rs:187) and a Format item that switches between page and window width."
   },
   {
@@ -365,9 +365,9 @@
    "feature": "Zoom in / out / actual size",
    "area": "menu",
    "apple": "Edit.nib: View > Zoom In, Zoom Out, Actual Size",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No zoom.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:351, springboard/apps/textedit-desktop/src/main.rs:114",
+   "note": "View > Zoom In (cmd+alt+=), Zoom Out (cmd+alt+-) and Actual Size (cmd+0) scale the text 50% to 400% (sizes are scaled for layout and drawing; the page width stays). Not checked on the lab machine.",
    "wire": "Add a View menu with Zoom In/Out/Actual Size scaling the page in view.rs geometry and draw_canvas (main.rs:837)."
   },
   {
@@ -383,18 +383,18 @@
    "feature": "Go to line (Select Line…)",
    "area": "panel",
    "apple": "SelectLinePanel.nib, LinePanel strings",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Missing.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:656, springboard/apps/textedit-desktop/src/text.rs:608",
+   "note": "Edit > Find > Select Line... (cmd+L) selects a line or range such as 12-20 typed in the find field (the first press opens the find bar). There is no separate panel.",
    "wire": "Add Edit > Find > Select Line… (cmd+L) sheet taking \"n\" or \"n-m\" and selecting those lines via text.rs line index."
   },
   {
    "feature": "Settings: new document format, window size, fonts",
    "area": "settings",
    "apple": "Preferences.nib: New Document tab (format, wrap to page, window size, fonts)",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No settings window.",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:1079, springboard/apps/textedit-desktop/src/prefs.rs:1",
+   "note": "No settings window API exists in the SDK, so a Preferences menu holds the new-document format (rich or plain) and the other options are kept in the preferences. Default fonts and window size in characters are not done.",
    "wire": "Add a Settings window (SDK settings pane): default rich/plain, default fonts, window width/height in characters; apply on New in the controller."
   },
   {
@@ -411,8 +411,8 @@
    "area": "settings",
    "apple": "Preferences.nib: Options (check spelling as you type, grammar, correct automatically, smart quotes/dashes/links)",
    "status": "partial",
-   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:702",
-   "note": "Learned words persist in preferences; check-while-typing toggle not persisted as a default.",
+   "bifrost": "springboard/apps/textedit-desktop/src/prefs.rs:1, springboard/apps/textedit-desktop/src/main.rs:190",
+   "note": "Check Spelling While Typing, Correct Spelling Automatically, Smart Quotes, Smart Dashes, ruler, wrapping and print header/footer are saved to the preferences and restored at launch (main.rs configure). Exposed through the menus, not a settings window.",
    "wire": "Persist spelling.enabled and substitutions defaults in preferences and expose them in the Settings window."
   },
   {

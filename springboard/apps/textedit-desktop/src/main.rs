@@ -6,17 +6,22 @@
 //! `layout.rs`, the spelling in `spell.rs`, the PDF for printing in `print.rs`, and the window in `view.rs`. This file
 //! wires them to the SDK: the document controller, menus, keys, touches and the canvas.
 
+mod docx;
 mod document;
 mod html;
 mod layout;
+mod odt;
+mod prefs;
 mod print;
 mod rtf;
 mod spell;
 mod text;
 mod view;
+mod xml;
+mod zipdoc;
 
 use bifrost_app::controls::undo::ChangeCount;
-use bifrost_app::document::{is_menu_id, DocId, DocumentController, Notice};
+use bifrost_app::document::{is_menu_id, item, DocId, DocumentController, DocumentHost, Notice};
 use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::kit::ui::Ui;
 use bifrost_app::kit::{clipboard, Damage, Surface};
@@ -25,9 +30,10 @@ use bifrost_app::proto::CHORD_FLAG;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use document::TextDocument;
 use layout::Layout;
+use prefs::Options;
 use spell::Spelling;
 use std::ops::Range;
-use text::{Align, Kind, Style};
+use text::{Align, Cell, Kind, Style, Transform};
 use view::{Action, Button, Focus, Hit};
 
 /// The layout of the document as last drawn, and the misspelled words of its text, kept until the text, the width or
@@ -36,6 +42,9 @@ struct Cache {
     doc: DocId,
     revision: u64,
     width: f32,
+    zoom: f32,
+    /// the document's cells at the zoom: sizes scaled, so the layout, the caret and the drawing agree
+    cells: Vec<Cell>,
     layout: Layout,
     misspelled: Vec<Range<usize>>,
 }
@@ -60,6 +69,22 @@ struct TextEditApp {
     /// the spell checker, and the page setup that Print uses
     spelling: Spelling,
     print_info: PrintInfo,
+    /// the settings the menus toggle (kept in the preferences), and the view zoom
+    opts: Options,
+    zoom: f32,
+    /// Copy Style: the character formatting waiting to be pasted
+    copied_style: Option<Style>,
+    /// Edit > Complete: the word being completed, so a second Complete offers the next candidate
+    completion: Option<Completion>,
+    /// File > Export as PDF: the save panel's request, until its file is written
+    export_request: Option<u32>,
+}
+
+/// A completion in progress: the typed prefix, the cells of the word as completed, and which candidate it shows.
+struct Completion {
+    prefix: String,
+    range: Range<usize>,
+    index: usize,
 }
 
 /// The document of the active window, if any.
@@ -85,6 +110,36 @@ fn word_here(doc: &TextDocument) -> Option<(Range<usize>, String)> {
     (!word.is_empty() && !word.chars().any(char::is_whitespace)).then_some((range, word))
 }
 
+/// The cells with every size scaled by the view zoom; the text itself is unchanged.
+fn zoomed(cells: &[Cell], zoom: f32) -> Vec<Cell> {
+    cells
+        .iter()
+        .map(|c| {
+            let mut c = *c;
+            c.style.size *= zoom;
+            c
+        })
+        .collect()
+}
+
+/// Whether an action changes the document's text or formatting, which Prevent Editing refuses.
+fn edits_text(action: Action) -> bool {
+    is_formatting(action)
+        || matches!(
+            action,
+            Action::Undo
+                | Action::Redo
+                | Action::Cut
+                | Action::Paste
+                | Action::PasteMatch
+                | Action::Delete
+                | Action::Complete
+                | Action::Transform(_)
+                | Action::MakePlain
+                | Action::MakeRich
+        )
+}
+
 /// Whether an action changes how text looks, which only rich text does.
 fn is_formatting(action: Action) -> bool {
     matches!(
@@ -99,6 +154,11 @@ fn is_formatting(action: Action) -> bool {
             | Action::Color(_)
             | Action::Spacing(_)
             | Action::List(_)
+            | Action::Strike
+            | Action::Superscript
+            | Action::Subscript
+            | Action::Highlight(_)
+            | Action::PasteStyle
     )
 }
 
@@ -118,13 +178,35 @@ impl TextEditApp {
             cache: None,
             spelling: Spelling::new(),
             print_info: PrintInfo::default(),
+            opts: Options::default(),
+            zoom: 1.0,
+            copied_style: None,
+            completion: None,
+            export_request: None,
+        }
+    }
+
+    /// Writes the settings to the preferences.
+    fn save_options(&self, ctx: &Ctx) {
+        for (key, value) in self.opts.entries() {
+            DocumentHost::set_pref(ctx, key, value);
+        }
+    }
+
+    /// Whether the active document is read-only; says so in the status row when it is.
+    fn refuse_edit(&mut self) -> bool {
+        if active_doc(&self.docs).is_some_and(|d| d.read_only) {
+            self.note = Some("Editing is prevented. Choose Format > Allow Editing.".into());
+            true
+        } else {
+            false
         }
     }
 
     /// The window's regions for the current window size, find bar and document. The ruler shows for rich text only.
     fn geometry(&self, ui: &Ui, width_px: u32, height_px: u32) -> view::Geometry {
-        let ruler = active_doc(&self.docs).is_some_and(|d| d.rich);
-        view::geometry(width_px as f32 / ui.s, height_px as f32 / ui.s, self.find_open, ruler)
+        let ruler = self.opts.show_ruler && active_doc(&self.docs).is_some_and(|d| d.rich);
+        view::geometry_with(width_px as f32 / ui.s, height_px as f32 / ui.s, self.find_open, ruler, self.opts.wrap_window)
     }
 
     /// The toolbar's status: what the document has at the caret.
@@ -186,16 +268,18 @@ impl TextEditApp {
     /// Rebuilds the layout and the misspelled words of the active document when they are stale.
     fn ensure_layout(&mut self, ui: &Ui, width: f32) {
         let Some(id) = self.docs.active() else { return };
-        let fresh = self.cache.as_ref().is_some_and(|c| c.doc == id && c.revision == self.revision && c.width == width);
+        let zoom = self.zoom;
+        let fresh = self.cache.as_ref().is_some_and(|c| c.doc == id && c.revision == self.revision && c.width == width && c.zoom == zoom);
         if fresh {
             return;
         }
         let Some(doc) = self.docs.get(id) else { return };
         let measure = |ch: char, style: &Style| view::char_width(ui, ch, style);
         let cells = doc.text.cells();
-        let layout = layout::layout_tabs(cells, width, &measure, doc.text.tab_width());
+        let scaled = zoomed(cells, zoom);
+        let layout = layout::layout_tabs(&scaled, width, &measure, doc.text.tab_width() * zoom);
         let misspelled = if self.spelling.enabled { self.spelling.misspelled(cells) } else { Vec::new() };
-        self.cache = Some(Cache { doc: id, revision: self.revision, width, layout, misspelled });
+        self.cache = Some(Cache { doc: id, revision: self.revision, width, zoom, cells: scaled, layout, misspelled });
     }
 
     /// Runs a text command on the active document. Returns whether the window needs a frame.
@@ -203,7 +287,100 @@ impl TextEditApp {
         match action {
             Action::Document(id) => {
                 let Some(notices) = self.docs.menu_action(ctx, id) else { return false };
+                // File > New follows the Preferences' document format
+                if id == item::NEW && self.opts.new_plain {
+                    for n in &notices {
+                        if let Notice::Created(created) = n {
+                            if let Some(d) = self.docs.get_mut(*created) {
+                                d.rich = false;
+                            }
+                        }
+                    }
+                }
                 self.after_documents(&notices);
+                return true;
+            }
+            Action::SaveAll => {
+                for id in self.docs.ids() {
+                    if self.docs.is_edited(id) {
+                        self.docs.save(ctx, id);
+                    }
+                }
+                self.docs.sync(ctx);
+                return true;
+            }
+            Action::ExportPdf => return self.export_pdf(ctx),
+            Action::Complete => return self.complete(),
+            Action::UseSelection => {
+                let Some(doc) = active_doc(&self.docs) else { return false };
+                let picked: String = doc.text.cells()[doc.text.selection()].iter().map(|c| c.ch).collect();
+                if picked.is_empty() || picked.contains('\n') {
+                    return false;
+                }
+                self.note = Some(format!("Finding \"{picked}\""));
+                self.find = picked;
+                return true;
+            }
+            Action::JumpToSelection => {
+                self.follow = true;
+                return true;
+            }
+            Action::SelectLine => return self.select_line(),
+            Action::CopyStyle => {
+                let Some(doc) = active_doc(&self.docs) else { return false };
+                self.copied_style = Some(doc.text.char_style());
+                self.note = Some("Style copied".into());
+                return true;
+            }
+            Action::PreventEditing => {
+                let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
+                doc.read_only = !doc.read_only;
+                return true;
+            }
+            Action::ShowRuler => {
+                self.opts.show_ruler = !self.opts.show_ruler;
+                self.save_options(ctx);
+                return true;
+            }
+            Action::WrapToWindow => {
+                self.opts.wrap_window = !self.opts.wrap_window;
+                self.save_options(ctx);
+                self.revision += 1;
+                return true;
+            }
+            Action::ZoomIn | Action::ZoomOut | Action::ActualSize => {
+                self.zoom = match action {
+                    Action::ZoomIn => prefs::zoom_in(self.zoom),
+                    Action::ZoomOut => prefs::zoom_out(self.zoom),
+                    _ => 1.0,
+                };
+                self.revision += 1;
+                self.follow = true;
+                return true;
+            }
+            Action::SmartQuotes => {
+                self.opts.smart_quotes = !self.opts.smart_quotes;
+                self.save_options(ctx);
+                return true;
+            }
+            Action::SmartDashes => {
+                self.opts.smart_dashes = !self.opts.smart_dashes;
+                self.save_options(ctx);
+                return true;
+            }
+            Action::SpellAuto => {
+                self.opts.spell_auto = !self.opts.spell_auto;
+                self.save_options(ctx);
+                return true;
+            }
+            Action::HeaderFooter => {
+                self.opts.header_footer = !self.opts.header_footer;
+                self.save_options(ctx);
+                return true;
+            }
+            Action::NewPlain(plain) => {
+                self.opts.new_plain = plain;
+                self.save_options(ctx);
                 return true;
             }
             Action::Find => {
@@ -227,6 +404,9 @@ impl TextEditApp {
             Action::FindNext => return self.find_step(true),
             Action::FindPrevious => return self.find_step(false),
             Action::Replace => {
+                if self.refuse_edit() {
+                    return true;
+                }
                 let (query, replacement, case) = (self.find.clone(), self.replace.clone(), false);
                 let replaced = active_doc_mut(&mut self.docs).is_some_and(|d| d.text.replace_selection(&query, &replacement, case));
                 if replaced {
@@ -235,6 +415,9 @@ impl TextEditApp {
                 return self.find_step(true) || replaced;
             }
             Action::ReplaceAll => {
+                if self.refuse_edit() {
+                    return true;
+                }
                 let (query, replacement) = (self.find.clone(), self.replace.clone());
                 let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
                 let count = doc.text.replace_all(&query, &replacement, false);
@@ -256,6 +439,8 @@ impl TextEditApp {
             }
             Action::SpellToggle => {
                 self.spelling.enabled = !self.spelling.enabled;
+                self.opts.spell_enabled = self.spelling.enabled;
+                self.save_options(ctx);
                 self.revision += 1;
                 return true;
             }
@@ -264,6 +449,9 @@ impl TextEditApp {
             Action::SpellLearn => return self.spell_learn(ctx),
             Action::SpellIgnore => return self.spell_ignore(),
             _ => {}
+        }
+        if edits_text(action) && self.refuse_edit() {
+            return true;
         }
         let formatting = is_formatting(action);
         let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
@@ -291,7 +479,8 @@ impl TextEditApp {
                 }
                 return false;
             }
-            Action::Paste => match clipboard::text() {
+            // the clipboard carries plain text, so a paste already takes the style at the caret
+            Action::Paste | Action::PasteMatch => match clipboard::text() {
                 Some(s) if !s.is_empty() => {
                     doc.text.insert(&normalize_breaks(&s), Kind::Pasting);
                     true
@@ -302,6 +491,38 @@ impl TextEditApp {
                 doc.text.select_all();
                 return true;
             }
+            Action::Delete => {
+                if doc.text.has_selection() {
+                    doc.text.delete_backward();
+                    true
+                } else {
+                    false
+                }
+            }
+            Action::Transform(how) => doc.text.transform(how),
+            Action::Strike => {
+                doc.text.toggle_strike();
+                true
+            }
+            Action::Superscript => {
+                doc.text.toggle_script(1);
+                true
+            }
+            Action::Subscript => {
+                doc.text.toggle_script(-1);
+                true
+            }
+            Action::Highlight(index) => {
+                doc.text.set_highlight(index);
+                true
+            }
+            Action::PasteStyle => match self.copied_style {
+                Some(style) => {
+                    doc.text.apply_char_style(&style);
+                    true
+                }
+                None => false,
+            },
             Action::Bold => {
                 doc.text.toggle_bold();
                 true
@@ -430,17 +651,126 @@ impl TextEditApp {
         true
     }
 
-    /// Print: the document is laid out for the page setup and sent to the default printer through the print operation.
-    /// The answer is the status row's note.
-    fn print_document(&mut self, ctx: &Ctx) -> bool {
-        let info = self.print_info.clone();
+    /// Select Line: with a line number or range ("12", "12-20") in the find field, selects those lines; otherwise opens the
+    /// find bar to take one.
+    fn select_line(&mut self) -> bool {
+        if self.find_open {
+            if let Some((first, last)) = text::parse_line_spec(&self.find) {
+                let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
+                let found = doc.text.select_lines(first, last);
+                let count = doc.text.line_count();
+                self.note = Some(if found { format!("Selected line {first}") } else { format!("There is no line {first}; the document has {count}") });
+                self.follow = true;
+                return true;
+            }
+        }
+        self.find_open = true;
+        self.focus = Focus::Find;
+        self.note = Some("Type a line number or a range such as 12-20 in the find field, then choose Select Line again".into());
+        true
+    }
+
+    /// Edit > Complete: replaces the word before the caret with the first word of the document that starts with it;
+    /// choosing it again steps through the other candidates.
+    fn complete(&mut self) -> bool {
+        let previous = self.completion.take();
+        if self.refuse_edit() {
+            return true;
+        }
         let Some(doc) = active_doc(&self.docs) else { return false };
+        let sel = doc.text.selection();
+        let (prefix, start, index) = match previous {
+            Some(c) if c.range == sel && !sel.is_empty() => (c.prefix, c.range.start, c.index + 1),
+            _ => {
+                let head = doc.text.head();
+                let Some(range) = spell::word_at(doc.text.cells(), head).filter(|r| r.end == head && !doc.text.has_selection()) else {
+                    return false;
+                };
+                let prefix: String = doc.text.cells()[range.clone()].iter().map(|c| c.ch).collect();
+                (prefix, range.start, 0)
+            }
+        };
+        let options = text::completions(doc.text.cells(), &prefix);
+        if options.is_empty() {
+            self.note = Some(format!("No completions for \"{prefix}\""));
+            return true;
+        }
+        let index = index % options.len();
+        let choice = options[index].clone();
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
+        doc.text.replace_range(start..sel.end, &choice);
+        let range = doc.text.selection();
+        self.edited();
+        self.completion = Some(Completion { prefix, range, index });
+        true
+    }
+
+    /// The print operation for the active document: laid out for the page setup, with the title and page number in
+    /// the margins when the header and footer are on.
+    fn print_job(&self, ctx: &Ctx) -> Option<PrintOperation> {
+        let info = self.print_info.clone();
+        let doc = active_doc(&self.docs)?;
         let (_, _, width, _) = info.imageable();
         let measure = |ch: char, style: &Style| view::char_width(&ctx.ui, ch, style);
         let cells = doc.text.cells();
         let layout = layout::layout_tabs(cells, width, &measure, doc.text.tab_width());
-        let pages = print::document(cells, &layout, &info, &measure);
-        let job = PrintOperation::pages("Text Editor document", pages, print::FACES.to_vec()).with_info(info);
+        let title = self.docs.active().and_then(|id| self.docs.display_name(id)).unwrap_or_else(|| "Untitled".into());
+        let header = self.opts.header_footer.then_some(title.as_str());
+        let pages = print::document_with(cells, &layout, &info, &measure, header);
+        Some(PrintOperation::pages(title.clone(), pages, print::FACES.to_vec()).with_info(info))
+    }
+
+    /// File > Export as PDF: asks where to save; the PDF is written when the save panel answers (see `export_event`).
+    fn export_pdf(&mut self, ctx: &Ctx) -> bool {
+        let Some(id) = self.docs.active() else { return false };
+        let name = self.docs.display_name(id).unwrap_or_else(|| "Untitled".into());
+        let stem = name.rsplit_once('.').map_or(name.as_str(), |(stem, _)| stem);
+        self.export_request = Some(ctx.save_document(&format!("{stem}.pdf"), &["pdf"]));
+        true
+    }
+
+    /// The save panel's answers for Export as PDF: the file to write, then the commit. `Err` hands back an event that is
+    /// not the export's, for the document controller.
+    fn export_event(&mut self, ctx: &Ctx, ev: DocumentEvent) -> Result<bool, DocumentEvent> {
+        let Some(request) = self.export_request else { return Err(ev) };
+        match ev {
+            DocumentEvent::SaveTo(file) if file.request == request => {
+                let written = match self.print_job(ctx).map(|job| job.document()) {
+                    Some(Ok((_, bytes))) => {
+                        use std::io::Write;
+                        let mut f = &file.file;
+                        f.set_len(0).and_then(|_| f.write_all(&bytes)).and_then(|_| f.sync_all()).map_err(|e| e.to_string())
+                    }
+                    Some(Err(e)) => Err(format!("{e:?}")),
+                    None => Err("no document".to_string()),
+                };
+                match written {
+                    Ok(()) => ctx.commit_document(request),
+                    Err(message) => {
+                        ctx.abort_document(request);
+                        self.export_request = None;
+                        self.note = Some(format!("Export failed: {message}"));
+                    }
+                }
+                Ok(true)
+            }
+            DocumentEvent::Saved(file) if file.request == request => {
+                self.export_request = None;
+                self.note = Some("Exported as PDF".into());
+                Ok(true)
+            }
+            DocumentEvent::Failed { request: failed, .. } if failed == request => {
+                self.export_request = None;
+                Ok(true)
+            }
+            other => Err(other),
+        }
+    }
+
+    /// Print: the document is laid out for the page setup and sent to the default printer through the print operation.
+    /// The answer is the status row's note.
+    fn print_document(&mut self, ctx: &Ctx) -> bool {
+        let Some(job) = self.print_job(ctx) else { return false };
         self.note = Some(match job.run() {
             Ok(_) => "Sent to the printer".into(),
             Err(PrintError::NoCups) => "The printing service is not running".into(),
@@ -468,10 +798,39 @@ impl TextEditApp {
 
     /// Inserts text into the page as typed, line breaks included.
     fn insert_raw(&mut self, s: &str) -> bool {
+        if self.refuse_edit() {
+            return true;
+        }
+        let (quotes, dashes) = (self.opts.smart_quotes, self.opts.smart_dashes);
         let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
-        doc.text.type_text(s);
+        if quotes || dashes {
+            doc.text.type_smart(s, quotes, dashes);
+        } else {
+            doc.text.type_text(s);
+        }
         self.edited();
+        // a space or punctuation ends a word, which Correct Spelling Automatically then checks
+        if self.opts.spell_auto && s.chars().last().is_some_and(|c| !c.is_alphanumeric() && c != '\'') {
+            self.autocorrect();
+        }
         true
+    }
+
+    /// Correct Spelling Automatically: the word just ended by the typed boundary is replaced by the checker's guess, and
+    /// the caret stays after the boundary.
+    fn autocorrect(&mut self) {
+        let Some(doc) = active_doc(&self.docs) else { return };
+        let head = doc.text.head();
+        let Some(boundary) = head.checked_sub(1) else { return };
+        let Some((range, guess)) = self.spelling.autocorrect(doc.text.cells(), boundary) else { return };
+        let word: String = doc.text.cells()[range.clone()].iter().map(|c| c.ch).collect();
+        let shift = guess.chars().count() as isize - word.chars().count() as isize;
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return };
+        doc.text.select(range.start, range.end);
+        doc.text.replace_selection(&word, &guess, true);
+        let caret = (head as isize + shift).max(0) as usize;
+        doc.text.select(caret, caret);
+        self.edited();
     }
 
     /// Backspace: from the focused field, or the page.
@@ -479,6 +838,9 @@ impl TextEditApp {
         if self.find_open && self.focus != Focus::Body {
             let field = if self.focus == Focus::Find { &mut self.find } else { &mut self.replace };
             return field.pop().is_some();
+        }
+        if self.refuse_edit() {
+            return true;
         }
         let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
         doc.text.delete_backward();
@@ -502,7 +864,7 @@ impl TextEditApp {
             }
             38 | 40 => {
                 let Some(cache) = self.cache.as_ref() else { return false };
-                cache.layout.move_vertical(doc.text.cells(), head, code == 40, &measure)
+                cache.layout.move_vertical(&cache.cells, head, code == 40, &measure)
             }
             _ => return false,
         };
@@ -552,7 +914,7 @@ impl TextEditApp {
                 let scroll_y = py - geom.body_top + self.scroll;
                 let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
                 let Some(cache) = self.cache.as_ref() else { return false };
-                let index = cache.layout.index_at(doc.text.cells(), at, scroll_y, &measure);
+                let index = cache.layout.index_at(&cache.cells, at, scroll_y, &measure);
                 doc.text.select(index, index);
                 self.drag = true;
                 self.follow = true;
@@ -569,7 +931,7 @@ impl TextEditApp {
                 let scroll_y = py - geom.body_top + self.scroll;
                 let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
                 let Some(cache) = self.cache.as_ref() else { return false };
-                let index = cache.layout.index_at(doc.text.cells(), at, scroll_y, &measure);
+                let index = cache.layout.index_at(&cache.cells, at, scroll_y, &measure);
                 let anchor = doc.text.anchor();
                 doc.text.select(anchor, index);
                 true
@@ -602,21 +964,36 @@ impl TextEditApp {
             menu_item(Action::Cut, "Cut", "cmd+x", has_sel),
             menu_item(Action::Copy, "Copy", "cmd+c", has_sel),
             menu_item(Action::Paste, "Paste", "cmd+v", clipboard::text().is_some()),
+            menu_item(Action::PasteMatch, "Paste and Match Style", "cmd+alt+shift+v", clipboard::text().is_some()),
+            menu_item(Action::Delete, "Delete", "", has_sel),
             menu_item(Action::SelectAll, "Select All", "cmd+a", enabled),
             AppMenuItem::separator(),
             menu_item(Action::Find, "Find\u{2026}", "cmd+f", true),
             menu_item(Action::FindNext, "Find Next", "cmd+g", has_find),
             menu_item(Action::FindPrevious, "Find Previous", "cmd+shift+g", has_find),
+            menu_item(Action::UseSelection, "Use Selection for Find", "cmd+e", has_sel),
+            menu_item(Action::JumpToSelection, "Jump to Selection", "cmd+j", enabled),
+            menu_item(Action::SelectLine, "Select Line\u{2026}", "cmd+l", enabled),
             menu_item(Action::Replace, "Replace", "", self.find_open && has_find),
             menu_item(Action::ReplaceAll, "Replace All", "", self.find_open && has_find),
             AppMenuItem::separator(),
             AppMenuItem::submenu("Spelling and Grammar"),
             menu_item(Action::SpellNext, "Check Document Now", "cmd+;", enabled).depth(1),
             menu_item(Action::SpellToggle, "Check Spelling While Typing", "", true).checked(self.spelling.enabled).depth(1),
+            menu_item(Action::SpellAuto, "Correct Spelling Automatically", "", true).checked(self.opts.spell_auto).depth(1),
             AppMenuItem::separator().depth(1),
             menu_item(Action::SpellCorrect, "Correct Spelling", "", enabled).depth(1),
             menu_item(Action::SpellLearn, "Learn Spelling", "", enabled).depth(1),
             menu_item(Action::SpellIgnore, "Ignore Spelling", "", enabled).depth(1),
+            AppMenuItem::submenu("Substitutions"),
+            menu_item(Action::SmartQuotes, "Smart Quotes", "", true).checked(self.opts.smart_quotes).depth(1),
+            menu_item(Action::SmartDashes, "Smart Dashes", "", true).checked(self.opts.smart_dashes).depth(1),
+            AppMenuItem::submenu("Transformations"),
+            menu_item(Action::Transform(Transform::Upper), "Make Upper Case", "", has_sel).depth(1),
+            menu_item(Action::Transform(Transform::Lower), "Make Lower Case", "", has_sel).depth(1),
+            menu_item(Action::Transform(Transform::Capitalize), "Capitalize", "", has_sel).depth(1),
+            AppMenuItem::separator(),
+            menu_item(Action::Complete, "Complete", "alt+escape", enabled),
         ];
         AppMenu { title: "Edit".into(), items }
     }
@@ -629,12 +1006,21 @@ impl TextEditApp {
             menu_item(Action::Bold, "Bold", "cmd+b", rich).checked(style.bold),
             menu_item(Action::Italic, "Italic", "cmd+i", rich).checked(style.italic),
             menu_item(Action::Underline, "Underline", "cmd+u", rich).checked(style.underline),
+            menu_item(Action::Strike, "Strikethrough", "", rich).checked(style.strike),
             AppMenuItem::separator(),
             menu_item(Action::Bigger, "Bigger", "cmd+=", rich),
             menu_item(Action::Smaller, "Smaller", "cmd+-", rich),
             AppMenuItem::separator(),
-            AppMenuItem::submenu("Font"),
+            AppMenuItem::submenu("Baseline"),
+            menu_item(Action::Superscript, "Superscript", "", rich).checked(style.script == 1).depth(1),
+            menu_item(Action::Subscript, "Subscript", "", rich).checked(style.script == -1).depth(1),
+            AppMenuItem::submenu("Highlight"),
         ];
+        for (index, (name, _)) in text::COLORS.iter().enumerate() {
+            let title = if index == 0 { "None" } else { *name };
+            items.push(menu_item(Action::Highlight(index as u8), title, "", rich).checked(style.highlight == index as u8).depth(1));
+        }
+        items.push(AppMenuItem::submenu("Font"));
         for index in 0..text::FAMILIES.len() as u8 {
             items.push(menu_item(Action::Font(index), view::family_name(index), "", rich).checked(style.font == index).depth(1));
         }
@@ -655,13 +1041,48 @@ impl TextEditApp {
             items.push(menu_item(Action::Color(index as u8), name, "", rich).checked(style.color == index as u8).depth(1));
         }
         items.push(AppMenuItem::separator());
+        items.push(menu_item(Action::CopyStyle, "Copy Style", "cmd+alt+c", enabled));
+        items.push(menu_item(Action::PasteStyle, "Paste Style", "cmd+alt+v", rich && self.copied_style.is_some()));
+        items.push(AppMenuItem::separator());
         // the mode switch names the mode it switches to
         if rich {
             items.push(menu_item(Action::MakePlain, "Make Plain Text", "", enabled));
         } else {
             items.push(menu_item(Action::MakeRich, "Make Rich Text", "", enabled));
         }
+        let read_only = active_doc(&self.docs).is_some_and(|d| d.read_only);
+        items.push(menu_item(Action::PreventEditing, if read_only { "Allow Editing" } else { "Prevent Editing" }, "", enabled));
         AppMenu { title: "Format".into(), items }
+    }
+
+    /// View: the ruler, the wrapping width and the zoom.
+    fn view_menu(&self) -> AppMenu {
+        let doc = active_doc(&self.docs);
+        let enabled = doc.is_some();
+        let rich = doc.is_some_and(|d| d.rich);
+        let ruler = if self.opts.show_ruler { "Hide Ruler" } else { "Show Ruler" };
+        let wrap = if self.opts.wrap_window { "Wrap to Page" } else { "Wrap to Window" };
+        let items = vec![
+            menu_item(Action::ShowRuler, ruler, "cmd+r", rich),
+            menu_item(Action::WrapToWindow, wrap, "", enabled),
+            AppMenuItem::separator(),
+            menu_item(Action::ZoomIn, "Zoom In", "cmd+alt+=", enabled && self.zoom < prefs::ZOOMS[prefs::ZOOMS.len() - 1]),
+            menu_item(Action::ZoomOut, "Zoom Out", "cmd+alt+-", enabled && self.zoom > prefs::ZOOMS[0]),
+            menu_item(Action::ActualSize, "Actual Size", "cmd+0", enabled && self.zoom != 1.0),
+        ];
+        AppMenu { title: "View".into(), items }
+    }
+
+    /// Preferences: the format of new documents. The other options live in the menus they belong to (spelling and
+    /// substitutions in Edit, the ruler and wrapping in View, the header and footer in File) and are kept in the
+    /// preferences too.
+    fn preferences_menu(&self) -> AppMenu {
+        let items = vec![
+            AppMenuItem::submenu("New Documents"),
+            menu_item(Action::NewPlain(false), "Rich Text", "", true).checked(!self.opts.new_plain).depth(1),
+            menu_item(Action::NewPlain(true), "Plain Text", "", true).checked(self.opts.new_plain).depth(1),
+        ];
+        AppMenu { title: "Preferences".into(), items }
     }
 
     /// File: the document controller's items, then Print and Page Setup.
@@ -669,7 +1090,12 @@ impl TextEditApp {
         let mut menu = self.docs.file_menu();
         let enabled = active_doc(&self.docs).is_some();
         menu.items.push(AppMenuItem::separator());
+        let any_edited = self.docs.ids().into_iter().any(|id| self.docs.is_edited(id));
+        menu.items.push(menu_item(Action::SaveAll, "Save All", "cmd+alt+s", any_edited));
+        menu.items.push(menu_item(Action::ExportPdf, "Export as PDF\u{2026}", "", enabled));
+        menu.items.push(AppMenuItem::separator());
         menu.items.push(menu_item(Action::Print, "Print\u{2026}", "cmd+p", enabled));
+        menu.items.push(menu_item(Action::HeaderFooter, "Print Header and Footer", "", enabled).checked(self.opts.header_footer));
         menu.items.push(AppMenuItem::submenu("Paper Size"));
         for (index, paper) in print::PAPERS.iter().enumerate() {
             let checked = self.print_info.paper == *paper;
@@ -699,11 +1125,18 @@ impl App for TextEditApp {
     }
 
     fn configure(&mut self, ctx: &Ctx) {
-        // the learned words are read once the app has its preferences
+        // the learned words and the settings are read once the app has its preferences
         self.spelling.load(ctx);
+        self.opts = Options::read(&|key| DocumentHost::pref(ctx, key));
+        self.spelling.enabled = self.opts.spell_enabled;
         // a window starts with an untitled document, as a new document would
         if self.docs.is_empty() {
-            self.docs.new_document();
+            let id = self.docs.new_document();
+            if self.opts.new_plain {
+                if let Some(d) = self.docs.get_mut(id) {
+                    d.rich = false;
+                }
+            }
         }
     }
 
@@ -750,14 +1183,19 @@ impl App for TextEditApp {
                             false
                         }
                     }
-                    46 if self.focus == Focus::Body => match active_doc_mut(&mut self.docs) {
-                        Some(doc) => {
-                            doc.text.delete_forward();
-                            self.edited();
-                            true
+                    46 if self.focus == Focus::Body => {
+                        if self.refuse_edit() {
+                            return true;
                         }
-                        None => false,
-                    },
+                        match active_doc_mut(&mut self.docs) {
+                            Some(doc) => {
+                                doc.text.delete_forward();
+                                self.edited();
+                                true
+                            }
+                            None => false,
+                        }
+                    }
                     37 | 38 | 39 | 40 if self.focus == Focus::Body => self.page_key(ctx, code),
                     _ => false,
                 }
@@ -793,7 +1231,7 @@ impl App for TextEditApp {
     }
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        vec![self.file_menu(), self.edit_menu(), self.format_menu()]
+        vec![self.file_menu(), self.edit_menu(), self.format_menu(), self.view_menu(), self.preferences_menu()]
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
@@ -807,6 +1245,10 @@ impl App for TextEditApp {
     }
 
     fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        let ev = match self.export_event(ctx, ev) {
+            Ok(handled) => return handled,
+            Err(ev) => ev,
+        };
         match self.docs.handle(ctx, ev) {
             Some(notices) => {
                 self.after_documents(&notices);
@@ -855,7 +1297,7 @@ impl App for TextEditApp {
             let sel = doc.text.selection();
             let head = doc.text.head();
             if self.follow {
-                let (_, top, height) = cache.layout.caret(doc.text.cells(), head, &|ch: char, st: &Style| view::char_width(ui, ch, st));
+                let (_, top, height) = cache.layout.caret(&cache.cells, head, &|ch: char, st: &Style| view::char_width(ui, ch, st));
                 if top < self.scroll {
                     self.scroll = top;
                 } else if top + height > self.scroll + view_h {
@@ -870,7 +1312,7 @@ impl App for TextEditApp {
                 ui,
                 &geom,
                 &cache.layout,
-                doc.text.cells(),
+                &cache.cells,
                 sel,
                 head,
                 self.scroll,
@@ -919,6 +1361,38 @@ mod tests {
         assert_eq!(word_here(&d), None, "a selection of two words is not a word");
         d.text.select(4, 4);
         assert_eq!(word_here(&d), Some((0..4, "helo".to_string())), "the end of a word still belongs to it");
+    }
+
+    #[test]
+    fn prevent_editing_refuses_text_changes_but_not_copying_or_view_commands() {
+        assert!(edits_text(Action::Paste));
+        assert!(edits_text(Action::Delete));
+        assert!(edits_text(Action::Transform(Transform::Upper)));
+        assert!(edits_text(Action::Strike));
+        assert!(edits_text(Action::Undo));
+        assert!(!edits_text(Action::Copy));
+        assert!(!edits_text(Action::Find));
+        assert!(!edits_text(Action::ZoomIn));
+        assert!(!edits_text(Action::PreventEditing));
+        assert!(!edits_text(Action::CopyStyle));
+    }
+
+    #[test]
+    fn zooming_scales_sizes_only() {
+        let cells = vec![Cell { ch: 'a', style: Style { size: 12.0, ..Style::default() } }];
+        let big = zoomed(&cells, 2.0);
+        assert_eq!(big[0].style.size, 24.0);
+        assert_eq!(big[0].ch, 'a');
+        assert_eq!(cells[0].style.size, 12.0, "the document keeps its own size");
+    }
+
+    #[test]
+    fn formatting_commands_include_the_new_character_styles() {
+        assert!(is_formatting(Action::Strike));
+        assert!(is_formatting(Action::Superscript));
+        assert!(is_formatting(Action::Highlight(2)));
+        assert!(is_formatting(Action::PasteStyle));
+        assert!(!is_formatting(Action::CopyStyle));
     }
 
     #[test]
