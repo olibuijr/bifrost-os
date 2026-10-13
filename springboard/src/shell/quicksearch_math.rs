@@ -251,7 +251,7 @@ mod tests {
     fn a_bare_number_or_a_word_is_not_a_calculation() {
         assert_eq!(answer("42"), None);
         assert_eq!(answer("-5"), None);
-        assert_eq!(answer("safari"), None);
+        assert_eq!(answer("banana"), None);
         assert_eq!(answer("1/0"), None, "infinite results give no answer");
     }
 

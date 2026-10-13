@@ -61,7 +61,7 @@ impl View for ZStack {
 
 /// `ViewThatFits`: offers the whole bounds to the candidates in order and shows the first one whose intrinsic size fits
 /// the constrained axes (`axes` is `(horizontal, vertical)`, both by default). The others are hidden. When none fits
-/// the last candidate is shown, as SwiftUI does for its fallback.
+/// the last candidate is shown as the fallback.
 pub struct ViewThatFits {
     base: ViewBase,
     pub axes: (bool, bool),

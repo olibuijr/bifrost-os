@@ -442,11 +442,7 @@ impl Contacts {
         app
     }
 
-    #[allow(dead_code)]
-    pub fn needs_frame(&self) -> bool {
-        self.dirty
-    }
-    #[allow(dead_code)]
+    #[cfg_attr(not(test), allow(dead_code))] // the tests read the shown rows through this
     pub fn listed(&self) -> Vec<&Contact> {
         self.rows.iter().map(|r| &self.contacts[r.contact]).collect()
     }
@@ -454,16 +450,6 @@ impl Contacts {
     /// unreadable file never clears what the index holds.
     pub fn all_contacts(&self) -> Option<&[Contact]> {
         (!self.load_failed).then_some(self.contacts.as_slice())
-    }
-
-    /// Opens a saved contact by stable ID, ignoring a stale search result.
-    #[allow(dead_code)]
-    pub fn show_contact(&mut self, ui: &Ui, id: u64, _t: f64) -> bool {
-        if !self.contacts.iter().any(|contact| contact.id == id) {
-            return false;
-        }
-        self.open_detail(ui, id);
-        true
     }
 
     /// True while the editor is open: its edits are not saved yet.
@@ -478,7 +464,7 @@ impl Contacts {
             None
         }
     }
-    #[allow(dead_code)]
+    #[cfg_attr(not(test), allow(dead_code))] // the tests read the state dump through this
     pub fn describe(&self) -> String {
         let screen = match self.screen {
             Screen::List => "list".into(),

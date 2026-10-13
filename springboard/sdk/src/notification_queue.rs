@@ -14,7 +14,7 @@
 use crate::dispatch::DispatchQueue;
 use crate::notification::{Notification, NotificationCenter};
 
-/// When a queued post reaches observers (`NSPostingStyle`).
+/// When a queued post reaches observers (the posting style).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PostingStyle {
     /// Posted at once; never held in the queue.
@@ -25,7 +25,7 @@ pub enum PostingStyle {
     WhenIdle,
 }
 
-/// Which queued posts a new post replaces (`NSNotificationCoalescing`).
+/// Which queued posts a new post replaces (the coalescing mode).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Coalescing {
     None,
