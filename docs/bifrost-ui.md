@@ -2066,3 +2066,16 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## Core Location (`bifrost_app::core_location`, the `location` service)
+
+`LocationManager` mirrors `CLLocationManager`: `authorization_status`, `request_when_in_use_authorization`,
+`start_updating_location` / `stop_updating_location`, `request_location`, `desired_accuracy` (`accuracy::*`),
+`distance_filter`, and a `Delegate` with `did_update_locations`, `did_fail_with_error` and `did_change_authorization`.
+`Location` mirrors `CLLocation` (coordinate, horizontal accuracy, timestamp, `distance_from`); `reverse_geocode` returns a
+city-level `Placemark`. Authorization is the privacy grant (Settings > Privacy > App Permissions > Location); errors are
+`bifrost_ui::location_auth::LocationError`. The shell side is `springboard/src/shell/services/location.rs`.
+Honest limits: no GPS hardware and no Wi-Fi positioning. A fix is a manual location from the shell prefs
+(`location.manual.*`, 100 m) or an IP lookup that is off by default (`location.ip.enabled`, `location.ip.endpoint`, about
+25 km); altitude is always absent; reverse geocoding knows only those places within 50 km, not a worldwide gazetteer;
+no heading, regions or background updates. Host-tested only; the rows stay partial until checked on Midget.
