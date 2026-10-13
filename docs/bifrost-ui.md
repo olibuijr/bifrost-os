@@ -2066,3 +2066,17 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## CryptoKit signatures (`Curve25519.Signing`, `bifrost_ui::ed25519`)
+
+Ed25519 (RFC 8032) public-key signatures, a pure model with host unit tests. Field
+arithmetic is shared with `x25519`; the hash is `bifrost_core::sha512`.
+
+- `PrivateKey::generate()` (`init()`), `from_raw_representation` (32-byte seed),
+  `raw_representation`, `public_key`, `signature_for(data)` (64 bytes).
+- `PublicKey::from_raw_representation`, `raw_representation`,
+  `is_valid_signature(signature, data)`; it rejects bad lengths, non-canonical S and
+  keys that are not curve points.
+- `CryptoKitError::IncorrectKeySize` for keys that are not 32 bytes.
+
+Still missing: P256, P384, P521. Status is partial until checked on Midget.
