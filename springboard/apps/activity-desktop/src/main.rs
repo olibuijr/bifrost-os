@@ -5,6 +5,8 @@
 #[allow(dead_code)]
 mod draw;
 #[allow(dead_code)]
+mod inspect;
+#[allow(dead_code)]
 mod model;
 #[allow(dead_code)]
 mod sample;
@@ -14,7 +16,7 @@ mod window;
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
-use window::{Monitor, MENU_FIND, MENU_QUIT};
+use window::{Monitor, MENU_FIND, MENU_FORCE, MENU_INSPECT, MENU_QUIT};
 
 struct ActivityApp {
     monitor: Option<Monitor>,
@@ -73,7 +75,9 @@ impl App for ActivityApp {
             title: "Process".into(),
             items: vec![
                 AppMenuItem::new(MENU_QUIT, "Quit Process").enabled(m.can_quit_selected()),
+                AppMenuItem::new(MENU_FORCE, "Force Quit Process").enabled(m.can_quit_selected()),
                 AppMenuItem::separator(),
+                AppMenuItem::new(MENU_INSPECT, "Inspect Process").enabled(m.has_selected()),
                 AppMenuItem::new(MENU_FIND, "Find Process").key("cmd+f"),
             ],
         }]
@@ -84,6 +88,14 @@ impl App for ActivityApp {
         match id {
             MENU_QUIT => {
                 m.quit_selected();
+                true
+            }
+            MENU_FORCE => {
+                m.force_quit_selected();
+                true
+            }
+            MENU_INSPECT => {
+                m.toggle_inspector();
                 true
             }
             MENU_FIND => {

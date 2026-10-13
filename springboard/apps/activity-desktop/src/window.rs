@@ -2,6 +2,7 @@
 //! sampling clock and the geometry that drawing and pointer input share. Points for the kit (`ui.pt`), pixels only
 //! where the surface is drawn.
 
+use crate::inspect::{self, Inspection};
 use crate::model::{self, Column, Filter, History, Sort, SortKey, Tab};
 use crate::sample::{ProcSample, Sampler, Snapshot};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
@@ -38,6 +39,8 @@ pub const SAMPLE_MS: f64 = 1000.0;
 /// Toolbar item ids (also the published control ids).
 pub const B_QUIT: u32 = 1;
 pub const B_SEARCH: u32 = 2;
+pub const B_FORCE: u32 = 3;
+pub const B_INSPECT: u32 = 4;
 /// Sidebar row ids.
 const ROW_ALL: u32 = 1;
 const ROW_MINE: u32 = 2;
@@ -45,6 +48,8 @@ const ROW_OTHER: u32 = 3;
 /// Menu item ids for the app's own menu.
 pub const MENU_QUIT: u32 = 1;
 pub const MENU_FIND: u32 = 2;
+pub const MENU_FORCE: u32 = 3;
+pub const MENU_INSPECT: u32 = 4;
 
 /// Where a press started, so the release can act on the same thing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -91,6 +96,8 @@ pub struct Monitor {
     pub status: String,
     pub labels: TextCache,
     pub press: Press,
+    /// The process being inspected (its pid and the last reading), shown in place of the graph.
+    pub inspector: Option<(u32, Inspection)>,
 }
 
 impl Monitor {
@@ -113,6 +120,7 @@ impl Monitor {
             status: String::new(),
             labels: TextCache::default(),
             press: Press::None,
+            inspector: None,
         }
     }
 
@@ -133,7 +141,20 @@ impl Monitor {
         self.history.record(&snap);
         self.snapshot = Some(snap);
         self.rebuild();
+        self.refresh_inspector();
         true
+    }
+
+    /// Re-reads the inspected process. It closes when the process has exited.
+    fn refresh_inspector(&mut self) {
+        let Some((pid, _)) = self.inspector else { return };
+        let data = inspect::inspect(pid);
+        if data.command.is_empty() && data.exe.is_empty() {
+            self.inspector = None;
+            self.status = "The inspected process has exited".into();
+        } else {
+            self.inspector = Some((pid, data));
+        }
     }
 
     /// The time of the next reading, so the app wakes for it.
@@ -185,14 +206,37 @@ impl Monitor {
 
     /// Sends SIGTERM to the selected process (its own user's, checked here as well as in the toolbar).
     pub fn quit_selected(&mut self) {
+        self.signal_selected(SIGTERM, "quit");
+    }
+
+    /// Sends SIGKILL to the selected process. Same ownership rule as Quit: a process that cannot be quit cannot be forced.
+    pub fn force_quit_selected(&mut self) {
+        self.signal_selected(SIGKILL, "force quit");
+    }
+
+    fn signal_selected(&mut self, sig: i32, verb: &str) {
         let Some(p) = self.selected_proc().cloned() else { return };
         if !self.can_quit_selected() {
-            self.status = "Only processes you own can be quit".into();
+            self.status = format!("Only processes you own can be {verb}");
             return;
         }
         // SAFETY: kill(2) takes a pid and a signal number and touches no memory of ours.
-        let rc = unsafe { kill(p.pid as i32, SIGTERM) };
-        self.status = if rc == 0 { format!("Sent quit to {}", p.name) } else { format!("Could not quit {}", p.name) };
+        let rc = unsafe { kill(p.pid as i32, sig) };
+        self.status = if rc == 0 { format!("Sent {verb} to {}", p.name) } else { format!("Could not {verb} {}", p.name) };
+    }
+
+    /// Whether a process row is selected (any process can be inspected; the reading says what is denied).
+    pub fn has_selected(&self) -> bool {
+        self.selected_proc().is_some()
+    }
+
+    /// Opens the inspector on the selected process, or closes it when it is open.
+    pub fn toggle_inspector(&mut self) {
+        if self.inspector.take().is_some() {
+            return;
+        }
+        let Some(pid) = self.selected else { return };
+        self.inspector = Some((pid, inspect::inspect(pid)));
     }
 
     // --- layout ---
@@ -323,6 +367,8 @@ impl Monitor {
     fn bar(&self) -> Toolbar {
         Toolbar::new(vec![
             ToolbarItem::button(B_QUIT, "Quit Process").enabled(self.can_quit_selected()),
+            ToolbarItem::button(B_FORCE, "Force Quit").enabled(self.can_quit_selected()),
+            ToolbarItem::button(B_INSPECT, "Inspect").enabled(self.has_selected()),
             ToolbarItem::flexible_space(),
             ToolbarItem::custom(B_SEARCH, "Search", SEARCH_PT),
         ])
@@ -357,6 +403,8 @@ impl Monitor {
     fn activate(&mut self, id: u32) {
         match id {
             B_QUIT => self.quit_selected(),
+            B_FORCE => self.force_quit_selected(),
+            B_INSPECT => self.toggle_inspector(),
             B_SEARCH => self.search_focused = true,
             _ => {}
         }
@@ -506,4 +554,38 @@ fn item_w(ui: &Ui) -> impl Fn(&ToolbarItem) -> f32 + '_ {
 extern "C" {
     fn kill(pid: i32, sig: i32) -> i32;
 }
+const SIGKILL: i32 = 9;
 const SIGTERM: i32 = 15;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_inspector_needs_a_selected_process() {
+        let mut m = Monitor::new(800.0, 600.0);
+        assert!(!m.has_selected());
+        m.toggle_inspector();
+        assert!(m.inspector.is_none());
+    }
+
+    #[test]
+    fn the_inspector_opens_on_the_selected_pid_and_closes_again() {
+        let mut m = Monitor::new(800.0, 600.0);
+        m.selected = Some(std::process::id());
+        m.toggle_inspector();
+        let (pid, data) = m.inspector.clone().expect("open");
+        assert_eq!(pid, std::process::id());
+        assert!(!data.exe.is_empty());
+        m.toggle_inspector();
+        assert!(m.inspector.is_none());
+    }
+
+    #[test]
+    fn force_quit_without_a_selection_does_nothing() {
+        let mut m = Monitor::new(800.0, 600.0);
+        m.force_quit_selected();
+        m.quit_selected();
+        assert!(m.status.is_empty());
+    }
+}
