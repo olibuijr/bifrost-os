@@ -363,6 +363,8 @@ pub enum Overlay {
     Details,
     /// Settings: the account and Sign Out.
     Settings,
+    /// Asks before leaving the conversation with this room id.
+    Confirm(String),
     /// The emoji picker. With a message id, a choice reacts to that message; without, it goes into the composer.
     Emoji(Option<String>),
 }
@@ -372,6 +374,8 @@ pub enum Overlay {
 pub struct Messages {
     /// The signed-in user's id. Empty until a sign-in succeeds.
     pub user_id: String,
+    /// The homeserver base address of the signed-in account, for Settings.
+    pub homeserver: String,
     pub rooms: Vec<Room>,
     /// The room on screen.
     pub selected: Option<String>,
