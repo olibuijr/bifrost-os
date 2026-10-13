@@ -1,18 +1,14 @@
-//! Data-based previews (`QLPreviewProvider`, `QLFilePreviewRequest`, `QLPreviewReply`, `QLPreviewReplyAttachment`)
-//! and thumbnail requests (`QLThumbnailGenerator.Request`), as pure models.
+//! Data-based previews (`QLPreviewProvider`, `QLFilePreviewRequest`, `QLPreviewReply`, `QLPreviewReplyAttachment`),
+//! as a pure model. Thumbnails are `crate::thumb_service`.
 //!
 //! A [`Registry`] maps a file type to the provider that previews it, using the type tree in [`crate::uttype`]: the
 //! most specific registered type wins. A provider answers with a [`Reply`]: HTML with inline [`Attachment`]s, a PDF
-//! page size, a bitmap size, or a file the viewer already shows. A [`ThumbnailRequest`] asks for one or more
-//! [`Representation`]s of a file at a size in points and a scale, and [`ThumbnailRequest::best_of`] picks the best
-//! one that was produced.
+//! page size, a bitmap size, or a file the viewer already shows.
 
 use crate::uttype;
 
 /// Largest bitmap edge a reply may declare, in pixels. Larger sizes are refused, not clamped.
 pub const MAX_BITMAP_EDGE: u32 = 16384;
-/// Largest display scale a thumbnail request may ask for.
-pub const MAX_SCALE: f32 = 4.0;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ModelError {
@@ -26,8 +22,6 @@ pub enum ModelError {
     Empty,
     /// A file URL is not an absolute path or `file://` URL naming a file, or a searchable item domain is malformed.
     BadUrl,
-    /// A thumbnail request asks for no representation.
-    NoRepresentation,
 }
 
 /// `QLPreviewReplyAttachment(data:contentType:)`: an inline resource an HTML preview refers to as `cid:<id>`.
@@ -245,66 +239,6 @@ impl Registry {
     }
 }
 
-/// `QLThumbnailGenerator.Request.RepresentationTypes`: a size of thumbnail a request can ask for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Representation {
-    Thumbnail,
-    LowQuality,
-    Icon,
-}
-
-impl Representation {
-    /// Best first: a full thumbnail beats a low-quality one, which beats an icon.
-    pub const ALL: [Self; 3] = [Self::Thumbnail, Self::LowQuality, Self::Icon];
-}
-
-/// `QLThumbnailGenerator.Request(fileAt:size:scale:representationTypes:)`.
-#[derive(Clone, Debug, PartialEq)]
-pub struct ThumbnailRequest {
-    pub url: String,
-    /// Width and height in points.
-    pub size: (f32, f32),
-    /// Pixels per point of the target display.
-    pub scale: f32,
-    representations: Vec<Representation>,
-}
-
-impl ThumbnailRequest {
-    /// Refuses a size or scale that is zero, negative, not finite, or above [`MAX_SCALE`], and a request with no
-    /// representation. Repeated representations are kept once.
-    pub fn new(url: &str, size: (f32, f32), scale: f32, representations: &[Representation]) -> Result<Self, ModelError> {
-        let ok = |v: f32| v.is_finite() && v > 0.0;
-        if !(ok(size.0) && ok(size.1) && ok(scale) && scale <= MAX_SCALE) {
-            return Err(ModelError::BadSize);
-        }
-        let mut kept: Vec<Representation> = Vec::new();
-        for r in Representation::ALL {
-            if representations.contains(&r) {
-                kept.push(r);
-            }
-        }
-        if kept.is_empty() {
-            return Err(ModelError::NoRepresentation);
-        }
-        Ok(Self { url: url.to_string(), size, scale, representations: kept })
-    }
-
-    /// The requested pixel size, rounded to whole pixels and at least one pixel per edge.
-    pub fn pixel_size(&self) -> (u32, u32) {
-        let px = |v: f32| (v * self.scale).round().max(1.0) as u32;
-        (px(self.size.0), px(self.size.1))
-    }
-
-    pub fn wants(&self, r: Representation) -> bool {
-        self.representations.contains(&r)
-    }
-
-    /// `generateBestRepresentation`: the best requested representation that was produced, if any.
-    pub fn best_of(&self, produced: &[Representation]) -> Option<Representation> {
-        Representation::ALL.into_iter().find(|r| self.wants(*r) && produced.contains(r))
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -383,25 +317,6 @@ mod tests {
         reg.register("custom", &["com.example.thing"]).unwrap();
         assert_eq!(reg.provider_for_type("com.example.thing"), Some("custom"));
         assert_eq!(reg.provider_for_type("com.example.other"), None);
-    }
-
-    #[test]
-    fn thumbnail_request_pixels_and_scale_limits() {
-        let r = ThumbnailRequest::new("file:///a.png", (64.0, 40.5), 2.0, &[Representation::Thumbnail]).unwrap();
-        assert_eq!(r.pixel_size(), (128, 81));
-        assert_eq!(ThumbnailRequest::new("u", (0.0, 4.0), 1.0, &[Representation::Icon]), Err(ModelError::BadSize));
-        assert_eq!(ThumbnailRequest::new("u", (4.0, 4.0), MAX_SCALE + 0.5, &[Representation::Icon]), Err(ModelError::BadSize));
-        assert_eq!(ThumbnailRequest::new("u", (4.0, 4.0), 1.0, &[]), Err(ModelError::NoRepresentation));
-    }
-
-    #[test]
-    fn best_representation_is_the_best_requested_one_produced() {
-        let r = ThumbnailRequest::new("u", (64.0, 64.0), 1.0, &[Representation::Icon, Representation::LowQuality]).unwrap();
-        assert!(!r.wants(Representation::Thumbnail));
-        assert_eq!(r.best_of(&[Representation::Icon, Representation::LowQuality]), Some(Representation::LowQuality));
-        assert_eq!(r.best_of(&[Representation::Thumbnail]), None);
-        let all = ThumbnailRequest::new("u", (64.0, 64.0), 1.0, &Representation::ALL).unwrap();
-        assert_eq!(all.best_of(&[Representation::Icon, Representation::Thumbnail]), Some(Representation::Thumbnail));
     }
 
     #[test]

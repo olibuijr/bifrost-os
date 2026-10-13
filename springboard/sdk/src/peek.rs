@@ -1,18 +1,14 @@
-//! Preview (`QLPreviewPanel`, `QLPreviewItem`, `QLThumbnailGenerator`).
+//! Preview (the floating preview panel and its items, and data-based previews).
 //!
 //! [`PreviewPanel`] holds an ordered list of [`PreviewItem`]s and a current index that is always clamped. An app either
 //! hands it a list or pulls one from a [`PreviewDataSource`] (at most [`MAX_ITEMS`]). Each item carries an [`ItemState`].
 //! [`PreviewPanel::make_key_and_order_front`] sends `ToShell::Preview` (the shell draws the floating panel) and
-//! [`PreviewPanel::toggle`] is the Space-bar behaviour. Thumbnails: [`thumbnail_path`] names the cached PNG for a file and
-//! size, and [`ThumbnailCache`] remembers which were generated (an `NativeCache`, see `crate::cache`).
+//! [`PreviewPanel::toggle`] is the Space-bar behaviour. The panel draws each item's picture from the system thumbnails
+//! (`crate::thumbnails`), so an app does not make its own thumbnails.
 
 pub use crate::proto::peek::{PreviewItem, MAX_ITEMS};
-/// Data-based previews and thumbnail requests (`QLPreviewProvider`, `QLPreviewReply`, `QLThumbnailGenerator.Request`):
-/// the pure models in `bifrost_ui::preview`, re-exported for apps. See [`Registry`] and [`ThumbnailRequest`].
-pub use bifrost_ui::preview::{Attachment, Content, ModelError, PreviewProvider, Registry, Reply, Representation, ThumbnailRequest};
-/// Custom file type thumbnails (`QLThumbnailProvider`, `QLThumbnailReply`), generator errors and progressive
-/// updates: the pure models in `bifrost_ui::thumbnail`. See [`FileThumbnailRequest`] and [`Progressive`].
-pub use bifrost_ui::thumbnail::{FileThumbnailRequest, Progressive, ThumbnailContent, ThumbnailError, ThumbnailReply};
+/// Data-based previews: the pure models in `bifrost_ui::preview`, re-exported for apps. See [`Registry`].
+pub use bifrost_ui::preview::{Attachment, Content, ModelError, PreviewProvider, Registry, Reply};
 use crate::proto::ToShell;
 use crate::Ctx;
 
@@ -166,50 +162,6 @@ impl PreviewPanel {
     }
 }
 
-/// `QLThumbnailGenerator` target: the cached PNG path for `url` at `size` points and `scale`.
-pub fn thumbnail_path(url: &str, size: u32, scale: u32) -> std::path::PathBuf {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    (url, size, scale).hash(&mut h);
-    let base = std::env::var_os("XDG_CACHE_HOME").map(std::path::PathBuf::from).unwrap_or_else(std::env::temp_dir);
-    base.join("bifrost-peek").join(format!("{:016x}.png", h.finish()))
-}
-
-/// Remembers generated thumbnails (`generateBestRepresentation` results). Purgeable under memory pressure.
-pub struct ThumbnailCache(crate::cache::Cache<String, std::path::PathBuf>);
-
-impl ThumbnailCache {
-    pub fn new() -> Self {
-        Self(crate::cache::Cache::new(256, 256))
-    }
-
-    /// The cached PNG path for `url` if generated and still on disk; otherwise `generate(path)` renders the PNG at the
-    /// returned path and, when it returns true, the path is cached.
-    pub fn best_representation(&self, url: &str, size: u32, scale: u32, generate: impl FnOnce(&std::path::Path) -> bool) -> Option<std::path::PathBuf> {
-        let key = format!("{url}@{size}x{scale}");
-        if let Some(p) = self.0.get(&key) {
-            if p.exists() {
-                return Some(p);
-            }
-        }
-        let p = thumbnail_path(url, size, scale);
-        if let Some(d) = p.parent() {
-            let _ = std::fs::create_dir_all(d);
-        }
-        if generate(&p) {
-            self.0.set(key, p.clone(), 1);
-            return Some(p);
-        }
-        None
-    }
-}
-
-impl Default for ThumbnailCache {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// `QLPreviewViewStyle`: the layout of an embedded preview. `normal` is for larger, full-sized previews and `compact`
 /// for smaller previews or inspectors.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -347,16 +299,6 @@ mod tests {
     }
 
     #[test]
-    fn thumbnails_are_cached() {
-        let c = ThumbnailCache::new();
-        let u = "file:///peek-test-unique.png";
-        let a = c.best_representation(u, 64, 1, |p| std::fs::write(p, b"png").is_ok()).unwrap();
-        let b = c.best_representation(u, 64, 1, |_| panic!("cached")).unwrap();
-        assert_eq!(a, b);
-        let _ = std::fs::remove_file(a);
-    }
-
-    #[test]
     fn provider_routing_is_reachable_from_the_sdk() {
         let mut reg = Registry::new();
         reg.register("text", &["public.plain-text"]).unwrap();
@@ -376,15 +318,6 @@ mod tests {
         assert_eq!(reply.display_title("q3.html"), "Q3 report");
         assert_eq!(reply.resolve_cid("cid:chart").unwrap().data.len(), 2);
         assert!(Reply::new(Content::Bitmap { width: 0, height: 1 }).is_err());
-    }
-
-    #[test]
-    fn thumbnail_request_picks_the_best_produced_size() {
-        let req = ThumbnailRequest::new("file:///a.png", (128.0, 128.0), 2.0, &[Representation::Thumbnail, Representation::Icon]).unwrap();
-        assert_eq!(req.pixel_size(), (256, 256));
-        assert_eq!(req.best_of(&[Representation::Icon]), Some(Representation::Icon));
-        assert_eq!(req.best_of(&[Representation::Thumbnail, Representation::Icon]), Some(Representation::Thumbnail));
-        assert_eq!(req.best_of(&[Representation::LowQuality]), None);
     }
 
     /// A data source that makes its items on demand, like an app with a large folder.
