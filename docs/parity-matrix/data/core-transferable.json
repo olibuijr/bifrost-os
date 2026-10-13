@@ -10,30 +10,30 @@
     {
       "feature": "Transferable protocol and TransferRepresentation builder",
       "apple": "Transferable, TransferRepresentation, TransferRepresentationBuilder, TupleTransferRepresentation",
-      "bifrost": "springboard/sdk/src/transfer.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item, from_pasteboard_item, drag_item, begin_drag, drop_values)",
+      "bifrost": "springboard/sdk/src/transfer.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item, from_pasteboard_item, drag_item, begin_drag, drop_values); springboard/sdk/src/item_provider.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-model protocol that declares import and export representations; apps convert by hand Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Sprint 10: Transferable trait with Representations builder (data, codable, file, proxy, proxy_of), exportedContentType and importedContentTypes, NSItemProvider (item_provider.rs: loadTransferable). Host tests only (sdk/tests/transferable.rs); verify on Midget for parity."
     },
     {
       "feature": "Data transfer (Codable and binary data)",
       "apple": "CodableRepresentation, DataRepresentation",
-      "bifrost": "springboard/sdk/src/coding.rs (JSONEncoder, JSONDecoder, PropertyListEncoder); springboard/sdk/src/pasteboard.rs (set_data, data(uti))",
+      "bifrost": "springboard/sdk/src/coding.rs (JSONEncoder, JSONDecoder, PropertyListEncoder); springboard/sdk/src/pasteboard.rs (set_data, data(uti)); springboard/sdk/src/transfer.rs (Representations::codable, data, JSON)",
       "status": "partial",
-      "note": "encoders and raw pasteboard bytes exist separately; no bridge from Codable types to the pasteboard or drag"
+      "note": "CodableRepresentation and DataRepresentation are declared on the model and reach the pasteboard, drag and item provider through one Transferable declaration (encoders are supplied as functions, no derive). Host tests only; verify on Midget."
     },
     {
       "feature": "File transfer (file URL representations)",
       "apple": "FileRepresentation, SentTransferredFile, ReceivedTransferredFile",
-      "bifrost": "springboard/proto/src/rich.rs (Payload::File with a document grant); springboard/sdk/src/dnd.rs (dropped files arrive as App::document events with read-only grants)",
+      "bifrost": "springboard/proto/src/rich.rs (Payload::File with a document grant); springboard/sdk/src/dnd.rs (dropped files arrive as App::document events with read-only grants); springboard/sdk/src/transfer.rs (Representations::file, SentTransferredFile, ReceivedTransferredFile)",
       "status": "partial",
-      "note": "files move as document grants, not as a typed file representation with sent and received roles"
+      "note": "FileRepresentation with sender and receiver roles and copy semantics (allow_open_in_place hands over the original). On a pasteboard item a file representation travels as bytes; no file promise in the shell yet. Host tests only; verify on Midget."
     },
     {
       "feature": "Copy and paste of typed items",
       "apple": "NSPasteboard-backed Transferable items, PasteButton",
-      "bifrost": "springboard/sdk/src/pasteboard.rs (NSPasteboard, change_count, write_objects); springboard/src/shell/pasteboard.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item, from_pasteboard_item); springboard/sdk/src/pasteboard_types.rs (Board::best); springboard/src/shell/services/pasteboard_types.rs (best method); wired: springboard/apps/clock-desktop/src/clock/stopwatch.rs (Stopwatch::export_text), springboard/sdk/src/pasteboard.rs",
+      "bifrost": "springboard/sdk/src/pasteboard.rs (NSPasteboard, change_count, write_objects); springboard/src/shell/pasteboard.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item, from_pasteboard_item); springboard/sdk/src/pasteboard_types.rs (Board::best); springboard/src/shell/services/pasteboard_types.rs (best method); wired: springboard/apps/clock-desktop/src/clock/stopwatch.rs (Stopwatch::export_text), springboard/sdk/src/pasteboard.rs; springboard/sdk/src/pasteboard.rs (write_items, write_transferable, declare_types, pasteboard_items, read_objects); springboard/sdk/src/pasteboard_item.rs (NSPasteboardItem); springboard/sdk/src/pasteboard_promise.rs (DataProvider)",
       "status": "partial",
-      "note": "the shell publishes only one rich type to the Wayland selection (springboard/src/shell/pasteboard.rs:33); other types stay inside BifrOSt apps Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "SDK writes carry every representation in one write and one change count step; NSPasteboardItem holds several types with lazy DataProvider promises resolved once; declareTypes(owner) and readObjects(forClasses) are modelled. The shell still publishes one rich type to the Wayland selection (shell/pasteboard.rs follow-up). Host tests only; verify on Midget."
     },
     {
       "feature": "Drag and drop of typed items",
@@ -61,13 +61,13 @@
       "apple": "ProxyRepresentation, TransferRepresentationVisibility",
       "bifrost": "springboard/sdk/src/transfer.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item hides OwnProcess representations)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no way to limit which apps or processes see a transferred item Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Visibility All, Team and OwnProcess filter exports; proxy_of forwards another Transferable's bytes representations with the stricter visibility. Host tests only; verify on Midget."
     }
   ],
   "gaps": [
-    "No Transferable protocol or TransferRepresentation for app model types, so there is no single declaration that drives copy, paste, drag, and share.",
+    "Transferable and TransferRepresentation exist in the SDK (Sprint 10) but are not yet adopted by apps; verify on Midget before marking parity.",
     "The Wayland clipboard publishes only one rich type at a time (springboard/src/shell/pasteboard.rs:33), so typed pasteboard data does not reach other apps in full.",
-    "No SentTransferredFile or ReceivedTransferredFile equivalent with sender and receiver roles for file transfers.",
-    "No ProxyRepresentation or TransferRepresentationVisibility equivalent."
+    "Shell follow-up: springboard/src/shell/pasteboard.rs publishes one type to the Wayland selection and keeps items flat; it needs multi-MIME data sources and item grouping so the SDK's multi-representation writes (NativePasteboard::write_items) reach other apps in full, plus file promises for file representations.",
+    "proxy_of does not forward the proxied type's file representations; no derive-style CodableRepresentation (encoders are passed as functions)."
   ]
 }

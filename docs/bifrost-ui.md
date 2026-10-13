@@ -1445,6 +1445,35 @@ never snapshots "Loading…".
 (plain text, else file URLs, else HTML) to the Wayland selection; other types stay inside BifrOSt until the presenter offers
 multi-MIME data sources (today one rich type, png then html, rtf, uri-list, goes out through `wl-copy --type`). The shell pushes `ToApp::Pasteboard` with the bytes to every other connected app.
 
+### Core Transferable and the multi-type pasteboard (Sprint 10)
+
+`bifrost_app::transfer` mirrors Core Transferable. A model type implements `Transferable::transfer_representations()` and
+returns a `Representations<Self>` builder; declaration order is the preference order:
+
+- `.data(uti, visibility, export, import)` (`DataRepresentation`), `.codable(JSON, ...)` (`CodableRepresentation`),
+  `.proxy(uti, visibility, export)` (export only) and `.proxy_of::<U>(visibility, to_proxy, from_proxy)` (forwards `U`'s
+  bytes representations, with the stricter visibility).
+- `.file(uti, visibility, export -> SentTransferredFile, import(&ReceivedTransferredFile))` (`FileRepresentation`).
+  `SentTransferredFile::new(path).allow_open_in_place(bool)`; `receive(dest_dir)` copies the file (receiver gets
+  `is_original_file == false`) unless opening in place was allowed.
+- `Visibility::{All, Team, OwnProcess}` against `Viewer::{Other, Team, OwnProcess}`; `types_for`, `exported_content_type`,
+  `imported_content_types`, `export`, `export_file`, `import`, `import_file`, `best_import`, `kind_of`.
+
+Bridges: `pasteboard_item` / `from_pasteboard_item`, `drag_item` / `begin_drag` / `drop_values`.
+
+`NativePasteboard` gains `write_items(ctx, &[Item])` and `write_transferable(ctx, &value)` (every representation in one
+write, one change count step), `declare_types(ctx, types, owner)` (`declareTypes(_:owner:)` with a lazy `DataProvider`,
+resolved once on first read), `pasteboard_items()`, `read_objects::<T>()` and `can_read_object::<T>()`.
+`bifrost_app::pasteboard_item::NSPasteboardItem` holds several types of one copy, each as data or a promise
+(`set_data_provider`); `bifrost_app::pasteboard_promise::DataProvider` is `NSPasteboardItemDataProvider`.
+`bifrost_app::item_provider::NSItemProvider` registers data or lazy representations (`registerDataRepresentation`),
+`with_transferable(&value)`, and `load_transferable::<T>()` (synchronous; errors are `ItemProviderError`).
+
+Gaps: the shell (`springboard/src/shell/pasteboard.rs`) still publishes one type to the Wayland selection and keeps items
+flat (the first item holding a type wins on the wire; `pasteboard_items` returns the board as one item), so multi-type
+copies stay inside BifrOSt until multi-MIME sources land; file representations travel as bytes on a pasteboard item;
+`proxy_of` does not forward file representations. Host tests only (`sdk/tests/transferable.rs`); verify on Midget.
+
 ## Printing (NSPrintInfo / NSPrintOperation parity)
 
 `bifrost_app::print` (`springboard/ui/src/print.rs`, re-exported by the SDK as `pub use bifrost_ui::print`). Updated in round 75
