@@ -73,6 +73,36 @@ pub fn wants_pointer_emulation(first_contact: bool, client_has_touch: bool) -> b
     first_contact && !client_has_touch
 }
 
+/// Whether the pointer image is drawn. A finger has no cursor, so it is hidden while the last input was a touch
+/// contact, and real pointer motion shows it again.
+pub fn cursor_shown(last_input_was_touch: bool) -> bool {
+    !last_input_was_touch
+}
+
+/// The touchscreens the backend has announced. The seat keeps the touch capability while at least one is present.
+/// Only announced devices are counted: a touch from a source that was never announced (a nested window) gives the
+/// seat the capability without a count, so no later removal can leave it behind.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct TouchDevices(usize);
+
+impl TouchDevices {
+    /// The number of announced touchscreens.
+    pub fn count(self) -> usize {
+        self.0
+    }
+
+    /// A touchscreen was announced.
+    pub fn added(&mut self) {
+        self.0 += 1;
+    }
+
+    /// A touchscreen went away. True when it was the last one, so the seat must lose the capability.
+    pub fn removed(&mut self) -> bool {
+        self.0 = self.0.saturating_sub(1);
+        self.0 == 0
+    }
+}
+
 /// The finger that drives the emulated pointer, and where it last was.
 #[derive(Clone, Copy, Debug)]
 struct Emulated {
@@ -154,43 +184,59 @@ impl WmState {
     pub(crate) fn process_touch_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
         match event {
             InputEvent::TouchDown { event } => {
+                self.last_input_touch = true;
                 // a backend that never announced a touchscreen (a nested window) gets the capability on first use
-                if self.seat.get_touch().is_none() {
-                    self.touch_device_added();
-                }
+                self.ensure_touch_capability();
                 self.touch_down(event.slot(), normalized::<I, _>(&event), event.time_msec());
             }
             InputEvent::TouchMotion { event } => {
+                self.last_input_touch = true;
                 self.touch_motion(event.slot(), normalized::<I, _>(&event), event.time_msec())
             }
             InputEvent::TouchUp { event } => {
+                self.last_input_touch = true;
                 self.touch_up(event.slot(), event.time_msec());
             }
-            InputEvent::TouchCancel { event } => self.touch_cancel(event.time_msec()),
+            InputEvent::TouchCancel { event } => {
+                self.last_input_touch = true;
+                self.touch_cancel(event.time_msec())
+            }
             InputEvent::TouchFrame { .. } => self.touch_frame(),
             _ => {}
         }
     }
 
-    /// A touchscreen appeared: the seat gets the touch capability with the first one.
-    pub fn touch_device_added(&mut self) {
-        self.touch_devices += 1;
+    /// Whether the pointer image is drawn now (see [`cursor_shown`]).
+    pub fn pointer_cursor_shown(&self) -> bool {
+        cursor_shown(self.last_input_touch)
+    }
+
+    /// The seat has the touch capability: a touchscreen was announced, or a touch arrived from an unannounced source.
+    fn ensure_touch_capability(&mut self) {
         if self.seat.get_touch().is_none() {
             self.seat.add_touch();
         }
     }
 
+    /// A touchscreen appeared: the seat gets the touch capability with the first one.
+    pub fn touch_device_added(&mut self) {
+        self.touch_devices.added();
+        self.ensure_touch_capability();
+    }
+
     /// A touchscreen went away: with the last one every contact is cancelled and the seat loses the capability.
     pub fn touch_device_removed(&mut self) {
-        self.touch_devices = self.touch_devices.saturating_sub(1);
-        if self.touch_devices == 0 {
+        if self.touch_devices.removed() {
             let now = self.start.elapsed().as_millis() as u32;
             self.touch_cancel(now);
-            self.seat.remove_touch();
+            if self.seat.get_touch().is_some() {
+                self.seat.remove_touch();
+            }
         }
     }
 
     /// The point in the output's logical space for a normalized device position (through the output transform).
+    /// Absolute pointer devices use it too, so they land where a touch at the same place lands.
     pub fn touch_position(&self, norm: Norm) -> Option<Point<f64, Logical>> {
         let output = self.output()?;
         let geo = self.space.output_geometry(&output)?;
@@ -342,6 +388,15 @@ mod tests {
     }
 
     #[test]
+    fn an_absolute_pointer_lands_where_a_touch_at_the_same_place_lands() {
+        use smithay::utils::Transform;
+        // the panel's top-left corner is the desktop's top-right corner when the desktop is turned 90 degrees
+        assert_eq!(map_touch((0.0, 0.0), Transform::_90, (0, 0), (1920, 1200)), (1919.0, 0.0));
+        // the same fraction on an unrotated output is the plain scaled position
+        assert_eq!(map_touch((0.5, 0.5), Transform::Normal, (0, 0), (1920, 1200)), (960.0, 600.0));
+    }
+
+    #[test]
     fn only_the_first_contact_of_a_pointer_only_client_emulates() {
         assert!(wants_pointer_emulation(true, false));
         assert!(!wants_pointer_emulation(true, true), "a touch-aware client gets touch events, not a pointer");
@@ -399,5 +454,31 @@ mod tests {
         c.down(slot(0), (4.0, 4.0), false);
         assert_eq!(c.up(slot(0)), Some(Lifted { pointer_at: None }));
         assert!(c.is_empty(), "the slot is listed once");
+    }
+
+    #[test]
+    fn the_pointer_image_hides_while_the_last_input_was_a_touch() {
+        assert!(cursor_shown(false), "a desktop with no touch input always shows the pointer");
+        assert!(!cursor_shown(true));
+    }
+
+    #[test]
+    fn the_last_announced_touchscreen_is_the_one_that_takes_the_capability() {
+        let mut d = TouchDevices::default();
+        assert_eq!(d.count(), 0);
+        d.added();
+        d.added();
+        assert!(!d.removed(), "one touchscreen is still present");
+        assert!(d.removed(), "the last one went away");
+        assert_eq!(d.count(), 0);
+    }
+
+    #[test]
+    fn a_removal_without_an_announced_device_does_not_go_negative() {
+        let mut d = TouchDevices::default();
+        assert!(d.removed());
+        assert_eq!(d.count(), 0);
+        d.added();
+        assert!(d.removed(), "the earlier stray removal did not leave a credit behind");
     }
 }

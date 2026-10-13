@@ -434,7 +434,7 @@ impl Drm {
             return None;
         }
         let mut top = Vec::new();
-        if spec.cursor {
+        if spec.cursor && state.pointer_cursor_shown() {
             let pos = state.pointer_location();
             if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(&mut self.renderer, (pos.x, pos.y), &self.pointer, None, None, None, Kind::Cursor) {
                 top.push(SceneElement::Memory(e));
@@ -474,7 +474,7 @@ impl Drm {
             if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(&mut self.renderer, (0.0, 0.0), &buffer, Some(alpha), None, None, Kind::Unspecified) {
                 top.push(SceneElement::Memory(e));
             }
-        } else {
+        } else if state.pointer_cursor_shown() {
             let pos = state.pointer_location();
             if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(&mut self.renderer, (pos.x, pos.y), &self.pointer, None, None, None, Kind::Cursor) {
                 top.push(SceneElement::Memory(e));
