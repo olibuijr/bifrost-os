@@ -10,9 +10,9 @@
     {
       "feature": "Account store (ACAccountStore)",
       "apple": "ACAccountStore: accounts, account(withIdentifier:), accounts(with:), saveAccount, removeAccount, requestAccessToAccounts",
-      "bifrost": "springboard/sdk/src/accounts.rs",
+      "bifrost": "springboard/sdk/src/accounts.rs (AccountStore::open, shared_path, reload, observe_did_change)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK object that lists or saves the user's accounts across apps."
+      "note": "Wave 1 (parity/integration 0d0412c3) made the pure model; sprint1/3-accounts makes it persistent: AccountStore::open(shared_path()) keeps accounts.ini in the user's data directory, written atomically through bifrost_core::fsutil::write_atomic; every change runs against the file's current contents, reload() picks up another handle's changes, and observe_did_change fires for each change (ACAccountStoreDidChange). Credentials are not written to the file. Not yet wired into the apps or the shell, and not yet tested on the VM or Midget."
     },
     {
       "feature": "Account objects (ACAccount)",
@@ -26,14 +26,14 @@
       "apple": "ACAccountCredential: init(oAuthToken:tokenSecret:), init(oAuth2Token:refreshToken:expiryDate:), oauthToken",
       "bifrost": "springboard/sdk/src/keychain.rs (add, get, update, delete of opaque bytes by service and account)",
       "status": "partial",
-      "note": "An app can store a token itself as an opaque secret. There is no typed credential, no refresh token or expiry field, and no shared store between apps."
+      "note": "An app can store a token itself as an opaque secret. The typed credential (Credential::encode and decode) is kept in memory by the account store and never written to accounts.ini; after a reopen the app sets it again from its keychain item. There is no refresh-token flow beyond renewCredentials, and no shared store between apps for secrets."
     },
     {
       "feature": "Account types and access grants (ACAccountType)",
       "apple": "ACAccountType: identifier, accountTypeDescription, accessGranted; accountType(withAccountTypeIdentifier:)",
       "bifrost": "springboard/sdk/src/accounts.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The manifest permission binds only keychain access. There is no account-type registry and no user prompt that grants access to a type of account."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests. The access grant (accessGranted) persists in accounts.ini, so a grant survives a restart. There is still no user prompt that grants access to a type of account, and the manifest permission binds only keychain access. Not yet wired into apps or the shell, not yet tested on the VM or Midget."
     },
     {
       "feature": "Credential renewal (renewCredentials)",
@@ -72,7 +72,7 @@
     }
   ],
   "gaps": [
-    "No system account store (ACAccountStore): no list, save, remove or lookup of user accounts that apps share.",
+    "No account list the apps share yet: the file-backed store (accounts.ini) exists, but no app reads it, and the Settings Internet Accounts pane keeps its own list in internet-accounts.ini, so Mail, Calendar and Contacts still see separate lists.",
     "No account type registry and no access-grant prompt (requestAccessToAccounts, accessGranted).",
     "No typed OAuth credential objects, token expiry or credential renewal.",
     "No SDK API for the local OS account (bare/account.rs) or for the BifrOSt cloud account.",
