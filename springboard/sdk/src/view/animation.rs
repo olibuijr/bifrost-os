@@ -158,6 +158,10 @@ pub(super) struct Animator {
     ready: Vec<u64>,
     pub(super) reduce: Option<bool>,
     links: crate::frame_clock::FrameLinks,
+    /// key-path animations and the transaction stack (see `keyanim`)
+    pub(super) keyed: super::keyanim::Keyed,
+    /// the clock of the last tick, seconds
+    pub(super) clock: f64,
 }
 
 fn union(a: Option<Rect>, b: Rect) -> Rect {
@@ -220,6 +224,10 @@ impl Animator {
             }
         }
     }
+    /// Velocity (value units per second) of the running track of `prop` on `id`, zero when there is none.
+    fn velocity_of(&self, id: u64, prop: Prop) -> f32 {
+        self.tracks.iter().find(|t| t.id == id && t.prop == prop && t.started).map_or(0.0, |t| t.anim.velocity_at(self.clock))
+    }
     fn cancel(&mut self, id: u64, prop: Prop) {
         if let Some(i) = self.tracks.iter().position(|t| t.id == id && t.prop == prop) {
             let t = self.tracks.remove(i);
@@ -254,7 +262,9 @@ impl<S: Responder> Window<S> {
     fn run(&mut self, tx: Option<Transaction>, f: impl FnOnce(&mut Self)) {
         let before = snapshot(self.root());
         self.anim.snaps.push(before);
+        self.anim.keyed.open_scope(tx.as_ref().map(|t| t.timing));
         f(self);
+        self.anim.keyed.tx.commit();
         let before = self.anim.snaps.pop().unwrap_or_default();
         let after = snapshot(self.root());
         let reduced = self.anim.reduced();
@@ -278,6 +288,7 @@ impl<S: Responder> Window<S> {
                 None => true,
                 Some(t) => t.instant() || (reduced && p.is_frame()),
             };
+            let carried = self.anim.velocity_of(id, p);
             self.anim.cancel(id, p);
             if instant {
                 // outer transactions must not animate what was set without actions
@@ -308,7 +319,13 @@ impl<S: Responder> Window<S> {
                     group,
                 }
             } else {
-                Track { id, prop: p, anim: t.animation(b.get(p), a.get(p)), started: false, shown: b.get(p), colors: None, shown_color: None, group }
+                let mut anim = t.animation(b.get(p), a.get(p));
+                // a retargeted spring keeps the speed of the one it replaces
+                let distance = a.get(p) - b.get(p);
+                if matches!(anim.curve, Curve::Spring { .. }) && distance.abs() > 1e-6 {
+                    anim.velocity = carried / distance;
+                }
+                Track { id, prop: p, anim, started: false, shown: b.get(p), colors: None, shown_color: None, group }
             };
             // the view keeps showing the old value until the first tick starts the clock
             walk_mut(self.root.as_mut(), &mut |v| {
@@ -360,7 +377,7 @@ impl<S: Responder> Window<S> {
 
     /// True while a property of `id` (or of any view when `None`) is animating.
     pub fn is_animating(&self, id: Option<u64>) -> bool {
-        self.anim.tracks.iter().any(|t| id.map_or(true, |i| t.id == i))
+        self.anim.tracks.iter().any(|t| id.map_or(true, |i| t.id == i)) || self.anim.keyed.animating(id)
     }
 
     /// Actions of finished transactions ([`Transaction::action`]); send them with [`Window::send`].
@@ -375,7 +392,7 @@ impl<S: Responder> Window<S> {
 
     /// When the next animation frame is due, in the clock of `t` (seconds); `None` when nothing animates.
     pub fn next_wake(&self, t: f64) -> Option<f64> {
-        let anim = (!self.anim.tracks.is_empty() || !self.anim.ready.is_empty() || super::any_wants_tick(self.root.as_ref())).then_some(FRAME);
+        let anim = (!self.anim.tracks.is_empty() || !self.anim.ready.is_empty() || self.anim.keyed.active() || super::any_wants_tick(self.root.as_ref())).then_some(FRAME);
         let link = self.anim.links.wake_interval();
         match (anim, link) {
             (None, None) => None,
@@ -406,6 +423,8 @@ impl<S: Responder> Window<S> {
 
     /// Advances the tracks to `t` (seconds). Called by [`Window::tick`].
     pub(super) fn advance_animations(&mut self, t: f64) {
+        self.anim.clock = t;
+        self.advance_key_animations(t);
         if self.anim.tracks.is_empty() && self.anim.ready.is_empty() {
             return;
         }
@@ -702,5 +721,25 @@ mod tests {
         let p = px[0];
         assert!((p & 0xff).abs_diff(0x80) <= 1 && p >> 24 == 0xff);
         assert_eq!(px[3], 0xff00_0000);
+    }
+
+    #[test]
+    fn a_retargeted_spring_keeps_its_speed() {
+        let (mut w, id) = win();
+        let sp = Timing::spring(0.6, 0.5);
+        w.animate(sp, |w| w.view_mut::<Container>(id).unwrap().set_frame(rect(100.0, 0.0, 100.0, 50.0)));
+        w.tick(0.0);
+        w.tick(0.1);
+        let x1 = frame(&w, id).x;
+        w.tick(0.11);
+        let x2 = frame(&w, id).x;
+        let v = (x2 - x1) / 0.01;
+        assert!(v > 0.0);
+        w.animate(sp, |w| w.view_mut::<Container>(id).unwrap().set_frame(rect(300.0, 0.0, 100.0, 50.0)));
+        w.tick(0.11);
+        assert!((frame(&w, id).x - x2).abs() < 1e-3, "no jump");
+        w.tick(0.12);
+        let v2 = (frame(&w, id).x - x2) / 0.01;
+        assert!((v2 - v).abs() / v < 0.3, "{v} vs {v2}");
     }
 }
