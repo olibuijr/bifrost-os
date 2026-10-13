@@ -16,6 +16,7 @@ pub mod input;
 pub mod lock;
 pub mod material_filter;
 pub mod material_kind;
+pub mod output_layout;
 pub mod render_server;
 #[cfg(feature = "nested")]
 pub mod nested;

@@ -10,6 +10,7 @@ use wayland_protocols::xdg::shell::client::{xdg_wm_base, xdg_surface, xdg_toplev
 use std::collections::{HashMap,HashSet};
 use wayland_protocols::ext::idle_notify::v1::client::{ext_idle_notifier_v1 as idle_notifier, ext_idle_notification_v1 as idle_notification};
 use wayland_protocols_wlr::output_power_management::v1::client::{zwlr_output_power_manager_v1 as power_manager,zwlr_output_power_v1 as output_power};
+use wayland_protocols_wlr::output_management::v1::client::{zwlr_output_manager_v1 as om_manager, zwlr_output_head_v1 as om_head, zwlr_output_mode_v1 as om_mode, zwlr_output_configuration_v1 as om_config, zwlr_output_configuration_head_v1 as om_config_head};
 use wayland_protocols::xdg::activation::v1::client::{xdg_activation_v1 as activation,xdg_activation_token_v1 as activation_token};
 use wayland_protocols::ext::session_lock::v1::client::{ext_session_lock_manager_v1 as lock_manager,ext_session_lock_v1 as lock,ext_session_lock_surface_v1 as lock_surface};
 use wayland_protocols_wlr::foreign_toplevel::v1::client::{zwlr_foreign_toplevel_manager_v1 as foreign_manager, zwlr_foreign_toplevel_handle_v1 as foreign_handle};
@@ -71,6 +72,9 @@ fn transient<T>(r: Result<T, wayland_client::backend::WaylandError>) -> io::Resu
 struct Slot { buffer: wl_buffer::WlBuffer, map: memmap2::MmapMut, busy: bool, damage: Damage }
 #[derive(Default)]
 struct State {
+    /// The window server's output management (mode requests from the shell), its first head, the last serial it sent,
+    /// and whether a configuration is in flight.
+    output_manager:Option<om_manager::ZwlrOutputManagerV1>, output_head:Option<om_head::ZwlrOutputHeadV1>, output_serial:u32, output_busy:bool,
     bg_manager:Option<bg_manager::ExtBackgroundEffectManagerV1>, bg_blur:bool, mat_manager:Option<mat_manager::BifrostMaterialManagerV1>,
     foreign_manager:Option<foreign_manager::ZwlrForeignToplevelManagerV1>, foreign:Vec<Foreign>, foreign_dirty:bool,
     cursor_manager: Option<cursor_manager::WpCursorShapeManagerV1>, cursor_device: Option<cursor_device::WpCursorShapeDeviceV1>, pointer: Option<wl_pointer::WlPointer>, cursor_serial:u32,
@@ -165,6 +169,25 @@ impl Display {
     pub fn power(&mut self,on:bool) -> io::Result<()> {
         if let Some(power)=&self.state.output_power {power.set_mode(if on {output_power::Mode::On} else {output_power::Mode::Off});transient(self.conn.flush())?;}
         Ok(())
+    }
+    /// Sends the shell's pending mode request (`display_services::MODE_REQUEST`) to the window server: a configuration
+    /// with the first head and the requested custom mode. Its `succeeded` / `failed` answer lands in `MODE_RESULT`. With
+    /// no output management (the bare shell) the request is refused at once.
+    pub fn output_modes(&mut self) -> io::Result<()> {
+        use crate::shell::services::display_services::{MODE_REQUEST, MODE_RESULT};
+        if self.state.output_busy {return Ok(());}
+        let Some(request) = MODE_REQUEST.lock().unwrap_or_else(|p| p.into_inner()).take() else {return Ok(());};
+        let (Some(manager), Some(head)) = (self.state.output_manager.clone(), self.state.output_head.clone()) else {
+            *MODE_RESULT.lock().unwrap_or_else(|p| p.into_inner()) = Some(false);
+            return Ok(());
+        };
+        let qh = self.queue.handle();
+        let config = manager.create_configuration(self.state.output_serial, &qh, ());
+        let head_config = config.enable_head(&head, &qh, ());
+        head_config.set_custom_mode(request.width as i32, request.height as i32, request.refresh_mhz);
+        config.apply();
+        self.state.output_busy = true;
+        transient(self.conn.flush())
     }
     pub fn refresh(&self) -> u32 { if self.state.refresh == 0 {60} else {self.state.refresh} }
     pub fn needs_redraw(&mut self) -> bool { std::mem::take(&mut self.state.redraw) }
@@ -676,6 +699,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for State {
             "zwlr_foreign_toplevel_manager_v1" => s.foreign_manager=Some(reg.bind(name,version.min(3),q,())),
             "ext_idle_notifier_v1" => s.idle_notifier=Some(reg.bind(name,version.min(2),q,())),
             "zwlr_output_power_manager_v1" => s.power_manager=Some(reg.bind(name,1,q,())),
+            "zwlr_output_manager_v1" => s.output_manager=Some(reg.bind(name,version.min(4),q,())),
             "wp_cursor_shape_manager_v1" => s.cursor_manager=Some(reg.bind(name,version.min(1),q,())),
             "wl_output" if s.output.is_none() => s.output=Some(reg.bind(name,version.min(3),q,())),
             "ext_session_lock_manager_v1" => s.lock_manager=Some(reg.bind(name,1,q,())),
@@ -1125,6 +1149,35 @@ impl Dispatch<activation_token::XdgActivationTokenV1,u32> for State {
 wayland_client::delegate_noop!(State: ignore idle_notifier::ExtIdleNotifierV1);
 wayland_client::delegate_noop!(State: ignore power_manager::ZwlrOutputPowerManagerV1);
 wayland_client::delegate_noop!(State: ignore output_power::ZwlrOutputPowerV1);
+wayland_client::delegate_noop!(State: ignore om_mode::ZwlrOutputModeV1);
+wayland_client::delegate_noop!(State: ignore om_config_head::ZwlrOutputConfigurationHeadV1);
+// zwlr_output_manager_v1: the heads (the first one is the output the shell asks to change) and the serial of the list
+impl Dispatch<om_manager::ZwlrOutputManagerV1, ()> for State {
+    fn event(s:&mut Self,_:&om_manager::ZwlrOutputManagerV1,e:om_manager::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {
+        match e {
+            om_manager::Event::Head { head } => { if s.output_head.is_none() { s.output_head = Some(head); } }
+            om_manager::Event::Done { serial } => s.output_serial = serial,
+            om_manager::Event::Finished => s.output_manager = None,
+            _ => {}
+        }
+    }
+    wayland_client::event_created_child!(State, om_manager::ZwlrOutputManagerV1, [om_manager::EVT_HEAD_OPCODE => (om_head::ZwlrOutputHeadV1, ())]);
+}
+impl Dispatch<om_head::ZwlrOutputHeadV1, ()> for State {
+    fn event(_:&mut Self,_:&om_head::ZwlrOutputHeadV1,_:om_head::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {}
+    wayland_client::event_created_child!(State, om_head::ZwlrOutputHeadV1, [om_head::EVT_MODE_OPCODE => (om_mode::ZwlrOutputModeV1, ())]);
+}
+// zwlr_output_configuration_v1: the answer to a mode request
+impl Dispatch<om_config::ZwlrOutputConfigurationV1, ()> for State {
+    fn event(s:&mut Self,_:&om_config::ZwlrOutputConfigurationV1,e:om_config::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {
+        let ok = match e {
+            om_config::Event::Succeeded => true,
+            om_config::Event::Failed | om_config::Event::Cancelled => false,
+        };
+        s.output_busy = false;
+        *crate::shell::services::display_services::MODE_RESULT.lock().unwrap_or_else(|p| p.into_inner()) = Some(ok);
+    }
+}
 impl Dispatch<idle_notification::ExtIdleNotificationV1,()> for State {
     fn event(s:&mut Self,_:&idle_notification::ExtIdleNotificationV1,e:idle_notification::Event,_:&(),_:&Connection,_:&QueueHandle<Self>) {
         match e {idle_notification::Event::Idled=>s.idle=true,idle_notification::Event::Resumed=>{s.idle=false;s.resumed=true;},_=>{}}

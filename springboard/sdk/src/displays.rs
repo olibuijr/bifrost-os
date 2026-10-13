@@ -5,7 +5,8 @@
 //!
 //! Each call returns a request id; the answer arrives in `App::service_reply` and goes through the matching decoder.
 //! Changing the mode needs the `display-config` permission in the manifest; capturing the screen needs the person to
-//! allow screen recording for the app (the first call shows the sheet and fails).
+//! allow screen recording for the app (the first call shows the sheet and fails). A change is kept with [`keep_mode`]
+//! within 15 seconds, or it goes back by itself.
 //!
 //! ```ignore
 //! let id = displays::list(ctx, displays::Kind::Active);
@@ -57,9 +58,20 @@ pub fn modes(ctx: &Ctx, id: DisplayId) -> u32 {
     call(ctx, "modes", obj(vec![("id", num(id))]))
 }
 
-/// Asks for a display mode (`display-config` permission). Answer: [`decode_mode_change`].
+/// Asks for a display mode (`display-config` permission). Answer: [`decode_mode_change`]. An applied change is kept only
+/// after [`keep_mode`]; otherwise it goes back after 15 seconds (the `mode_changed` event says so).
 pub fn set_mode(ctx: &Ctx, id: DisplayId, width: u32, height: u32, refresh_hz: f32) -> u32 {
     call(ctx, "set_mode", obj(vec![("id", num(id)), ("width", num(width)), ("height", num(height)), ("refresh_hz", num(refresh_hz))]))
+}
+
+/// Keeps the change the last [`set_mode`] applied (`display-config` permission). Answer: a plain `Ok` or an error.
+pub fn keep_mode(ctx: &Ctx) -> u32 {
+    call(ctx, "keep_mode", Json::Null)
+}
+
+/// Goes back to the mode the last applied change replaced, at once (`display-config` permission).
+pub fn revert_mode(ctx: &Ctx) -> u32 {
+    call(ctx, "revert_mode", Json::Null)
 }
 
 /// Captures a display as a PNG (screen recording permission). Answer: [`decode_capture`].
@@ -80,11 +92,17 @@ pub fn decode_modes(result: &Result<Json, String>) -> Result<Vec<DisplayMode>, S
     Ok(body.as_array().map(|a| a.iter().filter_map(DisplayMode::from_json).collect()).unwrap_or_default())
 }
 
-/// The answer to [`set_mode`]: `(applied, pending)`. A mode other than the current one is pending until the compositor
-/// applies it.
-pub fn decode_mode_change(result: &Result<Json, String>) -> Result<(bool, bool), String> {
+/// The answer to [`set_mode`], given at once: `applied` when the display already shows that mode, else `requested`
+/// when the window server was asked. The outcome of a request arrives as the `mode_changed` event.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ModeChange {
+    pub applied: bool,
+    pub requested: bool,
+}
+
+pub fn decode_mode_change(result: &Result<Json, String>) -> Result<ModeChange, String> {
     let body = result.as_ref().map_err(|e| e.clone())?;
-    Ok((bool_of(body, "applied").unwrap_or(false), bool_of(body, "pending").unwrap_or(false)))
+    Ok(ModeChange { applied: bool_of(body, "applied").unwrap_or(false), requested: bool_of(body, "requested").unwrap_or(false) })
 }
 
 /// A captured display: its size and the PNG bytes.
@@ -156,8 +174,10 @@ mod tests {
     fn modes_and_mode_changes_decode() {
         let m = Ok(Json::Arr(vec![display().mode.to_json()]));
         assert_eq!(decode_modes(&m).unwrap(), vec![display().mode]);
-        let change = Ok(obj(vec![("applied", Json::Bool(false)), ("pending", Json::Bool(true))]));
-        assert_eq!(decode_mode_change(&change), Ok((false, true)));
+        let change = Ok(obj(vec![("applied", Json::Bool(false)), ("requested", Json::Bool(true))]));
+        assert_eq!(decode_mode_change(&change), Ok(ModeChange { applied: false, requested: true }));
+        let current = Ok(obj(vec![("applied", Json::Bool(true)), ("requested", Json::Bool(false))]));
+        assert_eq!(decode_mode_change(&current), Ok(ModeChange { applied: true, requested: false }));
     }
 
     #[test]
