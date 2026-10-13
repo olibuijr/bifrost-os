@@ -2478,7 +2478,7 @@ impl Settings {
                 let on = flip(&mut self.desk.magnify);
                 let _ = prefs.set(super::pages::DOCK_MAGNIFY_PREF, if on { "1" } else { "0" });
                 // the dock owns magnification (desktop-dock.ini): this pref only mirrors it for the page
-                self.dock_out.push(super::desktop_dock::Change::Magnification);
+                self.dock_out.push(super::desktop_dock::Change::Magnification(on));
                 on
             }
             Toggle::OverviewGroup => {

@@ -18,6 +18,11 @@
 - App launch: an app that fails to start, or exits before it says hello, posts an alert from the app ("X could not be opened") and its Dock launch bounce stops at once. A window closed and opened again in the session comes back at the size it had (a fixed manifest size still wins).
 - SDK: `UserFonts::system_object`, `mono_object` and `library_object` return the user's Settings > Fonts choice (or a
   library match) as an app-facing `FontObject` at a size, so apps draw and measure with the shell's face.
+- Dock: a Downloads stack sits left of the Trash (after the minimized windows). It shows the three newest visible files of
+  Downloads fanned out on a blue folder, re-listed every 10 s (never per frame), and a click opens the folder in Files.
+  `dock_stack.rs` holds the list, the fan and the drawing; the Trash uses the same account home helper.
+- Dock magnification in Settings sets the dock's value (`Change::Magnification(on)`) instead of flipping it, so the switch
+  and the dock cannot drift apart.
 - Software Update: `softwareupdate --schedule` prints whether the background checks run; `--schedule on|off` switches them.
   Manual checks (`softwareupdate -l`, Settings > Check) still run. The switch is one file in the shell data folder that the
   update agent and the shell's own checker both read.

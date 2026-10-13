@@ -192,6 +192,9 @@ pub struct Desk {
     /// the last title-bar press (window, time in ms): a second press within DOUBLE_CLICK_MS zooms
     last_title: Option<(AppId, f64)>,
     pub(super) dock_hide_at:Option<f64>,
+    /// the newest files of Downloads, fanned out by the Dock's stack, and when the folder was last listed (seconds)
+    pub(super) stack_files:Vec<String>,
+    pub(super) stack_listed:Option<f64>,
     pub(super) dock_menu_target:Option<usize>,
     pub(super) dock_menu_anchor:(f32,f32),
     grab: Option<Grab>,
@@ -1028,7 +1031,8 @@ impl Shell {
         let sep = ui.pt(DOCK_SEP_PT).round() as i32;
         let available=if self.dock_preferences().position==super::desktop_dock::Position::Bottom {m.w}else{m.h-m.menubar};
         let icon=icon.min(((available-2*pad-2*ui.pt(DOCK_MARGIN_PT) as i32-2*sep)/(list.len().max(1) as i32)-gap).max(ui.pt(24.) as i32));
-        // the Trash is always last, after the last divider
+        // the Downloads stack and the Trash are last, after the last divider
+        list.push(super::dock_stack::DOCK_STACK);
         list.push(DOCK_TRASH);
         let seps = self.dock_seps(&list);
         let (bar, rects) = dock_rects_seps(m, icon, pad, gap, list.len(), &seps, sep);
@@ -1378,11 +1382,14 @@ impl Shell {
                         if icons.get(k).is_some_and(|r| r.contains(x, y)) {
                             if list[k] == DOCK_TRASH {
                                 // the account's Trash as Files keeps it; the shell runs as root, so not $HOME, and Files creates it
-                                #[cfg(feature="desktop-wayland")] let account=crate::bare::app_policy::Account::installed().map(|a|a.home).ok();
-                                #[cfg(not(feature="desktop-wayland"))] let account:Option<std::path::PathBuf>=None;
-                                let home=account.unwrap_or_else(||std::env::var_os("HOME").map(std::path::PathBuf::from).unwrap_or_else(||"/root".into()));
-                                let trash=crate::files::trash::dir(&home);
+                                let trash=crate::files::trash::dir(&super::dock_stack::home_dir());
                                 if let Err(e)=self.desktop_open_folder(FILES_APP,&trash.to_string_lossy(),t){eprintln!("BifrOSt Trash: {e}");}
+                                return Some(vec![]);
+                            }
+                            if list[k] == super::dock_stack::DOCK_STACK {
+                                // the Downloads stack opens its folder in Files
+                                let folder = super::dock_stack::downloads_dir();
+                                if let Err(e)=self.desktop_open_folder(FILES_APP,&folder.to_string_lossy(),t){eprintln!("BifrOSt Downloads: {e}");}
                                 return Some(vec![]);
                             }
                             if let Some(wi) = super::desktop_dock::dock_min_index(list[k]) {
@@ -1784,6 +1791,7 @@ impl Shell {
             let (bx, by) = self.dock_bounce_offset(i, t / 1000.0, r.w);
             let r = &Rect { x: r.x + ox.round() as i32 + bx, y: r.y + oy.round() as i32 + by, ..*r };
             if i == DOCK_TRASH { draw_trash(s, r); continue; }
+            if i == super::dock_stack::DOCK_STACK { super::dock_stack::draw_stack(s, r, &desk.stack_files); continue; }
             if let Some(wi) = super::desktop_dock::dock_min_index(i) {
                 // a minimized window: a plate with its app's icon, to the right of the last divider
                 if let Some(ai) = desk.wins.get(wi).and_then(|w| apps().iter().position(|a| a.id == w.app)) {
@@ -1860,6 +1868,7 @@ impl Shell {
             if let (Some(r), Some(&i)) = (rects.get(k), list.get(k)) {
                 let name: String = if i < apps().len() { apps()[i].name.to_string() }
                     else if i == DOCK_TRASH { "Trash".into() }
+                    else if i == super::dock_stack::DOCK_STACK { "Downloads".into() }
                     else if let Some(wi) = super::desktop_dock::dock_min_index(i) { desk.wins.get(wi).and_then(|w| apps().iter().find(|a| a.id == w.app)).map_or(String::new(), |a| a.name.to_string()) }
                     else { self.dock_linux_name(i) };
                 if !name.is_empty() && label_alpha > 0.0 {
