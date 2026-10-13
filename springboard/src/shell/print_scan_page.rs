@@ -6,6 +6,7 @@ use super::forms::{Prompt, Purpose};
 use super::list::{Group, Item, Spec, Tint};
 use super::pages::{Action, PageId};
 use bifrost_ui::cups::{self, Client, Printer, PrinterState};
+use bifrost_ui::scanner::{self, ScannerInfo};
 
 /// What a row on the page does.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -21,20 +22,35 @@ pub enum Edit {
 pub struct View {
     pub printers: Vec<Printer>,
     pub error: Option<String>,
+    /// the scanners `scanimage -L` lists (Scanners group)
+    pub scanners: Vec<ScannerInfo>,
+    /// why the scanners could not be listed (scanning not installed, or the command failed)
+    pub scanner_error: Option<String>,
 }
 
 impl View {
     pub fn load() -> View {
         View::from_result(Client::local().printers().map_err(|e| e.to_string()))
+            .with_scanners(scanner::list().map_err(|e| e.to_string()))
     }
 
     pub fn from_result(r: Result<Vec<Printer>, String>) -> View {
         match r {
-            Ok(printers) => View { printers, error: None },
-            Err(e) => View { printers: Vec::new(), error: Some(e) },
+            Ok(printers) => View { printers, error: None, scanners: Vec::new(), scanner_error: None },
+            Err(e) => View { printers: Vec::new(), error: Some(e), scanners: Vec::new(), scanner_error: None },
         }
     }
 
+    pub fn with_scanners(mut self, r: Result<Vec<ScannerInfo>, String>) -> View {
+        match r {
+            Ok(scanners) => {
+                self.scanners = scanners;
+                self.scanner_error = None;
+            }
+            Err(e) => self.scanner_error = Some(e),
+        }
+        self
+    }
 }
 
 /// The state a printer's row shows.
@@ -66,7 +82,32 @@ pub fn groups(v: &View) -> Vec<Group> {
         out.push(Group::new(vec![Item::new("Add Printer…").tint(Tint::Blue).action(Action::PrintScan(Edit::Add))])
             .footer("Adds a network or USB printer by its address, such as ipp://printer.local/ipp/print or socket://192.168.1.20. The printer must support driverless printing."));
     }
+    out.push(scanners_group(v));
     out
+}
+
+/// The SCANNERS group: each scanner the system lists, with how it is connected. Scanning itself is in the Image
+/// Capture app; this group only shows what is attached.
+pub fn scanners_group(v: &View) -> Group {
+    match &v.scanner_error {
+        Some(e) => Group::new(vec![Item::new("No Scanners").tint(Tint::Dim)]).header("SCANNERS").footer(&format!("Scanning is not available: {e}.")),
+        None if v.scanners.is_empty() => Group::new(vec![Item::new("No Scanners").tint(Tint::Dim)])
+            .header("SCANNERS")
+            .footer("Scanners on the network or over USB appear here when they are on. Scan with the Image Capture app."),
+        None => {
+            let rows = v.scanners.iter().map(|s| Item::new(s.name()).value(transport_label(s))).collect();
+            Group::new(rows).header("SCANNERS").footer("Scan with the Image Capture app.")
+        }
+    }
+}
+
+/// How a scanner is connected, as the row shows it.
+fn transport_label(s: &ScannerInfo) -> &'static str {
+    match s.transport() {
+        bifrost_ui::device_browser::Transport::Usb => "USB",
+        bifrost_ui::device_browser::Transport::Network => "Network",
+        bifrost_ui::device_browser::Transport::Other => "",
+    }
 }
 
 /// The whole Print & Scan page.
@@ -136,8 +177,31 @@ mod tests {
     fn no_printing_service_shows_why_and_offers_no_add_row() {
         let v = View::from_result(Err("printing service unreachable: refused".into()));
         let g = groups(&v);
-        assert_eq!(g.len(), 1);
+        assert_eq!(g.len(), 2, "the printers group, then the scanners group");
         assert!(g[0].footer.as_deref().is_some_and(|f| f.contains("refused")));
+        assert_eq!(g[1].header.as_deref(), Some("SCANNERS"));
+    }
+
+    #[test]
+    fn scanners_are_listed_with_how_they_connect() {
+        let v = View::from_result(Ok(vec![])).with_scanners(Ok(vec![
+            ScannerInfo { device: "genesys:libusb:001,004".into(), description: "Canon LiDE 220".into() },
+            ScannerInfo { device: "airscan:w0:Brother".into(), description: "Brother MFC".into() },
+        ]));
+        let g = groups(&v);
+        let scanners = g.last().unwrap();
+        assert_eq!(scanners.items[0].label, "Canon LiDE 220");
+        assert_eq!(scanners.items[0].value, "USB");
+        assert_eq!(scanners.items[1].value, "Network");
+        assert_eq!(scanners.items[0].action, Action::None, "a scanner row has no action here");
+    }
+
+    #[test]
+    fn a_missing_scanner_command_says_so_in_its_group() {
+        let v = View::from_result(Ok(vec![])).with_scanners(Err("Scanning is not available: no such file".into()));
+        let scanners = groups(&v).pop().unwrap();
+        assert_eq!(scanners.items[0].label, "No Scanners");
+        assert!(scanners.footer.as_deref().is_some_and(|f| f.contains("no such file")));
     }
 
     #[test]
