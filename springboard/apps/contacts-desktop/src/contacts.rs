@@ -1193,13 +1193,21 @@ impl Contacts {
             self.dirty = true;
             return;
         }
+        let texts: Vec<Option<String>> = files.iter().map(|file| std::fs::read(file).ok().map(|bytes| String::from_utf8_lossy(&bytes).into_owned())).collect();
+        let _ = self.merge_card_texts(ui, texts);
+    }
+
+    /// Merges vCard texts into the contacts (a card that duplicates one is skipped), saves them and returns the summary
+    /// the status line shows. `None` is a text that could not be read. The file import and the CardDAV sync both use it.
+    pub fn merge_card_texts(&mut self, ui: &Ui, texts: Vec<Option<String>>) -> String {
+        if self.load_failed {
+            return "The contacts could not be read, so nothing was imported.".into();
+        }
         let mut updated = self.contacts.clone();
         let mut updated_extras = self.extras.clone();
         let (mut added, mut skipped, mut invalid, mut extra, mut unreadable) = (0usize, 0usize, 0usize, 0usize, 0usize);
-        for file in files {
-            let read = std::fs::read(&file)
-                .ok()
-                .and_then(|bytes| exchange::import(&String::from_utf8_lossy(&bytes)).ok());
+        for text in texts {
+            let read = text.and_then(|t| exchange::import(&t).ok());
             let Some(read) = read else {
                 unreadable += 1;
                 continue;
@@ -1237,9 +1245,9 @@ impl Contacts {
         }
         let summary = parts.join(", ") + ".";
         if added == 0 {
-            self.status = Some(summary);
+            self.status = Some(summary.clone());
             self.dirty = true;
-            return;
+            return summary;
         }
         match store::save(&self.path, &updated) {
             Ok(()) => {
@@ -1250,11 +1258,12 @@ impl Contacts {
                 if let Err(e) = extras::save(&self.values_path(), &self.extras) {
                     self.error = Some(format!("Unable to save contact values: {e}"));
                 }
-                self.status = Some(summary);
+                self.status = Some(summary.clone());
                 self.rebuild(ui);
             }
             Err(e) => self.error = Some(format!("Unable to import: {e}")),
         }
+        summary
     }
 
     /// Writes every contact to `Export/contacts-3.0.vcf` or `Export/contacts-4.0.vcf` beside the contacts file.
