@@ -32,13 +32,13 @@ a live system that lacks it. Options that avoid an ISO are open: pacstrap `sprin
 
 | What changed | Loop |
 |---|---|
-| Shell, desktop windows, apps | `cargo build --profile fast --bin shell` then `bifrost xemu restart --name deskt --port 2260 --size 1920x1080 --platform desktop`, drive with `bifrost --xemu --emu-port 2260 shot\|tap\|swipe\|state` (unlock: swipe up from the bottom) |
+| Shell, desktop windows, apps | Host preview of a real app binary: `bifrost pc smoke APP [--light]`. On the device: `tools/midget-push-shell.sh [--no-build] [shot.png]` builds the fast desktop shell, installs it over `/usr/bin/springboard` on Midget, restarts the session, unlocks and takes a screenshot (the next `midget update` restores the packaged binary) |
 | Installer UI or logic | `tools/lab-push.sh` (fast profile); a lab machine picks it up at its next boot (`bifrost-lab-sync`), or `systemctl restart bifrost-installer` on the running live system pulls it at once |
 | The whole install | `bifrost pc cycle` (UI-driven, screenshots, timings) or `tools/vm-install.sh install` (`BIFROST_AUTO=user:password:/dev/vda`, no UI), then `bifrost pc boot` for the installed disk |
 | Boot path (splash, initramfs, cmdline) | No loop yet. Needs a new ISO file that iVentoy serves from its folder; no ISO build is approved for this (2026-10-08). See "How installed boot files arrive" below |
 
 `[profile.fast]` in `springboard/Cargo.toml`: no LTO, 32 codegen units, incremental, and `lld` as the linker
-(`springboard/.cargo/config.toml`). Desktop System Updates use the optimized incremental `fast` profile by default; `bifrost pc publish --release` explicitly selects the slower full-LTO build. The package copy is stripped while the local binary keeps profiling symbols. `tools/emu.py` runs the newest of the two builds.
+(`springboard/.cargo/config.toml`). Desktop System Updates use the optimized incremental `fast` profile by default; `bifrost pc publish --release` explicitly selects the slower full-LTO build. The package copy is stripped while the local binary keeps profiling symbols.
 
 ## Autonomous cycles and computer use (the headed VM)
 
@@ -90,6 +90,14 @@ Gotchas: the lab key only works on the live (lab ISO) system; the installed syst
 | `me` | what the OS says about Intel ME/AMT (PCI, `/dev/mei0`, firmware version, `meshcmd`/`amtinfo` if installed): the M900 is vPro-certified but many units are ISM-only or have no AMT, so check before relying on remote power/KVM |
 | `amt` | probes for Intel AMT/vPro (remote power, boot-to-PXE, KVM); the M900 only has it on some SKUs and it must be enabled in MEBx |
 | `ssh CMD` | run a command as root with the lab key |
+| `state`, `lock`, `ax [PREFIX]`, `press NAME`, `wait NAME [--value V] [--gone] [--enabled] [--timeout S]` | the shell's control port: version and windows; lock; the element map (`ax` lists, `press` presses by address, path or unique name, `wait` blocks on an element). See [agent-api.md](agent-api.md) |
+| `ota [--timeout=S]` | Settings > General > Software Update by element name: check, download, install, restart, unlock, wait for `phase=accepted`. Handles an update already staged by `update` |
+| `update [--restart]` | `bifrost-update-guard install` (stages the package transaction), then `apply` with `--restart` |
+| `recovery`, `apps`, `mem`, `idle LABEL` | `bifrost-update-guard status`; `/run/bifrost/app-resources.json` ([app-manager.md](app-manager.md)); process-tree PSS; idle CPU per process |
+| `open-app ID`, `open-url URL`, `open-folder ID PATH`, `show-in-files PATH`, `context X Y`, `hover X Y`, `tap`, `swipe`, `tap-window`, `key`, `trace on\|off`, `appearance`, `wallpaper` | input and shell commands (below) |
+| `login-bypass on\|off` | root touches or removes `/etc/bifrost/no-login`; with it on the login window accepts an empty password. Recovery only, turn it off again |
+| `labboot on\|off` | UEFI BootOrder with PXE first (a reset always lands in the live lab ISO) or the disk first |
+| `wipe`, `qa-install`, `reinstall`, `follow` | reinstall paths (see "Reinstall Midget autonomously") |
 | `unlock` | types the Tester password on the login window after a reboot (see below) |
 | `kbench LABEL [--seconds N]` | kernel latency bench on the running kernel: installs `tools/midget/kbench.sh`, ensures `rt-tests stress-ng numactl`, runs cyclictest idle and under stress plus `aplay` underruns at 32/64/128 frames, prints the summary and appends one `kernel-latency` line to `docs/perf-history.jsonl` |
 | `kab [--seconds N]` | the stock vs linux-rt A/B (linux-rt is the installed default since 2026-10-12, so the first run is whatever kernel is running; install and boot stock `linux` for the "stock" side): `kbench stock`, one boot into linux-rt through a create-only EFI entry "BifrOSt RT bench" plus BootNext (the entry carries `panic=10`, so a failed boot returns to the disk), checks `uname -r` has `rt` (stops if not), `kbench rt`, both summaries side by side. Results: `docs/audio-latency.md` "Kernel" |
@@ -181,8 +189,12 @@ singletons), traffic lights (close, minimize, zoom), title-bar drag, edge resize
 under running ones, the status bar as menu bar. Each window's app is laid out for the window body: the shell's `w`/`h` are
 swapped to the body size while it draws or takes a touch (`Shell::with_size`), the app draws into an offscreen buffer
 that is copied in. Touches are translated to window-local coordinates and go through `app_touch_single`. The go-home swipe is off.
-Limits: only the focused window ticks; bottom corners are square; no keyboard shortcuts yet.
-The Terminal runs `/bin/bash -l` and shows no on-screen keyboard on a desktop.
+The installed session runs the window server `bifrost-wm` (`springboard/wm`, labwc is gone) with the menu bar, dock and panels as
+separate chrome clients (`springboard/chrome`); the shell keeps the app model, Settings and the control port. The compositor owns
+the global shortcuts (`springboard/wm/src/keybindings.rs`): Super+Space opens the search panel, Super+A the app list, Alt+Tab
+cycles focus, Alt+F4 closes the focused window, Ctrl+Super+arrows tile, maximize or centre it. Window chrome, the dock and
+the menu bar are described in [desktop-chrome.md](desktop-chrome.md). The Terminal runs `/bin/bash -l` and shows no on-screen
+keyboard on a desktop.
 
 ## Lab rules
 
@@ -400,13 +412,19 @@ newest file under `springboard/bootweave/{efi,frame}/src` (`tools/verify-efi-loa
 for `x86_64-unknown-uefi` too. See `docs/boot-architecture.md`, "One project: Bootweave".
 
 Release order used for system 0.4.47 to 0.4.49 and Files 1.10.x:
-1. Full tests on titan: `cd springboard && cargo test --offline --lib -p springboard` (2334 passed)
-   and the app crates (`cargo test -p bifrost-files -p bifrost-reminders`), then
+1. Full tests on titan: `bifrost pc acceptance --quick` (workspace tests, SDK coverage, app compliance, tool tests), or
+   `cd springboard && cargo test --offline --profile fast --workspace --no-fail-fast`; then
    `bifrost pc smoke <app dirs>` (and `--light`) for each app that changed; for SDK changes also
-   `bifrost pc gallery` and `bifrost pc adoption`.
+   `bifrost pc gallery` and `bifrost pc adoption`; `python3 tools/check-app-compliance.py --changed-sdk` lists the apps to retest.
+   Parity rows for the change go in `docs/parity-matrix/data/` (`bifrost pc parity check`, `build`).
 2. Bump `springboard/Cargo.toml` and `springboard/CHANGELOG.md` (a new `## x.y.z — date` heading);
    commit as `release: system x.y.z`.
-3. `bifrost pc publish` (about 45 s). First it runs `tools/pc_mirror.py`: Midget installs every package from titan's
+3. `bifrost pc publish` (about 45 s; `--release` for the full-LTO build, `--skip-build`, `--no-serve`). It builds the shell,
+   `bootweave`, `bifrost-portal`, `bifrost-privd`, `bifrost-mcp`, `bifrostd`, `bifrost-audiod`, the audio bench and ALSA
+   plugin, `bifrost-wm`, the chrome clients and `bifrost-log`; compiles the recovery guard (`packaging/arch/recovery/guard.rs`,
+   static); packs everything into one `springboard-shell` package (version = Cargo version + build timestamp; the
+   last 3 are kept) and serves the repo at `http://192.168.1.12:8079/bifrost/$arch`. If `bifrost-ref/assets` exists its
+   reference assets are packed under `/usr/share/bifrost/ref` (never committed). First it runs `tools/pc_mirror.py`: Midget installs every package from titan's
    mirror `http://192.168.1.12:8079/mirror/$repo/os/$arch` (`out/pc-repo/mirror/{core,extra}/os/x86_64`, nothing but
    `pc-publish.py` serves it). The step downloads the current core/extra dbs and every package file the
    `runtime-packages.txt`, base and GPU closure needs (list from `tools/lab-mirror.sh --list`, closure resolved from the
@@ -417,10 +435,13 @@ Release order used for system 0.4.47 to 0.4.49 and Files 1.10.x:
    `python3 -I tools/test_pc_mirror.py`. Midget's mirrorlist must point at that URL (not written by the installer). It refuses a version that is not newer than the published one.
 4. Apps: bump manifest and Cargo versions with the CHANGELOG entry, commit, then
    `python3 tools/pc-app.py publish <app dir>`.
-5. Midget: `bifrost pc midget update --restart` stages the system; `bifrost pc midget reboot`
-   activates it (about 25 s). `bifrost pc midget reboot` waits for the device and prints the recovery phase.
-   `python3 tools/midget.py recovery` must show `phase=accepted`; `system-probation` means the new build booted and
-   is still being checked (about 1-2 minutes).
+5. Midget: `bifrost pc midget ota` drives Settings > Software Update by element name (check, download, Install Now,
+   restart, unlock) and waits for the guard. By hand: `bifrost pc midget update --restart` stages and applies the system and
+   `bifrost pc midget reboot` waits for the device and prints the recovery phase. `python3 tools/midget.py recovery`
+   (`bifrost-update-guard status`) must show `phase=accepted`; `system-prepared` is a staged transaction (pacman may still
+   be running; do not reboot until it is done), `system-probation` means the new build booted and is being checked: 30
+   uninterrupted seconds of a responsive shell accept it, 90 seconds without acceptance roll back to the previous generation
+   (see [system-recovery.md](system-recovery.md)). Then take a screenshot.
 6. Install an app on Midget with `/usr/bin/springboard --install-store-app <app id>`. The running
    shell only sees new apps after a reboot or a store-UI install; a CLI install alone is not enough
    to open it from the desktop (found 2026-10-08).
@@ -481,7 +502,11 @@ Update badge). Daily timer install: `mkdir -p ~/.config/systemd/user && cp tools
 
 ## Parity teams and the macOS 27 reference (2026-10-13)
 
-Parity work runs as continuous teams of 10 Haiku agents (one framework or OS area each). Agents write code and unit
+Parity work runs as continuous teams of up to 10 agents (one framework or OS area each; Sonnet for building, Haiku for
+fixes). The scripts are in `.claude/workflows/`: `bifrost-parity-sprint.js` (triage the biggest SDK gaps, then one coder
+per task on a `sprintN/...` branch, SDK side only), `bifrost-app-parity-wave.js` (one coder per app, briefed by its
+`docs/parity-matrix/apps/<slug>.json` inventory, then `bifrost pc parity apps` lists apps by coverage) and
+`bifrost-wave.js` (scout, code, review for errors, hardening, cleanup and parity). Agents write code and unit
 tests and commit them on their own branches without running anything; the lead reviews by reading, merges into
 `integration`, runs the workspace tests to find errors and fixes them, then dispatches the next team. Frameworks come
 from `bifrost pc parity coverage` (most gaps first); OS areas from the OS layer (`bifrost pc parity os-status`).
@@ -536,4 +561,4 @@ or `midget.py reboot [--netboot]`. Only Midget can be reinstalled; the MCP and t
 
 ## System sleep policy (Snow Leopard round 6)
 
-Lock Screen and display-off never suspend the machine (macOS parity). The prefs key `system_sleep_minutes` (default unset = never) sets a separate Energy idle timeout after the display went off; Apple menu > Sleep suspends immediately. No Energy settings page exists yet, so the key is set in settings.ini. Code: `springboard/src/bare/sleep.rs` (`system_sleep_after`, `Policy`).
+Lock Screen and display-off never suspend the machine (macOS parity). The prefs key `system_sleep_minutes` (default unset = never) sets a separate Energy idle timeout after the display went off; Apple menu > Sleep suspends immediately. The key is listed in `shell/options.rs`; set it in settings.ini. Code: `springboard/src/bare/sleep.rs` (`system_sleep_after`, `Policy`).
