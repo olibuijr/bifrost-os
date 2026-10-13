@@ -30,9 +30,6 @@ pub const JOB_ROW_PT: f32 = 30.0;
 pub const FOOT_PT: f32 = 30.0;
 /// Padding inside the queue pane (points).
 pub const PAD_PT: f32 = 20.0;
-/// How often the printers are listed again while the window is in the foreground and nothing is queued (milliseconds).
-/// While a job waits or prints the listing comes sooner, see `model::poll_interval_ms`.
-pub const POLL_MS: f64 = model::IDLE_POLL_MS;
 /// How soon the loop comes back while the Add Printer pane listens for replies (milliseconds).
 const DISCOVER_WAKE_MS: f64 = 250.0;
 /// One printer found on the network (points).
@@ -469,7 +466,7 @@ impl PrintCenter {
         true
     }
 
-    /// One loop turn in the foreground: takes the replies and lists the printers every `POLL_MS`. True when a frame is
+    /// One loop turn in the foreground: takes the replies and lists the printers on the interval `model::poll_interval_ms` gives. True when a frame is
     /// needed.
     pub fn step(&mut self, t: f64) -> bool {
         let mut changed = self.poll();
@@ -976,7 +973,7 @@ mod tests {
         assert_eq!(w.in_flight, 1);
         assert_eq!(w.wake_at(0.0), BUSY_WAKE_MS);
         w.in_flight = 0;
-        assert_eq!(w.wake_at(10.0), POLL_MS);
+        assert_eq!(w.wake_at(10.0), model::IDLE_POLL_MS);
         assert!(w.next_poll > 0.0);
     }
 
@@ -1286,7 +1283,7 @@ mod tests {
         assert_eq!(w.next_poll, model::ACTIVE_POLL_MS, "a waiting job brings the next listing within a second");
         w.model.printers[0].queued_jobs = 0;
         w.step(model::ACTIVE_POLL_MS);
-        assert_eq!(w.next_poll, model::ACTIVE_POLL_MS + POLL_MS);
+        assert_eq!(w.next_poll, model::ACTIVE_POLL_MS + model::IDLE_POLL_MS);
     }
 
     #[test]
