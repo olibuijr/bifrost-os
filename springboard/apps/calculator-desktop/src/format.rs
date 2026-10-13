@@ -134,10 +134,11 @@ pub fn format_styled(value: f64, style: Style) -> String {
             None => scientific(value),
             Some(p) => {
                 let text = format!("{value:.p$e}");
-                match text.strip_prefix('-') {
-                    Some(rest) if value == 0.0 => rest.to_string(),
-                    _ => text,
+                // negative zero prints a sign
+                if value == 0.0 && text.starts_with('-') {
+                    return text[1..].to_string();
                 }
+                text
             }
         };
     }
