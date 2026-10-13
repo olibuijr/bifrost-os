@@ -105,6 +105,7 @@ fn main() {
         })
         .collect();
     let info = Info {
+        captive_portal: None,
         battery_present: true,
         desktop_network: Default::default(),
         display_mode: None,

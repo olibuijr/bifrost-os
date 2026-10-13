@@ -210,7 +210,7 @@ impl Shell {
         if !self.screen_on || !self.saver.active() {
             return false;
         }
-        let clock = status::clock_in(self.info.hour, self.info.min, self.clock.use_24h);
+        let clock = status::clock_in(self.info.hour, self.info.min, self.clock_style.use_24h);
         let date = status::date_text(self.info.wday, self.info.mday, self.info.mon);
         self.saver.draw(s, &self.ui, self.w, self.h, &clock, &date, t);
         true

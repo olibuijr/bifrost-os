@@ -339,7 +339,7 @@ impl Shell {
             s.blit_colored(shadow,x,y+self.ui.pt(0.5).max(1.) as i32,ink.shadow,ink.shadow_alpha);s.blit_colored(im,x,y,ink.text,ink.text_alpha);
         });
     }
-    pub(super) fn clock_text(&self)->String {self.clock.text(self.info.wday,self.info.mday,self.info.mon,self.info.hour,self.info.min)}
+    pub(super) fn clock_text(&self)->String {self.clock_style.text(self.info.wday,self.info.mday,self.info.mon,self.info.hour,self.info.min)}
     /// The date and time at the right end of the bar; a tap toggles Notification Center.
     fn clock_hit(&self,x:f32,y:f32)->bool {
         let width=self.ui.measure(&self.clock_text(),12.,Weight::Medium);let left=self.w as f32-self.ui.pt(16.)-width;

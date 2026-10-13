@@ -1173,6 +1173,7 @@ impl Dispatch<om_config::ZwlrOutputConfigurationV1, ()> for State {
         let ok = match e {
             om_config::Event::Succeeded => true,
             om_config::Event::Failed | om_config::Event::Cancelled => false,
+            _ => return,
         };
         s.output_busy = false;
         *crate::shell::services::display_services::MODE_RESULT.lock().unwrap_or_else(|p| p.into_inner()) = Some(ok);
