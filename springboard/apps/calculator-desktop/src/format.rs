@@ -92,7 +92,68 @@ pub fn format_number(value: f64) -> String {
     text
 }
 
-fn localize_number(raw: &str, locale: Locale) -> String {
+/// How results are shown, set from the View menu: thousands separators, a fixed number of decimal places and
+/// scientific notation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Style {
+    /// Group the integer part in threes (`1,234,567`).
+    pub thousands: bool,
+    /// Fraction digits, 0 to `MAX_PLACES`; `None` keeps the automatic rule of nine significant digits.
+    pub places: Option<u8>,
+    /// Always write results as a mantissa and an exponent.
+    pub scientific: bool,
+}
+
+impl Default for Style {
+    fn default() -> Self {
+        Self { thousands: true, places: None, scientific: false }
+    }
+}
+
+/// The most fraction digits the Decimal Places menu offers.
+pub const MAX_PLACES: u8 = 15;
+
+impl Style {
+    /// Whether results are rewritten from their value (a fixed place count or scientific notation) instead of
+    /// being shown as the automatic nine-digit text.
+    pub fn rewrites(self) -> bool {
+        self.places.is_some() || self.scientific
+    }
+}
+
+/// The canonical text of `value` (ASCII, `.` decimal, no separators) in `style`: the automatic rule, a fixed number
+/// of places, or scientific notation (with a fixed number of mantissa places when `places` is set).
+pub fn format_styled(value: f64, style: Style) -> String {
+    if !value.is_finite() {
+        return "Error".into();
+    }
+    let places = style.places.map(|p| p.min(MAX_PLACES) as usize);
+    if style.scientific {
+        return match places {
+            None if value == 0.0 => "0".into(),
+            None => scientific(value),
+            Some(p) => {
+                let text = format!("{value:.p$e}");
+                match text.strip_prefix('-') {
+                    Some(rest) if value == 0.0 => rest.to_string(),
+                    _ => text,
+                }
+            }
+        };
+    }
+    let Some(p) = places else { return format_number(value) };
+    if value.abs() >= 1e15 {
+        return scientific(value);
+    }
+    let text = format!("{value:.p$}");
+    // a tiny negative value rounds to "-0.00"
+    if text.starts_with('-') && !text.bytes().any(|b| (b'1'..=b'9').contains(&b)) {
+        return text[1..].to_string();
+    }
+    text
+}
+
+fn localize_number(raw: &str, locale: Locale, group: bool) -> String {
     let (sign, rest) = match raw.strip_prefix('-') {
         Some(rest) => ("-", rest),
         None => ("", raw),
@@ -107,7 +168,7 @@ fn localize_number(raw: &str, locale: Locale) -> String {
     let mut out = String::new();
     let n = integer.chars().count();
     for (k, ch) in integer.chars().enumerate() {
-        if k > 0 && (n - k) % 3 == 0 {
+        if group && k > 0 && (n - k) % 3 == 0 {
             out.push(locale.group());
         }
         out.push(ch);
@@ -123,6 +184,11 @@ fn localize_number(raw: &str, locale: Locale) -> String {
 /// such as `1.5e10` or a whole expression) with the locale's separators.
 /// Everything that is not a digit run passes through untouched.
 pub fn localize(text: &str, locale: Locale) -> String {
+    localize_with(text, locale, true)
+}
+
+/// `localize` with the thousands separators switched on or off.
+pub fn localize_with(text: &str, locale: Locale, group: bool) -> String {
     let mut out = String::new();
     let mut run = String::new();
     for ch in text.chars() {
@@ -130,14 +196,14 @@ pub fn localize(text: &str, locale: Locale) -> String {
             run.push(ch);
         } else {
             if !run.is_empty() {
-                out.push_str(&localize_number(&run, locale));
+                out.push_str(&localize_number(&run, locale, group));
                 run.clear();
             }
             out.push(ch);
         }
     }
     if !run.is_empty() {
-        out.push_str(&localize_number(&run, locale));
+        out.push_str(&localize_number(&run, locale, group));
     }
     out
 }
@@ -147,9 +213,50 @@ pub fn display(value: f64, locale: Locale) -> String {
     localize(&format_number(value), locale)
 }
 
+/// `value` as shown on the display in `style`.
+pub fn display_styled(value: f64, locale: Locale, style: Style) -> String {
+    localize_with(&format_styled(value, style), locale, style.thousands)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn styles_fix_the_places_or_force_scientific_notation() {
+        let auto = Style::default();
+        assert_eq!(format_styled(1.0 / 3.0, auto), "0.333333333");
+        let places = |p| Style { places: Some(p), ..Style::default() };
+        assert_eq!(format_styled(1.0 / 3.0, places(2)), "0.33");
+        assert_eq!(format_styled(2.0, places(2)), "2.00");
+        assert_eq!(format_styled(2.6, places(0)), "3");
+        assert_eq!(format_styled(-0.001, places(2)), "0.00");
+        assert_eq!(format_styled(1234567.891, places(1)), "1234567.9");
+        assert_eq!(format_styled(1e20, places(2)), "1e20");
+        assert_eq!(format_styled(f64::NAN, places(2)), "Error");
+        assert_eq!(format_styled(1.0 / 3.0, places(15)), "0.333333333333333");
+        assert_eq!(format_styled(1.0, places(99)), "1.000000000000000", "places clamp at 15");
+        let sci = Style { scientific: true, ..Style::default() };
+        assert_eq!(format_styled(1234.5, sci), "1.2345e3");
+        assert_eq!(format_styled(0.0, sci), "0");
+        assert_eq!(format_styled(-0.00025, sci), "-2.5e-4");
+        let both = Style { scientific: true, places: Some(2), ..Style::default() };
+        assert_eq!(format_styled(1234.5, both), "1.23e3");
+        assert_eq!(format_styled(0.0, both), "0.00e0");
+        assert!(sci.rewrites() && places(0).rewrites() && !auto.rewrites());
+    }
+
+    #[test]
+    fn the_thousands_separator_can_be_switched_off() {
+        assert_eq!(localize_with("1234567.5", Locale::En, false), "1234567.5");
+        assert_eq!(localize_with("1234567.5", Locale::Is, false), "1234567,5");
+        assert_eq!(localize_with("1234567.5", Locale::En, true), "1,234,567.5");
+        let off = Style { thousands: false, ..Style::default() };
+        assert_eq!(display_styled(1234567.5, Locale::En, off), "1234567.5");
+        assert_eq!(display_styled(1234567.5, Locale::En, Style::default()), "1,234,567.5");
+        let two = Style { places: Some(2), ..Style::default() };
+        assert_eq!(display_styled(1234.5, Locale::Is, two), "1.234,50");
+    }
 
     #[test]
     fn plain_numbers_keep_nine_digits_and_trim_zeros() {

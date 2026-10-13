@@ -1,8 +1,9 @@
-//! The Convert mode of Calculator: unit conversion over five categories.
+//! The Convert mode of Calculator: unit conversion over thirteen categories.
 //!
 //! Length, mass and temperature use the SDK's `Measurement` model (`bifrost_app::locale`). That model has
-//! no speed or volume dimension yet, so those two use the scale factors below (the SDK's `Unit` cannot hold
-//! them). Numbers are shown with the SDK's `NumberFormatter` in the app's locale.
+//! no other dimension yet, so the rest (speed, volume, area, time, data size, energy, pressure, power, angle and
+//! fuel economy) use the scale factors below (the SDK's `Unit` cannot hold them). Numbers are shown with the
+//! SDK's `NumberFormatter` in the app's locale.
 
 use crate::format::{self, Locale};
 use bifrost_app::locale::{Locale as SdkLocale, Measurement, NumberFormatter, NumberStyle, Unit as Std};
@@ -17,10 +18,32 @@ pub enum Category {
     Temperature,
     Speed,
     Volume,
+    Area,
+    Time,
+    DataSize,
+    Energy,
+    Pressure,
+    Power,
+    Angle,
+    FuelEconomy,
 }
 
 impl Category {
-    pub const ALL: [Category; 5] = [Category::Length, Category::Mass, Category::Temperature, Category::Speed, Category::Volume];
+    pub const ALL: [Category; 13] = [
+        Category::Length,
+        Category::Mass,
+        Category::Temperature,
+        Category::Speed,
+        Category::Volume,
+        Category::Area,
+        Category::Time,
+        Category::DataSize,
+        Category::Energy,
+        Category::Pressure,
+        Category::Power,
+        Category::Angle,
+        Category::FuelEconomy,
+    ];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -29,6 +52,14 @@ impl Category {
             Category::Temperature => "Temperature",
             Category::Speed => "Speed",
             Category::Volume => "Volume",
+            Category::Area => "Area",
+            Category::Time => "Time",
+            Category::DataSize => "Data Size",
+            Category::Energy => "Energy",
+            Category::Pressure => "Pressure",
+            Category::Power => "Power",
+            Category::Angle => "Angle",
+            Category::FuelEconomy => "Fuel",
         }
     }
 
@@ -39,6 +70,14 @@ impl Category {
             Category::Temperature => TEMPERATURE,
             Category::Speed => SPEED,
             Category::Volume => VOLUME,
+            Category::Area => AREA,
+            Category::Time => TIME,
+            Category::DataSize => DATA_SIZE,
+            Category::Energy => ENERGY,
+            Category::Pressure => PRESSURE,
+            Category::Power => POWER,
+            Category::Angle => ANGLE,
+            Category::FuelEconomy => FUEL_ECONOMY,
         }
     }
 }
@@ -47,8 +86,11 @@ impl Category {
 pub enum Kind {
     /// A unit the SDK's `Measurement` model converts.
     Std(Std),
-    /// Base units (metre per second, litre) per one of this unit.
+    /// Base units (metre per second, litre, square metre, second, byte, joule, pascal, watt, degree, kilometre per
+    /// litre) per one of this unit.
     Scale(f64),
+    /// A unit that is the reciprocal of the base unit: `factor / base` (litres per 100 km against km per litre).
+    Reciprocal(f64),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -91,14 +133,99 @@ const VOLUME: &[UnitDef] = &[
     UnitDef { name: "US Gallons", symbol: "gal", kind: Kind::Scale(3.785_411_784) },
 ];
 
+const AREA: &[UnitDef] = &[
+    UnitDef { name: "Square Meters", symbol: "m\u{b2}", kind: Kind::Scale(1.0) },
+    UnitDef { name: "Square Kilometers", symbol: "km\u{b2}", kind: Kind::Scale(1e6) },
+    UnitDef { name: "Hectares", symbol: "ha", kind: Kind::Scale(1e4) },
+    UnitDef { name: "Square Feet", symbol: "ft\u{b2}", kind: Kind::Scale(0.092_903_04) },
+    UnitDef { name: "Acres", symbol: "ac", kind: Kind::Scale(4_046.856_422_4) },
+    UnitDef { name: "Square Miles", symbol: "mi\u{b2}", kind: Kind::Scale(2_589_988.110_336) },
+];
+
+const TIME: &[UnitDef] = &[
+    UnitDef { name: "Seconds", symbol: "s", kind: Kind::Scale(1.0) },
+    UnitDef { name: "Minutes", symbol: "min", kind: Kind::Scale(60.0) },
+    UnitDef { name: "Hours", symbol: "h", kind: Kind::Scale(3_600.0) },
+    UnitDef { name: "Days", symbol: "d", kind: Kind::Scale(86_400.0) },
+    UnitDef { name: "Weeks", symbol: "wk", kind: Kind::Scale(604_800.0) },
+];
+
+const DATA_SIZE: &[UnitDef] = &[
+    UnitDef { name: "Bits", symbol: "bit", kind: Kind::Scale(0.125) },
+    UnitDef { name: "Bytes", symbol: "B", kind: Kind::Scale(1.0) },
+    UnitDef { name: "Kilobytes", symbol: "kB", kind: Kind::Scale(1e3) },
+    UnitDef { name: "Megabytes", symbol: "MB", kind: Kind::Scale(1e6) },
+    UnitDef { name: "Gigabytes", symbol: "GB", kind: Kind::Scale(1e9) },
+    UnitDef { name: "Terabytes", symbol: "TB", kind: Kind::Scale(1e12) },
+    UnitDef { name: "Kibibytes", symbol: "KiB", kind: Kind::Scale(1_024.0) },
+    UnitDef { name: "Mebibytes", symbol: "MiB", kind: Kind::Scale(1_048_576.0) },
+    UnitDef { name: "Gibibytes", symbol: "GiB", kind: Kind::Scale(1_073_741_824.0) },
+];
+
+const ENERGY: &[UnitDef] = &[
+    UnitDef { name: "Joules", symbol: "J", kind: Kind::Scale(1.0) },
+    UnitDef { name: "Kilojoules", symbol: "kJ", kind: Kind::Scale(1e3) },
+    UnitDef { name: "Calories", symbol: "cal", kind: Kind::Scale(4.184) },
+    UnitDef { name: "Kilocalories", symbol: "kcal", kind: Kind::Scale(4_184.0) },
+    UnitDef { name: "Watt Hours", symbol: "Wh", kind: Kind::Scale(3_600.0) },
+    UnitDef { name: "Kilowatt Hours", symbol: "kWh", kind: Kind::Scale(3.6e6) },
+];
+
+const PRESSURE: &[UnitDef] = &[
+    UnitDef { name: "Pascals", symbol: "Pa", kind: Kind::Scale(1.0) },
+    UnitDef { name: "Kilopascals", symbol: "kPa", kind: Kind::Scale(1e3) },
+    UnitDef { name: "Bars", symbol: "bar", kind: Kind::Scale(1e5) },
+    UnitDef { name: "Pounds per Square Inch", symbol: "psi", kind: Kind::Scale(6_894.757_293_168) },
+    UnitDef { name: "Atmospheres", symbol: "atm", kind: Kind::Scale(101_325.0) },
+    UnitDef { name: "Millimeters of Mercury", symbol: "mmHg", kind: Kind::Scale(133.322_387_415) },
+];
+
+const POWER: &[UnitDef] = &[
+    UnitDef { name: "Watts", symbol: "W", kind: Kind::Scale(1.0) },
+    UnitDef { name: "Kilowatts", symbol: "kW", kind: Kind::Scale(1e3) },
+    UnitDef { name: "Megawatts", symbol: "MW", kind: Kind::Scale(1e6) },
+    UnitDef { name: "Horsepower", symbol: "hp", kind: Kind::Scale(745.699_871_582_27) },
+];
+
+const ANGLE: &[UnitDef] = &[
+    UnitDef { name: "Degrees", symbol: "\u{b0}", kind: Kind::Scale(1.0) },
+    UnitDef { name: "Radians", symbol: "rad", kind: Kind::Scale(57.295_779_513_082_32) },
+    UnitDef { name: "Gradians", symbol: "grad", kind: Kind::Scale(0.9) },
+    UnitDef { name: "Revolutions", symbol: "rev", kind: Kind::Scale(360.0) },
+];
+
+const FUEL_ECONOMY: &[UnitDef] = &[
+    UnitDef { name: "Miles per Gallon", symbol: "mpg", kind: Kind::Scale(0.425_143_707) },
+    UnitDef { name: "Kilometers per Liter", symbol: "km/L", kind: Kind::Scale(1.0) },
+    UnitDef { name: "Liters per 100 Kilometers", symbol: "L/100km", kind: Kind::Reciprocal(100.0) },
+];
+
+/// `value` of a scale or reciprocal unit in the category's base unit; None for a reciprocal of zero or an SDK unit.
+fn to_base(kind: Kind, value: f64) -> Option<f64> {
+    match kind {
+        Kind::Scale(x) => Some(value * x),
+        Kind::Reciprocal(k) => (value != 0.0).then(|| k / value),
+        Kind::Std(_) => None,
+    }
+}
+
+/// `base` expressed in a scale or reciprocal unit.
+fn from_base(kind: Kind, base: f64) -> Option<f64> {
+    match kind {
+        Kind::Scale(x) => Some(base / x),
+        Kind::Reciprocal(k) => (base != 0.0).then(|| k / base),
+        Kind::Std(_) => None,
+    }
+}
+
 /// `value` in unit `from` expressed in unit `to` of the same category; None for an index out of range.
 pub fn convert(category: Category, value: f64, from: usize, to: usize) -> Option<f64> {
     let units = category.units();
     let (a, b) = (units.get(from)?, units.get(to)?);
     match (a.kind, b.kind) {
         (Kind::Std(x), Kind::Std(y)) => Measurement::new(value, x).converted(y).map(|m| m.value),
-        (Kind::Scale(x), Kind::Scale(y)) => Some(value * x / y),
-        _ => None,
+        (Kind::Std(_), _) | (_, Kind::Std(_)) => None,
+        (from_kind, to_kind) => from_base(to_kind, to_base(from_kind, value)?),
     }
 }
 
@@ -275,6 +402,51 @@ mod tests {
         assert!(close(conv(Category::Volume, 1.0, "L", "mL"), 1000.0));
         assert!(close(conv(Category::Volume, 1.0, "gal", "L"), 3.785_411_784));
         assert!(close(conv(Category::Volume, 1.0, "L", "fl oz"), 33.814_022_7));
+    }
+
+    #[test]
+    fn the_other_categories_convert_through_their_base_unit() {
+        assert!(close(conv(Category::Area, 1.0, "ha", "m\u{b2}"), 10_000.0));
+        assert!(close(conv(Category::Area, 1.0, "mi\u{b2}", "ac"), 640.0));
+        assert!(close(conv(Category::Time, 2.0, "h", "min"), 120.0));
+        assert!(close(conv(Category::Time, 1.0, "wk", "d"), 7.0));
+        assert!(close(conv(Category::DataSize, 1.0, "GiB", "MiB"), 1024.0));
+        assert!(close(conv(Category::DataSize, 1.0, "kB", "bit"), 8000.0));
+        assert!(close(conv(Category::Energy, 1.0, "kcal", "kJ"), 4.184));
+        assert!(close(conv(Category::Energy, 1.0, "kWh", "Wh"), 1000.0));
+        assert!(close(conv(Category::Pressure, 1.0, "atm", "kPa"), 101.325));
+        assert!(close(conv(Category::Pressure, 14.5, "psi", "bar"), 0.999_739_807_509_36));
+        assert!(close(conv(Category::Power, 1.0, "hp", "W"), 745.699_871_582_27));
+        assert!(close(conv(Category::Angle, 180.0, "\u{b0}", "rad"), std::f64::consts::PI));
+        assert!(close(conv(Category::Angle, 1.0, "rev", "grad"), 400.0));
+    }
+
+    #[test]
+    fn fuel_economy_includes_the_reciprocal_unit() {
+        assert!(close(conv(Category::FuelEconomy, 5.0, "L/100km", "km/L"), 20.0));
+        assert!(close(conv(Category::FuelEconomy, 20.0, "km/L", "L/100km"), 5.0));
+        assert!(close(conv(Category::FuelEconomy, 30.0, "mpg", "L/100km"), 7.840_486_119_046_173));
+        assert!(close(conv(Category::FuelEconomy, 10.0, "L/100km", "mpg"), 23.521_458_357_138_52));
+        let (mpg, per_100) = (index_of(Category::FuelEconomy, "mpg"), index_of(Category::FuelEconomy, "L/100km"));
+        assert_eq!(convert(Category::FuelEconomy, 0.0, mpg, per_100), None, "zero mpg has no consumption");
+        assert_eq!(convert(Category::FuelEconomy, 0.0, per_100, mpg), None);
+    }
+
+    #[test]
+    fn every_category_has_units_a_title_and_distinct_symbols() {
+        assert_eq!(Category::ALL.len(), 13);
+        for category in Category::ALL {
+            let units = category.units();
+            assert!(units.len() >= 3, "{category:?}");
+            assert!(!category.title().is_empty());
+            for (i, a) in units.iter().enumerate() {
+                assert!(units.iter().skip(i + 1).all(|b| b.symbol != a.symbol && b.name != a.name), "{category:?} {}", a.name);
+            }
+        }
+        let mut titles: Vec<&str> = Category::ALL.iter().map(|c| c.title()).collect();
+        titles.sort_unstable();
+        titles.dedup();
+        assert_eq!(titles.len(), Category::ALL.len());
     }
 
     #[test]
