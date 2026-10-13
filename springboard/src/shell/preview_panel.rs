@@ -1,9 +1,10 @@
 //! Preview (`QLPreviewPanel`): the floating panel an app opens with `ToShell::Preview` (SDK `peek::PreviewPanel`) or the
 //! `quick-look` service. It is drawn on the desktop above the windows and the Dock, at the menus' layer.
 //!
-//! The panel shows one item at a time: a picture (decoded and fitted into the body), the first lines of a text file, a
-//! line naming the app that plays or reads a PDF or audio item, or a line saying there is no preview. The kind comes
-//! from the preview registry (`registry()`, by the file's type). The title is the headline and the URL sits under the
+//! The panel shows one item at a time: a picture from the system thumbnails (`services::quick_look` asks the
+//! `thumbnails` service for it, so the panel decodes nothing itself), the first lines of a text file, or a line saying
+//! there is no preview (or which app plays or reads a PDF or audio item, when the thumbnail is only an icon). The kind
+//! comes from the preview registry (`registry()`, by the file's type). The title is the headline and the URL sits under the
 //! body. Left and Right arrows, the chevron buttons and the arrow keys step through the
 //! items (no wrapping, as `PreviewPanel::step`). Esc, Space and the close button hide it. A click on the desktop
 //! outside the panel is left to the desktop, and the panel stays up. The shell never reads a file the app did not name:
@@ -39,8 +40,6 @@ pub fn registry() -> Registry {
     r
 }
 
-/// Pictures larger than this are not decoded (the panel is a preview, not an editor).
-pub const MAX_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
 /// Text previews read this many bytes at most, and show at most [`MAX_TEXT_LINES`] lines of [`MAX_LINE_CHARS`] characters.
 pub const MAX_TEXT_BYTES: u64 = 16 * 1024;
 pub const MAX_TEXT_LINES: usize = 24;
@@ -130,6 +129,8 @@ pub struct Panel {
     owner: Option<String>,
     visible: bool,
     body: Body,
+    /// the local file whose thumbnail the body waits for; taken once by the `quick-look` service, which asks for it
+    wanted: Option<String>,
     /// events for the owner, drained by the `quick-look` service's tick: (event name, body)
     events: Vec<(&'static str, Json)>,
     dirty: bool,
@@ -224,8 +225,33 @@ impl Panel {
         ])
     }
 
+    /// The local file whose picture the current body waits for, once. The service asks the thumbnails service for it.
+    pub fn take_wanted(&mut self) -> Option<String> {
+        self.wanted.take()
+    }
+
+    /// The thumbnails service's answer for `file`: its picture, or None when the file has none. It applies only while
+    /// the current item is that file and its body waits. True when the body changed.
+    pub fn thumbnail(&mut self, file: &str, picture: Option<Image>) -> bool {
+        let body = match self.current() {
+            Some(item) if local_path(&item.url) == Some(file) && matches!(self.body, Body::Loading) => match picture {
+                Some(im) => Body::Image(im),
+                None => fallback_body(item),
+            },
+            _ => return false,
+        };
+        self.body = body;
+        self.dirty = true;
+        true
+    }
+
     fn reload(&mut self) {
-        self.body = load_body(self.items.get(self.index));
+        let item = self.items.get(self.index);
+        self.body = load_body(item);
+        self.wanted = match (&self.body, item) {
+            (Body::Loading, Some(i)) => local_path(&i.url).map(str::to_string),
+            _ => None,
+        };
         self.dirty = true;
     }
 }
@@ -323,6 +349,18 @@ impl Shell {
         }
     }
 
+    /// The file the panel's body waits for a picture of, once (see [`Panel::take_wanted`]).
+    pub(super) fn quick_look_take_wanted(&mut self) -> Option<String> {
+        self.quick_look.take_wanted()
+    }
+
+    /// A thumbnail answer for the panel: redraws when the body changed.
+    pub(super) fn quick_look_thumbnail(&mut self, file: &str, picture: Option<Image>) {
+        if self.quick_look.thumbnail(file, picture) {
+            self.dirty = true;
+        }
+    }
+
     /// The app's `step` call: moves the index without an event back to the app.
     pub(super) fn quick_look_step(&mut self, delta: i32) {
         if self.quick_look.step(delta) {
@@ -381,7 +419,7 @@ impl Shell {
         s.fill_rrect(bx, by, bw, bh, ui.pt(9.0), DETAIL_BG.now());
         s.stroke_rrect(bx, by, bw, bh, ui.pt(9.0), ui.pt(1.0), SEPARATOR_C.now());
         match &p.body {
-            Body::Empty => {}
+            Body::Empty | Body::Loading => {}
             Body::Image(im) => {
                 let k = (bw - ui.pt(24.0)) / im.w.max(1) as f32;
                 let k = k.min((bh - ui.pt(24.0)) / im.h.max(1) as f32);
@@ -451,14 +489,34 @@ mod tests {
     }
 
     #[test]
-    fn pdf_and_audio_items_say_which_app_plays_them() {
+    fn pictures_pdfs_and_audio_wait_for_the_thumbnails_service() {
         let dir = std::env::temp_dir().join(format!("ql-kinds-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let pdf = dir.join("paper.pdf");
         std::fs::write(&pdf, b"%PDF-1.4").unwrap();
         let url = format!("file://{}", pdf.display());
-        assert!(matches!(load_body(Some(&item(&url, "paper"))), Body::Info(t) if t.starts_with("PDF document")));
+        assert!(matches!(load_body(Some(&item(&url, "paper"))), Body::Loading));
+        assert!(matches!(fallback_body(&item(&url, "paper")), Body::Info(t) if t.starts_with("PDF document")));
+        let song = format!("file://{}/song.mp3", dir.display());
+        assert!(matches!(fallback_body(&item(&song, "")), Body::Info(t) if t.starts_with("Audio file")));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_thumbnail_answer_fills_the_body_only_for_the_current_item() {
+        let mut p = Panel::default();
+        p.show("app", vec![item("file:///a.png", "a"), item("file:///b.zip", "b")], 0);
+        assert_eq!(p.take_wanted().as_deref(), Some("/a.png"), "the picture is asked for once");
+        assert_eq!(p.take_wanted(), None);
+        assert!(!p.thumbnail("/b.zip", None), "an answer for another item is dropped");
+        let im = Image::new(2, 2);
+        assert!(p.thumbnail("/a.png", Some(im)));
+        assert!(matches!(p.body, Body::Image(_)));
+        assert!(!p.thumbnail("/a.png", None), "the body no longer waits");
+        p.step(1);
+        assert_eq!(p.take_wanted().as_deref(), Some("/b.zip"), "every kind but text is asked for a thumbnail");
+        assert!(p.thumbnail("/b.zip", None), "an icon answer shows the kind's line");
+        assert!(matches!(p.body, Body::Info(t) if t == "No preview for .zip files."));
     }
 
     #[test]
