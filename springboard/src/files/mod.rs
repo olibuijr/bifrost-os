@@ -48,6 +48,8 @@ pub const LONG_PRESS_MS: f64 = 500.0;
 const SLOP: f32 = 12.0;
 /// Bytes sniffed to classify a file of unknown kind.
 const SNIFF: usize = 4096;
+/// Back-button labels kept before the cache starts over (a folder has a handful of distinct names).
+const BACK_LABELS: usize = 32;
 
 /// Something the shell must do for the app.
 #[derive(Clone, Debug, PartialEq)]
@@ -1164,7 +1166,14 @@ impl Files {
 
     /// The Back label reading `text`, rendered once.
     fn back_image(&self, ui: &Ui, text: &str) -> Image {
-        self.back.borrow_mut().entry(text.to_string()).or_insert_with(|| ui.text(&ui.fit(text, 17.0, ui.pt(200.0)), 17.0, Weight::Regular, icons::BLUE)).clone()
+        let mut back = self.back.borrow_mut();
+        if !back.contains_key(text) {
+            if back.len() >= BACK_LABELS {
+                back.clear();
+            }
+            back.insert(text.to_string(), ui.text(&ui.fit(text, 17.0, ui.pt(200.0)), 17.0, Weight::Regular, icons::BLUE));
+        }
+        back[text].clone()
     }
 }
 

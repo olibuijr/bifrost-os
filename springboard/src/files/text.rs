@@ -15,6 +15,15 @@ const PAD_PT: f32 = 16.0;
 /// Rendered lines kept around once the view scrolls on.
 const CACHE_LINES: usize = 400;
 
+/// The keys to drop from a full cache: all but the `keep` nearest to `near`, farthest first.
+fn far_lines(keys: impl Iterator<Item = usize>, near: usize, keep: usize) -> Vec<usize> {
+    let mut keys: Vec<usize> = keys.collect();
+    keys.sort_by_key(|k| std::cmp::Reverse(k.abs_diff(near)));
+    let drop = keys.len().saturating_sub(keep);
+    keys.truncate(drop);
+    keys
+}
+
 pub struct TextView {
     lines: Vec<String>,
     truncated: bool,
@@ -51,16 +60,19 @@ impl TextView {
         first.min(last)..last
     }
 
-    fn rendered(&self, font: &Font, ui: &Ui, i: usize) -> Image {
+    /// Renders line `i` into the cache if it is not there. A full cache keeps the `CACHE_LINES / 2` lines nearest `i`.
+    fn ensure_rendered(&self, font: &Font, ui: &Ui, i: usize) {
         let mut cache = self.cache.borrow_mut();
         if !cache.contains_key(&i) {
             if cache.len() >= CACHE_LINES {
-                cache.clear();
+                let drop = far_lines(cache.keys().copied(), i, CACHE_LINES / 2);
+                for k in drop {
+                    cache.remove(&k);
+                }
             }
             let st = Style { px: ui.pt(PT), embolden: 0.0, color: WHITE, shadow: false };
             cache.insert(i, font.render(&self.lines[i], &st));
         }
-        cache[&i].clone()
     }
 
     /// Draws the lines into the band `top..bottom` (px) scrolled by `offset`,
@@ -75,7 +87,9 @@ impl TextView {
             if y + lh < top || y > bottom {
                 continue;
             }
-            let img = self.rendered(font, ui, i);
+            self.ensure_rendered(font, ui, i);
+            let cache = self.cache.borrow();
+            let img = &cache[&i];
             let visible = img.crop(0, 0, img.w.min((s.w as f32 - x as f32).max(0.0) as usize), img.h);
             s.blit(&visible, x, (y + (lh - img.h as f32) / 2.0) as i32, 255, 255);
         }
@@ -101,6 +115,16 @@ mod tests {
     fn mono() -> Font<'static> {
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/SFUIMono.ttf")).unwrap().into_boxed_slice());
         Font::parse(data).unwrap()
+    }
+
+    #[test]
+    fn a_full_line_cache_drops_the_lines_farthest_from_the_view() {
+        let keys = 0..CACHE_LINES;
+        let dropped = far_lines(keys, 300, CACHE_LINES / 2);
+        assert_eq!(dropped.len(), CACHE_LINES / 2);
+        // the 200 nearest to line 300 are lines 200..400, so the first 200 lines go
+        assert!(dropped.iter().all(|k| *k < 200), "only the far lines go");
+        assert!(far_lines(0..3, 1, 10).is_empty(), "a cache under the keep count drops nothing");
     }
 
     #[test]
