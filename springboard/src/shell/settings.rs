@@ -3,6 +3,7 @@
 //! the Wi-Fi password sheet, confirmation alerts, and the dispatch of every
 //! row's action into persisted `Options` and `Effect`s for the device.
 
+use super::accessibility::shortcut::Feature;
 use super::accessibility::{AccessibilitySettings, HOLD_MS, ZOOMS};
 use super::datetime_page::{PickerEvent, ZonePicker};
 use super::timeset_page::{TimeEvent, TimePicker};
@@ -1083,7 +1084,7 @@ impl Settings {
         for name in path.split('>') {
             let id = [Network, Wifi, Bluetooth, Sounds, Focus, Notifications, General, About, SoftwareUpdate, Storage, DateTime, Keyboard, Language, Fonts, Dictionary, DefaultApps, LoginItems,
                 HomeScreen, Battery, ControlCentre, MenuBar, Accessibility, Privacy, Passcode, Passwords, InternetAccounts, Developer, ScreenTime, Backup, Wallpaper, Nearby, NightShift, InterfaceScale, Graphics, AutoLock, Energy, Vpn, Legal,
-                BackgroundRefresh, Display, Appearance, Diagnostics, DisplayZoom, TouchHold]
+                BackgroundRefresh, Display, Appearance, Diagnostics, DisplayZoom, TouchHold, AccessibilityShortcut]
             .into_iter()
             .find(|id| format!("{id:?}") == name);
             if let Some(id) = id {
@@ -1820,6 +1821,15 @@ impl Settings {
                 }
                 vec![]
             }
+            Slider::CursorSize => {
+                let v = v.clamp(0., 1.);
+                self.a11y.cursor_size = v;
+                self.list_mut().expect("list").set_slider(g, i, v);
+                if release {
+                    self.a11y.save(prefs);
+                }
+                vec![]
+            }
             Slider::DockSize => {
                 let v = v.clamp(0., 1.);
                 let size = 32. + v * 48.;
@@ -2127,6 +2137,16 @@ impl Settings {
                         self.a11y.hold = k.min(HOLD_MS.len() - 1);
                         self.a11y.save(prefs);
                         self.set_parent_value(ui, "Touch Accommodations", HOLD_MS[self.a11y.hold].0);
+                        vec![]
+                    }
+                    Pick::AccessibilityShortcut(k) => {
+                        // checks the feature in panel order: a tapped feature joins or leaves the choice
+                        if let Some(&f) = Feature::ALL.get(k) {
+                            let on = self.a11y.shortcut.contains(&f);
+                            self.a11y.shortcut = Feature::ALL.into_iter().filter(|x| if *x == f { !on } else { self.a11y.shortcut.contains(x) }).collect();
+                            self.a11y.save(prefs);
+                            self.set_parent_value(ui, "Accessibility Shortcut", &super::pages::shortcut_label(&self.a11y.shortcut));
+                        }
                         vec![]
                     }
                     Pick::Nearby(k) => {

@@ -2,6 +2,7 @@
 //! from the device info and the user's options, and `Action` says what a
 //! row does. Rendering and hit testing live in `list`.
 
+use super::accessibility::shortcut::Feature;
 use super::accessibility::{AccessibilitySettings, HOLD_MS, ZOOMS};
 use super::battery::{self, Graph};
 use super::desktop_dock::Position;
@@ -72,6 +73,8 @@ pub enum PageId {
     Accessibility,
     DisplayZoom,
     TouchHold,
+    /// Accessibility › Accessibility Shortcut: the feature Option+Cmd+F5 switches
+    AccessibilityShortcut,
     /// Display & Brightness › Interface Scale (desktop only)
     InterfaceScale,
     Appearance,
@@ -225,6 +228,8 @@ pub enum Pick {
     PowerMode(usize),
     DisplayZoom(usize),
     TouchHold(usize),
+    /// Accessibility > Accessibility Shortcut: the n-th of `accessibility::SHORTCUT_CHOICES` (0 is None)
+    AccessibilityShortcut(usize),
     /// 0 is Auto, n the n-th of `layout::SCALE_CHOICES`
     InterfaceScale(usize),
     /// Displays > Appearance: 0 Light, 1 Dark, 2 Auto
@@ -286,6 +291,8 @@ pub enum Slider {
     MouseScroll,
     /// Trackpad > Tracking Speed
     TrackpadSpeed,
+    /// Accessibility > Cursor Size, 0..1 (`accessibility::AccessibilitySettings::cursor_size`)
+    CursorSize,
 }
 
 /// Something that asks for confirmation first.
@@ -1177,6 +1184,10 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Group::new(vec![Item::new("Reduce Motion").switch(a.reduce_motion, Action::Toggle(Toggle::ReduceMotion))])
                         .header("MOTION")
                         .footer("Opening, closing and switching apps cross-fade instead of zooming."),
+                    Group::new(vec![Item::slider(Ends::Cursor, a.cursor_size, Action::Slider(Slider::CursorSize))]).header("POINTER").footer("The pointer grows as you drag the slider."),
+                    Group::new(vec![Item::new("Accessibility Shortcut").value(shortcut_label(&a.shortcut)).link(PageId::AccessibilityShortcut)])
+                        .header("SHORTCUT")
+                        .footer("Press Option+Cmd+F5 to switch the chosen features on or off."),
                     Group::new(vec![
                         Item::new("AssistiveTouch").switch(o.assistive_touch, Action::Toggle(Toggle::AssistiveTouch)),
                         Item::new("Touch Accommodations").value(HOLD_MS[a.hold.min(HOLD_MS.len() - 1)].0).link(PageId::TouchHold),
@@ -1209,6 +1220,13 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 .header("HOLD DURATION")
                 .footer("A press must last this long before it counts as a touch and hold.")],
         ),
+        PageId::AccessibilityShortcut => page(
+            "Accessibility Shortcut",
+            false,
+            vec![Group::new(Feature::ALL.iter().enumerate().map(|(i, f)| Item::new(f.name()).check(m.a11y.shortcut.contains(f), Action::Pick(Pick::AccessibilityShortcut(i)))).collect())
+                .header("FEATURES")
+                .footer("Option+Cmd+F5 switches the checked features on, or off again when they are all on already.")],
+        ),
         // built by `game_controllers_page::spec`, which reads the live controllers
         PageId::GameControllers | PageId::GameController(_) => page("", false, vec![]),
         // built by `storage_page::spec`, which also knows the live state
@@ -1220,6 +1238,15 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Diagnostics => page("Analytics & Diagnostics", false, vec![]),
         // built by `permissions_page`, which reads the installed apps and their answers
         PageId::PrivacyPermissions => page("App Permissions", false, vec![]),
+    }
+}
+
+/// The value the Accessibility Shortcut row shows: the features it switches, or None.
+pub fn shortcut_label(features: &[Feature]) -> String {
+    match features {
+        [] => "None".into(),
+        [one] => one.name().into(),
+        many => format!("{} Features", many.len()),
     }
 }
 

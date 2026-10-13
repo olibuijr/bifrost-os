@@ -16,6 +16,9 @@ const KEY_W: u16 = 17;
 const KEY_Q: u16 = 16;
 const KEY_H: u16 = 35;
 const KEY_F: u16 = 33;
+const KEY_8: u16 = 9;
+const KEY_MINUS: u16 = 12;
+const KEY_EQUAL: u16 = 13;
 const KEY_GRAVE: u16 = 41;
 const KEY_5: u16 = 6;
 const KEY_UP: u16 = 103;
@@ -124,6 +127,10 @@ pub enum Shortcut {
     AccessibilityShortcut,
     /// Shift+Cmd+5: the screenshot toolbar, a capture session over the screen
     Capture,
+    /// Option+Cmd+8: Screen Zoom on or off (`accessibility::zoom`)
+    ZoomToggle,
+    /// Option+Cmd+= (true) zooms the screen in one step, Option+Cmd+- (false) zooms it out
+    ZoomStep(bool),
 }
 
 impl Shortcut {
@@ -136,7 +143,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) => return None,
         }))
     }
 }
@@ -233,6 +240,9 @@ impl HwKeys {
             KEY_W | KEY_Q if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Close),
             KEY_M | KEY_H if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Minimize),
             KEY_F if meta && ctrl && !alt => Some(Shortcut::FullScreen),
+            // Option+Cmd+8 turns Screen Zoom on and off; Option+Cmd+= and Option+Cmd+- zoom in and out
+            KEY_8 if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::ZoomToggle),
+            KEY_EQUAL | KEY_MINUS if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::ZoomStep(code == KEY_EQUAL)),
             KEY_LEFT | KEY_RIGHT | KEY_UP | KEY_DOWN if meta && ctrl && !alt && self.shift == 0 => Some(Shortcut::Tile(match code {
                 KEY_LEFT => Tile::Left,
                 KEY_RIGHT => Tile::Right,
@@ -631,6 +641,14 @@ impl Shell {
                 self.accessibility_shortcut();
                 vec![]
             }
+            Shortcut::ZoomToggle if !self.is_locked() => {
+                self.screen_zoom.toggle();
+                vec![]
+            }
+            Shortcut::ZoomStep(bigger) if !self.is_locked() => {
+                self.screen_zoom.step(bigger);
+                vec![]
+            }
             Shortcut::FullScreen if self.desk_active() && !self.is_locked() => {
                 if let Some(i) = self.desk.as_ref().and_then(|d| d.front().and_then(|w| d.index_of(w.app))) {
                     self.desk_zoom_window(i);
@@ -779,6 +797,10 @@ mod tests {
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_UP), Some(Shortcut::ReaderRotor(false)));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_SPACE), Some(Shortcut::ReaderActivate));
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTALT], KEY_F5), Some(Shortcut::AccessibilityShortcut), "Option+Cmd+F5");
+        // Screen Zoom: Option+Cmd+8 toggles, Option+Cmd+= zooms in, Option+Cmd+- zooms out
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTALT], KEY_8), Some(Shortcut::ZoomToggle));
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTALT], KEY_EQUAL), Some(Shortcut::ZoomStep(true)));
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTALT], KEY_MINUS), Some(Shortcut::ZoomStep(false)));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_SPACE), Some(Shortcut::InputSource));
         assert_eq!(chord(&mut k, &[KEY_LEFTALT], KEY_RIGHT), None, "Alt alone is not the cursor");
     }

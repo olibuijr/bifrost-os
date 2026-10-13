@@ -1060,6 +1060,20 @@ impl Presenter {
         gl!(gl, draw_arrays(GL_TRIANGLES, 0, 6));
     }
 
+    /// The final-frame zoom (Settings > Accessibility > Zoom): draws the composed frame `src` magnified into the
+    /// framebuffer `dst_fbo`, showing only the normalised rect `uv` = (u0, v0, u1, v1) of it. The shell supplies
+    /// the rect from `shell::accessibility::zoom`; with zoom off the caller skips this pass.
+    pub fn zoom_into(&self, src: u32, dst_fbo: u32, dst_w: usize, dst_h: usize, uv: [f32; 4]) {
+        self.current();
+        let gl = self.gl;
+        gl!(gl, bind_framebuffer(GL_FRAMEBUFFER, dst_fbo));
+        gl!(gl, viewport(0, 0, dst_w as i32, dst_h as i32));
+        gl!(gl, uniform2f(self.prog.view, dst_w as f32, dst_h as f32));
+        gl!(gl, uniform1i(self.prog.mode, 0));
+        self.quad_uv(src, [0.0, 0.0, dst_w as f32, dst_h as f32], uv, 1.0, None);
+        self.finish();
+    }
+
     /// One blur pass from `src` into `dst`.
     fn pass(&self, dst: &Tex, src: (u32, usize, usize), mode: i32) {
         let gl = self.gl;
