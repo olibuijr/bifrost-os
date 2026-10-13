@@ -41,22 +41,32 @@ links, devices and unsafe member paths and reports how many it skipped; the shar
 the copy would change that safety behaviour, so it is left for a reviewed change. Candidate follow-up: move the skip
 reporting into the shared module, then delete `archive.rs`'s tar code.
 
-## System Information (`apps/sysinfo-desktop`, now 0.2.0; `core/src/sysinfo.rs`)
+## System Information (`apps/sysinfo-desktop`, now 0.5.0; `core/src/sysinfo.rs`, `apps/sysinfo-desktop/src/probe.rs`)
 
 | Reference feature | BifrOSt path | State |
 |---|---|---|
 | Hardware categories (CPU, memory, graphics, PCI, USB, displays, power, storage) | `core/src/sysinfo.rs` readers, `apps/sysinfo-desktop/src/model.rs` | Done (earlier round) |
 | Software categories (OS, installed apps) | `core/src/sysinfo.rs` `read_installed_apps`, `apps/sysinfo-desktop/src/model.rs` | Done (earlier round) |
 | Network: interface state, MAC, Wi-Fi flag | `read_net` | Done (earlier round) |
-| Network: IPv6 addresses (global) | `core/src/sysinfo.rs` `parse_if_inet6`, `read_net` | Done this round, via `/proc/net/if_inet6` |
-| Network: default route marker | `core/src/sysinfo.rs` `parse_default_route` | Done this round, via `/proc/net/route` |
-| Network: IPv4 addresses, gateway address, DNS | none | Gap. `/proc` does not map IPv4 addresses to devices; needs netlink or the netd status |
+| Network: IPv6 addresses (global) | `core/src/sysinfo.rs` `parse_if_inet6`, `read_net` | Done (earlier round), via `/proc/net/if_inet6` |
+| Network: default route marker | `core/src/sysinfo.rs` `parse_default_route` | Done (earlier round), via `/proc/net/route` |
+| Network: IPv4 addresses, gateway, DNS, link speed, Wi-Fi signal | `probe.rs` `assign_ipv4`, `parse_gateway`, `read_dns`, `parse_wireless` | Done in 0.5.0. IPv4 comes from `/proc/net/fib_trie` matched to the on-link networks of `/proc/net/route`; the Wi-Fi SSID and channel still need the network service |
+| Audio, Bluetooth, Camera, Printers, Thunderbolt, NVMe, SATA pages | `probe.rs` readers, `model.rs` list items | Done in 0.5.0 (sysfs and `/proc/asound`; printers from `printers.conf` and USB class 07) |
+| Network section (Wi-Fi, Ethernet, WWAN, Firewall, Volumes) | `model.rs` `Section::Network` | Done in 0.5.0. Firewall shows the loaded packet filter only; the rules need root |
+| Fonts, Logs | `probe.rs` `read_fonts`, `read_logs` | Done in 0.5.0 (Fonts through `bifrost_render::fontprefs`) |
+| Processor cores and caches, memory slots, video memory, USB tree and power, partitions with free space | `probe.rs`, `model.rs` | Done in 0.5.0. Memory slots need the SMBIOS table, which only root can read |
+| Item list above a detail card | `window.rs` `panes`, `model.rs` `Content` | Done in 0.5.0 |
+| Save as text, rich text, JSON; Open Report and Open Recent | `export.rs`, `recents.rs`, `main.rs` | Done in 0.5.0. No file type registration: manifests cannot declare document types yet |
+| Speak Serial Number | `window.rs` `speech_for_serial`, `main.rs` | Done in 0.5.0 through the announcement call, so it is spoken only while the screen reader is on |
+| Preparing system profile sheet | `window.rs` `start_load`, `poll_load`, `draw.rs` `paint_loading` | Done in 0.5.0 (worker thread, Cancel) |
+| Foldable, scrolling sidebar; toolbar search field; Window menu | `window.rs`, `draw.rs`, `main.rs` | Done in 0.5.0 |
 
 ## Shared-file edits
 
 - `springboard/core/src/sysinfo.rs`: `Roots` gained `proc_net`; `read_net` takes a second argument; `NetInterface`
   gained `addresses` and `default_route`. Only `Report::collect` calls `read_net`.
-- `springboard/Cargo.lock`: version lines for `bifrost-activity` and `bifrost-sysinfo` (0.2.0).
+- `springboard/Cargo.lock`: version lines for `bifrost-activity` and `bifrost-sysinfo` (0.2.0; sysinfo 0.5.0 also lists
+  `bifrost-render`, which the Fonts page needs).
 
 ## Not verified
 
