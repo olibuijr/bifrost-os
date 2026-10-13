@@ -15,7 +15,7 @@ const AVOID = (A.avoid || []).join('; ') || 'none'
 
 const RULES = `Repo ~/Projects/bifrost-os (pure Rust, springboard/ workspace). AGENTS.md and the top of HANDOFF.md hold the rules.
 BifrOSt mirrors macOS 27: each SDK module mirrors one Apple framework type by type (developer.apple.com is the reference; macOS 27 values
-via \`bifrost pc ref\` and REA). NAME GUARD: no platform or product names in code, comments, identifiers or strings (no NS/UI/AV-prefixed type names, no product names like the search panel's or file manager's brand names); run `python3 tools/check-names.py` before every commit and get 0 hits (it is allowed to run). Pure Rust, no new C deps. TDD + clean code.
+via \ GITHUB TEXT: commit messages, code comments, doc comments and docs must be professional, plain, human prose: short conventional commit subjects, bodies stating what changed and why, comments that explain intent; no AI-slop wording (no 'seamless/robust/comprehensive/leverage/delve', no 'not just X but Y', no emoji, no filler summaries); see ~/.claude/skills/avoid-ai-writing/SKILL.md.`bifrost pc ref\` and REA). NAME GUARD: no platform or product names in code, comments, identifiers or strings (no NS/UI/AV-prefixed type names, no product names like the search panel's or file manager's brand names); run `python3 tools/check-names.py` before every commit and get 0 hits (it is allowed to run). Pure Rust, no new C deps. TDD + clean code.
 Use the akurai_index MCP (symbol_lookup/code_search, repo bifrost-os) before grep. Parity data lives in docs/parity-matrix/data/<framework>.json
 (\`bifrost pc parity show|gaps|search\` read it). Owned by others now, do not touch: ${AVOID}.`
 

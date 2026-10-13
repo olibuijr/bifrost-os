@@ -20,7 +20,7 @@ const RULES = `Repo ~/Projects/bifrost-os (pure Rust, springboard/ workspace). R
 Architecture follows Apple's: kits mirror Apple frameworks (developer.apple.com is the reference, macOS 27 values via
 REA/bifrost pc ref), HIG for UI (bifrost-hig skill). No platform or product names in code (tools/check-names.py).
 Pure Rust, no new C deps. TDD + clean code. Use the akurai_index MCP (symbol_lookup/code_search) before grep.
-Already done or in flight, skip: ${AVOID}. ${FOCUS}`
+Already done or in flight, skip: ${AVOID}. ${FOCUS} GITHUB TEXT: commit messages, code comments, doc comments and docs must be professional, plain, human prose: short conventional commit subjects, bodies stating what changed and why, comments that explain intent; no AI-slop wording (no 'seamless/robust/comprehensive/leverage/delve', no 'not just X but Y', no emoji, no filler summaries); see ~/.claude/skills/avoid-ai-writing/SKILL.md.`
 
 const TASKS = {
   type: 'object',
