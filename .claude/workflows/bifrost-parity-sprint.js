@@ -8,7 +8,7 @@ export const meta = {
   ],
 }
 
-// args: { sprint: number, tasks?: number, avoid?: string[], context?: string }
+// args: { sprint: number, tasks?: number, avoid?: string[], context?: string, taskList?: Task[] (skips triage) }
 const A = args || {}
 const N = Math.min(A.tasks || 10, 10)
 const AVOID = (A.avoid || []).join('; ') || 'none'
@@ -30,7 +30,8 @@ const TASKS = {
 }
 
 phase('Triage')
-const triage = await agent(
+// A task list the lead prepared while the previous sprint ran skips the triage agent.
+const triage = A.taskList ? { tasks: A.taskList } : await agent(
   `${RULES}\n\nYou are the parity triage lead. READ ONLY. Goal: pick the ${N} most important missing macOS 27 API/SDK capabilities for BifrOSt as a daily-driver desktop OS, as independent tasks that Sonnet coders can do in parallel.
 Inputs: \`bifrost pc parity status\`, \`bifrost pc parity coverage\`, \`bifrost pc parity gaps\` (and \`--group\`), \`bifrost pc parity os-status\`, docs/parity-matrix/data/*.json. ${A.context ? 'Also read the lead\'s survey: ' + A.context : ''}
 Rank by daily-driver impact: what real apps and users hit first (files/documents, networking/URLSession, pasteboard/drag, notifications, preferences/defaults, keychain, contacts/calendar/reminders/photos stores, text input, printing, audio/video playback, accessibility, power/displays, launch services/workspace, search/metadata, sharing, undo/document model).
