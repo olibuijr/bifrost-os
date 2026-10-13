@@ -3,13 +3,14 @@
 
   verify plan [--group G] [--slug S] [--out plan.json]
         resolve each partial row's cited repo paths to a crate and its #[test] fns; class: logic (tests, pure logic),
-        ui / hardware (needs a screenshot or manual check), untested (no test found)
+        ui-headless (drawing code whose cited tests render offscreen and need no compositor), ui / hardware
+        (needs a screenshot or manual check), untested (no test found)
   verify run PLAN.json --version X [--out results.json]
         cargo test --no-run per crate, scp the test binaries to midget:/var/tmp/parity-verify/, run the rows' tests there
   verify closures RESULTS.json --version X [--out closures.json]
         apply closures for rows whose tests all passed; needs-manual.md (next to --out) lists the rest by framework
 
-Only `logic` rows can be promoted; ui, hardware and untested rows never are.
+Only `logic` and `ui-headless` rows can be promoted; ui, hardware and untested rows never are.
 """
 import argparse
 import collections
@@ -31,6 +32,12 @@ HARDWARE = ("audio", "alsa", "drm", "kms", "evdev", "input", "bluetooth", "camer
             "pcm", "midi", "haptic", "printer", "scanner", "wayland", "libinput", "v4l")
 UI = ("draw", "render", "paint", "canvas", "window", "wm", "view", "layer", "gfx", "shell", "widget", "chrome", "scene",
       "screen", "compositor", "animation", "theme")
+# A ui row whose cited tests only draw to memory is `ui-headless`; any compositor marker keeps it a manual `ui` row.
+HEADLESS_MARKERS = ("offscreen", "raster", "snapshot", "pixel", "headless")
+COMPOSITOR_MARKERS = ("wl_", "wayland", "compositor", "xdg_", "winit", "window_server", "windowserver", "layer_shell",
+                      "libinput", "drm", "kms")
+PROMOTABLE = ("logic", "ui-headless")
+CLASSES = ("logic", "ui-headless", "ui", "hardware", "untested")
 MOD_RE = re.compile(r"^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*\{")
 TEST_ATTR_RE = re.compile(r"#\[(?:\w+::)?test\b")
 
@@ -108,13 +115,28 @@ def integration_tests(crate_dir, crate_name, mod):
     return out
 
 
-def classify(paths, sources, has_tests):
-    """hardware or ui when the cited code touches devices or drawing (by path and `use` lines), else logic/untested."""
+def test_code(source, whole=False):
+    """The test part of a source: all of an integration test file, else what follows the first #[cfg(test)]."""
+    if whole:
+        return source
+    i = source.find("#[cfg(test)]")
+    return source[i:] if i >= 0 else ""
+
+
+def is_headless(test_sources):
+    """True when the tests render to memory (a headless marker) and use no compositor or window server symbol."""
+    text = " ".join(test_sources).lower()
+    return any(m in text for m in HEADLESS_MARKERS) and not any(m in text for m in COMPOSITOR_MARKERS)
+
+
+def classify(paths, sources, has_tests, test_sources=()):
+    """hardware or ui when the cited code touches devices or drawing (by path and `use` lines), else logic/untested.
+    A ui row with tests that only render offscreen is ui-headless."""
     uses = [l.lower() for s in sources for l in s.splitlines() if l.lstrip().startswith("use ")]
     text = " ".join(paths).lower() + " " + " ".join(uses)
     for cls, words in (("hardware", HARDWARE), ("ui", UI)):
         if any(w in text for w in words):
-            return cls
+            return "ui-headless" if cls == "ui" and has_tests and is_headless(test_sources) else cls
     return "logic" if has_tests else "untested"
 
 
@@ -124,26 +146,28 @@ def plan_row(slug, row):
     paths = cited_paths(row.get("bifrost"))
     found = [(p, crate_of(p)) for p in paths if rust_files(p)]
     crate = next((c for _, c in found if c), None)
-    filters, sources = [], []
+    filters, sources, test_sources = [], [], []
     for p, c in found:
         if c != crate or not c:
             continue
         for f in rust_files(p):
             src = read(f)
             sources.append(src)
+            test_sources.append(test_code(src))
             mod = module_path(f, c[0])
             filters += ["lib:" + "::".join(mod + [t]) for t in tests_in(src)]
             for stem, names in integration_tests(c[0], c[1], mod).items():
+                test_sources.append(test_code(read(os.path.join(SRC_ROOT, c[0], "tests", stem + ".rs")), whole=True))
                 filters += [f"{stem}:{n}" for n in names]
     filters = list(dict.fromkeys(filters))
     return {"slug": slug, "feature": row.get("feature", ""), "crate": crate[1] if crate else None,
-            "test_filters": filters, "class": classify(paths, sources, bool(filters))}
+            "test_filters": filters, "class": classify(paths, sources, bool(filters), test_sources)}
 
 
 def summarize(rows, applicable):
     counts = collections.Counter(r["class"] for r in rows)
-    gain = 100 * 0.5 * counts["logic"] / applicable if applicable else 0.0
-    return {"rows": len(rows), "classes": {c: counts[c] for c in ("logic", "ui", "hardware", "untested")},
+    gain = 100 * 0.5 * sum(counts[c] for c in PROMOTABLE) / applicable if applicable else 0.0
+    return {"rows": len(rows), "classes": {c: counts[c] for c in CLASSES},
             "coverage_gain_pct": round(gain, 2)}
 
 
@@ -246,7 +270,7 @@ def cmd_run(a):
     plan = json.load(open(a.plan))
     by_crate = collections.defaultdict(list)
     for r in plan["rows"]:
-        if r["class"] == "logic":
+        if r["class"] in PROMOTABLE:
             by_crate[r["crate"]].append(r)
     done = {}
     for n, (crate, rows) in enumerate(sorted(by_crate.items()), 1):
@@ -262,12 +286,12 @@ def cmd_run(a):
 
 # --- closures --------------------------------------------------------------------------------------------------------
 def make_closures(results, rows_by_key, version):
-    """`parity apply` closures for logic rows whose tests all passed on Midget. apply prepends the closure's note to the
+    """`parity apply` closures for logic and ui-headless rows whose tests all passed on Midget. apply prepends the closure's note to the
     row's own, so the note carries only the verification and the old note is kept by apply."""
     return [{"slug": r["slug"], "feature": r["feature"], "status": "parity",
              "bifrost": rows_by_key.get((r["slug"], r["feature"]), {}).get("bifrost", ""),
-             "note": f"verified on Midget {version} by {len(r['test_filters'])} tests."}
-            for r in results["rows"] if r["class"] == "logic" and r["status"] == "pass" and r["test_filters"]]
+             "note": f"verified{' headless' if r['class'] == 'ui-headless' else ''} on Midget {version} by {len(r['test_filters'])} tests."}
+            for r in results["rows"] if r["class"] in PROMOTABLE and r["status"] == "pass" and r["test_filters"]]
 
 
 def manual_report(results, names):

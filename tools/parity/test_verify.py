@@ -62,6 +62,26 @@ class Planning(unittest.TestCase):
         r = self.plan({"springboard/ui/Cargo.toml": CARGO, "springboard/ui/src/paint.rs": LOGIC}, "springboard/ui/src/paint.rs")
         self.assertEqual(r["class"], "ui")
 
+    def test_ui_headless_when_tests_render_offscreen(self):
+        src = "pub fn f() {}\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn draws() { let s = Surface::offscreen(4, 4); }\n}\n"
+        r = self.plan({"springboard/ui/Cargo.toml": CARGO, "springboard/ui/src/paint.rs": src}, "springboard/ui/src/paint.rs")
+        self.assertEqual((r["class"], r["test_filters"]), ("ui-headless", ["lib:paint::tests::draws"]))
+
+    def test_ui_stays_manual_with_compositor_symbols(self):
+        src = "pub fn f() {}\n#[cfg(test)]\nmod tests {\n    #[test]\n    fn shows() { offscreen(); wl_connect(); }\n}\n"
+        r = self.plan({"springboard/ui/Cargo.toml": CARGO, "springboard/ui/src/paint.rs": src}, "springboard/ui/src/paint.rs")
+        self.assertEqual(r["class"], "ui")
+
+    def test_headless_marker_outside_tests_does_not_count(self):
+        src = "pub fn offscreen() {}\n" + LOGIC
+        r = self.plan({"springboard/ui/Cargo.toml": CARGO, "springboard/ui/src/paint.rs": src}, "springboard/ui/src/paint.rs")
+        self.assertEqual(r["class"], "ui")
+
+    def test_ui_headless_from_integration_snapshot_test(self):
+        files = {"springboard/ui/Cargo.toml": CARGO, "springboard/ui/src/paint.rs": "pub fn f() {}\n",
+                 "springboard/ui/tests/paint_it.rs": "use kit_ui::paint;\n#[test]\nfn snapshot_matches() {}\n"}
+        self.assertEqual(self.plan(files, "springboard/ui/src/paint.rs")["class"], "ui-headless")
+
     def test_hardware_from_use_lines(self):
         r = self.plan({"springboard/ui/Cargo.toml": CARGO, "springboard/ui/src/calc.rs": "use crate::alsa::Pcm;\n" + LOGIC}, "springboard/ui/src/calc.rs")
         self.assertEqual(r["class"], "hardware")
@@ -80,6 +100,7 @@ class Planning(unittest.TestCase):
     def test_summary_counts_and_gain(self):
         rows = [{"class": "logic"}, {"class": "logic"}, {"class": "ui"}]
         s = verify.summarize(rows, 100)
+        self.assertEqual(verify.summarize(rows + [{"class": "ui-headless"}], 100)["coverage_gain_pct"], 1.5)
         self.assertEqual((s["classes"]["logic"], s["classes"]["ui"], s["coverage_gain_pct"]), (2, 1, 1.0))
 
     def test_build_plan_only_partial_rows_and_filters(self):
@@ -113,17 +134,24 @@ class Closures(unittest.TestCase):
         {"slug": "s", "feature": "A", "class": "logic", "status": "pass", "test_filters": ["lib:t1", "lib:t2"]},
         {"slug": "s", "feature": "B", "class": "logic", "status": "fail", "test_filters": ["lib:t3"]},
         {"slug": "s", "feature": "C", "class": "ui", "status": "skipped", "test_filters": ["lib:t4"]},
-        {"slug": "s", "feature": "D", "class": "untested", "status": "skipped", "test_filters": []}]}
+        {"slug": "s", "feature": "D", "class": "untested", "status": "skipped", "test_filters": []},
+        {"slug": "s", "feature": "E", "class": "ui-headless", "status": "pass", "test_filters": ["lib:t5"]},
+        {"slug": "s", "feature": "F", "class": "ui-headless", "status": "fail", "test_filters": ["lib:t6"]},
+        {"slug": "s", "feature": "G", "class": "ui-headless", "status": "skipped", "test_filters": ["lib:t7"]}]}
 
     def test_closure_format_for_apply(self):
         rows = {("s", "A"): {"bifrost": "springboard/ui/src/a.rs", "note": "old"}}
-        self.assertEqual(verify.make_closures(self.RESULTS, rows, "0.7.25"), [{
+        self.assertEqual([c for c in verify.make_closures(self.RESULTS, rows, "0.7.25") if c["feature"] == "A"], [{
             "slug": "s", "feature": "A", "status": "parity", "bifrost": "springboard/ui/src/a.rs",
             "note": "verified on Midget 0.7.25 by 2 tests."}])
 
     def test_never_promotes_ui_hardware_untested_or_failed(self):
         features = {c["feature"] for c in verify.make_closures(self.RESULTS, {}, "1")}
-        self.assertEqual(features, {"A"})
+        self.assertEqual(features, {"A", "E"})
+
+    def test_ui_headless_closure_is_promoted_with_headless_note(self):
+        c = [x for x in verify.make_closures(self.RESULTS, {}, "0.7.25") if x["feature"] == "E"]
+        self.assertEqual((c[0]["status"], c[0]["note"]), ("parity", "verified headless on Midget 0.7.25 by 1 tests."))
 
     def test_manual_report_grouped_by_framework(self):
         md = verify.manual_report(self.RESULTS, {"s": "Contacts"})
