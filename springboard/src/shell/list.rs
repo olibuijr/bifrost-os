@@ -67,6 +67,8 @@ pub enum Ends {
     Warmth,
     /// Liquid Glass: an outlined pane (clear) and a filled one (tinted)
     Glass,
+    /// Mouse and Trackpad tracking and scrolling speed: slower and faster
+    Speed,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1056,6 +1058,13 @@ impl ListPage {
                     } else {
                         s.stroke_rrect(cx - d / 2.0, ty - d / 2.0, d, d, ui.pt(4.0), ui.pt(1.5), SECONDARY);
                     }
+                }
+            }
+            Ends::Speed => {
+                for (cx, label) in [(lx, "Slower"), (rx, "Faster")] {
+                    let a = ui.chrome(label, 11.0, Weight::Regular, SECONDARY);
+                    let x = if cx < tx { m } else { tx + tw + ui.pt(26.0) * 2.0 - a.w as f32 };
+                    s.blit(&a, x as i32, (ty + ui.pt(KNOB_PT) / 2.0 + ui.pt(4.0)) as i32, 255, 255);
                 }
             }
             Ends::Warmth => {

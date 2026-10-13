@@ -9,7 +9,7 @@ use super::icons::Icon;
 use super::row_glyphs::Glyph;
 use super::low_battery::last_charged;
 use super::list::{Accessory, Ends, Group, Item, Spec, Tint};
-use super::options::{Options, AUTO_LOCK, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES};
+use super::options::{speed_slider, Options, AUTO_LOCK, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES, TRACKPAD_SECONDARY};
 use super::{Info, WifiAction};
 use bifrost_render::fontprefs::{FontRole, Installed};
 use bifrost_ui::capture_access::Media;
@@ -105,6 +105,12 @@ pub enum PageId {
     Sharing,
     /// Lock Screen: the passcode, inactivity lock and screen saver in one place (links to their own pages)
     LockScreen,
+    /// Settings > Trackpad (desktop): tracking speed, tap to click, secondary click, natural scrolling and gestures
+    Trackpad,
+    /// Settings > Mouse (desktop): tracking and scrolling speed, natural scrolling, swapped buttons
+    Mouse,
+    /// Settings > Users & Groups (desktop): the local account, login options and password
+    Users,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -167,6 +173,16 @@ pub enum Toggle {
     Permission(Media, usize),
     /// App Permissions > Location: the app at this index may use location while it is in use
     Location(usize),
+    /// Mouse and Trackpad: natural scrolling (the wheel and fingers move the content the way a touch screen does)
+    NaturalScroll,
+    /// Trackpad > Tap to Click
+    TapToClick,
+    /// Mouse > Swap Left and Right Buttons
+    SwapButtons,
+    /// Users & Groups > Login Options: name and password fields at sign-in
+    LoginNamePassword,
+    /// Users & Groups > Login Options: password hints at sign-in
+    LoginHints,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -207,6 +223,8 @@ pub enum Pick {
     ScreenSaverStart(usize),
     /// Settings > Screen Saver > Preview: the saver starts full screen (the shell does it, see `Settings::take_screensaver_preview`)
     ScreenSaverPreview,
+    /// Trackpad > Secondary Click: index into `TRACKPAD_SECONDARY`
+    TrackpadSecondary(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -221,6 +239,12 @@ pub enum Slider {
     LiquidGlass,
     /// Desktop & Dock > Magnification size, 0..1
     DockMagnify,
+    /// Mouse > Tracking Speed (see `options::speed_from_slider`)
+    MouseSpeed,
+    /// Mouse > Scrolling Speed
+    MouseScroll,
+    /// Trackpad > Tracking Speed
+    TrackpadSpeed,
 }
 
 /// Something that asks for confirmation first.
@@ -504,6 +528,9 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Item::new("Overview").icon(Icon::HomeScreen).link(PageId::Overview),
                     Item::new("Sharing").icon(Icon::Wifi).link(PageId::Sharing),
                     Item::new("Keyboard Shortcuts").icon(Icon::General).link(PageId::Shortcuts),
+                    Item::new("Trackpad").icon(Icon::General).link(PageId::Trackpad),
+                    Item::new("Mouse").icon(Icon::General).link(PageId::Mouse),
+                    Item::new("Users & Groups").icon(Icon::Passcode).link(PageId::Users),
                     Item::new("Accessibility").icon(Icon::Accessibility).link(PageId::Accessibility),
                     Item::new("Wallpaper").icon(Icon::Wallpaper).value(m.wallpaper.as_str()).link(PageId::Wallpaper),
                     Item::new("Screen Saver").icon(Icon::Wallpaper).value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver),
@@ -792,6 +819,49 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     .footer("Actions when you swipe your finger from a bottom corner."),
             ],
         ),
+        PageId::Trackpad => page(
+            "Trackpad",
+            false,
+            vec![
+                Group::new(vec![Item::slider(Ends::Speed, speed_slider(o.trackpad_speed), Action::Slider(Slider::TrackpadSpeed))]).header("TRACKING SPEED"),
+                Group::new(vec![Item::new("Tap to Click").switch(o.tap_to_click, Action::Toggle(Toggle::TapToClick))]).footer("A light tap on the trackpad clicks."),
+                Group::new(TRACKPAD_SECONDARY.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.trackpad_secondary, Action::Pick(Pick::TrackpadSecondary(i)))).collect()).header("SECONDARY CLICK"),
+                Group::new(vec![Item::new("Natural Scrolling").switch(o.natural_scroll, Action::Toggle(Toggle::NaturalScroll))]).footer("The content moves with your fingers, as it does on a touch screen."),
+                Group::new(vec![
+                    Item::new("Four & Five Finger Swipe").value(on_off(o.four_finger)).link(PageId::Gestures),
+                    Item::new("Swipe From Corner").value(on_off(o.corner_swipe)).link(PageId::Gestures),
+                ])
+                .header("GESTURES")
+                .footer("Gestures are set in General › Gestures."),
+            ],
+        ),
+        PageId::Mouse => page(
+            "Mouse",
+            false,
+            vec![
+                Group::new(vec![Item::slider(Ends::Speed, speed_slider(o.mouse_speed), Action::Slider(Slider::MouseSpeed))]).header("TRACKING SPEED"),
+                Group::new(vec![Item::slider(Ends::Speed, speed_slider(o.mouse_scroll), Action::Slider(Slider::MouseScroll))]).header("SCROLLING SPEED"),
+                Group::new(vec![Item::new("Natural Scrolling").switch(o.natural_scroll, Action::Toggle(Toggle::NaturalScroll))]).footer("The content moves with the wheel, as it does on a touch screen."),
+                Group::new(vec![Item::new("Swap Left and Right Buttons").switch(o.swap_buttons, Action::Toggle(Toggle::SwapButtons))]).footer("The left button becomes the secondary button and the right button the primary one."),
+            ],
+        ),
+        PageId::Users => {
+            let account = super::account::load();
+            page(
+                "Users & Groups",
+                false,
+                vec![
+                    Group::new(vec![Item::new(account.full_name.as_str()).value(account.username.as_str())]).header("ACCOUNT").footer("The account this computer was set up with."),
+                    Group::new(vec![
+                        Item::new("Name and Password").switch(o.login_name_password, Action::Toggle(Toggle::LoginNamePassword)),
+                        Item::new("Password Hints").switch(o.login_hints, Action::Toggle(Toggle::LoginHints)),
+                    ])
+                    .header("LOGIN OPTIONS")
+                    .footer("Choose how the login window asks for this account."),
+                    Group::new(vec![Item::new("Change Password…").tint(Tint::Dim)]).header("PASSWORD").footer("Changing the password is not available yet."),
+                ],
+            )
+        }
         PageId::Fonts => fonts_page(m),
         PageId::FontPick(role) => font_pick_page(m, role),
         PageId::Dictionary => page(
