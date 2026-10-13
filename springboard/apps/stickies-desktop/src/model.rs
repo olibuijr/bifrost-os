@@ -1,7 +1,10 @@
-//! The sticky notes board as plain data: the notes, their colour, frame, collapse and text style, editing,
-//! import and export as text, and the JSON file the app keeps in its data directory. No drawing here.
+//! The sticky notes board as plain data: the notes, their colour, frame, collapse and text style, editing with a
+//! caret and selection, find, arrange, import and export as text, and the JSON file the app keeps in its data
+//! directory. No drawing here.
 
+use bifrost_app::controls::text::TextBuffer;
 use bifrost_core::json::{self, Json};
+use std::ops::Range;
 
 /// The title bar height of a note, in points. A collapsed note is only its title bar.
 pub const TITLE_H: f32 = 28.0;
@@ -21,10 +24,16 @@ pub const EXPORT_SEPARATOR: &str = "\n\n---\n\n";
 pub const IMPORT_MAX: u64 = 1 << 20;
 /// How far a duplicated note sits from the note it copies, in points, so the copy shows on top of it.
 pub const DUPLICATE_OFFSET_PT: f32 = 24.0;
+/// The size a zoomed note takes, in points.
+pub const ZOOM_W: f32 = 460.0;
+pub const ZOOM_H: f32 = 380.0;
+/// Margin and gap of the grid that Arrange By lays the notes out in, in points.
+pub const ARRANGE_MARGIN_PT: f32 = 16.0;
 
 /// The six sticky colours, in menu order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Colour {
+    #[default]
     Yellow,
     Orange,
     Green,
@@ -36,7 +45,6 @@ pub enum Colour {
 impl Colour {
     pub const ALL: [Colour; 6] = [Colour::Yellow, Colour::Orange, Colour::Green, Colour::Teal, Colour::Pink, Colour::Purple];
 
-    #[cfg_attr(not(test), allow(dead_code))] // the colour menu cycles through these
     pub fn index(self) -> usize {
         Colour::ALL.iter().position(|c| *c == self).unwrap_or(0)
     }
@@ -92,19 +100,125 @@ impl TextSize {
             _ => TextSize::Medium,
         }
     }
+
+    /// The next larger size, or the same one at the top (Font > Bigger).
+    pub fn bigger(self) -> TextSize {
+        match self {
+            TextSize::Small => TextSize::Medium,
+            _ => TextSize::Large,
+        }
+    }
+
+    /// The next smaller size, or the same one at the bottom (Font > Smaller).
+    pub fn smaller(self) -> TextSize {
+        match self {
+            TextSize::Large => TextSize::Medium,
+            _ => TextSize::Small,
+        }
+    }
 }
 
-/// Whole-note formatting: Bold and Italic apply to the entire body (per-range formatting is not kept yet).
+/// The colours a note's text can take (Font > Text Colour).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Ink {
+    #[default]
+    Black,
+    Red,
+    Blue,
+    Green,
+    Purple,
+}
+
+impl Ink {
+    pub const ALL: [Ink; 5] = [Ink::Black, Ink::Red, Ink::Blue, Ink::Green, Ink::Purple];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Ink::Black => "Black",
+            Ink::Red => "Red",
+            Ink::Blue => "Blue",
+            Ink::Green => "Green",
+            Ink::Purple => "Purple",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Ink {
+        Ink::ALL.iter().copied().find(|i| i.name() == name).unwrap_or_default()
+    }
+}
+
+/// How Window > Arrange By orders the notes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Arrange {
+    Colour,
+    Content,
+    Created,
+    Modified,
+}
+
+impl Arrange {
+    pub const ALL: [Arrange; 4] = [Arrange::Colour, Arrange::Content, Arrange::Created, Arrange::Modified];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Arrange::Colour => "Colour",
+            Arrange::Content => "Content",
+            Arrange::Created => "Date Created",
+            Arrange::Modified => "Date Modified",
+        }
+    }
+}
+
+/// Letter case changes of the selection (Edit > Transformations).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Case {
+    Upper,
+    Lower,
+    Capitalised,
+}
+
+impl Case {
+    pub fn apply(self, text: &str) -> String {
+        match self {
+            Case::Upper => text.to_uppercase(),
+            Case::Lower => text.to_lowercase(),
+            Case::Capitalised => {
+                let mut out = String::with_capacity(text.len());
+                let mut word_start = true;
+                for c in text.chars() {
+                    if c.is_alphanumeric() {
+                        if word_start {
+                            out.extend(c.to_uppercase());
+                        } else {
+                            out.extend(c.to_lowercase());
+                        }
+                        word_start = false;
+                    } else {
+                        out.push(c);
+                        // an apostrophe stays inside a word
+                        word_start = !(c == '\'' || c == '\u{2019}');
+                    }
+                }
+                out
+            }
+        }
+    }
+}
+
+/// Whole-note formatting: the attributes apply to the entire body (per-range formatting is not kept yet).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Style {
     pub bold: bool,
     pub italic: bool,
+    pub underline: bool,
+    pub strike: bool,
     pub size: TextSize,
+    pub ink: Ink,
 }
 
 impl Default for Style {
     fn default() -> Self {
-        Style { bold: false, italic: false, size: TextSize::Medium }
+        Style { bold: false, italic: false, underline: false, strike: false, size: TextSize::Medium, ink: Ink::Black }
     }
 }
 
@@ -115,6 +229,17 @@ pub enum Part {
     Title,
     Body,
     Grip,
+}
+
+/// Caret movements that need no line layout.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Move {
+    Left,
+    Right,
+    LineStart,
+    LineEnd,
+    Start,
+    End,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -129,6 +254,13 @@ pub struct Note {
     pub collapsed: bool,
     pub style: Style,
     pub text: String,
+    /// The selection in the text, as byte offsets: `anchor` stays, `caret` moves. Equal when nothing is selected.
+    pub anchor: usize,
+    pub caret: usize,
+    /// Whether the note shows the window behind it while it is not the focused note (Window > Translucent).
+    pub translucent: bool,
+    /// The size before Zoom, while the note is zoomed.
+    pub restore: Option<(f32, f32)>,
     /// Unix seconds.
     pub created: u64,
     pub modified: u64,
@@ -146,6 +278,10 @@ impl Note {
             collapsed: false,
             style: Style::default(),
             text: String::new(),
+            anchor: 0,
+            caret: 0,
+            translucent: true,
+            restore: None,
             created: now,
             modified: now,
         }
@@ -189,24 +325,173 @@ impl Note {
         self.h = h.max(MIN_H);
     }
 
-    /// Typed text goes to the end of the body: the board has no caret position yet.
+    /// Runs `f` on a text buffer holding the body and the selection, then takes the result back.
+    fn with_buffer<R>(&mut self, f: impl FnOnce(&mut TextBuffer) -> R) -> R {
+        let mut b = TextBuffer::from_text(&self.text);
+        b.set_selection(self.anchor, self.caret);
+        let r = f(&mut b);
+        if b.text() != self.text {
+            self.text = b.text().to_string();
+        }
+        self.anchor = b.anchor();
+        self.caret = b.caret();
+        r
+    }
+
+    /// Replaces the whole body; the caret goes to the end.
+    pub fn set_text(&mut self, text: &str) {
+        self.text = text.to_string();
+        self.anchor = self.text.len();
+        self.caret = self.text.len();
+    }
+
+    /// The selected byte range (empty at the caret when nothing is selected).
+    pub fn selection(&self) -> Range<usize> {
+        self.anchor.min(self.caret)..self.anchor.max(self.caret)
+    }
+
+    pub fn has_selection(&self) -> bool {
+        self.anchor != self.caret
+    }
+
+    pub fn selected_text(&self) -> &str {
+        self.text.get(self.selection()).unwrap_or("")
+    }
+
+    /// Typed text replaces the selection, or goes in at the caret.
     pub fn type_text(&mut self, text: &str, now: u64) {
-        self.text.push_str(text);
-        self.modified = now;
+        if self.with_buffer(|b| b.insert_text(text).is_some()) {
+            self.modified = now;
+        }
     }
 
     pub fn newline(&mut self, now: u64) {
-        self.text.push('\n');
-        self.modified = now;
+        self.type_text("\n", now);
     }
 
+    /// Deletes the selection, or the character before the caret. False when there was nothing to delete.
     pub fn backspace(&mut self, now: u64) -> bool {
-        let removed = self.text.pop().is_some();
+        let removed = self.with_buffer(|b| b.delete_backward().is_some());
         if removed {
             self.modified = now;
         }
         removed
     }
+
+    /// Deletes the selection, or the character after the caret. False when there was nothing to delete.
+    pub fn delete_forward(&mut self, now: u64) -> bool {
+        let removed = self.with_buffer(|b| b.delete_forward().is_some());
+        if removed {
+            self.modified = now;
+        }
+        removed
+    }
+
+    /// Removes the selection and returns it (Cut); `None` when nothing is selected.
+    pub fn cut(&mut self, now: u64) -> Option<String> {
+        if !self.has_selection() {
+            return None;
+        }
+        let text = self.selected_text().to_string();
+        self.with_buffer(|b| b.insert_text(""));
+        self.modified = now;
+        Some(text)
+    }
+
+    pub fn select_all(&mut self) {
+        self.with_buffer(|b| b.select_all());
+    }
+
+    /// Puts the caret at byte `pos`; with `extend` the anchor stays and the selection grows.
+    pub fn set_caret(&mut self, pos: usize, extend: bool) {
+        let anchor = if extend { self.anchor } else { pos };
+        self.with_buffer(|b| b.set_selection(anchor, pos));
+    }
+
+    /// Selects the word around byte `pos` (a double click).
+    pub fn select_word_at(&mut self, pos: usize) {
+        self.with_buffer(|b| b.select_word_at(pos));
+    }
+
+    /// Moves the caret one character or to the line or text edge.
+    pub fn move_caret(&mut self, dir: Move, extend: bool) {
+        self.with_buffer(|b| match dir {
+            Move::Left => b.move_char(false, extend),
+            Move::Right => b.move_char(true, extend),
+            Move::LineStart => b.move_line(false, extend),
+            Move::LineEnd => b.move_line(true, extend),
+            Move::Start => b.move_document(false, extend),
+            Move::End => b.move_document(true, extend),
+        });
+    }
+
+    /// Changes the case of the selection and keeps it selected. False without a selection or when nothing changed.
+    pub fn transform(&mut self, case: Case, now: u64) -> bool {
+        if !self.has_selection() {
+            return false;
+        }
+        let range = self.selection();
+        let new = case.apply(self.selected_text());
+        if new == self.selected_text() {
+            return false;
+        }
+        let end = range.start + new.len();
+        self.with_buffer(|b| {
+            b.replace_range(range.clone(), &new);
+            b.set_selection(range.start, end);
+        });
+        self.modified = now;
+        true
+    }
+
+    /// The link under byte `pos`, as a URL to open.
+    pub fn link_at(&self, pos: usize) -> Option<String> {
+        links(&self.text).into_iter().find(|r| r.start <= pos && pos <= r.end).map(|r| {
+            let url = &self.text[r];
+            if url.to_ascii_lowercase().starts_with("www.") {
+                format!("https://{url}")
+            } else {
+                url.to_string()
+            }
+        })
+    }
+
+    /// Zoom: a note jumps to the large size, and back to its old size on the next Zoom.
+    pub fn toggle_zoom(&mut self) {
+        match self.restore.take() {
+            Some((w, h)) => self.resize(w, h),
+            None => {
+                self.restore = Some((self.w, self.h));
+                self.resize(ZOOM_W, ZOOM_H);
+                self.collapsed = false;
+            }
+        }
+    }
+}
+
+/// The byte ranges of the web addresses in `text`: words that start with `http://`, `https://` or `www.`, without
+/// the punctuation that ends a sentence.
+pub fn links(text: &str) -> Vec<Range<usize>> {
+    let mut out = Vec::new();
+    let mut pos = 0;
+    for word in text.split_inclusive(char::is_whitespace) {
+        let core = word.trim_end().trim_end_matches(['.', ',', ';', ':', '!', '?', ')', '"', '\'']);
+        let lower = core.to_ascii_lowercase();
+        let is_link = (lower.starts_with("http://") && lower.len() > 7) || (lower.starts_with("https://") && lower.len() > 8) || (lower.starts_with("www.") && lower.len() > 4);
+        if is_link {
+            out.push(pos..pos + core.len());
+        }
+        pos += word.len();
+    }
+    out
+}
+
+/// A place where the find text occurs: the note and the byte range in its body.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Match {
+    pub note: u64,
+    pub start: usize,
+    pub end: usize,
 }
 
 /// All notes, in stacking order: the last one is in front.
@@ -216,6 +501,9 @@ pub struct Board {
     pub next_id: u64,
     /// The note that takes typing and draws active.
     pub focus: Option<u64>,
+    /// The colour and text style that new notes start with (Use as Default).
+    pub default_colour: Colour,
+    pub default_style: Style,
 }
 
 impl Board {
@@ -236,13 +524,24 @@ impl Board {
         self.find_mut(id)
     }
 
-    /// Adds an empty note at `(x, y)`, in front, and focuses it.
+    /// Adds an empty note at `(x, y)`, in front, and focuses it. It takes the default colour and style.
     pub fn new_note(&mut self, x: f32, y: f32, now: u64) -> u64 {
         self.next_id += 1;
         let id = self.next_id;
-        self.notes.push(Note::new(id, x, y, now));
+        let mut note = Note::new(id, x, y, now);
+        note.colour = self.default_colour;
+        note.style = self.default_style;
+        self.notes.push(note);
         self.focus = Some(id);
         id
+    }
+
+    /// Makes the focused note's colour and text style the ones new notes start with. False without a focused note.
+    pub fn use_as_default(&mut self) -> bool {
+        let Some((colour, style)) = self.focused().map(|n| (n.colour, n.style)) else { return false };
+        self.default_colour = colour;
+        self.default_style = style;
+        true
     }
 
     /// Copies note `id` into a new note in front, offset from the original, and focuses the copy. `None` when
@@ -268,7 +567,7 @@ impl Board {
     pub fn add_text(&mut self, text: &str, x: f32, y: f32, now: u64) -> u64 {
         let id = self.new_note(x, y, now);
         if let Some(n) = self.find_mut(id) {
-            n.text = text.to_string();
+            n.set_text(text);
         }
         id
     }
@@ -296,6 +595,45 @@ impl Board {
         }
     }
 
+    /// Collapses or expands every note (Window > Collapse All, Expand All). False when none changed.
+    pub fn set_all_collapsed(&mut self, collapsed: bool) -> bool {
+        let mut changed = false;
+        for n in &mut self.notes {
+            if n.collapsed != collapsed {
+                n.collapsed = collapsed;
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    /// Orders the notes by `by` and lays them out in rows that fit `width` points (Window > Arrange By). The stacking
+    /// order follows the sort. False when there are no notes.
+    pub fn arrange(&mut self, by: Arrange, width: f32) -> bool {
+        if self.notes.is_empty() {
+            return false;
+        }
+        match by {
+            Arrange::Colour => self.notes.sort_by_key(|n| n.colour.index()),
+            Arrange::Content => self.notes.sort_by_key(|n| n.title().to_lowercase()),
+            Arrange::Created => self.notes.sort_by_key(|n| n.created),
+            Arrange::Modified => self.notes.sort_by_key(|n| n.modified),
+        }
+        let (mut x, mut y, mut row_h) = (ARRANGE_MARGIN_PT, ARRANGE_MARGIN_PT, 0.0f32);
+        for n in &mut self.notes {
+            if x > ARRANGE_MARGIN_PT && x + n.w > width - ARRANGE_MARGIN_PT {
+                x = ARRANGE_MARGIN_PT;
+                y += row_h + ARRANGE_MARGIN_PT;
+                row_h = 0.0;
+            }
+            n.x = x;
+            n.y = y;
+            x += n.w + ARRANGE_MARGIN_PT;
+            row_h = row_h.max(n.frame_h());
+        }
+        true
+    }
+
     /// Plain text of one note, or of all of them, separated by `EXPORT_SEPARATOR`.
     pub fn export_text(&self, id: Option<u64>) -> String {
         match id {
@@ -318,6 +656,82 @@ impl Board {
         }
         ids
     }
+
+    /// Every place `query` occurs, note by note in stacking order. The comparison ignores ASCII case.
+    pub fn matches(&self, query: &str) -> Vec<Match> {
+        let mut out = Vec::new();
+        if query.is_empty() {
+            return out;
+        }
+        let needle = query.to_ascii_lowercase();
+        for note in &self.notes {
+            let hay = note.text.to_ascii_lowercase();
+            let mut pos = 0;
+            while let Some(i) = hay[pos..].find(&needle) {
+                let start = pos + i;
+                out.push(Match { note: note.id, start, end: start + needle.len() });
+                pos = start + needle.len();
+            }
+        }
+        out
+    }
+
+    /// The match after (or before) the focused note's selection, wrapping round the board.
+    pub fn find_step(&self, query: &str, forward: bool) -> Option<Match> {
+        let all = self.matches(query);
+        let index_of = |id: u64| self.notes.iter().position(|n| n.id == id).unwrap_or(0);
+        let here = match self.focused() {
+            Some(n) => {
+                let sel = n.selection();
+                (index_of(n.id), if forward { sel.end } else { sel.start })
+            }
+            None => (if forward { 0 } else { self.notes.len() }, 0),
+        };
+        let found = if forward {
+            all.iter().find(|m| (index_of(m.note), m.start) >= here)
+        } else {
+            all.iter().rev().find(|m| (index_of(m.note), m.start) < here)
+        };
+        found.or(if forward { all.first() } else { all.last() }).cloned()
+    }
+
+    /// Brings the match's note to the front and selects the match in it.
+    pub fn select_match(&mut self, m: &Match) {
+        self.raise(m.note);
+        if let Some(n) = self.find_mut(m.note) {
+            n.anchor = m.start;
+            n.caret = m.end;
+        }
+    }
+}
+
+fn style_fields(style: &Style) -> Vec<(String, Json)> {
+    vec![
+        ("bold".into(), Json::Bool(style.bold)),
+        ("italic".into(), Json::Bool(style.italic)),
+        ("underline".into(), Json::Bool(style.underline)),
+        ("strike".into(), Json::Bool(style.strike)),
+        ("size".into(), Json::Str(style.size.name().into())),
+        ("ink".into(), Json::Str(style.ink.name().into())),
+    ]
+}
+
+fn flag(item: &Json, key: &str, default: bool) -> bool {
+    match item.get(key) {
+        Some(Json::Bool(b)) => *b,
+        _ => default,
+    }
+}
+
+fn style_from(item: &Json) -> Style {
+    Style {
+        bold: flag(item, "bold", false),
+        italic: flag(item, "italic", false),
+        underline: flag(item, "underline", false),
+        strike: flag(item, "strike", false),
+        size: TextSize::from_name(&item.str_field("size").unwrap_or_default()),
+        ink: Ink::from_name(&item.str_field("ink").unwrap_or_default()),
+    }
 }
 
 /// Encodes the board as the app's JSON file.
@@ -326,7 +740,7 @@ pub fn encode(board: &Board) -> String {
         .notes
         .iter()
         .map(|n| {
-            Json::Obj(vec![
+            let mut fields: Vec<(String, Json)> = vec![
                 ("id".into(), Json::Num(n.id as f64)),
                 ("colour".into(), Json::Str(n.colour.name().into())),
                 ("x".into(), Json::Num(n.x as f64)),
@@ -334,19 +748,26 @@ pub fn encode(board: &Board) -> String {
                 ("w".into(), Json::Num(n.w as f64)),
                 ("h".into(), Json::Num(n.h as f64)),
                 ("collapsed".into(), Json::Bool(n.collapsed)),
-                ("bold".into(), Json::Bool(n.style.bold)),
-                ("italic".into(), Json::Bool(n.style.italic)),
-                ("size".into(), Json::Str(n.style.size.name().into())),
-                ("text".into(), Json::Str(n.text.clone())),
-                ("created".into(), Json::Num(n.created as f64)),
-                ("modified".into(), Json::Num(n.modified as f64)),
-            ])
+                ("translucent".into(), Json::Bool(n.translucent)),
+            ];
+            fields.extend(style_fields(&n.style));
+            fields.push(("text".into(), Json::Str(n.text.clone())));
+            if let Some((w, h)) = n.restore {
+                fields.push(("restore_w".into(), Json::Num(w as f64)));
+                fields.push(("restore_h".into(), Json::Num(h as f64)));
+            }
+            fields.push(("created".into(), Json::Num(n.created as f64)));
+            fields.push(("modified".into(), Json::Num(n.modified as f64)));
+            Json::Obj(fields)
         })
         .collect();
+    let mut default: Vec<(String, Json)> = vec![("colour".into(), Json::Str(board.default_colour.name().into()))];
+    default.extend(style_fields(&board.default_style));
     Json::Obj(vec![
         ("version".into(), Json::Num(1.0)),
         ("next_id".into(), Json::Num(board.next_id as f64)),
         ("focus".into(), board.focus.map_or(Json::Null, |id| Json::Num(id as f64))),
+        ("default".into(), Json::Obj(default)),
         ("notes".into(), Json::Arr(notes)),
     ])
     .encode()
@@ -363,16 +784,20 @@ pub fn decode(text: &str) -> Result<Board, String> {
         let mut note = Note::new(id as u64, num("x", 40.0), num("y", 60.0), 0);
         note.colour = item.get("colour").and_then(Json::as_str).and_then(Colour::from_name).unwrap_or(Colour::Yellow);
         note.resize(num("w", DEFAULT_W), num("h", DEFAULT_H));
-        note.collapsed = matches!(item.get("collapsed"), Some(Json::Bool(true)));
-        note.style = Style {
-            bold: matches!(item.get("bold"), Some(Json::Bool(true))),
-            italic: matches!(item.get("italic"), Some(Json::Bool(true))),
-            size: TextSize::from_name(&item.str_field("size").unwrap_or_default()),
-        };
-        note.text = item.str_field("text").unwrap_or_default();
+        note.collapsed = flag(item, "collapsed", false);
+        note.translucent = flag(item, "translucent", true);
+        note.style = style_from(item);
+        note.set_text(&item.str_field("text").unwrap_or_default());
+        if let (Some(w), Some(h)) = (item.get("restore_w").and_then(Json::number), item.get("restore_h").and_then(Json::number)) {
+            note.restore = Some((w as f32, h as f32));
+        }
         note.created = item.get("created").and_then(Json::number).unwrap_or(0.0) as u64;
         note.modified = item.get("modified").and_then(Json::number).unwrap_or(0.0) as u64;
         board.notes.push(note);
+    }
+    if let Some(default) = root.get("default") {
+        board.default_colour = default.get("colour").and_then(Json::as_str).and_then(Colour::from_name).unwrap_or_default();
+        board.default_style = style_from(default);
     }
     board.next_id = root.get("next_id").and_then(Json::number).map_or(0, |v| v as u64);
     board.next_id = board.next_id.max(board.notes.iter().map(|n| n.id).max().unwrap_or(0));
@@ -441,6 +866,120 @@ mod tests {
     }
 
     #[test]
+    fn typing_goes_in_at_the_caret_and_replaces_the_selection() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.set_text("hello world");
+        n.set_caret(5, false);
+        n.type_text(",", 1);
+        assert_eq!(n.text, "hello, world");
+        assert_eq!(n.caret, 6);
+        n.set_caret(7, false);
+        n.set_caret(12, true);
+        assert_eq!(n.selected_text(), "world");
+        n.type_text("there", 2);
+        assert_eq!(n.text, "hello, there");
+        assert!(!n.has_selection());
+    }
+
+    #[test]
+    fn backspace_and_delete_forward_act_on_the_caret_or_the_selection() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.set_text("abcd");
+        n.set_caret(2, false);
+        assert!(n.backspace(1));
+        assert_eq!(n.text, "acd");
+        assert!(n.delete_forward(2));
+        assert_eq!(n.text, "ad");
+        n.select_all();
+        assert!(n.backspace(3));
+        assert_eq!(n.text, "");
+        assert!(!n.delete_forward(4));
+    }
+
+    #[test]
+    fn cut_removes_and_returns_the_selection() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.set_text("one two");
+        assert_eq!(n.cut(1), None);
+        n.set_caret(0, false);
+        n.set_caret(3, true);
+        assert_eq!(n.cut(2).as_deref(), Some("one"));
+        assert_eq!(n.text, " two");
+        assert_eq!(n.modified, 2);
+    }
+
+    #[test]
+    fn the_caret_moves_by_character_line_and_document() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.set_text("ab\ncd");
+        n.move_caret(Move::Left, false);
+        assert_eq!(n.caret, 4);
+        n.move_caret(Move::LineStart, false);
+        assert_eq!(n.caret, 3);
+        n.move_caret(Move::Start, true);
+        assert_eq!(n.selection(), 0..3);
+        n.move_caret(Move::End, false);
+        assert_eq!((n.anchor, n.caret), (5, 5));
+        n.move_caret(Move::Right, false);
+        assert_eq!(n.caret, 5, "the end stays the end");
+    }
+
+    #[test]
+    fn select_word_selects_the_word_under_the_caret() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.set_text("alpha beta");
+        n.select_word_at(7);
+        assert_eq!(n.selected_text(), "beta");
+    }
+
+    #[test]
+    fn transformations_change_the_case_of_the_selection_only() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.set_text("one two three");
+        assert!(!n.transform(Case::Upper, 1), "nothing selected");
+        n.set_caret(4, false);
+        n.set_caret(7, true);
+        assert!(n.transform(Case::Upper, 2));
+        assert_eq!(n.text, "one TWO three");
+        assert_eq!(n.selected_text(), "TWO");
+        assert!(!n.transform(Case::Upper, 3), "already upper case");
+        assert!(n.transform(Case::Lower, 4));
+        assert_eq!(n.text, "one two three");
+        assert_eq!(Case::Capitalised.apply("hELLO wORLD don't"), "Hello World Don't");
+    }
+
+    #[test]
+    fn links_are_found_without_trailing_punctuation() {
+        let text = "see https://example.com/a, and www.example.org. not http:// here";
+        let found: Vec<&str> = links(text).into_iter().map(|r| &text[r]).collect();
+        assert_eq!(found, vec!["https://example.com/a", "www.example.org"]);
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.set_text(text);
+        assert_eq!(n.link_at(8).as_deref(), Some("https://example.com/a"));
+        assert_eq!(n.link_at(35).as_deref(), Some("https://www.example.org"));
+        assert_eq!(n.link_at(1), None);
+    }
+
+    #[test]
+    fn zoom_toggles_between_the_large_size_and_the_old_one() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.collapsed = true;
+        n.toggle_zoom();
+        assert_eq!((n.w, n.h, n.collapsed), (ZOOM_W, ZOOM_H, false));
+        assert_eq!(n.restore, Some((DEFAULT_W, DEFAULT_H)));
+        n.toggle_zoom();
+        assert_eq!((n.w, n.h, n.restore), (DEFAULT_W, DEFAULT_H, None));
+    }
+
+    #[test]
+    fn text_sizes_step_and_stop_at_the_ends() {
+        assert_eq!(TextSize::Small.bigger(), TextSize::Medium);
+        assert_eq!(TextSize::Large.bigger(), TextSize::Large);
+        assert_eq!(TextSize::Large.smaller(), TextSize::Medium);
+        assert_eq!(TextSize::Small.smaller(), TextSize::Small);
+    }
+
+    #[test]
     fn title_is_the_first_non_blank_line() {
         let mut n = Note::new(1, 0.0, 0.0, 0);
         n.text = "\n   \n  Groceries  \nmilk".into();
@@ -495,6 +1034,100 @@ mod tests {
     }
 
     #[test]
+    fn new_notes_take_the_default_colour_and_style() {
+        let mut b = Board::default();
+        assert!(!b.use_as_default(), "no focused note");
+        let a = b.new_note(0.0, 0.0, 0);
+        {
+            let n = b.find_mut(a).unwrap();
+            n.colour = Colour::Pink;
+            n.style = Style { bold: true, size: TextSize::Large, ink: Ink::Blue, ..Style::default() };
+        }
+        assert!(b.use_as_default());
+        let c = b.new_note(0.0, 0.0, 1);
+        let n = b.find(c).unwrap();
+        assert_eq!(n.colour, Colour::Pink);
+        assert_eq!((n.style.bold, n.style.size, n.style.ink), (true, TextSize::Large, Ink::Blue));
+    }
+
+    #[test]
+    fn collapse_all_and_expand_all_report_whether_anything_changed() {
+        let mut b = Board::default();
+        b.new_note(0.0, 0.0, 0);
+        b.new_note(0.0, 0.0, 0);
+        assert!(!b.set_all_collapsed(false));
+        assert!(b.set_all_collapsed(true));
+        assert!(b.notes.iter().all(|n| n.collapsed));
+        assert!(!b.set_all_collapsed(true));
+        assert!(b.set_all_collapsed(false));
+    }
+
+    #[test]
+    fn arrange_sorts_and_lays_the_notes_out_in_rows() {
+        let mut b = Board::default();
+        let a = b.add_text("banana", 300.0, 300.0, 5);
+        let c = b.add_text("avocado", 300.0, 300.0, 3);
+        let d = b.add_text("cherry", 300.0, 300.0, 4);
+        b.find_mut(a).unwrap().colour = Colour::Teal;
+        b.find_mut(c).unwrap().colour = Colour::Pink;
+        b.find_mut(d).unwrap().colour = Colour::Orange;
+        assert!(b.arrange(Arrange::Content, 1000.0));
+        let order: Vec<u64> = b.notes.iter().map(|n| n.id).collect();
+        assert_eq!(order, vec![c, a, d]);
+        assert_eq!((b.notes[0].x, b.notes[0].y), (ARRANGE_MARGIN_PT, ARRANGE_MARGIN_PT));
+        assert_eq!(b.notes[1].x, ARRANGE_MARGIN_PT * 2.0 + DEFAULT_W);
+        assert_eq!(b.notes[1].y, ARRANGE_MARGIN_PT);
+        b.arrange(Arrange::Colour, 1000.0);
+        let order: Vec<u64> = b.notes.iter().map(|n| n.id).collect();
+        assert_eq!(order, vec![d, a, c], "orange, teal, pink");
+        b.arrange(Arrange::Created, 1000.0);
+        assert_eq!(b.notes.iter().map(|n| n.created).collect::<Vec<_>>(), vec![3, 4, 5]);
+        // a narrow board wraps to a second row
+        b.arrange(Arrange::Modified, 300.0);
+        assert!(b.notes.iter().all(|n| n.x == ARRANGE_MARGIN_PT));
+        assert!(b.notes[1].y > b.notes[0].y);
+        assert!(!Board::default().arrange(Arrange::Colour, 100.0));
+    }
+
+    #[test]
+    fn find_lists_every_match_ignoring_ascii_case() {
+        let mut b = Board::default();
+        let a = b.add_text("Foo bar foo", 0.0, 0.0, 0);
+        let c = b.add_text("nothing", 0.0, 0.0, 0);
+        let d = b.add_text("FOO", 0.0, 0.0, 0);
+        let m = b.matches("foo");
+        assert_eq!(m, vec![Match { note: a, start: 0, end: 3 }, Match { note: a, start: 8, end: 11 }, Match { note: d, start: 0, end: 3 }]);
+        assert!(b.matches("").is_empty());
+        assert!(b.matches("zzz").is_empty());
+        let _ = c;
+    }
+
+    #[test]
+    fn find_next_and_previous_walk_the_matches_and_wrap() {
+        let mut b = Board::default();
+        let a = b.add_text("foo bar foo", 0.0, 0.0, 0);
+        let c = b.add_text("foo", 0.0, 0.0, 0);
+        b.focus = None;
+        let first = b.find_step("foo", true).unwrap();
+        assert_eq!((first.note, first.start), (a, 0));
+        b.select_match(&first);
+        assert_eq!(b.focus, Some(a));
+        assert_eq!(b.find(a).unwrap().selected_text(), "foo");
+        let second = b.find_step("foo", true).unwrap();
+        assert_eq!((second.note, second.start), (a, 8));
+        b.select_match(&second);
+        let third = b.find_step("foo", true).unwrap();
+        assert_eq!((third.note, third.start), (c, 0));
+        // raising moved note c to the front; stepping on from it wraps to the first match
+        b.select_match(&third);
+        let wrapped = b.find_step("foo", true).unwrap();
+        assert_eq!((wrapped.note, wrapped.start), (a, 0));
+        let back = b.find_step("foo", false).unwrap();
+        assert_eq!((back.note, back.start), (a, 8));
+        assert!(b.find_step("zzz", true).is_none());
+    }
+
+    #[test]
     fn export_all_joins_notes_and_import_splits_them_back() {
         let mut b = Board::default();
         b.add_text("first", 0.0, 0.0, 0);
@@ -531,11 +1164,15 @@ mod tests {
             let n = b.find_mut(a).unwrap();
             n.colour = Colour::Pink;
             n.collapsed = true;
-            n.style = Style { bold: true, italic: true, size: TextSize::Large };
+            n.translucent = false;
+            n.style = Style { bold: true, italic: true, underline: true, strike: true, size: TextSize::Large, ink: Ink::Green };
             n.resize(300.0, 240.0);
+            n.restore = Some((220.0, 200.0));
             n.modified = 150;
         }
         b.add_text("second", 0.0, 0.0, 101);
+        b.default_colour = Colour::Teal;
+        b.default_style = Style { underline: true, ..Style::default() };
         let decoded = decode(&encode(&b)).unwrap();
         assert_eq!(decoded, b);
     }
@@ -547,8 +1184,10 @@ mod tests {
         assert_eq!(b.notes.len(), 1);
         assert_eq!(b.notes[0].colour, Colour::Yellow);
         assert_eq!(b.notes[0].text, "ok");
+        assert!(b.notes[0].translucent, "a file from before the flag keeps notes translucent");
         assert_eq!(b.focus, None);
         assert_eq!(b.next_id, 3);
+        assert_eq!(b.default_colour, Colour::Yellow);
     }
 
     #[test]
