@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.7.2
+
+- Upstream filmcraft v0.7.2.
+  ## What's Changed
+  * Share docking transactions and preserve FilmCraft panel behavior by @skylartaylor in https://github.com/storytold/filmcraft/pull/881
+  * ci: refactor workflows to use storytold/craft-common-actions by @dylanmtaylor in https://github.com/storytold/filmcraft/pull/1051
+  * #853: Shift constrains pen mask segments to 45° steps by @vangel76 in https://github.com/storytold/filmcraft/pull/862
+  * Reveal in Finder for Project clips with a local path by @vbasky in https://github.com/storytold/filmcraft/pull/889
+
 ## 0.6.1
 
 - Upstream filmcraft v0.6.0.

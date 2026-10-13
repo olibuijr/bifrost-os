@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.6.2
+
+- Upstream cadcraft v0.6.2.
+  ## What's Changed
+  * AUDIT and RECOVER: find and fix database errors, open damaged drawings repaired (part of #406) by @vangel76 in https://github.com/storytold/cadcraft/pull/411
+  * Plot styles: colour-dependent tables (monochrome, grayscale) apply to PDF plots and layouts (part of #410) by @vangel76 in https://github.com/storytold/cadcraft/pull/412
+  * MTEXT: Height, Justify, Line spacing, Rotation, Style, Width, Columns (part of #408) by @vangel76 in https://github.com/storytold/cadcraft/pull/415
+  * SPLINE: Knots, start/end Tangency, toLerance and Object (part of #408) by @vangel76 in https://github.com/storytold/cadcraft/pull/413
+
 ## 0.5.1
 
 - Upstream cadcraft v0.5.0.

@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.10.0
+
+- Upstream vectorcraft v0.10.0.
+  ## What's Changed
+  * #1063: a fill or stroke chosen with characters selected colours just them by @bflatastic in https://github.com/storytold/vectorcraft/pull/1075
+  * Fix font size and horizontal scale after text/group scaling by @lollinoo in https://github.com/storytold/vectorcraft/pull/1045
+  * Type: Proportional Metrics — full-width glyphs on the font's proportional widths, `palt` (#966) by @imachus in https://github.com/storytold/vectorcraft/pull/1067
+  * Object: Align, Move, Arrange and other commands that change nothing record no undo step by @dotCooCoo in https://github.com/storytold/vectorcraft/pull/1060
+
 ## 0.9.0
 
 - Upstream vectorcraft v0.9.0.

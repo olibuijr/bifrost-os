@@ -4,6 +4,15 @@
 
 # Changelog
 
+## 0.8.2
+
+- Upstream photocraft v0.8.2.
+  ## What's Changed
+  * Adopt shared docking while preserving panel controls and workspaces by @skylartaylor in https://github.com/storytold/photocraft/pull/3097
+  * GPU composite: reuse unchanged lower-stack chunks for property edits by @Elvis33LE in https://github.com/storytold/photocraft/pull/1169
+  * Design: bounded GPU stack prefix reuse for property edits by @Elvis33LE in https://github.com/storytold/photocraft/pull/1164
+  * feat(ui): allow disabling Studio canvas background dots by @Ni-zav in https://github.com/storytold/photocraft/pull/2317
+
 ## 0.7.0
 
 - Upstream photocraft v0.7.0.
