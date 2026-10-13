@@ -2,6 +2,7 @@
 //! Follows the OpenStreetMap tile usage policy: an identifying user agent, cached tiles, and a low request rate.
 
 use crate::tiles::TileId;
+use std::time::Duration;
 
 pub const DEFAULT_TEMPLATE: &str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 /// The imagery layer of the Satellite map type.
@@ -56,6 +57,9 @@ impl MapType {
     }
 }
 
+/// Traffic tiles go stale quickly: a cached traffic tile older than this is fetched again.
+pub const TRAFFIC_MAX_AGE: Duration = Duration::from_secs(5 * 60);
+
 /// Pause between tile requests, so one view never bursts at the tile server.
 pub const MIN_REQUEST_INTERVAL_MS: u64 = 500;
 /// Most tile requests in flight at once.
@@ -107,6 +111,12 @@ impl TileSource {
 
     pub fn user_agent(&self) -> &str {
         &self.user_agent
+    }
+
+    /// The cache folder of this source used as an overlay on the base map. It is kept apart from the base tiles, so
+    /// an overlay served from the same host as the map never overwrites them.
+    pub fn overlay_cache_key(&self) -> String {
+        format!("overlay-{}", self.cache_key())
     }
 
     pub fn template(&self) -> &str {
@@ -168,6 +178,15 @@ mod tests {
         let url = MapType::Satellite.source("1.0.0").url(TileId { z: 3, x: 4, y: 2 });
         assert!(url.ends_with("/tile/3/2/4"), "{url}");
         assert!(MapType::Standard.attribution().contains("OpenStreetMap"));
+    }
+
+    #[test]
+    fn an_overlay_never_shares_a_cache_folder_with_the_base_map() {
+        let base = TileSource::default_source("1.0.0");
+        let traffic = TileSource::new("https://tile.openstreetmap.org/traffic/{z}/{x}/{y}.png", "ua").unwrap();
+        assert_eq!(base.cache_key(), traffic.cache_key());
+        assert_ne!(base.cache_key(), traffic.overlay_cache_key());
+        assert_eq!(traffic.overlay_cache_key(), "overlay-tile.openstreetmap.org");
     }
 
     #[test]

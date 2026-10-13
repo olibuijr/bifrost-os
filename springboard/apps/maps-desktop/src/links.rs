@@ -52,6 +52,7 @@ fn dirflg(p: Profile) -> &'static str {
         Profile::Driving => "d",
         Profile::Walking => "w",
         Profile::Cycling => "b",
+        Profile::Transit => "r",
     }
 }
 
@@ -59,6 +60,7 @@ fn profile_of(flag: &str) -> Profile {
     match flag {
         "w" => Profile::Walking,
         "b" => Profile::Cycling,
+        "r" => Profile::Transit,
         _ => Profile::Driving,
     }
 }

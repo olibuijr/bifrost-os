@@ -7,6 +7,8 @@
 //! - `view`: the map view (centre, fractional zoom, pan, anchored zoom for pinch) and pins.
 //! - `route`: directions from an OSRM-compatible server when one is configured, a labelled straight-line estimate
 //!   otherwise, and offline place search over a local list.
+//! - `transit`: journeys from an OpenTripPlanner-compatible planner, read into the same routes.
+//! - `nav`: turn-by-turn guidance, following a route against a position.
 //! - `units`, `measure`, `gpx`, `links`, `store`: distance units and the scale bar, Measure Distance, GPX import,
 //!   `maps:` and `geo:` links, and the saved places (Home, Work, Favorites, Recents, Collections).
 //! - `net`, `loader`: the HTTP client with the identifying user agent and the tile loader (cache, pacing, decode).
@@ -24,7 +26,9 @@ pub mod rpc;
 pub mod source;
 pub mod state;
 pub mod store;
+pub mod nav;
 pub mod tiles;
+pub mod transit;
 pub mod units;
 pub mod view;
 pub mod window;
