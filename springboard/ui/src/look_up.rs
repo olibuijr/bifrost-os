@@ -7,6 +7,9 @@ pub const TERM_MAX_CHARS: usize = 64;
 /// How many quick search hits the popover lists.
 pub const HITS_SHOWN: usize = 5;
 
+/// The longest definition the popover shows, in characters; a longer one is cut and ends in an ellipsis.
+pub const DEFINITION_MAX_CHARS: usize = 320;
+
 /// The term to look up: the first line of `text`, trimmed and cut to [`TERM_MAX_CHARS`]. None when there is no visible
 /// text or the first line has a control character.
 pub fn term_of(text: &str) -> Option<String> {
@@ -26,6 +29,8 @@ pub enum Row {
     Text(String),
     /// Opens Search with the term.
     Search { query: String },
+    /// Opens the term in the Dictionary app.
+    OpenInDictionary { word: String },
 }
 
 /// The popover's content for one term.
@@ -43,18 +48,30 @@ impl LookUp {
         LookUp { term: term.into(), definition, search_hits }
     }
 
-    /// The popover rows: the dictionary section, then the search section ending with the Search row.
+    /// The popover rows: the dictionary section, the search section, then the two actions (Search and Open in
+    /// Dictionary).
     pub fn rows(&self) -> Vec<Row> {
         let mut rows = vec![Row::Heading("Dictionary")];
         match self.definition.as_deref().map(str::trim).filter(|d| !d.is_empty()) {
-            Some(def) => rows.push(Row::Text(def.to_string())),
+            Some(def) => rows.push(Row::Text(cut_definition(def))),
             None => rows.push(Row::Text("No definition in the installed dictionaries.".into())),
         }
         rows.push(Row::Heading("Search"));
         rows.extend(self.search_hits.iter().take(HITS_SHOWN).map(|h| Row::Text(h.clone())));
         rows.push(Row::Search { query: self.term.clone() });
+        rows.push(Row::OpenInDictionary { word: self.term.clone() });
         rows
     }
+}
+
+/// `def` cut to [`DEFINITION_MAX_CHARS`] characters, with an ellipsis when cut.
+fn cut_definition(def: &str) -> String {
+    if def.chars().count() <= DEFINITION_MAX_CHARS {
+        return def.to_string();
+    }
+    let mut cut: String = def.chars().take(DEFINITION_MAX_CHARS).collect();
+    cut.push('…');
+    cut
 }
 
 #[cfg(test)]
@@ -91,6 +108,7 @@ mod tests {
                 Row::Text("Cat photos".into()),
                 Row::Text("Catalogue".into()),
                 Row::Search { query: "cat".into() },
+                Row::OpenInDictionary { word: "cat".into() },
             ]
         );
     }
@@ -101,6 +119,16 @@ mod tests {
         let rows = LookUp::new("zzz", Some("   ".into()), hits).rows();
         assert_eq!(rows[1], Row::Text("No definition in the installed dictionaries.".into()));
         assert_eq!(rows.iter().filter(|r| matches!(r, Row::Text(t) if t.starts_with("hit"))).count(), HITS_SHOWN);
-        assert_eq!(rows.last(), Some(&Row::Search { query: "zzz".into() }));
+        assert_eq!(rows.last(), Some(&Row::OpenInDictionary { word: "zzz".into() }));
+        assert_eq!(rows[rows.len() - 2], Row::Search { query: "zzz".into() });
+    }
+
+    #[test]
+    fn a_long_definition_is_cut_with_an_ellipsis() {
+        let long = "d".repeat(DEFINITION_MAX_CHARS + 50);
+        let rows = LookUp::new("w", Some(long), vec![]).rows();
+        let Row::Text(text) = &rows[1] else { panic!("definition row") };
+        assert_eq!(text.chars().count(), DEFINITION_MAX_CHARS + 1);
+        assert!(text.ends_with('…'));
     }
 }
