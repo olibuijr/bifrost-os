@@ -470,7 +470,7 @@ mod tests {
         let mut w = DiskUtility::new();
         w.nodes = vec![
             Node { name: "sdb".into(), removable: true, size: 8_000_000_000, ..Node::default() },
-            Node { name: "sdb1".into(), kind: Kind::Partition, parent: Some("sdb".into()), fs_type: Some("vfat".into()), mount_point: Some("/mnt/a".into()), ..Node::default() },
+            Node { name: "sdb1".into(), kind: Kind::Partition, parent: Some("sdb".into()), fs_type: Some("vfat".into()), ..Node::default() },
         ];
         w
     }
@@ -478,6 +478,7 @@ mod tests {
     #[test]
     fn a_refused_erase_is_the_footer_error_and_opens_no_sheet() {
         let mut w = one_stick();
+        w.nodes[1].mount_point = Some("/mnt/a".into());
         w.selected = Some("sdb1".into());
         assert!(w.activate(Target::Toolbar(B_ERASE), 1.0));
         assert!(w.sheet.is_none() && w.job.is_none());
@@ -499,8 +500,7 @@ mod tests {
     #[test]
     fn a_sheet_blocks_the_toolbar_under_it() {
         let mut w = one_stick();
-        w.selected = Some("sdb".into());
-        w.size = (1200.0, 780.0);
+        w.selected = Some("sdb1".into());
         assert!(w.activate(Target::Toolbar(B_FIRST_AID), 1.0));
         let parent = w.window_rect();
         let pending = w.sheet.as_ref().expect("sheet");
