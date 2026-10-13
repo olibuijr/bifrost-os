@@ -3,7 +3,7 @@
 //! raster uses SHM, with damage tracking and released-buffer ownership.
 use std::{io, os::fd::AsFd};
 use wayland_client::{Connection, Dispatch, EventQueue, QueueHandle, WEnum, Proxy};
-use wayland_client::protocol::{wl_buffer, wl_callback, wl_compositor, wl_keyboard, wl_pointer, wl_registry, wl_output, wl_region, wl_seat, wl_shm, wl_shm_pool, wl_surface};
+use wayland_client::protocol::{wl_buffer, wl_callback, wl_compositor, wl_keyboard, wl_pointer, wl_registry, wl_output, wl_region, wl_seat, wl_shm, wl_shm_pool, wl_surface, wl_touch};
 use wayland_protocols_wlr::layer_shell::v1::client::{zwlr_layer_shell_v1 as layer, zwlr_layer_surface_v1 as surface};
 use crate::gfx::Damage;
 use wayland_protocols::xdg::shell::client::{xdg_wm_base, xdg_surface, xdg_toplevel};
@@ -51,6 +51,7 @@ const TITLE_PT: f32 = 30.0;
 /// Presenter keys of built-in app windows (chrome ids are small, the background is u32::MAX).
 const GPU_WINDOW: u32 = 0x1000_0000;
 use super::input::Event;
+use super::wl_touch::{self as touch_model, Placement};
 use wayland_protocols::wp::cursor_shape::v1::client::{wp_cursor_shape_manager_v1 as cursor_manager, wp_cursor_shape_device_v1 as cursor_device};
 use wayland_protocols::wp::linux_dmabuf::zv1::client::{zwp_linux_dmabuf_v1 as dmabuf, zwp_linux_buffer_params_v1 as dmabuf_params};
 use crate::gpu::wl::{Backdrop, BufferInfo, Magnify, Presenter};
@@ -82,6 +83,8 @@ struct State {
     bg_manager:Option<bg_manager::ExtBackgroundEffectManagerV1>, bg_blur:bool, mat_manager:Option<mat_manager::BifrostMaterialManagerV1>,
     foreign_manager:Option<foreign_manager::ZwlrForeignToplevelManagerV1>, foreign:Vec<Foreign>, foreign_dirty:bool,
     cursor_manager: Option<cursor_manager::WpCursorShapeManagerV1>, cursor_device: Option<cursor_device::WpCursorShapeDeviceV1>, pointer: Option<wl_pointer::WlPointer>, cursor_serial:u32,
+    /// the seat's touch device (bound when the seat reports touch) and the fingers on it
+    touch: Option<wl_touch::WlTouch>, fingers: touch_model::Translator,
     lock_manager:Option<lock_manager::ExtSessionLockManagerV1>, output:Option<wl_output::WlOutput>, lock:Option<Lock>, lock_wanted:bool, redraw:bool, refresh:u32,
     idle_notifier:Option<idle_notifier::ExtIdleNotifierV1>, idle:bool, resumed:bool, keys:HashSet<u16>, power_manager:Option<power_manager::ZwlrOutputPowerManagerV1>, output_power:Option<output_power::ZwlrOutputPowerV1>,
     activation:Option<activation::XdgActivationV1>, focused:Option<u32>, serial:u32, raise_front:bool, z:Vec<u32>,
@@ -581,6 +584,9 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
             let _ = self.render_chrome();
             let _ = self.conn.flush();
         }
+        // a report whose `frame` has not arrived yet is delivered as it stands
+        self.state.fingers.frame();
+        self.state.fingers.take(&mut self.state.inputs);
         out.append(&mut self.state.inputs);
     }
     /// The wallpaper the GPU draws under the desktop (uploaded and blurred once per change).
@@ -807,6 +813,14 @@ impl Dispatch<wl_seat::WlSeat, ()> for State {
                 s.pointer=Some(pointer);
             }
             if c.contains(wl_seat::Capability::Keyboard) { seat.get_keyboard(q,()); }
+            if c.contains(wl_seat::Capability::Touch) {
+                if s.touch.is_none() { s.touch=Some(seat.get_touch(q,())); }
+            } else if let Some(touch)=s.touch.take() {
+                // the touch device went away: end its fingers, and give the object back where the protocol allows
+                s.fingers.cancel(super::sys::now_ms());
+                s.fingers.take(&mut s.inputs);
+                if touch.version()>=3 { touch.release(); }
+            }
         }
     }
 }
@@ -911,6 +925,40 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
             wl_pointer::Event::Axis { axis:WEnum::Value(wl_pointer::Axis::VerticalScroll),value,.. } => {
                 s.inputs.extend([Event::Down { x:s.xy.0+offset.0,y:s.xy.1+offset.1,t },Event::Move { x:s.xy.0+offset.0,y:s.xy.1+offset.1-value as f32*3.0,t:t+16.0 },Event::Up { x:s.xy.0+offset.0,y:s.xy.1+offset.1-value as f32*3.0,t:t+32.0 }]);
             },
+            _ => {}
+        }
+    }
+}
+/// Where the surface a finger landed on sits on screen, and the window it belongs to (if it is an app window).
+/// The desktop surface and the lock surface fill the screen.
+fn touch_surface(s: &State, surface: &wl_surface::WlSurface) -> (Placement, Option<u32>) {
+    if let Some((&id, w)) = s.windows.iter().find(|(_, w)| &w.surface == surface) {
+        return (Placement { offset: (w.frame.x as f32, w.frame.y as f32), margin: w.margin as f32 }, Some(id));
+    }
+    if let Some(w) = s.chrome.values().find(|w| &w.surface == surface) {
+        return (Placement { offset: (w.frame.x as f32, w.frame.y as f32), margin: 0.0 }, None);
+    }
+    (Placement::default(), None)
+}
+impl Dispatch<wl_touch::WlTouch, ()> for State {
+    fn event(s: &mut Self, _: &wl_touch::WlTouch, e: wl_touch::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
+        let t = super::sys::now_ms();
+        match e {
+            wl_touch::Event::Down { serial,surface,id,x,y,.. } => {
+                s.serial = serial;
+                let (place, window) = touch_surface(s, &surface);
+                if let Some(wid) = window { s.focused = Some(wid); s.window_events.push(WindowEvent::Focus(wid)); }
+                // the first finger on a window's title area moves the window, as a pointer press there does
+                let drags = s.fingers.is_idle() && window.and_then(|wid| s.windows.get(&wid)).is_some_and(|w| touch_model::starts_window_drag(place.local(x, y), w.frame.drag_height, &w.frame.no_drag));
+                if drags {
+                    if let (Some(w), Some(seat)) = (window.and_then(|wid| s.windows.get(&wid)), s.seat.as_ref()) { w.top._move(seat, serial); return; }
+                }
+                s.fingers.down(id, x, y, place, t);
+            },
+            wl_touch::Event::Motion { id,x,y,.. } => s.fingers.motion(id, x, y, t),
+            wl_touch::Event::Up { serial,id,.. } => { s.serial = serial; s.fingers.up(id, t); },
+            wl_touch::Event::Frame => { s.fingers.frame(); s.fingers.take(&mut s.inputs); },
+            wl_touch::Event::Cancel => { s.fingers.cancel(t); s.fingers.take(&mut s.inputs); },
             _ => {}
         }
     }

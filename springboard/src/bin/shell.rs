@@ -741,6 +741,8 @@ fn run() -> std::io::Result<()> {
                 input::Event::Hover{x,y,..}=>{let (x,y)=map(x,y);let Some((x,y))=shell.tap_hover(x,y) else {continue};shell.desktop_pointer(x,y,false,t);continue;},
                 input::Event::Context{x,y,..}=>{let (x,y)=map(x,y);shell.desktop_pointer(x,y,true,t);continue;},
                 input::Event::Switch { .. } => continue,
+                // per-finger contacts: the gesture layer consumes these; the first finger also arrives as Down/Move/Up
+                input::Event::Contact { .. } => continue,
                 input::Event::Key { code: input::KEY_WAKEUP, down: true } => Event::Wake,
                 input::Event::Key { code, down } => {
                     // session event taps see the key first and may drop or replace it

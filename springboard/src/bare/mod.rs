@@ -24,6 +24,7 @@ pub mod sys_watch;
 pub mod takeover;
 pub mod timezone;
 pub mod vibrator;
+pub mod wl_touch;
 #[cfg(feature = "desktop-wayland")]
 pub mod wayland;
 #[cfg(feature = "desktop-wayland")]
