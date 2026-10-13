@@ -238,7 +238,7 @@ pub mod tests {
                 let head = String::from_utf8_lossy(&self.request).into_owned();
                 let path = head.split_whitespace().nth(1).unwrap_or("/").to_string();
                 let hit = {
-                    let sites = self.sites.lock().unwrap();
+                    let sites = self.sites.lock().unwrap_or_else(|p| p.into_inner());
                     let bare = path.split('?').next().unwrap_or(&path);
                     sites.get(&format!("{}{path}", self.host)).or_else(|| sites.get(&format!("{}{bare}", self.host))).or_else(|| sites.get(&self.host)).cloned()
                 };
@@ -277,7 +277,7 @@ pub mod tests {
 
     impl Transport for Fake {
         fn connect(&self, host: &str, _port: u16, _tls: bool) -> io::Result<Box<dyn Stream>> {
-            let known = self.sites.lock().unwrap().keys().any(|k| k == host || k.starts_with(&format!("{host}/")));
+            let known = self.sites.lock().unwrap_or_else(|p| p.into_inner()).keys().any(|k| k == host || k.starts_with(&format!("{host}/")));
             if !known {
                 return Err(io::Error::other("no such host"));
             }

@@ -246,6 +246,31 @@ mod tests {
         // DRM_IOCTL_MODE_CREATE_DUMB = _IOWR('d', 0xb2, 32-byte struct)
         assert_eq!(iowr::<[u8; 32]>(b'd', 0xb2), 0xc020_64b2);
     }
+
+    #[test]
+    fn a_panicking_service_thread_does_not_take_the_joiner_down() {
+        // the release profile unwinds (not aborts), so a panic ends only the service thread that hit it
+        let h = spawn_named("panic-probe", || -> u32 { panic!("bad input") });
+        assert!(h.join().is_err());
+        let ok = spawn_named("ok-probe", || 7u32);
+        assert_eq!(ok.join().ok(), Some(7));
+    }
+
+    #[test]
+    fn a_service_panic_while_holding_shared_state_leaves_the_state_readable() {
+        // the shell reads state that service threads write: a poisoned lock must not panic the reader
+        let shared = std::sync::Arc::new(std::sync::Mutex::new(vec![1u32]));
+        let s = shared.clone();
+        let h = spawn_named("poison-probe", move || {
+            let mut g = s.lock().unwrap_or_else(|p| p.into_inner());
+            g.push(2);
+            panic!("bad input while holding the lock");
+        });
+        assert!(h.join().is_err());
+        assert!(shared.is_poisoned());
+        let g = shared.lock().unwrap_or_else(|p| p.into_inner());
+        assert_eq!(*g, vec![1, 2]);
+    }
 }
 
 /// Maps a file read-only for the life of the process (fonts, wallpapers): the pages come from the

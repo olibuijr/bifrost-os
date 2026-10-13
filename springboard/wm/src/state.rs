@@ -120,7 +120,10 @@ impl WmState {
         handle
             .insert_source(Generic::new(display, Interest::READ, Mode::Level), |_, display, state| {
                 // SAFETY: the display is never dropped while the loop runs.
-                unsafe { display.get_mut().dispatch_clients(state).expect("dispatch clients") };
+                // a failed dispatch is logged, not fatal: one broken client connection must not take the session down
+                if let Err(e) = unsafe { display.get_mut().dispatch_clients(state) } {
+                    eprintln!("bifrost-wm: dispatch clients: {e}");
+                }
                 state.dirty = true;
                 Ok(PostAction::Continue)
             })

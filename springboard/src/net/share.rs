@@ -405,13 +405,13 @@ impl Tracker {
     pub fn begin(&self, outgoing: bool, peer: &str, name: &str, total: u64) -> u64 {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         let t = Transfer { id, outgoing, peer: peer.to_string(), name: name.to_string(), done: 0, total, status: Status::Running, finished: None };
-        self.list.lock().unwrap().push(t);
+        self.list.lock().unwrap_or_else(|p| p.into_inner()).push(t);
         id
     }
 
     /// Records the bytes moved so far; `total` is the file size.
     pub fn progress(&self, id: u64, done: u64, total: u64) {
-        if let Some(t) = self.list.lock().unwrap().iter_mut().find(|t| t.id == id) {
+        if let Some(t) = self.list.lock().unwrap_or_else(|p| p.into_inner()).iter_mut().find(|t| t.id == id) {
             t.done = done.min(total);
             t.total = total;
         }
@@ -423,7 +423,7 @@ impl Tracker {
     }
 
     fn finish_at(&self, id: u64, error: Option<String>, now: Instant) {
-        if let Some(t) = self.list.lock().unwrap().iter_mut().find(|t| t.id == id) {
+        if let Some(t) = self.list.lock().unwrap_or_else(|p| p.into_inner()).iter_mut().find(|t| t.id == id) {
             t.finished = Some(now);
             match error {
                 None => {
@@ -438,7 +438,7 @@ impl Tracker {
     /// The transfers to show at `now`: the running ones and the finished ones within DONE_SHOW.
     /// Older finished ones are dropped from the list.
     pub fn snapshot(&self, now: Instant) -> Vec<Transfer> {
-        let mut list = self.list.lock().unwrap();
+        let mut list = self.list.lock().unwrap_or_else(|p| p.into_inner());
         list.retain(|t| t.finished.map_or(true, |f| now.duration_since(f) < DONE_SHOW));
         list.clone()
     }
@@ -535,7 +535,7 @@ impl Service {
                     if let Some(b) = Beacon::decode(&buf[..n]) {
                         if b.fingerprint == fp && b.port != beacon.port {
                             let addr = SocketAddr::new(from.ip(), b.port);
-                            pr.lock().unwrap().heard(Peer { name: b.name, addr }, Instant::now());
+                            pr.lock().unwrap_or_else(|p| p.into_inner()).heard(Peer { name: b.name, addr }, Instant::now());
                         }
                     }
                 }
@@ -545,7 +545,7 @@ impl Service {
     }
 
     pub fn peers(&self) -> Vec<Peer> {
-        self.peers.lock().unwrap().live(Instant::now())
+        self.peers.lock().unwrap_or_else(|p| p.into_inner()).live(Instant::now())
     }
 }
 

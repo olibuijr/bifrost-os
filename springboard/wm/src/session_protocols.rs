@@ -491,7 +491,7 @@ fn write_shm(_buffer: &WlBuffer, _pixels: &[u8]) -> Result<(), &'static str> { E
 fn toplevel_names(surface: &WlSurface) -> Option<(String, String)> {
     with_states(surface, |states| {
         states.data_map.get::<XdgToplevelSurfaceData>().map(|d| {
-            let d = d.lock().unwrap();
+            let d = d.lock().unwrap_or_else(|p| p.into_inner());
             (d.title.clone().unwrap_or_default(), d.app_id.clone().unwrap_or_default())
         })
     })
@@ -688,12 +688,12 @@ impl Dispatch<ZwlrOutputConfigurationV1, ConfigEntries> for WmState {
                 let want: HeadWantRef = Arc::new(Mutex::new(HeadWant::default()));
                 data_init.init(id, want.clone());
                 if let Some(name) = head.data::<String>() {
-                    data.0.lock().unwrap().push(ConfigEntry { output: name.clone(), enabled: true, want });
+                    data.0.lock().unwrap_or_else(|p| p.into_inner()).push(ConfigEntry { output: name.clone(), enabled: true, want });
                 }
             }
             R::DisableHead { head } => {
                 if let Some(name) = head.data::<String>() {
-                    data.0.lock().unwrap().push(ConfigEntry { output: name.clone(), enabled: false, want: HeadWantRef::default() });
+                    data.0.lock().unwrap_or_else(|p| p.into_inner()).push(ConfigEntry { output: name.clone(), enabled: false, want: HeadWantRef::default() });
                 }
             }
             R::Apply => run_configuration(state, resource, data, false),
@@ -710,7 +710,7 @@ fn run_configuration(state: &mut WmState, resource: &ZwlrOutputConfigurationV1, 
         .lock()
         .unwrap()
         .iter()
-        .map(|e| (e.output.clone(), e.enabled, e.want.lock().unwrap().mode))
+        .map(|e| (e.output.clone(), e.enabled, e.want.lock().unwrap_or_else(|p| p.into_inner()).mode))
         .collect();
     if state.apply_outputs(&entries, test_only) {
         resource.succeeded();
@@ -728,11 +728,11 @@ impl Dispatch<ZwlrOutputConfigurationHeadV1, HeadWantRef> for WmState {
         match request {
             R::SetMode { mode } => {
                 if let Some(info) = mode.data::<ModeInfo>() {
-                    data.lock().unwrap().mode = Some((info.w, info.h, Some(info.refresh)));
+                    data.lock().unwrap_or_else(|p| p.into_inner()).mode = Some((info.w, info.h, Some(info.refresh)));
                 }
             }
             R::SetCustomMode { width, height, refresh } => {
-                data.lock().unwrap().mode = Some((width, height, (refresh > 0).then_some(refresh)));
+                data.lock().unwrap_or_else(|p| p.into_inner()).mode = Some((width, height, (refresh > 0).then_some(refresh)));
             }
             // Position, transform, scale and adaptive sync are accepted and ignored until the backend can apply them.
             _ => {}
@@ -919,10 +919,10 @@ impl Dispatch<ExtImageCopyCaptureFrameV1, FrameData> for WmState {
     fn request(state: &mut Self, _client: &Client, resource: &ExtImageCopyCaptureFrameV1, request: ext_image_copy_capture_frame_v1::Request, data: &FrameData, _dh: &DisplayHandle, _data_init: &mut DataInit<'_, Self>) {
         use ext_image_copy_capture_frame_v1::{FailureReason, Request as R};
         match request {
-            R::AttachBuffer { buffer } => *data.buffer.lock().unwrap() = Some(buffer),
+            R::AttachBuffer { buffer } => *data.buffer.lock().unwrap_or_else(|p| p.into_inner()) = Some(buffer),
             R::DamageBuffer { .. } => {}
             R::Capture => {
-                let buffer = data.buffer.lock().unwrap().take();
+                let buffer = data.buffer.lock().unwrap_or_else(|p| p.into_inner()).take();
                 let Some(buffer) = buffer else {
                     resource.failed(FailureReason::BufferConstraints);
                     return;

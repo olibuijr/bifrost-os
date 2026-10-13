@@ -381,7 +381,7 @@ impl SpeakerOut {
             .spawn(move || {
                 while let Some(session) = weak.upgrade() {
                     {
-                        let mut s = session.lock().unwrap();
+                        let mut s = session.lock().unwrap_or_else(|p| p.into_inner());
                         if s.is_open() && s.active.elapsed() >= IDLE_CLOSE {
                             s.release();
                             eprintln!("audio.speaker: idle, closed");
@@ -417,12 +417,12 @@ impl AudioOut for SpeakerOut {
     fn write(&mut self, frames: &[i16]) -> io::Result<()> {
         let began = Instant::now();
         let ring = {
-            let mut s = self.0.lock().unwrap();
+            let mut s = self.0.lock().unwrap_or_else(|p| p.into_inner());
             s.ensure()?;
             s.desk.as_ref().expect("opened above").ring.clone()
         };
         let r = push_all(&ring, frames, WRITE_STALL);
-        let mut s = self.0.lock().unwrap();
+        let mut s = self.0.lock().unwrap_or_else(|p| p.into_inner());
         s.meter.add(frames, began.elapsed());
         if let Err(e) = &r {
             eprintln!("audio.speaker: write failed after {:?}: {e}", began.elapsed());
@@ -437,11 +437,11 @@ impl AudioOut for SpeakerOut {
     }
 
     fn played(&mut self) -> u64 {
-        self.0.lock().unwrap().desk.as_ref().map_or(0, |d| d.ring.played())
+        self.0.lock().unwrap_or_else(|p| p.into_inner()).desk.as_ref().map_or(0, |d| d.ring.played())
     }
 
     fn pause(&mut self, on: bool) {
-        let mut s = self.0.lock().unwrap();
+        let mut s = self.0.lock().unwrap_or_else(|p| p.into_inner());
         s.paused = on;
         if let Some(d) = &s.desk {
             d.ring.set_paused(on);
@@ -451,19 +451,19 @@ impl AudioOut for SpeakerOut {
 
     fn flush(&mut self) {
         // let what is queued play out, bounded, then drop the rest
-        let ring = self.0.lock().unwrap().desk.as_ref().map(|d| d.ring.clone());
+        let ring = self.0.lock().unwrap_or_else(|p| p.into_inner()).desk.as_ref().map(|d| d.ring.clone());
         if let Some(ring) = ring {
             let until = Instant::now() + Duration::from_millis(600);
-            while ring.queued() > 0 && !self.0.lock().unwrap().paused && Instant::now() < until {
+            while ring.queued() > 0 && !self.0.lock().unwrap_or_else(|p| p.into_inner()).paused && Instant::now() < until {
                 std::thread::sleep(Duration::from_millis(5));
             }
             ring.discard();
         }
-        self.0.lock().unwrap().active = Instant::now();
+        self.0.lock().unwrap_or_else(|p| p.into_inner()).active = Instant::now();
     }
 
     fn discard(&mut self) {
-        let mut s = self.0.lock().unwrap();
+        let mut s = self.0.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(d) = &s.desk {
             d.ring.discard();
         }

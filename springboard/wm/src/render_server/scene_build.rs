@@ -216,7 +216,7 @@ fn surface_nodes(importer: &mut Importer, surface: &smithay::reexports::wayland_
             let view = states
                 .data_map
                 .get::<RendererSurfaceStateUserData>()
-                .and_then(|d| d.lock().unwrap().view());
+                .and_then(|d| d.lock().unwrap_or_else(|p| p.into_inner()).view());
             match view {
                 Some(view) => {
                     loc += view.offset;
@@ -228,7 +228,7 @@ fn surface_nodes(importer: &mut Importer, surface: &smithay::reexports::wayland_
         |_, states, loc| {
             let mut loc = *loc;
             let Some(data) = states.data_map.get::<RendererSurfaceStateUserData>() else { return };
-            let st = data.lock().unwrap();
+            let st = data.lock().unwrap_or_else(|p| p.into_inner());
             let (Some(view), Some(size), Some(buffer)) = (st.view(), st.surface_size(), st.buffer()) else { return };
             loc += view.offset;
             let key = buffer_key(buffer);
