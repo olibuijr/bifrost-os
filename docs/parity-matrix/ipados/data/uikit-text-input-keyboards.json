@@ -10,9 +10,9 @@
   {
    "feature": "Text input protocol",
    "apple": "UITextInput, UIKeyInput, UITextInputDelegate, UITextPosition, UITextRange",
-   "bifrost": "springboard/ui/src/text.rs, springboard/sdk/src/view/mod.rs",
+   "bifrost": "springboard/ui/src/text.rs, springboard/sdk/src/view/mod.rs, springboard/wm/src/text_input.rs",
    "status": "partial",
-   "note": "TextBuffer has selection, marked range and edit commands; TextField reports state to the shell through TextInputInfo. No generic position and range protocol for custom views, no input delegate (selectionWillChange)"
+   "note": "WmState::text_input_active reports whether a client has a text field focused; the on-screen keyboard follows it. Not yet verified on the tablet."
   },
   {
    "feature": "Text input traits",
@@ -31,16 +31,16 @@
   {
    "feature": "Software keyboard",
    "apple": "system keyboard, input views, keyboard types",
-   "bifrost": "springboard/src/shell/keyboard.rs, springboard/apps/keyboard, docs/keyboard-system-app.md",
+   "bifrost": "springboard/src/shell/keyboard.rs, springboard/apps/keyboard, docs/keyboard-system-app.md, springboard/ui/src/form_factor.rs, springboard/src/shell/login.rs",
    "status": "partial",
-   "note": "touch keyboard with layouts, auto caps and emoji, running as a system app. src/bin/shell.rs calls keyboard::set_disabled(true) and Shell::set_keyboard refuses while desk_active(), so on a tablet in desktop mode no software keyboard appears (area B3)"
+   "note": "Tablet form raises the on-screen keyboard for text fields (FormFactor::allows_onscreen_keyboard) and in the login window's password field. Not yet verified on the tablet."
   },
   {
    "feature": "Keyboard layout guide and avoidance",
    "apple": "UIKeyboardLayoutGuide, keyboard notifications",
-   "bifrost": "springboard/sdk/src/runtime.rs",
+   "bifrost": "springboard/sdk/src/runtime.rs, springboard/src/shell/desk.rs",
    "status": "partial",
-   "note": "Ctx::keyboard_height tells apps the keyboard height; no layout guide object, no floating or split keyboard states, no interactive dismissal"
+   "note": "The windowed desktop draws the keyboard over the desktop on a tablet (desk_keyboard_visible, draw_desk) and lifts the front window clear of it (desk_keyboard_lift). Not yet verified on the tablet."
   },
   {
    "feature": "Input accessory and shortcuts bar",
@@ -73,9 +73,9 @@
   {
    "feature": "Physical keyboard",
    "apple": "UIKey, UIKeyboardHIDUsage, handling key presses",
-   "bifrost": "springboard/src/shell/hwkeys.rs, springboard/src/shell/kb_input.rs, springboard/ui/src/keys.rs",
+   "bifrost": "springboard/src/shell/hwkeys.rs, springboard/src/shell/kb_input.rs, springboard/ui/src/keys.rs, springboard/src/bare/input.rs",
    "status": "partial",
-   "note": "evdev key events with modifiers, repeat and remapping; apps get KeyInput without HID usage codes"
+   "note": "keyboard_change reports hardware keyboard attach and removal; the shell's Shell::set_hardware_keyboard is not yet fed from it outside tests, so the tablet keeps the on-screen keyboard. Not yet verified on the tablet."
   },
   {
    "feature": "Dictation",

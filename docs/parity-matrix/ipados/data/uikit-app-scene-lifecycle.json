@@ -45,9 +45,9 @@
   {
    "feature": "Device environment",
    "apple": "UIDevice (userInterfaceIdiom, orientation, battery, proximity)",
-   "bifrost": "springboard/sdk/src/device_registry.rs, springboard/sdk/src/power_sources.rs, springboard/sdk/src/sensors.rs",
+   "bifrost": "springboard/sdk/src/device_registry.rs, springboard/sdk/src/power_sources.rs, springboard/sdk/src/sensors.rs, springboard/ui/src/form_factor.rs, springboard/sdk/src/lib.rs",
    "status": "partial",
-   "note": "battery and sensors are reachable; apps have no form-factor query (desktop or tablet idiom), which B3 defines"
+   "note": "Form factor query: bifrost_app::is_touch_tablet() reads BIFROST_FORM, then /etc/bifrost/form (default Desktop). Not yet verified on the tablet."
   },
   {
    "feature": "Traits and trait environment",
@@ -66,9 +66,9 @@
   {
    "feature": "Interface orientation",
    "apple": "supportedInterfaceOrientations, viewWillTransition(to:)",
-   "bifrost": "springboard/src/shell/rotate.rs",
-   "status": "os",
-   "note": "the shell rotates on accelerometer data and apps see only a new Configure size; apps cannot declare supported orientations and the turn plays as a shell animation (area B7)"
+   "bifrost": "springboard/src/shell/rotate.rs, springboard/wm/src/transform.rs, springboard/wm/src/touch.rs",
+   "status": "partial",
+   "note": "Rotation comes from BIFROST_ROTATION or /etc/bifrost/rotation; touch coordinates go through the same output transform. Not yet verified on the tablet."
   },
   {
    "feature": "Observation tracking",
