@@ -38,10 +38,12 @@ Rank by daily-driver impact: what real apps and users hit first (files/documents
 Rules for tasks: SDK/API side only (springboard/sdk, springboard/ui, springboard/core, shell services under springboard/src/shell/services); NO app changes (list apps that should adopt it later in appsToMigrateLater). Each task: one framework, one parity json file, files disjoint from every other task, a size one Sonnet agent can do in one sitting (<~500 lines with tests). Verify each gap is real by reading the existing module first. 'apple' = the exact Apple types/methods being matched. plan = numbered steps including the tests to write first and the parity rows to update.`,
   { label: 'triage', phase: 'Triage', schema: TASKS })
 
+// one-line `mod` additions to lib.rs/mod.rs merge cleanly, so they never count as overlap
+const owned = t => t.files.filter(f => !/(lib|mod)\.rs \(.*mod lines? only/.test(f))
 const seen = new Set(), tasks = []
 for (const t of (triage?.tasks || [])) {
-  if (t.files.some(f => seen.has(f)) || seen.has(t.parityFile)) { log(`dropped overlapping task: ${t.title}`); continue }
-  t.files.forEach(f => seen.add(f)); seen.add(t.parityFile); tasks.push(t)
+  if (owned(t).some(f => seen.has(f))) { log(`dropped overlapping task: ${t.title}`); continue }
+  owned(t).forEach(f => seen.add(f)); tasks.push(t)
 }
 log(`sprint ${A.sprint || 1}: ${tasks.length} tasks: ${tasks.map(t => t.framework).join(', ')}`)
 
