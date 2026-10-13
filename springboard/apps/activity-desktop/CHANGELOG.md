@@ -12,6 +12,7 @@
 - The process inspector shows the parent process, page faults and context switches.
 - Process > Sample Process watches every thread of the selected process for ten seconds and reports where each one waited, in a report you can copy or save.
 - View > Run System Diagnostics gathers kernel counters, the process list, the journal tail, the kernel log and disk usage into one archive and asks where to save it.
+- Process > Send Signal... opens a sheet with the eight signals, what each does, and Cancel and Send.
 - The app asks for the documents permission, for the save panel.
 
 ## 0.3.0

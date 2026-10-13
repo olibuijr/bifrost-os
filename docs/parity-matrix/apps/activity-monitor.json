@@ -60,9 +60,9 @@
    "area": "menu",
    "apple": "View > Send Signal to Process",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/main.rs:88",
-   "note": "Process > Send Signal submenu with eight signals; no signal sheet.",
-   "wire": "Add a Process > Send Signal... item in main.rs:72 that opens a sheet with a signal popup (HUP, INT, KILL, TERM, USR1, USR2, STOP, CONT) and calls window.rs signal_selected(sig)."
+   "bifrost": "springboard/apps/activity-desktop/src/window.rs:553",
+   "note": "Process > Send Signal... opens a sheet listing the eight signals with what each does, Cancel and Send; the submenu stays. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Check the sheet on the lab machine (keyboard: Return to send, arrow keys to choose) and reuse it for the Quit and Force Quit confirmation."
   },
   {
    "feature": "Inspect Process window (stats, memory, open files and ports)",

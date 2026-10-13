@@ -71,6 +71,7 @@ pub const MENU_DIAGNOSTICS: u32 = 9;
 pub const MENU_SAVE: u32 = 10;
 pub const MENU_CLOSE_REPORT: u32 = 11;
 pub const MENU_STOP: u32 = 12;
+pub const MENU_SIGNAL_SHEET: u32 = 13;
 /// Update Frequency radio items: MENU_FREQ + index into `UpdateFrequency::ALL`.
 pub const MENU_FREQ: u32 = 20;
 /// Send Signal items: MENU_SIGNAL + index into `model::SIGNALS`.
@@ -113,10 +114,54 @@ pub enum Request {
     SaveBundle(PathBuf),
 }
 
+/// The signal sheet: a card over the window with one row per signal, then Cancel and Send. Points.
+pub const SHEET_W_PT: f32 = 340.0;
+const SHEET_ROW_PT: f32 = 22.0;
+const SHEET_HEAD_PT: f32 = 44.0;
+const SHEET_FOOT_PT: f32 = 48.0;
+const SHEET_BUTTON_W_PT: f32 = 84.0;
+const SHEET_BUTTON_H_PT: f32 = 24.0;
+const SHEET_PAD_PT: f32 = 12.0;
+
+/// What a point on the signal sheet is over.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SheetHit {
+    Row(usize),
+    Cancel,
+    Send,
+}
+
+/// The row of one signal on a sheet whose card is `card`.
+pub fn signal_sheet_row(card: Rect, index: usize) -> Rect {
+    Rect { x: card.x + SHEET_PAD_PT, y: card.y + SHEET_HEAD_PT + index as f32 * SHEET_ROW_PT, w: card.w - 2.0 * SHEET_PAD_PT, h: SHEET_ROW_PT }
+}
+
+/// The Cancel and Send buttons, Send at the right.
+pub fn signal_sheet_buttons(card: Rect) -> (Rect, Rect) {
+    let y = card.y + card.h - SHEET_FOOT_PT + (SHEET_FOOT_PT - SHEET_BUTTON_H_PT) / 2.0;
+    let send = Rect { x: card.x + card.w - SHEET_PAD_PT - SHEET_BUTTON_W_PT, y, w: SHEET_BUTTON_W_PT, h: SHEET_BUTTON_H_PT };
+    let cancel = Rect { x: send.x - 8.0 - SHEET_BUTTON_W_PT, ..send };
+    (cancel, send)
+}
+
+/// What the point is over on a sheet whose card is `card`.
+pub fn signal_sheet_hit(card: Rect, x: f32, y: f32) -> Option<SheetHit> {
+    let inside = |b: Rect| x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h;
+    let (cancel, send) = signal_sheet_buttons(card);
+    if inside(cancel) {
+        return Some(SheetHit::Cancel);
+    }
+    if inside(send) {
+        return Some(SheetHit::Send);
+    }
+    (0..model::SIGNALS.len()).find(|i| inside(signal_sheet_row(card, *i))).map(SheetHit::Row)
+}
+
 /// Where a press started, so the release can act on the same thing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Press {
     None,
+    Sheet,
     Report,
     Sidebar,
     Toolbar(u32),
@@ -178,6 +223,8 @@ pub struct Monitor {
     pub report: Option<Report>,
     /// A save the app layer should ask the shell for; taken with `take_request`.
     pub request: Option<Request>,
+    /// The signal sheet, with the index of the chosen signal in `model::SIGNALS`.
+    pub signal_sheet: Option<usize>,
     /// The app's storage folder, where the diagnostics archive is prepared.
     pub data_dir: PathBuf,
 }
@@ -212,6 +259,7 @@ impl Monitor {
             job: None,
             report: None,
             request: None,
+            signal_sheet: None,
             data_dir: PathBuf::new(),
         }
     }
@@ -501,6 +549,35 @@ impl Monitor {
         self.signal_selected(SIGKILL, "force quit");
     }
 
+    /// Process > Send Signal...: opens the sheet with TERM chosen. Only for a process that may be signalled.
+    pub fn open_signal_sheet(&mut self) {
+        if self.can_quit_selected() {
+            self.signal_sheet = model::SIGNALS.iter().position(|s| s.number == SIGTERM).or(Some(0));
+        }
+    }
+
+    /// The sheet's card, centred on the content.
+    pub fn signal_sheet_rect(&self, ui: &Ui) -> Rect {
+        let g = self.geo(ui);
+        let h = SHEET_HEAD_PT + model::SIGNALS.len() as f32 * SHEET_ROW_PT + SHEET_FOOT_PT;
+        let top = UNIFIED_BAR_PT + GAP_PT;
+        Rect { x: SIDE_PT + ((g.w - SIDE_PT - SHEET_W_PT) / 2.0).max(0.0), y: ((g.h - h) / 2.0).max(top), w: SHEET_W_PT, h }
+    }
+
+    /// A release on the sheet: a row chooses its signal, Cancel closes it, Send closes it and signals the process.
+    fn sheet_released(&mut self, ui: &Ui, x: f32, y: f32) {
+        match signal_sheet_hit(self.signal_sheet_rect(ui), x, y) {
+            Some(SheetHit::Row(i)) => self.signal_sheet = Some(i),
+            Some(SheetHit::Cancel) => self.signal_sheet = None,
+            Some(SheetHit::Send) => {
+                if let Some(i) = self.signal_sheet.take() {
+                    self.send_signal(model::SIGNALS[i]);
+                }
+            }
+            None => {}
+        }
+    }
+
     /// Process > Send Signal: any of the listed signals, same ownership rule as Quit.
     pub fn send_signal(&mut self, sig: Signal) {
         self.signal_selected(sig.number, &format!("signal {}", sig.name));
@@ -764,6 +841,11 @@ impl Monitor {
 
     /// Editing keys (shell key codes: 8 backspace, 1 escape). True when a frame is needed.
     pub fn key(&mut self, code: u32) -> bool {
+        // Escape closes the signal sheet
+        if self.signal_sheet.is_some() && code == 1 {
+            self.signal_sheet = None;
+            return true;
+        }
         // Escape leaves the report
         if self.report.is_some() && code == 1 {
             self.report = None;
@@ -796,6 +878,12 @@ impl Monitor {
         let (x, y) = (x / k, y / k);
         match kind {
             TouchKind::Down => {
+                // the sheet takes every press while it is open
+                if self.signal_sheet.is_some() {
+                    self.press = Press::Sheet;
+                    self.search_focused = false;
+                    return true;
+                }
                 let g = self.geo(ui);
                 let seg = self.seg_rect(ui);
                 self.press = if x < SIDE_PT {
@@ -855,6 +943,7 @@ impl Monitor {
                             report.scroll.up(y, t);
                         }
                     }
+                    Press::Sheet => self.sheet_released(ui, x, y),
                     Press::Tab(i) => {
                         let seg = self.seg_rect(ui);
                         if sheet::segment_hit(seg, Tab::ALL.len(), x, y) == Some(i) {
@@ -1194,5 +1283,47 @@ mod tests {
         assert_eq!(m.job_text(), "4 of 10 seconds");
         m.stop_job();
         wait_for_job(&mut m);
+    }
+
+    fn card() -> Rect {
+        Rect { x: 100.0, y: 50.0, w: SHEET_W_PT, h: SHEET_HEAD_PT + 8.0 * SHEET_ROW_PT + SHEET_FOOT_PT }
+    }
+
+    #[test]
+    fn the_signal_sheet_hit_tests_rows_and_buttons() {
+        let c = card();
+        for i in 0..model::SIGNALS.len() {
+            let r = signal_sheet_row(c, i);
+            assert_eq!(signal_sheet_hit(c, r.x + 5.0, r.y + r.h / 2.0), Some(SheetHit::Row(i)));
+        }
+        let (cancel, send) = signal_sheet_buttons(c);
+        assert!(cancel.x + cancel.w < send.x, "Cancel sits left of Send");
+        assert_eq!(signal_sheet_hit(c, cancel.x + 1.0, cancel.y + 1.0), Some(SheetHit::Cancel));
+        assert_eq!(signal_sheet_hit(c, send.x + 1.0, send.y + 1.0), Some(SheetHit::Send));
+        assert_eq!(signal_sheet_hit(c, c.x + 1.0, c.y + 1.0), None, "the title area is nothing");
+        assert!(send.y + send.h <= c.y + c.h, "the buttons fit in the card");
+        let last = signal_sheet_row(c, model::SIGNALS.len() - 1);
+        assert!(last.y + last.h <= send.y, "the rows end above the buttons");
+    }
+
+    #[test]
+    fn the_sheet_only_opens_for_a_process_that_may_be_signalled() {
+        let mut m = Monitor::new(800.0, 600.0);
+        m.open_signal_sheet();
+        assert_eq!(m.signal_sheet, None, "nothing selected");
+        let own = m.sampler.own_uid;
+        let mut mine = proc(4_000_000, 1, "mine");
+        mine.uid = own;
+        let mut theirs = proc(4_000_001, 1, "theirs");
+        theirs.uid = own.wrapping_add(1);
+        with_rows(&mut m, vec![mine, theirs]);
+        m.selected = Some(4_000_001);
+        m.open_signal_sheet();
+        assert_eq!(m.signal_sheet, None, "someone else's process");
+        m.selected = Some(4_000_000);
+        m.open_signal_sheet();
+        assert_eq!(m.signal_sheet.map(|i| model::SIGNALS[i].name), Some("TERM"));
+        assert!(m.key(1));
+        assert_eq!(m.signal_sheet, None, "Escape closes the sheet");
     }
 }

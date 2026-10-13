@@ -28,7 +28,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use window::{
     Monitor, Request, MENU_CLOSE_REPORT, MENU_COLUMN, MENU_COPY, MENU_CPU_HISTORY, MENU_DELTAS, MENU_DIAGNOSTICS, MENU_FILTER, MENU_FIND, MENU_FORCE,
-    MENU_FREQ, MENU_INSPECT, MENU_QUIT, MENU_SAMPLE, MENU_SAVE, MENU_SIGNAL, MENU_STOP,
+    MENU_FREQ, MENU_INSPECT, MENU_QUIT, MENU_SAMPLE, MENU_SAVE, MENU_SIGNAL, MENU_SIGNAL_SHEET, MENU_STOP,
 };
 
 /// The preference holding View > Update Frequency, in seconds.
@@ -109,6 +109,10 @@ impl ActivityApp {
             }
             MENU_DELTAS => {
                 m.toggle_deltas();
+                true
+            }
+            MENU_SIGNAL_SHEET => {
+                m.open_signal_sheet();
                 true
             }
             MENU_SAMPLE => {
@@ -264,6 +268,7 @@ impl App for ActivityApp {
         let mut process = vec![
             AppMenuItem::new(MENU_QUIT, "Quit Process").enabled(can_signal),
             AppMenuItem::new(MENU_FORCE, "Force Quit Process").enabled(can_signal),
+            AppMenuItem::new(MENU_SIGNAL_SHEET, "Send Signal...").enabled(can_signal),
             AppMenuItem::submenu("Send Signal to Process").enabled(can_signal),
         ];
         for (i, sig) in SIGNALS.iter().enumerate() {

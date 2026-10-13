@@ -324,6 +324,22 @@ pub struct Signal {
     pub number: i32,
 }
 
+impl Signal {
+    /// What the signal does, in a few words, for the signal sheet.
+    pub fn describes(self) -> &'static str {
+        match self.name {
+            "HUP" => "Hang up: many programs reload their settings",
+            "INT" => "Interrupt, as Control-C does",
+            "KILL" => "Stop at once; the process cannot clean up",
+            "TERM" => "Ask the process to quit",
+            "USR1" | "USR2" => "Left to the program to define",
+            "STOP" => "Pause the process",
+            "CONT" => "Resume a paused process",
+            _ => "",
+        }
+    }
+}
+
 pub const SIGNALS: [Signal; 8] = [
     Signal { name: "HUP", number: 1 },
     Signal { name: "INT", number: 2 },
@@ -681,6 +697,17 @@ mod tests {
                 assert!(cols.iter().any(|c| c.key == Some(tab.default_sort().key)));
             }
         }
+    }
+
+    #[test]
+    fn every_signal_has_a_description_and_a_distinct_number() {
+        let mut numbers: Vec<i32> = SIGNALS.iter().map(|s| s.number).collect();
+        numbers.sort_unstable();
+        numbers.dedup();
+        assert_eq!(numbers.len(), SIGNALS.len());
+        assert!(SIGNALS.iter().all(|s| !s.describes().is_empty()));
+        assert_eq!(SIGNALS[3].name, "TERM");
+        assert_eq!(SIGNALS[3].describes(), "Ask the process to quit");
     }
 
     #[test]

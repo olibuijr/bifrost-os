@@ -4,9 +4,9 @@
 //! the appearance.
 
 use crate::inspect::Inspection;
-use crate::model::{self, bytes, energy, percent, rate, Column, SortKey, Tab, HISTORY};
+use crate::model::{self, bytes, energy, percent, rate, Column, SortKey, Tab, HISTORY, SIGNALS};
 use crate::sample::{ProcSample, Snapshot};
-use crate::window::{Geo, Monitor, B_SEARCH, FOOT_PT, HEAD_PT, REPORT_LINE_PT, ROW_PT, SIDE_PT, SIDE_SCROLL};
+use crate::window::{signal_sheet_buttons, signal_sheet_row, Geo, Monitor, B_SEARCH, FOOT_PT, HEAD_PT, REPORT_LINE_PT, ROW_PT, SIDE_PT, SIDE_SCROLL};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::colors::{SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PURPLE};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, LABEL_3, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, MAC_SUBHEAD_PT, MAC_TITLE3_PT, SELECTION, SEPARATOR_C, WHITE};
@@ -139,6 +139,37 @@ impl Monitor {
         self.draw_chrome(ui, s, &g);
         if self.job.is_some() {
             self.draw_job(ui, s, &g);
+        }
+        if self.signal_sheet.is_some() {
+            self.draw_signal_sheet(ui, s);
+        }
+    }
+
+    /// The signal sheet: the process, one row per signal with what it does, and Cancel and Send.
+    fn draw_signal_sheet(&mut self, ui: &Ui, s: &mut Surface) {
+        let Some(chosen) = self.signal_sheet else { return };
+        let card = self.signal_sheet_rect(ui);
+        let who = self.selected_proc().map(|p| format!("{} ({})", p.name, p.pid)).unwrap_or_default();
+        rounded(s, ui, card.x - 1.0, card.y - 1.0, card.w + 2.0, card.h + 2.0, CARD_RADIUS_PT + 1.0, SEPARATOR_C.now());
+        rounded(s, ui, card.x, card.y, card.w, card.h, CARD_RADIUS_PT, CARD_BG.now());
+        let title = format!("Send a signal to {who}");
+        text(&mut self.labels, s, ui, &title, MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), card.x + CARD_PAD, card.y + 24.0, card.w - 2.0 * CARD_PAD);
+        for (i, sig) in SIGNALS.iter().enumerate() {
+            let row = signal_sheet_row(card, i);
+            let on = i == chosen;
+            if on {
+                rounded(s, ui, row.x, row.y, row.w, row.h, 5.0, SELECTION.now());
+            }
+            let (ink, quiet) = if on { (WHITE, WHITE) } else { (LABEL.now(), LABEL_2.now()) };
+            let mid = row.y + row.h / 2.0;
+            text(&mut self.labels, s, ui, &format!("SIG{}", sig.name), MAC_SUBHEAD_PT, Weight::Semibold, ink, row.x + PAD, mid, 64.0);
+            text(&mut self.labels, s, ui, sig.describes(), MAC_SUBHEAD_PT, Weight::Regular, quiet, row.x + PAD + 72.0, mid, row.w - 2.0 * PAD - 72.0);
+        }
+        let (cancel, send) = signal_sheet_buttons(card);
+        for (b, label, fill_color, ink) in [(cancel, "Cancel", SEPARATOR_C.now(), LABEL.now()), (send, "Send", SYSTEM_BLUE.now(), WHITE)] {
+            rounded(s, ui, b.x, b.y, b.w, b.h, 5.0, fill_color);
+            let lx = b.x + (b.w - width(ui, label, MAC_SUBHEAD_PT, Weight::Regular)) / 2.0;
+            text(&mut self.labels, s, ui, label, MAC_SUBHEAD_PT, Weight::Regular, ink, lx, b.y + b.h / 2.0, b.w);
         }
     }
 
