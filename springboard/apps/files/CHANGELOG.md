@@ -1,3 +1,9 @@
+## 1.26.0 — 2026-10-13
+
+- Tab strip: with two or more tabs a strip runs under the toolbar. Each tab shows its folder's name, the open tab is raised, a click selects a tab, and its close box closes it (the open tab closes the same way as ⌘W). The strip is hidden while there is one tab, and the content moves below it.
+- Empty Trash (⇧⌘⌫, or the background menu while in the Trash) deletes every item in Recently Deleted for good as a background job. It cannot be undone and does not ask first yet.
+- Not yet: drag and drop between Files and other windows (drags inside Files work), and a confirmation before Empty Trash.
+
 ## 1.25.0 — 2026-10-13
 
 - Tabs: New Tab (⌘T) opens a tab at the open folder with its own history; ⌘W closes the open tab (the last tab stays); Ctrl+Tab and Ctrl+Shift+Tab step through tabs. Tags moves from T to Shift+T. The tab strip is not drawn yet, so tabs are reached by the keys only.
