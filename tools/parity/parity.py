@@ -12,11 +12,19 @@ feature rows, filled by agents from the official docs and this repo. This CLI re
   gaps [--group G] [--status gap,partial]
                                  what remains, most important gaps first
   check                          JSON validity, statuses, cited repo paths exist, every framework assessed
+
+status, coverage, show, gaps, check and refresh-index take --platform macos|ipados (default macos). The tablet platform
+lives apart in docs/parity-matrix/ipados/ (index.json, data/<slug>.json, same row format). A framework that is in the
+tablet index and has a macOS assessment reuses those rows by reference; its own data file replaces them, or extends
+them when it carries "reuse": "macos" (own rows override same-named rows, new rows are added). Tablet-only
+frameworks have their own files.
+
   build [OUT.md]                 regenerate docs/apple-parity-matrix.md
   import DIR [--new-only]        copy agent output files DIR/*.json into data/ (validated; --new-only keeps existing files)
   db-export DIR                  one JSON file per database document for the published artifact
                                  (frameworks/<slug>.json, meta/summary.json) plus batches.json (50 per batch)
-  refresh-index                  re-read the official documentation index and rewrite index.json
+  refresh-index                  re-read the official documentation index and rewrite index.json (--platform ipados:
+                                 records ipados_since, and macos_since when the framework is on both)
   search QUERY [--top N] [--status gap,partial]
                                  semantic search over feature rows (Titan embeddings, then rerank)
   related                        nearest frameworks per framework by embedding -> related.json
@@ -53,6 +61,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 BASE = os.path.join(ROOT, "docs", "parity-matrix")
 DATA = os.path.join(BASE, "data")
 INDEX = os.path.join(BASE, "index.json")
+IPADOS = os.path.join(BASE, "ipados")  # the tablet platform: index.json and data/<slug>.json
 MATRIX_MD = os.path.join(ROOT, "docs", "apple-parity-matrix.md")
 RELATED = os.path.join(BASE, "related.json")
 THEMES = os.path.join(BASE, "themes.json")
@@ -66,6 +75,9 @@ WEIGHT = {"parity": 1.0, "partial": 0.5, "os": 0.5, "gap": 0.0}
 PARTS = {  # large frameworks split by official topic sections; slug prefix -> framework title
     "appkit-": "AppKit", "foundation-": "Foundation", "swiftui-": "SwiftUI", "avfoundation-": "AVFoundation",
 }
+PLATFORMS = ("macos", "ipados")
+PLATFORM_NAME = {"macos": "macOS", "ipados": "iPadOS"}  # as the documentation metadata spells them
+SINCE = {"macos": "macos_since", "ipados": "ipados_since"}
 DOCS_URL = "https://developer.apple.com/tutorials/data/documentation/"
 PATH_RE = re.compile(r"(?<![\w/~.:-])((?:springboard|docs|tools|packaging)/[A-Za-z0-9_./-]+)")  # this repo only
 
@@ -80,21 +92,39 @@ def key(s):
     return re.sub(r"[^a-z0-9]", "", (s or "").lower())
 
 
-def load_index():
-    return json.load(open(INDEX))
+def platform_paths(platform):
+    """(data directory, index.json) of a reference platform."""
+    if platform == "macos":
+        return DATA, INDEX
+    if platform == "ipados":
+        return os.path.join(IPADOS, "data"), os.path.join(IPADOS, "index.json")
+    raise ValueError(f"unknown platform {platform!r}; expected one of {', '.join(PLATFORMS)}")
 
 
-def load_entries():
-    idx = {r["slug"]: r for r in load_index()}
+def load_index(platform="macos"):
+    return json.load(open(platform_paths(platform)[1]))
+
+
+def row_stats(rows):
+    """Counts per status, applicable rows, score and coverage percent (None when no row applies)."""
+    c = collections.Counter(r["status"] for r in rows)
+    applicable = sum(c[s] for s in WEIGHT)
+    score = sum(WEIGHT[s] * c[s] for s in WEIGHT)
+    return c, applicable, score, (round(100 * score / applicable, 1) if applicable else None)
+
+
+def read_entries(data_dir, index, since_key):
+    """Entries from every <data_dir>/*.json, matched against the index rows; unreadable files come back as messages."""
+    idx = {r["slug"]: r for r in index}
     by_title = {r["title"]: r for r in idx.values()}
     by_key = {key(r["slug"]): r for r in idx.values()} | {key(r["title"]): r for r in idx.values()}
     out, bad = [], []
-    for f in sorted(os.listdir(DATA)) if os.path.isdir(DATA) else []:
+    for f in sorted(os.listdir(data_dir)) if os.path.isdir(data_dir) else []:
         if not f.endswith(".json"):
             continue
         slug = f[:-5]
         try:
-            d = json.load(open(os.path.join(DATA, f)))
+            d = json.load(open(os.path.join(data_dir, f)))
         except Exception as e:  # noqa: BLE001 - report and continue
             bad.append(f"{slug}: {e}")
             continue
@@ -103,17 +133,108 @@ def load_entries():
             parent = next((t for p, t in PARTS.items() if slug.startswith(p)), None)
             meta = by_title.get(parent, {})
         rows = [dict(r, status=norm(r.get("status"))) for r in d.get("features") or []]
-        c = collections.Counter(r["status"] for r in rows)
-        applicable = sum(c[s] for s in WEIGHT)
-        score = sum(WEIGHT[s] * c[s] for s in WEIGHT)
+        c, applicable, score, coverage = row_stats(rows)
         out.append(dict(
             slug=slug, index_slug=meta.get("slug"), name=d.get("framework") or meta.get("title", slug), group=meta.get("group", "Other"),
-            parent=meta.get("title", d.get("framework", slug)), since=meta.get("macos_since", ""),
+            parent=meta.get("title", d.get("framework", slug)), since=meta.get(since_key, ""),
             deprecated=bool(meta.get("deprecated")), status=norm(d.get("status")), doc=d.get("doc") or meta.get("doc", ""),
             bifrost=d.get("bifrost", ""), summary=d.get("summary", ""), rea=d.get("rea_evidence", ""),
             gaps=[g for g in d.get("gaps") or [] if g], rows=rows, counts=c, applicable=applicable, score=score,
-            coverage=round(100 * score / applicable, 1) if applicable else None,
+            coverage=coverage, reuse=d.get("reuse"), given=set(d),
         ))
+    return out, bad
+
+
+def parse_reuse(spec, default_slug):
+    """The (platform, slug) a data file's "reuse" key points to: "macos", "macos:<slug>" or {"platform", "slug"}."""
+    if isinstance(spec, dict):
+        platform, slug = spec.get("platform", "macos"), spec.get("slug") or default_slug
+    elif isinstance(spec, str):
+        platform, _, slug = spec.partition(":")
+        slug = slug or default_slug
+    else:
+        raise ValueError(f"reuse must be a string or an object, got {spec!r}")
+    if platform != "macos":
+        raise ValueError(f"reuse platform {platform!r} is not supported; only macos can be reused")
+    return platform, slug
+
+
+def derive_status(counts):
+    """Framework status of a merged row set: parity when every applicable row is parity, gap when none is built."""
+    applicable = sum(counts[s] for s in WEIGHT)
+    if not applicable:
+        return "n/a"
+    if counts["parity"] == applicable:
+        return "parity"
+    return "partial" if counts["parity"] or counts["partial"] or counts["os"] else "gap"
+
+
+def merge_reused(own, bases):
+    """One entry from a data file that extends macOS assessments: the base rows, then own rows replacing rows with the
+    same feature name or appended. Fields the file states win; the rest come from the base."""
+    rows = [dict(r) for b in bases for r in b["rows"]]
+    at = {r.get("feature"): i for i, r in enumerate(rows)}
+    for r in own["rows"]:
+        i = at.get(r.get("feature"))
+        if i is None:
+            at[r.get("feature")] = len(rows)
+            rows.append(r)
+        else:
+            rows[i] = r
+    c, applicable, score, coverage = row_stats(rows)
+    first, given = bases[0], own["given"]
+    return dict(
+        own, rows=rows, counts=c, applicable=applicable, score=score, coverage=coverage, source="macos+own",
+        status=own["status"] if "status" in given else (first["status"] if len(bases) == 1 and not own["rows"] else derive_status(c)),
+        bifrost=own["bifrost"] if "bifrost" in given else first["bifrost"],
+        summary=own["summary"] if "summary" in given else first["summary"],
+        rea=own["rea"] if "rea_evidence" in given else first["rea"], doc=own["doc"] or first["doc"],
+        gaps=own["gaps"] if "gaps" in given else [g for b in bases for g in b["gaps"]],
+    )
+
+
+def tablet_entries(own, bad, index, macos):
+    """Tablet entries: own files (replacing the macOS rows, or extending them when the file says "reuse"), then, for
+    every other framework in the tablet index that has a macOS assessment, that assessment by reference."""
+    by_index = collections.defaultdict(list)
+    for e in macos:
+        if e.get("index_slug"):
+            by_index[e["index_slug"]].append(e)
+    out, bad = [], list(bad)
+    for e in own:
+        e["source"] = "own"
+        if e.get("reuse") is not None:
+            try:
+                _, target = parse_reuse(e["reuse"], e.get("index_slug") or e["slug"])
+            except ValueError as err:
+                bad.append(f"{e['slug']}: {err}")
+            else:
+                if by_index.get(target):
+                    e = merge_reused(e, by_index[target])
+                else:
+                    bad.append(f"{e['slug']}: reuse target {target!r} has no macOS assessment")
+        out.append(e)
+    have = {e["index_slug"] for e in out if e.get("index_slug")}
+    for r in index:
+        if r["slug"] in have:
+            continue
+        for b in by_index.get(r["slug"], []):
+            out.append(dict(b, since=r.get(SINCE["ipados"], ""), group=r.get("group", b["group"]), parent=r["title"],
+                            deprecated=bool(r.get("deprecated")), source="macos", reuse=None, given=set()))
+    return out, bad
+
+
+def load_entries(platform="macos"):
+    data_dir, _ = platform_paths(platform)
+    index = load_index(platform)
+    out, bad = read_entries(data_dir, index, SINCE[platform])
+    if platform == "macos":
+        for e in out:
+            e["source"] = "own"
+    else:
+        out, bad = tablet_entries(out, bad, index, load_entries("macos")[0])
+    for e in out:
+        e["platform"] = platform
     out.sort(key=lambda e: (e["group"], e["name"].lower()))
     return out, bad
 
@@ -145,11 +266,11 @@ def by_group(entries):
     return dict(sorted(g.items()))
 
 
-def missing_slugs(entries):
+def missing_slugs(entries, platform="macos"):
     have = {e["slug"] for e in entries} | {s for e in entries for s in (e.get("index_slug"),) if s}
     parts = {p for p in PARTS if any(s.startswith(p) for s in have)}
     out = []
-    for r in load_index():
+    for r in load_index(platform):
         if r["slug"] in have:
             continue
         if any(r["title"] == PARTS[p] for p in parts):
@@ -217,11 +338,31 @@ def os_check():
     return problems
 
 
+def plat(a):
+    return getattr(a, "platform", None) or "macos"
+
+
+def source_counts(entries, index):
+    """Where a platform's assessments come from: index frameworks that are also on macOS (and how many of those
+    reuse macOS rows or have their own), and the tablet-only ones."""
+    shared = {r["slug"] for r in index if r.get("macos_since")}
+    own = {e["index_slug"] for e in entries if e["source"] != "macos" and e.get("index_slug")}
+    reused = {e["index_slug"] for e in entries if e["source"] == "macos" and e.get("index_slug")}
+    return dict(frameworks=len(index), shared=len(shared), reused=len(reused), shared_own=len(shared & own),
+                tablet_only=len(index) - len(shared), tablet_only_own=len(own - shared))
+
+
 def cmd_status(a):
-    entries, bad = load_entries()
+    platform = plat(a)
+    entries, bad = load_entries(platform)
     fw, rows, n, score = totals(entries)
     built = fw["parity"] + fw["partial"] + fw["os"]
-    print(f"Assessed: {len(entries)} frameworks/parts; not yet assessed: {len(missing_slugs(entries))}; unreadable: {len(bad)}")
+    if platform != "macos":
+        sc = source_counts(entries, load_index(platform))
+        print(f"Platform {platform}: {sc['frameworks']} frameworks in the index; {sc['shared']} also on macOS "
+              f"({sc['reused']} reuse the macOS rows, {sc['shared_own']} have their own file); "
+              f"{sc['tablet_only']} tablet-only ({sc['tablet_only_own']} assessed)")
+    print(f"Assessed: {len(entries)} frameworks/parts; not yet assessed: {len(missing_slugs(entries, platform))}; unreadable: {len(bad)}")
     print(f"Created (parity/partial/os): {built}  [parity {fw['parity']}, partial {fw['partial']}, os {fw['os']}]")
     print(f"Remaining: gap {fw['gap']} frameworks, plus missing features in {fw['partial']} partial ones; n/a {fw['n/a']}")
     print(f"Feature rows: {sum(rows.values())}; applicable {n}; coverage {pct(score, n)}; built {built_pct(rows):.1f}% "
@@ -234,7 +375,7 @@ def cmd_status(a):
 
 
 def cmd_coverage(a):
-    entries, _ = load_entries()
+    entries, _ = load_entries(plat(a))
     if a.group:
         entries = [e for e in entries if a.group.lower() in e["group"].lower()]
     if a.min is not None:
@@ -262,13 +403,14 @@ def find(entries, name):
 
 
 def cmd_show(a):
-    entries, _ = load_entries()
+    entries, _ = load_entries(plat(a))
     hits = find(entries, a.name)
     if not hits:
         sys.exit(f"no framework matches {a.name!r}")
     for e in hits:
         cov = "n/a" if e["coverage"] is None else f"{e['coverage']:.1f}%"
-        print(f"# {e['name']}  [{LABEL[e['status']]}, coverage {cov}, since {e['since']}]  {e['doc']}")
+        src = {"own": "", "macos": ", rows from macOS", "macos+own": ", macOS rows plus own"}[e["source"]]
+        print(f"# {e['name']}  [{LABEL[e['status']]}, coverage {cov}, since {e['since']}{src}]  {e['doc']}")
         print(f"  BifrOSt: {e['bifrost']}")
         print(f"  {e['summary']}")
         print(f"  REA evidence: {e['rea'] or 'none'}")
@@ -281,7 +423,7 @@ def cmd_show(a):
 
 
 def cmd_gaps(a):
-    entries, _ = load_entries()
+    entries, _ = load_entries(plat(a))
     want = set((a.status or "gap,partial").split(","))
     for g, es in by_group(entries).items():
         if a.group and a.group.lower() not in g.lower():
@@ -419,18 +561,22 @@ def cmd_apps(a):
 
 
 def cmd_check(a):
-    entries, bad = load_entries()
+    platform = plat(a)
+    entries, bad = load_entries(platform)
     problems = list(bad)
     for e in entries:
         if not e["rows"]:
             problems.append(f"{e['slug']}: no feature rows")
         if not e["doc"].startswith("https://developer.apple.com/"):
             problems.append(f"{e['slug']}: doc link is not the official documentation")
-    ok, missing = cited_paths(entries)
+        if platform != "macos" and not e.get("index_slug"):
+            problems.append(f"{e['slug']}: not in the {platform} index (run refresh-index --platform {platform} or fix the slug)")
+    ok, missing = cited_paths([e for e in entries if e["source"] != "macos"])  # reused rows are checked with macOS
     problems += [f"{s}: cited path not found: {p}" for s, p in missing]
-    miss = missing_slugs(entries)
-    problems += os_check()
-    problems += check_apps()
+    miss = missing_slugs(entries, platform)
+    if platform == "macos":
+        problems += os_check()
+        problems += check_apps()
     print(f"{len(entries)} entries, cited paths ok {ok}, not found {len(missing)}, not assessed {len(miss)}")
     if miss:
         print("not assessed: " + ", ".join(miss))
@@ -649,38 +795,75 @@ def cmd_db_export(a):
     print(f"{len(writes)} documents in {len(batches)} batches: {os.path.join(a.dir, 'batches.json')}")
 
 
-def cmd_refresh_index(a):
-    def get(p):
-        with urllib.request.urlopen(DOCS_URL + p + ".json", timeout=30) as r:
-            return json.load(r)
-    tech = get("technologies")
-    old = {r["slug"]: r for r in load_index()} if os.path.exists(INDEX) else {}
-    rows = []
-    for s in tech["sections"]:
+def docc_get(path):
+    with urllib.request.urlopen(DOCS_URL + path + ".json", timeout=30) as r:
+        return json.load(r)
+
+
+def abstract_text(page):
+    return "".join(x.get("text", "") for x in page.get("abstract") or []).strip()
+
+
+def index_rows(get, platform, old=None, workers=8):
+    """Index rows for a platform from the documentation index: every technology whose page lists the platform.
+    get(path) returns the DocC JSON of a page. macOS rows carry macos_since; tablet rows carry ipados_since and, when the
+    framework is also on macOS, macos_since."""
+    from concurrent.futures import ThreadPoolExecutor
+    old = old or {}
+    want = PLATFORM_NAME[platform]
+    techs = []
+    for s in get("technologies")["sections"]:
         if s.get("kind") != "technologies":
             continue
         for g in s["groups"]:
             for t in g["technologies"]:
                 ident = t["destination"]["identifier"]
-                if "/documentation/" not in ident:
-                    continue
-                path = ident.split("/documentation/", 1)[1].lower()
-                try:
-                    m = get(path).get("metadata", {})
-                except Exception:  # noqa: BLE001 - pages without data are tool or overview pages
-                    continue
-                mac = [p for p in m.get("platforms", []) if p.get("name") == "macOS"]
-                if not mac:
-                    continue
-                slug = re.sub(r"[^a-z0-9]+", "-", t["title"].lower()).strip("-")
-                rows.append({"title": t["title"], "slug": slug, "path": path, "group": g["name"],
-                             "doc": "https://developer.apple.com/documentation/" + path,
-                             "macos_since": mac[0].get("introducedAt", ""),
-                             "deprecated": mac[0].get("deprecatedAt") if mac[0].get("deprecated") else None,
-                             "abstract": old.get(slug, {}).get("abstract", "")})
+                if "/documentation/" in ident:
+                    techs.append((g["name"], t["title"], ident.split("/documentation/", 1)[1].lower()))
+
+    def page(path):
+        try:
+            return get(path)
+        except Exception:  # noqa: BLE001 - pages without data are tool or overview pages
+            return None
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        pages = list(pool.map(page, [t[2] for t in techs]))
+    rows, seen = [], set()
+    for (group, title, path), pg in zip(techs, pages):
+        if pg is None:
+            continue
+        plats = {p.get("name"): p for p in pg.get("metadata", {}).get("platforms", [])}
+        mine = plats.get(want)
+        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+        if not mine or slug in seen:
+            continue
+        seen.add(slug)
+        row = {"title": title, "slug": slug, "path": path, "group": group, "doc": "https://developer.apple.com/documentation/" + path}
+        if platform == "macos":
+            row["macos_since"] = mine.get("introducedAt", "")
+        else:
+            # a page can omit the tablet version while listing the phone one, which the tablet shares
+            row[SINCE[platform]] = mine.get("introducedAt") or plats.get("iOS", {}).get("introducedAt", "")
+            if "macOS" in plats:
+                row["macos_since"] = plats["macOS"].get("introducedAt", "")
+        row["deprecated"] = mine.get("deprecatedAt") if mine.get("deprecated") else None
+        row["abstract"] = old.get(slug, {}).get("abstract") or abstract_text(pg)
+        rows.append(row)
     rows.sort(key=lambda r: (r["group"], r["title"].lower()))
-    json.dump(rows, open(INDEX, "w"), indent=1)
-    print(f"{len(rows)} frameworks with macOS availability written to {os.path.relpath(INDEX, ROOT)}")
+    return rows
+
+
+def cmd_refresh_index(a):
+    platform = plat(a)
+    index_path = platform_paths(platform)[1]
+    old = {r["slug"]: r for r in load_index(platform)} if os.path.exists(index_path) else {}
+    rows = index_rows(docc_get, platform, old)
+    os.makedirs(os.path.dirname(index_path), exist_ok=True)
+    with open(index_path, "w") as fh:
+        json.dump(rows, fh, indent=1)
+    both = sum(1 for r in rows if r.get("macos_since")) if platform != "macos" else len(rows)
+    print(f"{len(rows)} frameworks with {PLATFORM_NAME[platform]} availability written to {os.path.relpath(index_path, ROOT)}"
+          + (f" ({both} also on macOS)" if platform != "macos" else ""))
 
 
 def _semantic():
@@ -784,20 +967,23 @@ def main(argv=None):
         return verify.main(argv[1:])
     p = argparse.ArgumentParser(prog="bifrost pc parity", description=(__doc__ or "").split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("status")
+    def platform_arg(sp):
+        sp.add_argument("--platform", choices=PLATFORMS, default="macos", help="reference platform (default macos)")
+        return sp
+    platform_arg(sub.add_parser("status"))
     sub.add_parser("os-status")
-    c = sub.add_parser("coverage")
+    c = platform_arg(sub.add_parser("coverage"))
     c.add_argument("--group")
     c.add_argument("--sort", choices=["coverage", "name", "group"], default="group")
     c.add_argument("--min", type=float)
     c.add_argument("--max", type=float)
     c.add_argument("--json", action="store_true")
-    s = sub.add_parser("show")
+    s = platform_arg(sub.add_parser("show"))
     s.add_argument("name")
-    g = sub.add_parser("gaps")
+    g = platform_arg(sub.add_parser("gaps"))
     g.add_argument("--group")
     g.add_argument("--status")
-    sub.add_parser("check")
+    platform_arg(sub.add_parser("check"))
     ps = sub.add_parser("apps")
     ps.add_argument("--gaps", metavar="APP")
     ps.add_argument("--json", action="store_true")
@@ -808,7 +994,7 @@ def main(argv=None):
     i.add_argument("--new-only", action="store_true", help="skip files that already exist in data/ (keep edited rows)")
     d = sub.add_parser("db-export")
     d.add_argument("dir")
-    sub.add_parser("refresh-index")
+    platform_arg(sub.add_parser("refresh-index"))
     q = sub.add_parser("search")
     q.add_argument("query")
     q.add_argument("--top", type=int, default=10)
