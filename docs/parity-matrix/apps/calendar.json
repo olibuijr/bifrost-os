@@ -14,7 +14,7 @@
    "area": "menu",
    "apple": "MainMenu.nib File > New Event",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:77",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:138",
    "note": "",
    "wire": ""
   },
@@ -32,7 +32,7 @@
    "area": "view",
    "apple": "MainMenu.nib View > By Day/Week/Month/Year",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:91",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:158",
    "note": "",
    "wire": ""
   },
@@ -41,7 +41,7 @@
    "area": "menu",
    "apple": "MainMenu.nib View > Go to Today, Next, Previous",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:87",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:153",
    "note": "",
    "wire": ""
   },
@@ -59,7 +59,7 @@
    "area": "panel",
    "apple": "event inspector (Edit Event / Show Inspector)",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:346",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:601",
    "note": "",
    "wire": ""
   },
@@ -68,7 +68,7 @@
    "area": "panel",
    "apple": "event inspector repeat popup",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:867",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:975",
    "note": "Fixed preset cycle (store::REPEATS); calendar/recur.rs supports full RRULE but there is no custom-repeat UI",
    "wire": "Add a Custom repeat sheet (frequency, interval, weekdays, end after N / on date) that writes an RRULE into the rich sidecar via calendar/exchange.rs; open it from Target::Repeat."
   },
@@ -77,7 +77,7 @@
    "area": "panel",
    "apple": "AlarmCustom.nib, AlarmInstance.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:868",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:976",
    "note": "One alert from a preset cycle; delivery via notification-schedule works (calendar/connect.rs)",
    "wire": "Allow a list of alerts per event plus a Custom alert sheet (N minutes/hours/days before, or at a time); store as VALARMs in the rich sidecar and schedule each in connect.rs plan_alerts."
   },
@@ -86,7 +86,7 @@
    "area": "menu",
    "apple": "MainMenu.nib Edit > Duplicate",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:599",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:674",
    "note": "",
    "wire": ""
   },
@@ -95,7 +95,7 @@
    "area": "menu",
    "apple": "MainMenu.nib Edit > Delete / Undo",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:653",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:728",
    "note": "Undo bar, not the shell Edit > Undo stack",
    "wire": ""
   },
@@ -104,7 +104,7 @@
    "area": "menu",
    "apple": "MainMenu.nib Edit > Cut/Copy/Paste",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/clip.rs:117",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/clip.rs:120",
    "note": "Edit > Cut / Copy / Paste act on the shown day's event as .ics text; paste lands on the shown day; text fields keep their own commands; built on parity/team-d-calendar; not yet verified on Midget",
    "wire": "Select an event with a single click (the grid opens it today) and keep custom repeat rules when pasting once the custom repeat sheet exists."
   },
@@ -113,7 +113,7 @@
    "area": "document",
    "apple": "MainMenu.nib File > Export > Export Event",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:611",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:686",
    "note": "",
    "wire": ""
   },
@@ -122,7 +122,7 @@
    "area": "document",
    "apple": "MainMenu.nib File > Export",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:686",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:760",
    "note": "",
    "wire": ""
   },
@@ -158,7 +158,7 @@
    "area": "view",
    "apple": "View > Show Calendar List",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:878",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:986",
    "note": "",
    "wire": ""
   },
@@ -167,7 +167,7 @@
    "area": "settings",
    "apple": "PreferencesPanel.nib week numbers option",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:679",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:923",
    "note": "",
    "wire": ""
   },
@@ -194,7 +194,7 @@
    "area": "integration",
    "apple": "PreferencesPanel.nib Accounts; CalDAVCalendarInspector.nib; View > Refresh Calendars",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:186",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:345",
    "note": "Read-only import from Internet Accounts; no write-back, no per-account calendars, no Refresh command",
    "wire": "Push local saves/deletes with dav_sync PUT/DELETE, keep each account as its own calendar in the sidebar, add Refresh Calendars (cmd+r) to View."
   },
@@ -230,7 +230,7 @@
    "area": "settings",
    "apple": "PreferencesPanel.nib Alerts pane",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:32",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:66",
    "note": "Settings menu: default alert for new timed and all-day events; not birthdays; built on parity/team-d-calendar; not yet verified on Midget",
    "wire": "Add a default alert for birthdays once the Birthdays calendar exists."
   },
@@ -266,7 +266,7 @@
    "area": "panel",
    "apple": "event inspector",
    "status": "parity",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:831",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:931",
    "note": "",
    "wire": ""
   },
@@ -338,7 +338,7 @@
    "area": "view",
    "apple": "View > Zoom In / Zoom Out",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/timeview.rs:100",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/timeview.rs:99",
    "note": "Zoom In / Out under View, 12 pt steps from 24 to 144 pt per hour, kept across restarts; built on parity/team-d-calendar; not yet verified on Midget",
    "wire": "Verify Cmd+= / Cmd+- and the toolbar on Midget."
   },
