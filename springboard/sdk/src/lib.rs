@@ -133,6 +133,11 @@ pub mod script_export;
 pub mod view;
 pub mod wl;
 pub mod layers;
+/// The retained layer tree (`Layer`, delegates, layout managers, constraints); see `ViewBase::layer`.
+pub mod layer_tree {
+    pub use bifrost_ui::layer_layout::*;
+    pub use bifrost_ui::layer_tree::*;
+}
 pub mod document;
 pub mod markup;
 pub mod log;

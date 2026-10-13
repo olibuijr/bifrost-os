@@ -45,6 +45,7 @@ mod app;
 mod autolayout;
 mod controls;
 mod forms;
+mod layer_backed;
 mod scroll;
 pub use animation::{mix_color, Prop, Timing, Transaction, DEFAULT_DURATION, REDUCED_DURATION};
 pub use app::{action_for, ControllerHost, MenuEntry, ViewApp, ViewController};
@@ -81,17 +82,24 @@ pub struct ViewBase {
     pub opacity: f32,
     /// Premultiplied fill the window paints under the view (`layer.backgroundColor`), animatable; `None` paints nothing
     pub background: Option<u32>,
+    /// The backing layer of a layer-backed view (`wantsLayer`); `None` until [`ViewBase::layer`] is first called
+    pub layer: Option<bifrost_ui::layer_tree::Layer>,
     /// actions queued by `send_action`, dispatched by the window after the event
     pub pending: Vec<String>,
 }
 
 impl Default for ViewBase {
     fn default() -> Self {
-        ViewBase { id: NEXT_ID.fetch_add(1, Ordering::Relaxed), frame: Rect::default(), dirty: true, hidden: false, enabled: true, focused: false, opacity: 1.0, background: None, pending: Vec::new() }
+        ViewBase { id: NEXT_ID.fetch_add(1, Ordering::Relaxed), frame: Rect::default(), dirty: true, hidden: false, enabled: true, focused: false, opacity: 1.0, background: None, layer: None, pending: Vec::new() }
     }
 }
 
 impl ViewBase {
+    /// The backing layer, created on first use; the view then draws its layer tree after its own content (clipped to
+    /// the view's frame) and before its subviews. The window keeps the layer's frame equal to the view's frame.
+    pub fn layer(&mut self) -> bifrost_ui::layer_tree::Layer {
+        self.layer.get_or_insert_with(bifrost_ui::layer_tree::Layer::new).clone()
+    }
     /// `NativeControl.sendAction(_:to:)` with a nil target: queues `action`; the window sends it up the chain.
     pub fn send_action(&mut self, action: &str) {
         self.pending.push(action.into());
@@ -262,7 +270,7 @@ pub trait View: 'static {
     /// Paints above the whole tree after the normal pass (menus, tooltips).
     fn draw_overlay(&mut self, _s: &mut dyn Canvas, _ui: &Ui) {}
     fn needs_display(&self) -> bool {
-        self.base().dirty
+        self.base().dirty || self.base().layer.as_ref().map_or(false, |l| l.tree_dirty())
     }
     fn set_needs_display(&mut self) {
         self.base_mut().dirty = true;
@@ -511,6 +519,7 @@ fn draw_subtree(v: &mut dyn View, c: &mut dyn Canvas, ui: &Ui) {
         c.fill_rrect(px_rf(ui, v.frame()), 0.0, bg);
     }
     v.draw(c, ui);
+    layer_backed::draw(v, c, ui);
     v.base_mut().dirty = false;
     scrolled(v, |v| {
         if v.clips_children() {
