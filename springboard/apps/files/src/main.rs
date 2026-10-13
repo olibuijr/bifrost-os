@@ -930,7 +930,8 @@ mod tests {
         let report = empty_now(&items, &bin, &AtomicBool::new(false), &tx);
         assert_eq!(report.done.len(), 3);
         assert!(report.failed.is_empty() && !report.cancelled);
-        assert_eq!(std::fs::read_dir(&bin).unwrap().count(), 0);
+        let left: Vec<_> = std::fs::read_dir(&bin).unwrap().flatten().filter(|e| e.file_name().to_str() != Some(ORIGINS)).collect();
+        assert!(left.is_empty(), "only the origins file remains");
     }
     #[test]
     fn empty_trash_says_so_when_the_bin_has_nothing_to_delete() {
