@@ -192,8 +192,12 @@ impl DiskUtility {
                 Ok(plan) => self.start_plan("Attaching", images::base_name(&path).to_string(), plan, false),
                 Err(sentence) => self.error = Some(sentence),
             },
-            OpenThen::Convert => self.open_convert_form(path),
-            OpenThen::Resize => self.open_resize_form(path, size, images::is_ext_image(head)),
+            OpenThen::Convert => {
+                self.open_convert_form(path);
+            }
+            OpenThen::Resize => {
+                self.open_resize_form(path, size, images::is_ext_image(head));
+            }
             OpenThen::Folder => {
                 let suggested = images::suggested_file(images::base_name(&path), "iso");
                 let volname = images::iso_volume_name(&path);
