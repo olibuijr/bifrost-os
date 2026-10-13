@@ -240,6 +240,7 @@ pub mod accessory_hotspot;
 pub mod vpn_configuration;
 pub mod wifi_accessory_browser;
 pub mod compression;
+pub mod video_compression;
 pub mod pixel_buffer;
 pub mod display_link;
 pub use bifrost_ui::frame_clock;

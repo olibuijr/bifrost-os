@@ -31,9 +31,9 @@
     {
       "feature": "Compression session (encoding)",
       "apple": "VTCompressionSessionCreate, VTCompressionSessionEncodeFrame, output callback, PrepareToEncodeFrames, CompleteFrames",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no encoder in springboard/src, springboard/render or springboard/sdk; the only recording path is audio (springboard/src/svc.rs Record)"
+      "bifrost": "springboard/sdk/src/video_compression.rs (CompressionSession)",
+      "status": "partial",
+      "note": "Midget check pending. Lossless intra-only (one PNG per frame, springboard::pngenc); H.264/HEVC encoders do not exist and fail with CouldNotFindVideoEncoder; no frame reordering."
     },
     {
       "feature": "Encoder list and property query",
@@ -52,9 +52,9 @@
     {
       "feature": "Multi-pass encoding (frame silo, multipass storage)",
       "apple": "VTFrameSiloCreate, VTMultiPassStorageCreate, VTCompressionSessionBeginPass / EndPass",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "depends on the encode gap"
+      "bifrost": "springboard/sdk/src/video_compression.rs (FrameSilo, MultiPassStorage, begin_pass/end_pass)",
+      "status": "partial",
+      "note": "Midget check pending. Storage records encoded sizes only; two passes; no rate control uses them yet."
     },
     {
       "feature": "Pixel transfer (format conversion and scaling)",
@@ -87,9 +87,9 @@
     {
       "feature": "Frame processing (super resolution, frame interpolation, optical flow, noise filter, motion blur)",
       "apple": "VTFrameProcessor, VTSuperResolutionScalerConfiguration, VTFrameRateConversionConfiguration, VTMotionBlurConfiguration, VTOpticalFlowConfiguration, VTTemporalNoiseFilterConfiguration",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "no ML or frame-processing module found in the index"
+      "bifrost": "springboard/sdk/src/video_compression.rs (FrameProcessorSession, FrameProcessor, SuperResolutionScaler)",
+      "status": "partial",
+      "note": "Midget check pending. Only nearest-neighbour super resolution; no frame interpolation, optical flow, noise filter or motion blur."
     },
     {
       "feature": "Motion estimation",

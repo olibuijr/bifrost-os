@@ -2066,3 +2066,10 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## Video Toolbox: compression session (`bifrost_sdk::video_compression`)
+
+- `CompressionSession::create(w, h, Codec, callback)` mirrors `VTCompressionSessionCreate`; `set_property` / `copy_property` check keys (`key::*`, the `kVTCompressionPropertyKey_*` names), types, ranges and read-only keys; `prepare_to_encode_frames`, `encode_frame(frame, pts, duration)`, `complete_frames`, `invalidate`. Time stamps must increase; output order is submission order.
+- The only encoder is lossless intra-only (one PNG per frame, all key frames). `Codec::H264` and `Codec::Hevc` fail with `Status::CouldNotFindVideoEncoder`.
+- Multi-pass: `FrameSilo` (`add_sample`, `for_each_sample`), `MultiPassStorage` (`set`, `get`, `close`, `to_bytes` / `from_bytes`), and `set_multi_pass`, `begin_pass`, `end_pass` (true when another pass is wanted).
+- Frame processing: `FrameProcessor` trait, `FrameProcessorSession` (start, process, end) and `SuperResolutionScaler` (integer upscale); `set_frame_processor` runs it before encoding.
