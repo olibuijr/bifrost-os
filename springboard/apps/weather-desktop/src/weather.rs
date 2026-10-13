@@ -29,6 +29,7 @@ use springboard::shell::weather::glyph;
 use bifrost_app::controls::geo::{format_distance, Coordinate, DistanceUnits};
 use bifrost_app::controls::chart_marks::Frame;
 use bifrost_app::controls::location_auth::AuthorizationStatus;
+use crate::details;
 use crate::insights;
 use bifrost_app::controls::weather_model::{illuminated_fraction, MoonPhase, Wind, WeatherError};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -79,16 +80,23 @@ const ROW: f32 = 56.0;
 const HEAD: f32 = 28.0;
 const QUOTE_ROW: f32 = 60.0;
 const REMOVE_W: f32 = 48.0;
-const HOURLY_TOP: f32 = 296.0;
-const HOURLY_H: f32 = 116.0;
+/// The Next Hour card (precipitation by quarter hour) sits above the hourly strip.
+const NEXT_TOP: f32 = 296.0;
+const NEXT_H: f32 = 112.0;
+const NEXT_BARS_TOP: f32 = 56.0;
+const NEXT_BAR_H: f32 = 28.0;
+const HOURLY_TOP: f32 = NEXT_TOP + NEXT_H + 16.0;
+const HOURLY_H: f32 = 136.0;
 const HOUR_W: f32 = 60.0;
-const DAILY_TOP: f32 = 424.0;
+const DAILY_TOP: f32 = HOURLY_TOP + HOURLY_H + 12.0;
 const DAY_ROW: f32 = 44.0;
 const DAILY_H: f32 = 28.0 + 10.0 * DAY_ROW + 8.0;
 const DETAILS_TOP: f32 = DAILY_TOP + DAILY_H + 16.0;
 const TILE_H: f32 = 104.0;
 const TILE_GAP: f32 = 12.0;
-const DETAILS_H: f32 = 3.0 * TILE_H + 2.0 * TILE_GAP;
+/// Nine tiles in two columns: five rows.
+const TILE_ROWS: f32 = 5.0;
+const DETAILS_H: f32 = TILE_ROWS * TILE_H + (TILE_ROWS - 1.0) * TILE_GAP;
 /// The temperature chart card, below the detail tiles: its plot area and the axis labels' room, in points.
 const CHART_TOP: f32 = DETAILS_TOP + DETAILS_H + 16.0;
 const CHART_H: f32 = 176.0;
@@ -303,7 +311,18 @@ impl Weather {
     // ---- Golden Gate chrome: sidebar and toolbar ----
 
     fn sidebar(&self) -> SourceList {
-        let items = self.places.iter().enumerate().map(|(i, p)| SidebarItem::row(PLACE_ID + i as u32, &p.name)).collect();
+        let items = self
+            .places
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let row = SidebarItem::row(PLACE_ID + i as u32, &p.name);
+                match self.forecasts.get(&p.key()) {
+                    Some(f) => row.with_trailing(&self.units.degrees(f.current.temp)),
+                    None => row,
+                }
+            })
+            .collect();
         let mut list = SourceList::new(items, SIDEBAR_ROW_PT, SIDEBAR_ROW_PT);
         list.set_selected((self.screen != Screen::Stocks).then_some(PLACE_ID + self.selected as u32));
         list
@@ -933,6 +952,11 @@ impl Weather {
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
         self.maintain_at = f64::NEG_INFINITY;
         self.dirty = true;
+        // Edit > Delete: with no field being edited, Delete or Backspace removes the selected place
+        if !self.field.focused && self.screen == Screen::Main && matches!(out, Out::Backspace | Out::Named("Delete")) {
+            self.activate(ui, Target::Remove(self.selected), 0.0, t);
+            return;
+        }
         if out == Out::Hide || !self.field.focused {
             if out == Out::Hide {
                 self.field.focused = false;
@@ -1151,6 +1175,25 @@ impl Weather {
         let dim = fade(WHITE, 160);
         let (card_x, card_w) = (ui.pt(MARGIN), self.card_w(ui));
         let card = SKY_SCRIM;
+        // next hour: the precipitation of the coming quarter hours as bars under a summary sentence
+        c.fill_rrect(card_x, p(NEXT_TOP), card_w, ui.pt(NEXT_H), ui.pt(RADIUS), card);
+        self.put(&mut c, ui, "NEXT HOUR", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Left, card_x + ui.pt(SPACE_L), p(NEXT_TOP + 16.0));
+        let summary = ui.fit(&details::next_hour_summary(&f.minutes), MAC_BODY_PT, card_w - ui.pt(2.0 * SPACE_L));
+        self.put(&mut c, ui, &summary, MAC_BODY_PT, Weight::Medium, WHITE, Align::Left, card_x + ui.pt(SPACE_L), p(NEXT_TOP + 38.0));
+        let bars = details::next_hour_bars(&f.minutes);
+        if !bars.is_empty() {
+            let area_x = card_x + ui.pt(SPACE_L);
+            let slot = (card_w - ui.pt(2.0 * SPACE_L)) / bars.len() as f32;
+            for (i, h) in bars.iter().enumerate() {
+                let bh = (ui.pt(NEXT_BAR_H) * h).max(ui.pt(SPACE_XXS));
+                let wet = f.minutes[i] >= details::WET_MM;
+                let colour = if wet { WHITE } else { fade(WHITE, 60) };
+                let bx = area_x + i as f32 * slot;
+                c.fill_rrect(bx, p(NEXT_TOP + NEXT_BARS_TOP) + ui.pt(NEXT_BAR_H) - bh, slot - ui.pt(SPACE_XS), bh, ui.pt(SPACE_XXS), colour);
+                let label = if i == 0 { "Now".to_string() } else { format!("{} min", i * 15) };
+                self.put(&mut c, ui, &label, MAC_CAPTION1_PT, Weight::Regular, dim, Align::Left, bx, p(NEXT_TOP + NEXT_BARS_TOP + NEXT_BAR_H + 14.0));
+            }
+        }
         // hourly strip: drawn into its own image so the columns clip at the card
         c.fill_rrect(card_x, p(HOURLY_TOP), card_w, ui.pt(HOURLY_H), ui.pt(RADIUS), card);
         self.put(&mut c, ui, "HOURLY FORECAST", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Left, card_x + ui.pt(SPACE_L), p(HOURLY_TOP + 16.0));
@@ -1165,7 +1208,11 @@ impl Weather {
                 let label = if i == 0 { "Now".to_string() } else { hr.label.clone() };
                 self.put(&mut ss, ui, &label, MAC_BODY_PT, Weight::Medium, WHITE, Align::Centre, mid, ui.pt(SPACE_M));
                 glyph::draw(&mut ss, Sky::from_code(hr.code), hr.day, (mid, ui.pt(SPACE_HUGE)), ui.pt(SPACE_L));
-                self.put(&mut ss, ui, &units.degrees(hr.temp), MAC_BODY_PT, Weight::Semibold, WHITE, Align::Centre, mid, ui.pt(68.0));
+                let chance = details::hour_chance(hr.precip_prob);
+                if !chance.is_empty() {
+                    self.put(&mut ss, ui, &chance, MAC_CAPTION1_PT, Weight::Semibold, fade(WHITE, 200), Align::Centre, mid, ui.pt(62.0));
+                }
+                self.put(&mut ss, ui, &units.degrees(hr.temp), MAC_BODY_PT, Weight::Semibold, WHITE, Align::Centre, mid, ui.pt(84.0));
             }
         }
         c.blit(&strip, card_x as i32, p(HOURLY_TOP + 30.0) as i32, 255, 255);
@@ -1183,7 +1230,12 @@ impl Weather {
             }
             let label = if i == 0 { "Today" } else { d.label.as_str() };
             self.put(&mut c, ui, label, MAC_BODY_PT, Weight::Medium, WHITE, Align::Left, card_x + ui.pt(SPACE_L), mid);
-            glyph::draw(&mut c, Sky::from_code(d.code), true, (card_x + ui.pt(100.0), mid), ui.pt(SPACE_M));
+            let chance = details::day_chance(d.precip_prob);
+            let glyph_y = if chance.is_empty() { mid } else { mid - ui.pt(SPACE_XS) };
+            glyph::draw(&mut c, Sky::from_code(d.code), true, (card_x + ui.pt(100.0), glyph_y), ui.pt(SPACE_M));
+            if !chance.is_empty() {
+                self.put(&mut c, ui, &chance, MAC_CAPTION1_PT, Weight::Semibold, fade(WHITE, 200), Align::Centre, card_x + ui.pt(100.0), mid + ui.pt(SPACE_L));
+            }
             self.put(&mut c, ui, &units.degrees(d.min), MAC_BODY_PT, Weight::Medium, dim, Align::Right, bar_x - ui.pt(SPACE_M), mid);
             c.fill_rrect(bar_x, mid - ui.pt(SPACE_XXS), bar_w, ui.pt(SPACE_XS), ui.pt(SPACE_XXS), fade(WHITE, 60));
             let (x0, x1) = (((d.min - lo as f64) as f32 / span).clamp(0.0, 1.0), ((d.max - lo as f64) as f32 / span).clamp(0.0, 1.0));
@@ -1209,13 +1261,19 @@ impl Weather {
         let sun = |d: Option<&data::Day>, rise: bool| d.map(|d| if rise { d.sunrise.clone() } else { d.sunset.clone() }).filter(|s| !s.is_empty()).unwrap_or_else(|| "--:--".into());
         let delta = f.current.feels.round() - f.current.temp.round();
         let feels_note = if delta.abs() < 1.0 { "Similar to the actual temperature" } else if delta < 0.0 { "Wind makes it feel colder" } else { "Humidity makes it feel warmer" };
+        let next_24h: f64 = f.hours.iter().take(24).map(|h| h.precip_mm).sum();
+        let tomorrow = f.days.get(1).map_or(0.0, |d| d.precip_mm);
+        let visibility = f.hours.first().map_or(0.0, |h| h.visibility_m);
         let tiles = [
             ("UV INDEX", format!("{}", uv.round() as i32), uv_note.to_string()),
             ("SUNRISE", sun(today, true), format!("Sunset: {}", sun(today, false))),
-            ("WIND", wind, "Current speed".to_string()),
-            ("HUMIDITY", format!("{}%", f.current.humidity), "Relative humidity".to_string()),
+            ("WIND", wind, details::wind_note(f.current.wind_dir, f.current.gust_kmh, f.current.wind_kmh, units)),
+            ("HUMIDITY", format!("{}%", f.current.humidity), details::dew_note(f.current.dew, units)),
             ("FEELS LIKE", units.degrees(f.current.feels), feels_note.to_string()),
             ("MOON", moon_value, moon_note),
+            ("PRECIPITATION", details::precip_text(next_24h, units), details::precip_note(tomorrow, units)),
+            ("VISIBILITY", details::visibility_text(visibility, units), details::visibility_note(visibility).to_string()),
+            ("PRESSURE", details::pressure_text(f.current.pressure_hpa, units), details::pressure_note(f.pressure_change).to_string()),
         ];
         let tile_w = (card_w - ui.pt(TILE_GAP)) / 2.0;
         for (i, (name, value, note)) in tiles.iter().enumerate() {
@@ -1226,6 +1284,42 @@ impl Weather {
             self.put(&mut c, ui, value, MAC_LARGE_TITLE_PT, Weight::Medium, WHITE, Align::Left, tx + ui.pt(SPACE_L), ty + ui.pt(54.0));
             let note = ui.fit(note, MAC_FOOTNOTE_PT, tile_w - ui.pt(28.0));
             self.put(&mut c, ui, &note, MAC_FOOTNOTE_PT, Weight::Regular, WHITE, Align::Left, tx + ui.pt(SPACE_L), ty + ui.pt(86.0));
+            match i {
+                // the sun's path: a half-circle of dots from sunrise to sunset with the sun on it
+                1 => {
+                    let (cx, cy, r) = (tx + tile_w - ui.pt(56.0), ty + ui.pt(64.0), ui.pt(32.0));
+                    c.fill_rrect(cx - r - ui.pt(SPACE_S), cy, 2.0 * r + ui.pt(2.0 * SPACE_S), 1.0, 0.0, fade(WHITE, 90));
+                    let dot = ui.pt(2.0);
+                    for k in 0..=20 {
+                        let (x, y) = details::sun_position(k as f32 / 20.0, cx, cy, r);
+                        c.fill_rrect(x - dot / 2.0, y - dot / 2.0, dot, dot, dot / 2.0, fade(WHITE, 90));
+                    }
+                    let now = details::clock_minutes(&f.current.clock);
+                    if let (Some(d), Some(now)) = (today, now) {
+                        if let Some(k) = details::sun_progress(&d.sunrise, &d.sunset, now) {
+                            let (x, y) = if k > 0.0 && k < 1.0 { details::sun_position(k, cx, cy, r) } else { (cx, cy) };
+                            let sun_d = ui.pt(SPACE_M);
+                            if k > 0.0 && k < 1.0 {
+                                c.fill_rrect(x - sun_d / 2.0, y - sun_d / 2.0, sun_d, sun_d, sun_d / 2.0, ORANGE);
+                            }
+                        }
+                    }
+                }
+                // the compass: a ring of dots with the point the wind comes from marked
+                2 => {
+                    let (cx, cy, r) = (tx + tile_w - ui.pt(44.0), ty + ui.pt(52.0), ui.pt(26.0));
+                    let dot = ui.pt(2.0);
+                    for k in 0..24 {
+                        let a = k as f32 * std::f32::consts::TAU / 24.0;
+                        c.fill_rrect(cx + r * a.sin() - dot / 2.0, cy - r * a.cos() - dot / 2.0, dot, dot, dot / 2.0, fade(WHITE, 90));
+                    }
+                    self.put(&mut c, ui, "N", MAC_CAPTION1_PT, Weight::Semibold, dim, Align::Centre, cx, cy - r + ui.pt(SPACE_M));
+                    let a = (f.current.wind_dir as f32).to_radians();
+                    let mark = ui.pt(SPACE_S);
+                    c.fill_rrect(cx + r * a.sin() - mark / 2.0, cy - r * a.cos() - mark / 2.0, mark, mark, mark / 2.0, WHITE);
+                }
+                _ => {}
+            }
         }
         // temperature chart: the hours as a line over labelled rules (points are in the card's own frame)
         let card_pt = self.w as f32 / ui.pt(1.0) - 2.0 * MARGIN;
