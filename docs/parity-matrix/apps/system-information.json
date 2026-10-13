@@ -38,8 +38,8 @@
    "area": "view",
    "apple": "Software group: Accessibility, Applications, Developer, Extensions, Fonts, Frameworks, Installations, Language & Region, Logs, Preference Panes, Printer Software, Profiles, Startup Items, Sync Services",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:72",
-   "note": "Only Operating System and Installed Apps.",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:98",
+   "note": "Extensions (kernel modules), Startup Items and Language & Region added; Fonts, Logs and Preference Panes remain.",
    "wire": "Add Fonts (Font Book catalogue), Extensions (kernel modules from /proc/modules), Startup Items (autostart and user units), Logs (journal summary), Language & Region and Preference Panes (settings pane list) categories to model.rs."
   },
   {
@@ -155,8 +155,8 @@
    "area": "view",
    "apple": "Software > System / About: version, build, boot volume, uptime",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:89",
-   "note": "Name, version, kernel; no build id, boot volume, host name, uptime or secure boot state.",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:173",
+   "note": "Computer name, time since boot, boot volume and boot mode added; no build id or secure-boot state.",
    "wire": "Add host name, uptime, boot volume and secure-boot state rows to Category::System."
   },
   {
@@ -182,8 +182,8 @@
    "area": "menu",
    "apple": "File/View > Refresh Information (cmd+R)",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:29",
-   "note": "A toolbar Refresh button re-reads the report; no menu item or cmd+R.",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:127",
+   "note": "View > Refresh Information (Cmd+R) routes to SysInfo::reload; the toolbar button stays.",
    "wire": "Declare a View menu (Refresh Information cmd+R) in main.rs via the app menu API used by activity-desktop (main.rs main_menu) and route cmd+R to SysInfo::reload (window.rs:74)."
   },
   {
@@ -199,18 +199,18 @@
    "feature": "Show Less / More Information",
    "area": "menu",
    "apple": "View > Show Less Information (hides item detail or developer rows)",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No concise/full toggle.",
+   "status": "partial",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:147",
+   "note": "View > Show Less Information toggles a mini mode: sidebar and report keep only the Overview.",
    "wire": "Add a mini/full flag to SysInfo and a View menu toggle; the concise mode shows only the Overview rows."
   },
   {
    "feature": "Save System Report as .spx / text / rich text",
    "area": "menu",
    "apple": "File > Save; document types spx, txt, rtf",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Nothing is exported.",
+   "status": "partial",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:122",
+   "note": "File > Save Report As writes a plain-text report through the save panel; no .spx or rich text yet.",
    "wire": "Add File > Save As… in main.rs that serializes every category's model::rows to a plain text and a JSON report file through the SDK save panel."
   },
   {
@@ -226,18 +226,18 @@
    "feature": "Find in the report",
    "area": "menu",
    "apple": "Edit > Find: Find Next/Previous, Use Selection for Find, Jump to Selection",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No search over rows.",
+   "status": "partial",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:157",
+   "note": "Edit > Find (Cmd+F) opens a typed find that filters rows; Find Next/Previous jump across categories. No toolbar search field yet.",
    "wire": "Add a toolbar search field (kit search_field) to window.rs filtering rows across categories and Find Next/Previous menu items."
   },
   {
    "feature": "Select and copy rows",
    "area": "menu",
    "apple": "Edit > Select All, Copy",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Detail rows are not selectable or copyable.",
+   "status": "partial",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:204",
+   "note": "Click or Select All picks rows (highlighted); Edit > Copy (Cmd+C) puts key: value lines on the clipboard. No multi-row range selection.",
    "wire": "Add row selection to the detail card and cmd+C to place key: value lines on the shell clipboard."
   },
   {
@@ -272,8 +272,8 @@
    "area": "input",
    "apple": "arrow keys move the sidebar selection",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:74",
-   "note": "Up and down scroll the detail card; they do not move the sidebar selection.",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:204",
+   "note": "Up/Down move the sidebar selection when it has focus; Tab switches focus to the card, where they scroll.",
    "wire": "In main.rs route Up/Down to SysInfo::select with the previous/next Category when the sidebar has focus (window.rs:91) and add Tab to move focus between sidebar and card."
   },
   {
@@ -290,17 +290,17 @@
    "area": "menu",
    "apple": "About, Hide, Hide Others, Show All, Services, Quit, Minimize, Bring All to Front",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:20",
-   "note": "The shell frames the window and quits it; the app publishes no menu of its own.",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:94",
+   "note": "File, Edit, View and Help menus are published; no app or Window menu items beyond the shell's.",
    "wire": "Publish an app menu (About System Information, Quit) and a Window menu from main.rs with the SDK menu API."
   },
   {
    "feature": "Help menu",
    "area": "menu",
    "apple": "System Information Help",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No help.",
+   "status": "partial",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:145",
+   "note": "Help > System Information Help opens the help page URL; no in-shell help viewer.",
    "wire": "Add a Help menu entry that opens a short Help page in the shell help viewer."
   }
  ]
