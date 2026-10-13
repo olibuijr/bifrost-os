@@ -12,14 +12,14 @@
       "apple": "LAContext, kLAPolicyDeviceOwnerAuthenticationWithBiometrics",
       "bifrost": "springboard/core/src/biometry.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Touch ID, Face ID or fingerprint support in the shell or SDK. Grep for fprint, fprintd, howdy and biometric returns nothing except the keychain doc's gap note (docs/bifrost-ui.md around line 410)."
+      "note": "Wave 2 (theme-02, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No Touch ID, Face ID or fingerprint support in the shell or SDK. Grep for fprint, fprintd, howdy and biometric returns nothing except the keychain doc's gap note (docs/bifrost-ui.md around line 410). LAPolicy.deviceOwnerAuthenticationWithBiometrics returns biometryNotAvailable from LAContext; biometry stays a gap."
     },
     {
       "feature": "Device-owner password or passcode authentication for apps",
       "apple": "LAContext, kLAPolicyDeviceOwnerAuthentication",
-      "bifrost": "springboard/src/shell/login.rs, springboard/src/privd/pam.rs, springboard/src/shell/passcode.rs",
-      "status": "os",
-      "note": "Login and unlock check the account password through the root helper (PAM service bifrost-login, faillock). The lock-screen passcode is a salted, stretched hash in passcode.ini. Neither is exposed to apps as an SDK call that asks the user to authenticate."
+      "bifrost": "springboard/sdk/src/local_auth.rs, springboard/src/shell/services/local_auth.rs",
+      "status": "partial",
+      "note": "LAContext canEvaluatePolicy/evaluatePolicy with LAPolicy.deviceOwnerAuthentication: the local_auth shell service verifies the account password through the login backend (read-only), rate-limits failures per app. The password sheet is not drawn yet; callers pass the password. Host unit tests only, not checked on Midget."
     },
     {
       "feature": "Authentication prompt UI (LocalAuthenticationView)",
@@ -59,9 +59,9 @@
     {
       "feature": "Authentication errors (LAError, LAErrorDomain)",
       "apple": "LAError, LAError.Code, LAErrorDomain",
-      "bifrost": "springboard/sdk/src/keychain.rs (Error, Reply)",
+      "bifrost": "springboard/sdk/src/keychain.rs (Error, Reply), springboard/sdk/src/local_auth.rs",
       "status": "partial",
-      "note": "The keychain error type mirrors the SecItem OSStatus codes (DuplicateItem, ItemNotFound, Param, NotPermitted, Io). No LAError codes exist, since there is no LAContext."
+      "note": "The keychain error type mirrors the SecItem OSStatus codes (DuplicateItem, ItemNotFound, Param, NotPermitted, Io). No LAError codes exist, since there is no LAContext. LAError codes (userCancel, authenticationFailed, biometryNotAvailable, passcodeNotSet, appCancel, invalidContext, ...) exist in bifrost_app::local_auth; not checked on Midget."
     },
     {
       "feature": "Biometry type and device state (LADomainState, LAEnvironment, kLABiometryType*)",
