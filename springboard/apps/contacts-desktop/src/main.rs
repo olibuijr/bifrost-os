@@ -9,6 +9,7 @@ mod group_file;
 mod history;
 mod names;
 mod services;
+mod smart;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::controls::Node;
