@@ -8,6 +8,7 @@
 //! `chrome-core` and is not wired yet, so `run` reports that instead of drawing.
 
 use crate::model::{ControlModule, FromChrome, Notification, PanelsModel};
+use bifrost_render::motion::{self, Curve};
 use std::collections::BTreeMap;
 
 /// Window corner radius (`prefs_layout` `m::*`, the window radius of the design rules).
@@ -155,11 +156,10 @@ pub fn progress(elapsed_ms: u32, duration_ms: u32) -> f32 {
     (elapsed_ms as f32 / duration_ms as f32).clamp(0.0, 1.0)
 }
 
-/// How far a panel is still pushed off its edge at `progress` (0 = starts `distance` away, 1 = in place). Ease-out
-/// cubic, so a panel decelerates into place.
+/// How far a panel is still pushed off its edge at `progress` (0 = starts `distance` away, 1 = in place). Eased on
+/// the shared `PanelReveal` curve (ease-out cubic), so a panel decelerates into place.
 pub fn slide_offset(progress: f32, distance: f32) -> f32 {
-    let p = progress.clamp(0.0, 1.0);
-    let eased = 1.0 - (1.0 - p).powi(3);
+    let eased = motion::ease(Curve::EaseOut, progress);
     distance * (1.0 - eased)
 }
 
