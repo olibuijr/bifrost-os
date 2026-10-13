@@ -6,12 +6,16 @@
 //! lasso can move or delete it and the canvas is repainted from the strokes. The pixel canvas
 //! stays the picture that is drawn and saved.
 
-use crate::ink;
+use crate::arrange::{self, Align, Handle};
+use crate::boards::{self, BoardList};
+use crate::ink::{self, ShapeKind};
+use crate::pdfout;
 use crate::style::{self, Bitmap, Fill, Style, OPACITY_STEPS};
 use bifrost_app::controls::cg::path::Affine;
 use bifrost_app::controls::cursor::Kind;
 use bifrost_app::controls::drawing::{Drawing, Ink, InkKind, Stroke, StrokePoint};
 use bifrost_app::controls::lasso::{Lasso, Selection};
+use bifrost_app::print::{Destination, PrintError, PrintOperation};
 use bifrost_app::controls::layout_protocol::{FlowLayout, Layout};
 use bifrost_app::controls::tips::{self, Datastore, Tip, TipSection, TipView, TipViewStyle};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
@@ -49,6 +53,15 @@ const BAR_INSPECTOR: u32 = 14;
 const BAR_PENCIL: u32 = 15;
 
 const UNDO_DEPTH: usize = 12;
+
+/// Selection handles (points): the square's side, how far above the box the rotate handle sits, and how close a press
+/// must be to grab one.
+const HANDLE_PT: f32 = 8.0;
+const ROTATE_GAP_PT: f32 = 22.0;
+const HANDLE_REACH_PT: f32 = 9.0;
+/// The grid's spacing in points, and a grid dot's side.
+const GRID_PT: f32 = 20.0;
+const GRID_DOT_PT: f32 = 2.0;
 
 /// Width of the shape inspector's panel on the right, in points.
 const PANEL_PT: f32 = 220.0;
@@ -162,6 +175,45 @@ enum Tool {
     Lasso,
     Rectangle,
     Oval,
+    Line,
+    Arrow,
+    Triangle,
+    Star,
+}
+
+impl Tool {
+    /// The shape this tool draws by dragging, if it is a shape tool.
+    fn shape_kind(self) -> Option<ShapeKind> {
+        Some(match self {
+            Tool::Rectangle => ShapeKind::Rectangle,
+            Tool::Oval => ShapeKind::Oval,
+            Tool::Line => ShapeKind::Line,
+            Tool::Arrow => ShapeKind::Arrow,
+            Tool::Triangle => ShapeKind::Triangle,
+            Tool::Star => ShapeKind::Star,
+            _ => return None,
+        })
+    }
+
+    fn of_shape(kind: ShapeKind) -> Tool {
+        match kind {
+            ShapeKind::Rectangle => Tool::Rectangle,
+            ShapeKind::Oval => Tool::Oval,
+            ShapeKind::Line => Tool::Line,
+            ShapeKind::Arrow => Tool::Arrow,
+            ShapeKind::Triangle => Tool::Triangle,
+            ShapeKind::Star => Tool::Star,
+        }
+    }
+}
+
+/// A resize or rotate drag of the selection: the handle, the last pointer point and the point the drag turns or
+/// scales about (canvas pixels).
+#[derive(Clone, Copy, Debug)]
+struct HandleDrag {
+    handle: Handle,
+    last: (f32, f32),
+    pivot: (f32, f32),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -217,8 +269,16 @@ pub struct Freeform {
     lassoing: bool,
     /// The selection is being dragged; the last point (canvas pixels).
     moving: Option<(f32, f32)>,
-    /// A rectangle or oval is being dragged from this point (canvas pixels).
+    /// A shape is being dragged from this point (canvas pixels).
     shape: Option<(f32, f32)>,
+    /// A selection handle is being dragged.
+    handle: Option<HandleDrag>,
+    /// View > Show Grid: a dot grid is drawn on the board.
+    grid: bool,
+    /// View > Snap to Grid: shape corners land on grid points.
+    snap: bool,
+    /// Every board, and which is open. Board 1 is the store folder itself (see `boards`).
+    boards: BoardList,
     /// Pixels per canvas pixel of the export (1 unless the display is denser than the canvas).
     export_scale: u32,
     /// The strokes Copy took, waiting for the app to put them on the pasteboard (`take_copy`).
@@ -247,7 +307,7 @@ const PASTE_OFFSET_PT: f32 = 16.0;
 /// Width of the ink a tool draws, in points.
 fn ink_width(tool: Tool) -> f32 {
     match tool {
-        Tool::Pen | Tool::Lasso | Tool::Rectangle | Tool::Oval => 2.0 * SPACE_XS,
+        Tool::Pen | Tool::Lasso | Tool::Rectangle | Tool::Oval | Tool::Line | Tool::Arrow | Tool::Triangle | Tool::Star => 2.0 * SPACE_XS,
         Tool::Pencil => SPACE_XS,
         Tool::Marker => 2.0 * SPACE_M,
         Tool::Eraser => 2.0 * SPACE_L,
@@ -292,7 +352,7 @@ fn target_id(t: Target) -> Option<u32> {
         Target::Arrange => BAR_ARRANGE,
         Target::Save => BAR_SAVE,
         Target::Inspector => BAR_INSPECTOR,
-        Target::Color(_) | Target::Edit(_) => return None,
+        Target::Tool(_) | Target::Color(_) | Target::Edit(_) => return None,
     })
 }
 
@@ -324,6 +384,10 @@ impl Freeform {
             lassoing: false,
             moving: None,
             shape: None,
+            handle: None,
+            grid: false,
+            snap: false,
+            boards: BoardList::default(),
             export_scale: 1,
             copied: None,
             tips: None,
@@ -336,8 +400,26 @@ impl Freeform {
         }
     }
 
-    /// Keeps the board in `dir` between runs and loads what an earlier run left there.
+    /// Keeps the boards in `dir` between runs and loads what an earlier run left there: the board list, and the open board.
     pub fn with_store(mut self, dir: PathBuf) -> Self {
+        if let Ok(text) = std::fs::read_to_string(dir.join("boards.txt")) {
+            self.boards = BoardList::from_text(&text);
+        }
+        self.store = Some(dir);
+        self.load_board();
+        self
+    }
+
+    /// The folder the open board is kept in.
+    fn board_dir(&self) -> Option<PathBuf> {
+        self.store.as_ref().map(|root| boards::dir_for(root, self.boards.current()))
+    }
+
+    /// Replaces the strokes with what the open board's folder holds (nothing when it holds no board).
+    fn load_board(&mut self) {
+        self.model = Drawing::new();
+        self.styles.clear();
+        let Some(dir) = self.board_dir() else { return };
         if let Ok(text) = std::fs::read_to_string(dir.join("board.txt")) {
             if let Ok(model) = Drawing::from_text(&text) {
                 let looks = std::fs::read_to_string(dir.join("board.styles")).map(|t| style::styles_from_text(&t)).unwrap_or_default();
@@ -346,14 +428,19 @@ impl Freeform {
                 self.sync_styles();
             }
         }
-        self.store = Some(dir);
-        self
     }
 
-    /// Writes the board to the store folder. A board with no strokes removes the files.
+    /// Writes the board list to the store folder.
+    fn write_list(&self) {
+        let Some(root) = &self.store else { return };
+        let _ = std::fs::create_dir_all(root);
+        let _ = springboard::shell::fsutil::write_atomic(&root.join("boards.txt"), self.boards.to_text().into_bytes());
+    }
+
+    /// Writes the open board to its folder. A board with no strokes removes the files.
     fn write_board(&self) -> std::io::Result<()> {
-        let Some(dir) = &self.store else { return Ok(()) };
-        std::fs::create_dir_all(dir)?;
+        let Some(dir) = self.board_dir() else { return Ok(()) };
+        std::fs::create_dir_all(&dir)?;
         if self.model.is_empty() {
             let _ = std::fs::remove_file(dir.join("board.txt"));
             let _ = std::fs::remove_file(dir.join("board.styles"));
@@ -430,8 +517,23 @@ impl Freeform {
             self.model.push(moved);
         }
         self.sync_styles();
+        // a copy joins a fresh group of its own (never the original's) and starts unlocked
+        let mut next = self.styles.iter().map(|st| st.group).max().unwrap_or(0) + 1;
+        let mut renamed: Vec<(u32, u32)> = Vec::new();
         for (i, (_, look)) in copies.iter().enumerate() {
-            self.styles[base + i] = *look;
+            let mut look = *look;
+            look.locked = false;
+            if look.group != 0 {
+                look.group = match renamed.iter().find(|r| r.0 == look.group) {
+                    Some(r) => r.1,
+                    None => {
+                        renamed.push((look.group, next));
+                        next += 1;
+                        next - 1
+                    }
+                };
+            }
+            self.styles[base + i] = look;
         }
         self.selection = Some(Selection::from_indices((base..base + n).collect()));
         self.tool = Tool::Lasso;
@@ -509,6 +611,335 @@ impl Freeform {
     pub fn copy_selected(&mut self) {
         self.copy_selection();
         self.dirty = true;
+    }
+
+    /// Insert > shape: the next drag on the board draws this shape.
+    pub fn choose_shape(&mut self, kind: ShapeKind) {
+        self.tool = Tool::of_shape(kind);
+        self.selection = None;
+        self.dirty = true;
+    }
+
+    /// The shape tool in use, if the tool is a shape.
+    pub fn shape_tool(&self) -> Option<ShapeKind> {
+        self.tool.shape_kind()
+    }
+
+    /// The selected strokes that are not locked, or `None` when none is left to change.
+    fn editable(&self) -> Option<Selection> {
+        let sel = self.selection.as_ref()?;
+        let ids: Vec<usize> = sel.indices().iter().copied().filter(|&i| !self.styles.get(i).is_some_and(|st| st.locked)).collect();
+        Some(Selection::from_indices(ids)).filter(|s| !s.is_empty())
+    }
+
+    /// `sel` and every other stroke that shares a group with one of its strokes.
+    fn expand_groups(&mut self, sel: Selection) -> Selection {
+        self.sync_styles();
+        let groups: Vec<u32> = sel.indices().iter().filter_map(|&i| self.styles.get(i)).map(|st| st.group).filter(|&g| g != 0).collect();
+        if groups.is_empty() {
+            return sel;
+        }
+        let mut ids = sel.indices().to_vec();
+        ids.extend(self.styles.iter().enumerate().filter(|(_, st)| groups.contains(&st.group)).map(|(i, _)| i));
+        Selection::from_indices(ids)
+    }
+
+    /// The box the selection handles surround: the unlocked part of the selection, with the lasso tool in hand.
+    fn handle_box(&self) -> Option<Rect> {
+        if self.tool != Tool::Lasso {
+            return None;
+        }
+        self.editable()?.bounds(&self.model)
+    }
+
+    /// The selection handle under canvas point (x, y), if any.
+    fn handle_at(&self, ui: &Ui, x: f32, y: f32) -> Option<Handle> {
+        arrange::hit_handle(self.handle_box()?, ui.pt(ROTATE_GAP_PT), ui.pt(HANDLE_REACH_PT), x, y)
+    }
+
+    /// `p` moved to the nearest grid point when snapping is on.
+    fn snapped(&self, ui: &Ui, p: (f32, f32)) -> (f32, f32) {
+        if self.snap {
+            let step = ui.pt(GRID_PT);
+            (arrange::snap(p.0, step), arrange::snap(p.1, step))
+        } else {
+            p
+        }
+    }
+
+    /// View > Show Grid / Hide Grid.
+    pub fn toggle_grid(&mut self) {
+        self.grid = !self.grid;
+        self.dirty = true;
+    }
+
+    /// View > Snap to Grid.
+    pub fn toggle_snap(&mut self) {
+        self.snap = !self.snap;
+    }
+
+    pub fn grid_shown(&self) -> bool {
+        self.grid
+    }
+
+    pub fn snapping(&self) -> bool {
+        self.snap
+    }
+
+    /// How many strokes are selected, how many of them are grouped, locked, and unlocked.
+    fn selection_counts(&self) -> (usize, usize, usize, usize) {
+        let Some(sel) = &self.selection else { return (0, 0, 0, 0) };
+        let looks: Vec<Style> = sel.indices().iter().map(|&i| self.styles.get(i).copied().unwrap_or_default()).collect();
+        let locked = looks.iter().filter(|st| st.locked).count();
+        (looks.len(), looks.iter().filter(|st| st.group != 0).count(), locked, looks.len() - locked)
+    }
+
+    /// Arrange > Group needs two or more strokes that are not already one group.
+    pub fn can_group(&self) -> bool {
+        let Some(sel) = &self.selection else { return false };
+        let first = sel.indices().first().and_then(|&i| self.styles.get(i)).map_or(0, |st| st.group);
+        let one_group = first != 0 && sel.indices().iter().all(|&i| self.styles.get(i).is_some_and(|st| st.group == first));
+        sel.indices().len() >= 2 && !one_group
+    }
+
+    pub fn can_ungroup(&self) -> bool {
+        self.selection_counts().1 > 0
+    }
+
+    pub fn can_lock(&self) -> bool {
+        self.selection_counts().3 > 0
+    }
+
+    pub fn can_unlock(&self) -> bool {
+        self.selection_counts().2 > 0
+    }
+
+    /// Whether the selection has at least `n` things that move as one (a group counts once) that can be changed.
+    pub fn has_units(&self, n: usize) -> bool {
+        self.editable_units().len() >= n
+    }
+
+    /// The unlocked selected strokes, joined into the groups they move with.
+    fn editable_units(&self) -> Vec<Vec<usize>> {
+        let Some(sel) = self.editable() else { return Vec::new() };
+        let groups: Vec<u32> = self.styles.iter().map(|st| st.group).collect();
+        arrange::units(sel.indices(), &groups)
+    }
+
+    /// Changes the looks of the selected strokes as one undo step.
+    fn set_selected_looks(&mut self, change: impl Fn(&mut Style)) {
+        self.sync_styles();
+        let Some(sel) = self.selection.clone() else { return };
+        self.push_undo();
+        for &i in sel.indices() {
+            if let Some(st) = self.styles.get_mut(i) {
+                change(st);
+            }
+        }
+        self.mark_changed();
+        self.dirty = true;
+    }
+
+    /// Arrange > Group: the selected strokes are selected and moved together from now on.
+    pub fn group_selection(&mut self) {
+        if !self.can_group() {
+            return;
+        }
+        let id = self.styles.iter().map(|st| st.group).max().unwrap_or(0) + 1;
+        self.set_selected_looks(|st| st.group = id);
+    }
+
+    /// Arrange > Ungroup.
+    pub fn ungroup_selection(&mut self) {
+        if self.can_ungroup() {
+            self.set_selected_looks(|st| st.group = 0);
+        }
+    }
+
+    /// Arrange > Lock: the selected strokes stay where they are and cannot be changed or deleted.
+    pub fn lock_selection(&mut self) {
+        if self.can_lock() {
+            self.set_selected_looks(|st| st.locked = true);
+        }
+    }
+
+    /// Arrange > Unlock.
+    pub fn unlock_selection(&mut self) {
+        if self.can_unlock() {
+            self.set_selected_looks(|st| st.locked = false);
+        }
+    }
+
+    /// The box of the strokes in `unit`.
+    fn unit_box(&self, unit: &[usize]) -> Option<Rect> {
+        let boxes: Vec<Rect> = unit.iter().filter_map(|&i| self.model.strokes().get(i)?.bounds()).collect();
+        arrange::union_of(&boxes)
+    }
+
+    /// Moves each unit (a group or a loose stroke) of the selection by the offset `plan` gives for its box. One undo
+    /// step, and nothing when no unit has to move.
+    fn move_units(&mut self, ui: &Ui, plan: impl Fn(&[Rect]) -> Vec<(f32, f32)>) {
+        self.sync_styles();
+        let units: Vec<(Vec<usize>, Rect)> = self.editable_units().into_iter().filter_map(|u| Some((u.clone(), self.unit_box(&u)?))).collect();
+        let boxes: Vec<Rect> = units.iter().map(|(_, b)| *b).collect();
+        let offsets = plan(&boxes);
+        if offsets.iter().all(|&(dx, dy)| dx.abs() < 0.01 && dy.abs() < 0.01) {
+            return;
+        }
+        self.push_undo();
+        for ((unit, _), (dx, dy)) in units.iter().zip(offsets) {
+            for &i in unit {
+                if let Some(s) = self.model.stroke_mut(i) {
+                    s.transform(Affine::translate(dx, dy));
+                }
+            }
+        }
+        self.repaint(ui, None);
+        self.mark_changed();
+    }
+
+    /// Arrange > Align: the selected items line up on an edge or centre line of the selection.
+    pub fn align_selection(&mut self, ui: &Ui, how: Align) {
+        self.move_units(ui, |boxes| arrange::align_offsets(boxes, how));
+    }
+
+    /// Arrange > Distribute: the gaps between three or more items become equal.
+    pub fn distribute_selection(&mut self, ui: &Ui, horizontal: bool) {
+        self.move_units(ui, |boxes| arrange::distribute_offsets(boxes, horizontal));
+    }
+
+    /// The open board's title.
+    pub fn board_title(&self) -> &str {
+        self.boards.current_title()
+    }
+
+    /// Every board as (id, title, open).
+    pub fn board_entries(&self) -> Vec<(u32, String, bool)> {
+        self.boards.entries().iter().map(|e| (e.id, e.title.clone(), e.id == self.boards.current())).collect()
+    }
+
+    pub fn board_count(&self) -> usize {
+        self.boards.len()
+    }
+
+    /// Writes the open board and starts on board `id`: the history and the selection belong to the board left behind.
+    pub fn open_board(&mut self, ui: &Ui, id: u32) {
+        if id == self.boards.current() {
+            return;
+        }
+        self.flush();
+        if !self.boards.open(id) {
+            return;
+        }
+        self.show_loaded_board(ui);
+        self.write_list();
+        self.say(format!("Opened {}", self.boards.current_title()));
+    }
+
+    /// Reads the open board from its folder and paints it, with no history, selection or gesture left over.
+    fn show_loaded_board(&mut self, ui: &Ui) {
+        self.undo.clear();
+        self.redo.clear();
+        self.selection = None;
+        self.lasso = Lasso::new();
+        self.lassoing = false;
+        self.moving = None;
+        self.shape = None;
+        self.handle = None;
+        self.drawing = false;
+        self.load_board();
+        self.ensure_canvas(ui);
+        self.repaint(ui, None);
+    }
+
+    /// File > New Board: an empty board is added and opened.
+    pub fn new_board(&mut self, ui: &Ui) {
+        self.flush();
+        let id = self.boards.add();
+        self.open_board(ui, id);
+    }
+
+    /// File > Duplicate Board: a copy of the open board, opened.
+    pub fn duplicate_board(&mut self, ui: &Ui) {
+        self.flush();
+        let from = self.boards.current();
+        let Some(id) = self.boards.duplicate(from) else { return };
+        if let Some(root) = self.store.clone() {
+            let (src, dst) = (boards::dir_for(&root, from), boards::dir_for(&root, id));
+            let _ = std::fs::create_dir_all(&dst);
+            for name in ["board.txt", "board.styles"] {
+                let _ = std::fs::copy(src.join(name), dst.join(name));
+            }
+        }
+        self.open_board(ui, id);
+    }
+
+    /// File > Delete Board: the open board and its file go, and the board before it opens. The last board stays.
+    pub fn delete_board(&mut self, ui: &Ui) {
+        let id = self.boards.current();
+        if !self.boards.remove(id) {
+            return;
+        }
+        self.unsaved = false;
+        self.save_at = None;
+        if let Some(root) = &self.store {
+            let dir = boards::dir_for(root, id);
+            if id == 1 {
+                let _ = std::fs::remove_file(dir.join("board.txt"));
+                let _ = std::fs::remove_file(dir.join("board.styles"));
+            } else {
+                let _ = std::fs::remove_dir_all(dir);
+            }
+        }
+        self.show_loaded_board(ui);
+        self.write_list();
+        self.say(format!("Deleted the board; opened {}", self.boards.current_title()));
+    }
+
+    /// Switches to the next or previous board.
+    pub fn step_board(&mut self, ui: &Ui, forward: bool) {
+        let id = self.boards.neighbour(forward);
+        self.open_board(ui, id);
+    }
+
+    /// Shows `msg` in the toast for a moment.
+    fn say(&mut self, msg: String) {
+        self.toast = Some((msg, self.now + 2500.0));
+        self.dirty = true;
+    }
+
+    /// The board as the pages a PDF or a print job carries.
+    fn pdf_pages(&self, ui: &Ui) -> Vec<bifrost_app::print::PdfPage> {
+        vec![pdfout::board_page(self.model.strokes(), &self.styles, self.cw, self.ch, ui.s)]
+    }
+
+    /// File > Export as PDF: the board, as a vector page, is written to the Photos folder.
+    pub fn export_as_pdf(&mut self, ui: &Ui) {
+        let result = (|| -> Result<String, String> {
+            let dir = self.save_dir.as_ref().ok_or("no Photos folder")?;
+            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+            let millis = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+            let name = free_name_ext(dir, millis, "pdf");
+            PrintOperation::pages("Freeform board", self.pdf_pages(ui), Vec::new())
+                .to(Destination::Pdf(dir.join(&name)))
+                .run()
+                .map_err(print_message)?;
+            Ok(name)
+        })();
+        let msg = match result {
+            Ok(name) => format!("Exported {name} as PDF"),
+            Err(e) => format!("Could not export: {e}"),
+        };
+        self.say(msg);
+    }
+
+    /// File > Print: the board goes to the default printer.
+    pub fn print_board(&mut self, ui: &Ui) {
+        let msg = match PrintOperation::pages(self.boards.current_title().to_string(), self.pdf_pages(ui), Vec::new()).run() {
+            Ok(_) => "Sent to the printer".to_string(),
+            Err(e) => print_message(e),
+        };
+        self.say(msg);
     }
 
     /// Whether the board has any strokes to export.
@@ -633,12 +1064,16 @@ impl Freeform {
             return Kind::Arrow;
         }
         match self.tool {
-            Tool::Pen | Tool::Pencil | Tool::Marker | Tool::Rectangle | Tool::Oval => Kind::Crosshair,
+            Tool::Pen | Tool::Pencil | Tool::Marker | Tool::Rectangle | Tool::Oval | Tool::Line | Tool::Arrow | Tool::Triangle | Tool::Star => {
+                Kind::Crosshair
+            }
             Tool::Eraser => Kind::DisappearingItem,
             Tool::Lasso => {
                 let (cx, cy) = self.canvas_point(ui, x, y);
                 if self.moving.is_some() {
                     Kind::ClosedHand
+                } else if self.handle.is_some() || self.handle_at(ui, cx, cy).is_some() {
+                    Kind::Crosshair
                 } else if self.selection_contains(cx, cy) {
                     Kind::OpenHand
                 } else {
@@ -871,9 +1306,10 @@ impl Freeform {
 
     /// Removes the selected strokes (one undo step) and repaints.
     fn delete_selection(&mut self, ui: &Ui) {
-        let Some(sel) = self.selection.take() else { return };
-        self.push_undo();
         self.sync_styles();
+        let Some(sel) = self.editable() else { return };
+        self.selection = None;
+        self.push_undo();
         let kept: Vec<Stroke> = self
             .model
             .strokes()
@@ -898,7 +1334,7 @@ impl Freeform {
     /// its centre; a width, fill, dash, shadow or opacity is set on each selected stroke.
     fn edit(&mut self, ui: &Ui, e: Edit) {
         self.sync_styles();
-        let Some(sel) = self.selection.clone() else { return };
+        let Some(sel) = self.editable() else { return };
         match e {
             Edit::Turn | Edit::Smaller | Edit::Larger => {
                 let Some(b) = sel.bounds(&self.model) else { return };
@@ -946,7 +1382,7 @@ impl Freeform {
     }
 
     fn gesture_active(&self) -> bool {
-        self.lassoing || self.moving.is_some() || self.shape.is_some()
+        self.lassoing || self.moving.is_some() || self.shape.is_some() || self.handle.is_some()
     }
 
     /// A press on the canvas starts the stroke, selection drag, lasso loop or shape of the current tool.
@@ -963,7 +1399,11 @@ impl Freeform {
                 self.stroke_to(ui, x, y);
             }
             Tool::Lasso => {
-                if self.selection_contains(cx, cy) {
+                if let (Some(h), Some(b)) = (self.handle_at(ui, cx, cy), self.handle_box()) {
+                    let pivot = arrange::anchor_of(b, h).unwrap_or((b.x + b.w / 2.0, b.y + b.h / 2.0));
+                    self.push_undo();
+                    self.handle = Some(HandleDrag { handle: h, last: (cx, cy), pivot });
+                } else if self.selection_contains(cx, cy) && self.editable().is_some() {
                     self.push_undo();
                     self.moving = Some((cx, cy));
                 } else {
@@ -973,10 +1413,10 @@ impl Freeform {
                     self.lassoing = true;
                 }
             }
-            Tool::Rectangle | Tool::Oval => {
+            Tool::Rectangle | Tool::Oval | Tool::Line | Tool::Arrow | Tool::Triangle | Tool::Star => {
                 self.selection = None;
                 self.push_undo();
-                self.shape = Some((cx, cy));
+                self.shape = Some(self.snapped(ui, (cx, cy)));
             }
         }
         self.dirty = true;
@@ -988,13 +1428,23 @@ impl Freeform {
         if self.lassoing {
             self.lasso.add(cx, cy);
         } else if let Some((mx, my)) = self.moving {
-            if let Some(sel) = &self.selection {
+            if let Some(sel) = self.editable() {
                 sel.transform(&mut self.model, ink::nudge(cx - mx, cy - my));
             }
             self.moving = Some((cx, cy));
             self.repaint(ui, None);
-        } else if let Some(a) = self.shape {
-            let preview = ink::shape_drawing(a, (cx, cy), self.tool == Tool::Oval, self.shape_ink());
+        } else if let Some(drag) = self.handle {
+            if let Some(sel) = self.editable() {
+                let step = match drag.handle {
+                    Handle::Rotate => arrange::rotate_step(drag.pivot, drag.last, (cx, cy)),
+                    _ => arrange::resize_step(drag.pivot, drag.last, (cx, cy)),
+                };
+                sel.transform(&mut self.model, step);
+            }
+            self.handle = Some(HandleDrag { last: (cx, cy), ..drag });
+            self.repaint(ui, None);
+        } else if let (Some(a), Some(kind)) = (self.shape, self.tool.shape_kind()) {
+            let preview = ink::shape_of_kind(a, self.snapped(ui, (cx, cy)), kind, self.shape_ink());
             self.repaint(ui, Some(&preview));
         }
         self.dirty = true;
@@ -1006,29 +1456,34 @@ impl Freeform {
         let (cx, cy) = self.canvas_point(ui, x, y);
         if self.lassoing {
             self.lassoing = false;
+            self.sync_styles();
             let sel = self.lasso.select(&self.model);
-            self.selection = Some(sel).filter(|s| !s.is_empty());
+            self.selection = Some(self.expand_groups(sel)).filter(|s| !s.is_empty());
             self.lasso = Lasso::new();
         } else if self.moving.is_some() {
             self.moving = None;
+        } else if self.handle.is_some() {
+            self.handle = None;
         } else if let Some(a) = self.shape.take() {
-            if (cx - a.0).abs() < 2.0 && (cy - a.1).abs() < 2.0 {
+            let end = self.snapped(ui, (cx, cy));
+            let kind = self.tool.shape_kind().unwrap_or(ShapeKind::Rectangle);
+            if (end.0 - a.0).abs() < 2.0 && (end.1 - a.1).abs() < 2.0 {
                 if let Some((c, d, looks)) = self.undo.pop() {
                     self.canvas = c;
                     self.model = d;
                     self.styles = looks;
                 }
             } else {
-                let shape = ink::shape_drawing(a, (cx, cy), self.tool == Tool::Oval, self.shape_ink());
+                let shape = ink::shape_of_kind(a, end, kind, self.shape_ink());
                 self.sync_styles();
                 let base = self.model.strokes().len();
                 for s in shape.strokes() {
                     self.model.push(s.clone());
                 }
                 self.sync_styles();
-                // a rectangle or oval is a shape: the inspector can fill it
+                // a closed shape can be filled by the inspector; a line or arrow cannot
                 for st in self.styles.iter_mut().skip(base) {
-                    st.shape = true;
+                    st.shape = kind.closed();
                 }
                 self.repaint(ui, None);
             }
@@ -1259,6 +1714,36 @@ impl Freeform {
         )
     }
 
+    /// The dot grid over the board (not part of an export): one dot per grid point.
+    fn draw_grid(&self, s: &mut Surface, ui: &Ui, top: i32) {
+        let step = ui.pt(GRID_PT).max(4.0);
+        let dot = ui.pt(GRID_DOT_PT).max(1.0);
+        let colour = SEPARATOR_C.now();
+        let mut y = step;
+        while y < self.ch as f32 {
+            let mut x = step;
+            while x < self.cw as f32 {
+                s.fill_rect(x as usize, (top as f32 + y) as usize, dot as usize, dot as usize, colour);
+                x += step;
+            }
+            y += step;
+        }
+    }
+
+    /// Square handles on the corners of the selection and a rotate handle above it.
+    fn draw_handles(&self, s: &mut Surface, ui: &Ui, top: f32, b: Rect) {
+        let side = ui.pt(HANDLE_PT);
+        let gap = ui.pt(ROTATE_GAP_PT);
+        let line = ui.pt(1.0).max(1.0);
+        // the stem from the top edge to the rotate handle
+        s.fill_rrect(b.x + b.w / 2.0 - line / 2.0, b.y + top - gap, line, gap, 0.0, TINT);
+        for (_, (x, y)) in arrange::handle_points(b, gap) {
+            let (x0, y0) = (x - side / 2.0, y + top - side / 2.0);
+            s.fill_rrect(x0, y0, side, side, 0.0, TINT);
+            s.fill_rrect(x0 + line, y0 + line, side - 2.0 * line, side - 2.0 * line, 0.0, WHITE);
+        }
+    }
+
     /// A thin tint frame around the selection's box (canvas pixels, drawn below the toolbar).
     fn outline(&self, s: &mut Surface, ui: &Ui, top: f32, b: Rect) {
         let t = ui.pt(1.0).max(1.0);
@@ -1286,8 +1771,14 @@ impl Freeform {
                 *s.at(col, y as usize) = self.canvas[row * self.cw + col];
             }
         }
+        if self.grid {
+            self.draw_grid(s, ui, top);
+        }
         if let Some(b) = self.selection.as_ref().and_then(|sel| sel.bounds(&self.model)) {
             self.outline(s, ui, top as f32, b);
+        }
+        if let Some(b) = self.handle_box() {
+            self.draw_handles(s, ui, top as f32, b);
         }
         if self.lassoing {
             let d = ui.pt(bifrost_app::kit::ui::SPACE_XXS);
@@ -1392,13 +1883,27 @@ fn lum(c: u32) -> u32 {
 /// `Freeform-<ms>.png`, numbered `-2`, `-3`... when that name is taken, so a
 /// second save never overwrites an earlier one.
 fn free_name(dir: &std::path::Path, millis: u128) -> String {
-    let mut name = format!("Freeform-{millis}.png");
+    free_name_ext(dir, millis, "png")
+}
+
+/// `free_name` for any file extension.
+fn free_name_ext(dir: &std::path::Path, millis: u128, ext: &str) -> String {
+    let mut name = format!("Freeform-{millis}.{ext}");
     let mut n = 2;
     while dir.join(&name).exists() {
-        name = format!("Freeform-{millis}-{n}.png");
+        name = format!("Freeform-{millis}-{n}.{ext}");
         n += 1;
     }
     name
+}
+
+/// What a failed print or PDF job says.
+fn print_message(e: PrintError) -> String {
+    match e {
+        PrintError::NoCups => "The printing service is not running".to_string(),
+        PrintError::NoPrinter => "No printer is set up".to_string(),
+        PrintError::Failed(why) => format!("Printing failed: {why}"),
+    }
 }
 
 #[cfg(test)]

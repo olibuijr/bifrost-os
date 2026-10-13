@@ -1,280 +1,280 @@
 {
- "app": "Freeform",
- "bifrost_app": "freeform-desktop",
- "evidence": [
-  "ref27 Freeform.app is partial: only PlugIns/FreeformSharingExtension.appex (activation rule: urls, images, text, rtf, movies, map items; CRLSEMacCreateBoardController.nib)",
-  "bifrost pc ref index timed out; main-bundle rows from general knowledge of the app, described in own words"
- ],
- "features": [
-  {
-   "feature": "Board canvas with freehand ink",
-   "area": "view",
-   "apple": "board window",
-   "status": "parity",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:507",
-   "note": "",
-   "wire": ""
-  },
-  {
-   "feature": "Tools: pen, pencil, marker, eraser, lasso",
-   "area": "toolbar",
-   "apple": "drawing palette",
-   "status": "parity",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:507",
-   "note": "",
-   "wire": ""
-  },
-  {
-   "feature": "Shapes",
-   "area": "toolbar",
-   "apple": "Insert > Shape",
-   "status": "partial",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:512",
-   "note": "rectangle and oval only",
-   "wire": "Add Line, Arrow, Triangle, Star and a Shapes popover; extend Tool (freeform.rs:157)"
-  },
-  {
-   "feature": "Colour palette",
-   "area": "toolbar",
-   "apple": "colour well",
-   "status": "parity",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:514",
-   "note": "7 fixed colours",
-   "wire": ""
-  },
-  {
-   "feature": "Inspector: fill, width, dash, shadow, opacity",
-   "area": "panel",
-   "apple": "Format inspector",
-   "status": "parity",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:70",
-   "note": "",
-   "wire": ""
-  },
-  {
-   "feature": "Rotate / resize selection",
-   "area": "panel",
-   "apple": "selection handles",
-   "status": "partial",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:86",
-   "note": "fixed steps only; no drag handles",
-   "wire": "Add drag resize/rotate handles on the lasso selection"
-  },
-  {
-   "feature": "Undo",
-   "area": "menu",
-   "apple": "Edit > Undo",
-   "status": "partial",
-   "bifrost": "springboard/apps/freeform-desktop/src/main.rs:106",
-   "note": "Edit > Undo with Cmd+Z, enabled by the undo stack (freeform.rs:398). Needs a check on the lab machine.",
-   "wire": "Expose Undo in the Edit AppMenu (main.rs:97) with cmd+Z"
-  },
-  {
-   "feature": "Redo",
-   "area": "menu",
-   "apple": "Edit > Redo",
-   "status": "partial",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:408",
-   "note": "Redo stack of snapshots, cleared by every new edit; Edit > Redo with Cmd+Shift+Z. Needs a check on the lab machine.",
-   "wire": "Keep a redo stack of Snapshot in freeform.rs and wire cmd+shift+Z"
-  },
-  {
-   "feature": "Copy selection",
-   "area": "menu",
-   "apple": "Edit > Copy",
-   "status": "parity",
-   "bifrost": "springboard/apps/freeform-desktop/src/services.rs:5",
-   "note": "",
-   "wire": ""
-  },
-  {
-   "feature": "Paste / duplicate",
-   "area": "menu",
-   "apple": "Edit > Paste / Duplicate",
-   "status": "partial",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:443",
-   "note": "Edit > Duplicate (freeform.rs:443) and Edit > Paste (services.rs:101 reads the stroke type; freeform.rs:459 inserts). Pasted strokes land at a fixed offset, not at the pointer; PNG-only pasteboards are not read yet.",
-   "wire": "Read STROKES_UTI (services.rs:20) or PNG from the pasteboard and insert at the pointer; add Edit > Paste and Duplicate"
-  },
-  {
-   "feature": "Delete selection and clear",
-   "area": "toolbar",
-   "apple": "Edit > Delete",
-   "status": "parity",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:520",
-   "note": "",
-   "wire": ""
-  },
-  {
-   "feature": "Arrange: align and layer order",
-   "area": "menu",
-   "apple": "Arrange menu",
-   "status": "partial",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:466",
-   "note": "Arrange menu: Bring to Front, Send to Back, Arrange in Row. Align left/centre/right and distribute are not done.",
-   "wire": "Add Bring to Front / Send to Back / Align to an Arrange AppMenu"
-  },
-  {
-   "feature": "Group / lock",
-   "area": "menu",
-   "apple": "Arrange > Group / Lock",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add group ids and a locked flag to Style; Arrange menu items"
-  },
-  {
-   "feature": "Text boxes",
-   "area": "toolbar",
-   "apple": "Insert > Text Box",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a Text tool with an SDK TextField overlay; store text items in the board"
-  },
-  {
-   "feature": "Sticky notes",
-   "area": "toolbar",
-   "apple": "Insert > Sticky Note",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a sticky note item (coloured square with text)"
-  },
-  {
-   "feature": "Insert images, files, links",
-   "area": "menu",
-   "apple": "Insert menu",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add an Insert menu using the shell open panel; draw images as board items"
-  },
-  {
-   "feature": "Connectors",
-   "area": "toolbar",
-   "apple": "connection lines",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add connector items linking two items, redrawn on move"
-  },
-  {
-   "feature": "Tables",
-   "area": "menu",
-   "apple": "Insert > Table",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a table item of TextField cells and Insert > Table"
-  },
-  {
-   "feature": "Multiple boards and board browser",
-   "area": "view",
-   "apple": "boards sidebar",
-   "status": "gap",
-   "bifrost": "",
-   "note": "single board",
-   "wire": "Add a board list in data_dir with a sidebar and File > New Board, rename, delete, duplicate"
-  },
-  {
-   "feature": "Board persistence",
-   "area": "document",
-   "apple": "board documents",
-   "status": "partial",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:340",
-   "note": "The board and each stroke's look are written to the data folder 1 s after an edit and on suspend, and loaded at launch (freeform.rs:354). Single board only.",
-   "wire": "Serialise Drawing::to_text plus styles to data_dir on change; load in configure (main.rs)"
-  },
-  {
-   "feature": "Zoom and pan canvas",
-   "area": "view",
-   "apple": "View > Zoom",
-   "status": "gap",
-   "bifrost": "",
-   "note": "canvas is the window size",
-   "wire": "Add a view transform (zoom, pan) in freeform.rs with cmd+= / - / 0 and pinch"
-  },
-  {
-   "feature": "Grid and snapping",
-   "area": "menu",
-   "apple": "View > Show Grid",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Draw a dot grid and snap shape points when enabled"
-  },
-  {
-   "feature": "Export as PNG / save to Photos",
-   "area": "menu",
-   "apple": "File > Export",
-   "status": "parity",
-   "bifrost": "springboard/apps/freeform-desktop/src/main.rs:97",
-   "note": "save at freeform.rs:951",
-   "wire": ""
-  },
-  {
-   "feature": "Export as PDF",
-   "area": "menu",
-   "apple": "File > Export as PDF",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Paint the board through a PDF context and save"
-  },
-  {
-   "feature": "Print",
-   "area": "menu",
-   "apple": "File > Print",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add File > Print through bifrost_app::print"
-  },
-  {
-   "feature": "Collaboration",
-   "area": "integration",
-   "apple": "Share > Collaborate",
-   "status": "n/a",
-   "bifrost": "",
-   "note": "vendor cloud collaboration",
-   "wire": ""
-  },
-  {
-   "feature": "Share target: create board from shared content",
-   "area": "integration",
-   "apple": "FreeformSharingExtension.appex (urls, images, text, movies; CRLSEMacCreateBoardController.nib)",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Register as a share target for images/text/urls and add them to a new or chosen board"
-  },
-  {
-   "feature": "Search boards",
-   "area": "toolbar",
-   "apple": "board browser search",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Filter the board list by title once boards exist"
-  },
-  {
-   "feature": "Pointer shape per tool",
-   "area": "integration",
-   "apple": "cursor",
-   "status": "parity",
-   "bifrost": "springboard/apps/freeform-desktop/src/services.rs:3",
-   "note": "",
-   "wire": ""
-  },
-  {
-   "feature": "First-use tip",
-   "area": "panel",
-   "apple": "onboarding",
-   "status": "parity",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:459",
-   "note": "",
-   "wire": ""
-  }
- ]
+  "app": "Freeform",
+  "bifrost_app": "freeform-desktop",
+  "evidence": [
+    "ref27 Freeform.app is partial: only PlugIns/FreeformSharingExtension.appex (activation rule: urls, images, text, rtf, movies, map items; CRLSEMacCreateBoardController.nib)",
+    "bifrost pc ref index timed out; main-bundle rows from general knowledge of the app, described in own words"
+  ],
+  "features": [
+    {
+      "feature": "Board canvas with freehand ink",
+      "area": "view",
+      "apple": "board window",
+      "status": "parity",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:507",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Tools: pen, pencil, marker, eraser, lasso",
+      "area": "toolbar",
+      "apple": "drawing palette",
+      "status": "parity",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:507",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Shapes",
+      "area": "toolbar",
+      "apple": "Insert > Shape",
+      "status": "partial",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:617",
+      "note": "rectangle and oval only | Wave 2: Insert menu Line/Arrow/Triangle/Star; no toolbar popover yet; not compiled or lab-checked yet.",
+      "wire": "Add Line, Arrow, Triangle, Star and a Shapes popover; extend Tool (freeform.rs:157)"
+    },
+    {
+      "feature": "Colour palette",
+      "area": "toolbar",
+      "apple": "colour well",
+      "status": "parity",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:514",
+      "note": "7 fixed colours",
+      "wire": ""
+    },
+    {
+      "feature": "Inspector: fill, width, dash, shadow, opacity",
+      "area": "panel",
+      "apple": "Format inspector",
+      "status": "parity",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:70",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Rotate / resize selection",
+      "area": "panel",
+      "apple": "selection handles",
+      "status": "partial",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:656",
+      "note": "fixed steps only; no drag handles | Wave 2: handles on the selection; not compiled or lab-checked yet.",
+      "wire": "Add drag resize/rotate handles on the lasso selection"
+    },
+    {
+      "feature": "Undo",
+      "area": "menu",
+      "apple": "Edit > Undo",
+      "status": "partial",
+      "bifrost": "springboard/apps/freeform-desktop/src/main.rs:187",
+      "note": "Edit > Undo with Cmd+Z, enabled by the undo stack (freeform.rs:398). Needs a check on the lab machine. | Wave 2: Edit > Undo cmd+Z; not compiled or lab-checked yet.",
+      "wire": "Expose Undo in the Edit AppMenu (main.rs:97) with cmd+Z"
+    },
+    {
+      "feature": "Redo",
+      "area": "menu",
+      "apple": "Edit > Redo",
+      "status": "partial",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:495",
+      "note": "Redo stack of snapshots, cleared by every new edit; Edit > Redo with Cmd+Shift+Z. Needs a check on the lab machine. | Wave 2: Edit > Redo cmd+shift+Z; not compiled or lab-checked yet.",
+      "wire": "Keep a redo stack of Snapshot in freeform.rs and wire cmd+shift+Z"
+    },
+    {
+      "feature": "Copy selection",
+      "area": "menu",
+      "apple": "Edit > Copy",
+      "status": "parity",
+      "bifrost": "springboard/apps/freeform-desktop/src/services.rs:5",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Paste / duplicate",
+      "area": "menu",
+      "apple": "Edit > Paste / Duplicate",
+      "status": "partial",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:545",
+      "note": "Edit > Duplicate (freeform.rs:443) and Edit > Paste (services.rs:101 reads the stroke type; freeform.rs:459 inserts). Pasted strokes land at a fixed offset, not at the pointer; PNG-only pasteboards are not read yet. | Wave 2: strokes only; PNG paste not done; not compiled or lab-checked yet.",
+      "wire": "Read STROKES_UTI (services.rs:20) or PNG from the pasteboard and insert at the pointer; add Edit > Paste and Duplicate"
+    },
+    {
+      "feature": "Delete selection and clear",
+      "area": "toolbar",
+      "apple": "Edit > Delete",
+      "status": "parity",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:520",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Arrange: align and layer order",
+      "area": "menu",
+      "apple": "Arrange menu",
+      "status": "partial",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:802",
+      "note": "Arrange menu: Bring to Front, Send to Back, Arrange in Row. Align left/centre/right and distribute are not done. | Wave 2: Arrange menu: front/back, align, distribute; not compiled or lab-checked yet.",
+      "wire": "Add Bring to Front / Send to Back / Align to an Arrange AppMenu"
+    },
+    {
+      "feature": "Group / lock",
+      "area": "menu",
+      "apple": "Arrange > Group / Lock",
+      "status": "partial",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:744",
+      "note": " | Wave 2: group and lock in Arrange menu; not compiled or lab-checked yet.",
+      "wire": "Add group ids and a locked flag to Style; Arrange menu items"
+    },
+    {
+      "feature": "Text boxes",
+      "area": "toolbar",
+      "apple": "Insert > Text Box",
+      "status": "gap",
+      "bifrost": "",
+      "note": " | Wave 2: not implemented.",
+      "wire": "Add a Text tool with an SDK TextField overlay; store text items in the board"
+    },
+    {
+      "feature": "Sticky notes",
+      "area": "toolbar",
+      "apple": "Insert > Sticky Note",
+      "status": "gap",
+      "bifrost": "",
+      "note": " | Wave 2: not implemented.",
+      "wire": "Add a sticky note item (coloured square with text)"
+    },
+    {
+      "feature": "Insert images, files, links",
+      "area": "menu",
+      "apple": "Insert menu",
+      "status": "gap",
+      "bifrost": "",
+      "note": " | Wave 2: not implemented.",
+      "wire": "Add an Insert menu using the shell open panel; draw images as board items"
+    },
+    {
+      "feature": "Connectors",
+      "area": "toolbar",
+      "apple": "connection lines",
+      "status": "gap",
+      "bifrost": "",
+      "note": " | Wave 2: not implemented.",
+      "wire": "Add connector items linking two items, redrawn on move"
+    },
+    {
+      "feature": "Tables",
+      "area": "menu",
+      "apple": "Insert > Table",
+      "status": "gap",
+      "bifrost": "",
+      "note": " | Wave 2: not implemented.",
+      "wire": "Add a table item of TextField cells and Insert > Table"
+    },
+    {
+      "feature": "Multiple boards and board browser",
+      "area": "view",
+      "apple": "boards sidebar",
+      "status": "partial",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:856",
+      "note": "single board | Wave 2: File and Boards menus; no sidebar browser yet; not compiled or lab-checked yet.",
+      "wire": "Add a board list in data_dir with a sidebar and File > New Board, rename, delete, duplicate"
+    },
+    {
+      "feature": "Board persistence",
+      "area": "document",
+      "apple": "board documents",
+      "status": "partial",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:419",
+      "note": "The board and each stroke's look are written to the data folder 1 s after an edit and on suspend, and loaded at launch (freeform.rs:354). Single board only. | Wave 2: saved after edits, loaded at launch; not compiled or lab-checked yet.",
+      "wire": "Serialise Drawing::to_text plus styles to data_dir on change; load in configure (main.rs)"
+    },
+    {
+      "feature": "Zoom and pan canvas",
+      "area": "view",
+      "apple": "View > Zoom",
+      "status": "gap",
+      "bifrost": "",
+      "note": "canvas is the window size | Wave 2: not implemented.",
+      "wire": "Add a view transform (zoom, pan) in freeform.rs with cmd+= / - / 0 and pinch"
+    },
+    {
+      "feature": "Grid and snapping",
+      "area": "menu",
+      "apple": "View > Show Grid",
+      "status": "partial",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:1718",
+      "note": " | Wave 2: View > Show Grid and Snap to Grid; not compiled or lab-checked yet.",
+      "wire": "Draw a dot grid and snap shape points when enabled"
+    },
+    {
+      "feature": "Export as PNG / save to Photos",
+      "area": "menu",
+      "apple": "File > Export",
+      "status": "parity",
+      "bifrost": "springboard/apps/freeform-desktop/src/main.rs:97",
+      "note": "save at freeform.rs:951",
+      "wire": ""
+    },
+    {
+      "feature": "Export as PDF",
+      "area": "menu",
+      "apple": "File > Export as PDF",
+      "status": "partial",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:917",
+      "note": " | Wave 2: File > Export as PDF; not compiled or lab-checked yet.",
+      "wire": "Paint the board through a PDF context and save"
+    },
+    {
+      "feature": "Print",
+      "area": "menu",
+      "apple": "File > Print",
+      "status": "partial",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:937",
+      "note": " | Wave 2: File > Print; not compiled or lab-checked yet.",
+      "wire": "Add File > Print through bifrost_app::print"
+    },
+    {
+      "feature": "Collaboration",
+      "area": "integration",
+      "apple": "Share > Collaborate",
+      "status": "n/a",
+      "bifrost": "",
+      "note": "vendor cloud collaboration",
+      "wire": ""
+    },
+    {
+      "feature": "Share target: create board from shared content",
+      "area": "integration",
+      "apple": "FreeformSharingExtension.appex (urls, images, text, movies; CRLSEMacCreateBoardController.nib)",
+      "status": "gap",
+      "bifrost": "",
+      "note": " | Wave 2: not implemented.",
+      "wire": "Register as a share target for images/text/urls and add them to a new or chosen board"
+    },
+    {
+      "feature": "Search boards",
+      "area": "toolbar",
+      "apple": "board browser search",
+      "status": "gap",
+      "bifrost": "",
+      "note": " | Wave 2: not implemented.",
+      "wire": "Filter the board list by title once boards exist"
+    },
+    {
+      "feature": "Pointer shape per tool",
+      "area": "integration",
+      "apple": "cursor",
+      "status": "parity",
+      "bifrost": "springboard/apps/freeform-desktop/src/services.rs:3",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "First-use tip",
+      "area": "panel",
+      "apple": "onboarding",
+      "status": "parity",
+      "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:459",
+      "note": "",
+      "wire": ""
+    }
+  ]
 }
