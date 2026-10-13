@@ -330,7 +330,7 @@ impl App for StickiesApp {
                 }
                 self.changed();
                 self.flush(ctx);
-                true
+                return true;
             }
             DocumentEvent::SaveTo(mut doc) => match self.export.take() {
                 Some((request, bytes)) if request == doc.request => match doc.file.write_all(&bytes) {

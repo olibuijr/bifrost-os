@@ -5,7 +5,7 @@
 mod model;
 
 use bifrost_app::kit::ui::{self, Ui, Weight};
-use bifrost_app::kit::{Damage, Event, Font, Surface};
+use bifrost_app::kit::{Damage, Font, Surface};
 use bifrost_app::{App, Ctx, Input, KeyInput, TouchKind};
 use bifrost_render::fontprefs;
 use model::{Library, Source};
@@ -174,6 +174,8 @@ impl App for FontBookApp {
         let scale = ui.s;
         self.ensure_preview(scale);
         let p = |v: f32| (v * scale) as usize;
+        // positions for blit_colored, which takes signed pixels
+        let pi = |v: f32| (v * scale) as i32;
         let (w, h) = (s.w, s.h);
         s.fill_rect(0, 0, w, h, ui::DETAIL_BG.now());
         // sidebar
@@ -188,7 +190,7 @@ impl App for FontBookApp {
                 s.fill_rect(p(6.0), p(y), p(SIDEBAR_PT - 12.0), p(ROW_PT), ui::SIDEBAR_SELECTED);
             }
             let img = ui.text(&ui.fit(label, ui::MAC_BODY_PT, ui.pt(SIDEBAR_PT - 2.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
-            s.blit_colored(&img, p(PAD_PT), p(y + 6.0), ui::LABEL.now(), 255);
+            s.blit_colored(&img, pi(PAD_PT), pi(y + 6.0), ui::LABEL.now(), 255);
         }
         // list column
         let x0 = SIDEBAR_PT;
@@ -196,7 +198,7 @@ impl App for FontBookApp {
         let shown = self.shown();
         let total = shown.len();
         let header = ui.text(&format!("{total} families"), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-        s.blit_colored(&header, p(x0 + PAD_PT), p(HEADER_PT - 20.0), ui::LABEL_2.now(), 255);
+        s.blit_colored(&header, pi(x0 + PAD_PT), pi(HEADER_PT - 20.0), ui::LABEL_2.now(), 255);
         for (i, name) in shown.iter().enumerate() {
             let y = HEADER_PT + i as f32 * ROW_PT;
             if y > h as f32 / scale {
@@ -208,7 +210,7 @@ impl App for FontBookApp {
             }
             let colour = if on { ui::LABEL.now() } else { ui::LABEL_2.now() };
             let img = ui.text(&ui.fit(name, ui::MAC_BODY_PT, ui.pt(LIST_PT - 2.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, colour);
-            s.blit_colored(&img, p(x0 + PAD_PT), p(y + 6.0), colour, 255);
+            s.blit_colored(&img, pi(x0 + PAD_PT), pi(y + 6.0), colour, 255);
         }
         // preview column
         let px = SIDEBAR_PT + LIST_PT + PAD_PT;
@@ -218,14 +220,14 @@ impl App for FontBookApp {
                 s.fill_rect(p(px), p(PAD_PT), p(120.0), p(28.0), if on { ui::LINK } else { ui::SEPARATOR });
                 let label = if on { "Turn Off" } else { "Turn On" };
                 let img = ui.text(label, ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
-                s.blit_colored(&img, p(px + 12.0), p(PAD_PT + 6.0), ui::LABEL.now(), 255);
+                s.blit_colored(&img, pi(px + 12.0), pi(PAD_PT + 6.0), ui::LABEL.now(), 255);
                 let title = ui.text(&ui.fit(name, ui::MAC_TITLE2_PT, ui.pt(w as f32 / scale - px - PAD_PT)), ui::MAC_TITLE2_PT, Weight::Regular, ui::LABEL.now());
-                s.blit_colored(&title, p(px), p(HEADER_PT + PAD_PT), ui::LABEL.now(), 255);
+                s.blit_colored(&title, pi(px), pi(HEADER_PT + PAD_PT), ui::LABEL.now(), 255);
                 let mut y = HEADER_PT + 56.0;
                 if let Some((_, font_ui)) = preview {
                     for size in PREVIEW_SIZES {
                         let img = font_ui.text(model::PREVIEW_TEXT, size, Weight::Regular, ui::LABEL.now());
-                        s.blit_colored(&img, p(px), p(y), ui::LABEL.now(), 255);
+                        s.blit_colored(&img, pi(px), pi(y), ui::LABEL.now(), 255);
                         y += size * 1.6;
                     }
                 }
@@ -234,19 +236,19 @@ impl App for FontBookApp {
                     for (k, v) in lib.info(name) {
                         let line = format!("{k}: {v}");
                         let img = ui.text(&ui.fit(&line, ui::MAC_FOOTNOTE_PT, ui.pt(w as f32 / scale - px - PAD_PT)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-                        s.blit_colored(&img, p(px), p(y), ui::LABEL_2.now(), 255);
+                        s.blit_colored(&img, pi(px), pi(y), ui::LABEL_2.now(), 255);
                         y += 18.0;
                     }
                 }
             }
             (None, _) => {
                 let hint = ui.text("Select a font to preview it", ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
-                s.blit_colored(&hint, p(px), p(HEADER_PT + PAD_PT), ui::LABEL_2.now(), 255);
+                s.blit_colored(&hint, pi(px), pi(HEADER_PT + PAD_PT), ui::LABEL_2.now(), 255);
             }
         }
         if !self.status.is_empty() {
             let img = ui.text(&ui.fit(&self.status, ui::MAC_FOOTNOTE_PT, ui.pt(w as f32 / scale - px - PAD_PT)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-            s.blit_colored(&img, p(px), p(h as f32 / scale - 24.0), ui::LABEL_2.now(), 255);
+            s.blit_colored(&img, pi(px), pi(h as f32 / scale - 24.0), ui::LABEL_2.now(), 255);
         }
         let mut d = Damage::new(w, h);
         d.all();

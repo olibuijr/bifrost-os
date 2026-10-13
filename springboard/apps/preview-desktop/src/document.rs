@@ -27,8 +27,12 @@ pub struct Page {
 
 /// An open document: its pages and the markup saved for it.
 pub struct Document {
+    /// Shown as the window title once the SDK can set one (apps have no window title API yet).
+    #[allow(dead_code)]
     pub title: String,
     pub path: PathBuf,
+    /// For the PDF-only commands (outline, page thumbnails) still to come.
+    #[allow(dead_code)]
     pub is_pdf: bool,
     pub pages: Vec<Page>,
     pub marks: Vec<Mark>,

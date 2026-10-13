@@ -408,7 +408,8 @@ pub fn chunk_text(parts: &[&str], limit: usize) -> Vec<String> {
     let mut pages = Vec::new();
     let mut cur = String::new();
     for part in parts.iter().filter(|p| !p.trim().is_empty()) {
-        if !cur.is_empty() && cur.chars().count() + part.chars().count() > limit {
+        // a page never runs past the limit, the blank line between parts included
+        if !cur.is_empty() && cur.chars().count() + 2 + part.trim().chars().count() > limit {
             pages.push(std::mem::take(&mut cur));
         }
         if !cur.is_empty() {
@@ -553,7 +554,8 @@ mod tests {
         let parts = ["alpha", "  ", "beta", "gamma"];
         assert_eq!(chunk_text(&parts, 100), vec!["alpha\n\nbeta\n\ngamma".to_string()]);
         let pages = chunk_text(&parts, 9);
-        assert_eq!(pages, vec!["alpha".to_string(), "beta\n\ngamma".to_string()]);
+        assert_eq!(pages, vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()], "no page passes 9 characters with its separators");
+        assert_eq!(chunk_text(&parts, 11), vec!["alpha\n\nbeta".to_string(), "gamma".to_string()], "exactly at the limit still fits");
         assert!(chunk_text(&[], 10).is_empty());
     }
 }

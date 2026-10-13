@@ -409,7 +409,7 @@ mod tests {
         assert_eq!(n.text, "héllo\nx");
         assert!(n.backspace(12));
         assert!(n.backspace(13));
-        assert_eq!(n.text, "héllo\n");
+        assert_eq!(n.text, "héllo", "two backspaces remove the x and the newline");
         assert_eq!(n.modified, 13);
         assert_eq!(n.created, 5);
         let mut empty = Note::new(2, 0.0, 0.0, 0);

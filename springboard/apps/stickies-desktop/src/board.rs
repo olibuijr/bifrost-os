@@ -1,7 +1,7 @@
 //! Drawing of the sticky notes board on a canvas. Layout is in points (`Ui::pt` turns them into pixels), so the
 //! board follows the window size and the display scale. Colours and type come from the shell's tokens.
 
-use crate::model::{Board, Colour, Note, Style, TextSize, DISCLOSURE_PT, GRIP_PT, PAD_PT, TITLE_H};
+use crate::model::{Board, Colour, Note, Style, TextSize, DISCLOSURE_PT, PAD_PT, TITLE_H};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::rgba;

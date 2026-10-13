@@ -141,6 +141,7 @@ impl Text {
     }
 
     /// The text without styles; paragraphs end with `'\n'`.
+    #[cfg_attr(not(test), allow(dead_code))] // word count and find use the cells directly
     pub fn text(&self) -> String {
         self.cells.iter().map(|c| c.ch).collect()
     }

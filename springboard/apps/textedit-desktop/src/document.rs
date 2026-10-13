@@ -12,7 +12,9 @@ pub const PLAIN_TYPE: &str = "public.plain-text";
 #[derive(Clone, Debug)]
 pub struct TextDocument {
     pub text: Text,
-    /// Whether the file was rich text (RTF). A plain document stays plain when saved.
+    /// Whether the file was rich text (RTF). Saving follows the document type the framework passes, so this only
+    /// records the source format (for the Format menu's Make Plain/Rich Text item, not built yet).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub rich: bool,
 }
 

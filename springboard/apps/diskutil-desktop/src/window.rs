@@ -29,8 +29,6 @@ pub const KEY_PT: f32 = 130.0;
 /// How often the disks are re-read, and how often usage is measured (seconds).
 pub const REFRESH_S: f64 = 2.0;
 pub const USAGE_S: f64 = 10.0;
-/// How often a running action is polled (seconds).
-const POLL_S: f64 = 0.25;
 
 pub const B_MOUNT: u32 = 1;
 pub const B_UNMOUNT: u32 = 2;

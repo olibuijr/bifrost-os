@@ -129,7 +129,7 @@ impl Viewer {
         self.save();
     }
 
-    fn act(&mut self, ui: &Ui, lay: &Layout, action: Action) -> bool {
+    fn act(&mut self, _ui: &Ui, lay: &Layout, action: Action) -> bool {
         match action {
             Action::Previous | Action::Next => {
                 let delta = if action == Action::Previous { -1 } else { 1 };
