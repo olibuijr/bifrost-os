@@ -34,6 +34,7 @@ pub enum Colour {
 impl Colour {
     pub const ALL: [Colour; 6] = [Colour::Yellow, Colour::Orange, Colour::Green, Colour::Teal, Colour::Pink, Colour::Purple];
 
+    #[cfg_attr(not(test), allow(dead_code))] // the colour menu cycles through these
     pub fn index(self) -> usize {
         Colour::ALL.iter().position(|c| *c == self).unwrap_or(0)
     }
@@ -43,6 +44,7 @@ impl Colour {
         Colour::ALL[i % Colour::ALL.len()]
     }
 
+    #[cfg_attr(not(test), allow(dead_code))] // the colour menu cycles through these
     pub fn next(self) -> Colour {
         Colour::from_index(self.index() + 1)
     }

@@ -453,9 +453,9 @@ impl<T: Transport> Client<T> {
             .with(group::OPERATION, "document-format", vec![Value::mime(mime)])
             .document(data);
         let resp = self.exchange(req)?;
-        resp.groups_with(group::JOB)
-            .find_map(|g| g.int("job-id"))
-            .ok_or(CupsError::Missing("job-id"))
+        // bind the id first: the iterator borrows `resp`, which a tail expression would outlive
+        let id = resp.groups_with(group::JOB).find_map(|g| g.int("job-id"));
+        id.ok_or(CupsError::Missing("job-id"))
     }
 }
 

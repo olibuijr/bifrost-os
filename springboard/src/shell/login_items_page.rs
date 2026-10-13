@@ -78,7 +78,8 @@ pub struct LoginExtensions {
 }
 
 /// The empty list, for pages that show no extensions (a `const` so a page model can borrow it).
-pub const NO_EXTENSIONS: LoginExtensions = LoginExtensions { background: Vec::new(), background_off: Vec::new(), extensions: Vec::new() };
+#[cfg_attr(not(test), allow(dead_code))] // the empty set for tests and previews (a static: a const with Vecs cannot be borrowed for 'static)
+pub static NO_EXTENSIONS: LoginExtensions = LoginExtensions { background: Vec::new(), background_off: Vec::new(), extensions: Vec::new() };
 
 /// The tables of one manifest that this page reads.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

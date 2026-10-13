@@ -47,6 +47,7 @@ fn key(name: &str) -> String {
 }
 
 /// A name safe for one line of a text file.
+#[cfg_attr(not(test), allow(dead_code))] // used by the collection editor still to come
 fn clean(name: &str) -> String {
     name.replace(['\t', '\n', '\r'], " ").trim().to_string()
 }
@@ -70,6 +71,7 @@ impl Library {
         }
     }
 
+    #[cfg_attr(not(test), allow(dead_code))] // collections UI still to come
     pub fn disabled_names(&self) -> Vec<String> {
         self.families.iter().filter(|f| !self.is_enabled(&f.family)).map(|f| f.family.clone()).collect()
     }
@@ -83,6 +85,7 @@ impl Library {
     }
 
     /// Adds a collection. Returns false when the name is empty or already taken (names ignore case).
+    #[cfg_attr(not(test), allow(dead_code))] // collections UI still to come
     pub fn create_collection(&mut self, name: &str) -> bool {
         let name = clean(name);
         if name.is_empty() || self.collections.keys().any(|k| key(k) == key(&name)) {
@@ -92,12 +95,14 @@ impl Library {
         true
     }
 
+    #[cfg_attr(not(test), allow(dead_code))] // collections UI still to come
     pub fn delete_collection(&mut self, name: &str) -> bool {
         let found = self.collections.keys().find(|k| key(k) == key(name)).cloned();
         found.is_some_and(|k| self.collections.remove(&k).is_some())
     }
 
     /// Adds `family` to `collection`. Returns false when it is already a member or the collection is missing.
+    #[cfg_attr(not(test), allow(dead_code))] // collections UI still to come
     pub fn add_to_collection(&mut self, collection: &str, family: &str) -> bool {
         let Some(list) = self.collections.iter_mut().find(|(k, _)| key(k) == key(collection)).map(|(_, v)| v) else {
             return false;
@@ -110,6 +115,7 @@ impl Library {
         true
     }
 
+    #[cfg_attr(not(test), allow(dead_code))] // collections UI still to come
     pub fn remove_from_collection(&mut self, collection: &str, family: &str) -> bool {
         let Some(list) = self.collections.iter_mut().find(|(k, _)| key(k) == key(collection)).map(|(_, v)| v) else {
             return false;
@@ -233,6 +239,7 @@ pub fn install(src: &Path, user_dir: &Path) -> Result<(PathBuf, String), String>
 }
 
 /// Removes a font the user installed. Only files inside `user_dir` can be removed; system and library fonts stay.
+#[cfg_attr(not(test), allow(dead_code))] // Remove Font is not in the menu yet
 pub fn uninstall(path: &Path, user_dir: &Path) -> Result<(), String> {
     if !path.starts_with(user_dir) || path == user_dir {
         return Err("Only fonts installed for this user can be removed.".to_string());

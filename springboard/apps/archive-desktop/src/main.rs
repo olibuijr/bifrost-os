@@ -153,22 +153,24 @@ impl App for ArchiveApp {
         let ui = &ctx.ui;
         let scale = ui.s;
         let p = |v: f32| (v * scale) as usize;
+        // positions for blit_colored, which takes signed pixels
+        let pi = |v: f32| (v * scale) as i32;
         let (w, h) = (s.w, s.h);
         let width_pt = w as f32 / scale - 2.0 * PAD_PT;
         s.fill_rect(0, 0, w, h, ui::DETAIL_BG.now());
 
         let title = ui.text("Archive", ui::MAC_TITLE2_PT, Weight::Regular, ui::LABEL.now());
-        s.blit_colored(&title, p(PAD_PT), p(PAD_PT), ui::LABEL.now(), 255);
+        s.blit_colored(&title, pi(PAD_PT), pi(PAD_PT), ui::LABEL.now(), 255);
         let hint = "Open an archive to expand it, or a folder to compress it to .zip.";
         let img = ui.text(&ui.fit(hint, ui::MAC_FOOTNOTE_PT, ui.pt(width_pt)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-        s.blit_colored(&img, p(PAD_PT), p(PAD_PT + 26.0), ui::LABEL_2.now(), 255);
+        s.blit_colored(&img, pi(PAD_PT), pi(PAD_PT + 26.0), ui::LABEL_2.now(), 255);
 
         let mut y = HEADER_PT;
         if let Some(run) = &self.running {
             let verb = if run.req.op == Op::Expand { "Expanding" } else { "Compressing" };
             let line = format!("{verb} {}", name_of(&run.req.path));
             let img = ui.text(&ui.fit(&line, ui::MAC_BODY_PT, ui.pt(width_pt)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
-            s.blit_colored(&img, p(PAD_PT), p(y), ui::LABEL.now(), 255);
+            s.blit_colored(&img, pi(PAD_PT), pi(y), ui::LABEL.now(), 255);
             y += ROW_PT;
             let bar_w = (width_pt * scale) as usize;
             s.fill_rect(p(PAD_PT), p(y), bar_w, p(BAR_PT), ui::SEPARATOR);
@@ -179,19 +181,19 @@ impl App for ArchiveApp {
         if !self.queue.is_empty() {
             let line = format!("{} waiting", self.queue.len());
             let img = ui.text(&line, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-            s.blit_colored(&img, p(PAD_PT), p(y), ui::LABEL_2.now(), 255);
+            s.blit_colored(&img, pi(PAD_PT), pi(y), ui::LABEL_2.now(), 255);
             y += ROW_PT;
         }
         if self.history.is_empty() && self.running.is_none() {
             let img = ui.text("Nothing has been done yet.", ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
-            s.blit_colored(&img, p(PAD_PT), p(y), ui::LABEL_2.now(), 255);
+            s.blit_colored(&img, pi(PAD_PT), pi(y), ui::LABEL_2.now(), 255);
         }
         for line in &self.history {
             if y > h as f32 / scale {
                 break;
             }
             let img = ui.text(&ui.fit(line, ui::MAC_BODY_PT, ui.pt(width_pt)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
-            s.blit_colored(&img, p(PAD_PT), p(y), ui::LABEL.now(), 255);
+            s.blit_colored(&img, pi(PAD_PT), pi(y), ui::LABEL.now(), 255);
             y += ROW_PT;
         }
         let mut d = Damage::new(w, h);

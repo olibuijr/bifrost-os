@@ -214,7 +214,7 @@ pub enum Button {
 
 pub fn button_rect(bar: Rect, button: Button) -> Rect {
     let slot_w = 96.0;
-    let shutter = 52.0;
+    let shutter: f32 = 52.0;
     let y = bar.y + (bar.h - shutter.min(bar.h)) / 2.0;
     match button {
         Button::Mode => Rect { x: 12.0, y: bar.y + (bar.h - 28.0) / 2.0, w: slot_w, h: 28.0 },

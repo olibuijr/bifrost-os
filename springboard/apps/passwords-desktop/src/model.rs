@@ -43,6 +43,7 @@ pub fn generate() -> Result<String, String> {
 }
 
 /// The same generator with a caller-supplied random source (tests fix every draw).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn generate_with<F>(length: usize, below: F) -> Result<String, String>
 where
     F: FnMut(u64) -> Option<u64>,

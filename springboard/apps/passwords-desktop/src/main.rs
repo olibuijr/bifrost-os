@@ -319,19 +319,21 @@ impl App for PasswordsApp {
         let ui = &ctx.ui;
         let scale = ui.s;
         let p = |v: f32| (v * scale) as usize;
+        // positions for blit_colored, which takes signed pixels
+        let pi = |v: f32| (v * scale) as i32;
         let (w, h) = (s.w, s.h);
         s.fill_rect(0, 0, w, h, ui::DETAIL_BG.now());
         // list column with its bar and search field
         s.fill_rect(0, 0, p(LIST_PT), h, ui::SIDEBAR_BG.now());
         for (label, x) in [("Import", IMPORT_BTN.0), ("Export", EXPORT_BTN.0)] {
             let img = ui.text(label, ui::MAC_BODY_PT, Weight::Regular, ui::LINK);
-            s.blit_colored(&img, p(x + 4.0), p(BAR_Y_PT + 6.0), ui::LINK, 255);
+            s.blit_colored(&img, pi(x + 4.0), pi(BAR_Y_PT + 6.0), ui::LINK, 255);
         }
         let search = if self.query.is_empty() { "Search".to_string() } else { self.query.clone() };
         let search_colour = if self.query.is_empty() { ui::LABEL_2.now() } else { ui::LABEL.now() };
         s.fill_rect(p(PAD_PT), p(HEADER_PT - 36.0), p(LIST_PT - 2.0 * PAD_PT), p(26.0), ui::SEPARATOR);
         let img = ui.text(&ui.fit(&search, ui::MAC_BODY_PT, ui.pt(LIST_PT - 4.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, search_colour);
-        s.blit_colored(&img, p(PAD_PT + 8.0), p(HEADER_PT - 31.0), search_colour, 255);
+        s.blit_colored(&img, pi(PAD_PT + 8.0), pi(HEADER_PT - 31.0), search_colour, 255);
         let shown = self.shown();
         for (i, l) in shown.iter().enumerate() {
             let y = HEADER_PT + i as f32 * ROW_PT;
@@ -343,14 +345,14 @@ impl App for PasswordsApp {
                 s.fill_rect(p(6.0), p(y), p(LIST_PT - 12.0), p(ROW_PT - 4.0), ui::SIDEBAR_SELECTED);
             }
             let img = ui.text(&ui.fit(&l.site, ui::MAC_BODY_PT, ui.pt(LIST_PT - 2.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
-            s.blit_colored(&img, p(PAD_PT), p(y + 5.0), ui::LABEL.now(), 255);
+            s.blit_colored(&img, pi(PAD_PT), pi(y + 5.0), ui::LABEL.now(), 255);
             let img = ui.text(&ui.fit(&l.account, ui::MAC_FOOTNOTE_PT, ui.pt(LIST_PT - 2.0 * PAD_PT)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-            s.blit_colored(&img, p(PAD_PT), p(y + 24.0), ui::LABEL_2.now(), 255);
+            s.blit_colored(&img, pi(PAD_PT), pi(y + 24.0), ui::LABEL_2.now(), 255);
         }
         if shown.is_empty() {
             let text = if self.logins.is_empty() { "No Saved Passwords" } else { "No Matches" };
             let img = ui.text(text, ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
-            s.blit_colored(&img, p(PAD_PT), p(HEADER_PT + PAD_PT), ui::LABEL_2.now(), 255);
+            s.blit_colored(&img, pi(PAD_PT), pi(HEADER_PT + PAD_PT), ui::LABEL_2.now(), 255);
         }
         s.fill_rect(p(LIST_PT - 1.0), 0, 1, h, ui::SEPARATOR);
         // detail column
@@ -364,29 +366,29 @@ impl App for PasswordsApp {
                     };
                     let label = if name == "Reveal" && self.revealed.is_some() { "Hide" } else { name };
                     let img = ui.text(label, ui::MAC_BODY_PT, Weight::Regular, colour);
-                    s.blit_colored(&img, p(px + bx + 2.0), p(BAR_Y_PT + 6.0), colour, 255);
+                    s.blit_colored(&img, pi(px + bx + 2.0), pi(BAR_Y_PT + 6.0), colour, 255);
                 }
                 let width = w as f32 / scale - px - PAD_PT;
                 let title = ui.text(&ui.fit(site, ui::MAC_TITLE2_PT, ui.pt(width)), ui::MAC_TITLE2_PT, Weight::Regular, ui::LABEL.now());
-                s.blit_colored(&title, p(px), p(HEADER_PT), ui::LABEL.now(), 255);
+                s.blit_colored(&title, pi(px), pi(HEADER_PT), ui::LABEL.now(), 255);
                 let user = ui.text(&ui.fit(account, ui::MAC_BODY_PT, ui.pt(width)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
-                s.blit_colored(&user, p(px), p(HEADER_PT + 36.0), ui::LABEL_2.now(), 255);
+                s.blit_colored(&user, pi(px), pi(HEADER_PT + 36.0), ui::LABEL_2.now(), 255);
                 let shown_pw = match &self.revealed {
                     Some(pw) => pw.clone(),
                     None => "••••••••••••".to_string(),
                 };
                 let pw = ui.text(&ui.fit(&shown_pw, ui::MAC_BODY_PT, ui.pt(width)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
-                s.blit_colored(&pw, p(px), p(HEADER_PT + 72.0), ui::LABEL.now(), 255);
+                s.blit_colored(&pw, pi(px), pi(HEADER_PT + 72.0), ui::LABEL.now(), 255);
             }
             None => {
                 let hint = ui.text("Select a login to see its password", ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
-                s.blit_colored(&hint, p(px), p(HEADER_PT + PAD_PT), ui::LABEL_2.now(), 255);
+                s.blit_colored(&hint, pi(px), pi(HEADER_PT + PAD_PT), ui::LABEL_2.now(), 255);
             }
         }
         if !self.status.is_empty() {
             let width = w as f32 / scale - PAD_PT * 2.0;
             let img = ui.text(&ui.fit(&self.status, ui::MAC_FOOTNOTE_PT, ui.pt(width)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-            s.blit_colored(&img, p(PAD_PT), p(h as f32 / scale - 24.0), ui::LABEL_2.now(), 255);
+            s.blit_colored(&img, pi(PAD_PT), pi(h as f32 / scale - 24.0), ui::LABEL_2.now(), 255);
         }
         let mut d = Damage::new(w, h);
         d.all();
