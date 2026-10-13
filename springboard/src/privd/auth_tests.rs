@@ -179,3 +179,20 @@ fn set_password_without_token_only_for_an_empty_hash_from_the_shell() {
     std::fs::write(d.join("shadow"), "other:$6$x:1::::::\n").unwrap();
     assert!(matches!(a.set_password(None, true, "", "longenough"), Err(AuthError::Internal(_))));
 }
+
+#[test]
+fn the_password_hint_is_read_from_the_account_file_and_cleaned() {
+    let (a, _, d) = setup("hint");
+    assert_eq!(a.account_info().unwrap().password_hint, "");
+    std::fs::write(d.join("account"), "full_name=Olafur B\nusername=olafur\npassword_hint=  first  pet\u{7}  \n").unwrap();
+    assert_eq!(a.account_info().unwrap().password_hint, "first  pet");
+}
+
+#[test]
+fn hint_parsing_drops_control_characters_blank_text_and_long_text() {
+    assert_eq!(parse_hint("full_name=x\n"), "");
+    assert_eq!(parse_hint("password_hint=   \n"), "");
+    assert_eq!(parse_hint("password_hint=a\u{0}b\n"), "ab");
+    let long = format!("password_hint={}\n", "h".repeat(HINT_MAX + 50));
+    assert_eq!(parse_hint(&long).chars().count(), HINT_MAX);
+}

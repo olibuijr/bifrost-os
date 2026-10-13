@@ -32,6 +32,8 @@ pub const SHAKE_MS: f64 = super::passcode::SHAKE_MS;
 pub const MAX_LEN: usize = 256;
 /// How often an unavailable login helper is asked again.
 const RETRY_MS: f64 = 5000.0;
+/// Wrong passwords in a row before the password hint is shown.
+pub const HINT_AFTER: u32 = 3;
 /// The power button's size in the status bar.
 const POWER_PT: f32 = 22.0;
 
@@ -129,6 +131,8 @@ pub struct AccountInfo {
     pub username: String,
     pub has_password: bool,
     pub locked_out_secs: u64,
+    /// the account's password hint; shown under the message after a few wrong passwords
+    pub password_hint: String,
 }
 
 /// The privd side of the login window; tests stub it.
@@ -199,6 +203,10 @@ pub struct Login {
     pub lock_message: Option<String>,
     /// Users & Groups > Login Options > Name and Password: no picture; a name field above the password field
     pub name_mode: bool,
+    /// the account's password hint (empty when none is set)
+    pub hint: String,
+    /// wrong passwords since the last success; the hint shows from `HINT_AFTER`
+    wrong_count: u32,
     /// name mode: the name typed so far
     typed_name: String,
     /// name mode: keys go to the name field until Return moves them on to the password
@@ -226,6 +234,8 @@ impl Login {
             power_open: false,
             lock_message: None,
             name_mode: false,
+            hint: String::new(),
+            wrong_count: 0,
             typed_name: String::new(),
             name_focus: false,
             backend,
@@ -247,6 +257,7 @@ impl Login {
                     self.name = i.full_name;
                 }
                 self.username = i.username;
+                self.hint = i.password_hint;
                 if !i.has_password {
                     self.msg = Msg::NoPassword;
                 } else if i.locked_out_secs > 0 {
@@ -354,6 +365,14 @@ impl Login {
             Msg::Unavailable => "Login service unavailable".into(),
             Msg::NoPassword => "No password is set for this account".into(),
         }
+    }
+
+    /// The password hint line, once the wrong passwords reach `HINT_AFTER` and the account has a hint.
+    pub fn hint_line(&self) -> Option<String> {
+        if self.wrong_count < HINT_AFTER || self.hint.is_empty() || self.msg == Msg::Unavailable {
+            return None;
+        }
+        Some(format!("Hint: {}", self.hint))
     }
 
     /// Up to two letters for the avatar disc.
@@ -482,10 +501,12 @@ impl Login {
         match r {
             Reply::Ok(token) => {
                 self.msg = Msg::None;
+                self.wrong_count = 0;
                 return Some(token);
             }
             Reply::Wrong { retry_secs } => {
                 self.shake = Some(t);
+                self.wrong_count += 1;
                 self.msg = Msg::Wrong;
                 if retry_secs > 0 {
                     self.lock_for(retry_secs, t);
@@ -694,6 +715,11 @@ impl Login {
             let mi = ui.text(&m, 12.0, Weight::Regular, col);
             centred(s, &mi, cx, line as i32);
         }
+        if let Some(h) = self.hint_line() {
+            line += ui.pt(20.0);
+            let hi = ui.text(&h, 12.0, Weight::Regular, ink_2());
+            centred(s, &hi, cx, line as i32);
+        }
         if let Some(m) = &self.lock_message {
             let mi = ui.text(m, 13.0, Weight::Regular, ink_2());
             centred(s, &mi, cx, (h - ui.pt(64.0) - mi.h as f32) as i32);
@@ -875,6 +901,7 @@ impl Backend for Privd {
             username: json_str(&t, "username").unwrap_or_default(),
             has_password: json_bool(&t, "has_password").unwrap_or(true),
             locked_out_secs: json_num(&t, "locked_out_secs").unwrap_or(0),
+            password_hint: json_str(&t, "password_hint").unwrap_or_default(),
         })
     }
 }
@@ -1011,7 +1038,7 @@ mod tests {
             self.0.clone()
         }
         fn account(&self) -> Option<AccountInfo> {
-            Some(AccountInfo { full_name: "Ada Lovelace".into(), username: "ada".into(), has_password: true, locked_out_secs: 0 })
+            Some(AccountInfo { full_name: "Ada Lovelace".into(), username: "ada".into(), has_password: true, locked_out_secs: 0, password_hint: String::new() })
         }
     }
 
@@ -1145,7 +1172,7 @@ mod tests {
     impl Backend for Flaky {
         fn authenticate(&self, _: &str) -> Reply { Reply::Unavailable }
         fn account(&self) -> Option<AccountInfo> {
-            self.0.load(std::sync::atomic::Ordering::SeqCst).then(|| AccountInfo { full_name: "Owner".into(), username: "owner".into(), has_password: true, locked_out_secs: 0 })
+            self.0.load(std::sync::atomic::Ordering::SeqCst).then(|| AccountInfo { full_name: "Owner".into(), username: "owner".into(), has_password: true, locked_out_secs: 0, password_hint: String::new() })
         }
     }
 
@@ -1198,6 +1225,23 @@ mod tests {
         assert!(!l.power_open, "Escape closes it");
         let (sx, sy, sw, sh) = { l.power_open = true; l.bottom(&ui)[0].2 };
         assert_eq!(l.touch(&ui, Event::Up(sx + sw / 2.0, sy + sh / 2.0), 0.0), Act::Sleep);
+    }
+
+    #[test]
+    fn the_password_hint_shows_after_three_wrong_passwords_and_only_when_set() {
+        let mut l = login(Reply::Wrong { retry_secs: 0 });
+        l.hint = "first pet".into();
+        for _ in 0..HINT_AFTER - 1 {
+            l.apply(Reply::Wrong { retry_secs: 0 }, 0.0);
+        }
+        assert_eq!(l.hint_line(), None, "no line before the third wrong password");
+        l.apply(Reply::Wrong { retry_secs: 0 }, 0.0);
+        assert_eq!(l.hint_line().as_deref(), Some("Hint: first pet"));
+        l.apply(Reply::Ok("t".into()), 0.0);
+        assert_eq!(l.hint_line(), None, "a success clears the count");
+        let mut none = login(Reply::Wrong { retry_secs: 0 });
+        none.wrong_count = 9;
+        assert_eq!(none.hint_line(), None, "no hint is set");
     }
 
     #[test]

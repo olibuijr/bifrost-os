@@ -421,7 +421,7 @@
     impl login::Backend for FixedLogin {
         fn authenticate(&self, _: &str) -> login::Reply { self.0.clone() }
         fn account(&self) -> Option<login::AccountInfo> {
-            Some(login::AccountInfo { full_name: "Owner".into(), username: "owner".into(), has_password: true, locked_out_secs: 0 })
+            Some(login::AccountInfo { full_name: "Owner".into(), username: "owner".into(), has_password: true, locked_out_secs: 0, password_hint: String::new() })
         }
     }
 
@@ -477,7 +477,7 @@
         impl login::Backend for Stub {
             fn authenticate(&self, _: &str) -> login::Reply { login::Reply::Unavailable }
             fn account(&self) -> Option<login::AccountInfo> {
-                Some(login::AccountInfo { full_name: "Ada Lovelace".into(), username: "ada".into(), has_password: true, locked_out_secs: 0 })
+                Some(login::AccountInfo { full_name: "Ada Lovelace".into(), username: "ada".into(), has_password: true, locked_out_secs: 0, password_hint: String::new() })
             }
         }
         let Some(dir) = std::env::var_os("PREVIEW_DIR") else { return };
@@ -506,7 +506,7 @@
         impl login::Backend for Stub {
             fn authenticate(&self, _: &str) -> login::Reply { login::Reply::Unavailable }
             fn account(&self) -> Option<login::AccountInfo> {
-                Some(login::AccountInfo { full_name: "Ada Lovelace".into(), username: "ada".into(), has_password: true, locked_out_secs: 0 })
+                Some(login::AccountInfo { full_name: "Ada Lovelace".into(), username: "ada".into(), has_password: true, locked_out_secs: 0, password_hint: String::new() })
             }
         }
         let mut sh = shell();

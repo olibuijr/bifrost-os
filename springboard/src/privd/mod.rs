@@ -61,7 +61,7 @@ pub struct Peer {
 
 /// The login state machine. `require_unlocked` is the check every AUTH method goes through.
 pub trait Gate: Send + Sync {
-    /// `login.account` result: username, full_name, uid, has_password, locked_out_secs.
+    /// `login.account` result: username, full_name, uid, has_password, locked_out_secs, password_hint.
     fn account(&self) -> Result<Json, PErr>;
     /// `login.authenticate`: marks the session Unlocked and returns the token.
     fn authenticate(&self, password: &str) -> Result<String, PErr>;

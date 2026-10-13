@@ -52,6 +52,18 @@ pub struct AccountInfo {
     pub uid: u32,
     pub has_password: bool,
     pub locked_out_secs: u64,
+    /// the account's password hint (`password_hint=` in the account file); empty when none is set
+    pub password_hint: String,
+}
+
+/// Longest password hint kept; longer text is cut at a character boundary.
+pub const HINT_MAX: usize = 200;
+
+/// The `password_hint=` line of the account file: control characters are dropped and blank text means no hint.
+pub fn parse_hint(text: &str) -> String {
+    let raw = text.lines().find_map(|l| l.strip_prefix("password_hint=")).unwrap_or("");
+    let clean: String = raw.chars().filter(|c| !c.is_control()).collect();
+    clean.trim().chars().take(HINT_MAX).collect()
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -173,6 +185,10 @@ impl Auth {
         r.map_err(|e| AuthError::Internal(format!("account: {e}")))
     }
 
+    fn password_hint(&self) -> String {
+        std::fs::read_to_string(&self.cfg.account_file).map(|t| parse_hint(&t)).unwrap_or_default()
+    }
+
     fn full_name(&self) -> String {
         std::fs::read_to_string(&self.cfg.account_file)
             .ok()
@@ -213,6 +229,7 @@ impl Auth {
             full_name: self.full_name(),
             uid: a.uid,
             locked_out_secs: self.left(now()),
+            password_hint: self.password_hint(),
             username: a.name,
         })
     }
