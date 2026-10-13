@@ -824,6 +824,8 @@ pub mod model_attachment;
 pub mod music;
 pub mod indexset;
 pub mod tracking;
+pub mod wheel;
+pub mod drag_session;
 pub mod evaluation;
 pub mod notifattach;
 pub mod notifmedia;
