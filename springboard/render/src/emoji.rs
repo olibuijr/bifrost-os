@@ -446,7 +446,7 @@ pub fn render_with(faces: &[Face], cluster: &str, px: f32) -> Option<Image> {
     let w = px.round().max(1.0) as usize;
     faces.iter().find_map(|f| {
         let png = f.bitmap(f.cluster_glyph(cluster)?)?;
-        let img = crate::imgdec::decode(png)?;
+        let img = crate::cg::imageio::decode(png)?;
         let h = (img.h as f32 * w as f32 / img.w as f32).round().max(1.0) as usize;
         Some(resample(&img, w, h))
     })
@@ -478,7 +478,7 @@ pub(crate) mod tests {
     /// and 3 subtables, CBDT formats 17 and 18, and a GSUB ligature
     /// 1F600 + 1F601 -> gid 3 (ccmp).
     pub fn synthetic() -> Vec<u8> {
-        let png = crate::imgdec::tests::png_bytes(8, 4, [255, 0, 0, 255]);
+        let png = crate::cg::imageio::tests::png_bytes(8, 4, [255, 0, 0, 255]);
         let mut cbdt = vec![0, 3, 0, 0];
         let o1 = cbdt.len();
         cbdt.extend([4, 8, 0, 0, 8]);

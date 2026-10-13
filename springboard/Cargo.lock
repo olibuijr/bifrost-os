@@ -669,6 +669,7 @@ dependencies = [
 name = "bifrost-render"
 version = "0.1.0"
 dependencies = [
+ "miniz_oxide 0.8.9",
  "png",
  "zune-core",
  "zune-jpeg",

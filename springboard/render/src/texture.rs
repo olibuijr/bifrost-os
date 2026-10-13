@@ -226,7 +226,7 @@ pub fn prepare(img: Image, options: &LoadOptions) -> Result<Prepared, TextureErr
 
 /// Decodes PNG or JPEG bytes and prepares them.
 pub fn load_bytes(bytes: &[u8], options: &LoadOptions) -> Result<Prepared, TextureError> {
-    let img = imgdec::decode(bytes).ok_or(TextureError::Undecodable)?;
+    let img = crate::cg::imageio::decode(bytes).ok_or(TextureError::Undecodable)?;
     prepare(img, options)
 }
 
@@ -311,7 +311,7 @@ mod tests {
 
     #[test]
     fn load_bytes_decodes_png_and_rejects_garbage() {
-        let png = crate::imgdec::files_tests::png_bytes(4, 2, [200, 100, 0, 255]);
+        let png = crate::cg::imageio::tests::png_bytes(4, 2, [200, 100, 0, 255]);
         let o = LoadOptions { srgb: true, ..Default::default() };
         let prepared = load_bytes(&png, &o).unwrap();
         assert_eq!((prepared.descriptor.width, prepared.descriptor.height), (4, 2));
