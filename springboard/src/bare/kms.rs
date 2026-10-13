@@ -525,6 +525,32 @@ fn refresh_rates(modes: &[ModeInfo], w: u16, h: u16) -> Vec<f32> {
     rates
 }
 
+/// The refresh rates `wlr-randr` lists at the size of the current mode, fastest first (`2560x1440 px, 164.847000 Hz
+/// (current)` lines of the first enabled output).
+pub fn wlr_randr_rates(text: &str) -> Vec<f32> {
+    let parse = |l: &str| {
+        let (size, rest) = l.trim().split_once(" px, ")?;
+        let hz: f32 = rest.split_whitespace().next()?.parse().ok()?;
+        Some((size.to_string(), hz, rest.contains("current")))
+    };
+    let modes: Vec<(String, f32, bool)> = text.lines().filter_map(parse).collect();
+    let Some(size) = modes.iter().find(|m| m.2).map(|m| m.0.clone()) else { return Vec::new() };
+    let mut rates: Vec<f32> = modes.iter().filter(|m| m.0 == size).map(|m| (m.1 * 100.0).round() / 100.0).collect();
+    rates.sort_by(|a, b| b.total_cmp(a));
+    rates.dedup();
+    rates
+}
+
+#[cfg(test)]
+mod wlr_rates_tests {
+    #[test]
+    fn rates_at_the_current_size_fastest_first() {
+        let t = "DP-2 \"x\"\n  Modes:\n    2560x1440 px, 59.951000 Hz (preferred)\n    2560x1440 px, 164.847000 Hz (current)\n    2560x1440 px, 143.998993 Hz\n    1920x1080 px, 60.000000 Hz\n";
+        assert_eq!(super::wlr_randr_rates(t), vec![164.85, 144.0, 59.95]);
+        assert!(super::wlr_randr_rates("no modes").is_empty());
+    }
+}
+
 /// The inherited mode stays only when it is the selected size at the selected refresh or faster.
 /// Identical timings count as the same mode whatever the rounded `vrefresh` says (59.951 Hz reads as 60).
 fn keeps_inherited(inherited: &ModeInfo, selected: &ModeInfo) -> bool {
@@ -770,6 +796,9 @@ impl Display {
         let (w,h) = backend.size();
         let mut display = Self::virtual_panel(w,h,60);
         display.mode.vrefresh = backend.refresh();
+        // the rates Settings > Displays > Refresh Rate offers: the window server's modes at the current size
+        display.rates = std::process::Command::new("wlr-randr").output().ok()
+            .map(|o| wlr_randr_rates(&String::from_utf8_lossy(&o.stdout))).unwrap_or_default();
         display.wayland = Some(backend);
         // No shell copy of the boot frame under labwc: its surface can be scaled, so a frame drawn here would not
         // match the loader's mark box in panel pixels. Bootweave's frame stays up until the first present.

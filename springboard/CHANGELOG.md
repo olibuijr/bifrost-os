@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.7 — 2026-10-13
+
+- Displays: the fastest refresh at the native size is the default from the first frame (`display-refresh` runs in the session's autostart before the shell connects; a 2560x1440 panel that offers 165 Hz no longer starts at 60 Hz). Settings > Displays > Refresh Rate picks Highest Available or any rate the panel offers, applied live and kept across restarts (`/var/lib/springboard/display-refresh`). `refresh=firmware` in `/etc/bifrost/display.conf` still keeps the firmware mode.
+
 ## 0.7.6 — 2026-10-13
 
 - Smoothness: the key-state fast path also takes an app frame that is still a few pixels larger than its window (the size the app first drew at), clipped to the body as the full draw clips it; such switches fell back to drawing the whole window.
