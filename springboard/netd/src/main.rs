@@ -72,7 +72,9 @@ impl Core {
 static SUBSCRIBED: std::sync::Condvar = std::sync::Condvar::new();
 
 fn serve(core: Arc<Mutex<Core>>, mut stream: UnixStream) {
-    let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
+    // subscribers are written while the core lock is held: a stalled client is dropped after this much,
+    // so it cannot hold up every other client's command or status push
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(50)));
     let Ok(writer) = stream.try_clone() else { return };
     let mut writer = Some(writer);
     while let Ok(frame) = svc::read_frame(&mut stream) {
