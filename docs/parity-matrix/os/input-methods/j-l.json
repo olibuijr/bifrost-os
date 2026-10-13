@@ -60,11 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/src/shell/input_methods/hangul.rs",
+   "status": "partial",
+   "note": "Pure-Rust 2-set Hangul composer: jamo to syllables, compound finals and vowels, final moves on a following vowel, backspace decomposes. No Hanja conversion, no ancient jamo, no 3-set layouts. Host tests only; needs a Midget check and wiring in kb_input.rs.",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   }
  ]
 }

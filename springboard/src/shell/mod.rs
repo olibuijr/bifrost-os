@@ -53,6 +53,7 @@ pub mod compose_window;
 pub mod kb_layouts;
 pub mod kb_capslock;
 pub mod kb_input;
+pub mod input_methods;
 pub mod kb_clicks;
 pub mod alert_sound;
 pub mod hwkeys;
