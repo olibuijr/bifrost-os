@@ -23,6 +23,7 @@ pub mod scene;
 pub mod session_protocols;
 pub mod state;
 pub mod sync;
+pub mod tiling;
 pub mod wm;
 #[cfg(feature = "xwayland")]
 pub mod xwayland;
