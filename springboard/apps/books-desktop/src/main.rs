@@ -34,6 +34,7 @@ const MENU_NO_COLLECTIONS: u32 = 22;
 const MENU_VIEW_GRID: u32 = 25;
 const MENU_VIEW_LIST: u32 = 26;
 const MENU_JUSTIFY: u32 = 27;
+const MENU_CONTINUOUS: u32 = 28;
 /// Submenu items count up from their base: Sort By (an index into `SortBy::ALL`), Reading Goal (into `store::GOALS`),
 /// Highlight Color (into `store::HIGHLIGHT_STYLES`), Line Spacing, Margins, and Add to Collection.
 const MENU_SORT_BASE: u32 = 30;
@@ -65,6 +66,7 @@ struct MenuState {
     match_style: Option<u8>,
     whole_words: bool,
     two_pages: bool,
+    continuous: bool,
     has_selection: bool,
     /// Read Aloud: None when nothing is read, otherwise whether it is paused
     speaking: Option<bool>,
@@ -141,10 +143,11 @@ fn build_menus(m: &MenuState) -> Vec<AppMenu> {
         AppMenuItem::new(MENU_WHOLE_WORDS, "Match Whole Words").enabled(m.open).checked(m.whole_words),
     ]);
 
-    // the View menu merges into the shell's View menu; Continuous scrolling is not wired yet
+    // the View menu merges into the shell's View menu
     let mut view = vec![
-        AppMenuItem::new(MENU_SINGLE_PAGE, "Single Page").enabled(m.open).checked(!m.two_pages),
+        AppMenuItem::new(MENU_SINGLE_PAGE, "Single Page").enabled(m.open).checked(!m.two_pages && !m.continuous),
         AppMenuItem::new(MENU_TWO_PAGES, "Two Pages").enabled(m.open).checked(m.two_pages),
+        AppMenuItem::new(MENU_CONTINUOUS, "Continuous Scroll").enabled(m.open).checked(m.continuous),
         AppMenuItem::separator(),
         AppMenuItem::new(MENU_VIEW_GRID, "as Grid").checked(!m.list),
         AppMenuItem::new(MENU_VIEW_LIST, "as List").checked(m.list),
@@ -221,6 +224,10 @@ impl BooksApp {
                     let on = !books.settings().justify;
                     books.set_justified(&ctx.ui, on);
                 }
+                MENU_CONTINUOUS => {
+                    let on = !books.continuous();
+                    books.set_continuous(&ctx.ui, on);
+                }
                 _ => return None,
             }
         }
@@ -256,6 +263,7 @@ impl App for BooksApp {
                 match_style: b.match_style(),
                 whole_words: b.whole_words(),
                 two_pages: b.two_pages(),
+                continuous: b.continuous(),
                 has_selection: b.has_selection(),
                 speaking: b.speaking(),
                 status: Some(b.open_status()),
@@ -296,7 +304,10 @@ impl App for BooksApp {
             match id {
                 MENU_FIND_NEXT => books.find_step(1, t),
                 MENU_FIND_PREVIOUS => books.find_step(-1, t),
-                MENU_SINGLE_PAGE => books.set_two_pages(&ctx.ui, false),
+                MENU_SINGLE_PAGE => {
+                    books.set_continuous(&ctx.ui, false);
+                    books.set_two_pages(&ctx.ui, false);
+                }
                 MENU_TWO_PAGES => books.set_two_pages(&ctx.ui, true),
                 MENU_SELECT_PAGE => {
                     books.select_page();
@@ -319,9 +330,14 @@ impl App for BooksApp {
         if id != MENU_PRINT {
             return false;
         }
-        // PDF books print as-is; other formats have no print rendering yet (docs/bifrost-ui.md "Printing")
-        let Some(path) = self.books.as_ref().and_then(|b| b.reading()).filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"))) else { return false };
-        let _ = bifrost_app::print::PrintOperation::new(path).run();
+        // PDF books print as they are; an EPUB prints as the text of the book, laid out for the paper
+        let Some(books) = self.books.as_ref() else { return false };
+        let Some(path) = books.reading() else { return false };
+        if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) {
+            let _ = bifrost_app::print::PrintOperation::new(path).run();
+        } else if let Some((title, text)) = books.print_text() {
+            let _ = bifrost_app::print::PrintOperation::text(title, text).run();
+        }
         false
     }
 
@@ -532,6 +548,17 @@ mod tests {
         assert!(item(&on, "Green").enabled && item(&on, "Green").checked);
         assert!(!item(&on, "Yellow").checked && !item(&on, "Underline").checked);
         assert_eq!(item(&on, "Underline").id, MENU_COLOR_BASE + store::UNDERLINE as u32);
+    }
+
+    #[test]
+    fn continuous_scroll_is_a_view_choice_beside_the_page_modes() {
+        let menus = build_menus(&MenuState { open: true, ..MenuState::default() });
+        assert!(item(&menus, "Single Page").checked && !item(&menus, "Continuous Scroll").checked);
+        assert!(item(&menus, "Continuous Scroll").enabled);
+        let scrolling = build_menus(&MenuState { open: true, continuous: true, ..MenuState::default() });
+        assert!(item(&scrolling, "Continuous Scroll").checked);
+        assert!(!item(&scrolling, "Single Page").checked && !item(&scrolling, "Two Pages").checked);
+        assert!(!item(&build_menus(&MenuState::default()), "Continuous Scroll").enabled, "no book, no scrolling");
     }
 
     #[test]

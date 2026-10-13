@@ -178,6 +178,28 @@ pub(super) fn line_extra(ui: &Ui, justify: bool, block_text: &str, line: &layout
     layout::justify_extra(ui.measure(&line.text, pt, weight), width, line.text.matches(' ').count(), ui.measure(" ", pt, weight))
 }
 
+/// The page in view when the pages of a book follow each other `pitch` px apart and the window is scrolled `offset` px: the
+/// one that covers the middle of the window.
+pub(super) fn page_at(offset: f32, pitch: f32, pages: usize) -> usize {
+    if pitch <= 0.0 || pages == 0 {
+        return 0;
+    }
+    (((offset + pitch / 2.0) / pitch).floor().max(0.0) as usize).min(pages - 1)
+}
+
+/// The text of a book as a printout: its headings and paragraphs in reading order, a blank line between them. Pictures
+/// are left out.
+pub(super) fn book_text(blocks: &[engine::Block]) -> String {
+    let mut out = String::new();
+    for text in blocks.iter().filter_map(|b| b.text()).map(str::trim).filter(|t| !t.is_empty()) {
+        if !out.is_empty() {
+            out.push_str("\n\n");
+        }
+        out.push_str(text);
+    }
+    out
+}
+
 /// The page texts of a whole layout, in page order, as the document model of pdfselect.
 fn document_text(layout: &Layout) -> Vec<String> {
     layout.pages.iter().map(page_text).collect()
@@ -357,6 +379,12 @@ pub struct Books {
     context_book: Option<PathBuf>,
     /// counts the time a book is open towards the reading goal
     clock: store::ReadingClock,
+    /// View menu: the pages of the book follow each other down the window and scroll. Kept for the session.
+    continuous: bool,
+    /// the scroll position of the pages in continuous scrolling, in px from the top of the first page
+    pub(super) page_scroll: Scroller,
+    /// the distance from the top of one page to the top of the next in continuous scrolling, in px
+    pitch: f32,
 }
 
 impl Books {
@@ -402,6 +430,9 @@ impl Books {
             import_dir,
             context_book: None,
             clock: store::ReadingClock::default(),
+            continuous: false,
+            page_scroll: Scroller::new(),
+            pitch: 1.0,
         };
         b.rescan();
         b
@@ -576,6 +607,8 @@ impl Books {
         // the selection's character ranges belong to the old pages
         r.selection = None;
         self.labels.clear();
+        self.fit_page_scroll(ui);
+        self.sync_scroll();
         self.dirty = true;
     }
 
@@ -607,8 +640,15 @@ impl Books {
         self.save_now();
     }
 
-    /// Turns to page `p` (clamped).
+    /// Turns to page `p` (clamped). In continuous scrolling the window scrolls to the top of the page.
     pub(super) fn goto_page(&mut self, p: usize, t: f64) {
+        self.set_page(p, t);
+        self.sync_scroll();
+    }
+
+    /// Makes page `p` (clamped) the current one without moving the scroll position of continuous scrolling: the reading
+    /// position is remembered, and a book whose last page is reached is marked Finished.
+    fn set_page(&mut self, p: usize, t: f64) {
         let Some(r) = &mut self.reader else { return };
         let p = p.min(r.layout.pages.len().saturating_sub(1));
         let mut finished = None;
@@ -642,7 +682,7 @@ impl Books {
         let p = (r.page as i32 + delta).clamp(0, r.layout.pages.len() as i32 - 1);
         self.goto_page(p as usize, t);
         // a spread changes at once; only a single page slides
-        if p as usize != old && !self.two_pages() {
+        if p as usize != old && !self.two_pages() && !self.continuous {
             self.slide = Some((old, delta.signum(), t));
         }
     }
@@ -660,6 +700,8 @@ impl Books {
             return;
         }
         self.display = mode;
+        // a spread is turned, not scrolled
+        self.continuous = self.continuous && !on;
         self.slide = None;
         let keep = self.reader.as_ref().map(|r| r.layout.pos_of(r.page));
         if let Some(keep) = keep {
@@ -693,6 +735,14 @@ impl Books {
         r.selection = found.then_some(selection);
         self.dirty = true;
         found
+    }
+
+    /// File > Print for a book that is not a PDF: the job name and the text of the open book (see `book_text`). None when
+    /// no book is open or it has no text.
+    pub fn print_text(&self) -> Option<(String, String)> {
+        let r = self.reader.as_ref()?;
+        let text = book_text(&r.book.blocks);
+        (!text.is_empty()).then(|| (r.book.title.clone(), text))
     }
 
     /// Whether a selection is on the page (Find menu: Copy Selection).
@@ -1028,6 +1078,7 @@ impl Books {
         }
         if turned {
             self.remember(t);
+            self.sync_scroll();
         }
         self.dirty = true;
         true
@@ -1600,6 +1651,61 @@ impl Books {
         (m, self.list_top(ui) + i as f32 * ui.pt(ROW_PT) - self.panel_scroll.offset(), pw - 2.0 * m, ui.pt(ROW_PT))
     }
 
+    /// The distance in px from the top of one page to the top of the next in continuous scrolling: the window below the
+    /// toolbar, so one page fills the window when the scroll rests on it.
+    pub(super) fn page_pitch(&self, ui: &Ui) -> f32 {
+        (self.h as f32 - ui.pt(page_top_pt())).max(1.0)
+    }
+
+    /// Keeps the page distance and the end of the scroll range in step with the window and the number of pages.
+    fn fit_page_scroll(&mut self, ui: &Ui) {
+        self.pitch = self.page_pitch(ui);
+        let pages = self.reader.as_ref().map_or(1, |r| r.layout.pages.len());
+        self.page_scroll.set_max(pages.saturating_sub(1) as f32 * self.pitch);
+    }
+
+    /// Puts the scroll of continuous scrolling at the top of the current page.
+    fn sync_scroll(&mut self) {
+        if !self.continuous {
+            return;
+        }
+        let page = self.reader.as_ref().map_or(0, |r| r.page);
+        self.page_scroll.jump_to(page as f32 * self.pitch);
+    }
+
+    /// Makes the page in the middle of the window the current one while the pages are scrolled.
+    fn follow_scroll(&mut self, t: f64) {
+        if !self.continuous {
+            return;
+        }
+        let Some(r) = &self.reader else { return };
+        let page = page_at(self.page_scroll.offset(), self.pitch, r.layout.pages.len());
+        if page != r.page {
+            self.set_page(page, t);
+        }
+    }
+
+    /// View menu: whether the pages follow each other down the window.
+    pub fn continuous(&self) -> bool {
+        self.continuous
+    }
+
+    /// View menu: Continuous Scroll shows the pages one below the other and scrolls through them; off, one page is shown at a
+    /// time. It replaces Two Pages, and the reader keeps its place.
+    pub fn set_continuous(&mut self, ui: &Ui, on: bool) {
+        if self.continuous == on {
+            return;
+        }
+        self.slide = None;
+        if on && self.two_pages() {
+            self.set_two_pages(ui, false);
+        }
+        self.continuous = on;
+        self.fit_page_scroll(ui);
+        self.sync_scroll();
+        self.dirty = true;
+    }
+
     fn fit_panel_scroll(&mut self, ui: &Ui) {
         let (_, py, _, ph) = self.panel_rect(ui);
         let list_h = self.panel_rows() as f32 * ui.pt(ROW_PT) + ui.pt(SPACE_L);
@@ -1964,9 +2070,16 @@ impl Books {
     fn scroller(&mut self) -> &mut Scroller {
         if self.screen == Screen::Library {
             &mut self.shelf_scroll
+        } else if self.scrolls_pages() {
+            &mut self.page_scroll
         } else {
             &mut self.panel_scroll
         }
+    }
+
+    /// Whether a drag on the page scrolls the pages: continuous scrolling, with no panel over them.
+    fn scrolls_pages(&self) -> bool {
+        self.continuous && self.screen == Screen::Reader && self.reader.as_ref().is_some_and(|r| r.panel.is_none())
     }
 
     pub fn touch(&mut self, ui: &Ui, ev: Event, t: f64) {
@@ -1981,12 +2094,17 @@ impl Books {
         };
         self.fit_shelf_scroll(ui);
         self.fit_panel_scroll(ui);
+        self.fit_page_scroll(ui);
         match ev {
             Event::Down(..) => {
                 self.down = Some((x, y));
                 self.pressed = self.hit(ui, x, y);
                 match self.pressed {
                     Some(Target::Cover(_) | Target::Shelf | Target::Row(_) | Target::RowRemove(_)) => {
+                        self.scroller().down(y, t);
+                        self.scrolling = true;
+                    }
+                    Some(Target::PageArea) if self.scrolls_pages() => {
                         self.scroller().down(y, t);
                         self.scrolling = true;
                     }
@@ -2074,12 +2192,14 @@ impl Books {
         }
         self.fit_shelf_scroll(ui);
         self.fit_panel_scroll(ui);
+        self.fit_page_scroll(ui);
+        self.follow_scroll(t);
         if self.slide.is_some_and(|(_, _, t0)| t - t0 >= SLIDE_MS) {
             self.slide = None;
             self.dirty = true;
         }
         let narrated = self.follow_narration(t);
-        let moving = self.shelf_scroll.tick(t) | self.panel_scroll.tick(t) | self.slide.is_some();
+        let moving = self.shelf_scroll.tick(t) | self.panel_scroll.tick(t) | self.page_scroll.tick(t) | self.slide.is_some();
         let blinking = self.screen == Screen::Library && self.library_search.focused;
         self.dirty |= got || moving || blinking || narrated;
         self.dirty

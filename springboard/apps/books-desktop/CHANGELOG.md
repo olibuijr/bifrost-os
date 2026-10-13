@@ -18,6 +18,12 @@
 - Display panel and View menu: line spacing (tight, normal, loose), margins (narrow, normal, wide) and Justify Text.
   Pages are laid out again when the spacing or margins change and the reader keeps its place. Justified text is set
   flush on both sides; the last line of a paragraph stays ragged.
+- View > Continuous Scroll shows the pages of a book one below the other, a window high each, and scrolls through them
+  with a drag or a fling. The page in the middle of the window is the current one, so the page counter, the scrubber,
+  bookmarks and the saved place follow the scroll; tapping the edges, the scrubber and the contents jump to a page.
+  Continuous Scroll and Two Pages replace each other.
+- File > Print for an EPUB prints the text of the book (headings and paragraphs) through the print service. PDF books
+  print as before.
 - Reading goal: Library > Reading Goal sets minutes a day. The time a book is open counts (at most two minutes
   between page turns), and Reading Now shows the minutes read today against the goal and the days in a row it was met.
 - The Reading Now and Library headings of the grid were drawn above the visible area; they are in place now.

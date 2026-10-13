@@ -93,7 +93,7 @@ fn highlight_colour(style: u8) -> u32 {
 /// `lh` its height.
 fn paint_highlight(s: &mut Surface, ui: &Ui, style: u8, x0: f32, x1: f32, y: f32, lh: f32) {
     if style == super::store::UNDERLINE {
-        let thick = ui.pt(2.0).max(1.0);
+        let thick = ui.pt(SPACE_XXS).max(1.0);
         s.fill_rrect(x0, y + lh - thick, x1 - x0, thick, 0.0, RED);
     } else {
         s.fill_rrect(x0, y, x1 - x0, lh, 0.0, fade(highlight_colour(style), 110));
@@ -250,7 +250,7 @@ impl Books {
         let caption = store::caption(status, progress);
         let caption_w = ui.measure(&caption, MAC_CALLOUT_PT, Weight::Regular);
         let text_x = x + cw + ui.pt(SPACE_L);
-        let room = (x + w - caption_w - ui.pt(SPACE_XL) - text_x).max(ui.pt(40.0));
+        let room = (x + w - caption_w - ui.pt(SPACE_XL) - text_x).max(ui.pt(SPACE_HUGE));
         let title = ui.fit(&self.shelf[i].title, MAC_BODY_PT, room);
         put(&mut self.labels, s, ui, &title, MAC_BODY_PT, Weight::Medium, LABEL.now(), text_x, y + h / 2.0 - ui.pt(SPACE_XL));
         let author = self.shelf[i].author.clone();
@@ -274,15 +274,27 @@ impl Books {
                 let p = ((t - t0) / super::SLIDE_MS).clamp(0.0, 1.0) as f32;
                 let e = 1.0 - (1.0 - p) * (1.0 - p) * (1.0 - p);
                 let w = self.w as f32;
-                self.draw_page(s, ui, &pal, old, -dir as f32 * w * e);
-                self.draw_page(s, ui, &pal, cur, dir as f32 * w * (1.0 - e));
+                self.draw_page(s, ui, &pal, old, -dir as f32 * w * e, 0.0);
+                self.draw_page(s, ui, &pal, cur, dir as f32 * w * (1.0 - e), 0.0);
+            }
+            None if self.continuous() => {
+                // View > Continuous Scroll: the pages one below the other, the ones in view drawn at their scroll position
+                let pitch = self.page_pitch(ui);
+                let offset = self.page_scroll.offset();
+                let pages = self.reader.as_ref().map_or(0, |r| r.layout.pages.len());
+                for page in 0..pages {
+                    let dy = page as f32 * pitch - offset;
+                    if dy < self.h as f32 && dy + pitch > 0.0 {
+                        self.draw_page(s, ui, &pal, page, 0.0, dy);
+                    }
+                }
             }
             None => {
-                self.draw_page(s, ui, &pal, cur, 0.0);
+                self.draw_page(s, ui, &pal, cur, 0.0, 0.0);
                 // View > Two Pages: the page after the current one sits in the right column, after the gutter
                 if self.two_pages() && self.reader.as_ref().is_some_and(|r| cur + 1 < r.layout.pages.len()) {
                     let column = self.metrics(ui).width + ui.pt(PAGE_GUTTER_PT);
-                    self.draw_page(s, ui, &pal, cur + 1, column);
+                    self.draw_page(s, ui, &pal, cur + 1, column, 0.0);
                 }
             }
         }
@@ -318,7 +330,9 @@ impl Books {
         put_mid(&mut self.labels, s, ui, &text, MAC_CALLOUT_PT, Weight::Regular, LABEL.now(), self.w as f32 / 2.0, y + h / 2.0);
     }
 
-    fn draw_page(&mut self, s: &mut Surface, ui: &Ui, pal: &Palette, page_no: usize, dx: f32) {
+    /// Draws page `page_no` with its column shifted `dx` px to the right (a slide, the second page of a spread) and `dy` px
+    /// down (continuous scrolling).
+    fn draw_page(&mut self, s: &mut Surface, ui: &Ui, pal: &Palette, page_no: usize, dx: f32, dy: f32) {
         let m = self.metrics(ui);
         let marked = self.reader.as_ref().is_some_and(|_r| !self.page_marks(page_no).is_empty());
         let justify = self.store.settings.justify;
@@ -333,7 +347,7 @@ impl Books {
             })
         };
         let Some(r) = self.reader.as_mut() else { return };
-        let (left, top) = (ui.pt(self.store.settings.margin_pt()) + dx, ui.pt(page_top_pt()));
+        let (left, top) = (ui.pt(self.store.settings.margin_pt()) + dx, ui.pt(page_top_pt()) + dy);
         let body_pt = Self::pt_of(ui, m.body);
         let Some(page) = r.layout.pages.get(page_no) else { return };
         if let Some(marks) = &marks {
@@ -435,11 +449,11 @@ impl Books {
         }
         let total = r.layout.pages.len();
         let label = format!("{} / {}", page_no + 1, total);
-        put_mid(&mut self.labels, s, ui, &label, MAC_FOOTNOTE_PT, Weight::Regular, pal.dim, self.w as f32 / 2.0 + dx, self.h as f32 - ui.pt(FOOTER_PT) + ui.pt(SPACE_XXL));
+        put_mid(&mut self.labels, s, ui, &label, MAC_FOOTNOTE_PT, Weight::Regular, pal.dim, self.w as f32 / 2.0 + dx, top + m.height + ui.pt(SPACE_XXL));
         if marked {
             // the ribbon sits at the trailing edge of this page's column (a spread has two)
             let right = if self.two_pages() { left + m.width } else { self.w as f32 + dx };
-            s.fill_rrect(right - ui.pt(64.0), ui.pt(super::nav_bottom_pt()), ui.pt(SPACE_XL), ui.pt(38.0), 0.0, ORANGE);
+            s.fill_rrect(right - ui.pt(64.0), ui.pt(super::nav_bottom_pt()) + dy, ui.pt(SPACE_XL), ui.pt(38.0), 0.0, ORANGE);
         }
     }
 

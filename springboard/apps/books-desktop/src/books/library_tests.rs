@@ -293,6 +293,29 @@ fn a_context_menu_marks_a_book_and_only_acts_on_the_book_it_was_made_for() {
 }
 
 #[test]
+fn a_book_prints_as_its_text_without_pictures() {
+    let ui = ui();
+    let dir = scratch("print");
+    let blocks = vec![
+        Block::Heading(1, " Chapter One ".into()),
+        Block::Para("First paragraph.".into()),
+        Block::Image(Image::new(10, 10)),
+        Block::Para("   ".into()),
+        Block::Para("Second paragraph.".into()),
+    ];
+    assert_eq!(book_text(&blocks), "Chapter One\n\nFirst paragraph.\n\nSecond paragraph.");
+    assert_eq!(book_text(&[]), "");
+    let b = reader(&dir, &ui);
+    let (title, text) = b.print_text().expect("an open book has text to print");
+    assert_eq!(title, "Long Book");
+    assert!(text.starts_with("Chapter One\n\nParagraph 0."));
+    assert!(!text.contains("\n\n\n"));
+    let closed = Books::with_library_dirs(&ui, 1200, 1920, dir.clone(), Vec::new());
+    assert_eq!(closed.print_text(), None, "no book is open");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn the_library_caption_says_where_a_book_stands() {
     let ui = ui();
     let dir = scratch("caption");
@@ -418,6 +441,118 @@ fn line_spacing_margins_and_justification_lay_the_pages_out_again_and_persist() 
     b.set_line_spacing(&ui, 1);
     let again = Books::with_library_dirs(&ui, 1200, 1920, dir.clone(), Vec::new());
     assert_eq!(again.settings(), store::Settings { justify: true, ..store::Settings::default() });
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_page_in_view_is_the_one_in_the_middle_of_the_window() {
+    assert_eq!(page_at(0.0, 100.0, 5), 0);
+    assert_eq!(page_at(49.0, 100.0, 5), 0);
+    assert_eq!(page_at(51.0, 100.0, 5), 1);
+    assert_eq!(page_at(100.0, 100.0, 5), 1, "resting on a page");
+    assert_eq!(page_at(1.0e6, 100.0, 5), 4, "past the end is the last page");
+    assert_eq!(page_at(-80.0, 100.0, 5), 0, "before the start is the first");
+    assert_eq!(page_at(10.0, 0.0, 5), 0);
+    assert_eq!(page_at(10.0, 100.0, 0), 0);
+}
+
+#[test]
+fn continuous_scrolling_follows_the_scroll_and_scrolls_to_a_page() {
+    let ui = ui();
+    let dir = scratch("continuous");
+    let mut b = reader(&dir, &ui);
+    let (_, total) = b.page().unwrap();
+    assert!(total > 5);
+    b.tick(&ui, 0.0);
+    b.goto_page(3, 10.0);
+    assert!(!b.continuous());
+    b.set_continuous(&ui, true);
+    assert!(b.continuous());
+    let pitch = b.page_pitch(&ui);
+    assert_eq!(b.page_scroll.offset(), 3.0 * pitch, "the scroll rests on the current page");
+    // scrolling on makes the page in the middle of the window the current one
+    b.page_scroll.jump_to(4.0 * pitch + pitch * 0.2);
+    b.tick(&ui, 20.0);
+    assert_eq!(b.page().unwrap().0, 4);
+    // turning to a page scrolls to it
+    b.goto_page(1, 30.0);
+    assert_eq!(b.page_scroll.offset(), pitch);
+    // the scroll ends on the last page, which finishes the book
+    b.page_scroll.jump_to(1.0e9);
+    assert_eq!(b.page_scroll.offset(), (total - 1) as f32 * pitch);
+    assert_eq!(b.open_status(), Status::None);
+    b.tick(&ui, 40.0);
+    assert_eq!(b.page().unwrap().0, total - 1);
+    assert_eq!(b.open_status(), Status::Finished);
+    // back to one page at a time
+    b.set_continuous(&ui, false);
+    assert!(!b.continuous());
+    assert_eq!(b.page().unwrap().0, total - 1, "the reader keeps its place");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_drag_scrolls_the_pages_and_a_tap_still_works() {
+    let ui = ui();
+    let dir = scratch("continuous-touch");
+    let mut b = reader(&dir, &ui);
+    b.set_continuous(&ui, true);
+    b.tick(&ui, 0.0);
+    b.touch(&ui, Event::Down(600.0, 1500.0), 100.0);
+    b.touch(&ui, Event::Move(600.0, 1100.0), 116.0);
+    b.touch(&ui, Event::Move(600.0, 700.0), 132.0);
+    assert!(b.page_scroll.offset() > 100.0, "dragging up scrolls on: {}", b.page_scroll.offset());
+    b.touch(&ui, Event::Up(600.0, 700.0), 148.0);
+    assert!(b.fullscreen(), "a drag does not show the bars");
+    // a tap in the middle shows the bars, and a tap at the edge turns to the next page
+    b.page_scroll.jump_top();
+    b.goto_page(0, 200.0);
+    tap(&mut b, &ui, 600.0, 900.0, 300.0);
+    assert!(!b.fullscreen(), "the centre toggles the bars");
+    tap(&mut b, &ui, 1100.0, 900.0, 400.0);
+    assert_eq!(b.page().unwrap().0, 1);
+    assert_eq!(b.page_scroll.offset(), b.page_pitch(&ui), "the next page is scrolled to");
+    // the panels scroll their own lists: a drag in the contents list leaves the pages where they are
+    b.reader.as_mut().unwrap().panel = Some(Panel::Pages);
+    let before = b.page_scroll.offset();
+    let (x, y) = centre(b.row_rect(&ui, 2));
+    b.touch(&ui, Event::Down(x, y), 500.0);
+    b.touch(&ui, Event::Move(x, y - 300.0), 516.0);
+    b.touch(&ui, Event::Up(x, y - 300.0), 532.0);
+    assert_eq!(b.page_scroll.offset(), before);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn continuous_scrolling_and_two_pages_replace_each_other() {
+    let ui = ui();
+    let dir = scratch("continuous-modes");
+    let mut b = reader(&dir, &ui);
+    b.set_two_pages(&ui, true);
+    b.set_continuous(&ui, true);
+    assert!(b.continuous() && !b.two_pages(), "continuous scrolling replaces the spread");
+    b.set_two_pages(&ui, true);
+    assert!(b.two_pages() && !b.continuous(), "and a spread replaces it");
+    b.set_two_pages(&ui, false);
+    assert!(!b.two_pages() && !b.continuous());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn the_pages_are_drawn_one_below_the_other_at_the_scroll_position() {
+    let ui = ui();
+    let dir = scratch("continuous-draw");
+    let mut b = reader(&dir, &ui);
+    b.set_continuous(&ui, true);
+    b.tick(&ui, 0.0);
+    let pitch = b.page_pitch(&ui);
+    b.goto_page(2, 10.0);
+    let resting = render(&mut b, &ui, 20.0);
+    b.page_scroll.jump_to(2.5 * pitch);
+    let between = render(&mut b, &ui, 30.0);
+    assert_ne!(resting, between, "half way between two pages shows parts of both");
+    b.page_scroll.jump_to(2.0 * pitch);
+    assert_eq!(resting, render(&mut b, &ui, 40.0), "the same scroll gives the same picture");
     let _ = std::fs::remove_dir_all(dir);
 }
 
