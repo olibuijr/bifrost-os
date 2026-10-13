@@ -8,9 +8,9 @@ use springboard::shell::clock::Wall;
 
 /// How far ahead one scan looks; the state rescans when it runs out.
 const SCAN_SECS: i64 = 3 * 86_400;
-const REPEAT_RULES: [&str; 6] = ["", "FREQ=DAILY", "FREQ=WEEKLY", "FREQ=WEEKLY;INTERVAL=2", "FREQ=MONTHLY", "FREQ=YEARLY"];
+pub const REPEAT_RULES: [&str; 6] = ["", "FREQ=DAILY", "FREQ=WEEKLY", "FREQ=WEEKLY;INTERVAL=2", "FREQ=MONTHLY", "FREQ=YEARLY"];
 /// Minutes before the start for each `CalendarEvent::alert` choice.
-const ALERT_MINUTES: [Option<u32>; 7] = [None, Some(0), Some(5), Some(15), Some(30), Some(60), Some(1440)];
+pub const ALERT_MINUTES: [Option<u32>; 7] = [None, Some(0), Some(5), Some(15), Some(30), Some(60), Some(1440)];
 
 /// Store events plus rich events as one calendar whose store events carry
 /// their alert and repeat choices, which the .ics conversion leaves out.

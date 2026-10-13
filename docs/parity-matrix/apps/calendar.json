@@ -103,10 +103,10 @@
    "feature": "Cut / Copy / Paste events",
    "area": "menu",
    "apple": "MainMenu.nib Edit > Cut/Copy/Paste",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Edit commands only reach text fields",
-   "wire": "Implement copy/paste of the selected event (ICS on the pasteboard via exchange.rs export_event_ics, import_ics on paste onto the selected day); route the shell Edit commands through App::commands in main.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/clip.rs:117",
+   "note": "Edit > Cut / Copy / Paste act on the shown day's event as .ics text; paste lands on the shown day; text fields keep their own commands; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Select an event with a single click (the grid opens it today) and keep custom repeat rules when pasting once the custom repeat sheet exists."
   },
   {
    "feature": "Export Event (.ics)",

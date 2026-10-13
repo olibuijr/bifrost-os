@@ -749,3 +749,80 @@ fn settings_cannot_change_while_an_event_is_open() {
     assert!(!c.change_setting(&ui, Setting::MondayFirst));
     assert!(!c.setting_checked(Setting::MondayFirst));
 }
+
+#[test]
+fn copy_and_paste_move_an_event_to_another_day() {
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.events = vec![event(1, "Standup")];
+    assert!(c.edit_commands(None).supports(Edit::Copy));
+    assert!(c.edit_commands(None).supports(Edit::Cut));
+    assert!(!c.edit_commands(Some("buy milk")).supports(Edit::Paste), "plain text is not an event");
+    assert!(c.edit_command(&ui, Edit::Copy, None, 0.0));
+    let text = c.take_copied().expect("the .ics text for the pasteboard");
+    assert!(text.contains("SUMMARY:Standup"));
+    c.selected = date(2026, 10, 9);
+    assert!(!c.edit_commands(None).supports(Edit::Copy), "nothing on the 9th");
+    assert!(c.edit_commands(Some(&text)).supports(Edit::Paste));
+    assert!(c.edit_command(&ui, Edit::Paste, Some(&text), 0.0));
+    let days: Vec<(String, Date)> = c.events.iter().map(|e| (e.title.clone(), e.date)).collect();
+    assert_eq!(days, vec![("Standup".to_string(), date(2026, 10, 4)), ("Standup".to_string(), date(2026, 10, 9))]);
+    assert_eq!(c.notice.as_deref(), Some("Pasted 1 event"));
+    assert_eq!(new(&ui, temp.file()).events.len(), 2, "saved");
+}
+
+#[test]
+fn pasting_something_else_changes_nothing_and_says_so() {
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(!c.edit_command(&ui, Edit::Paste, Some("buy milk"), 0.0));
+    assert!(c.events.is_empty());
+    assert_eq!(c.error.as_deref(), Some("There are no events to paste"));
+    assert!(!c.edit_command(&ui, Edit::Paste, None, 0.0));
+}
+
+#[test]
+fn cut_removes_the_event_with_an_undo_bar() {
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.events = vec![event(1, "Standup"), event(2, "Lunch")];
+    // the event opened last is the one Cut takes
+    c.open(&ui, Some(2));
+    c.close();
+    assert!(c.edit_command(&ui, Edit::Cut, None, 1000.0));
+    assert!(c.take_copied().is_some_and(|t| t.contains("SUMMARY:Lunch")));
+    assert_eq!(c.events.iter().map(|e| e.id).collect::<Vec<_>>(), vec![1]);
+    assert!(c.undo.is_some());
+    c.undo_delete(&ui, 2000.0);
+    assert_eq!(c.events.len(), 2, "undo puts it back");
+}
+
+#[test]
+fn copy_in_the_editor_takes_the_open_event_and_text_commands_go_to_the_field() {
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.events = vec![event(1, "Standup")];
+    c.open(&ui, Some(1));
+    assert!(c.edit_commands(None).supports(Edit::Copy), "no field has focus, so Copy takes the event");
+    assert!(!c.edit_commands(None).supports(Edit::Cut));
+    assert!(c.edit_command(&ui, Edit::Copy, None, 0.0));
+    assert!(c.take_copied().is_some());
+    // a field with focus gets the text commands
+    c.activate(&ui, Target::Notes, 0.0);
+    c.key(&ui, Out::Text("remember the cake".into()), 0.0);
+    assert!(c.edit_commands(None).supports(Edit::SelectAll));
+    assert!(!c.edit_commands(None).supports(Edit::Cut), "nothing is selected");
+    assert!(c.edit_command(&ui, Edit::SelectAll, None, 0.0));
+    assert!(c.edit_commands(None).supports(Edit::Cut));
+    assert!(c.edit_command(&ui, Edit::Cut, None, 0.0));
+    assert_eq!(c.fields[2].text(), "");
+    assert!(c.take_copied().is_none(), "the field's text is not an event");
+}

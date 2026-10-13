@@ -4,7 +4,7 @@
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::controls::internet_accounts::Service;
 use bifrost_app::widgets_timeline;
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Commands, Ctx, Input, KeyInput, TouchKind};
 use bifrost_calendar::calendar::connect::{self, Connect, Snap};
 use bifrost_calendar::calendar::prefs::{self, Setting};
 use bifrost_calendar::calendar::{self, Command};
@@ -124,6 +124,11 @@ impl App for CalendarApp {
         ]
     }
 
+    /// The Edit menu: Cut, Copy and Paste act on events, or on the focused field of the event editor.
+    fn commands(&self, ctx: &Ctx) -> Commands {
+        self.cal.as_ref().map_or_else(Commands::default, |c| c.edit_commands(ctx.pasteboard_string().as_deref()))
+    }
+
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         if let Some(setting) = Setting::from_id(id) {
             return self.cal.as_mut().is_some_and(|c| c.change_setting(&ctx.ui, setting));
@@ -142,6 +147,14 @@ impl App for CalendarApp {
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        // Edit menu commands: events are copied as .ics text and pasted from the pasteboard
+        if let Input::Command(cmd) = &ev {
+            let Some(c) = &mut self.cal else { return false };
+            let text = ctx.pasteboard_string();
+            let done = c.edit_command(&ctx.ui, *cmd, text.as_deref(), bifrost_app::proto::sys::now_ms());
+            share_copy(c, ctx);
+            return done;
+        }
         // a published toolbar control (accessibility, `bifrost pc midget tap-window`): a click at its centre
         if let (Some(c), Input::Activate(id)) = (&mut self.cal, &ev) {
             let Some(node) = c.controls(&ctx.ui).into_iter().find(|n| n.id == *id && n.enabled) else { return false };

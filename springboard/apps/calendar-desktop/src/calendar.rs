@@ -2,6 +2,7 @@
 //! each day's events in its cell, Day/Week/Year views and an event form. Colours follow Light and Dark.
 pub mod alerts;
 mod chrome;
+pub mod clip;
 pub mod connect;
 pub mod exchange;
 pub mod ics;
@@ -163,6 +164,8 @@ pub struct Calendar {
     changes: StoreChangeHub,
     alerts: alerts::AlertState,
     editor: Option<Draft>,
+    /// The event last opened or saved: what Copy and Cut act on while it is on the shown day (`clip.rs`).
+    picked: Option<u64>,
     /// Title, Location, Notes.
     fields: [TextField; 3],
     labels: TextCache,
@@ -253,6 +256,7 @@ impl Calendar {
             storage_blocked,
             text_style: (ui.text_scale, ui.bold),
             editor: None,
+            picked: None,
             fields,
             labels: TextCache::default(),
             scroll: Scroller::new(),
@@ -523,6 +527,9 @@ impl Calendar {
         self.fields[1].set_text(ui, &event.location);
         self.fields[2].set_text(ui, &event.notes);
         self.focus((!existing).then_some(0));
+        if existing {
+            self.picked = Some(event.id);
+        }
         let people = if existing {
             invitees::for_event(&self.rich_events(), &event.title, event.date, event.minute, event.all_day)
         } else {
@@ -725,6 +732,7 @@ impl Calendar {
                 self.changes.post();
                 self.selected = event.date;
                 self.error = None;
+                self.picked = (!delete).then_some(event.id);
                 self.undo = removed.map(|e| (e, t + UNDO_MS));
                 self.close();
                 self.scroll.jump_top();
