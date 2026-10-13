@@ -2490,3 +2490,8 @@ are refused (`ListenerError::TlsUnsupported`), no IPv6 or interface selection, n
   `becomeCurrent(withPendingUnitCount:)`, `Progress.current()` and `resignCurrent()`: the first implicit child takes the pending
   units, otherwise resigning completes them on the object.
 - Gap: publishing progress to other processes. Row status stays partial until checked on Midget.
+
+## URL bookmarks and FileWrapper (Foundation parity)
+
+- `bifrost_app::bookmark`: `bookmark_data(path, BookmarkCreationOptions, relative_to)` and `resolve_bookmark(data, relative_to) -> ResolvedBookmark { path, is_stale }`. The blob holds path, device, inode and size; a rename inside the old directory still resolves and reports stale. `with_security_scope` returns `Unsupported`.
+- `bifrost_app::file_wrapper::FileWrapper`: `regular_file_with_contents`, `directory_with_file_wrappers`, `from_path`, `is_directory`/`is_regular_file`/`is_symbolic_link`, `file_wrappers`, `add_regular_file`, `add_file_wrapper`, `remove_file_wrapper`, `write_to` (atomic by rename), `matches_contents`, `needs_to_be_updated`.

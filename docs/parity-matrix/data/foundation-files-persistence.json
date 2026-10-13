@@ -1,103 +1,103 @@
 {
-  "framework": "Foundation (Files and Data Persistence)",
-  "doc": "https://developer.apple.com/documentation/foundation",
-  "macos_since": "10.0",
-  "status": "partial",
-  "bifrost": "bifrost_app::defaults, coding, file_coordination, fswatch, workspace, quicksearch, document; docbroker file grants",
-  "summary": "Settings, JSON and plist coding, file coordination, change events and Spotlight-style indexing have SDK APIs. FileManager has an SDK type for item operations, atomic writes, replaceItemAt, standard user directories and option-driven enumeration. There is no FileWrapper, no keyed archiver or binary plist, and no iCloud.",
-  "rea_evidence": "ev_177296a326822b32e03af061d208f36da74e7e78f5ede1bf1a127a910c832240",
-  "features": [
-    {
-      "feature": "File System (create, read, write, examine files)",
-      "apple": "FileManager, FileHandle, URL file APIs, FileWrapper, bookmarks",
-      "bifrost": "springboard/sdk/src/file_manager.rs (NativeFileManager: item operations, write_atomically, replace_item_at, url_for, enumerator); springboard/src/bare/docbroker.rs; docs/file-portal-design.md; springboard/sdk/src/document.rs; wired: springboard/apps/files/src/info.rs (get_info reads the item status for the panel)",
-      "status": "partial",
-      "note": "FileManager item operations, Data-style atomic write, replaceItemAt with backup, standard directories and enumerator options are host unit-tested; no FileWrapper, and user files still go through the file portal grants. Not yet wired into apps; verify on Midget for parity."
-    },
-    {
-      "feature": "File coordination and presenters",
-      "apple": "NSFileCoordinator, NSFilePresenter",
-      "bifrost": "springboard/sdk/src/file_coordination.rs; wired: springboard/apps/files/src/ops.rs (transfer_now, compress_now, extract_now) via src/coordinate.rs (writing_in, refused)",
-      "status": "partial",
-      "note": "Advisory flock; no relinquish or move negotiation, no versions. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
-    },
-    {
-      "feature": "File change events",
-      "apple": "FSEvents, DispatchSource file system objects",
-      "bifrost": "springboard/sdk/src/fswatch.rs",
-      "status": "parity",
-      "note": "Recursive inotify stream with latency and a SHALLOW flag."
-    },
-    {
-      "feature": "Trash and workspace file operations",
-      "apple": "FileManager.trashItem, NSWorkspace open/recycle/reveal",
-      "bifrost": "springboard/sdk/src/workspace.rs",
-      "status": "parity",
-      "note": "Recycle uses the shared Recently Deleted folder with Put Back."
-    },
-    {
-      "feature": "Archives and Serialization: JSON and property lists",
-      "apple": "JSONEncoder/Decoder, PropertyListEncoder/Decoder, JSONSerialization",
-      "bifrost": "springboard/sdk/src/coding.rs",
-      "status": "partial",
-      "note": "JSON and XML plist only; no binary plist, Data unsupported, few strategies."
-    },
-    {
-      "feature": "Archives and Serialization: keyed archiving",
-      "apple": "NSKeyedArchiver, NSKeyedUnarchiver, NSSecureCoding",
-      "bifrost": "springboard/sdk/src/keyed_archive.rs",
-      "status": "partial",
-      "note": "Wave 5 (theme-07, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Codable-style traits exist; no keyed archive format."
-    },
-    {
-      "feature": "Settings",
-      "apple": "UserDefaults, NSUbiquitousKeyValueStore (local part)",
-      "bifrost": "springboard/sdk/src/defaults.rs",
-      "status": "parity",
-      "note": "Typed get/set and register(defaults:); no change-observation across processes noted."
-    },
-    {
-      "feature": "State restoration data",
-      "apple": "NSUserActivity restoration, app state",
-      "bifrost": "springboard/sdk/src/restoration.rs",
-      "status": "partial",
-      "note": "One restorable window per app, JSON file."
-    },
-    {
-      "feature": "Spotlight: indexing app content",
-      "apple": "CSSearchableIndex",
-      "bifrost": "springboard/sdk/src/quicksearch.rs",
-      "status": "partial",
-      "note": "Per-app JSON index, capped at 1000 items."
-    },
-    {
-      "feature": "Spotlight: metadata queries",
-      "apple": "NSMetadataQuery, MDQuery",
-      "bifrost": "springboard/sdk/src/file_manager.rs, springboard/ui/src/metaquery.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No file-system-wide metadata query API for apps."
-    },
-    {
-      "feature": "iCloud documents and key-value store",
-      "apple": "NSUbiquitousKeyValueStore, ubiquity containers",
-      "bifrost": "springboard/ui/src/ubiquitous_store.rs (key-value part only",
-      "status": "partial",
-      "note": "Wave 3 (theme-01, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apple iCloud service; BifrOSt Cloud backups/sync are separate and not an SDK file API."
-    },
-    {
-      "feature": "Backup exclusion and purgeable data",
-      "apple": "URLResourceKey isExcludedFromBackup, purgeable",
-      "bifrost": "springboard/render/src/purgeable.rs",
-      "status": "partial",
-      "note": "Memory caches purge on pressure; no on-disk purgeable or backup exclusion flags."
-    }
-  ],
-  "gaps": [
-    "FileManager gaps: FileWrapper, bookmarks, replaceItemAt metadata-only and backup-deletion options, enumerator resource keys",
-    "Keyed archiver and binary plist",
-    "Metadata query over files",
-    "iCloud / cloud-synced documents and key-value store",
-    "Backup exclusion and on-disk purgeable data",
-    "File versions"
-  ]
+ "framework": "Foundation (Files and Data Persistence)",
+ "doc": "https://developer.apple.com/documentation/foundation",
+ "macos_since": "10.0",
+ "status": "partial",
+ "bifrost": "bifrost_app::defaults, coding, file_coordination, fswatch, workspace, quicksearch, document; docbroker file grants",
+ "summary": "Settings, JSON and plist coding, file coordination, change events and Spotlight-style indexing have SDK APIs. FileManager has an SDK type for item operations, atomic writes, replaceItemAt, standard user directories and option-driven enumeration. There is no FileWrapper, no keyed archiver or binary plist, and no iCloud.",
+ "rea_evidence": "ev_177296a326822b32e03af061d208f36da74e7e78f5ede1bf1a127a910c832240",
+ "features": [
+  {
+   "feature": "File System (create, read, write, examine files)",
+   "apple": "FileManager, FileHandle, URL file APIs, FileWrapper, bookmarks",
+   "bifrost": "springboard/sdk/src/file_manager.rs (NativeFileManager: item operations, write_atomically, replace_item_at, url_for, enumerator); springboard/src/bare/docbroker.rs; docs/file-portal-design.md; springboard/sdk/src/document.rs; wired: springboard/apps/files/src/info.rs (get_info reads the item status for the panel)",
+   "status": "partial",
+   "note": "FileManager item operations, Data-style atomic write, replaceItemAt with backup, standard directories and enumerator options are host unit-tested; no FileWrapper, and user files still go through the file portal grants. Not yet wired into apps; verify on Midget for parity."
+  },
+  {
+   "feature": "File coordination and presenters",
+   "apple": "NSFileCoordinator, NSFilePresenter",
+   "bifrost": "springboard/sdk/src/file_coordination.rs; wired: springboard/apps/files/src/ops.rs (transfer_now, compress_now, extract_now) via src/coordinate.rs (writing_in, refused)",
+   "status": "partial",
+   "note": "Advisory flock; no relinquish or move negotiation, no versions. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+  },
+  {
+   "feature": "File change events",
+   "apple": "FSEvents, DispatchSource file system objects",
+   "bifrost": "springboard/sdk/src/fswatch.rs",
+   "status": "parity",
+   "note": "Recursive inotify stream with latency and a SHALLOW flag."
+  },
+  {
+   "feature": "Trash and workspace file operations",
+   "apple": "FileManager.trashItem, NSWorkspace open/recycle/reveal",
+   "bifrost": "springboard/sdk/src/workspace.rs",
+   "status": "parity",
+   "note": "Recycle uses the shared Recently Deleted folder with Put Back."
+  },
+  {
+   "feature": "Archives and Serialization: JSON and property lists",
+   "apple": "JSONEncoder/Decoder, PropertyListEncoder/Decoder, JSONSerialization",
+   "bifrost": "springboard/sdk/src/coding.rs",
+   "status": "partial",
+   "note": "JSON and XML plist only; no binary plist, Data unsupported, few strategies."
+  },
+  {
+   "feature": "Archives and Serialization: keyed archiving",
+   "apple": "NSKeyedArchiver, NSKeyedUnarchiver, NSSecureCoding",
+   "bifrost": "springboard/sdk/src/keyed_archive.rs",
+   "status": "partial",
+   "note": "Wave 5 (theme-07, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Codable-style traits exist; no keyed archive format."
+  },
+  {
+   "feature": "Settings",
+   "apple": "UserDefaults, NSUbiquitousKeyValueStore (local part)",
+   "bifrost": "springboard/sdk/src/defaults.rs",
+   "status": "parity",
+   "note": "Typed get/set and register(defaults:); no change-observation across processes noted."
+  },
+  {
+   "feature": "State restoration data",
+   "apple": "NSUserActivity restoration, app state",
+   "bifrost": "springboard/sdk/src/restoration.rs",
+   "status": "partial",
+   "note": "One restorable window per app, JSON file."
+  },
+  {
+   "feature": "Spotlight: indexing app content",
+   "apple": "CSSearchableIndex",
+   "bifrost": "springboard/sdk/src/quicksearch.rs",
+   "status": "partial",
+   "note": "Per-app JSON index, capped at 1000 items."
+  },
+  {
+   "feature": "Spotlight: metadata queries",
+   "apple": "NSMetadataQuery, MDQuery",
+   "bifrost": "springboard/sdk/src/file_manager.rs, springboard/ui/src/metaquery.rs",
+   "status": "partial",
+   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No file-system-wide metadata query API for apps."
+  },
+  {
+   "feature": "iCloud documents and key-value store",
+   "apple": "NSUbiquitousKeyValueStore, ubiquity containers",
+   "bifrost": "springboard/ui/src/ubiquitous_store.rs (key-value part only",
+   "status": "partial",
+   "note": "Wave 3 (theme-01, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Apple iCloud service; BifrOSt Cloud backups/sync are separate and not an SDK file API."
+  },
+  {
+   "feature": "Backup exclusion and purgeable data",
+   "apple": "URLResourceKey isExcludedFromBackup, purgeable",
+   "bifrost": "springboard/render/src/purgeable.rs",
+   "status": "partial",
+   "note": "Memory caches purge on pressure; no on-disk purgeable or backup exclusion flags."
+  }
+ ],
+ "gaps": [
+  "FileManager gaps: FileWrapper, bookmarks, replaceItemAt metadata-only and backup-deletion options, enumerator resource keys",
+  "Keyed archiver and binary plist",
+  "Metadata query over files",
+  "iCloud / cloud-synced documents and key-value store",
+  "Backup exclusion and on-disk purgeable data",
+  "File versions"
+ ]
 }

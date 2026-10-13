@@ -282,6 +282,8 @@ pub mod process_events;
 pub mod event_client;
 pub mod file_metadata;
 pub mod file_stat;
+pub mod bookmark;
+pub mod file_wrapper;
 pub mod volume;
 pub mod identity;
 pub mod reachability;
