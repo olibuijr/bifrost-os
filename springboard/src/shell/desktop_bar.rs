@@ -465,7 +465,7 @@ impl Shell {
                     Action::Tile(t)=>{if self.foreign_active().is_none(){self.desk_tile_front(t);}},
                     Action::RestoreSize=>{if self.foreign_active().is_none(){self.desk_restore_front();}},
                     Action::CycleWindow=>{self.desk_cycle_window();let t=self.last_input;self.cmdtab_release(t);},
-                    Action::InputSource(i)=>{if let Some(l)=super::kb_layouts::Layout::ALL.get(i as usize) {super::kb_layouts::set_active(*l);}self.dirty=true;},
+                    Action::InputSource(i)=>{if let Some(l)=super::kb_layouts::Layout::ALL.get(i as usize) {super::kb_layouts::set_active(*l);self.show_input_source(*l,t);}self.dirty=true;},
                     Action::Zoom=>{if let Some(id)=self.foreign_active(){let max=self.desk.as_ref().is_some_and(|d|d.native_windows.iter().chain(d.linux_apps.iter().flat_map(|a|a.windows.iter())).any(|w|w.id==id&&w.maximized));effects.push(Effect::ForeignWindowMaximize(id,!max));}else if let Some(i)=self.desk.as_ref().and_then(|d|d.wins.iter().rposition(|w|!w.minimized)){self.desk_zoom_window(i);}},
                     Action::Foreign(id)=>effects.push(Effect::ActivateForeign(id)),
                     Action::Print=>self.print_sheet_open(t),

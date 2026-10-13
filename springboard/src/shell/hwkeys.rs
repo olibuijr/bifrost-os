@@ -609,8 +609,8 @@ impl Shell {
             // the binary moves the hardware layout to the new source before the next key is typed; the menu bar
             // shows the new label
             Shortcut::InputSource => {
-                super::kb_layouts::cycle();
-                self.dirty = true;
+                let source = super::kb_layouts::cycle();
+                self.show_input_source(source, t);
                 vec![]
             }
             Shortcut::AppSwitch => {
