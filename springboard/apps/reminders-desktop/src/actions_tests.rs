@@ -932,3 +932,82 @@ fn urgent_and_time_zone_are_set_in_the_details_form_and_urgent_from_the_menu() {
     assert!(!app.toggle_urgent_selected(&ui));
     cleanup(&path);
 }
+
+/// A PNG signature and header for a picture of `w` x `h`, enough for the size checks (it does not decode).
+fn png_header(w: u32, h: u32) -> Vec<u8> {
+    let mut b = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, b'I', b'H', b'D', b'R'];
+    b.extend(w.to_be_bytes());
+    b.extend(h.to_be_bytes());
+    b.extend([8, 6, 0, 0, 0]);
+    b
+}
+
+#[test]
+fn pictures_are_attached_in_the_form_kept_on_done_and_deleted_on_cancel() {
+    let (mut app, ui, path) = app("pictures");
+    add(&mut app, &ui, "Plan trip", 0.0);
+    let id = id_of(&app, "Plan trip");
+    let dir = path.with_file_name("attachments");
+    let files = |dir: &std::path::Path| std::fs::read_dir(dir).map(|d| d.flatten().count()).unwrap_or(0);
+    let has = |app: &Reminders, t: Target| app.form_rows().0.iter().any(|(row, _, _)| *row == t);
+
+    app.open_editor(&ui, Some(id), 10.0);
+    assert!(has(&app, Target::AddImage) && !has(&app, Target::Thumbs) && !has(&app, Target::RemoveImage));
+    assert!(!app.take_image_request());
+    app.activate(&ui, Target::AddImage, 11.0);
+    assert!(app.take_image_request(), "the form asks for the open panel");
+    assert!(!app.take_image_request(), "once");
+    assert!(app.attach_image(b"not a picture").is_err());
+    assert!(app.attach_image(&png_header(5000, 5000)).is_err(), "too many pixels");
+    app.attach_image(&png_header(40, 30)).unwrap();
+    app.attach_image(&png_header(20, 20)).unwrap();
+    assert!(has(&app, Target::Thumbs) && has(&app, Target::RemoveImage));
+    assert_eq!(files(&dir), 2);
+    render(&mut app, &ui);
+    // Cancel throws the new pictures away
+    app.activate(&ui, Target::Cancel, 12.0);
+    assert_eq!(files(&dir), 0);
+    assert!(app.data.items[0].attachments.is_empty());
+
+    // Done keeps them, and they show on the list row
+    app.open_editor(&ui, Some(id), 20.0);
+    app.attach_image(&png_header(40, 30)).unwrap();
+    app.attach_image(&png_header(20, 20)).unwrap();
+    app.activate(&ui, Target::Save, 21.0);
+    assert_eq!(app.data.items[0].attachments.len(), 2);
+    assert_eq!(files(&dir), 2);
+    app.activate(&ui, Target::Smart(Smart::All), 22.0);
+    render(&mut app, &ui);
+
+    // removing one in the form and saving deletes its file; a duplicate that shares a picture keeps it
+    app.open_editor(&ui, Some(id), 30.0);
+    app.activate(&ui, Target::RemoveImage, 31.0);
+    app.activate(&ui, Target::Save, 32.0);
+    assert_eq!(app.data.items[0].attachments.len(), 1);
+    assert_eq!(files(&dir), 1);
+    app.open_editor(&ui, Some(id), 40.0);
+    app.activate(&ui, Target::Duplicate, 41.0);
+    assert_eq!(app.data.items.len(), 2);
+    app.open_editor(&ui, Some(id), 50.0);
+    app.activate(&ui, Target::RemoveImage, 51.0);
+    app.activate(&ui, Target::Save, 52.0);
+    assert!(app.data.items[0].attachments.is_empty());
+    assert_eq!(files(&dir), 1, "the copy still uses it");
+    cleanup(&path);
+}
+
+#[test]
+fn a_reminder_holds_four_pictures_and_the_form_must_be_open_to_add_one() {
+    let (mut app, ui, path) = app("pictures-cap");
+    assert!(app.attach_image(&png_header(8, 8)).is_err(), "no form is open");
+    app.activate(&ui, Target::New, 0.0);
+    for _ in 0..attach::MAX_PER_REMINDER {
+        app.attach_image(&png_header(8, 8)).unwrap();
+    }
+    assert!(app.attach_image(&png_header(8, 8)).is_err());
+    app.activate(&ui, Target::AddImage, 1.0);
+    assert!(!app.take_image_request(), "the form does not ask for a fifth");
+    assert!(app.notice.is_some());
+    app.activate(&ui, Target::Cancel, 2.0);
+    cleanup(&path);
+}

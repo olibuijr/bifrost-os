@@ -52,6 +52,8 @@ pub struct Reminder {
     pub tz: Option<String>,
     /// Once the due moment has passed, the alert repeats every minute until the reminder is completed.
     pub urgent: bool,
+    /// File names of the pictures attached to the reminder (`attach`), in the `attachments` folder beside the store.
+    pub attachments: Vec<String>,
 }
 
 impl Reminder {
@@ -74,6 +76,7 @@ impl Reminder {
             section: None,
             tz: None,
             urgent: false,
+            attachments: vec![],
         }
     }
 

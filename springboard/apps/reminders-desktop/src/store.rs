@@ -6,6 +6,7 @@ use crate::model::{
     Data, DueRule, FlagRule, ListDef, ListGroup, Reminder, Section, SmartDef, SmartRules, Template, TemplateItem, TimeRule, MAX_GROUPS,
     MAX_ITEMS, MAX_LISTS, MAX_NAME, MAX_NOTES, MAX_SECTIONS, MAX_SMARTS, MAX_TEMPLATES, MAX_TEMPLATE_ITEMS, MAX_TITLE, MAX_URL,
 };
+use crate::attach;
 use crate::repeat::Repeat;
 use crate::zones;
 use springboard::shell::prefs::{escape_field as escaped, unescape_field};
@@ -50,8 +51,8 @@ fn flag(field: &str) -> Option<bool> {
 }
 
 fn parse_item(fields: &[&str]) -> Option<Reminder> {
-    // R id list parent due time done flag prio repeat early title notes url [created [section [zone [urgent]]]]
-    if !(14..=18).contains(&fields.len()) {
+    // R id list parent due time done flag prio repeat early title notes url [created [section [zone [urgent [pictures]]]]]
+    if !(14..=19).contains(&fields.len()) {
         return None;
     }
     let due: Option<i64> = opt_num(fields[4]).ok()?;
@@ -93,6 +94,16 @@ fn parse_item(fields: &[&str]) -> Option<Reminder> {
         urgent: match fields.get(17) {
             Some(f) => flag(f)?,
             None => false,
+        },
+        attachments: match fields.get(18) {
+            None | Some(&"-") => vec![],
+            Some(f) => {
+                let names: Vec<String> = f.split(',').map(str::to_string).collect();
+                if names.len() > attach::MAX_PER_REMINDER || names.iter().any(|n| !attach::valid_name(n)) {
+                    return None;
+                }
+                names
+            }
         },
     })
 }
@@ -367,6 +378,8 @@ fn valid(data: &Data) -> bool {
                 && unescape(&escaped(&r.notes), MAX_NOTES, true).is_some()
                 && unescape(&escaped(&r.url), MAX_URL, true).is_some()
                 && r.tz.as_deref().is_none_or(zones::valid_name)
+                && r.attachments.len() <= attach::MAX_PER_REMINDER
+                && r.attachments.iter().all(|n| attach::valid_name(n))
                 && r.due.is_none_or(|d| DAY_RANGE.contains(&d))
                 && r.section.is_none_or(|s| data.lists.iter().any(|l| l.id == r.list && l.sections.iter().any(|x| x.id == s)))
         })
@@ -433,7 +446,7 @@ pub fn save(path: &Path, data: &Data) -> std::io::Result<()> {
     }
     for r in &data.items {
         out.push_str(&format!(
-            "R\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            "R\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
             r.id,
             r.list,
             num(r.parent.map(|p| p.to_string())),
@@ -451,6 +464,7 @@ pub fn save(path: &Path, data: &Data) -> std::io::Result<()> {
             num(r.section.map(|s| s.to_string())),
             r.tz.as_deref().map_or_else(|| "-".to_string(), escaped),
             u8::from(r.urgent),
+            if r.attachments.is_empty() { "-".to_string() } else { r.attachments.join(",") },
         ));
         if out.len() > MAX_BYTES {
             return Err(invalid("Reminders file too large"));
@@ -516,6 +530,7 @@ mod tests {
         a.section = Some(9);
         a.tz = Some("America/New_York".into());
         a.urgent = true;
+        a.attachments = vec!["att-1791073380-1.png".into(), "att-1791073380-2.jpg".into()];
         let mut b = Reminder::new(2, "Sub");
         b.list = 2;
         b.parent = Some(1);
@@ -554,6 +569,28 @@ mod tests {
         let mut d = Data::default();
         d.items = vec![r];
         assert!(save(&scratch("zone"), &d).is_err(), "save refuses a zone name that load would drop");
+    }
+    #[test]
+    fn a_reminder_with_a_picture_name_that_is_not_ours_is_dropped() {
+        let row = |id: u32, pictures: &str| format!("R\t{id}\t1\t-\t-\t-\t0\t0\t0\t-\t-\tT{id}\t\t\t-\t-\t-\t0\t{pictures}\n");
+        let text = format!(
+            "{HEADER}\nL\t1\t0\t0\tOne\n{}{}{}{}{}",
+            row(1, "att-1-1.png,att-1-2.jpg"),
+            row(2, "../../etc/passwd"),
+            row(3, "att-1-1.png,att-1-2.png,att-1-3.png,att-1-4.png,att-1-5.png"),
+            row(4, "-"),
+            row(5, "att-1-1.gif"),
+        );
+        let data = parse(&text);
+        let ids: Vec<u64> = data.items.iter().map(|r| r.id).collect();
+        assert_eq!(ids, [1, 4]);
+        assert_eq!(data.items[0].attachments, ["att-1-1.png", "att-1-2.jpg"]);
+        assert!(data.items[1].attachments.is_empty());
+        let mut r = Reminder::new(1, "x");
+        r.attachments = vec!["../x.png".into()];
+        let mut d = Data::default();
+        d.items = vec![r];
+        assert!(save(&scratch("pictures"), &d).is_err(), "save refuses a name that load would drop");
     }
     #[test]
     fn broken_references_in_the_new_fields_are_repaired() {

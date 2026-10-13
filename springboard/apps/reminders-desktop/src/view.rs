@@ -182,6 +182,11 @@ impl Reminders {
         if r.urgent {
             sub = if sub.is_empty() { "Urgent".to_string() } else { format!("{sub} · Urgent") };
         }
+        if !r.attachments.is_empty() {
+            let n = r.attachments.len();
+            let pictures = format!("{n} {}", if n == 1 { "image" } else { "images" });
+            sub = if sub.is_empty() { pictures } else { format!("{sub} · {pictures}") };
+        }
         // right-hand decorations, laid out right to left
         let mut rx = right_edge;
         if kids {
@@ -460,6 +465,33 @@ impl Reminders {
             Target::Early => {
                 let v = draft.as_ref().and_then(|d| d.early).map_or("None".to_string(), model::early_label);
                 self.value_row(c, ui, rect, "Early Reminder", &v, LABEL_2.now());
+            }
+            Target::AddImage => {
+                let n = draft.as_ref().map_or(0, |d| d.attachments.len());
+                self.cell(c, ui, rect);
+                self.text(c, ui, "Add Image...", MAC_BODY_PT, Weight::Regular, LINK, x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
+                self.right(c, ui, &format!("{n} of {}", attach::MAX_PER_REMINDER), MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x + w - ui.pt(SPACE_L), y + ui.pt(SPACE_L));
+            }
+            Target::Thumbs => {
+                self.cell(c, ui, rect);
+                let side = ui.pt(72.0);
+                let names = draft.as_ref().map(|d| d.attachments.clone()).unwrap_or_default();
+                for (i, name) in names.iter().enumerate() {
+                    if !self.thumbs.contains_key(name) {
+                        let thumb = attach::thumbnail(&self.attach_dir, name, side as usize);
+                        self.thumbs.insert(name.clone(), thumb);
+                    }
+                    let (tx, ty) = (x + ui.pt(SPACE_L) + (side + ui.pt(SPACE_M)) * i as f32, y + (h - side) / 2.0);
+                    match self.thumbs.get(name) {
+                        Some(Some(img)) => c.blit(img, (tx + (side - img.w as f32) / 2.0) as i32, (ty + (side - img.h as f32) / 2.0) as i32, 255, 255),
+                        // a picture that is missing or does not decode keeps its place as a plain square
+                        _ => c.fill_rrect(tx, ty, side, side, ui.pt(SWATCH_R), FIELD_BG.now()),
+                    }
+                }
+            }
+            Target::RemoveImage => {
+                self.cell(c, ui, rect);
+                self.center(c, ui, "Remove Last Image", MAC_BODY_PT, Weight::Regular, DESTRUCTIVE, x + w / 2.0, y + h / 2.0);
             }
             Target::TimeZone => {
                 let v = draft.as_ref().and_then(|d| d.tz.clone()).map_or("Same as Device".to_string(), |z| zones::short_name(&z));

@@ -13,8 +13,8 @@ mod chrome;
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_M, SPACE_S, SPACE_XL};
 use springboard::layout::in_rect as within;
 use bifrost_app::kit::ui::{home_zone, Ui};
-use bifrost_app::kit::{Event, TextCache};
-use crate::{model, organize, quick, repeat, settings, store, zones};
+use bifrost_app::kit::{Event, Image, TextCache};
+use crate::{attach, model, organize, quick, repeat, settings, store, zones};
 use springboard::deildu::scroll::Scroller;
 use springboard::shell::clock::{
     tz::{civil_from_days, days_from_civil},
@@ -25,7 +25,7 @@ use springboard::shell::textfield::TextField;
 use bifrost_app::controls::undo::UndoManager;
 use bifrost_app::controls::tips::{self, Datastore, Tip, TipSection, TipView, TipViewStyle};
 use model::{Data, Group, ListDef, ListGroup, Options, Reminder, Row, Smart, Sort, View};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use store::local_day;
 
@@ -90,6 +90,10 @@ enum Target {
     /// The reminder form's Time Zone and Urgent rows.
     TimeZone,
     Urgent,
+    /// The reminder form's picture rows: add one, the strip of thumbnails, remove the last.
+    AddImage,
+    Thumbs,
+    RemoveImage,
     /// A section header row of the open list (its row index); choosing it edits the section.
     Section(usize),
     /// A list group's disclosure in the sidebar, by group id.
@@ -145,6 +149,8 @@ struct Editor {
     id: Option<u64>,
     draft: Reminder,
     month: i64,
+    /// Pictures stored while this form has been open; they are deleted again if the form is cancelled.
+    added: Vec<String>,
 }
 
 /// What the list editor form edits: a list, a section of a list (by list id) or a list group.
@@ -297,6 +303,12 @@ pub struct Reminders {
     /// Reminders > Settings, kept in `settings.tsv` beside the reminders.
     settings: settings::Settings,
     settings_path: PathBuf,
+    /// The folder beside the reminders file that holds the attached pictures.
+    attach_dir: PathBuf,
+    /// Thumbnails of attached pictures by file name (`None`: the file is missing or does not decode).
+    thumbs: HashMap<String, Option<Image>>,
+    /// The form asked for a picture; `main.rs` opens the open panel.
+    image_request: bool,
     wall: Wall,
     data: Data,
     screen: Screen,
@@ -421,6 +433,7 @@ impl Reminders {
         let loaded = store::load_checked(&path);
         let load_error = loaded.is_err();
         let settings_path = path.with_file_name("settings.tsv");
+        let attach_dir = path.with_file_name("attachments");
         let settings = settings::load(&settings_path);
         let mut app = Self {
             w,
@@ -433,6 +446,9 @@ impl Reminders {
             path,
             settings,
             settings_path,
+            attach_dir,
+            thumbs: HashMap::new(),
+            image_request: false,
             wall,
             screen: Screen::Items,
             view: View::Smart(Smart::All),
@@ -655,6 +671,35 @@ impl Reminders {
             self.rebuild(ui);
         }
         saved
+    }
+
+    /// Whether the details form asked for a picture since the last call; `main.rs` then opens the open panel.
+    pub fn take_image_request(&mut self) -> bool {
+        std::mem::take(&mut self.image_request)
+    }
+
+    /// The open panel answered: stores the picture and adds it to the reminder being edited. The form keeps it until
+    /// Done; Cancel deletes it again.
+    pub fn attach_image(&mut self, bytes: &[u8]) -> Result<(), String> {
+        let Some(e) = &mut self.editor else { return Err("no reminder is open".into()) };
+        if e.draft.attachments.len() >= attach::MAX_PER_REMINDER {
+            return Err(format!("a reminder holds up to {} pictures", attach::MAX_PER_REMINDER));
+        }
+        let name = attach::store(&self.attach_dir, bytes, self.wall.unix).map_err(|_| "the picture is not a PNG or JPEG, or is too large".to_string())?;
+        e.draft.attachments.push(name.clone());
+        e.added.push(name);
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Deletes the pictures stored for a form that is cancelled.
+    fn discard_new_pictures(&mut self) {
+        if let Some(e) = &mut self.editor {
+            for name in std::mem::take(&mut e.added) {
+                attach::remove(&self.attach_dir, &name);
+                self.thumbs.remove(&name);
+            }
+        }
     }
 
     /// Reminders > Mark All Overdue as Today: one undo step for every reminder moved.
@@ -1081,6 +1126,12 @@ impl Reminders {
                 add(&mut v, &mut y, Target::Priority, 52.0, 8.0);
                 add(&mut v, &mut y, Target::MoveList, 52.0, 8.0);
                 add(&mut v, &mut y, Target::Indent, 52.0, 20.0);
+                let pictures = e.draft.attachments.len();
+                add(&mut v, &mut y, Target::AddImage, 52.0, if pictures == 0 { 20.0 } else { 8.0 });
+                if pictures > 0 {
+                    add(&mut v, &mut y, Target::Thumbs, 96.0, 8.0);
+                    add(&mut v, &mut y, Target::RemoveImage, 52.0, 20.0);
+                }
                 if e.id.is_some() {
                     add(&mut v, &mut y, Target::Duplicate, 52.0, 8.0);
                     add(&mut v, &mut y, Target::Delete, 52.0, 8.0);
@@ -1467,7 +1518,7 @@ impl Reminders {
         self.notes = mk_field(ui, "Notes", model::MAX_NOTES, &draft.notes);
         self.url = mk_field(ui, "URL", model::MAX_URL, &draft.url);
         let month = month_start(draft.due.unwrap_or(self.today));
-        self.editor = Some(Editor { id: id.filter(|_| draft.id != 0), draft, month });
+        self.editor = Some(Editor { id: id.filter(|_| draft.id != 0), draft, month, added: vec![] });
         self.screen = Screen::Editor;
         self.swipe = None;
         self.scroll.jump_top();
@@ -1769,7 +1820,17 @@ impl Reminders {
             }
         }
         let name = if id.is_some() { "Edit Reminder" } else { "New Reminder" };
+        let before: Vec<String> = id.and_then(|i| self.data.items.iter().find(|r| r.id == i)).map(|r| r.attachments.clone()).unwrap_or_default();
         if self.commit_named(next, name) {
+            // a picture the reminder no longer lists is deleted unless another reminder (a duplicate) still uses it
+            for gone in before {
+                if !self.data.items.iter().any(|r| r.attachments.contains(&gone)) {
+                    attach::remove(&self.attach_dir, &gone);
+                }
+            }
+            if let Some(e) = &mut self.editor {
+                e.added.clear();
+            }
             self.close_form(ui, t);
         }
     }
@@ -2113,7 +2174,10 @@ impl Reminders {
             }
             Target::Undo => self.run_undo(ui),
             Target::Field(f) => self.set_focus(Some(f), t),
-            Target::Cancel => self.close_form(ui, t),
+            Target::Cancel => {
+                self.discard_new_pictures();
+                self.close_form(ui, t);
+            }
             Target::Save => {
                 if self.editor.is_some() {
                     self.save_editor(ui, t);
@@ -2182,6 +2246,18 @@ impl Reminders {
             Target::TimeZone => {
                 if let Some(e) = &mut self.editor {
                     e.draft.tz = zones::next_choice(e.draft.tz.as_deref());
+                }
+            }
+            Target::AddImage => {
+                if self.editor.as_ref().is_some_and(|e| e.draft.attachments.len() >= attach::MAX_PER_REMINDER) {
+                    self.notice = Some(format!("A reminder holds up to {} pictures", attach::MAX_PER_REMINDER));
+                } else {
+                    self.image_request = true;
+                }
+            }
+            Target::RemoveImage => {
+                if let Some(e) = &mut self.editor {
+                    e.draft.attachments.pop();
                 }
             }
             Target::Urgent => {
@@ -2266,7 +2342,7 @@ impl Reminders {
                     }
                 }
             },
-            Target::Colors | Target::Icons | Target::Calendar | Target::TimeStep | Target::Scroll => {}
+            Target::Colors | Target::Icons | Target::Calendar | Target::TimeStep | Target::Thumbs | Target::Scroll => {}
             Target::Color(c) => {
                 if let Some(e) = &mut self.list_edit {
                     e.color = c;

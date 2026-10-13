@@ -3,6 +3,7 @@
 
 mod alerts;
 mod app;
+mod attach;
 mod model;
 mod organize;
 mod quick;
@@ -82,6 +83,8 @@ struct RemindersApp {
     import: Option<u32>,
     /// The Quick Reminder menu bar extra.
     quick: Option<StatusItem>,
+    /// The open panel asked for by a reminder form's Add Image.
+    pick: Option<u32>,
 }
 
 /// The menu bar extra: New Quick Reminder opens the new reminder form (the title takes the quick-add words, such as
@@ -101,6 +104,10 @@ impl RemindersApp {
             ctx.wants_keyboard(on);
         }
         self.sync_termination(ctx);
+        // the reminder form asked for a picture: the open panel answers in `document`
+        if self.app.as_mut().is_some_and(|a| a.take_image_request()) {
+            self.pick = Some(ctx.open_document(DocMode::Read, "Add Image", &["png", "jpg", "jpeg"]));
+        }
     }
 
     /// Every change is saved as it is made, so the app may be ended at once (sudden termination) except while an
@@ -504,9 +511,25 @@ impl App for RemindersApp {
                 ctx.release_document(doc.grant);
                 imported
             }
+            DocumentEvent::Opened(mut doc) if self.pick == Some(doc.request) => {
+                self.pick = None;
+                let mut bytes = Vec::new();
+                let read = if doc.size > attach::MAX_BYTES as u64 { Err("the picture is too large".to_string()) } else { (&mut doc.file).take(attach::MAX_BYTES as u64).read_to_end(&mut bytes).map_err(|e| e.to_string()) };
+                ctx.release_document(doc.grant);
+                match read.and_then(|_| self.app.as_mut().map_or(Err("Reminders is not ready".to_string()), |a| a.attach_image(&bytes))) {
+                    Ok(()) => true,
+                    Err(e) => {
+                        ctx.log(&format!("attach image: {e}"));
+                        false
+                    }
+                }
+            }
             DocumentEvent::Failed { request, code } => {
                 if self.import == Some(request) {
                     self.import = None;
+                }
+                if self.pick == Some(request) {
+                    self.pick = None;
                 }
                 if code != DocErrorCode::Cancelled {
                     ctx.log(&format!("document request {request}: {code:?}"));
@@ -615,5 +638,5 @@ fn tip_store(data_dir: &Path) -> bifrost_app::controls::tips::Datastore {
 }
 
 fn main() {
-    bifrost_app::run(RemindersApp { app: None, kb: false, alerts: alerts::AlertState::default(), wall: Wall::default(), badge: None, badge_req: None, schedule: None, probe: None, widget_gen: None, terminable: false, import: None, quick: None });
+    bifrost_app::run(RemindersApp { app: None, kb: false, alerts: alerts::AlertState::default(), wall: Wall::default(), badge: None, badge_req: None, schedule: None, probe: None, widget_gen: None, terminable: false, import: None, quick: None, pick: None });
 }
