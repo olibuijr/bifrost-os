@@ -149,6 +149,11 @@ impl Client {
         self.call("time.set_timezone", vec![("name", privd::s(name))]).map(|_| ())
     }
 
+    /// Changes the account password (`account.set_password`); `old` is empty for a first password.
+    pub fn set_password(&self, old: &str, new: &str) -> Result<(), ClientError> {
+        self.call("account.set_password", vec![("old", privd::s(old)), ("new", privd::s(new))]).map(|_| ())
+    }
+
     pub fn set_ntp(&self, on: bool) -> Result<(), ClientError> {
         self.call("time.set_ntp", vec![("on", Json::Bool(on))]).map(|_| ())
     }

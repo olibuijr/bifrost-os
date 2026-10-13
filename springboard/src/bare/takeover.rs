@@ -72,6 +72,63 @@ pub fn forgive_stall(dir: &str) {
     }
 }
 
+/// How a run ended, for the crash-loop counter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ending {
+    /// systemd stopped the service (SIGTERM), a reboot or shutdown was requested, a restart or logout: deliberate.
+    Clean,
+    /// The UI loop stopped beating (see `after_stall`).
+    Stall,
+    /// A panic, a kill, a crash or a power loss: nothing wrote an exit, the counter stays as this start left it.
+    Crash,
+}
+
+/// The attempt counter's content after a run ended `ending`, given the file's `raw` content. Only crashes, panics,
+/// kills and stalls leave a failed start counted: a clean stop (three quick benchmark reboots) must not latch the
+/// guard and show the start-failed screen.
+pub fn attempts_after(raw: &str, ending: Ending) -> u32 {
+    match ending {
+        Ending::Clean => 0,
+        Ending::Stall => after_stall(raw),
+        Ending::Crash => parse_attempts(raw),
+    }
+}
+
+/// A deliberate stop: records `last_exit` (so the next start does not log an unclean death) and clears the attempt
+/// counter. Call it before `process::exit` on a requested reboot, shutdown or restart, and from the SIGTERM watcher.
+pub fn clean_stop(dir: &str, status: i32, reason: &str) {
+    super::crashlog::write_last_exit(dir, status, reason);
+    let file = format!("{dir}/boot_attempts");
+    let raw = fs::read_to_string(&file).unwrap_or_default();
+    let _ = fs::write(&file, attempts_after(&raw, Ending::Clean).to_string());
+}
+
+static TERM: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+extern "C" fn on_term(_sig: i32) {
+    TERM.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+extern "C" {
+    fn signal(signum: i32, handler: usize) -> usize;
+}
+
+/// SIGTERM (systemd stopping the unit on reboot or shutdown) is a clean stop: a watcher thread, so a hung UI loop
+/// cannot hold it, writes `last_exit`, clears the counter and exits 0.
+fn watch_term(dir: &str) {
+    const SIGTERM: i32 = 15;
+    // SAFETY: the handler only stores an atomic flag, which is async-signal-safe.
+    unsafe { signal(SIGTERM, on_term as *const () as usize) };
+    let dir = dir.to_string();
+    crate::bare::sys::spawn_named("term-watch", move || loop {
+        std::thread::sleep(Duration::from_millis(100));
+        if TERM.load(std::sync::atomic::Ordering::SeqCst) {
+            clean_stop(&dir, 0, "SIGTERM from the service manager");
+            std::process::exit(0);
+        }
+    });
+}
+
 /// What to do given the failed boots so far.
 pub fn decide(failed: u32) -> Boot {
     if failed >= MAX_FAILED_BOOTS {
@@ -122,6 +179,7 @@ pub fn begin(dir: &str) -> bool {
             log(dir, &format!("starting (attempt {n} of {MAX_FAILED_BOOTS})"));
         }
     }
+    watch_term(dir);
     let dir = dir.to_string();
     crate::bare::sys::spawn_named("boot-healthy", move || {
         std::thread::sleep(Duration::from_millis(HEALTHY_AFTER_MS as u64));
@@ -134,6 +192,44 @@ pub fn begin(dir: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_crashes_and_stalls_leave_a_failed_start_counted() {
+        assert_eq!(attempts_after("2", Ending::Clean), 0, "a clean reboot or shutdown resets the counter");
+        assert_eq!(attempts_after("3", Ending::Clean), 0);
+        assert_eq!(attempts_after("2", Ending::Crash), 2, "panics, kills and crashes keep the count");
+        assert_eq!(attempts_after("2", Ending::Stall), 1, "a stall takes its attempt back");
+        assert_eq!(attempts_after("junk", Ending::Crash), 0);
+    }
+
+    #[test]
+    fn three_quick_clean_reboots_never_latch_the_guard() {
+        let mut raw = String::from("0");
+        for _ in 0..5 {
+            let Boot::TakeOver(n) = decide(parse_attempts(&raw)) else { panic!("latched") };
+            raw = n.to_string();
+            raw = attempts_after(&raw, Ending::Clean).to_string();
+        }
+        // three crashes in a row do latch it
+        let mut raw = String::from("0");
+        for _ in 0..MAX_FAILED_BOOTS {
+            let Boot::TakeOver(n) = decide(parse_attempts(&raw)) else { panic!("latched early") };
+            raw = attempts_after(&n.to_string(), Ending::Crash).to_string();
+        }
+        assert_eq!(decide(parse_attempts(&raw)), Boot::CrashLoop(MAX_FAILED_BOOTS));
+    }
+
+    #[test]
+    fn a_clean_stop_writes_last_exit_and_clears_the_counter() {
+        let dir = std::env::temp_dir().join(format!("takeover-clean-{}", std::process::id()));
+        let _ = fs::create_dir_all(&dir);
+        let d = dir.to_str().unwrap();
+        fs::write(dir.join("boot_attempts"), "2").unwrap();
+        clean_stop(d, 0, "test");
+        assert_eq!(fs::read_to_string(dir.join("boot_attempts")).unwrap(), "0");
+        assert!(fs::read_to_string(dir.join("last_exit")).unwrap().starts_with("0 test"));
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn key_bitmap_bits_are_little_endian_per_byte() {

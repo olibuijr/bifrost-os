@@ -1,0 +1,647 @@
+{
+ "category": "system-ui",
+ "shard": "p-r",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/CoreServices/PIPAgent.app",
+   "category": "system-ui",
+   "name": "PIPAgent",
+   "path": "/System/Library/CoreServices/PIPAgent.app",
+   "kind": "core service agent",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Paired Devices.app",
+   "category": "system-ui",
+   "name": "Paired Devices",
+   "path": "/System/Library/CoreServices/Paired Devices.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple device pairing service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Pass Viewer.app",
+   "category": "system-ui",
+   "name": "Pass Viewer",
+   "path": "/System/Library/CoreServices/Pass Viewer.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Wallet pass viewer",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/PassViewer.app",
+   "category": "system-ui",
+   "name": "PassViewer",
+   "path": "/System/Library/CoreServices/PassViewer.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Wallet pass viewer",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/PeopleMessageService.app",
+   "category": "system-ui",
+   "name": "PeopleMessageService",
+   "path": "/System/Library/CoreServices/PeopleMessageService.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "people and messaging service, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/PeopleViewService.app",
+   "category": "system-ui",
+   "name": "PeopleViewService",
+   "path": "/System/Library/CoreServices/PeopleViewService.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "people view service, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/PowerChime.app",
+   "category": "system-ui",
+   "name": "PowerChime",
+   "path": "/System/Library/CoreServices/PowerChime.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "power connect sound, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/PreviewShell.app",
+   "category": "system-ui",
+   "name": "PreviewShell",
+   "path": "/System/Library/CoreServices/PreviewShell.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/services/quick_look.rs",
+   "status": "partial",
+   "note": "Quick Look",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/PreviewShellMac.app",
+   "category": "system-ui",
+   "name": "PreviewShellMac",
+   "path": "/System/Library/CoreServices/PreviewShellMac.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/services/quick_look.rs",
+   "status": "partial",
+   "note": "Quick Look",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Pro Display Calibrator.app",
+   "category": "system-ui",
+   "name": "Pro Display Calibrator",
+   "path": "/System/Library/CoreServices/Pro Display Calibrator.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Problem Reporter.app",
+   "category": "system-ui",
+   "name": "Problem Reporter",
+   "path": "/System/Library/CoreServices/Problem Reporter.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/diag.rs",
+   "status": "partial",
+   "note": "diagnostics",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/ProfileHelper.app",
+   "category": "system-ui",
+   "name": "ProfileHelper",
+   "path": "/System/Library/CoreServices/ProfileHelper.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/RapportUIAgent.app",
+   "category": "system-ui",
+   "name": "RapportUIAgent",
+   "path": "/System/Library/CoreServices/RapportUIAgent.app",
+   "kind": "core service agent",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple device handoff (Rapport)",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/RegisterPluginIMApp.app",
+   "category": "system-ui",
+   "name": "RegisterPluginIMApp",
+   "path": "/System/Library/CoreServices/RegisterPluginIMApp.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Rosetta 2 Updater.app",
+   "category": "system-ui",
+   "name": "Rosetta 2 Updater",
+   "path": "/System/Library/CoreServices/Rosetta 2 Updater.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple silicon translation layer",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/rcd.app",
+   "category": "system-ui",
+   "name": "rcd",
+   "path": "/System/Library/CoreServices/rcd.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple accessory control daemon",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PCCAgentClientExtension.appex",
+   "category": "system-ui",
+   "name": "PCCAgentClientExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/PCCAgentClientExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple private cloud compute client",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PRIMLCKPreemptivePing.appex",
+   "category": "system-ui",
+   "name": "PRIMLCKPreemptivePing",
+   "path": "/System/Library/ExtensionKit/Extensions/PRIMLCKPreemptivePing.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple private machine learning service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PackageThumbnailExtension.appex",
+   "category": "system-ui",
+   "name": "PackageThumbnailExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/PackageThumbnailExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PaperKitExtension.appex",
+   "category": "system-ui",
+   "name": "PaperKitExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/PaperKitExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/markup.rs",
+   "status": "partial",
+   "note": "markup tools in the shell",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PhoneAppIntentsExtension.appex",
+   "category": "system-ui",
+   "name": "PhoneAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/PhoneAppIntentsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PhotoPicker.appex",
+   "category": "system-ui",
+   "name": "PhotoPicker",
+   "path": "/System/Library/ExtensionKit/Extensions/PhotoPicker.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/photos/mod.rs",
+   "status": "partial",
+   "note": "photo picker",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PhotosPicker.appex",
+   "category": "system-ui",
+   "name": "PhotosPicker",
+   "path": "/System/Library/ExtensionKit/Extensions/PhotosPicker.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/photos/mod.rs",
+   "status": "partial",
+   "note": "photo picker",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PhotosPosterProvider.appex",
+   "category": "system-ui",
+   "name": "PhotosPosterProvider",
+   "path": "/System/Library/ExtensionKit/Extensions/PhotosPosterProvider.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PlatformSSOToken.appex",
+   "category": "system-ui",
+   "name": "PlatformSSOToken",
+   "path": "/System/Library/ExtensionKit/Extensions/PlatformSSOToken.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple platform single sign-on",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PnRCarPlayOnDeviceWorker.appex",
+   "category": "system-ui",
+   "name": "PnRCarPlayOnDeviceWorker",
+   "path": "/System/Library/ExtensionKit/Extensions/PnRCarPlayOnDeviceWorker.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PnROnDeviceWorker.appex",
+   "category": "system-ui",
+   "name": "PnROnDeviceWorker",
+   "path": "/System/Library/ExtensionKit/Extensions/PnROnDeviceWorker.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PrinterScannerIntentsExtension.appex",
+   "category": "system-ui",
+   "name": "PrinterScannerIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/PrinterScannerIntentsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PrivateEvolutionPlugin.appex",
+   "category": "system-ui",
+   "name": "PrivateEvolutionPlugin",
+   "path": "/System/Library/ExtensionKit/Extensions/PrivateEvolutionPlugin.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PrivateMLClientInferenceProviderService.appex",
+   "category": "system-ui",
+   "name": "PrivateMLClientInferenceProviderService",
+   "path": "/System/Library/ExtensionKit/Extensions/PrivateMLClientInferenceProviderService.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/RemoteCatalystPosterExtension.appex",
+   "category": "system-ui",
+   "name": "RemoteCatalystPosterExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/RemoteCatalystPosterExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/RepackagingWorker.appex",
+   "category": "system-ui",
+   "name": "RepackagingWorker",
+   "path": "/System/Library/ExtensionKit/Extensions/RepackagingWorker.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  }
+ ]
+}

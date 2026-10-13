@@ -1,5 +1,15 @@
 # BifrOSt changelog
 
+## 0.6.5 — 2026-10-12
+
+Honest live audio numbers and apps rebuilt on the current SDK.
+
+- Audio bench: the live MIDI latency measures on one clock and fails loudly on any sample outside 0..1000 ms; the
+  audio round trip reports "no loopback" (skipped, never recorded) when no cable connects line out to line in.
+- Apps: 21 desktop apps rebuilt on this SDK (an app built on the older shell/app protocol drew a black window).
+- Window server: bifrost-wm and its chrome ship in the update (opt-in through /etc/bifrost/compositor); the shell
+  asks it for live blur behind its windows.
+
 ## 0.6.4 — 2026-10-12
 
 The audio server stops its devices when asked.

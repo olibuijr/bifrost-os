@@ -8,6 +8,8 @@ use super::music::nowplaying::Target as Media;
 use super::music::{draw_cc_controls, icons};
 use super::services::now_playing;
 use crate::shell::switcher::draw_scaled;
+use bifrost_ui::material_request::ShellSurface;
+use bifrost_ui::visual_effect::{MaterialKind, MaterialRequest, MaterialState};
 use bifrost_ui::media_session::PlaybackState;
 use bifrost_ui::symbol_effect::{Effect as SymbolFx, Options as SymbolOptions, SymbolEffect};
 use super::AppId;
@@ -483,8 +485,19 @@ impl Shell {
         }
     }
 
+    /// The module list the user saved (`MODULES_PREF`), read as the cluster shows it.
+    fn cc_slots(&self) -> Vec<ModuleSlot> {
+        parse_slots(self.prefs.get(MODULES_PREF).unwrap_or(""))
+    }
+
+    /// The tile under (x, y) that the cluster is showing: a module the user hid does not answer a finger.
+    fn cc_tile_at(&self, x: f32, y: f32) -> Option<Tile> {
+        let slots = self.cc_slots();
+        hit(&self.ui, self.w, x, y).filter(|&t| tile_visible(&slots, t))
+    }
+
     fn cc_down(&mut self, x: f32, y: f32, t: f64, range: f32) -> Vec<Effect> {
-        let tile = hit(&self.ui, self.w, x, y);
+        let tile = self.cc_tile_at(x, y);
         self.cc.press = tile.filter(|&k| Expanded::of(k).is_some()).map(|k| (k, t, x, y));
         match tile {
             Some(tile @ (Tile::Brightness | Tile::Volume)) => {
@@ -522,7 +535,7 @@ impl Shell {
     fn cc_up(&mut self, x: f32, y: f32, t: f64) -> Vec<Effect> {
         self.cc.press = None;
         match self.cc.touch.take() {
-            Some(Touch::Tile(tile)) if hit(&self.ui, self.w, x, y) == Some(tile) => self.activate_tile(tile, t),
+            Some(Touch::Tile(tile)) if self.cc_tile_at(x, y) == Some(tile) => self.activate_tile(tile, t),
             Some(Touch::Outside(mut d)) => {
                 d.moved(y, t);
                 let tap = d.travel().abs() < self.ui.pt(TAP_PT);
@@ -739,6 +752,7 @@ impl Shell {
         if self.cc.labels.as_ref().is_none_or(|l| l.key != Labels::key(&self.info, self.cc.airplane)) {
             self.cc.labels = Some(Labels::new(&self.ui, &self.info, self.cc.airplane));
         }
+        let slots = self.cc_slots();
         let ui = &self.ui;
         let alpha = (p * 2.0).clamp(0.0, 1.0);
         self.draw_bar(s, (alpha * 255.0) as u32);
@@ -759,6 +773,9 @@ impl Shell {
         s.fill_rrect(nx, ny + slide, nw, nh, r, tile_bg);
         let bt_on = self.info.bt.on();
         for tile in [Tile::Airplane, Tile::Nearby, Tile::Wifi, Tile::Bluetooth] {
+            if !tile_visible(&slots, tile) {
+                continue;
+            }
             let (x, y, w, h) = tile_rect(ui, self.w, tile);
             let on = match tile {
                 Tile::Airplane => self.cc.airplane,
@@ -786,6 +803,7 @@ impl Shell {
         self.draw_media_tile(s, (kx, ky + slide, kw, kh), (alpha * 255.0) as u32, pressed.and_then(media_target));
 
         // rotation lock: a white tile with a red glyph while held, as on the bifrost
+        if tile_visible(&slots, Tile::RotationLock) {
         let (rx, ry, rw, rh) = tile_rect(ui, self.w, Tile::RotationLock);
         let locked = self.rotation_locked();
         let mut bg = if locked { a(rgba(255, 255, 255, 240)) } else { tile_bg };
@@ -794,14 +812,18 @@ impl Shell {
         }
         s.fill_rrect(rx, ry + slide, rw, rh, r, bg);
         draw_rotation_lock(s, rx + rw / 2.0, ry + slide + rh / 2.0, ui.s, a(if locked { LOCK_RED } else { WHITE }));
+        }
 
         // screen mirroring
+        if tile_visible(&slots, Tile::Mirror) {
         let (lx, ly, lw, lh) = tile_rect(ui, self.w, Tile::Mirror);
         let bg = if pressed == Some(Tile::Mirror) { over(tile_bg, a(rgba(255, 255, 255, 50))) } else { tile_bg };
         s.fill_rrect(lx, ly + slide, lw, lh, r, bg);
         draw_mirror(s, lx + lw / 2.0, ly + slide + lh / 2.0, ui.s, a(WHITE));
+        }
 
         // Focus: the moon beside its caption in a wide capsule
+        if tile_visible(&slots, Tile::Focus) {
         let (fx, fy, fw, fh) = tile_rect(ui, self.w, Tile::Focus);
         let mut bg = if self.dnd() { a(rgba(94, 92, 230, 230)) } else { tile_bg };
         if pressed == Some(Tile::Focus) {
@@ -815,9 +837,13 @@ impl Shell {
         super::glyphs::paint(s, (cx - radius, cy - radius, 2.0 * radius, 2.0 * radius), a(rgba(88, 86, 214, 255)), |x, y| moon(x, y).max(-cut(x, y)));
         let text = if self.dnd() { &labels.focus_on } else { &labels.focus_off };
         s.blit(text, (fx + ui.pt(70.0)) as i32, (fy + slide + (fh - text.h as f32) / 2.0) as i32, 255, (alpha * 255.0) as u32);
+        }
 
         // bottom row: silent mode, timer, camera
         for tile in [Tile::Silent, Tile::Timer, Tile::Camera] {
+            if !tile_visible(&slots, tile) {
+                continue;
+            }
             let (x, y, w, h) = tile_rect(ui, self.w, tile);
             let silent = tile == Tile::Silent && self.music_muted;
             let mut bg = if silent { a(rgba(255, 255, 255, 240)) } else { tile_bg };
@@ -835,6 +861,9 @@ impl Shell {
 
         // brightness and volume sliders
         for (tile, v) in [(Tile::Brightness, self.info.brightness), (Tile::Volume, self.cc.volume)] {
+            if !tile_visible(&slots, tile) {
+                continue;
+            }
             let (x, y, w, h) = tile_rect(ui, self.w, tile);
             let y = y + slide;
             s.fill_rrect(x, y, w, h, r, tile_bg);
@@ -1477,19 +1506,71 @@ fn desk_backlight() -> bool {
     std::fs::read_dir("/sys/class/backlight").is_ok_and(|mut d| d.next().is_some())
 }
 
-/// A glass plate: the presenter's blur under a tinted fill on the GPU path,
-/// the solid material with Reduce Transparency, the translucent tint otherwise.
-pub(super) fn desk_glass(s: &mut Surface, (x, y, w, h): (f32, f32, f32, f32), r: f32, alpha: u32) {
+/// The presenter's glass shape for a shell surface's reference material. Surfaces that float over the
+/// desktop (menus, panels, Search, the Dock) have no window active state to follow, so they are `Chrome`;
+/// the window-background families keep their own kinds.
+pub(super) fn shell_glass_rect(req: &MaterialRequest) -> bifrost_render::glass::Rect {
+    use bifrost_render::glass::Kind;
+    let kind = match req.kind {
+        MaterialKind::Sidebar => Kind::Sidebar,
+        MaterialKind::Titlebar | MaterialKind::HeaderView => Kind::Titlebar,
+        _ => Kind::Chrome,
+    };
+    let active = match req.state {
+        MaterialState::FollowsWindowActiveState => None,
+        MaterialState::Active => Some(true),
+        MaterialState::Inactive => Some(false),
+    };
+    let c = req.corners();
+    let detail = bifrost_render::glass::Detail {
+        kind: req.kind.window_server_wire(),
+        within_window: !req.for_window_server(),
+        emphasized: req.emphasized,
+        radii: [c.tl, c.tr, c.br, c.bl],
+    };
+    let r = c.tl.max(c.tr).max(c.br).max(c.bl);
+    bifrost_render::glass::Rect { x: req.rect.x, y: req.rect.y, w: req.rect.w, h: req.rect.h, r, kind, active, detail: Some(detail) }
+}
+
+/// Declare a shell surface's material: the presenter's blur under it on the GPU path (nothing under
+/// Reduce Transparency or on the CPU fallback). Returns the fill colour for the surface, which is the
+/// named material tint (`MENU_TINT`), the solid material with Reduce Transparency, or the plain tint.
+pub(super) fn request_shell_material(req: MaterialRequest) -> u32 {
     use super::ui::{MENU_SOLID, MENU_TINT};
-    let fill = if bifrost_render::glass::gpu() && bifrost_render::appearance::reduce_transparency() {
+    if bifrost_render::glass::gpu() && bifrost_render::appearance::reduce_transparency() {
         MENU_SOLID.now()
     } else if bifrost_render::glass::gpu() {
-        bifrost_render::glass::push(bifrost_render::glass::Rect { x, y, w, h, r, ..Default::default() });
+        bifrost_render::glass::push(shell_glass_rect(&req));
         bifrost_render::glass::tint(MENU_TINT.now())
     } else {
         MENU_TINT.now()
-    };
+    }
+}
+
+/// A glass plate for a shell surface (see `request_shell_material`), filled with `alpha`.
+pub(super) fn desk_glass(s: &mut Surface, surface: ShellSurface, (x, y, w, h): (f32, f32, f32, f32), r: f32, alpha: u32) {
+    let fill = request_shell_material(surface.request((x, y, w, h), r));
     s.fill_rrect(x, y, w, h, r, scale(fill, alpha));
+}
+
+#[cfg(test)]
+mod shell_material_tests {
+    use super::*;
+
+    #[test]
+    fn shell_surfaces_map_to_presenter_kinds() {
+        use bifrost_render::glass::Kind;
+        for (surface, kind) in [
+            (ShellSurface::SettingsSidebar, Kind::Sidebar),
+            (ShellSurface::SettingsToolbar, Kind::Titlebar),
+            (ShellSurface::Dock, Kind::Chrome),
+            (ShellSurface::Spotlight, Kind::Chrome),
+            (ShellSurface::MenuBarMenu, Kind::Chrome),
+        ] {
+            let r = shell_glass_rect(&surface.request((0.0, 0.0, 10.0, 10.0), 4.0));
+            assert_eq!(r.kind, kind, "{surface:?}");
+        }
+    }
 }
 
 impl Shell {
@@ -1708,7 +1789,7 @@ impl Shell {
             let y = y - lift;
             match tile {
                 Tile::Brightness | Tile::Volume => {
-                    desk_glass(s, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
+                    desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
                     let name = ui.text(if tile == Tile::Brightness { "Display" } else { "Sound" }, MAC_HEADLINE_PT, Weight::Semibold, label);
                     s.blit(&name, (x + ui.pt(DK_PAD_PT + 4.0)) as i32, (y + ui.pt(10.0)) as i32, 255, alpha);
                     let (l, r, cy) = self.desk_track((x, y, w, h));
@@ -1726,11 +1807,11 @@ impl Shell {
                     }
                 }
                 Tile::MediaPlay => {
-                    desk_glass(s, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
+                    desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
                     self.draw_media_tile(s, (x, y, w, h), alpha, None);
                 }
                 _ => {
-                    desk_glass(s, (x, y, w, h), h / 2.0, alpha);
+                    desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), h / 2.0, alpha);
                     let (on, title, sub) = match tile {
                         Tile::Wifi => {
                             let (on, ssid) = self.desk_wifi().unwrap_or((false, None));
@@ -1772,5 +1853,182 @@ impl Shell {
                 }
             }
         }
+    }
+}
+
+/// The modules the Control Centre can show, in the default order they have on the cluster. Media transport
+/// buttons are not listed: they belong to the media tile.
+pub const DEFAULT_MODULES: [Tile; 12] = [
+    Tile::Airplane,
+    Tile::Nearby,
+    Tile::Wifi,
+    Tile::Bluetooth,
+    Tile::RotationLock,
+    Tile::Mirror,
+    Tile::Focus,
+    Tile::Silent,
+    Tile::Timer,
+    Tile::Camera,
+    Tile::Brightness,
+    Tile::Volume,
+];
+
+/// The stable word a module is stored under in prefs. `None` for tiles that are not user modules.
+pub fn module_key(tile: Tile) -> Option<&'static str> {
+    Some(match tile {
+        Tile::Airplane => "airplane",
+        Tile::Nearby => "nearby",
+        Tile::Wifi => "wifi",
+        Tile::Bluetooth => "bluetooth",
+        Tile::RotationLock => "rotation-lock",
+        Tile::Mirror => "mirror",
+        Tile::Focus => "focus",
+        Tile::Silent => "silent",
+        Tile::Timer => "timer",
+        Tile::Camera => "camera",
+        Tile::Brightness => "brightness",
+        Tile::Volume => "volume",
+        Tile::MediaPrev | Tile::MediaPlay | Tile::MediaNext => return None,
+    })
+}
+
+/// One row of the customised module list: which module, and whether the cluster shows it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ModuleSlot {
+    pub tile: Tile,
+    pub shown: bool,
+}
+
+/// The default list: every module, in the default order, all shown.
+pub fn default_slots() -> Vec<ModuleSlot> {
+    DEFAULT_MODULES.iter().map(|&tile| ModuleSlot { tile, shown: true }).collect()
+}
+
+/// Reads the prefs string: comma-separated keys in display order, a leading `-` hides a module.
+/// Unknown keys and repeats are dropped, and any module the string leaves out is appended, shown, in
+/// its default position among the rest. An empty string gives the default list.
+pub fn parse_slots(text: &str) -> Vec<ModuleSlot> {
+    let mut out: Vec<ModuleSlot> = Vec::new();
+    for raw in text.split(',') {
+        let raw = raw.trim();
+        let (shown, key) = match raw.strip_prefix('-') {
+            Some(rest) => (false, rest),
+            None => (true, raw),
+        };
+        let Some(tile) = DEFAULT_MODULES.iter().copied().find(|&t| module_key(t) == Some(key)) else { continue };
+        if out.iter().any(|s| s.tile == tile) {
+            continue;
+        }
+        out.push(ModuleSlot { tile, shown });
+    }
+    for &tile in &DEFAULT_MODULES {
+        if !out.iter().any(|s| s.tile == tile) {
+            out.push(ModuleSlot { tile, shown: true });
+        }
+    }
+    out
+}
+
+/// Writes the list back in the form `parse_slots` reads.
+pub fn format_slots(slots: &[ModuleSlot]) -> String {
+    slots
+        .iter()
+        .filter_map(|s| module_key(s.tile).map(|k| if s.shown { k.to_string() } else { format!("-{k}") }))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// The tiles the cluster draws, in order.
+pub fn shown_tiles(slots: &[ModuleSlot]) -> Vec<Tile> {
+    slots.iter().filter(|s| s.shown).map(|s| s.tile).collect()
+}
+
+/// The prefs key that holds the module list (`format_slots` text).
+pub const MODULES_PREF: &str = "control_center_modules";
+
+/// Whether the cluster draws and answers `tile` under the list `slots`. The media transport buttons belong to the
+/// Now Playing tile and always show; a module the list hides does not.
+pub fn tile_visible(slots: &[ModuleSlot], tile: Tile) -> bool {
+    match module_key(tile) {
+        None => true,
+        Some(_) => slots.iter().find(|s| s.tile == tile).is_none_or(|s| s.shown),
+    }
+}
+
+/// Moves the module at `from` to `to` (both indices into the list). Out-of-range indices change nothing.
+pub fn move_slot(slots: &mut Vec<ModuleSlot>, from: usize, to: usize) {
+    if from >= slots.len() || to >= slots.len() {
+        return;
+    }
+    let s = slots.remove(from);
+    slots.insert(to, s);
+}
+
+#[cfg(test)]
+mod module_list_tests {
+    use super::*;
+
+    #[test]
+    fn empty_text_is_the_default_list_with_everything_shown() {
+        let slots = parse_slots("");
+        assert_eq!(slots, default_slots());
+        assert_eq!(shown_tiles(&slots), DEFAULT_MODULES.to_vec());
+    }
+
+    #[test]
+    fn stored_order_and_hidden_modules_are_read_back() {
+        let slots = parse_slots("focus,-wifi,airplane");
+        assert_eq!(slots[0], ModuleSlot { tile: Tile::Focus, shown: true });
+        assert_eq!(slots[1], ModuleSlot { tile: Tile::Wifi, shown: false });
+        assert_eq!(slots[2], ModuleSlot { tile: Tile::Airplane, shown: true });
+        // modules left out follow in default order, shown
+        assert_eq!(slots[3].tile, Tile::Nearby);
+        assert_eq!(slots.len(), DEFAULT_MODULES.len());
+        assert!(!shown_tiles(&slots).contains(&Tile::Wifi));
+    }
+
+    #[test]
+    fn unknown_keys_and_repeats_are_dropped() {
+        let slots = parse_slots("bogus,wifi,wifi,-wifi, camera ");
+        assert_eq!(slots.iter().filter(|s| s.tile == Tile::Wifi).count(), 1);
+        assert_eq!(slots[0], ModuleSlot { tile: Tile::Wifi, shown: true });
+        assert_eq!(slots[1], ModuleSlot { tile: Tile::Camera, shown: true });
+        assert_eq!(slots.len(), DEFAULT_MODULES.len());
+    }
+
+    #[test]
+    fn format_and_parse_round_trip() {
+        let mut slots = default_slots();
+        move_slot(&mut slots, 6, 0);
+        slots[2].shown = false;
+        let text = format_slots(&slots);
+        assert_eq!(parse_slots(&text), slots);
+    }
+
+    #[test]
+    fn media_tiles_have_no_key_and_are_not_listed() {
+        assert_eq!(module_key(Tile::MediaPlay), None);
+        assert!(!DEFAULT_MODULES.iter().any(|t| matches!(t, Tile::MediaPrev | Tile::MediaPlay | Tile::MediaNext)));
+        assert!(!format_slots(&default_slots()).contains("media"));
+    }
+
+    #[test]
+    fn hidden_modules_do_not_show_and_media_always_does() {
+        let slots = parse_slots("-wifi");
+        assert!(!tile_visible(&slots, Tile::Wifi));
+        assert!(tile_visible(&slots, Tile::Airplane));
+        assert!(tile_visible(&slots, Tile::MediaPlay));
+        assert!(tile_visible(&[], Tile::Wifi), "no list means every module shows");
+    }
+
+    #[test]
+    fn move_slot_ignores_out_of_range_indices() {
+        let mut slots = default_slots();
+        let before = slots.clone();
+        move_slot(&mut slots, 0, 99);
+        move_slot(&mut slots, 99, 0);
+        assert_eq!(slots, before);
+        move_slot(&mut slots, 0, 2);
+        assert_eq!(slots[2].tile, Tile::Airplane);
     }
 }

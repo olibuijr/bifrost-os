@@ -1,0 +1,14 @@
+[package]
+name = "bifrost-mail"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "bifrost_mail"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bifrost-mail"
+path = "src/main.rs"
+
+[dependencies]

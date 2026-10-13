@@ -1,0 +1,28 @@
+{
+ "category": "daemons",
+ "shard": "s-s",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/LaunchDaemons/ssh.plist",
+   "category": "daemons",
+   "name": "ssh",
+   "path": "/System/Library/LaunchDaemons/ssh.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1100
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

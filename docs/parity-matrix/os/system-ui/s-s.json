@@ -1,0 +1,667 @@
+{
+ "category": "system-ui",
+ "shard": "s-s",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Applications/Siri.app",
+   "category": "system-ui",
+   "name": "Siri",
+   "path": "/System/Applications/Siri.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/assistant-desktop",
+   "status": "partial",
+   "note": "assistant app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Screen Time.app",
+   "category": "system-ui",
+   "name": "Screen Time",
+   "path": "/System/Library/CoreServices/Screen Time.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/screentime/mod.rs",
+   "status": "partial",
+   "note": "Screen Time",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/ScreenSaverEngine.app",
+   "category": "system-ui",
+   "name": "ScreenSaverEngine",
+   "path": "/System/Library/CoreServices/ScreenSaverEngine.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/screensaver.rs",
+   "status": "partial",
+   "note": "screen saver",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Script Menu.app",
+   "category": "system-ui",
+   "name": "Script Menu",
+   "path": "/System/Library/CoreServices/Script Menu.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no script menu",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/ScriptMonitor.app",
+   "category": "system-ui",
+   "name": "ScriptMonitor",
+   "path": "/System/Library/CoreServices/ScriptMonitor.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/SettingsPlaceholder.app",
+   "category": "system-ui",
+   "name": "SettingsPlaceholder",
+   "path": "/System/Library/CoreServices/SettingsPlaceholder.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Setup Assistant.app",
+   "category": "system-ui",
+   "name": "Setup Assistant",
+   "path": "/System/Library/CoreServices/Setup Assistant.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no first-run setup assistant yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/ShortcutDroplet.app",
+   "category": "system-ui",
+   "name": "ShortcutDroplet",
+   "path": "/System/Library/CoreServices/ShortcutDroplet.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Shortcuts Events.app",
+   "category": "system-ui",
+   "name": "Shortcuts Events",
+   "path": "/System/Library/CoreServices/Shortcuts Events.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/shortcuts-desktop",
+   "status": "partial",
+   "note": "Shortcuts app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/ShortcutsActions.app",
+   "category": "system-ui",
+   "name": "ShortcutsActions",
+   "path": "/System/Library/CoreServices/ShortcutsActions.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/shortcuts-desktop",
+   "status": "partial",
+   "note": "Shortcuts app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Siri.app",
+   "category": "system-ui",
+   "name": "Siri",
+   "path": "/System/Library/CoreServices/Siri.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/assistant-desktop",
+   "status": "partial",
+   "note": "assistant app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Software Update.app",
+   "category": "system-ui",
+   "name": "Software Update",
+   "path": "/System/Library/CoreServices/Software Update.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/update.rs",
+   "status": "partial",
+   "note": "Software Update",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/SpacesTouchBarAgent.app",
+   "category": "system-ui",
+   "name": "SpacesTouchBarAgent",
+   "path": "/System/Library/CoreServices/SpacesTouchBarAgent.app",
+   "kind": "core service agent",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Touch Bar",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Spotlight.app",
+   "category": "system-ui",
+   "name": "Spotlight",
+   "path": "/System/Library/CoreServices/Spotlight.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "status": "partial",
+   "note": "quick search",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/StageManagerOnboarding.app",
+   "category": "system-ui",
+   "name": "StageManagerOnboarding",
+   "path": "/System/Library/CoreServices/StageManagerOnboarding.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no stage manager",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/System Events.app",
+   "category": "system-ui",
+   "name": "System Events",
+   "path": "/System/Library/CoreServices/System Events.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/SystemIntents.app",
+   "category": "system-ui",
+   "name": "SystemIntents",
+   "path": "/System/Library/CoreServices/SystemIntents.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/SystemUIServer.app",
+   "category": "system-ui",
+   "name": "SystemUIServer",
+   "path": "/System/Library/CoreServices/SystemUIServer.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/desktop_bar.rs",
+   "status": "partial",
+   "note": "menu bar",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/screencaptureui.app",
+   "category": "system-ui",
+   "name": "screencaptureui",
+   "path": "/System/Library/CoreServices/screencaptureui.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/screenshot.rs",
+   "status": "partial",
+   "note": "screenshot UI",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SAMaintenance.appex",
+   "category": "system-ui",
+   "name": "SAMaintenance",
+   "path": "/System/Library/ExtensionKit/Extensions/SAMaintenance.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Safari maintenance",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SafariBrowsingAssistantWorker.appex",
+   "category": "system-ui",
+   "name": "SafariBrowsingAssistantWorker",
+   "path": "/System/Library/ExtensionKit/Extensions/SafariBrowsingAssistantWorker.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SafariSearchUploadWorker.appex",
+   "category": "system-ui",
+   "name": "SafariSearchUploadWorker",
+   "path": "/System/Library/ExtensionKit/Extensions/SafariSearchUploadWorker.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SafariUsageRetentionExtension.appex",
+   "category": "system-ui",
+   "name": "SafariUsageRetentionExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SafariUsageRetentionExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Safari telemetry",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SearchPartnerInferenceProvider.appex",
+   "category": "system-ui",
+   "name": "SearchPartnerInferenceProvider",
+   "path": "/System/Library/ExtensionKit/Extensions/SearchPartnerInferenceProvider.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SearchToolDiagnosticExtension.appex",
+   "category": "system-ui",
+   "name": "SearchToolDiagnosticExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SearchToolDiagnosticExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple search diagnostics",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SearchToolExtension.appex",
+   "category": "system-ui",
+   "name": "SearchToolExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SearchToolExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SearchUploadWorker.appex",
+   "category": "system-ui",
+   "name": "SearchUploadWorker",
+   "path": "/System/Library/ExtensionKit/Extensions/SearchUploadWorker.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Shell.appex",
+   "category": "system-ui",
+   "name": "Shell",
+   "path": "/System/Library/ExtensionKit/Extensions/Shell.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "internal shell extension",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SpeakerIdSamplingExtension.appex",
+   "category": "system-ui",
+   "name": "SpeakerIdSamplingExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SpeakerIdSamplingExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple speaker identification sampling",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/StartupDisk.appex",
+   "category": "system-ui",
+   "name": "StartupDisk",
+   "path": "/System/Library/ExtensionKit/Extensions/StartupDisk.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple boot picker, PC uses the firmware boot menu",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/StartupDiskWidgetExtension.appex",
+   "category": "system-ui",
+   "name": "StartupDiskWidgetExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/StartupDiskWidgetExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple boot picker, PC uses the firmware boot menu",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/StopwatchIntentsExtension.appex",
+   "category": "system-ui",
+   "name": "StopwatchIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/StopwatchIntentsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SuggestedActionsRemoteUI.appex",
+   "category": "system-ui",
+   "name": "SuggestedActionsRemoteUI",
+   "path": "/System/Library/ExtensionKit/Extensions/SuggestedActionsRemoteUI.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "suggested actions UI, no counterpart yet",
+   "rea": []
+  }
+ ]
+}

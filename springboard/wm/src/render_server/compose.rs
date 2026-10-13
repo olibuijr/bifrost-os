@@ -24,6 +24,7 @@
 //!
 //! Owner: wave G1 agent `wm-compose`.
 
+use crate::material_filter::Tone;
 use crate::render_server::material::{MaterialRegion, ShadowSpec};
 use bifrost_gpu::pipeline::{BlendMode, Filter};
 use bifrost_gpu::{
@@ -134,6 +135,8 @@ pub struct Glass {
     pub blur: f32,
     pub tint: [f32; 4],
     pub saturation: f32,
+    /// Luminance mapping and brightness after the saturation.
+    pub tone: Tone,
 }
 
 /// One node of the stack as the window server knows it: a window, a layer-shell surface, a layer-tree layer or the
@@ -261,6 +264,7 @@ pub fn build_items(nodes: &[SceneNode], damage: &DamageRects, texture: &dyn Fn(u
             blur: g.blur * n.scale,
             tint: g.tint,
             saturation: g.saturation,
+            tone: g.tone,
         });
         let item = DrawItem { texture: tex, quad, src: n.src, opacity: n.opacity, color, clip, material, shadow: n.shadow };
         let ext = item_extent(&item);
@@ -273,7 +277,8 @@ pub fn build_items(nodes: &[SceneNode], damage: &DamageRects, texture: &dyn Fn(u
 
 /// The 128-byte push-constant block shared by `compose.vert` and `compose.frag`. Offsets (std430):
 /// corners 0..32, src 32, color 48, clip 64, clip_radius 80, opacity 84, flags 88, saturation 92, out_size 96,
-/// shadow_sigma 104, shadow_radius 108, shadow_rect 112.
+/// shadow_sigma 104, shadow_radius 108, shadow_rect 112. In a glass draw (`FLAG_MATERIAL`) the three shadow fields
+/// carry the material's tone: brightness (104), luminance amount (108), luminance values (112..128).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Push {
     pub corners: [[f32; 2]; 4],
@@ -391,6 +396,10 @@ pub fn material_push(item: &DrawItem, m: &MaterialRegion, out: (i32, i32), _blur
     p.src = [0.0, 0.0, 1.0, 1.0];
     p.color = m.tint;
     p.saturation = m.saturation;
+    // a glass draw has no shadow, so the shadow fields carry the tone: brightness, luminance amount, the four values
+    p.shadow_sigma = m.tone.brightness;
+    p.shadow_radius = m.tone.luminance_amount;
+    p.shadow_rect = m.tone.luminance_values;
     p.clip = m.rect;
     p.clip_radius = m.radius;
     p
@@ -665,7 +674,7 @@ mod tests {
             opacity: 1.0,
             color: [1.0; 4],
             clip: [0.0; 5],
-            material: Some(MaterialRegion { rect: [0.0, 0.0, 15.0, 30.0], radius: 0.0, blur: 4.0, tint: [0.0; 4], saturation: 1.0 }),
+            material: Some(MaterialRegion { rect: [0.0, 0.0, 15.0, 30.0], radius: 0.0, blur: 4.0, tint: [0.0; 4], saturation: 1.0, tone: Tone::NONE }),
             shadow: None,
         };
         assert_eq!(item_extent(&item), [0.0, 0.0, 20.0, 30.0]);
@@ -709,7 +718,7 @@ mod tests {
 
     #[test]
     fn material_push_samples_the_whole_region_sized_blur() {
-        let m = MaterialRegion { rect: [100.0, 50.0, 200.0, 100.0], radius: 13.0, blur: 20.0, tint: [0.1, 0.1, 0.1, 0.4], saturation: 1.8 };
+        let m = MaterialRegion { rect: [100.0, 50.0, 200.0, 100.0], radius: 13.0, blur: 20.0, tint: [0.1, 0.1, 0.1, 0.4], saturation: 1.8, tone: Tone::new(-0.1, 0.75, [0.23, 0.52, 0.27, 0.255]) };
         let item = DrawItem { texture: None, quad: [[0.0; 2]; 4], src: [0.0; 4], opacity: 1.0, color: [0.0; 4], clip: [0.0; 5], material: Some(m), shadow: None };
         let p = material_push(&item, &m, (1000, 500), (1000.0, 500.0));
         assert_eq!(p.flags, FLAG_TEXTURED | FLAG_MATERIAL);
@@ -726,7 +735,7 @@ mod tests {
         let mut n = SceneNode::solid([10.0, 10.0, 100.0, 40.0], [0.0; 4]);
         n.scale = 2.0;
         n.corner_radius = 9.0;
-        n.material = Some(Glass { blur: 12.0, tint: [0.0, 0.0, 0.0, 0.2], saturation: 1.5 });
+        n.material = Some(Glass { blur: 12.0, tint: [0.0, 0.0, 0.0, 0.2], saturation: 1.5, tone: Tone::NONE });
         let items = build_items(&[n], &vec![r(0, 0, 1000, 1000)], &|_| None);
         let m = items[0].material.unwrap();
         assert_eq!(m.rect, [20.0, 20.0, 200.0, 80.0]);

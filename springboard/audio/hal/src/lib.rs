@@ -12,6 +12,11 @@
 mod conn;
 mod iothread;
 
+/// Aggregate devices: the pure sub-device list, master and clock resolution, and channel mapping.
+pub mod aggregate;
+/// Audio processes: the pure list of processes with audio IO and their running flags.
+pub mod process;
+
 use bifrost_audio_shm::Region;
 use bifrost_audio_types::control::{IoProcRequest, Reply, Request, ShmLayout, CONTROL_SOCKET, PROTOCOL_VERSION};
 use bifrost_audio_types::{props, AudioError, BufferList, ObjectId, PropertyAddress, PropertyValue, TimeStamp, SYSTEM_OBJECT};

@@ -4,7 +4,7 @@
 //! "Assistant Suggestions": the four most recently opened apps. As the query is
 //! typed it lists the Top Hit, then apps, Settings pages, World Clock
 //! cities and Deildu titles cached on disk, with "Search in Terminal" last.
-//! Return opens the Top Hit; a tap outside, a swipe up or the go-home swipe
+//! Return opens the Top Hit (or the row the Up and Down arrow keys are on); a tap outside, a swipe up or the go-home swipe
 //! dismisses. Geometry is the bifrost mini's in points: a 556 pt card 41 pt
 //! from the top with a 52 pt field, 60 pt suggestion icons on an 88 pt
 //! pitch and 36 pt result rows.
@@ -204,6 +204,39 @@ fn shortcut_items() -> Vec<(Hit, String)> {
         }
     }
     v
+}
+
+/// The row `step` places from `cur` in `rows` (section, row pairs in list order), clamped to the ends.
+/// With no row selected, Down takes the first and Up the last. None when there are no rows.
+fn step_row(rows: &[(usize, usize)], cur: Option<(usize, usize)>, step: isize) -> Option<(usize, usize)> {
+    let last = rows.len().checked_sub(1)? as isize;
+    let next = match cur.and_then(|c| rows.iter().position(|r| *r == c)) {
+        Some(i) => (i as isize + step).clamp(0, last),
+        None if step > 0 => 0,
+        None => last,
+    };
+    Some(rows[next as usize])
+}
+
+#[cfg(test)]
+mod step_row_tests {
+    use super::step_row;
+
+    #[test]
+    fn arrows_walk_the_rows_and_stop_at_the_ends() {
+        let rows = [(0, 0), (0, 1), (1, 0)];
+        assert_eq!(step_row(&rows, None, 1), Some((0, 0)));
+        assert_eq!(step_row(&rows, None, -1), Some((1, 0)));
+        assert_eq!(step_row(&rows, Some((0, 0)), 1), Some((0, 1)));
+        assert_eq!(step_row(&rows, Some((1, 0)), 1), Some((1, 0)));
+        assert_eq!(step_row(&rows, Some((0, 0)), -1), Some((0, 0)));
+    }
+
+    #[test]
+    fn no_rows_means_no_selection() {
+        assert_eq!(step_row(&[], None, 1), None);
+        assert_eq!(step_row(&[], Some((0, 0)), -1), None);
+    }
 }
 
 /// A titled section of results.
@@ -464,6 +497,8 @@ pub struct QuickSearch {
     /// (app, 60 pt icon, 29 pt icon, label)
     icons: Vec<(AppId, Image, Image, Image)>,
     sections: Vec<Section>,
+    /// the row the arrow keys moved to: (section, row); Return opens it instead of the Top Hit
+    selected: Option<(usize, usize)>,
     deildu_titles: Vec<String>,
     /// `fuzzy::fold` of each Deildu title, kept so keystrokes do not re-fold them
     deildu_folded: Vec<String>,
@@ -526,6 +561,7 @@ impl QuickSearch {
             searches_header: ui.text("Recent Searches", 20.0, Weight::Semibold, WHITE),
             icons: vec![],
             sections: vec![],
+            selected: None,
             thumbs: vec![],
             deildu_titles: vec![],
             deildu_folded: vec![],
@@ -790,11 +826,34 @@ impl QuickSearch {
             self.field.focused = false;
             return None;
         }
+        match out {
+            Out::Named("Down") => {
+                self.move_selection(1);
+                return None;
+            }
+            Out::Named("Up") => {
+                self.move_selection(-1);
+                return None;
+            }
+            _ => {}
+        }
         if self.field.edit(ui, &out, t) {
-            return self.top_hit();
+            return self.selected_hit().or_else(|| self.top_hit());
         }
         self.search(ui, h);
         None
+    }
+
+    /// The row the arrow keys are on, if any.
+    pub fn selected_hit(&self) -> Option<Hit> {
+        let (si, ri) = self.selected?;
+        self.sections.get(si).and_then(|s| s.rows.get(ri)).map(|(h, _)| h.clone())
+    }
+
+    /// Moves the keyboard selection one row down (`step` 1) or up (-1) through the shown rows.
+    fn move_selection(&mut self, step: isize) {
+        let rows: Vec<(usize, usize)> = self.rows().into_iter().map(|(si, ri, _)| (si, ri)).collect();
+        self.selected = step_row(&rows, self.selected, step);
     }
 
     /// The first result: what Return opens.
@@ -856,6 +915,7 @@ impl QuickSearch {
             }
         }
         self.sections = sections;
+        self.selected = None;
     }
 
     /// Rows as the list shows them: (section, row, label text).
@@ -1195,7 +1255,7 @@ impl QuickSearch {
                     if top {
                         let pi = ui.pt(MAC_PLATE_INSET_PT);
                         s.fill_rrect(cx + pi, y, cw - 2.0 * pi, rh, ui.pt(MAC_PLATE_R_PT), a(SIDEBAR_PLATE.now())); // the reference: a neutral plate, not the accent
-                    } else if pressed == Some(Target::Row(si, ri)) {
+                    } else if pressed == Some(Target::Row(si, ri)) || self.selected == Some((si, ri)) {
                         s.fill_rrect(cx + ui.pt(6.0), y, cw - ui.pt(12.0), rh, ui.pt(8.0), a(PRESSED));
                     }
                     let (ix, isz) = (cx + ui.pt(m.row_icon_x), ui.pt(m.row_icon));
@@ -1906,18 +1966,20 @@ mod tests {
     }
 }
 
-/// The desktop Search material: the presenter's glass (blur) under the menu tint, the solid menu colour with
-/// Reduce Transparency, and the tint alone when no GPU presenter runs (the panel fades in with `alpha`).
+/// The desktop Search material: the shared `HudWindow` material request (the presenter's blur under the named
+/// menu tint, the solid colour with Reduce Transparency, the tint alone without a GPU presenter). The panel
+/// fades in with `alpha`; the blur shape is declared only once it is fully opaque, so it never pops mid-fade.
 fn mac_glass(s: &mut Surface, x: f32, y: f32, w: f32, h: f32, r: f32, alpha: u32) {
-    use bifrost_render::{appearance, glass};
-    if appearance::reduce_transparency() {
-        s.fill_rrect(x, y, w, h, r, scale(MENU_SOLID.now(), alpha));
+    use bifrost_ui::material_request::ShellSurface;
+    let req = ShellSurface::Spotlight.request((x, y, w, h), r);
+    let fill = if alpha == 255 {
+        super::control_center::request_shell_material(req)
+    } else if bifrost_render::appearance::reduce_transparency() {
+        MENU_SOLID.now()
     } else {
-        if glass::gpu() && alpha == 255 {
-            glass::push(glass::Rect { x, y, w, h, r, ..Default::default() });
-        }
-        s.fill_rrect(x, y, w, h, r, scale(glass::tint(MENU_TINT.now()), alpha));
-    }
+        bifrost_render::glass::tint(MENU_TINT.now())
+    };
+    s.fill_rrect(x, y, w, h, r, scale(fill, alpha));
 }
 
 #[cfg(test)]

@@ -1,0 +1,49 @@
+{
+ "category": "input-methods",
+ "shard": "d-f",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/Input Methods/DictationIM.app",
+   "category": "input-methods",
+   "name": "DictationIM",
+   "path": "/System/Library/Input Methods/DictationIM.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Input Methods/EmojiFunctionRowIM.app",
+   "category": "input-methods",
+   "name": "EmojiFunctionRowIM",
+   "path": "/System/Library/Input Methods/EmojiFunctionRowIM.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

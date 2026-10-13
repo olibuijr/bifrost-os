@@ -1,0 +1,227 @@
+{
+ "category": "system-ui",
+ "shard": "j-l",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/CoreServices/JavaLauncher.app",
+   "category": "system-ui",
+   "name": "JavaLauncher",
+   "path": "/System/Library/CoreServices/JavaLauncher.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Java runtime launcher, not shipped",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/KeyboardAccessAgent.app",
+   "category": "system-ui",
+   "name": "KeyboardAccessAgent",
+   "path": "/System/Library/CoreServices/KeyboardAccessAgent.app",
+   "kind": "core service agent",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/keyboard.rs",
+   "status": "partial",
+   "note": "keyboard access",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/KeyboardSetupAssistant.app",
+   "category": "system-ui",
+   "name": "KeyboardSetupAssistant",
+   "path": "/System/Library/CoreServices/KeyboardSetupAssistant.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/kb_layouts.rs",
+   "status": "partial",
+   "note": "keyboard layouts",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Keychain Circle Notification.app",
+   "category": "system-ui",
+   "name": "Keychain Circle Notification",
+   "path": "/System/Library/CoreServices/Keychain Circle Notification.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud Keychain service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Language Chooser.app",
+   "category": "system-ui",
+   "name": "Language Chooser",
+   "path": "/System/Library/CoreServices/Language Chooser.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "installer language step only",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/liquiddetectiond.app",
+   "category": "system-ui",
+   "name": "liquiddetectiond",
+   "path": "/System/Library/CoreServices/liquiddetectiond.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple liquid detection hardware service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/loginwindow.app",
+   "category": "system-ui",
+   "name": "loginwindow",
+   "path": "/System/Library/CoreServices/loginwindow.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/login.rs",
+   "status": "partial",
+   "note": "login and lock",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/LegacyPluginEnablement.appex",
+   "category": "system-ui",
+   "name": "LegacyPluginEnablement",
+   "path": "/System/Library/ExtensionKit/Extensions/LegacyPluginEnablement.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no legacy plugin support",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Localization.appex",
+   "category": "system-ui",
+   "name": "Localization",
+   "path": "/System/Library/ExtensionKit/Extensions/Localization.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Language & Region page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/LockScreen.appex",
+   "category": "system-ui",
+   "name": "LockScreen",
+   "path": "/System/Library/ExtensionKit/Extensions/LockScreen.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/login.rs",
+   "status": "partial",
+   "note": "lock screen",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/LockScreenIntentsExtension.appex",
+   "category": "system-ui",
+   "name": "LockScreenIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/LockScreenIntentsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  }
+ ]
+}

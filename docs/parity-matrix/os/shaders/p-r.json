@@ -1,0 +1,385 @@
+{
+ "category": "shaders",
+ "shard": "p-r",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/CoreImage/PortraitFilters.cifilter/Contents/Resources/portrait_filters.metallib",
+   "category": "shaders",
+   "name": "portrait_filters.metallib",
+   "path": "/System/Library/CoreImage/PortraitFilters.cifilter/Contents/Resources/portrait_filters.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 954320
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/CoreServices/RawCamera.bundle/Contents/Resources/RawCamera.metallib",
+   "category": "shaders",
+   "name": "RawCamera.metallib",
+   "path": "/System/Library/CoreServices/RawCamera.bundle/Contents/Resources/RawCamera.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "RawCamera",
+   "facts": {
+    "size": 2685936
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/raytracing_runtime_emulation.metallib",
+   "category": "shaders",
+   "name": "raytracing_runtime_emulation.metallib",
+   "path": "/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/raytracing_runtime_emulation.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "AGXMetal13_3",
+   "facts": {
+    "size": 38404
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/runtime.gen10.metallib",
+   "category": "shaders",
+   "name": "runtime.gen10.metallib",
+   "path": "/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/runtime.gen10.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "AGXMetal13_3",
+   "facts": {
+    "size": 1290322
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/runtime.gen12.metallib",
+   "category": "shaders",
+   "name": "runtime.gen12.metallib",
+   "path": "/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/runtime.gen12.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "AGXMetal13_3",
+   "facts": {
+    "size": 46514
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Extensions/AGXMetalG15G_B0.bundle/Contents/Resources/raytracing_runtime_ria1.metallib",
+   "category": "shaders",
+   "name": "raytracing_runtime_ria1.metallib",
+   "path": "/System/Library/Extensions/AGXMetalG15G_B0.bundle/Contents/Resources/raytracing_runtime_ria1.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "AGXMetalG15G_B0",
+   "facts": {
+    "size": 1347993
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Extensions/AGXMetalG15G_B0.bundle/Contents/Resources/runtime.gen15.metallib",
+   "category": "shaders",
+   "name": "runtime.gen15.metallib",
+   "path": "/System/Library/Extensions/AGXMetalG15G_B0.bundle/Contents/Resources/runtime.gen15.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "AGXMetalG15G_B0",
+   "facts": {
+    "size": 1517454
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Extensions/AGXMetalG16G_A0.bundle/Contents/Resources/raytracing_runtime_ria2.metallib",
+   "category": "shaders",
+   "name": "raytracing_runtime_ria2.metallib",
+   "path": "/System/Library/Extensions/AGXMetalG16G_A0.bundle/Contents/Resources/raytracing_runtime_ria2.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "AGXMetalG16G_A0",
+   "facts": {
+    "size": 1349881
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Extensions/AGXMetalG17G.bundle/Contents/Resources/raytracing_runtime_ria3.metallib",
+   "category": "shaders",
+   "name": "raytracing_runtime_ria3.metallib",
+   "path": "/System/Library/Extensions/AGXMetalG17G.bundle/Contents/Resources/raytracing_runtime_ria3.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "AGXMetalG17G",
+   "facts": {
+    "size": 1225537
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Extensions/AGXMetalG18G.bundle/Contents/Resources/raytracing_runtime_ria4.metallib",
+   "category": "shaders",
+   "name": "raytracing_runtime_ria4.metallib",
+   "path": "/System/Library/Extensions/AGXMetalG18G.bundle/Contents/Resources/raytracing_runtime_ria4.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "AGXMetalG18G",
+   "facts": {
+    "size": 1144001
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Extensions/AGXMetalG18G.bundle/Contents/Resources/runtime.gen18.metallib",
+   "category": "shaders",
+   "name": "runtime.gen18.metallib",
+   "path": "/System/Library/Extensions/AGXMetalG18G.bundle/Contents/Resources/runtime.gen18.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "AGXMetalG18G",
+   "facts": {
+    "size": 1511502
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Extensions/AppleMetalOpenGLRenderer.bundle/Contents/Resources/PixelConverter.metallib",
+   "category": "shaders",
+   "name": "PixelConverter.metallib",
+   "path": "/System/Library/Extensions/AppleMetalOpenGLRenderer.bundle/Contents/Resources/PixelConverter.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "AppleMetalOpenGLRenderer",
+   "facts": {
+    "size": 36312
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_GaussianSplatting_Kernels.metallib",
+   "category": "shaders",
+   "name": "Photogrammetry_GaussianSplatting_Kernels.metallib",
+   "path": "/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_GaussianSplatting_Kernels.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CorePhotogrammetry",
+   "facts": {
+    "size": 766726
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_MVS_Kernels.metallib",
+   "category": "shaders",
+   "name": "Photogrammetry_MVS_Kernels.metallib",
+   "path": "/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_MVS_Kernels.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CorePhotogrammetry",
+   "facts": {
+    "size": 71502
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_Matching_Kernels.metallib",
+   "category": "shaders",
+   "name": "Photogrammetry_Matching_Kernels.metallib",
+   "path": "/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_Matching_Kernels.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CorePhotogrammetry",
+   "facts": {
+    "size": 27194
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_Meshing_Kernels.metallib",
+   "category": "shaders",
+   "name": "Photogrammetry_Meshing_Kernels.metallib",
+   "path": "/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_Meshing_Kernels.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CorePhotogrammetry",
+   "facts": {
+    "size": 123024
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_Texturing_Kernels.metallib",
+   "category": "shaders",
+   "name": "Photogrammetry_Texturing_Kernels.metallib",
+   "path": "/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_Texturing_Kernels.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CorePhotogrammetry",
+   "facts": {
+    "size": 315372
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/VideoProcessing.framework/Versions/A/PlugIns/Codecs/VCPRealtimeEncoder.bundle/Contents/Resources/ProcessAccelerate.metallib",
+   "category": "shaders",
+   "name": "ProcessAccelerate.metallib",
+   "path": "/System/Library/PrivateFrameworks/VideoProcessing.framework/Versions/A/PlugIns/Codecs/VCPRealtimeEncoder.bundle/Contents/Resources/ProcessAccelerate.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "VideoProcessing",
+   "facts": {
+    "size": 179152
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

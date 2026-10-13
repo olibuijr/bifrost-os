@@ -1,0 +1,16 @@
+id = "is.olibuijr.stickies.desktop"
+name = "Sticky Notes"
+version = "0.1.0"
+exec = "bifrost-stickies"
+icon = "icon.png"
+min_shell = "0.4.84"
+summary = "Small floating notes in six colours that restore on launch."
+category = "Productivity"
+architecture = "x86_64-linux"
+permissions = ["storage", "documents"]
+window = "full-size"
+
+[[log.subsystem]]
+id = "is.olibuijr.stickies"
+categories = ["save", "import"]
+level = "notice"
