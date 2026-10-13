@@ -1,33 +1,40 @@
-//! Passwords as an installed BifrOSt app in the full-size window: the saved website logins in the shared passwords
-//! group (the logins Settings > Passwords lists), a search field, and a detail column with Reveal or Hide, Copy,
-//! Generate (a new strong password for the login) and Delete. Import reads a CSV with site, account and password
-//! columns (Open With on a .csv file); Export writes every login to `~/Downloads/passwords.csv` with mode 0600.
-//! Pure logic (search, CSV, generator) is in `model.rs`.
+//! Passwords as an installed BifrOSt app in the full-size window: the items in the shared passwords group, split into
+//! Logins, Notes and Certificates tabs, with a search field and a detail column. A login has Reveal or Hide, Copy,
+//! Generate (a new strong password for the login) and Delete; a note or certificate has Reveal or Hide, Copy and
+//! Delete. Import reads a CSV with site, account and password columns (Open With on a .csv file); Export writes every
+//! login to `~/Downloads/passwords.csv` with mode 0600. Pure logic (search, kinds, CSV, generator) is in `model.rs`.
 //!
-//! Secrets stay in the shell's keychain: the app reads one at a time, only when a login is revealed, copied,
-//! exported or replaced, and it never writes a password to the log or the status line.
+//! Secrets stay in the shell's keychain: the app reads one at a time, only when an item is revealed, copied,
+//! exported or replaced, and it never writes a secret to the log or the status line. The shell asks for the passcode
+//! before it shows a password in Settings; this app shows a revealed secret when the user asks for it.
 
 mod model;
 
 use bifrost_app::keychain::Error as KeychainError;
 use bifrost_app::kit::ui::{self, Weight};
 use bifrost_app::kit::{clipboard, Damage, Surface};
+use bifrost_app::passwords::{kind_of, name_of, Kind};
 use bifrost_app::{keychain_groups, passwords, App, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
-use model::{Entry, Login};
+use model::{Entry, Item};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Header and detail geometry in points.
 const LIST_PT: f32 = 300.0;
-const HEADER_PT: f32 = 88.0;
-const ROW_PT: f32 = 44.0;
-const PAD_PT: f32 = 12.0;
 const BAR_Y_PT: f32 = 12.0;
 const BAR_H_PT: f32 = 28.0;
+const TABS_Y_PT: f32 = 46.0;
+const TABS_H_PT: f32 = 26.0;
+const SEARCH_Y_PT: f32 = 80.0;
+const HEADER_PT: f32 = 124.0;
+const ROW_PT: f32 = 44.0;
+const PAD_PT: f32 = 12.0;
 /// Bar button hit boxes in the list header (x start, width) and in the detail column.
 const IMPORT_BTN: (f32, f32) = (PAD_PT, 64.0);
 const EXPORT_BTN: (f32, f32) = (PAD_PT + 72.0, 64.0);
+/// The kind tabs under the bar: the kind, its label, and its hit box (x start, width).
+const TABS: [(Kind, &str, f32, f32); 3] = [(Kind::Login, "Logins", PAD_PT, 80.0), (Kind::SecureNote, "Notes", PAD_PT + 84.0, 72.0), (Kind::Certificate, "Certificates", PAD_PT + 160.0, 108.0)];
 const DETAIL_BTNS: [(&str, f32, f32); 4] = [("Reveal", 0.0, 80.0), ("Copy", 88.0, 64.0), ("Generate", 160.0, 84.0), ("Delete", 252.0, 72.0)];
 
 /// What a service request was for, so its reply can be handled.
@@ -36,16 +43,17 @@ enum Pending {
     Reveal,
     Copy,
     Generate,
-    Delete { site: String, account: String },
+    Delete { service: String, account: String },
     Import { entry: Entry },
     ImportUpdate,
-    Export { site: String, account: String },
+    Export { service: String, account: String },
 }
 
 #[derive(Default)]
 struct PasswordsApp {
-    logins: Vec<Login>,
+    items: Vec<Item>,
     listed: bool,
+    tab: Kind,
     query: String,
     selected: Option<(String, String)>,
     revealed: Option<String>,
@@ -62,13 +70,19 @@ impl PasswordsApp {
         self.pending.insert(id, Pending::List);
     }
 
-    /// The logins the list shows now, in order.
-    fn shown(&self) -> Vec<Login> {
-        model::filter(&self.logins, &self.query).into_iter().cloned().collect()
+    /// The items the list shows now: the current tab, filtered by the search, in order.
+    fn shown(&self) -> Vec<Item> {
+        model::filter(&self.items, self.tab, &self.query).into_iter().cloned().collect()
     }
 
-    fn select(&mut self, site: String, account: String) {
-        self.selected = Some((site, account));
+    fn select(&mut self, service: String, account: String) {
+        self.selected = Some((service, account));
+        self.revealed = None;
+    }
+
+    fn set_tab(&mut self, kind: Kind) {
+        self.tab = kind;
+        self.selected = None;
         self.revealed = None;
     }
 
@@ -87,16 +101,18 @@ impl PasswordsApp {
         }
     }
 
+    /// Asks for the password of every login; the CSV is written once they have all come back.
     fn export(&mut self, ctx: &Ctx) {
-        if self.logins.is_empty() {
+        let logins: Vec<Item> = self.items.iter().filter(|i| i.kind == Kind::Login).cloned().collect();
+        if logins.is_empty() {
             self.status = "No logins to export.".into();
             return;
         }
         self.export_rows.clear();
-        self.export_left = self.logins.len();
-        for l in self.logins.clone() {
-            let id = passwords::fill(ctx, &l.site, &l.account);
-            self.pending.insert(id, Pending::Export { site: l.site, account: l.account });
+        self.export_left = logins.len();
+        for l in logins {
+            let id = passwords::fill(ctx, &l.service, &l.account);
+            self.pending.insert(id, Pending::Export { service: l.service, account: l.account });
         }
         self.status = "Exporting logins.".into();
     }
@@ -123,6 +139,33 @@ fn skipped_text(n: usize) -> String {
     }
 }
 
+/// The label of a note or certificate, which has no user name to show.
+fn kind_label(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Login => "",
+        Kind::SecureNote => "Secure note",
+        Kind::Certificate => "Certificate",
+    }
+}
+
+/// The second line of a list row: the account for a login, the kind for a note or certificate.
+fn subtitle(item: &Item) -> &str {
+    if item.kind == Kind::Login {
+        &item.account
+    } else {
+        kind_label(item.kind)
+    }
+}
+
+/// What an empty list of `kind` says.
+fn empty_text(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Login => "No Saved Passwords",
+        Kind::SecureNote => "No Secure Notes",
+        Kind::Certificate => "No Certificates",
+    }
+}
+
 /// Creates the file for the owner only, then writes it (the export holds passwords in clear text).
 fn write_private(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
@@ -132,6 +175,14 @@ fn write_private(path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
     }
     let mut f = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(path)?;
     f.write_all(data)
+}
+
+/// The kind tab at point `(x, y)` in the list column, if any.
+fn tab_at(x: f32, y: f32) -> Option<Kind> {
+    if !(TABS_Y_PT..TABS_Y_PT + TABS_H_PT).contains(&y) {
+        return None;
+    }
+    TABS.iter().find(|(_, _, bx, bw)| (*bx..bx + bw).contains(&x)).map(|(kind, _, _, _)| *kind)
 }
 
 /// The bar button at point `(x, y)` in the detail column, if any.
@@ -171,46 +222,51 @@ impl App for PasswordsApp {
                         }
                         return false;
                     }
+                    if let Some(kind) = tab_at(x, y) {
+                        self.set_tab(kind);
+                        return true;
+                    }
                     if y < HEADER_PT {
                         return false;
                     }
                     let index = ((y - HEADER_PT) / ROW_PT).floor() as usize;
-                    if let Some(l) = self.shown().get(index).cloned() {
-                        self.select(l.site, l.account);
+                    if let Some(item) = self.shown().get(index).cloned() {
+                        self.select(item.service, item.account);
                         return true;
                     }
                     return false;
                 }
-                let Some((site, account)) = self.selected.clone() else { return false };
+                let Some((service, account)) = self.selected.clone() else { return false };
+                let is_login = kind_of(&service) == Kind::Login;
                 match detail_button(x, y) {
                     Some("Reveal") if self.revealed.is_some() => {
                         self.revealed = None;
                     }
                     Some("Reveal") => {
-                            let id = passwords::fill(ctx, &site, &account);
+                        let id = passwords::fill(ctx, &service, &account);
                         self.pending.insert(id, Pending::Reveal);
                     }
                     Some("Copy") => match &self.revealed {
                         Some(p) => {
                             clipboard::set_text(p);
-                            self.status = "Password copied.".into();
+                            self.status = "Copied.".into();
                         }
                         None => {
-                            let id = passwords::fill(ctx, &site, &account);
+                            let id = passwords::fill(ctx, &service, &account);
                             self.pending.insert(id, Pending::Copy);
                         }
                     },
-                    Some("Generate") => match model::generate() {
+                    Some("Generate") if is_login => match model::generate() {
                         Ok(p) => {
-                            let id = passwords::update(ctx, &site, &account, &p);
+                            let id = passwords::update(ctx, &service, &account, &p);
                             self.pending.insert(id, Pending::Generate);
                             self.revealed = Some(p);
                         }
                         Err(e) => self.status = format!("Could not generate: {e}"),
                     },
                     Some("Delete") => {
-                        let id = passwords::remove(ctx, &site, &account);
-                        self.pending.insert(id, Pending::Delete { site, account });
+                        let id = passwords::remove(ctx, &service, &account);
+                        self.pending.insert(id, Pending::Delete { service, account });
                     }
                     _ => return false,
                 }
@@ -243,18 +299,18 @@ impl App for PasswordsApp {
         match job {
             Pending::List => {
                 if let Some(rows) = passwords::decode_list(result) {
-                    self.logins = rows.into_iter().map(|r| Login { site: r.service, account: r.account }).collect();
-                    model::sort(&mut self.logins);
+                    self.items = rows.into_iter().map(|r| Item::new(r.service, r.account)).collect();
+                    model::sort(&mut self.items);
                 }
             }
             Pending::Reveal => match passwords::decode_password(result) {
                 Ok(p) => self.revealed = Some(p),
-                Err(e) => self.status = format!("Could not show the password: {e}"),
+                Err(e) => self.status = format!("Could not show it: {e}"),
             },
             Pending::Copy => match passwords::decode_password(result) {
                 Ok(p) => {
                     clipboard::set_text(&p);
-                    self.status = "Password copied.".into();
+                    self.status = "Copied.".into();
                 }
                 Err(e) => self.status = format!("Could not copy: {e}"),
             },
@@ -262,14 +318,14 @@ impl App for PasswordsApp {
                 Ok(_) => self.status = "New password saved.".into(),
                 Err(e) => self.status = format!("Could not save the new password: {e}"),
             },
-            Pending::Delete { site, account } => match passwords::decode_password(result) {
+            Pending::Delete { service, account } => match passwords::decode_password(result) {
                 Ok(_) | Err(KeychainError::ItemNotFound) => {
-                    self.logins.retain(|l| !(l.site == site && l.account == account));
-                    if self.selected.as_ref().is_some_and(|(s, a)| *s == site && *a == account) {
+                    self.items.retain(|i| !(i.service == service && i.account == account));
+                    if self.selected.as_ref().is_some_and(|(s, a)| *s == service && *a == account) {
                         self.selected = None;
                         self.revealed = None;
                     }
-                    self.status = "Login deleted.".into();
+                    self.status = "Deleted.".into();
                 }
                 Err(e) => self.status = format!("Could not delete: {e}"),
             },
@@ -287,10 +343,10 @@ impl App for PasswordsApp {
                 Ok(_) => self.imported += 1,
                 Err(e) => self.status = format!("Could not update a login: {e}"),
             },
-            Pending::Export { site, account } => {
+            Pending::Export { service, account } => {
                 match passwords::decode_password(result) {
-                    Ok(password) => self.export_rows.push(Entry { site, account, password }),
-                    Err(e) => self.status = format!("Could not read {site}: {e}"),
+                    Ok(password) => self.export_rows.push(Entry { site: service, account, password }),
+                    Err(e) => self.status = format!("Could not read {service}: {e}"),
                 }
                 self.export_left = self.export_left.saturating_sub(1);
                 if self.export_left == 0 {
@@ -323,34 +379,43 @@ impl App for PasswordsApp {
         let pi = |v: f32| (v * scale) as i32;
         let (w, h) = (s.w, s.h);
         s.fill_rect(0, 0, w, h, ui::DETAIL_BG.now());
-        // list column with its bar and search field
+        // list column with its bar, kind tabs and search field
         s.fill_rect(0, 0, p(LIST_PT), h, ui::SIDEBAR_BG.now());
         for (label, x) in [("Import", IMPORT_BTN.0), ("Export", EXPORT_BTN.0)] {
             let img = ui.text(label, ui::MAC_BODY_PT, Weight::Regular, ui::LINK);
             s.blit_colored(&img, pi(x + 4.0), pi(BAR_Y_PT + 6.0), ui::LINK, 255);
         }
+        for (kind, label, x, width) in TABS {
+            let on = kind == self.tab;
+            let colour = if on { ui::LABEL.now() } else { ui::LINK };
+            if on {
+                s.fill_rect(p(x), p(TABS_Y_PT), p(width), p(TABS_H_PT), ui::SIDEBAR_SELECTED);
+            }
+            let img = ui.text(label, ui::MAC_BODY_PT, Weight::Regular, colour);
+            s.blit_colored(&img, pi(x + 6.0), pi(TABS_Y_PT + 5.0), colour, 255);
+        }
         let search = if self.query.is_empty() { "Search".to_string() } else { self.query.clone() };
         let search_colour = if self.query.is_empty() { ui::LABEL_2.now() } else { ui::LABEL.now() };
-        s.fill_rect(p(PAD_PT), p(HEADER_PT - 36.0), p(LIST_PT - 2.0 * PAD_PT), p(26.0), ui::SEPARATOR);
+        s.fill_rect(p(PAD_PT), p(SEARCH_Y_PT), p(LIST_PT - 2.0 * PAD_PT), p(26.0), ui::SEPARATOR);
         let img = ui.text(&ui.fit(&search, ui::MAC_BODY_PT, ui.pt(LIST_PT - 4.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, search_colour);
-        s.blit_colored(&img, pi(PAD_PT + 8.0), pi(HEADER_PT - 31.0), search_colour, 255);
+        s.blit_colored(&img, pi(PAD_PT + 8.0), pi(SEARCH_Y_PT + 5.0), search_colour, 255);
         let shown = self.shown();
-        for (i, l) in shown.iter().enumerate() {
+        for (i, item) in shown.iter().enumerate() {
             let y = HEADER_PT + i as f32 * ROW_PT;
             if y > h as f32 / scale {
                 break;
             }
-            let selected = self.selected.as_ref().is_some_and(|(site, acc)| *site == l.site && *acc == l.account);
+            let selected = self.selected.as_ref().is_some_and(|(service, account)| *service == item.service && *account == item.account);
             if selected {
                 s.fill_rect(p(6.0), p(y), p(LIST_PT - 12.0), p(ROW_PT - 4.0), ui::SIDEBAR_SELECTED);
             }
-            let img = ui.text(&ui.fit(&l.site, ui::MAC_BODY_PT, ui.pt(LIST_PT - 2.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
+            let img = ui.text(&ui.fit(item.name(), ui::MAC_BODY_PT, ui.pt(LIST_PT - 2.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
             s.blit_colored(&img, pi(PAD_PT), pi(y + 5.0), ui::LABEL.now(), 255);
-            let img = ui.text(&ui.fit(&l.account, ui::MAC_FOOTNOTE_PT, ui.pt(LIST_PT - 2.0 * PAD_PT)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
+            let img = ui.text(&ui.fit(subtitle(item), ui::MAC_FOOTNOTE_PT, ui.pt(LIST_PT - 2.0 * PAD_PT)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
             s.blit_colored(&img, pi(PAD_PT), pi(y + 24.0), ui::LABEL_2.now(), 255);
         }
         if shown.is_empty() {
-            let text = if self.logins.is_empty() { "No Saved Passwords" } else { "No Matches" };
+            let text = if self.items.iter().any(|i| i.kind == self.tab) { "No Matches" } else { empty_text(self.tab) };
             let img = ui.text(text, ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
             s.blit_colored(&img, pi(PAD_PT), pi(HEADER_PT + PAD_PT), ui::LABEL_2.now(), 255);
         }
@@ -358,8 +423,12 @@ impl App for PasswordsApp {
         // detail column
         let px = LIST_PT + PAD_PT;
         match &self.selected {
-            Some((site, account)) => {
+            Some((service, account)) => {
+                let kind = kind_of(service);
                 for (name, bx, _) in DETAIL_BTNS {
+                    if name == "Generate" && kind != Kind::Login {
+                        continue;
+                    }
                     let colour = match name {
                         "Delete" => ui::DESTRUCTIVE,
                         _ => ui::LINK,
@@ -369,19 +438,22 @@ impl App for PasswordsApp {
                     s.blit_colored(&img, pi(px + bx + 2.0), pi(BAR_Y_PT + 6.0), colour, 255);
                 }
                 let width = w as f32 / scale - px - PAD_PT;
-                let title = ui.text(&ui.fit(site, ui::MAC_TITLE2_PT, ui.pt(width)), ui::MAC_TITLE2_PT, Weight::Regular, ui::LABEL.now());
+                let title = ui.text(&ui.fit(name_of(service), ui::MAC_TITLE2_PT, ui.pt(width)), ui::MAC_TITLE2_PT, Weight::Regular, ui::LABEL.now());
                 s.blit_colored(&title, pi(px), pi(HEADER_PT), ui::LABEL.now(), 255);
-                let user = ui.text(&ui.fit(account, ui::MAC_BODY_PT, ui.pt(width)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
+                let sub = if kind == Kind::Login { account.as_str() } else { kind_label(kind) };
+                let user = ui.text(&ui.fit(sub, ui::MAC_BODY_PT, ui.pt(width)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
                 s.blit_colored(&user, pi(px), pi(HEADER_PT + 36.0), ui::LABEL_2.now(), 255);
-                let shown_pw = match &self.revealed {
-                    Some(pw) => pw.clone(),
+                // a note or certificate can be several lines: the detail shows its first line
+                let shown_secret = match &self.revealed {
+                    Some(v) if kind == Kind::Login => v.clone(),
+                    Some(v) => v.lines().next().unwrap_or("").to_string(),
                     None => "••••••••••••".to_string(),
                 };
-                let pw = ui.text(&ui.fit(&shown_pw, ui::MAC_BODY_PT, ui.pt(width)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
+                let pw = ui.text(&ui.fit(&shown_secret, ui::MAC_BODY_PT, ui.pt(width)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
                 s.blit_colored(&pw, pi(px), pi(HEADER_PT + 72.0), ui::LABEL.now(), 255);
             }
             None => {
-                let hint = ui.text("Select a login to see its password", ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
+                let hint = ui.text("Select an item to see it", ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
                 s.blit_colored(&hint, pi(px), pi(HEADER_PT + PAD_PT), ui::LABEL_2.now(), 255);
             }
         }

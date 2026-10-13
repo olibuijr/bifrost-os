@@ -575,7 +575,7 @@ impl Settings {
                 storage_page::spec(id, &PageState { usage: self.scan.usage.as_ref(), passcode_on, dev: &self.dev })
             }
             PageId::Passwords => {
-                let logins = super::services::keychain_groups::logins(&super::apphost::root());
+                let logins = crate::credentials::logins(&super::apphost::root());
                 let passcode_on = passcode::Store::load(self.data_dir.join("passcode.ini")).enabled();
                 let revealed = self.pw_revealed.as_ref().map(|(site, account, password)| super::passwords_page::Shown { site: site.as_str(), account: account.as_str(), password: password.as_str() });
                 super::passwords_page::spec(&super::passwords_page::PageState { logins: &logins, revealed, offset: crate::bare::sys::wall_time().1, passcode_on })
@@ -632,7 +632,7 @@ impl Settings {
             }
             Act::Hide => self.pw_revealed = None,
             Act::Delete { site, account } => {
-                let _ = super::services::keychain_groups::remove(&super::apphost::root(), &site, &account);
+                let _ = crate::credentials::remove(&super::apphost::root(), &site, &account);
                 if self.pw_revealed.as_ref().is_some_and(|(s, a, _)| *s == site && *a == account) {
                     self.pw_revealed = None;
                 }
@@ -670,7 +670,7 @@ impl Settings {
     }
 
     fn reveal_password(&mut self, ui: &Ui, site: String, account: String) {
-        if let Some(password) = super::services::keychain_groups::secret(&super::apphost::root(), &site, &account) {
+        if let Some(password) = crate::credentials::secret(&super::apphost::root(), &site, &account) {
             self.pw_revealed = Some((site, account, password));
         }
         self.rebuild(ui);

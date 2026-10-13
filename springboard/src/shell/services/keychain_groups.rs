@@ -138,46 +138,6 @@ pub fn run(root: &Path, member: &[String], method: &str, params: &Json) -> Resul
     })
 }
 
-/// The group of saved website logins: the Settings Passwords page reads it, and an app that lists it under
-/// `keychain_groups` (with the `keychain` permission) can save and fill them. The service name is the site and the
-/// account is the user name, so one item is one login.
-pub const PASSWORDS_GROUP: &str = "is.bifrost.passwords";
-
-/// One saved login as the Passwords page lists it. No secret: `secret` reads that when a login is revealed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Login {
-    pub site: String,
-    pub account: String,
-    /// Unix time the login was last written (0 when unknown).
-    pub modified: u64,
-}
-
-/// Every login in the passwords group, sorted by site then account. An unreadable group lists as empty.
-pub fn logins(root: &Path) -> Vec<Login> {
-    let rows = Store::open_group(root, PASSWORDS_GROUP).and_then(|s| s.list()).unwrap_or_default();
-    rows.into_iter().map(|r| Login { site: r.service, account: r.account, modified: r.modified }).collect()
-}
-
-/// The saved password of one login, or `None` when it is missing or not text.
-pub fn secret(root: &Path, site: &str, account: &str) -> Option<String> {
-    let value = Store::open_group(root, PASSWORDS_GROUP).and_then(|s| s.get(site, account)).ok()?;
-    String::from_utf8(value).ok()
-}
-
-/// Deletes one login from the passwords group (the shell acts for the user, so it needs no app membership).
-pub fn remove(root: &Path, site: &str, account: &str) -> Result<(), Error> {
-    Store::open_group(root, PASSWORDS_GROUP)?.delete(site, account)
-}
-
-/// Saves a login in the passwords group, or replaces the password of the login that exists (Internet Accounts).
-pub fn save(root: &Path, site: &str, account: &str, password: &str) -> Result<(), Error> {
-    let store = Store::open_group(root, PASSWORDS_GROUP)?;
-    match store.add(site, account, password.as_bytes()) {
-        Err(Error::DuplicateItem) => store.update(site, account, password.as_bytes()),
-        other => other,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -317,26 +277,5 @@ mod tests {
     fn the_service_is_registered_under_its_name() {
         assert_eq!(KeychainGroups::default().name(), "keychain-groups");
         assert_eq!(CHANGED, "changed");
-    }
-
-    #[test]
-    fn the_passwords_group_lists_reveals_and_removes_logins() {
-        let d = dir("passwords");
-        let g = members(PASSWORDS_GROUP);
-        let add = |site: &str, account: &str, value: &str| {
-            let p = obj(&[("group", PASSWORDS_GROUP), ("service", site), ("account", account), ("value", value)]);
-            assert_eq!(status(&run(&d, &g, "add", &p).unwrap()), 0.0);
-        };
-        add("b.example", "bo", "7365637265742d32");
-        add("a.example", "alice", "68756e74657232");
-        let rows = logins(&d);
-        let sites: Vec<(&str, &str)> = rows.iter().map(|l| (l.site.as_str(), l.account.as_str())).collect();
-        assert_eq!(sites, vec![("a.example", "alice"), ("b.example", "bo")]);
-        assert_eq!(secret(&d, "a.example", "alice").as_deref(), Some("hunter2"));
-        assert_eq!(secret(&d, "a.example", "nobody"), None);
-        remove(&d, "a.example", "alice").unwrap();
-        assert_eq!(logins(&d).len(), 1);
-        assert_eq!(remove(&d, "a.example", "alice"), Err(Error::ItemNotFound));
-        let _ = std::fs::remove_dir_all(&d);
     }
 }

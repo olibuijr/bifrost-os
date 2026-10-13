@@ -14,6 +14,7 @@ pub mod gvar;
 pub mod cg;
 pub mod imgdec;
 pub mod keychain;
+pub mod credentials;
 pub mod installer;
 pub mod layout;
 pub mod media;

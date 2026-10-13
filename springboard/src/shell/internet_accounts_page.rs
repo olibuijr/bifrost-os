@@ -11,7 +11,6 @@
 use super::forms::{Prompt, Purpose};
 use super::list::{Group, Item, Spec, Tint};
 use super::pages::{Action, PageId};
-use super::services::keychain_groups;
 use bifrost_ui::internet_accounts::{self as shared, Account, Kind, Security, Server, Service};
 use std::path::{Path, PathBuf};
 
@@ -96,7 +95,7 @@ pub fn remove(path: &Path, root: &Path, id: &str) -> Result<(), String> {
     let pos = all.iter().position(|a| a.id == id).ok_or_else(|| "That account is gone.".to_string())?;
     let gone = all.remove(pos);
     shared::save(path, &all).map_err(|e| format!("The change could not be saved: {e}"))?;
-    let _ = keychain_groups::remove(root, &gone.password_site(), &gone.username);
+    let _ = crate::credentials::remove(root, &gone.password_site(), &gone.username);
     Ok(())
 }
 
@@ -139,7 +138,7 @@ fn add(path: &Path, root: &Path, kind: Kind, address: &str, username: &str, pass
     let account = build(kind, &id, address, username)?;
     all.push(account.clone());
     shared::save(path, &all).map_err(|e| format!("The account could not be saved: {e}"))?;
-    keychain_groups::save(root, &account.password_site(), &account.username, password).map_err(|_| "The password could not be saved in Passwords.".to_string())
+    crate::credentials::save(root, &account.password_site(), &account.username, password).map_err(|_| "The password could not be saved in Passwords.".to_string())
 }
 
 /// The account for an address (mail) or server URL (CalDAV, CardDAV). Mail takes its servers from the address's

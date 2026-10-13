@@ -1,4 +1,4 @@
-//! Settings > Passwords: the website logins apps saved to the passwords group (`keychain_groups::PASSWORDS_GROUP`).
+//! Settings > Passwords: the website logins apps saved to the passwords group (`credentials::GROUP`).
 //!
 //! The page lists each login by site, with the account and the time it was last written. Tapping a login reveals its
 //! password: after the passcode when one is set (the Settings overlay does the asking), then the password shows in
@@ -8,7 +8,7 @@
 use super::diag::date_text;
 use super::list::{Group, Item, Spec, Tint};
 use super::pages::{Action, PageId};
-use super::services::keychain_groups::Login;
+use crate::credentials::Login;
 
 /// What a tap on a Passwords row does. The shell carries it out in Settings.
 #[derive(Clone, Debug, PartialEq, Eq)]
