@@ -703,6 +703,7 @@ pub mod controller_motion;
 pub mod racing_wheel;
 pub mod virtual_controller;
 pub mod input_method;
+pub mod imk_info;
 pub mod compose_method;
 pub mod kana_method;
 pub mod hangul_method;
