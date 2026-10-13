@@ -38,11 +38,8 @@ pub fn serialize(contacts: &[Contact], version: Version) -> String {
 fn full_name(c: &Contact) -> String {
     let join = |parts: &[&str]| parts.iter().map(|p| p.trim()).filter(|p| !p.is_empty()).collect::<Vec<_>>().join(" ");
     let person = join(&[c.name_prefix.as_str(), c.given_name.as_str(), c.middle_name.as_str(), c.family_name.as_str(), c.name_suffix.as_str()]);
-    [person.as_str(), c.nickname.trim(), c.organization_name.trim()]
-        .into_iter()
-        .find(|s| !s.is_empty())
-        .unwrap_or("")
-        .to_string()
+    let name = [person.as_str(), c.nickname.trim(), c.organization_name.trim()].into_iter().find(|s| !s.is_empty()).unwrap_or("").to_string();
+    name
 }
 
 /// The `TYPE` value for a predefined label's name.

@@ -103,6 +103,7 @@ impl Shell {
     }
 
     /// The shell chrome for the AT-SPI bridge: the menu bar and its menus, the dock's apps (open ones marked) and Spotlight.
+    #[cfg(feature = "atspi")]
     pub(super) fn ax_chrome_snap(&self) -> super::atspi::model::AppSnap {
         let menus: Vec<(String, Vec<(String, bool)>)> =
             self.ax_menus().into_iter().map(|(_, name, rows)| (name.to_string(), rows.into_iter().map(|(_, text, enabled)| (text, enabled)).collect())).collect();

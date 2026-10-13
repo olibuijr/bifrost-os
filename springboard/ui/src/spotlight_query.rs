@@ -608,7 +608,7 @@ mod tests {
     #[test]
     fn bad_queries_complete_with_an_error() {
         for q in ["", "title ==", r#"title == "x"#, "title = 1", r#"(title == "x""#, r#"title == "x" junk"#] {
-            assert_eq!(ids(q, 0), Err(Error::InvalidQuery), "{q}");
+            assert_eq!(ids(q, 0.0), Err(Error::InvalidQuery), "{q}");
         }
     }
 
