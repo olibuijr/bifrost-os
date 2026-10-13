@@ -31,9 +31,9 @@
     {
       "feature": "Downloads",
       "apple": "WKDownload, WKDownloadDelegate",
-      "bifrost": "springboard/ui/src/download.rs, springboard/ui/src/nav_policy.rs; wired: springboard/apps/browser/src/main.rs (menus, menu_action: File > Show Downloads, Clear Finished Downloads); springboard/apps/browser/src/downloads.rs",
+      "bifrost": "springboard/sdk/src/web_download.rs (WebDownload, WebDownloadDelegate, ResumeData, navigation_response_policy), springboard/sdk/src/webview.rs (WebViewEvent::DownloadStarted); springboard/ui/src/download.rs, springboard/ui/src/nav_policy.rs; wired: springboard/apps/browser/src/main.rs (menus, menu_action: File > Show Downloads, Clear Finished Downloads); springboard/apps/browser/src/downloads.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no download event or delegate; the engine does not report downloads Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. SDK has WKDownload, WKDownloadDelegate, resume data and a DownloadStarted event; the engine does not emit that event yet. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
     },
     {
       "feature": "Page content, scripts and messaging",
@@ -123,7 +123,6 @@
   "gaps": [
     "No WebDriver implementation for web content (Apple's WebDriver commands for Safari); the testing kit is XCTest-style only.",
     "No WKDOMNodeSnapshot equivalent: no DOM tree snapshot object.",
-    "No downloads API (WKDownload, WKDownloadDelegate).",
     "No navigation policy callback (per-request allow or cancel), and stop_loading does nothing because Servo 0.7.0 cannot cancel a load.",
     "No alert, confirm, prompt or file-chooser UI delegate, and no select element support.",
     "No page-to-app message handler (WKScriptMessageHandler equivalent) and no content rule lists.",
