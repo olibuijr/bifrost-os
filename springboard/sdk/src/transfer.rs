@@ -10,9 +10,7 @@
 //! representation exports and hand back the bytes they received, so a model type needs one declaration instead of
 //! hand-written conversions at every site.
 //!
-//! Remaining gaps: a `ProxyRepresentation` through another `Transferable` ([`Representations::proxy_of`]) re-exposes that
-//! type's bytes representations only (its file representations are not forwarded); a file representation travels as bytes on
-//! a pasteboard item (the shell has no file promise yet).
+//! Remaining gap: a file representation travels as bytes on a pasteboard item (the shell has no file promise yet).
 
 use crate::dnd::{self, DragItem, DragPreview, Payload};
 use crate::pasteboard_types::Item as PasteItem;
@@ -117,9 +115,14 @@ pub const JSON: &str = "public.json";
 type Export<T> = Rc<dyn Fn(&T) -> Vec<u8>>;
 type Import<T> = Rc<dyn Fn(&[u8]) -> Option<T>>;
 
+type FileExport<T> = Rc<dyn Fn(&T) -> Option<SentTransferredFile>>;
+type FileImport<T> = Rc<dyn Fn(&ReceivedTransferredFile) -> Option<T>>;
+
 enum Io<T> {
     Bytes { export: Export<T>, import: Option<Import<T>> },
-    File { export: Rc<dyn Fn(&T) -> SentTransferredFile>, import: Rc<dyn Fn(&ReceivedTransferredFile) -> Option<T>> },
+    /// A file representation. `export` gives `None` when the forwarded value has no file to hand over; `import` is `None`
+    /// for an export-only file.
+    File { export: FileExport<T>, import: Option<FileImport<T>> },
 }
 
 /// One representation of `T`: a UTType id, how to export `T` to it and, when present, how to rebuild `T` from it.
@@ -135,14 +138,14 @@ impl<T> Representation<T> {
     fn export_bytes(&self, value: &T) -> Option<Vec<u8>> {
         match &self.io {
             Io::Bytes { export, .. } => Some(export(value)),
-            Io::File { export, .. } => std::fs::read(export(value).file).ok(),
+            Io::File { export, .. } => std::fs::read(export(value)?.file).ok(),
         }
     }
     fn imports_bytes(&self) -> bool {
         matches!(&self.io, Io::Bytes { import: Some(_), .. })
     }
     fn imports(&self) -> bool {
-        self.imports_bytes() || matches!(&self.io, Io::File { .. })
+        self.imports_bytes() || matches!(&self.io, Io::File { import: Some(_), .. })
     }
 }
 
@@ -182,28 +185,41 @@ impl<T: 'static> Representations<T> {
         self.push_bytes(Kind::Proxy, uti, visibility, Rc::new(export), None)
     }
 
-    /// `ProxyRepresentation(exporting:importing:)` through another `Transferable` `U`: every bytes representation of `U`
-    /// is offered for `T` (converted with `to_proxy`), and read back through `from_proxy` when given. A proxy is never more
-    /// visible than the representation it forwards.
+    /// `ProxyRepresentation(exporting:importing:)` through another `Transferable` `U`: every representation of `U` (bytes
+    /// and file) is offered for `T` (converted with `to_proxy`), and read back through `from_proxy` when given. A proxy is
+    /// never more visible than the representation it forwards.
     pub fn proxy_of<U: Transferable>(mut self, visibility: Visibility, to_proxy: fn(&T) -> U, from_proxy: Option<fn(U) -> T>) -> Self {
         let inner = Rc::new(U::transfer_representations());
         for rep in &inner.items {
-            if !matches!(rep.io, Io::Bytes { .. }) {
-                continue;
-            }
             let uti = rep.uti;
             let vis = visibility.narrow(rep.visibility);
             let via = Rc::clone(&inner);
-            let export: Export<T> = Rc::new(move |t: &T| via.export(&to_proxy(t), uti, Viewer::OwnProcess).unwrap_or_default());
-            let import: Option<Import<T>> = match (from_proxy, rep.imports_bytes()) {
-                (Some(back), true) => {
-                    let via = Rc::clone(&inner);
-                    let f: Import<T> = Rc::new(move |b: &[u8]| via.import(uti, b).map(back));
-                    Some(f)
+            match &rep.io {
+                Io::Bytes { import, .. } => {
+                    let export: Export<T> = Rc::new(move |t: &T| via.export(&to_proxy(t), uti, Viewer::OwnProcess).unwrap_or_default());
+                    let import: Option<Import<T>> = match (from_proxy, import.is_some()) {
+                        (Some(back), true) => {
+                            let back_via = Rc::clone(&inner);
+                            let f: Import<T> = Rc::new(move |b: &[u8]| back_via.import(uti, b).map(back));
+                            Some(f)
+                        }
+                        _ => None,
+                    };
+                    self = self.push_bytes(Kind::Proxy, uti, vis, export, import);
                 }
-                _ => None,
-            };
-            self = self.push_bytes(Kind::Proxy, uti, vis, export, import);
+                Io::File { import, .. } => {
+                    let export: FileExport<T> = Rc::new(move |t: &T| via.export_file(&to_proxy(t), uti, Viewer::OwnProcess));
+                    let import: Option<FileImport<T>> = match (from_proxy, import.is_some()) {
+                        (Some(back), true) => {
+                            let back_via = Rc::clone(&inner);
+                            let f: FileImport<T> = Rc::new(move |file: &ReceivedTransferredFile| back_via.import_file(uti, file).map(back));
+                            Some(f)
+                        }
+                        _ => None,
+                    };
+                    self.items.push(Representation { uti, visibility: vis, kind: Kind::Proxy, io: Io::File { export, import } });
+                }
+            }
         }
         self
     }
@@ -217,7 +233,9 @@ impl<T: 'static> Representations<T> {
         export: fn(&T) -> SentTransferredFile,
         import: fn(&ReceivedTransferredFile) -> Option<T>,
     ) -> Self {
-        self.items.push(Representation { uti, visibility, kind: Kind::File, io: Io::File { export: Rc::new(export), import: Rc::new(import) } });
+        let export: FileExport<T> = Rc::new(move |t: &T| Some(export(t)));
+        let import: FileImport<T> = Rc::new(move |file: &ReceivedTransferredFile| import(file));
+        self.items.push(Representation { uti, visibility, kind: Kind::File, io: Io::File { export, import: Some(import) } });
         self
     }
 
@@ -248,7 +266,7 @@ impl<T> Representations<T> {
     /// The file a file representation of `uti` hands over to `viewer`.
     pub fn export_file(&self, value: &T, uti: &str, viewer: Viewer) -> Option<SentTransferredFile> {
         self.items.iter().find(|r| r.uti == uti && r.visibility.is_visible_to(viewer)).and_then(|r| match &r.io {
-            Io::File { export, .. } => Some(export(value)),
+            Io::File { export, .. } => export(value),
             Io::Bytes { .. } => None,
         })
     }
@@ -264,8 +282,8 @@ impl<T> Representations<T> {
     /// Rebuilds a value from the file a sender handed over, through the file representation of `uti`.
     pub fn import_file(&self, uti: &str, file: &ReceivedTransferredFile) -> Option<T> {
         self.items.iter().find(|r| r.uti == uti).and_then(|r| match &r.io {
-            Io::File { import, .. } => import(file),
-            Io::Bytes { .. } => None,
+            Io::File { import: Some(import), .. } => import(file),
+            _ => None,
         })
     }
 
@@ -501,6 +519,54 @@ mod tests {
         let items = [PasteItem::default().with(PLAIN, b"a"), PasteItem::default().with(HTML, b"<p>b</p>"), PasteItem::default().with(PLAIN, b"c")];
         let texts: Vec<String> = paste_values(&reps, &items).into_iter().map(|n| n.text).collect();
         assert_eq!(texts, ["a", "c"]);
+    }
+
+    const DOC_FILE: &str = "is.bifrost.doc-file";
+
+    #[derive(Debug, PartialEq)]
+    struct Doc(String);
+    #[derive(Debug, PartialEq)]
+    struct Wrapper(String);
+
+    fn doc_file(d: &Doc) -> SentTransferredFile {
+        SentTransferredFile::new(format!("/work/{}.txt", d.0))
+    }
+    fn doc_from_file(r: &ReceivedTransferredFile) -> Option<Doc> {
+        r.file.file_stem().and_then(|s| s.to_str()).map(|s| Doc(s.to_owned()))
+    }
+    fn wrap(w: &Wrapper) -> Doc {
+        Doc(w.0.clone())
+    }
+    fn unwrap_doc(d: Doc) -> Wrapper {
+        Wrapper(d.0)
+    }
+    impl Transferable for Doc {
+        fn transfer_representations() -> Representations<Doc> {
+            Representations::new().file(DOC_FILE, Visibility::All, doc_file, doc_from_file)
+        }
+    }
+
+    #[test]
+    fn proxy_of_forwards_file_representations_with_the_stricter_visibility() {
+        let reps = Representations::<Wrapper>::new().proxy_of::<Doc>(Visibility::Team, wrap, Some(unwrap_doc));
+        assert!(reps.types_for(Viewer::Other).is_empty(), "a team-only proxy is hidden from other processes");
+        assert_eq!(reps.types_for(Viewer::Team), vec![DOC_FILE]);
+        assert_eq!(reps.kind_of(DOC_FILE), Some(Kind::Proxy));
+        assert_eq!(reps.export_file(&Wrapper("report".into()), DOC_FILE, Viewer::Other), None);
+        let sent = reps.export_file(&Wrapper("report".into()), DOC_FILE, Viewer::Team).expect("forwarded file");
+        assert_eq!(sent.file, PathBuf::from("/work/report.txt"));
+        assert_eq!(reps.imported_content_types(), vec![DOC_FILE]);
+        let received = ReceivedTransferredFile { file: PathBuf::from("/in/memo.txt"), is_original_file: false };
+        assert_eq!(reps.import_file(DOC_FILE, &received), Some(Wrapper("memo".into())));
+    }
+
+    #[test]
+    fn export_only_forwarded_file_cannot_be_read_back() {
+        let reps = Representations::<Wrapper>::new().proxy_of::<Doc>(Visibility::All, wrap, None);
+        assert_eq!(reps.types_for(Viewer::Other), vec![DOC_FILE]);
+        assert!(reps.imported_content_types().is_empty());
+        let received = ReceivedTransferredFile { file: PathBuf::from("/in/memo.txt"), is_original_file: false };
+        assert_eq!(reps.import_file(DOC_FILE, &received), None);
     }
 
     #[test]
