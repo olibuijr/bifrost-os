@@ -567,7 +567,12 @@ impl AppHost {
             return;
         }
         // a Move is superseded by the next one, so it is the one thing that may be dropped on a full socket
-        let droppable = matches!(m, ToApp::Touch { kind: TouchKind::Move, .. });
+        let droppable = match m {
+            ToApp::Touch { kind: TouchKind::Move, .. } => true,
+            // a frame of only moved and stationary touches is superseded by the next one
+            ToApp::Touches(ev) => ev.droppable(),
+            _ => false,
+        };
         self.queue(m.encode(), droppable);
     }
 
@@ -668,6 +673,12 @@ impl AppHost {
 
     pub fn touch(&mut self, kind: TouchKind, id: u32, x: f32, y: f32, t_ms: u32) {
         self.send(&ToApp::Touch { kind, id, x, y, t_ms });
+    }
+
+    /// Sends one frame of touches (`ToApp::Touches`). Call it before the matching `touch` so the app can drop the
+    /// plain stream once it sees frames; locations are in the app's surface pixels, like `touch`.
+    pub fn touches(&mut self, ev: bifrost_ui::touch::TouchEvent) {
+        self.send(&ToApp::Touches(ev));
     }
 
     pub fn key(&mut self, k: KeyInput) {
