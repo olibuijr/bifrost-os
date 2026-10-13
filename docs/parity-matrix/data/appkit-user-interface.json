@@ -52,9 +52,9 @@
     {
       "feature": "Sound, Speech, and Haptics",
       "apple": "NSSound, NSSpeechSynthesizer, NSHapticFeedbackManager",
-      "bifrost": "springboard/audiod/src/main.rs; springboard/src/shell/audiosvc.rs",
-      "status": "os",
-      "note": "Audio service exists in the system layer; no app-facing sound, speech or haptic API found."
+      "bifrost": "springboard/audiod/src/main.rs; springboard/src/shell/audiosvc.rs; springboard/sdk/src/system_sound.rs (SystemSounds::named); springboard/src/shell/alert_sound.rs",
+      "status": "partial",
+      "note": "Named system sounds (init(named:) for the alert names) resolve through SystemSounds::named to synthesised tones, not the original recordings; speech and haptics are still missing. Needs a Midget check for parity."
     },
     {
       "feature": "Continuity Camera",

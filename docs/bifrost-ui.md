@@ -2280,3 +2280,7 @@ process, so these rows in `docs/parity-matrix/os/daemons/` are `partial` with th
 missing parts in the note. The table is in the `services/mod.rs` doc comment; `springboard/tests/daemon_map.rs`
 checks that every partial row cites an existing path and has a note. Siri, family controls, iCloud, search-party,
 Screen Time and slot-notification agents have no counterpart and stay `gap`. Parity needs a Midget check.
+
+## AppKit: named alert sounds (`bifrost_sdk::system_sound`, `shell::alert_sound`)
+
+`SystemSounds::named(name)` mirrors `NSSound(named:)` for the system alert names: Basso, Blow, Bottle, Frog, Funk, Glass, Hero, Morse, Ping, Pop, Purr, Sosumi, Submarine and Tink (plus Bell, Chime, Pulse, Tick). It returns a `SoundId` for a listed name and `None` for any other (`ALERT_NAMES` lists them). The id plays like any created sound. The shell synthesises each tone from a note recipe (additive sine notes and noise bursts, under 1.5 s, no clipping), so the sound is an equivalent, not the original recording. Settings > Sound > Alert Sound lists all of them (`options::ALERT_SOUNDS`). Status: partial until checked on Midget.

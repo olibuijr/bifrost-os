@@ -5,7 +5,7 @@
 use super::kb_clicks::RATE;
 use super::options::ALERT_SOUNDS;
 
-/// One note: frequency in hertz, start and length in milliseconds, and peak amplitude (0..=1).
+/// One note: frequency in hertz (zero or less makes a noise burst), start and length in milliseconds, and peak amplitude (0..=1).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Note {
     pub hz: f32,
@@ -18,6 +18,11 @@ const fn note(hz: f32, at_ms: f32, len_ms: f32, peak: f32) -> Note {
     Note { hz, at_ms, len_ms, peak }
 }
 
+/// A noise burst: a note with no pitch.
+const fn noise(at_ms: f32, len_ms: f32, peak: f32) -> Note {
+    Note { hz: 0.0, at_ms, len_ms, peak }
+}
+
 /// Bell: one long ringing note.
 const BELL: [Note; 1] = [note(880.0, 0.0, 900.0, 0.45)];
 /// Chime: three rising notes that overlap into a short arpeggio.
@@ -27,9 +32,52 @@ const PULSE: [Note; 3] = [note(1000.0, 0.0, 120.0, 0.5), note(1000.0, 250.0, 120
 /// Tick: two short clicks.
 const TICK: [Note; 2] = [note(2400.0, 0.0, 25.0, 0.5), note(2400.0, 120.0, 25.0, 0.5)];
 
+/// Basso: a low two-step drop.
+const BASSO: [Note; 2] = [note(196.0, 0.0, 320.0, 0.45), note(147.0, 220.0, 620.0, 0.45)];
+/// Blow: a breathy noise burst over a low hum.
+const BLOW: [Note; 2] = [noise(0.0, 500.0, 0.25), note(220.0, 0.0, 500.0, 0.3)];
+/// Bottle: a hollow mid tone with a soft noise onset.
+const BOTTLE: [Note; 2] = [noise(0.0, 40.0, 0.2), note(520.0, 0.0, 450.0, 0.5)];
+/// Frog: two quick low croaks.
+const FROG: [Note; 4] = [note(180.0, 0.0, 110.0, 0.4), note(360.0, 0.0, 110.0, 0.2), note(200.0, 160.0, 130.0, 0.4), note(400.0, 160.0, 130.0, 0.2)];
+/// Funk: a low note followed by a lower one with a bright overtone.
+const FUNK: [Note; 3] = [note(330.0, 0.0, 200.0, 0.4), note(247.0, 180.0, 450.0, 0.4), note(494.0, 180.0, 450.0, 0.15)];
+/// Glass: a high bright ring with a quiet overtone.
+const GLASS: [Note; 2] = [note(1319.0, 0.0, 800.0, 0.4), note(2637.0, 0.0, 500.0, 0.12)];
+/// Hero: a rising three-note fanfare.
+const HERO: [Note; 3] = [note(523.0, 0.0, 220.0, 0.4), note(659.0, 180.0, 220.0, 0.4), note(784.0, 360.0, 700.0, 0.4)];
+/// Morse: two short beeps and a long one.
+const MORSE: [Note; 3] = [note(700.0, 0.0, 80.0, 0.45), note(700.0, 140.0, 80.0, 0.45), note(700.0, 280.0, 240.0, 0.45)];
+/// Ping: one clear mid-high ring.
+const PING: [Note; 1] = [note(1568.0, 0.0, 650.0, 0.45)];
+/// Pop: a very short low blip.
+const POP: [Note; 2] = [note(300.0, 0.0, 70.0, 0.5), noise(0.0, 8.0, 0.3)];
+/// Purr: a low rumble of two close tones.
+const PURR: [Note; 3] = [note(110.0, 0.0, 700.0, 0.35), note(116.0, 0.0, 700.0, 0.35), noise(0.0, 700.0, 0.08)];
+/// Sosumi: a quick rising two-note figure.
+const SOSUMI: [Note; 2] = [note(784.0, 0.0, 160.0, 0.45), note(1047.0, 140.0, 420.0, 0.45)];
+/// Submarine: a deep long sonar-like ping.
+const SUBMARINE: [Note; 2] = [note(262.0, 0.0, 1100.0, 0.45), note(524.0, 0.0, 600.0, 0.15)];
+/// Tink: a tiny high tap.
+const TINK: [Note; 1] = [note(3136.0, 0.0, 60.0, 0.5)];
+
 /// The notes of alert `index` (an index into `ALERT_SOUNDS`). An index past the list plays the first tone.
 pub fn notes(index: usize) -> &'static [Note] {
     match ALERT_SOUNDS.get(index).copied().unwrap_or(ALERT_SOUNDS[0]) {
+        "Basso" => &BASSO,
+        "Blow" => &BLOW,
+        "Bottle" => &BOTTLE,
+        "Frog" => &FROG,
+        "Funk" => &FUNK,
+        "Glass" => &GLASS,
+        "Hero" => &HERO,
+        "Morse" => &MORSE,
+        "Ping" => &PING,
+        "Pop" => &POP,
+        "Purr" => &PURR,
+        "Sosumi" => &SOSUMI,
+        "Submarine" => &SUBMARINE,
+        "Tink" => &TINK,
         "Chime" => &CHIME,
         "Pulse" => &PULSE,
         "Tick" => &TICK,
@@ -44,6 +92,7 @@ pub fn pcm(index: usize, volume: f32) -> Vec<i16> {
     let n = (RATE as f32 * end_ms / 1000.0).ceil() as usize;
     let gain = volume.clamp(0.0, 1.0);
     let mut mix = vec![0f32; n];
+    let mut seed = 0x2545_F491u32;
     for note in notes {
         let start = (RATE as f32 * note.at_ms / 1000.0) as usize;
         let len = (RATE as f32 * note.len_ms / 1000.0) as usize;
@@ -55,7 +104,16 @@ pub fn pcm(index: usize, volume: f32) -> Vec<i16> {
             let attack = (i as f32 / (RATE as f32 * 0.005)).min(1.0);
             let decay = (1.0 - i as f32 / len as f32).powi(2);
             let t = i as f32 / RATE as f32;
-            mix[start + i] += (t * note.hz * std::f32::consts::TAU).sin() * note.peak * attack * decay;
+            let wave = if note.hz > 0.0 {
+                (t * note.hz * std::f32::consts::TAU).sin()
+            } else {
+                // a fixed-seed xorshift, so a noise burst sounds the same every time
+                seed ^= seed << 13;
+                seed ^= seed >> 17;
+                seed ^= seed << 5;
+                seed as f32 / u32::MAX as f32 * 2.0 - 1.0
+            };
+            mix[start + i] += wave * note.peak * attack * decay;
         }
     }
     mix.iter().map(|s| (s.clamp(-1.0, 1.0) * gain * i16::MAX as f32) as i16).collect()
@@ -70,6 +128,33 @@ mod tests {
         for i in 0..ALERT_SOUNDS.len() {
             assert!(!notes(i).is_empty(), "alert {i} has no notes");
             assert!(pcm(i, 1.0).iter().any(|&s| s != 0), "alert {i} is silent");
+        }
+    }
+
+    #[test]
+    fn every_listed_alert_has_its_own_notes() {
+        for i in 1..ALERT_SOUNDS.len() {
+            assert_ne!(notes(i), notes(0), "{} falls through to the first tone", ALERT_SOUNDS[i]);
+            for j in 0..i {
+                assert_ne!(notes(i), notes(j), "{} and {} share notes", ALERT_SOUNDS[i], ALERT_SOUNDS[j]);
+            }
+        }
+    }
+
+    #[test]
+    fn the_selectable_names_are_listed() {
+        for name in ["Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"] {
+            assert!(ALERT_SOUNDS.contains(&name), "{name} missing");
+        }
+    }
+
+    #[test]
+    fn every_alert_is_short_and_does_not_clip() {
+        for i in 0..ALERT_SOUNDS.len() {
+            let p = pcm(i, 1.0);
+            assert!(p.len() < (RATE as usize * 3) / 2, "{} is too long", ALERT_SOUNDS[i]);
+            assert!(p.iter().all(|&s| s.abs() < i16::MAX), "{} clips", ALERT_SOUNDS[i]);
+            assert!(p.iter().any(|&s| s != 0), "{} is silent", ALERT_SOUNDS[i]);
         }
     }
 

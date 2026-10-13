@@ -77,6 +77,12 @@ impl fmt::Display for SoundError {
     }
 }
 
+/// The names of the built-in alert sounds, as the shell's alert list spells them.
+pub const ALERT_NAMES: [&str; 18] = [
+    "Bell", "Chime", "Pulse", "Tick", "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi",
+    "Submarine", "Tink",
+];
+
 /// The sounds of one app: created sounds by id, the request waiting for the audio service, and the sound it has
 /// taken.
 #[derive(Debug, Default)]
@@ -102,6 +108,15 @@ impl SystemSounds {
         let id = SoundId(self.last);
         self.sounds.push((id, path.to_string()));
         Ok(id)
+    }
+
+    /// Creates the built-in alert sound with this name (see `ALERT_NAMES`), or `None` for any other name. The
+    /// file path is the sound's place in the system sound folder; the audio service synthesises the tone for it.
+    pub fn named(&mut self, name: &str) -> Option<SoundId> {
+        if !ALERT_NAMES.contains(&name) {
+            return None;
+        }
+        self.create(&format!("/System/Library/Sounds/{name}.aiff")).ok()
     }
 
     /// Frees a sound. A play of it that is still waiting or sounding is dropped.
@@ -165,6 +180,18 @@ impl SystemSounds {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_alert_name_creates_a_sound_and_other_names_do_not() {
+        let mut sounds = SystemSounds::new();
+        for name in ALERT_NAMES {
+            let id = sounds.named(name).unwrap_or_else(|| panic!("{name} has no sound"));
+            assert_eq!(sounds.path(id), Some(format!("/System/Library/Sounds/{name}.aiff").as_str()));
+        }
+        assert_eq!(sounds.named("Nope"), None);
+        assert_eq!(sounds.named(""), None);
+        assert!(ALERT_NAMES.contains(&"Funk") && ALERT_NAMES.contains(&"Submarine"));
+    }
 
     #[test]
     fn sounds_need_absolute_paths_and_get_new_ids() {

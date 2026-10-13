@@ -54,7 +54,10 @@ fn remap_choice(p: &Prefs, key: &str) -> usize {
 /// Trackpad › Secondary Click choices, as `Options::trackpad_secondary` indexes them.
 pub const TRACKPAD_SECONDARY: [&str; 2] = ["Click in Bottom-Right Corner", "Click with Two Fingers"];
 /// Settings › Sound › Alert Sound choices, as `Options::alert_sound` indexes them.
-pub const ALERT_SOUNDS: [&str; 4] = ["Bell", "Chime", "Pulse", "Tick"];
+pub const ALERT_SOUNDS: [&str; 18] = [
+    "Bell", "Chime", "Pulse", "Tick", "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi",
+    "Submarine", "Tink",
+];
 
 /// The slider's 0..1 position for a speed multiplier.
 /// True once the display has been off for longer than the Require Password grace (`grace_s` seconds), at `now_ms`
