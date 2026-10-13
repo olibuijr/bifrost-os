@@ -11,6 +11,11 @@
 //!   (`given_name`, `family_name`, `organization`, `phones`, `emails`, `address`, `note`) and must not be empty; `query`
 //!   filters by any text of the contact. Answers only the contacts the app may read, sorted by name. Without a
 //!   read grant it is an error.
+//! - `save {add?, update?, delete?}` changes the book and returns `{added: [id, ...]}`, the ids the new contacts got.
+//!   `add` and `update` hold records of the fields above (`update` also needs the contact `id`; its fields replace
+//!   the contact's). `delete` holds `{id}` objects. Only full access writes: a limited grant is read-only. The whole
+//!   call applies or none of it does, and the shell stores the book only when it succeeds.
+//!   read grant it is an error.
 //!
 //! The store holds one name per contact: the last word of it is the family name and the rest is the given name. The
 //! grants live per shell thread (thread-local, like the `privacy` service), so they reset when the shell restarts.
@@ -93,8 +98,121 @@ fn keys_of(params: &Json) -> Result<Keys, String> {
     Keys::new(&keys).map_err(|e| format!("{e:?}"))
 }
 
+/// A record from a `save` call: each name must be a known field (or `id`), holding text or a list of text. `null` is
+/// no value. The `id` is 0 when the call names none.
+fn record_of_json(v: &Json) -> Result<Record, String> {
+    let Json::Obj(fields) = v else {
+        return Err("a contact is an object of fields".into());
+    };
+    let mut record = Record::new(0);
+    for (name, value) in fields {
+        if name.as_str() == "id" {
+            record.id = value.as_u64().ok_or_else(|| "id is a number".to_string())?;
+            continue;
+        }
+        let key = Key::from_name(name).ok_or_else(|| format!("no contact field {name}"))?;
+        let value = match value {
+            Json::Null => continue,
+            Json::Str(text) => Value::Text(text.clone()),
+            Json::Arr(items) => Value::List(
+                items
+                    .iter()
+                    .map(|item| item.as_str().map(str::to_string).ok_or_else(|| format!("{name} is a list of text")))
+                    .collect::<Result<Vec<String>, String>>()?,
+            ),
+            _ => return Err(format!("{name} is text or a list of text")),
+        };
+        record.set(key, value);
+    }
+    Ok(record)
+}
+
+/// The one value a record holds for a key, or blank. The book keeps one phone, one email and one address per contact,
+/// so a list of more than one is refused rather than cut down.
+fn value_of(record: &Record, key: Key) -> Result<String, String> {
+    match record.get(key) {
+        None => Ok(String::new()),
+        Some(Value::Text(text)) => Ok(text.trim().to_string()),
+        Some(Value::List(items)) => match items.as_slice() {
+            [] => Ok(String::new()),
+            [one] => Ok(one.trim().to_string()),
+            _ => Err(format!("{} takes one value per contact", key.name())),
+        },
+    }
+}
+
+/// The contact a record describes. An update keeps the flags and label rows of the contact it replaces (`base`).
+fn contact_of(id: u64, record: &Record, base: Option<&Contact>) -> Result<Contact, String> {
+    let given = value_of(record, Key::GivenName)?;
+    let family = value_of(record, Key::FamilyName)?;
+    let contact = Contact {
+        id,
+        name: [given, family].into_iter().filter(|part| !part.is_empty()).collect::<Vec<_>>().join(" "),
+        company: value_of(record, Key::Organization)?,
+        phone: value_of(record, Key::Phones)?,
+        email: value_of(record, Key::Emails)?,
+        address: value_of(record, Key::Address)?,
+        notes: value_of(record, Key::Note)?,
+        favorite: base.is_some_and(|c| c.favorite),
+        labels: base.map_or([0; 3], |c| c.labels),
+    };
+    if contact.valid() {
+        Ok(contact)
+    } else {
+        Err("a contact needs a name, company, address, phone or email, within the field limits".into())
+    }
+}
+
+/// The list under `key` in a `save` call, empty when the call omits it.
+fn list_of<'a>(params: &'a Json, key: &str) -> Result<&'a [Json], String> {
+    match params.get(key) {
+        None | Some(Json::Null) => Ok(&[]),
+        Some(Json::Arr(items)) => Ok(items.as_slice()),
+        Some(_) => Err(format!("{key} is a list")),
+    }
+}
+
+/// Applies a `save` call to `book` for `app_id` and returns the reply and the new book. Pure: the caller stores the new
+/// book only when this is `Ok`, so a call that fails in any item changes nothing. Only full access writes. An add gets
+/// the next free id; an update and a delete must name a contact the book holds.
+pub fn apply_save(app_id: &str, params: &Json, book: &[Contact]) -> Result<(Json, Vec<Contact>), String> {
+    access_of(app_id).check_write().map_err(|e| match e {
+        Error::ReadOnly => "a limited contacts grant only reads; saving needs full access".to_string(),
+        _ => "contacts write access is not granted".to_string(),
+    })?;
+    let adds = list_of(params, "add")?;
+    let updates = list_of(params, "update")?;
+    let deletes = list_of(params, "delete")?;
+    if adds.is_empty() && updates.is_empty() && deletes.is_empty() {
+        return Err("save needs add, update or delete".into());
+    }
+    let mut next = book.to_vec();
+    let mut added = Vec::new();
+    for item in adds {
+        let id = contactstore::new_id(&next).ok_or_else(|| "the book is full".to_string())?;
+        next.push(contact_of(id, &record_of_json(item)?, None)?);
+        added.push(Json::Num(id as f64));
+    }
+    for item in updates {
+        let record = record_of_json(item)?;
+        if record.id == 0 {
+            return Err("update needs the id of a contact".into());
+        }
+        let at = next.iter().position(|c| c.id == record.id).ok_or_else(|| format!("no contact {}", record.id))?;
+        let updated = contact_of(record.id, &record, Some(&next[at]))?;
+        next[at] = updated;
+    }
+    for item in deletes {
+        let id = item.get("id").and_then(Json::as_u64).ok_or_else(|| "delete needs the id of a contact".to_string())?;
+        let at = next.iter().position(|c| c.id == id).ok_or_else(|| format!("no contact {id}"))?;
+        next.remove(at);
+    }
+    Ok((Json::Obj(vec![("added".into(), Json::Arr(added))]), next))
+}
+
 /// The answer to one method call by `app_id`. `contacts` is the store's book, loaded by the caller only for a
-/// `fetch` by an app that holds a read grant. Pure: no file access here.
+/// `fetch` by an app that holds a read grant. Pure: no file access here. A `save` is answered by [`apply_save`]
+/// through the service, which stores the book.
 pub fn answer(app_id: &str, method: &str, params: &Json, contacts: &[Contact]) -> Result<Json, String> {
     let access = access_of(app_id);
     match method {
@@ -121,6 +239,7 @@ pub fn answer(app_id: &str, method: &str, params: &Json, contacts: &[Contact]) -
                 .collect();
             Ok(Json::Obj(vec![("contacts".into(), Json::Arr(rows))]))
         }
+        "save" => Err("save changes the book, so the service stores it: call it through the shell".into()),
         _ => Err(format!("contacts has no method {method}")),
     }
 }
@@ -133,12 +252,21 @@ impl SystemService for Contacts {
     }
 
     fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
-        let book = if method == "fetch" && reads(app_id) {
-            contactstore::load_checked(&contactstore::store_path(&shell.data_dir)).map_err(|e| e.to_string())?
-        } else {
-            Vec::new()
-        };
-        answer(app_id, method, params, &book)
+        let path = contactstore::store_path(&shell.data_dir);
+        let load = || contactstore::load_checked(&path).map_err(|e| e.to_string());
+        match method {
+            "save" => {
+                let book = if access_of(app_id).check_write().is_ok() { load()? } else { Vec::new() };
+                let (reply, next) = apply_save(app_id, params, &book)?;
+                contactstore::save(&path, &next).map_err(|e| e.to_string())?;
+                Ok(reply)
+            }
+            "fetch" => {
+                let book = if reads(app_id) { load()? } else { Vec::new() };
+                answer(app_id, method, params, &book)
+            }
+            _ => answer(app_id, method, params, &[]),
+        }
     }
 }
 
@@ -238,6 +366,139 @@ mod tests {
         assert!(answer(id, "fetch", &keys(&["given_name"]), &book()).is_err());
         assert_eq!(change_by_user(id, Choice::All), Ok(Status::Authorized));
         assert!(answer(id, "fetch", &keys(&["given_name"]), &book()).is_ok());
+    }
+
+    fn obj(parts: &[(&str, Json)]) -> Json {
+        Json::Obj(parts.iter().map(|(k, v)| ((*k).to_string(), v.clone())).collect())
+    }
+
+    fn text(value: &str) -> Json {
+        Json::Str(value.into())
+    }
+
+    fn texts(values: &[&str]) -> Json {
+        Json::Arr(values.iter().map(|v| Json::Str((*v).into())).collect())
+    }
+
+    fn ids_of(book: &[Contact]) -> Vec<u64> {
+        book.iter().map(|c| c.id).collect()
+    }
+
+    #[test]
+    fn saving_needs_full_access() {
+        let add = obj(&[("add", Json::Arr(vec![obj(&[("given_name", text("Ada")), ("emails", texts(&["a@x"]))])]))]);
+        let undecided = "is.example.contacts-save-undecided";
+        assert!(apply_save(undecided, &add, &book()).is_err());
+        let refused = "is.example.contacts-save-denied";
+        answer_prompt(refused, Choice::Deny).unwrap();
+        assert!(apply_save(refused, &add, &book()).is_err());
+    }
+
+    #[test]
+    fn a_limited_grant_reads_but_cannot_save() {
+        let id = "is.example.contacts-save-limited";
+        answer_prompt(id, Choice::Picked([1u64].into_iter().collect())).unwrap();
+        let edit = obj(&[("update", Json::Arr(vec![obj(&[("id", Json::Num(1.0)), ("given_name", text("Ada"))])]))]);
+        assert!(apply_save(id, &edit, &book()).is_err());
+    }
+
+    #[test]
+    fn full_access_adds_a_contact_with_the_next_free_id() {
+        let id = "is.example.contacts-save-add";
+        answer_prompt(id, Choice::All).unwrap();
+        let add = obj(&[("add", Json::Arr(vec![obj(&[("given_name", text("Ada")), ("emails", texts(&["a@x"]))])]))]);
+        let (reply, next) = apply_save(id, &add, &book()).unwrap();
+        assert_eq!(reply.get("added"), Some(&Json::Arr(vec![Json::Num(4.0)])));
+        assert_eq!(ids_of(&next), vec![1, 2, 3, 4]);
+        assert_eq!(next[3].name, "Ada");
+        assert_eq!(next[3].email, "a@x");
+    }
+
+    #[test]
+    fn several_adds_get_ids_in_order_and_the_reply_lists_them() {
+        let id = "is.example.contacts-save-adds";
+        answer_prompt(id, Choice::All).unwrap();
+        let add = obj(&[(
+            "add",
+            Json::Arr(vec![obj(&[("given_name", text("Ada"))]), obj(&[("organization", text("Analytical Co"))])]),
+        )]);
+        let (reply, next) = apply_save(id, &add, &book()).unwrap();
+        assert_eq!(reply.get("added"), Some(&Json::Arr(vec![Json::Num(4.0), Json::Num(5.0)])));
+        assert_eq!(ids_of(&next), vec![1, 2, 3, 4, 5]);
+        assert_eq!(next[4].company, "Analytical Co");
+    }
+
+    #[test]
+    fn an_update_replaces_the_fields_of_a_known_contact_and_keeps_its_flags() {
+        let id = "is.example.contacts-save-update";
+        answer_prompt(id, Choice::All).unwrap();
+        let mut stored = book();
+        stored[1].favorite = true;
+        let edit = obj(&[(
+            "update",
+            Json::Arr(vec![obj(&[
+                ("id", Json::Num(2.0)),
+                ("given_name", text("Grace")),
+                ("family_name", text("Hopper")),
+                ("emails", texts(&["g@x"])),
+            ])]),
+        )]);
+        let (_, next) = apply_save(id, &edit, &stored).unwrap();
+        assert_eq!(next[1].name, "Grace Hopper");
+        assert_eq!(next[1].email, "g@x");
+        assert_eq!(next[1].phone, "");
+        assert!(next[1].favorite);
+    }
+
+    #[test]
+    fn an_update_of_an_unknown_or_unnamed_contact_errors() {
+        let id = "is.example.contacts-save-update-bad";
+        answer_prompt(id, Choice::All).unwrap();
+        let unknown = obj(&[("update", Json::Arr(vec![obj(&[("id", Json::Num(99.0)), ("given_name", text("No"))])]))]);
+        assert!(apply_save(id, &unknown, &book()).is_err());
+        let unnamed = obj(&[("update", Json::Arr(vec![obj(&[("given_name", text("No id"))])]))]);
+        assert!(apply_save(id, &unnamed, &book()).is_err());
+    }
+
+    #[test]
+    fn delete_removes_the_contact_and_an_unknown_id_errors() {
+        let id = "is.example.contacts-save-delete";
+        answer_prompt(id, Choice::All).unwrap();
+        let remove = obj(&[("delete", Json::Arr(vec![obj(&[("id", Json::Num(1.0))])]))]);
+        let (_, next) = apply_save(id, &remove, &book()).unwrap();
+        assert_eq!(ids_of(&next), vec![2, 3]);
+        let missing = obj(&[("delete", Json::Arr(vec![obj(&[("id", Json::Num(99.0))])]))]);
+        assert!(apply_save(id, &missing, &book()).is_err());
+    }
+
+    #[test]
+    fn a_save_applies_all_of_its_changes_or_none() {
+        let id = "is.example.contacts-save-atomic";
+        answer_prompt(id, Choice::All).unwrap();
+        let mixed = obj(&[
+            ("add", Json::Arr(vec![obj(&[("given_name", text("Ada"))])])),
+            ("delete", Json::Arr(vec![obj(&[("id", Json::Num(99.0))])])),
+        ]);
+        assert!(apply_save(id, &mixed, &book()).is_err());
+    }
+
+    #[test]
+    fn an_invalid_or_unknown_field_is_refused() {
+        let id = "is.example.contacts-save-invalid";
+        answer_prompt(id, Choice::All).unwrap();
+        let note_only = obj(&[("add", Json::Arr(vec![obj(&[("note", text("only a note"))])]))]);
+        assert!(apply_save(id, &note_only, &book()).is_err());
+        let unknown = obj(&[("add", Json::Arr(vec![obj(&[("nickname", text("Ada"))])]))]);
+        assert!(apply_save(id, &unknown, &book()).is_err());
+        let two_phones = obj(&[("add", Json::Arr(vec![obj(&[("given_name", text("Ada")), ("phones", texts(&["1", "2"]))])]))]);
+        assert!(apply_save(id, &two_phones, &book()).is_err());
+    }
+
+    #[test]
+    fn an_empty_save_is_refused() {
+        let id = "is.example.contacts-save-empty";
+        answer_prompt(id, Choice::All).unwrap();
+        assert!(apply_save(id, &obj(&[]), &book()).is_err());
     }
 
     #[test]

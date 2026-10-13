@@ -3,8 +3,8 @@
   "doc": "https://developer.apple.com/documentation/contacts",
   "macos_since": "10.11",
   "status": "partial",
-  "bifrost": "springboard/src/shell/contactstore.rs (local store), springboard/apps/contacts-desktop (Contacts app), springboard/src/shell/quicksearch.rs (search index), springboard/src/shell/share/mod.rs (vCard export); no SDK module",
-  "summary": "BifrOSt has a shell-internal local contact store (one flat file, fixed fields, atomic save) that the Contacts app, Search and Share use directly. Apps get no SDK contacts API, and no permission, change-history, group, container or contacts-changed mechanism exists.",
+  "bifrost": "springboard/src/shell/contactstore.rs (local store), springboard/src/shell/services/contacts.rs (contacts service: access, fetch, save), springboard/sdk/src/contacts.rs (SDK), springboard/apps/contacts-desktop (Contacts app), springboard/src/shell/quicksearch.rs (search index), springboard/src/shell/share/mod.rs (vCard export)",
+  "summary": "BifrOSt has a shell-internal local contact store (one flat file, fixed fields, atomic save) that the Contacts app, Search and Share use directly. Apps read and save contacts through the SDK contacts module and the contacts service, behind a per-app access grant. No groups, containers, change history or contacts-changed mechanism exists.",
   "rea_evidence": "ev_7d7f7f98ebfa979bea510b281e185ad1768b0842b8247a95e914096424ceeb15",
   "features": [
     {
@@ -12,14 +12,14 @@
       "apple": "CNContactStore",
       "bifrost": "springboard/src/shell/contactstore.rs (load, load_checked, save)",
       "status": "os",
-      "note": "Store is a shell module. The Contacts app reaches it by crate path (springboard/apps/contacts-desktop/src/contacts.rs:20), not through springboard/sdk/src/. Apps have no fetch or save call."
+      "note": "Store is a shell module. The Contacts app reaches it by crate path (springboard/apps/contacts-desktop/src/contacts.rs:20). Apps reach it only through the contacts service and springboard/sdk/src/contacts.rs (access, fetch, save)."
     },
     {
       "feature": "Authorization and privacy",
       "apple": "Accessing the contact store; NSContactsUsageDescription; contact access button and picker",
-      "bifrost": "springboard/ui/src/contact_access.rs",
+      "bifrost": "springboard/ui/src/contact_access.rs, springboard/src/shell/services/contacts.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No permission prompt or per-app grant. Any code in the shell reads the whole file."
+      "note": "Per-app access model (every contact, a picked set read-only, or none) is enforced by the contacts service. The access sheet and Settings row are not built yet, so a grant is set by the shell only. Grants reset on restart."
     },
     {
       "feature": "Contact data model (CNContact, CNMutableContact)",
@@ -45,9 +45,9 @@
     {
       "feature": "Save requests (CNSaveRequest)",
       "apple": "CNSaveRequest",
-      "bifrost": "springboard/src/shell/contactstore.rs:save; springboard/src/shell/fsutil.rs (write_atomic)",
+      "bifrost": "springboard/src/shell/services/contacts.rs (apply_save), springboard/sdk/src/contacts.rs (SaveRequest, save, decode_saved), springboard/src/shell/contactstore.rs:save, springboard/src/shell/fsutil.rs (write_atomic)",
       "status": "partial",
-      "note": "Whole-file atomic rewrite on each save. Invalid input is rejected and the old file is kept. No batch of add, update and delete operations and no per-record change."
+      "note": "Apps add, update and delete contacts in one save call through the contacts service and the SDK. Full access only: a limited grant is read-only. The whole call applies or none of it does, and the store is rewritten atomically only on success. No per-record change history."
     },
     {
       "feature": "Containers and groups",
@@ -114,7 +114,6 @@
     }
   ],
   "gaps": [
-    "No SDK contacts module: apps cannot fetch, search, create or save contacts (springboard/sdk/src/ has no contacts file).",
     "No permission model for contact access (NSContactsUsageDescription equivalent, per-app grant, contact access picker).",
     "No groups, containers or subgroups.",
     "No change history and no contacts-changed notification to apps.",
