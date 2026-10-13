@@ -89,4 +89,4 @@ This branch alone cannot be run on Midget: item 1 above is not done. Once a back
    blur, and the dock.
 5. Move a window and check on the stats that only its old and new places are redrawn (`bifrost-wm-frames.jsonl`,
    `damaged_px` well below the output size).
-6. Revert with `echo labwc | sudo tee /etc/bifrost/compositor` if anything is wrong.
+6. Revert: labwc is removed, so there is no compositor to switch back to. Remove `/etc/bifrost/renderer` (back to GLES) and rely on safe mode (`docs/window-server.md`).

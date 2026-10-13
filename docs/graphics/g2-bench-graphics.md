@@ -86,8 +86,7 @@ The session (history: ran labwc before its removal) runs `bifrost-wm`; formerly 
 4. Let the desktop idle for 30 s, then `python3 tools/graphics_bench.py --midget --no-record` for the idle numbers.
 5. Open and close a window and sweep the Dock magnification, then run `python3 tools/bench.py --midget --graphics --no-record`
    (add `--click X Y` once the test surface exists). Exit 3 lists each budget miss.
-6. Recheck that the labwc path still works (set `/etc/bifrost/compositor` back to labwc and run step 5 without
-   `BIFROST_WM_STATS`; the file then does not exist, which the helper reports with exit 2).
+6. (History: this step compared against labwc, which is removed.) Run step 5 without `BIFROST_WM_STATS` to see the helper report a missing stats file with exit 2.
 
 ## todo_left
 
