@@ -186,6 +186,9 @@ fn trigger(t: &Json) -> Result<Trigger, String> {
             if secs.fract() != 0.0 || secs < 1.0 || secs > MAX_INTERVAL_SECS {
                 return Err(format!("trigger.seconds must be a whole number from 1 to {}", MAX_INTERVAL_SECS as u32));
             }
+            if repeats && secs < 60.0 {
+                return Err("trigger.seconds must be at least 60 for a repeating trigger".into());
+            }
             Ok(Trigger::Interval { ms: secs as u32 * 1000, repeats })
         }
         Some("calendar") => {
@@ -249,6 +252,8 @@ mod tests {
         assert_eq!(trigger(&json(r#"{"kind":"interval","seconds":90,"repeats":true}"#)), Ok(Trigger::Interval { ms: 90_000, repeats: true }));
         assert_eq!(trigger(&json(r#"{"kind":"interval","seconds":5}"#)), Ok(Trigger::Interval { ms: 5000, repeats: false }));
         assert!(trigger(&json(r#"{"kind":"interval","seconds":0}"#)).is_err());
+        assert!(trigger(&json(r#"{"kind":"interval","seconds":30,"repeats":true}"#)).is_err(), "a repeating interval is at least 60 s");
+        assert!(trigger(&json(r#"{"kind":"interval","seconds":60,"repeats":true}"#)).is_ok());
         assert!(trigger(&json(r#"{"kind":"interval","seconds":1.5}"#)).is_err());
         assert!(trigger(&json(r#"{"kind":"interval"}"#)).is_err());
     }

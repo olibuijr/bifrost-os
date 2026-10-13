@@ -10,6 +10,10 @@ pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, 
 use crate::proto::ToShell;
 use crate::Ctx;
 
+pub use crate::usernotif_model::{
+    Attachment, AuthorizationOptions, AuthorizationStatus, AuthorizationStore, CalendarTrigger, DateComponents, Decision, IntervalTrigger, PresentationOptions, Setting, Settings, Sound,
+};
+
 /// The play and pause button of a media notification card: its frame, tint and visibility, and the play or pause glyph.
 /// [`MediaControl`](media::MediaControl) holds that state; the app starts or stops its playback on a tap and calls
 /// `media_play` or `media_pause`, and the glyph follows that state.

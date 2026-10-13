@@ -536,6 +536,24 @@ tapped (the banner and center rows do not carry the request id); delivered reque
 restart; no `UNNotificationSound`, attachments, `userInfo`, interruption levels, calendar or location triggers, repeating triggers,
 `willPresent` (foreground presentation options) or authorization prompt (`requestAuthorization`: the manifest permission is the grant).
 
+### User notifications model (sprint 9)
+
+`bifrost_app::usernotif_model` (re-exported from `usernotif`) is the pure, unit-tested model; the shell wire-up is still to do.
+
+- **Authorization**: `AuthorizationStore::request(app, AuthorizationOptions, Decision)` (`requestAuthorization(options:)`) moves
+  `AuthorizationStatus` from `NotDetermined` to `Authorized`, `Denied` or `Provisional` (no prompt) and never asks twice;
+  `settings(app)` is the `UNNotificationSettings` snapshot (`Setting` per alert, sound, badge, critical alert). `to_text`/`from_text` persist it.
+- **Triggers**: `CalendarTrigger { DateComponents, repeats }::next_trigger_date(after, offset)` matches year, month, day, weekday
+  (1 = Sunday), hour, minute and second (omitted = any, except second = 0), follows DST (a spring-gap time fires after the jump, a
+  repeated autumn hour the first time). `IntervalTrigger::new(seconds, repeats)` refuses 0 and a repeat under 60 s; the
+  `notification-schedule` service enforces the same minimum.
+- **willPresent**: `foreground_presentation(delegate options, settings)` with `PresentationOptions` (banner, list, sound, badge); no delegate shows nothing.
+- **Sound and attachments**: `Sound::{Default, DefaultCritical, DefaultCriticalVolume, Named}` (critical needs the critical-alert grant);
+  `Attachment::new(id, file name, size)` accepts image, audio and video types within 10, 5 and 50 MB.
+
+Gaps: none of this is on the wire yet (`NotifRequest` has no sound, attachments or calendar fields, and there is no delegate round trip
+or authorization prompt UI); remote push and service extensions are not built. Midget check pending.
+
 ## Share sheet (`NSSharingServicePicker`, roadmap item 5b)
 
 `bifrost_app::share` (SDK) over `ToShell::Share` (0x144) and `ToApp::ShareDone` (53); shell side `src/shell/sharing.rs`.

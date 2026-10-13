@@ -95,6 +95,7 @@ pub mod csv_writer;
 pub mod accounts;
 pub mod testing;
 pub mod usernotif;
+pub mod usernotif_model;
 pub mod contacts;
 pub mod notification_schedule;
 pub mod messaging;
