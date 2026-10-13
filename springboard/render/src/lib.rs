@@ -32,7 +32,6 @@ pub mod texture;
 pub mod colorfx;
 pub mod colorcube;
 pub mod gradient;
-pub mod cg;
 pub mod colorspace;
 pub mod icc;
 pub mod pixel_layout;

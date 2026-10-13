@@ -23,7 +23,7 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
 fn probe_dib(dib: &[u8], ico: bool) -> Option<Properties> {
     let hs = le32(dib, 0)? as usize;
     let (w, h, bpp, xppm, yppm) = if hs == 12 {
-        (le16(dib, 4)? as i64, le16(dib, 6)? as i64, le16(dib, 10)?, 0, 0)
+        (le16(dib, 4)? as i64, le16(dib, 6)? as i64, le16(dib, 10)?, 0.0, 0.0)
     } else if hs >= 40 {
         (le32(dib, 4)? as i32 as i64, le32(dib, 8)? as i32 as i64, le16(dib, 14)?, le32(dib, 24)? as i32 as f64, le32(dib, 28)? as i32 as f64)
     } else {

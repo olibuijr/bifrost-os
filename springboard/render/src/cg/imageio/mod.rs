@@ -595,7 +595,7 @@ impl ImageDestination {
                 let frames: Vec<gif::GifFrame> = items.iter().filter(|i| i.1 == *w && i.2 == *h).map(|i| gif::GifFrame { rgba: &i.0, delay_ms: i.3.delay_ms.unwrap_or(100) }).collect();
                 gif::encode(*w, *h, &frames, Some(self.loop_count))
             }
-            Format::Bmp => bmp::encode(*w, *h, first_px, fo.dpi),
+            Format::Bmp => Some(bmp::encode(*w, *h, first_px, fo.dpi)),
             Format::Tiff => {
                 let tiffs: Vec<Dict> = items
                     .iter()
