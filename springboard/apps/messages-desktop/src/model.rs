@@ -15,6 +15,80 @@ pub struct Message {
     pub sender: String,
     pub ts: u64,
     pub body: Body,
+    /// The message this one answers, when it is a reply.
+    pub reply_to: Option<String>,
+    /// True once the sender replaced the words.
+    pub edited: bool,
+    /// The reactions to this message, one entry per emoji in the order they first appeared.
+    pub reactions: Vec<Reaction>,
+}
+
+/// The people who answered a message with one emoji. Each entry keeps the id of the reaction event, which taking the
+/// reaction back removes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Reaction {
+    pub key: String,
+    pub users: Vec<(String, String)>,
+}
+
+impl Message {
+    /// The id of `user`'s reaction with `key` on this message, when there is one.
+    pub fn reaction_of(&self, user: &str, key: &str) -> Option<&str> {
+        let reaction = self.reactions.iter().find(|r| r.key == key)?;
+        reaction.users.iter().find(|(u, _)| u == user).map(|(_, id)| id.as_str())
+    }
+
+    fn add_reaction(&mut self, key: &str, user: &str, id: &str) {
+        let index = match self.reactions.iter().position(|r| r.key == key) {
+            Some(index) => index,
+            None => {
+                self.reactions.push(Reaction { key: key.to_string(), users: Vec::new() });
+                self.reactions.len() - 1
+            }
+        };
+        let users = &mut self.reactions[index].users;
+        if !users.iter().any(|(_, existing)| existing == id) {
+            users.push((user.to_string(), id.to_string()));
+        }
+    }
+
+    /// Drops the reaction event `id`. True when this message had it.
+    fn remove_reaction(&mut self, id: &str) -> bool {
+        let mut found = false;
+        for reaction in &mut self.reactions {
+            let before = reaction.users.len();
+            reaction.users.retain(|(_, existing)| existing != id);
+            found |= reaction.users.len() != before;
+        }
+        self.reactions.retain(|r| !r.users.is_empty());
+        found
+    }
+}
+
+/// A person in a room.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Member {
+    pub user_id: String,
+    pub name: Option<String>,
+    /// Invited and not yet joined.
+    pub invited: bool,
+}
+
+impl Member {
+    /// The name without the invitation note.
+    fn label_plain(&self) -> String {
+        self.name.clone().unwrap_or_else(|| protocol::display_name(&self.user_id).to_string())
+    }
+
+    /// The name to list: the display name, or the local part of the user id.
+    pub fn label(&self) -> String {
+        let name = self.name.clone().unwrap_or_else(|| protocol::display_name(&self.user_id).to_string());
+        if self.invited {
+            format!("{name} (invited)")
+        } else {
+            name
+        }
+    }
 }
 
 /// A joined room.
@@ -32,11 +106,45 @@ pub struct Room {
     pub last_ts: u64,
     /// The other people typing in the room now, by user id.
     pub typing: Vec<String>,
+    /// Who is in the room (joined or invited), as the syncs reported it.
+    pub members: Vec<Member>,
 }
 
 impl Room {
     fn named(id: &str) -> Room {
         Room { id: id.to_string(), name: id.to_string(), ..Room::default() }
+    }
+
+    /// The name the list and the header show. A room nobody named is called after the other people in it (a direct
+    /// conversation shows the person); until the members are known it keeps its id.
+    pub fn title(&self, me: &str) -> String {
+        if self.name != self.id {
+            return self.name.clone();
+        }
+        let others: Vec<String> = self.members.iter().filter(|m| m.user_id != me).map(Member::label_plain).collect();
+        if others.is_empty() {
+            self.name.clone()
+        } else {
+            others.join(", ")
+        }
+    }
+
+    /// The sender and one-line preview of the message `id`, for the quoted line above a reply.
+    pub fn quote(&self, id: &str) -> Option<(String, String)> {
+        let m = self.timeline.iter().find(|m| m.id == id)?;
+        Some((protocol::display_name(&m.sender).to_string(), preview(&m.body)))
+    }
+
+    /// True when `query` (already lower case) appears in the room's title or in a loaded message.
+    pub fn matches(&self, me: &str, query: &str) -> bool {
+        if query.is_empty() || self.title(me).to_lowercase().contains(query) {
+            return true;
+        }
+        self.timeline.iter().any(|m| match &m.body {
+            Body::Text(t) | Body::Notice(t) | Body::Emote(t) => t.to_lowercase().contains(query),
+            Body::Image { name, .. } => name.to_lowercase().contains(query),
+            _ => false,
+        })
     }
 
     /// The one-line preview of the newest message, for the room list.
@@ -108,6 +216,157 @@ impl SignIn {
     }
 }
 
+/// The reactions the context menu offers: the menu label and the emoji sent.
+pub const REACTIONS: [(&str, &str); 6] = [
+    ("Love", "\u{2764}\u{FE0F}"),
+    ("Like", "\u{1F44D}"),
+    ("Dislike", "\u{1F44E}"),
+    ("Haha", "\u{1F602}"),
+    ("Emphasize", "\u{203C}\u{FE0F}"),
+    ("Question", "\u{2753}"),
+];
+
+/// The emoji the composer's picker offers, in rows of [`EMOJI_COLUMNS`].
+pub const EMOJI: [&str; 40] = [
+    "\u{1F600}", "\u{1F603}", "\u{1F604}", "\u{1F601}", "\u{1F606}", "\u{1F605}", "\u{1F602}", "\u{1F642}",
+    "\u{1F609}", "\u{1F60A}", "\u{1F60D}", "\u{1F618}", "\u{1F61C}", "\u{1F914}", "\u{1F610}", "\u{1F62E}",
+    "\u{1F622}", "\u{1F62D}", "\u{1F620}", "\u{1F631}", "\u{1F634}", "\u{1F60E}", "\u{1F973}", "\u{1F64F}",
+    "\u{1F44D}", "\u{1F44E}", "\u{1F44F}", "\u{1F64C}", "\u{1F44B}", "\u{1F4AA}", "\u{2764}\u{FE0F}", "\u{1F494}",
+    "\u{1F525}", "\u{2728}", "\u{1F389}", "\u{1F381}", "\u{2705}", "\u{274C}", "\u{2753}", "\u{203C}\u{FE0F}",
+];
+/// How many emoji a row of the picker holds.
+pub const EMOJI_COLUMNS: usize = 8;
+
+/// The per-conversation choices the user makes: pinned, alerts hidden, and marked as unread. Kept as room ids and saved
+/// in the app's preferences as one id per line.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RoomPrefs {
+    pub pinned: Vec<String>,
+    pub muted: Vec<String>,
+    pub unread_marks: Vec<String>,
+}
+
+impl RoomPrefs {
+    /// Reads a saved list: one room id per line, blank lines ignored.
+    pub fn decode(text: &str) -> Vec<String> {
+        text.lines().map(str::trim).filter(|l| !l.is_empty()).map(str::to_string).collect()
+    }
+
+    /// The text a list is saved as.
+    pub fn encode(list: &[String]) -> String {
+        list.join("\n")
+    }
+}
+
+/// Toggles `id` in `list`. True when it is in the list afterwards.
+fn toggle(list: &mut Vec<String>, id: &str) -> bool {
+    match list.iter().position(|x| x == id) {
+        Some(i) => {
+            list.remove(i);
+            false
+        }
+        None => {
+            list.push(id.to_string());
+            true
+        }
+    }
+}
+
+/// What the composer's text becomes when it is sent.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Compose {
+    /// Answer the message with this id.
+    Reply(String),
+    /// Replace the words of the message with this id.
+    Edit(String),
+}
+
+/// What to send for the composer: a plain text, a reply or an edit.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Outgoing {
+    Text(String),
+    Reply { text: String, to: String },
+    Edit { text: String, target: String },
+}
+
+/// What a one-line sheet asks for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PromptKind {
+    /// The user id of the person to message.
+    NewMessage,
+    /// A new name for the room with this id.
+    Rename(String),
+}
+
+/// A sheet with one text field: New Message, or the room name in Conversation Details.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Prompt {
+    pub kind: PromptKind,
+    pub value: String,
+    pub error: String,
+    pub busy: bool,
+}
+
+impl Prompt {
+    pub fn new_message() -> Prompt {
+        Prompt { kind: PromptKind::NewMessage, value: "@".into(), error: String::new(), busy: false }
+    }
+
+    pub fn rename(room: &str, current: &str) -> Prompt {
+        Prompt { kind: PromptKind::Rename(room.to_string()), value: current.to_string(), error: String::new(), busy: false }
+    }
+
+    pub fn title(&self) -> &'static str {
+        match self.kind {
+            PromptKind::NewMessage => "New Message",
+            PromptKind::Rename(_) => "Rename Conversation",
+        }
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self.kind {
+            PromptKind::NewMessage => "To (a Matrix user id)",
+            PromptKind::Rename(_) => "Name",
+        }
+    }
+
+    pub fn ok_label(&self) -> &'static str {
+        match self.kind {
+            PromptKind::NewMessage => "Start",
+            PromptKind::Rename(_) => "Rename",
+        }
+    }
+
+    /// The checked value: a user id for New Message, a non-empty name for Rename.
+    pub fn checked(&self) -> Result<String, String> {
+        match self.kind {
+            PromptKind::NewMessage => protocol::checked_user_id(&self.value),
+            PromptKind::Rename(_) => {
+                let name = self.value.trim();
+                if name.is_empty() {
+                    Err("Enter a name".into())
+                } else {
+                    Ok(name.to_string())
+                }
+            }
+        }
+    }
+}
+
+/// A panel over the window. The sign-in sheet is separate because it blocks everything.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum Overlay {
+    #[default]
+    None,
+    Prompt(Prompt),
+    /// Conversation Details: the name and the members of the room on screen.
+    Details,
+    /// Settings: the account and Sign Out.
+    Settings,
+    /// The emoji picker. With a message id, a choice reacts to that message; without, it goes into the composer.
+    Emoji(Option<String>),
+}
+
 /// The app's state.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Messages {
@@ -123,6 +382,13 @@ pub struct Messages {
     pub sign_in: Option<SignIn>,
     /// True once the first sync has been applied. Only messages after that are notified.
     pub primed: bool,
+    pub prefs: RoomPrefs,
+    /// The search field's text, and whether it has the keyboard (otherwise the composer does).
+    pub search: String,
+    pub search_focus: bool,
+    /// Set while the composer holds a reply or an edit.
+    pub compose: Option<Compose>,
+    pub overlay: Overlay,
 }
 
 impl Messages {
@@ -135,9 +401,147 @@ impl Messages {
         self.rooms.iter().find(|r| r.id == id)
     }
 
-    /// The unread notifications of every room, for the dock badge.
+    /// The unread notifications of every room, for the dock badge. A conversation marked as unread counts as one when
+    /// the server counts none; one with alerts hidden is not counted.
     pub fn total_unread(&self) -> u64 {
-        self.rooms.iter().map(|r| r.unread).sum()
+        self.rooms
+            .iter()
+            .filter(|r| !self.is_muted(&r.id))
+            .map(|r| if r.unread == 0 && self.is_marked_unread(&r.id) { 1 } else { r.unread })
+            .sum()
+    }
+
+    pub fn is_pinned(&self, id: &str) -> bool {
+        self.prefs.pinned.iter().any(|x| x == id)
+    }
+
+    pub fn is_muted(&self, id: &str) -> bool {
+        self.prefs.muted.iter().any(|x| x == id)
+    }
+
+    pub fn is_marked_unread(&self, id: &str) -> bool {
+        self.prefs.unread_marks.iter().any(|x| x == id)
+    }
+
+    /// Pins or unpins a conversation. True when it is pinned afterwards.
+    pub fn toggle_pin(&mut self, id: &str) -> bool {
+        toggle(&mut self.prefs.pinned, id)
+    }
+
+    /// Hides or shows the alerts of a conversation. True when they are hidden afterwards.
+    pub fn toggle_mute(&mut self, id: &str) -> bool {
+        toggle(&mut self.prefs.muted, id)
+    }
+
+    /// Marks a conversation as unread, or takes the mark off. Marking the one on screen closes it, so the mark is not
+    /// cleared again at once.
+    pub fn toggle_unread_mark(&mut self, id: &str) -> bool {
+        let marked = toggle(&mut self.prefs.unread_marks, id);
+        if marked && self.selected.as_deref() == Some(id) {
+            self.selected = None;
+            self.compose = None;
+        }
+        marked
+    }
+
+    /// The conversations the list shows: those matching the search, pinned ones first, the rest in their order.
+    pub fn visible_rooms(&self) -> Vec<&Room> {
+        let query = self.search.trim().to_lowercase();
+        let mut rooms: Vec<&Room> = self.rooms.iter().filter(|r| r.matches(&self.user_id, &query)).collect();
+        rooms.sort_by_key(|r| !self.is_pinned(&r.id));
+        rooms
+    }
+
+    /// Forgets a conversation that was left or deleted.
+    pub fn remove_room(&mut self, id: &str) {
+        self.rooms.retain(|r| r.id != id);
+        self.prefs.pinned.retain(|x| x != id);
+        self.prefs.muted.retain(|x| x != id);
+        self.prefs.unread_marks.retain(|x| x != id);
+        if self.selected.as_deref() == Some(id) {
+            self.selected = None;
+            self.compose = None;
+            self.overlay = Overlay::None;
+        }
+    }
+
+    /// Puts a conversation that was just made on screen, adding it to the list until a sync describes it.
+    pub fn show_new_room(&mut self, id: &str) {
+        self.room_index(id);
+        self.selected = Some(id.to_string());
+        self.compose = None;
+    }
+
+    /// Signs out locally: forgets the account, every conversation and everything typed.
+    pub fn sign_out(&mut self) {
+        let prefs = std::mem::take(&mut self.prefs);
+        *self = Messages { prefs, ..Messages::default() };
+    }
+
+    /// Starts a reply to the message `id` of the room on screen. False when there is no such message.
+    pub fn begin_reply(&mut self, id: &str) -> bool {
+        if !self.selected_room().is_some_and(|r| r.timeline.iter().any(|m| m.id == id)) {
+            return false;
+        }
+        self.compose = Some(Compose::Reply(id.to_string()));
+        true
+    }
+
+    /// Starts editing the user's own text message `id`: its words go into the composer. False for anyone else's message
+    /// or one that is not text.
+    pub fn begin_edit(&mut self, id: &str) -> bool {
+        let me = self.user_id.clone();
+        let Some(room) = self.selected_room() else { return false };
+        let Some(message) = room.timeline.iter().find(|m| m.id == id) else { return false };
+        let Body::Text(words) = &message.body else { return false };
+        if message.sender != me {
+            return false;
+        }
+        let words = words.clone();
+        self.composer = words;
+        self.compose = Some(Compose::Edit(id.to_string()));
+        true
+    }
+
+    /// Drops a reply or an edit in progress; an edit also empties the composer.
+    pub fn cancel_compose(&mut self) {
+        if matches!(self.compose, Some(Compose::Edit(_))) {
+            self.composer.clear();
+        }
+        self.compose = None;
+    }
+
+    /// The line above the composer while it holds a reply or an edit.
+    pub fn banner(&self) -> Option<String> {
+        match self.compose.as_ref()? {
+            Compose::Reply(id) => {
+                let (who, what) = self.selected_room()?.quote(id)?;
+                Some(format!("Replying to {who}: {what}"))
+            }
+            Compose::Edit(_) => Some("Editing message".into()),
+        }
+    }
+
+    /// What the composer sends, with the composer and the reply or edit state cleared. `None` when there is nothing to
+    /// send, or an edit changes nothing.
+    pub fn take_outgoing(&mut self) -> Option<Outgoing> {
+        let compose = self.compose.take();
+        let text = self.take_composer()?;
+        match compose {
+            None => Some(Outgoing::Text(text)),
+            Some(Compose::Reply(to)) => Some(Outgoing::Reply { text, to }),
+            Some(Compose::Edit(target)) => {
+                let same = self
+                    .selected_room()
+                    .and_then(|r| r.timeline.iter().find(|m| m.id == target))
+                    .is_some_and(|m| m.body == Body::Text(text.clone()));
+                if same {
+                    None
+                } else {
+                    Some(Outgoing::Edit { text, target })
+                }
+            }
+        }
     }
 
     /// Applies one sync answer and returns the notifications for messages that just arrived from other people.
@@ -147,7 +551,8 @@ impl Messages {
         for update in &sync.rooms {
             let index = self.room_index(&update.id);
             let viewing = self.selected.as_deref() == Some(update.id.as_str());
-            apply_room(&mut self.rooms[index], update, &self.user_id, self.primed, viewing, &mut notices);
+            let alerts = self.primed && !self.prefs.muted.iter().any(|x| *x == update.id);
+            apply_room(&mut self.rooms[index], update, &self.user_id, alerts, viewing, &mut notices);
         }
         self.primed = true;
         self.rooms.sort_by(|a, b| b.last_ts.cmp(&a.last_ts).then_with(|| a.name.cmp(&b.name)));
@@ -157,7 +562,11 @@ impl Messages {
     /// Puts `id` on screen. The room's unread counts clear here; the returned value is the read marker to send, see
     /// [`Messages::take_read_marker`].
     pub fn select(&mut self, id: &str) -> Option<(String, String)> {
+        if self.selected.as_deref() != Some(id) {
+            self.compose = None;
+        }
         self.selected = Some(id.to_string());
+        self.prefs.unread_marks.retain(|x| x != id);
         self.take_read_marker()
     }
 
@@ -216,8 +625,17 @@ fn apply_room(room: &mut Room, update: &RoomUpdate, me: &str, primed: bool, view
             notices.push(notice(&room.name, event));
         }
         room.last_ts = room.last_ts.max(event.ts);
-        room.timeline.push(Message { id: event.id.clone(), sender: event.sender.clone(), ts: event.ts, body: event.body.clone() });
+        room.timeline.push(Message {
+            id: event.id.clone(),
+            sender: event.sender.clone(),
+            ts: event.ts,
+            body: event.body.clone(),
+            reply_to: event.reply_to.clone(),
+            edited: false,
+            reactions: Vec::new(),
+        });
     }
+    apply_changes(room, update);
     if room.timeline.len() > TIMELINE_MAX {
         let extra = room.timeline.len() - TIMELINE_MAX;
         room.timeline.drain(..extra);
@@ -225,6 +643,46 @@ fn apply_room(room: &mut Room, update: &RoomUpdate, me: &str, primed: bool, view
     for receipt in &update.receipts {
         if receipt.user_id == me {
             room.read_up_to = Some(receipt.event_id.clone());
+        }
+    }
+}
+
+/// Folds the edits, reactions, removals and membership changes of a room update into the room.
+fn apply_changes(room: &mut Room, update: &RoomUpdate) {
+    for edit in &update.edits {
+        if let Some(m) = room.timeline.iter_mut().find(|m| m.id == edit.target && m.sender == edit.sender) {
+            if m.body != Body::Redacted {
+                m.body = edit.body.clone();
+                m.edited = true;
+            }
+        }
+    }
+    for reaction in &update.reactions {
+        if let Some(m) = room.timeline.iter_mut().find(|m| m.id == reaction.target) {
+            m.add_reaction(&reaction.key, &reaction.sender, &reaction.id);
+        }
+    }
+    for removed in &update.redactions {
+        if let Some(m) = room.timeline.iter_mut().find(|m| m.id == *removed) {
+            m.body = Body::Redacted;
+            m.reactions.clear();
+            m.edited = false;
+        } else {
+            for m in &mut room.timeline {
+                if m.remove_reaction(removed) {
+                    break;
+                }
+            }
+        }
+    }
+    for change in &update.members {
+        room.members.retain(|m| m.user_id != change.user_id);
+        if change.membership == "join" || change.membership == "invite" {
+            room.members.push(Member {
+                user_id: change.user_id.clone(),
+                name: change.name.clone(),
+                invited: change.membership == "invite",
+            });
         }
     }
 }
@@ -314,7 +772,7 @@ mod tests {
     use super::*;
 
     fn ev(id: &str, sender: &str, ts: u64, body: Body) -> Event {
-        Event { id: id.into(), sender: sender.into(), ts, body }
+        Event { id: id.into(), sender: sender.into(), ts, body, reply_to: None }
     }
 
     fn update(id: &str, events: Vec<Event>, unread: u64) -> RoomUpdate {
@@ -527,5 +985,256 @@ mod tests {
         let mut m = signed_in();
         m.apply_sync(&sync(vec![update("!a:x", vec![], 2), update("!b:x", vec![], 3)]));
         assert_eq!(m.total_unread(), 5);
+    }
+
+    fn two_rooms() -> Messages {
+        let mut m = signed_in();
+        m.apply_sync(&sync(vec![
+            update("!a:x", vec![ev("$1", "@bob:x", 10, Body::Text("lunch plans".into()))], 0),
+            update("!b:x", vec![ev("$2", "@me:x", 20, Body::Text("mine".into()))], 0),
+        ]));
+        m
+    }
+
+    #[test]
+    fn pinned_conversations_sort_first_and_keep_their_order() {
+        let mut m = two_rooms();
+        assert_eq!(m.visible_rooms().iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["!b:x", "!a:x"]);
+        assert!(m.toggle_pin("!a:x"));
+        assert_eq!(m.visible_rooms()[0].id, "!a:x");
+        assert!(!m.toggle_pin("!a:x"), "a second toggle unpins");
+        assert_eq!(m.visible_rooms()[0].id, "!b:x");
+    }
+
+    #[test]
+    fn the_search_matches_titles_and_loaded_messages() {
+        let mut m = two_rooms();
+        m.rooms[0].name = "Family".into();
+        m.search = "FAMILY".into();
+        assert_eq!(m.visible_rooms().len(), 1);
+        m.search = "lunch".into();
+        assert_eq!(m.visible_rooms()[0].id, "!a:x", "a word in a loaded message finds its conversation");
+        m.search = "nothing like this".into();
+        assert!(m.visible_rooms().is_empty());
+        m.search = "  ".into();
+        assert_eq!(m.visible_rooms().len(), 2, "blank search shows all");
+    }
+
+    #[test]
+    fn hidden_alerts_skip_notifications_and_the_badge() {
+        let mut m = signed_in();
+        m.apply_sync(&sync(vec![update("!a:x", vec![], 0)]));
+        m.toggle_mute("!a:x");
+        let next = sync(vec![update("!a:x", vec![ev("$2", "@bob:x", 20, Body::Text("a".into()))], 3)]);
+        assert!(m.apply_sync(&next).is_empty());
+        assert_eq!(m.total_unread(), 0, "a muted conversation is not in the badge");
+        assert_eq!(m.rooms[0].unread, 3, "but its own count still shows");
+        assert!(!m.toggle_mute("!a:x"));
+        assert_eq!(m.total_unread(), 3);
+    }
+
+    #[test]
+    fn marking_as_unread_counts_once_and_opening_clears_it() {
+        let mut m = two_rooms();
+        assert!(m.toggle_unread_mark("!a:x"));
+        assert_eq!(m.total_unread(), 1);
+        m.select("!a:x");
+        assert!(!m.is_marked_unread("!a:x"));
+        assert_eq!(m.total_unread(), 0);
+    }
+
+    #[test]
+    fn marking_the_open_conversation_closes_it() {
+        let mut m = two_rooms();
+        m.select("!a:x");
+        m.begin_reply("$1");
+        assert!(m.toggle_unread_mark("!a:x"));
+        assert_eq!(m.selected, None);
+        assert_eq!(m.compose, None);
+        assert!(!m.toggle_unread_mark("!a:x"), "a second toggle takes the mark off");
+    }
+
+    #[test]
+    fn preferences_round_trip_as_lines() {
+        let list = vec!["!a:x".to_string(), "!b:x".to_string()];
+        assert_eq!(RoomPrefs::decode(&RoomPrefs::encode(&list)), list);
+        assert!(RoomPrefs::decode("\n  \n").is_empty());
+    }
+
+    #[test]
+    fn a_removed_conversation_leaves_no_trace() {
+        let mut m = two_rooms();
+        m.select("!a:x");
+        m.toggle_pin("!a:x");
+        m.toggle_mute("!a:x");
+        m.overlay = Overlay::Details;
+        m.remove_room("!a:x");
+        assert_eq!(m.rooms.len(), 1);
+        assert_eq!(m.selected, None);
+        assert_eq!(m.overlay, Overlay::None);
+        assert!(!m.is_pinned("!a:x") && !m.is_muted("!a:x"));
+    }
+
+    #[test]
+    fn a_new_conversation_is_listed_and_selected_before_a_sync_names_it() {
+        let mut m = two_rooms();
+        m.show_new_room("!new:x");
+        assert_eq!(m.selected.as_deref(), Some("!new:x"));
+        assert!(m.rooms.iter().any(|r| r.id == "!new:x"));
+    }
+
+    #[test]
+    fn an_unnamed_room_is_called_after_the_others_in_it() {
+        let mut m = signed_in();
+        let mut u = update("!d:x", vec![], 0);
+        u.members = vec![
+            protocol::MemberUpdate { user_id: "@me:x".into(), name: None, membership: "join".into() },
+            protocol::MemberUpdate { user_id: "@ann:x".into(), name: Some("Ann".into()), membership: "invite".into() },
+        ];
+        m.apply_sync(&sync(vec![u]));
+        assert_eq!(m.rooms[0].title("@me:x"), "Ann");
+        assert_eq!(m.rooms[0].members[1].label(), "Ann (invited)");
+        m.rooms[0].name = "Trip".into();
+        assert_eq!(m.rooms[0].title("@me:x"), "Trip", "a name wins");
+    }
+
+    #[test]
+    fn a_leaving_member_is_dropped() {
+        let mut m = signed_in();
+        let mut u = update("!d:x", vec![], 0);
+        u.members = vec![protocol::MemberUpdate { user_id: "@ann:x".into(), name: None, membership: "join".into() }];
+        m.apply_sync(&sync(vec![u]));
+        let mut gone = update("!d:x", vec![], 0);
+        gone.members = vec![protocol::MemberUpdate { user_id: "@ann:x".into(), name: None, membership: "leave".into() }];
+        m.apply_sync(&sync(vec![gone]));
+        assert!(m.rooms[0].members.is_empty());
+    }
+
+    #[test]
+    fn an_edit_replaces_the_words_of_the_senders_own_message_only() {
+        let mut m = two_rooms();
+        let mut u = update("!a:x", vec![], 0);
+        u.edits = vec![
+            protocol::Edit { target: "$1".into(), sender: "@eve:x".into(), body: Body::Text("forged".into()) },
+            protocol::Edit { target: "$1".into(), sender: "@bob:x".into(), body: Body::Text("dinner plans".into()) },
+        ];
+        m.apply_sync(&sync(vec![u]));
+        let message = &m.rooms.iter().find(|r| r.id == "!a:x").unwrap().timeline[0];
+        assert_eq!(message.body, Body::Text("dinner plans".into()));
+        assert!(message.edited);
+    }
+
+    #[test]
+    fn reactions_group_by_emoji_and_a_removal_takes_one_back() {
+        let mut m = two_rooms();
+        let react = |id: &str, who: &str, key: &str| protocol::Annotation { id: id.into(), target: "$1".into(), key: key.into(), sender: who.into() };
+        let mut u = update("!a:x", vec![], 0);
+        u.reactions = vec![react("$r1", "@me:x", "+1"), react("$r2", "@bob:x", "+1"), react("$r3", "@bob:x", "ok"), react("$r1", "@me:x", "+1")];
+        m.apply_sync(&sync(vec![u]));
+        let message = m.rooms.iter().find(|r| r.id == "!a:x").unwrap().timeline[0].clone();
+        assert_eq!(message.reactions.len(), 2);
+        assert_eq!(message.reactions[0].users.len(), 2, "a repeated event id counts once");
+        assert_eq!(message.reaction_of("@me:x", "+1"), Some("$r1"));
+        assert_eq!(message.reaction_of("@me:x", "ok"), None);
+        let mut back = update("!a:x", vec![], 0);
+        back.redactions = vec!["$r3".into()];
+        m.apply_sync(&sync(vec![back]));
+        let message = &m.rooms.iter().find(|r| r.id == "!a:x").unwrap().timeline[0];
+        assert_eq!(message.reactions.len(), 1, "an emptied reaction disappears");
+    }
+
+    #[test]
+    fn removing_a_message_blanks_it_and_its_reactions() {
+        let mut m = two_rooms();
+        let mut u = update("!a:x", vec![], 0);
+        u.reactions = vec![protocol::Annotation { id: "$r".into(), target: "$1".into(), key: "+1".into(), sender: "@me:x".into() }];
+        m.apply_sync(&sync(vec![u]));
+        let mut gone = update("!a:x", vec![], 0);
+        gone.redactions = vec!["$1".into()];
+        m.apply_sync(&sync(vec![gone]));
+        let message = &m.rooms.iter().find(|r| r.id == "!a:x").unwrap().timeline[0];
+        assert_eq!(message.body, Body::Redacted);
+        assert!(message.reactions.is_empty());
+    }
+
+    #[test]
+    fn a_reply_quotes_its_target_and_sends_with_the_relation() {
+        let mut m = two_rooms();
+        m.select("!a:x");
+        assert!(!m.begin_reply("$nope"));
+        assert!(m.begin_reply("$1"));
+        assert_eq!(m.banner().as_deref(), Some("Replying to bob: lunch plans"));
+        m.composer = " sure ".into();
+        assert_eq!(m.take_outgoing(), Some(Outgoing::Reply { text: "sure".into(), to: "$1".into() }));
+        assert_eq!(m.compose, None);
+        assert_eq!(m.banner(), None);
+    }
+
+    #[test]
+    fn only_my_own_text_messages_can_be_edited() {
+        let mut m = two_rooms();
+        m.select("!a:x");
+        assert!(!m.begin_edit("$1"), "bob's message");
+        m.select("!b:x");
+        assert!(m.begin_edit("$2"));
+        assert_eq!(m.composer, "mine", "the words come back into the composer");
+        assert_eq!(m.banner().as_deref(), Some("Editing message"));
+        m.composer = "mine, edited".into();
+        assert_eq!(m.take_outgoing(), Some(Outgoing::Edit { text: "mine, edited".into(), target: "$2".into() }));
+    }
+
+    #[test]
+    fn an_edit_that_changes_nothing_is_not_sent_and_cancel_empties_the_composer() {
+        let mut m = two_rooms();
+        m.select("!b:x");
+        m.begin_edit("$2");
+        assert_eq!(m.take_outgoing(), None);
+        m.begin_edit("$2");
+        m.cancel_compose();
+        assert!(m.composer.is_empty());
+        assert_eq!(m.compose, None);
+        m.begin_reply("$2");
+        m.composer = "draft".into();
+        m.cancel_compose();
+        assert_eq!(m.composer, "draft", "cancelling a reply keeps what was typed");
+    }
+
+    #[test]
+    fn plain_text_sends_as_text() {
+        let mut m = two_rooms();
+        m.composer = "hi".into();
+        assert_eq!(m.take_outgoing(), Some(Outgoing::Text("hi".into())));
+        assert_eq!(m.take_outgoing(), None);
+    }
+
+    #[test]
+    fn the_sheet_checks_what_it_asks_for() {
+        let mut p = Prompt::new_message();
+        assert!(p.checked().is_err(), "a bare @ is not a user id");
+        p.value = "@bob:example.org".into();
+        assert_eq!(p.checked(), Ok("@bob:example.org".into()));
+        let mut r = Prompt::rename("!a:x", "Old");
+        r.value = "  ".into();
+        assert_eq!(r.checked(), Err("Enter a name".into()));
+        r.value = " New ".into();
+        assert_eq!(r.checked(), Ok("New".into()));
+        assert_eq!((p.title(), r.title()), ("New Message", "Rename Conversation"));
+    }
+
+    #[test]
+    fn signing_out_keeps_only_the_preferences() {
+        let mut m = two_rooms();
+        m.toggle_pin("!a:x");
+        m.composer = "x".into();
+        m.sign_out();
+        assert!(!m.signed_in());
+        assert!(m.rooms.is_empty() && m.composer.is_empty());
+        assert!(m.is_pinned("!a:x"));
+    }
+
+    #[test]
+    fn the_emoji_picker_fills_whole_rows() {
+        assert_eq!(EMOJI.len() % EMOJI_COLUMNS, 0);
+        assert_eq!(REACTIONS.len(), 6);
     }
 }

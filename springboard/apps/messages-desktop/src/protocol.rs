@@ -43,6 +43,40 @@ pub struct RoomUpdate {
     pub receipts: Vec<Receipt>,
     /// Who is typing in the room, when the sync carried a typing update (`None` when it did not, so the last one stands).
     pub typing: Option<Vec<String>>,
+    /// Edits of earlier messages (`m.replace`): the new words of a message.
+    pub edits: Vec<Edit>,
+    /// Reactions (`m.annotation`) sent to messages.
+    pub reactions: Vec<Annotation>,
+    /// Event ids that were removed: a message or a reaction.
+    pub redactions: Vec<String>,
+    /// Membership changes (joins, invitations, leaves, new display names).
+    pub members: Vec<MemberUpdate>,
+}
+
+/// A replacement text for a message: `target` now reads `body`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Edit {
+    pub target: String,
+    pub sender: String,
+    pub body: Body,
+}
+
+/// A reaction: `sender` answered the message `target` with `key` (an emoji). `id` is the reaction's own event id, which
+/// removing the reaction redacts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Annotation {
+    pub id: String,
+    pub target: String,
+    pub key: String,
+    pub sender: String,
+}
+
+/// One membership event of a room: who, their display name when known and `join`, `invite`, `leave` or `ban`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MemberUpdate {
+    pub user_id: String,
+    pub name: Option<String>,
+    pub membership: String,
 }
 
 /// A message in a timeline.
@@ -53,6 +87,8 @@ pub struct Event {
     /// Server time in milliseconds since the Unix epoch.
     pub ts: u64,
     pub body: Body,
+    /// The event this message answers (a reply), when it is one.
+    pub reply_to: Option<String>,
 }
 
 /// What a message says.
@@ -145,6 +181,92 @@ pub fn send_url(base: &str, room: &str, txn: &str) -> String {
     api(base, &format!("/rooms/{}/send/m.room.message/{}", encode(room), encode(txn)))
 }
 
+/// The PUT that sends an event of another type than a message (a reaction).
+pub fn send_event_url(base: &str, room: &str, kind: &str, txn: &str) -> String {
+    api(base, &format!("/rooms/{}/send/{}/{}", encode(room), encode(kind), encode(txn)))
+}
+
+/// The PUT that removes (redacts) `event` from `room`.
+pub fn redact_url(base: &str, room: &str, event: &str, txn: &str) -> String {
+    api(base, &format!("/rooms/{}/redact/{}/{}", encode(room), encode(event), encode(txn)))
+}
+
+/// The POST that makes a room.
+pub fn create_room_url(base: &str) -> String {
+    api(base, "/createRoom")
+}
+
+pub fn leave_url(base: &str, room: &str) -> String {
+    api(base, &format!("/rooms/{}/leave", encode(room)))
+}
+
+pub fn forget_url(base: &str, room: &str) -> String {
+    api(base, &format!("/rooms/{}/forget", encode(room)))
+}
+
+/// The PUT that sets the room's name.
+pub fn room_name_url(base: &str, room: &str) -> String {
+    api(base, &format!("/rooms/{}/state/m.room.name", encode(room)))
+}
+
+pub fn logout_url(base: &str) -> String {
+    api(base, "/logout")
+}
+
+/// The body of a room name change.
+pub fn room_name_body(name: &str) -> String {
+    obj(vec![("name", text(name))]).encode()
+}
+
+/// The body that makes a direct conversation with `user_id` (an invitation to a private chat).
+pub fn create_direct_body(user_id: &str) -> String {
+    obj(vec![
+        ("is_direct", Json::Bool(true)),
+        ("preset", text("trusted_private_chat")),
+        ("invite", Json::Arr(vec![text(user_id)])),
+    ])
+    .encode()
+}
+
+/// A Matrix user id as the New Message sheet takes it: `@name:server`. Surrounding spaces go; a name without the `@` or
+/// the server is refused, because the homeserver would not know whom to invite.
+pub fn checked_user_id(input: &str) -> Result<String, String> {
+    let id = input.trim();
+    let Some(rest) = id.strip_prefix('@') else {
+        return Err("Enter a user id such as @alice:example.org".into());
+    };
+    match rest.split_once(':') {
+        Some((local, server)) if !local.is_empty() && !server.is_empty() && !id.contains(char::is_whitespace) => Ok(id.to_string()),
+        _ => Err("Enter a user id such as @alice:example.org".into()),
+    }
+}
+
+/// The `room_id` of a create-room answer.
+pub fn parse_room_id(body: &Json) -> Result<String, String> {
+    if let Some(e) = error_text(body) {
+        return Err(e);
+    }
+    field(body, "room_id")
+}
+
+/// The MIME type of a file the app sends, from its extension; `application/octet-stream` when it is not a known one.
+pub fn file_mime(name: &str) -> &'static str {
+    if let Some(mime) = image_mime(name) {
+        return mime;
+    }
+    let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+    match ext.as_str() {
+        "pdf" => "application/pdf",
+        "txt" | "md" => "text/plain",
+        "json" => "application/json",
+        "zip" => "application/zip",
+        "mp3" => "audio/mpeg",
+        "mp4" => "video/mp4",
+        "csv" => "text/csv",
+        _ => "application/octet-stream",
+    }
+}
+
 /// The POST that marks `event` as read in `room`.
 pub fn receipt_url(base: &str, room: &str, event: &str) -> String {
     api(base, &format!("/rooms/{}/receipt/m.read/{}", encode(room), encode(event)))
@@ -168,6 +290,49 @@ pub fn login_body(user: &str, password: &str) -> String {
 /// The content of a plain text message.
 pub fn text_content(body: &str) -> String {
     obj(vec![("msgtype", text("m.text")), ("body", text(body))]).encode()
+}
+
+/// The content of a text message that answers `reply_to`.
+pub fn reply_content(body: &str, reply_to: &str) -> String {
+    obj(vec![
+        ("msgtype", text("m.text")),
+        ("body", text(body)),
+        ("m.relates_to", obj(vec![("m.in_reply_to", obj(vec![("event_id", text(reply_to))]))])),
+    ])
+    .encode()
+}
+
+/// The content that replaces the words of the message `target` with `body` (`m.replace`). The plain `body` carries the
+/// `* ` that clients without edit support show.
+pub fn edit_content(target: &str, body: &str) -> String {
+    obj(vec![
+        ("msgtype", text("m.text")),
+        ("body", text(&format!("* {body}"))),
+        ("m.new_content", obj(vec![("msgtype", text("m.text")), ("body", text(body))])),
+        ("m.relates_to", obj(vec![("rel_type", text("m.replace")), ("event_id", text(target))])),
+    ])
+    .encode()
+}
+
+/// The content of a reaction to the message `target`.
+pub fn reaction_content(target: &str, key: &str) -> String {
+    obj(vec![(
+        "m.relates_to",
+        obj(vec![("rel_type", text("m.annotation")), ("event_id", text(target)), ("key", text(key))]),
+    )])
+    .encode()
+}
+
+/// The content of a file message, after the upload gave it an `mxc://` URI.
+pub fn file_content(info: &ImageInfo) -> String {
+    obj(vec![
+        ("msgtype", text("m.file")),
+        ("body", text(info.name)),
+        ("filename", text(info.name)),
+        ("url", text(info.mxc)),
+        ("info", obj(vec![("mimetype", text(info.mime)), ("size", Json::Num(info.size as f64))])),
+    ])
+    .encode()
 }
 
 /// The content of an image message, after the upload gave it an `mxc://` URI.
@@ -288,7 +453,85 @@ fn parse_room(id: &str, room: &Json) -> RoomUpdate {
         highlights: count("highlight_count"),
         receipts: receipts(raw_events(room.get("ephemeral"))),
         typing: typing(raw_events(room.get("ephemeral"))),
+        edits: timeline.iter().filter_map(edit).collect(),
+        reactions: timeline.iter().filter_map(reaction).collect(),
+        redactions: timeline.iter().filter_map(redaction).collect(),
+        members: state.iter().chain(timeline.iter()).filter_map(member).collect(),
     }
+}
+
+/// The `m.relates_to` object of an event's content.
+fn relation(ev: &Json) -> Option<&Json> {
+    ev.get("content")?.get("m.relates_to")
+}
+
+/// An edit: a message event that replaces another one (`m.replace`) and carries the new content.
+fn edit(ev: &Json) -> Option<Edit> {
+    if ev.str_field("type").as_deref() != Some("m.room.message") {
+        return None;
+    }
+    let rel = relation(ev)?;
+    if rel.str_field("rel_type").as_deref() != Some("m.replace") {
+        return None;
+    }
+    Some(Edit {
+        target: rel.str_field("event_id")?,
+        sender: ev.str_field("sender")?,
+        body: message_body(ev.get("content")?.get("m.new_content")),
+    })
+}
+
+/// A reaction event (`m.reaction`) with its target and key.
+fn reaction(ev: &Json) -> Option<Annotation> {
+    if ev.str_field("type").as_deref() != Some("m.reaction") {
+        return None;
+    }
+    let rel = relation(ev)?;
+    if rel.str_field("rel_type").as_deref() != Some("m.annotation") {
+        return None;
+    }
+    Some(Annotation {
+        id: ev.str_field("event_id")?,
+        target: rel.str_field("event_id")?,
+        key: rel.str_field("key")?,
+        sender: ev.str_field("sender")?,
+    })
+}
+
+/// The event id a redaction removes (`redacts` at the top, or inside the content in newer room versions).
+fn redaction(ev: &Json) -> Option<String> {
+    if ev.str_field("type").as_deref() != Some("m.room.redaction") {
+        return None;
+    }
+    ev.str_field("redacts").or_else(|| ev.get("content")?.str_field("redacts"))
+}
+
+/// A membership state event: the user is its `state_key`.
+fn member(ev: &Json) -> Option<MemberUpdate> {
+    if ev.str_field("type").as_deref() != Some("m.room.member") {
+        return None;
+    }
+    let content = ev.get("content")?;
+    Some(MemberUpdate {
+        user_id: ev.str_field("state_key")?,
+        name: content.str_field("displayname").filter(|n| !n.is_empty()),
+        membership: content.str_field("membership")?,
+    })
+}
+
+/// A reply's text without the quoted lines older clients put in front (`> <@bob> words`, then a blank line).
+pub fn strip_reply_fallback(body: &str) -> String {
+    if !body.starts_with("> ") {
+        return body.to_string();
+    }
+    let mut lines = body.lines().peekable();
+    while lines.peek().is_some_and(|l| l.starts_with('>')) {
+        lines.next();
+    }
+    if lines.peek().is_some_and(|l| l.trim().is_empty()) {
+        lines.next();
+    }
+    lines.collect::<Vec<_>>().join("\n")
 }
 
 /// The typing list of an ephemeral section: the user ids of the latest `m.typing` event. `None` when there is none.
@@ -317,12 +560,18 @@ fn messages(events: &[Json]) -> Vec<Event> {
 
 fn message(ev: &Json) -> Option<Event> {
     let kind = ev.str_field("type")?;
+    let reply_to = relation(ev).and_then(|r| r.get("m.in_reply_to")).and_then(|r| r.str_field("event_id"));
     let body = match kind.as_str() {
-        "m.room.message" => message_body(ev.get("content")),
+        "m.room.message" if edit(ev).is_some() => return None,
+        "m.room.message" => match message_body(ev.get("content")) {
+            Body::Text(t) if reply_to.is_some() => Body::Text(strip_reply_fallback(&t)),
+            other => other,
+        },
         "m.room.encrypted" => Body::Encrypted,
         _ => return None,
     };
     Some(Event {
+        reply_to,
         id: ev.str_field("event_id")?,
         sender: ev.str_field("sender")?,
         ts: ev.get("origin_server_ts").and_then(|v| v.as_u64()).unwrap_or(0),
@@ -505,7 +754,10 @@ mod tests {
         assert_eq!(room.unread, 3);
         assert_eq!(room.highlights, 1);
         assert_eq!(room.events.len(), 5, "the member event is not a message; the empty one is kept as redacted");
-        assert_eq!(room.events[0], Event { id: "$e1".into(), sender: "@bob:example.org".into(), ts: 1000, body: Body::Text("hello".into()) });
+        assert_eq!(
+            room.events[0],
+            Event { id: "$e1".into(), sender: "@bob:example.org".into(), ts: 1000, body: Body::Text("hello".into()), reply_to: None }
+        );
         assert_eq!(room.events[1].body, Body::Image { name: "cat.png".into(), mxc: "mxc://example.org/cat".into() });
         assert_eq!(room.events[2].body, Body::Encrypted);
         assert_eq!(room.events[3].body, Body::Redacted);
@@ -573,5 +825,99 @@ mod tests {
     fn a_sync_with_no_joined_rooms_is_empty() {
         let sync = parse_sync(&parse(r#"{"next_batch":"n","rooms":{"invite":{"!i:x":{}}}}"#)).unwrap();
         assert_eq!(sync, Sync { next_batch: "n".into(), rooms: Vec::new() });
+    }
+
+    #[test]
+    fn edits_reactions_replies_and_removals_come_out_of_the_timeline() {
+        let sync = parse_sync(&parse(
+            r#"{"next_batch":"n","rooms":{"join":{"!r:x":{"timeline":{"events":[
+              {"type":"m.room.message","event_id":"$e1","sender":"@a:x","origin_server_ts":1,"content":{"msgtype":"m.text","body":"hi"}},
+              {"type":"m.room.message","event_id":"$e2","sender":"@a:x","origin_server_ts":2,"content":{"msgtype":"m.text","body":"* hello",
+                 "m.new_content":{"msgtype":"m.text","body":"hello"},"m.relates_to":{"rel_type":"m.replace","event_id":"$e1"}}},
+              {"type":"m.reaction","event_id":"$r1","sender":"@b:x","origin_server_ts":3,
+                 "content":{"m.relates_to":{"rel_type":"m.annotation","event_id":"$e1","key":"+1"}}},
+              {"type":"m.room.message","event_id":"$e3","sender":"@b:x","origin_server_ts":4,"content":{"msgtype":"m.text","body":"> <@a:x> hi\n\nyes",
+                 "m.relates_to":{"m.in_reply_to":{"event_id":"$e1"}}}},
+              {"type":"m.room.redaction","event_id":"$d1","sender":"@a:x","redacts":"$e3","content":{}}]}}}}}"#,
+        ))
+        .unwrap();
+        let room = &sync.rooms[0];
+        assert_eq!(room.events.iter().map(|e| e.id.as_str()).collect::<Vec<_>>(), ["$e1", "$e3"], "an edit and a reaction are not messages");
+        assert_eq!(room.events[1].reply_to.as_deref(), Some("$e1"));
+        assert_eq!(room.events[1].body, Body::Text("yes".into()), "the quoted fallback is dropped");
+        assert_eq!(room.edits, vec![Edit { target: "$e1".into(), sender: "@a:x".into(), body: Body::Text("hello".into()) }]);
+        assert_eq!(room.reactions, vec![Annotation { id: "$r1".into(), target: "$e1".into(), key: "+1".into(), sender: "@b:x".into() }]);
+        assert_eq!(room.redactions, vec!["$e3".to_string()]);
+    }
+
+    #[test]
+    fn members_come_from_state_and_the_timeline() {
+        let sync = parse_sync(&parse(
+            r#"{"next_batch":"n","rooms":{"join":{"!r:x":{
+              "state":{"events":[{"type":"m.room.member","state_key":"@a:x","sender":"@a:x","content":{"membership":"join","displayname":"Ann"}}]},
+              "timeline":{"events":[{"type":"m.room.member","state_key":"@b:x","sender":"@a:x","content":{"membership":"invite"}}]}}}}}"#,
+        ))
+        .unwrap();
+        assert_eq!(
+            sync.rooms[0].members,
+            vec![
+                MemberUpdate { user_id: "@a:x".into(), name: Some("Ann".into()), membership: "join".into() },
+                MemberUpdate { user_id: "@b:x".into(), name: None, membership: "invite".into() },
+            ]
+        );
+    }
+
+    #[test]
+    fn replies_edits_reactions_and_files_have_their_wire_shapes() {
+        let reply = parse(&reply_content("yes", "$e1"));
+        assert_eq!(
+            reply.get("m.relates_to").and_then(|r| r.get("m.in_reply_to")).and_then(|r| r.str_field("event_id")).as_deref(),
+            Some("$e1")
+        );
+        let edit = parse(&edit_content("$e1", "hello"));
+        assert_eq!(edit.str_field("body").as_deref(), Some("* hello"));
+        assert_eq!(edit.get("m.new_content").and_then(|c| c.str_field("body")).as_deref(), Some("hello"));
+        assert_eq!(edit.get("m.relates_to").and_then(|r| r.str_field("rel_type")).as_deref(), Some("m.replace"));
+        let react = parse(&reaction_content("$e1", "+1"));
+        let rel = react.get("m.relates_to").unwrap();
+        assert_eq!((rel.str_field("rel_type").as_deref(), rel.str_field("key").as_deref()), (Some("m.annotation"), Some("+1")));
+        let info = ImageInfo { name: "a.pdf", mxc: "mxc://m/a", mime: "application/pdf", size: 7 };
+        let file = parse(&file_content(&info));
+        assert_eq!(file.str_field("msgtype").as_deref(), Some("m.file"));
+        assert_eq!(file.str_field("url").as_deref(), Some("mxc://m/a"));
+    }
+
+    #[test]
+    fn urls_for_redaction_rooms_and_logout() {
+        let b = "https://h";
+        assert_eq!(redact_url(b, "!r:x", "$e", "t1"), "https://h/_matrix/client/v3/rooms/%21r%3Ax/redact/%24e/t1");
+        assert_eq!(send_event_url(b, "!r:x", "m.reaction", "t2"), "https://h/_matrix/client/v3/rooms/%21r%3Ax/send/m.reaction/t2");
+        assert_eq!(leave_url(b, "!r:x"), "https://h/_matrix/client/v3/rooms/%21r%3Ax/leave");
+        assert_eq!(forget_url(b, "!r:x"), "https://h/_matrix/client/v3/rooms/%21r%3Ax/forget");
+        assert_eq!(room_name_url(b, "!r:x"), "https://h/_matrix/client/v3/rooms/%21r%3Ax/state/m.room.name");
+        assert_eq!(create_room_url(b), "https://h/_matrix/client/v3/createRoom");
+        assert_eq!(logout_url(b), "https://h/_matrix/client/v3/logout");
+    }
+
+    #[test]
+    fn a_direct_conversation_invites_one_user_and_the_id_is_checked() {
+        let body = parse(&create_direct_body("@bob:x"));
+        assert_eq!(body.get("is_direct"), Some(&Json::Bool(true)));
+        assert_eq!(body.get("invite").and_then(|i| i.as_array()).map(|a| a.len()), Some(1));
+        assert_eq!(checked_user_id("  @bob:x "), Ok("@bob:x".to_string()));
+        assert!(checked_user_id("bob").is_err());
+        assert!(checked_user_id("@bob").is_err());
+        assert!(checked_user_id("@:x").is_err());
+        assert!(checked_user_id("@b ob:x").is_err());
+        assert_eq!(parse_room_id(&parse(r#"{"room_id":"!n:x"}"#)), Ok("!n:x".to_string()));
+        assert!(parse_room_id(&parse(r#"{"errcode":"M_UNKNOWN","error":"no"}"#)).is_err());
+    }
+
+    #[test]
+    fn file_types_fall_back_to_octet_stream() {
+        assert_eq!(file_mime("a.PDF"), "application/pdf");
+        assert_eq!(file_mime("a.png"), "image/png");
+        assert_eq!(file_mime("a.weird"), "application/octet-stream");
+        assert_eq!(file_mime("noext"), "application/octet-stream");
     }
 }
