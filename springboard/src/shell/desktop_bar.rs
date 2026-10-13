@@ -26,6 +26,8 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     App,File,Edit,View,Window,Help,Network,Power,
     /// the Bluetooth menu extra: the radio, the paired and connected devices, and the Bluetooth pane
     Bluetooth,
+    /// the recording stop item, shown while a screen recording runs: a red dot whose menu has Stop Recording
+    Recording,
     /// Control Center menu extra: a press opens the Control Center sheet, it has no rows
     ControlCenter,
     /// CPU and RAM details; no longer placed on the bar (Golden Gate shows no readouts), kept for their rows
@@ -41,7 +43,7 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document}
 #[cfg(feature = "desktop-wayland")]
-#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),AppMenu(u8,u32),Dock(super::desktop_dock::Change),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String)}
+#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),AppMenu(u8,u32),Dock(super::desktop_dock::Change),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,CharacterViewer,KeyboardViewer,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String),RecordStop}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
@@ -174,6 +176,8 @@ impl Shell {
         // the input source sits left of Control Center (the extras are placed from the clock leftwards)
         let source=super::kb_layouts::active().short_name();let input=self.ui.measure(source,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);
         let mut extras=vec![(Menu::ControlCenter,self.ui.pt(STATUS_ICON_PT),String::from("control")),(Menu::Input,input,source.to_string()),(Menu::Network,nw,if wired {"ethernet"}else{"wifi"}.into()),(Menu::Power,pw,String::from("power")),(Menu::Memory,mw,memory),(Menu::Cpu,cw,cpu)];
+        // the recording stop item sits left of Control Center while a screen recording runs
+        if self.recording_active() {extras.insert(1,(Menu::Recording,self.ui.pt(STATUS_ICON_PT),String::from("stop")));}
         // the Bluetooth extra sits left of Wi-Fi, once the radio exists (it stays hidden without a controller)
         if self.info.bt.state!=crate::bare::bluetooth::State::Unavailable {extras.insert(2,(Menu::Bluetooth,self.ui.pt(STATUS_ICON_PT),String::from("bluetooth")));}
         // the Now Playing extra sits left of the system extras while an app has a session, and right of the app extras
@@ -203,6 +207,8 @@ impl Shell {
         let p=self.ui.pt(1.);
         // the glyphs are drawn from different origins; lift each so its ink centres on the bar like the text beside it
         let y=y-p*if matches!(menu,Menu::System|Menu::ControlCenter){0.}else{status_icon_lift(menu==Menu::Power&&self.info.battery_present,label=="ethernet")};let rect=|s:&mut Surface,dx:f32,dy:f32,w:f32,h:f32|s.fill_rrect(x+dx*p,y+dy*p,w*p,h*p,p,ink);
+        // the recording stop item: a red dot, as the recording indicator
+        if menu==Menu::Recording {s.fill_rrect(x-4.*p,y-4.*p,8.*p,8.*p,4.*p,super::ui::SYSTEM_RED);return;}
         if menu==Menu::System {
             // the BifrOSt mark: a ring (the sky) over the bridge deck
             s.stroke_rrect(x-6.*p,y-7.*p,12.*p,12.*p,6.*p,1.5*p,ink);rect(s,-8.,6.,16.,2.);return;
@@ -241,6 +247,7 @@ impl Shell {
             Menu::App=>{let enabled=self.foreign_active().is_some()||self.desk.as_ref().and_then(|d|d.front()).is_some();let name=self.app_menu_name();let quit=format!("Quit {name}");vec![Row::action(format!("About {name}"),Action::Settings("About")),Row::separator(),Row::action("Settings…",Action::Settings("")).symbol(crate::symbols::Symbol::GearOutline).key("cmd+,"),Row::separator(),(if enabled{Row::action(quit,Action::Close)}else{Row::label(quit)}).key("cmd+q")]},
             Menu::System=>{use super::power_menu::PowerAction;let mut rows=vec![Row::action("About This Computer",Action::Settings("About")),Row::separator(),Row::action("System Settings…",Action::Settings("")),Row::action("App Store…",Action::Open(AppId::AppStore)),Row::separator()];rows.push(Row::label("Recent Items"));let recent=self.recent_titles();for (i,title) in recent.iter().enumerate(){rows.push(Row::action(title.clone(),Action::Recent(i as u8)));}rows.push(if recent.is_empty(){Row::label("Clear Menu")}else{Row::action("Clear Menu",Action::ClearRecent)});rows.push(Row::separator());rows.extend(vec![Row::action("Sleep",Action::Sleep),Row::action("Restart…",Action::Halt(PowerAction::Restart)),Row::action("Shut Down…",Action::Halt(PowerAction::Off)),Row::separator(),Row::action("Lock Screen",Action::Lock)]);rows},
             Menu::ControlCenter=>Vec::new(),
+            Menu::Recording=>vec![Row::action("Stop Recording",Action::RecordStop)],
             // the Bluetooth extra: the radio, then each paired or connected device (connect or disconnect), then its pane
             Menu::Bluetooth=>{let bt=&self.info.bt;let mut rows=vec![Row::action(if bt.on(){"Turn Bluetooth Off"}else{"Turn Bluetooth On"},Action::Bluetooth(crate::bare::bluetooth::Cmd::Enable(!bt.on())))];if bt.on(){rows.push(Row::separator());for d in bt.devices.iter().filter(|d|d.paired||d.connected).take(8) {if bt.busy.as_deref()==Some(d.addr.as_str()){rows.push(Row::label(format!("{}…",d.label())));}else{let cmd=if d.connected{crate::bare::bluetooth::Cmd::Disconnect(d.addr.clone())}else{crate::bare::bluetooth::Cmd::Connect(d.addr.clone())};rows.push(Row::action(format!("{} {}",if d.connected{"✓"}else{" "},d.label()),Action::Bluetooth(cmd)));}}}rows.push(Row::separator());rows.push(Row::action("Bluetooth Settings…",Action::Settings("Bluetooth")));rows},
             // title and position as labels, then the transport: an enabled row sends its remote command to the owner
@@ -482,6 +489,7 @@ impl Shell {
                     Action::Media(command)=>{super::services::now_playing::send(command);},
                     Action::Bluetooth(command)=>effects.push(Effect::Bluetooth(command)),
                     Action::Portal(url)=>{let _=self.desktop_open_url(&url,t);},
+                    Action::RecordStop=>self.recording_stop_from_menu(),
                 }effects
     }
     /// Close or minimize the front window (the File menu and Ctrl+W / Ctrl+M).

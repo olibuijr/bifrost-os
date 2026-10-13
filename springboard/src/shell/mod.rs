@@ -99,6 +99,8 @@ pub mod session;
 pub mod prefs;
 pub mod markup;
 pub mod screenshot;
+/// Screen recording: the frames the shell draws, encoded to a movie (ffmpeg or the built-in AVI writer).
+pub mod screenrec;
 /// The screenshot toolbar's capture session: Shift-Cmd-5 and `screencapture -i -w` (see `capture.rs`).
 pub mod capture;
 pub mod screentime;
@@ -580,6 +582,8 @@ pub struct Shell {
     shot_tap: bool,
     /// The screenshot toolbar's capture session, open while it is on screen.
     capture: Option<capture::Session>,
+    /// the screen recording in progress (the toolbar's Record buttons, `rec start`, `screencapture -v`)
+    rec: Option<screenrec::Session>,
     /// the Files browser, alive in the background once opened
     files: Option<Files>,
     /// the roots Files offers (tests point them at a temp dir)
@@ -848,6 +852,7 @@ impl Shell {
             markup: None,
             shot_tap: false,
             capture: None,
+            rec: None,
             files: None,
             files_locations: files::fs::locations(),
             audio: crate::svc::audio::Client::for_root(&apphost::root()),
@@ -4224,6 +4229,14 @@ impl Shell {
     fn finish_capture(&mut self, t: f64) {
         let Some(sess) = self.capture.take() else { return };
         let Some((region, _)) = sess.pending else { return };
+        if sess.record {
+            let whole = region.x <= 0 && region.y <= 0 && region.w >= self.w as i32 && region.h >= self.h as i32;
+            let area = (!whole).then(|| (region.x.max(0) as u32, region.y.max(0) as u32, region.w.max(1) as u32, region.h.max(1) as u32));
+            if let Err(e) = self.recording_start(area, None, t) {
+                eprintln!("springboard: recording: {e}");
+            }
+            return;
+        }
         let pointer = sess.pointer.then_some(sess.at);
         self.take_capture(region, pointer, t);
     }

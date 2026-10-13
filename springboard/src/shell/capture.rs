@@ -146,6 +146,8 @@ impl Countdown {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Tool {
     Pick(Pick),
+    /// Records the region dragged (`Region`) or the whole screen (`Screen`) instead of taking a picture.
+    Record(Pick),
     Timer,
     Pointer,
     Cancel,
@@ -166,6 +168,8 @@ pub struct Session {
     pub pressed: Option<Tool>,
     /// The chosen rectangle and the countdown that ends in its capture.
     pub pending: Option<(Rect, Countdown)>,
+    /// Whether the chosen rectangle is recorded as a movie instead of saved as a picture (Record buttons).
+    pub record: bool,
 }
 
 impl Default for Session {
@@ -177,7 +181,7 @@ impl Default for Session {
 impl Session {
     /// A fresh session: a selection, no timer, no pointer.
     pub fn new() -> Self {
-        Session { pick: Pick::Region, timer: 0, pointer: false, at: (0.0, 0.0), drag: Drag::default(), pressed: None, pending: None }
+        Session { pick: Pick::Region, timer: 0, pointer: false, at: (0.0, 0.0), drag: Drag::default(), pressed: None, pending: None, record: false }
     }
 
     /// A press on the screen (not on the toolbar): a selection starts here.
@@ -209,7 +213,14 @@ impl Session {
     /// Applies a toolbar button to the session. Returns true when the button cancels the session.
     pub fn apply(&mut self, tool: Tool) -> bool {
         match tool {
-            Tool::Pick(p) => self.pick = p,
+            Tool::Pick(p) => {
+                self.pick = p;
+                self.record = false;
+            }
+            Tool::Record(p) => {
+                self.pick = p;
+                self.record = true;
+            }
             Tool::Timer => self.timer = next_timer(self.timer),
             Tool::Pointer => self.pointer = !self.pointer,
             Tool::Cancel => return true,
@@ -228,8 +239,13 @@ impl Session {
         let s = ui.s;
         let mut items: Vec<(Tool, Image)> = Vec::new();
         for p in [Pick::Region, Pick::Window, Pick::Screen] {
-            let color = if self.pick == p { WHITE } else { SECONDARY };
+            let color = if self.pick == p && !self.record { WHITE } else { SECONDARY };
             items.push((Tool::Pick(p), ui.text(p.label(), LABEL_PT, Weight::Medium, color)));
+        }
+        for p in [Pick::Region, Pick::Screen] {
+            let color = if self.pick == p && self.record { WHITE } else { SECONDARY };
+            let label = if p == Pick::Region { "Record Selection" } else { "Record Screen" };
+            items.push((Tool::Record(p), ui.text(label, LABEL_PT, Weight::Medium, color)));
         }
         let timer = if self.timer == 0 { "Timer: Off".to_string() } else { format!("Timer: {} s", self.timer) };
         items.push((Tool::Timer, ui.text(&timer, LABEL_PT, Weight::Medium, WHITE)));
@@ -292,7 +308,8 @@ impl Session {
         s.fill_rrect(bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, bar.h as f32 / 2.0, CELL);
         for (tool, r, img) in buttons {
             let on = match tool {
-                Tool::Pick(p) => self.pick == p,
+                Tool::Pick(p) => self.pick == p && !self.record,
+                Tool::Record(p) => self.pick == p && self.record,
                 Tool::Pointer => self.pointer,
                 _ => false,
             };
@@ -429,6 +446,18 @@ mod tests {
         s.apply(Tool::Pointer);
         assert!(s.pointer);
         assert!(s.apply(Tool::Cancel), "cancel ends the session");
+    }
+
+    #[test]
+    fn record_buttons_choose_a_movie_of_the_region_or_the_screen() {
+        let mut s = Session::new();
+        assert!(!s.record, "a fresh session takes pictures");
+        assert!(!s.apply(Tool::Record(Pick::Screen)));
+        assert!(s.record);
+        assert_eq!(s.pick, Pick::Screen);
+        s.apply(Tool::Pick(Pick::Region));
+        assert!(!s.record, "a capture button goes back to pictures");
+        assert_eq!(s.pick, Pick::Region);
     }
 
     #[test]
