@@ -1147,6 +1147,16 @@ Manifest: `[[log.subsystem]] id, categories = [...], level = "notice"`. The inst
 `/var/lib/bifrost/log/registry.toml`; `/etc/bifrost/log.toml` overrides it (`bifrost-log config --subsystem X --level debug
 --private on`). A `Logger` re-checks both files' mtime at most once a second, so a disabled message costs one atomic compare.
 
+Per-argument privacy and formatting (`core/src/log_format.rs`, `OSLogPrivacy`, `OSLogIntegerFormatting`):
+
+```rust
+use bifrost_app::log_format::{LogArg, Privacy, Mask, IntFormat, Align};
+log.info(format!("user {} id {}", LogArg::string(name).privacy(Privacy::Private(Mask::Hash)).render(),
+    LogArg::int(7).format(IntFormat::Hex { include_prefix: true, uppercase: false }).align(Align::Right(6)).render()));
+```
+
+`Auto` treats strings as private and numbers as public; `Mask::Hash` stores a stable `<mask.hash: 'base64'>`.
+
 | Apple | BifrOSt |
 |---|---|
 | `Logger(subsystem:category:)` | `Logger::new(subsystem, category)` |
