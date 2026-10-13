@@ -308,7 +308,7 @@ mod tests {
         assert!((vx - 600.0).abs() < 6.0, "600 points per second, got {vx}");
         assert_eq!(vy, 0.0);
         assert!((r.velocity_at(0.51).0 - 600.0).abs() < 6.0);
-        assert_eq!(r.velocity_at(0.5 + PAUSE_SECS + 0.1), 0.0, "rested fingers have no velocity");
+        assert_eq!(r.velocity_at(0.5 + PAUSE_SECS + 0.1), (0.0, 0.0), "rested fingers have no velocity");
     }
 
     #[test]

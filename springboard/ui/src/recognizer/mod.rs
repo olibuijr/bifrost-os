@@ -279,9 +279,9 @@ impl Core {
         }
     }
     pub fn reset(&mut self) {
-        let logging = self.logging;
+        let (logging, gated) = (self.logging, self.gated);
         let log = std::mem::take(&mut self.log);
-        *self = Core { logging, log, ..Core::default() };
+        *self = Core { logging, gated, log, ..Core::default() };
     }
 }
 
@@ -565,6 +565,9 @@ mod tests {
         c.set_gated(true);
         c.go(GestureState::Recognized);
         c.go(GestureState::Failed);
+        assert_eq!(c.state(), GestureState::Possible, "a held result is final; only force_fail overrides it");
+        assert_eq!(c.current(), GestureState::Recognized);
+        c.force_fail();
         assert_eq!(c.state(), GestureState::Failed);
         assert!(!c.busy());
         let mut d = Core::new();
@@ -572,6 +575,19 @@ mod tests {
         d.go(GestureState::Began);
         d.go(GestureState::Cancelled);
         assert_eq!(d.state(), GestureState::Failed, "a held gesture that is cancelled never began");
+        assert!(!d.busy());
+    }
+
+    #[test]
+    fn reset_keeps_the_gate_and_the_log_settings() {
+        let mut c = Core::new();
+        c.set_logging(true);
+        c.set_gated(true);
+        c.go(GestureState::Began);
+        c.reset();
+        c.go(GestureState::Recognized);
+        assert_eq!(c.state(), GestureState::Possible, "still gated after a reset");
+        assert!(c.busy());
     }
 
     #[test]

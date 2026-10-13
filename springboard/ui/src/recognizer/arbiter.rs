@@ -75,7 +75,10 @@ impl GestureArbiter {
     /// Turns a recognizer on or off. Turning one off ends what it was doing.
     pub fn set_enabled(&mut self, id: usize, enabled: bool) -> Vec<GestureEvent> {
         if self.slots[id].enabled && !enabled {
-            self.slots[id].r.core_mut().force_fail();
+            // Only a gesture in progress is reported as cancelled; one that never showed anything just goes away.
+            if self.slots[id].r.core().state().is_active() {
+                self.slots[id].r.core_mut().force_fail();
+            }
             self.slots[id].r.reset();
         }
         self.slots[id].enabled = enabled;
@@ -146,7 +149,9 @@ impl GestureArbiter {
     /// The system took all touches away: everything in progress is cancelled and every recognizer starts over.
     pub fn cancel_all(&mut self) -> Vec<GestureEvent> {
         for slot in &mut self.slots {
-            slot.r.core_mut().force_fail();
+            if slot.r.core().state().is_active() {
+                slot.r.core_mut().force_fail();
+            }
             slot.r.reset();
         }
         self.active.clear();
@@ -178,6 +183,8 @@ impl GestureArbiter {
             let slot = &mut self.slots[i];
             slot.r.core_mut().set_gated(gated);
             slot.r.tick(t);
+            // Settle before the next one ticks, so two that come due together do not both begin.
+            self.resolve();
         }
     }
 
@@ -425,17 +432,28 @@ mod tests {
     }
 
     #[test]
-    fn exclusive_recognizers_cancel_the_one_in_progress() {
+    fn a_pan_that_began_keeps_the_touches_and_the_pinch_stays_failed() {
         let mut a = GestureArbiter::new();
         let pan = a.add(Pan::new());
         let pinch = a.add(Pinch::new());
-        feed_all(&mut a, &[TouchSample::began(1, 100.0, 100.0, 0.0), TouchSample::moved(1, 130.0, 100.0, 0.02)]);
-        assert_eq!(a.state(pan), GestureState::Began);
+        let ev = feed_all(&mut a, &[TouchSample::began(1, 100.0, 100.0, 0.0), TouchSample::moved(1, 130.0, 100.0, 0.02)]);
+        assert_eq!(states_of(&ev, pan), vec![GestureState::Began]);
+        assert_eq!(states_of(&ev, pinch), vec![GestureState::Failed]);
         a.feed(&TouchSample::began(2, 300.0, 100.0, 0.03));
         let ev = a.feed(&TouchSample::moved(2, 350.0, 100.0, 0.04));
-        assert_eq!(states_of(&ev, pinch), vec![GestureState::Began]);
-        assert_eq!(a.state(pan), GestureState::Cancelled);
-        assert!(states_of(&ev, pan).contains(&GestureState::Cancelled));
+        assert!(states_of(&ev, pinch).is_empty());
+        assert_eq!(a.state(pan), GestureState::Changed);
+    }
+
+    #[test]
+    fn two_that_come_due_together_do_not_both_begin() {
+        let mut a = GestureArbiter::new();
+        let first = a.add(LongPress::new());
+        let second = a.add(LongPress::new());
+        a.feed(&TouchSample::began(1, 0.0, 0.0, 0.0));
+        let ev = a.tick(0.6);
+        assert_eq!(states_of(&ev, first), vec![GestureState::Began]);
+        assert_eq!(states_of(&ev, second), vec![GestureState::Failed], "it never began, so no Cancelled either");
     }
 
     #[test]

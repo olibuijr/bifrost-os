@@ -3036,6 +3036,9 @@ tick matters.
   `b` is recognized); `allow_simultaneous(a, b)` lets two run together; otherwise the first to begin fails or cancels
   the others. It returns `GestureEvent`s in the order the observer must see them.
 
+`ui::gesture` (single pointer `Tap`, `LongPress`, `Pan`, `Magnify`, `Rotate`) stays for the existing callers; new code that
+takes touch input uses `recognizer`, which tracks several fingers by id.
+
 Not done yet: the shell's own system gestures still use `src/shell/gestures.rs` directly; moving them onto
 recognizers is a separate step.
 
