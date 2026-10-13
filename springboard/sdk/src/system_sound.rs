@@ -119,6 +119,15 @@ impl SystemSounds {
         self.create(&format!("/System/Library/Sounds/{name}.aiff")).ok()
     }
 
+    /// Creates a sound by name (`Sound(named:)`): the reference asset layer is asked first, as an alert sound
+    /// and then as a system sound. `None` means no reference asset has that name, and the caller keeps its
+    /// built-in sound.
+    pub fn create_named(&mut self, resolver: &bifrost_core::ref_assets::Resolver, name: &str) -> Option<Result<SoundId, SoundError>> {
+        use bifrost_core::ref_assets::Kind;
+        let path = resolver.resolve(Kind::AlertSound, name).or_else(|| resolver.resolve(Kind::SystemSound, name))?;
+        Some(self.create(&path.to_string_lossy()))
+    }
+
     /// Frees a sound. A play of it that is still waiting or sounding is dropped.
     pub fn dispose(&mut self, id: SoundId) -> Result<(), SoundError> {
         let index = self.sounds.iter().position(|(sid, _)| *sid == id).ok_or(SoundError::UnknownSound)?;
@@ -191,6 +200,20 @@ mod tests {
         assert_eq!(sounds.named("Nope"), None);
         assert_eq!(sounds.named(""), None);
         assert!(ALERT_NAMES.contains(&"Funk") && ALERT_NAMES.contains(&"Submarine"));
+    }
+
+    #[test]
+    fn named_sounds_come_from_the_reference_layer_or_fall_back() {
+        let dir = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-named-sound"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("sounds/alerts")).unwrap();
+        std::fs::write(dir.join("sounds/alerts/Basso.wav"), b"x").unwrap();
+        let resolver = bifrost_core::ref_assets::Resolver::with_roots(vec![dir.clone()]);
+        let mut sounds = SystemSounds::new();
+        let id = sounds.create_named(&resolver, "basso").unwrap().unwrap();
+        assert!(sounds.path(id).unwrap().ends_with("sounds/alerts/Basso.wav"));
+        assert!(sounds.create_named(&resolver, "Glass").is_none(), "absent: caller uses the built-in sound");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]
