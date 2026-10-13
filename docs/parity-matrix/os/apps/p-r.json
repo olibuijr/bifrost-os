@@ -1,0 +1,187 @@
+{
+ "category": "apps",
+ "shard": "p-r",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Applications/Passwords.app",
+   "category": "apps",
+   "name": "Passwords",
+   "path": "/System/Applications/Passwords.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/passwords_page.rs",
+   "status": "partial",
+   "note": "passwords page, no separate passwords app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Phone.app",
+   "category": "apps",
+   "name": "Phone",
+   "path": "/System/Applications/Phone.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple telephony",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Photo Booth.app",
+   "category": "apps",
+   "name": "Photo Booth",
+   "path": "/System/Applications/Photo Booth.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/camera/mod.rs",
+   "status": "partial",
+   "note": "Camera (bifrost.camera), capture app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Photos.app",
+   "category": "apps",
+   "name": "Photos",
+   "path": "/System/Applications/Photos.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/photos/mod.rs",
+   "status": "partial",
+   "note": "Photos (bifrost.photos) in the shell",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Podcasts.app",
+   "category": "apps",
+   "name": "Podcasts",
+   "path": "/System/Applications/Podcasts.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/podcasts-desktop",
+   "status": "partial",
+   "note": "Podcasts app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Preview.app",
+   "category": "apps",
+   "name": "Preview",
+   "path": "/System/Applications/Preview.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/pdfcraft-desktop",
+   "status": "partial",
+   "note": "PDF viewing and editing; no image preview",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/QuickTime Player.app",
+   "category": "apps",
+   "name": "QuickTime Player",
+   "path": "/System/Applications/QuickTime Player.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/video.rs",
+   "status": "partial",
+   "note": "video playback in the shell",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Reminders.app",
+   "category": "apps",
+   "name": "Reminders",
+   "path": "/System/Applications/Reminders.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/reminders-desktop",
+   "status": "partial",
+   "note": "Reminders app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Utilities/Print Center.app",
+   "category": "apps",
+   "name": "Print Center",
+   "path": "/System/Applications/Utilities/Print Center.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no print queue app; print_sheet.rs only",
+   "rea": []
+  }
+ ]
+}

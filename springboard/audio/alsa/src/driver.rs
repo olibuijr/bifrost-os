@@ -339,6 +339,11 @@ pub fn physical_format(rate: u32, channels: u32, fmt: SampleFormat, interleaved:
     }
 }
 
+/// The device stamp when it is within 1 s of `now` (same clock), else 0 (a realtime or bogus stamp).
+fn sane_stamp(ts: u64, now: u64) -> u64 {
+    if ts.abs_diff(now) <= 1_000_000_000 { ts } else { 0 }
+}
+
 /// An open device: the IO thread's handle.
 pub struct AlsaIo {
     out: Option<Pcm>,
@@ -347,6 +352,7 @@ pub struct AlsaIo {
     quantum: u32,
     prefill: u32,
     last_ts: u64,
+    warned_clock: bool,
     xruns: u64,
     /// Playback converter latency in frames: hardware FIFO plus the codec and link delay the kernel reports.
     conv_out: u32,
@@ -383,7 +389,7 @@ impl AlsaIo {
         let buffer = out.as_ref().or(inp.as_ref()).map_or(0, |p| p.buffer_frames);
         let prefill = (cfg.quantum * 2).min(buffer / 2).max(cfg.quantum.min(buffer));
         dlog!("opened {} {}Hz quantum {} prefill {} buffer {}", e.desc.uid, rate, cfg.quantum, prefill, buffer);
-        Ok(AlsaIo { out, inp, dll: Dll::new(rate as f64, cfg.quantum), quantum: cfg.quantum, prefill, last_ts: 0, xruns: 0, conv_out: 0, conv_in: 0, started: false, gone: false, restarted: None })
+        Ok(AlsaIo { out, inp, dll: Dll::new(rate as f64, cfg.quantum), quantum: cfg.quantum, prefill, last_ts: 0, warned_clock: false, xruns: 0, conv_out: 0, conv_in: 0, started: false, gone: false, restarted: None })
     }
 
     /// Cycles lost to under- and overruns since open.
@@ -496,11 +502,18 @@ impl DeviceIo for AlsaIo {
         }
         let s = p.status();
         let running = s.state == STATE_RUNNING;
-        if running && s.tstamp_ns != 0 && s.tstamp_ns != self.last_ts {
-            self.last_ts = s.tstamp_ns;
-            self.dll.update(s.hw_frames, s.tstamp_ns);
+        let now = now_raw_ns();
+        let ts = if s.tstamp_ns == 0 { 0 } else { sane_stamp(s.tstamp_ns, now) };
+        if s.tstamp_ns != 0 && ts == 0 && !self.warned_clock {
+            self.warned_clock = true;
+            dlog!("device timestamps are not on the host clock ({} ns vs {} ns): using the read time", s.tstamp_ns, now);
         }
-        HwPosition { hw_frames: s.hw_frames, host_ns: s.tstamp_ns, running }
+        let ts = if s.tstamp_ns != 0 && ts == 0 { now } else { ts };
+        if running && ts != 0 && ts != self.last_ts {
+            self.last_ts = ts;
+            self.dll.update(s.hw_frames, ts);
+        }
+        HwPosition { hw_frames: s.hw_frames, host_ns: ts, running }
     }
 
     fn read_input(&mut self, frames: u32, dst: &mut BufferList) -> Result<(), Xrun> {
@@ -616,6 +629,14 @@ impl DeviceIo for AlsaIo {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn realtime_sized_stamps_are_rejected() {
+        let now = 5_000_000_000_000u64;
+        assert_eq!(super::sane_stamp(now - 200_000, now), now - 200_000);
+        assert_eq!(super::sane_stamp(1_791_845_800_151_835_200, now), 0);
+        assert_eq!(super::sane_stamp(now + 2_000_000_000, now), 0);
+    }
+
     use super::*;
     use crate::ctl::DbScale;
 

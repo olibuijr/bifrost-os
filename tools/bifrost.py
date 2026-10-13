@@ -7,6 +7,8 @@
   bifrost pc names | browser-smoke                                name guard; Browser smoke on Midget via the MCP
   bifrost pc smoke|adoption|gallery                              host app previews and Golden Gate SDK adoption (docs/golden-gate-sdk-adoption.md)
   bifrost pc parity status|coverage|show|gaps|check|build|...     reference SDK vs BifrOSt parity matrix (docs/parity-matrix/)
+  bifrost pc os-inventory [--index TSV]                           OS layer of the matrix from the macOS 27 file index (parity os-status)
+  bifrost pc ref extract REGEX... [--out DIR] | ref index         stream files out of the LZRAVEN macOS 27 reference (clean-room reading)
   bifrost pc shot|tap|rtap|swipe|key|type|wait-change            computer use on the headed x86 VM
   bifrost site build|check|doctest|shot|ship                      bifrost.olibuijr.com (~/Projects/bifrost-site/tools/site.py)
   bifrost e2e [--list] [scenario ...]                            end-to-end scenarios on the x86 VM
@@ -136,6 +138,28 @@ def cmd_pc(a):
     if op == "parity":
         # reference SDK vs BifrOSt parity matrix: status|coverage|show|gaps|check|build|import|db-export|refresh-index
         sys.exit(subprocess.run([sys.executable, os.path.join(here, "parity", "parity.py")] + rest).returncode)
+    if op == "os-inventory":
+        # the OS layer of the parity matrix from the reference file index: os-inventory [--index TSV] (default: the
+        # macOS 27 index ~/Projects/macos-ref/extract/ref27-index.tsv); writes docs/parity-matrix/os/<category>/*.json
+        index = os.path.expanduser("~/Projects/macos-ref/extract/ref27-index.tsv")
+        args = rest if "--index" in rest else ["--index", index] + rest
+        sys.exit(subprocess.run([sys.executable, os.path.join(here, "parity", "os_inventory.py")] + args).returncode)
+    if op == "ref":
+        # the macOS 27 reference (LZRAVEN OTA payload, decoded with liblzraven): ref extract REGEX... [--out DIR]
+        # streams the payload and writes only matching paths (default out: ~/Projects/macos-ref/extract/ref27),
+        # ref index rebuilds the file index; clean-room: read and measure, never copy into the repo
+        refdir = os.path.expanduser("~/Projects/macos-ref")
+        tool = os.path.join(refdir, "tools", "aa_stream.py")
+        payload = os.path.join(refdir, "extract/system/26A434__MacOS/AssetData/payloadv2")
+        if not rest or rest[0] not in ("extract", "index"):
+            sys.exit("usage: bifrost pc ref extract REGEX... [--out DIR] | bifrost pc ref index")
+        out = rest[rest.index("--out") + 1] if "--out" in rest else os.path.join(refdir, "extract/ref27")
+        pats = [a for i, a in enumerate(rest[1:], 1) if a != "--out" and rest[i - 1] != "--out"]
+        args = [sys.executable, "-I", tool, payload, out]
+        if rest[0] == "index":
+            args += ["--index", os.path.join(refdir, "extract/ref27-index.tsv")]
+        args += [x for p in pats for x in ("--match", p)]
+        sys.exit(subprocess.run(args).returncode)
     if op == "adoption":
         # how far each app has moved to the SDK kit: fixed dark colours left, widgets used, full-size window
         sys.exit(subprocess.run([sys.executable, os.path.join(here, "sdk-adoption.py")] + rest).returncode)

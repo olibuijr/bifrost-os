@@ -278,6 +278,14 @@ impl Pcm {
     /// Opens the node (non-blocking). Fails with `EBUSY` while another client holds the stream.
     pub fn open(card: u32, device: u32, dir: Direction) -> io::Result<Pcm> {
         let fd = open_dev(&pcm_path(card, device, dir), true)?;
+        // Without this the kernel ignores sw_params.tstamp_type and stamps with CLOCK_REALTIME.
+        let mut ver = PCM_USER_VERSION;
+        // SAFETY: both requests take a pointer to an i32.
+        unsafe {
+            let _ = ioctl(fd, PCM_USER_PVERSION, &mut ver);
+            let mut ty = TSTAMP_TYPE_MONOTONIC_RAW as i32;
+            let _ = ioctl(fd, PCM_TTSTAMP, &mut ty);
+        }
         Ok(Pcm {
             fd,
             dir,
@@ -353,6 +361,7 @@ impl Pcm {
         let mut sw = SwParams::zeroed();
         sw.tstamp_mode = TSTAMP_MODE_ENABLE;
         sw.tstamp_type = TSTAMP_TYPE_MONOTONIC_RAW;
+        sw.proto = PCM_USER_VERSION as u32;
         sw.period_step = 1;
         sw.avail_min = self.period_frames.max(1) as u64;
         sw.start_threshold = 1 << 32;

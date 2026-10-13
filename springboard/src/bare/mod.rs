@@ -11,6 +11,7 @@ pub mod jank;
 pub mod input;
 pub mod pmqos;
 pub mod pointer_finger;
+pub mod pointer_prefs;
 pub mod kms;
 pub mod nl80211;
 pub mod platform;
@@ -23,6 +24,8 @@ pub mod timezone;
 pub mod vibrator;
 #[cfg(feature = "desktop-wayland")]
 pub mod wayland;
+#[cfg(feature = "desktop-wayland")]
+pub mod material_client;
 
 #[cfg(feature="desktop-wayland")]
 pub mod desktop_input;

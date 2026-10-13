@@ -245,6 +245,8 @@ pub struct Settings {
     login_approve_out: Vec<String>,
     /// the ids the user moved one place earlier in Start Order
     login_moved: Vec<String>,
+    /// the Login Items & Extensions page's background agents and app extensions (`login_items_page::scan_installed`), with the agents the user turned off
+    login_ext: super::login_items_page::LoginExtensions,
     /// Settings > Fonts, loaded when the page opens
     fonts: super::pages::FontsView,
     sound: super::sound_page::SoundView,
@@ -405,6 +407,8 @@ impl Settings {
     /// `wallpapers` is the packed catalogue; `info.wallpaper` names the
     /// current one; `prefs` holds the persisted options.
     pub fn new(ui: &Ui, info: &Info, prefs: &Prefs, w: i32, h: i32, wallpapers: Rc<Vec<Wallpaper>>) -> Self {
+        let opts = Options::load(prefs);
+        crate::bare::pointer_prefs::set(opts.pointer_tuning());
         let mut st = Settings {
             w,
             h,
@@ -418,7 +422,7 @@ impl Settings {
             split_allowed: true,
             side_cache: None,
             info: info.clone(),
-            opts: Options::load(prefs),
+            opts,
             haptics: false,
             a11y: AccessibilitySettings::load(prefs),
             wallpapers,
@@ -439,6 +443,7 @@ impl Settings {
             login_pending: Vec::new(),
             login_approve_out: Vec::new(),
             login_moved: Vec::new(),
+            login_ext: Default::default(),
             login_out: Vec::new(),
             fonts: Default::default(),
             sound: Default::default(),
@@ -519,7 +524,7 @@ impl Settings {
 
     fn model(&self) -> Model<'_> {
         let now = self.info.battery_history.last().map_or(0, |s| s.unix);
-        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, fonts: &self.fonts, sound: &self.sound }
+        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: &self.fonts, sound: &self.sound }
     }
 
     fn wallpaper_name(&self) -> String {
@@ -688,6 +693,11 @@ impl Settings {
         &self.opts
     }
 
+    /// Publishes the Mouse and Trackpad choices to the input layer (`bare::pointer_prefs`).
+    fn apply_pointer(&self) {
+        crate::bare::pointer_prefs::set(self.opts.pointer_tuning());
+    }
+
     /// The accessibility settings as the user has set them.
     pub fn accessibility(&self) -> &AccessibilitySettings {
         &self.a11y
@@ -744,6 +754,13 @@ impl Settings {
     pub(super) fn set_login_items(&mut self, v: Vec<(String, String)>, pending: Vec<(String, String)>) {
         self.login_items = v;
         self.login_pending = pending;
+    }
+
+    /// The Login Items & Extensions page's model: the installed apps' background agents and extensions, and the
+    /// `login.background.off` ids read from the prefs.
+    pub(super) fn set_login_extensions(&mut self, mut ext: super::login_items_page::LoginExtensions, background_off: Vec<String>) {
+        ext.background_off = background_off;
+        self.login_ext = ext;
     }
 
     /// The Login Items ids the user moved earlier since the last call, in order.
@@ -1687,6 +1704,21 @@ impl Settings {
                 }
                 vec![]
             }
+            Slider::MouseSpeed | Slider::MouseScroll | Slider::TrackpadSpeed => {
+                let v = v.clamp(0., 1.);
+                let speed = super::options::speed_from_slider(v);
+                match which {
+                    Slider::MouseSpeed => self.opts.mouse_speed = speed,
+                    Slider::MouseScroll => self.opts.mouse_scroll = speed,
+                    _ => self.opts.trackpad_speed = speed,
+                }
+                self.list_mut().expect("list").set_slider(g, i, v);
+                self.apply_pointer();
+                if release {
+                    self.opts.save(prefs);
+                }
+                vec![]
+            }
             Slider::LiquidGlass => {
                 let v = v.clamp(0., 1.);
                 self.list_mut().expect("list").set_slider(g, i, v);
@@ -1744,6 +1776,18 @@ impl Settings {
             }
             Action::GameController(edit) => {
                 let _ = super::game_controllers_page::apply(prefs, &edit);
+                self.rebuild_visible(ui);
+                vec![]
+            }
+            Action::BackgroundAgentToggle(id) => {
+                let off = &mut self.login_ext.background_off;
+                match off.iter().position(|a| *a == id) {
+                    Some(i) => {
+                        off.remove(i);
+                    }
+                    None => off.push(id),
+                }
+                let _ = prefs.set(super::login_items_page::BACKGROUND_OFF_KEY, &super::login_items_page::background_off_to_pref(&off[..]));
                 self.rebuild_visible(ui);
                 vec![]
             }
@@ -1870,6 +1914,12 @@ impl Settings {
                         self.desk.sidebar_icons = k.min(super::pages::SIDEBAR_ICON_SIZES.len() - 1);
                         let _ = prefs.set(super::pages::SIDEBAR_ICON_PREF, &self.desk.sidebar_icons.to_string());
                         self.desk.apply();
+                        vec![]
+                    }
+                    Pick::TrackpadSecondary(k) => {
+                        self.opts.trackpad_secondary = k.min(super::options::TRACKPAD_SECONDARY.len() - 1);
+                        self.opts.save(prefs);
+                        self.apply_pointer();
                         vec![]
                     }
                     Pick::ScrollBars(k) => {
@@ -2060,6 +2110,23 @@ impl Settings {
             Toggle::BoldText => flip(&mut self.opts.bold_text),
             Toggle::AutoJoin => flip(&mut self.opts.auto_join),
             Toggle::Dnd => flip(&mut self.opts.dnd),
+            Toggle::NaturalScroll => {
+                let on = flip(&mut self.opts.natural_scroll);
+                self.apply_pointer();
+                on
+            }
+            Toggle::TapToClick => {
+                let on = flip(&mut self.opts.tap_to_click);
+                self.apply_pointer();
+                on
+            }
+            Toggle::SwapButtons => {
+                let on = flip(&mut self.opts.swap_buttons);
+                self.apply_pointer();
+                on
+            }
+            Toggle::LoginNamePassword => flip(&mut self.opts.login_name_password),
+            Toggle::LoginHints => flip(&mut self.opts.login_hints),
             Toggle::AssistiveTouch => flip(&mut self.opts.assistive_touch),
             Toggle::ReduceMotion => flip(&mut self.a11y.reduce_motion),
             Toggle::IncreaseContrast => flip(&mut self.a11y.increase_contrast),
@@ -2662,7 +2729,7 @@ mod tests {
             (vec!["General", "Software Update"], PageId::SoftwareUpdate),
             (vec!["General", "Date & Time"], PageId::DateTime),
             (vec!["General", "Default Apps"], PageId::DefaultApps),
-            (vec!["General", "Login Items"], PageId::LoginItems),
+            (vec!["General", "Login Items & Extensions"], PageId::LoginItems),
             (vec!["General", "Game Controllers"], PageId::GameControllers),
             (vec!["General", "Fonts"], PageId::Fonts),
             (vec!["General", "Fonts", "System Font"], PageId::FontPick(bifrost_render::fontprefs::FontRole::System)),
@@ -2677,6 +2744,13 @@ mod tests {
             (vec!["Home Screen & Dock"], PageId::HomeScreen),
             (vec!["Home Screen & Dock", "Hot Corners"], PageId::HotCorners),
             (vec!["Overview"], PageId::Overview),
+            (vec!["Sharing"], PageId::Sharing),
+            (vec!["Sharing", "Nearby Share"], PageId::Nearby),
+            (vec!["Sharing", "AirPlay & Handoff"], PageId::AirPlayHandoff),
+            (vec!["Lock Screen"], PageId::LockScreen),
+            (vec!["Trackpad"], PageId::Trackpad),
+            (vec!["Mouse"], PageId::Mouse),
+            (vec!["Users & Groups"], PageId::Users),
             (vec!["Keyboard Shortcuts"], PageId::Shortcuts),
             (vec!["Accessibility"], PageId::Accessibility),
             (vec!["Wallpaper"], PageId::Wallpaper),

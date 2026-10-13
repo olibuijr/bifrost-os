@@ -257,6 +257,41 @@ impl Drawing {
         }
     }
 
+    /// Renders the drawing over `rect` (drawing coordinates) at `scale` pixels per point, the way
+    /// the reference SDK image call does. The image is `ceil(w * scale)` by `ceil(h * scale)` pixels, starting at the
+    /// rect's top left. Strokes are painted in drawing order with source-over blending. A stroke is its width around its
+    /// segments, with a half-pixel edge ramp. The colour alpha scales the coverage. Per-point opacity, pressure and
+    /// the blend modes of marker ink are not rendered yet. An empty, non-finite or too large rect or scale gives an
+    /// empty raster.
+    pub fn image(&self, rect: Rect, scale: f32) -> Raster {
+        let finite = [rect.x, rect.y, rect.w, rect.h, scale].iter().all(|v| v.is_finite());
+        if !finite || rect.w <= 0.0 || rect.h <= 0.0 || scale <= 0.0 {
+            return Raster::default();
+        }
+        let w = (rect.w * scale).ceil() as usize;
+        let h = (rect.h * scale).ceil() as usize;
+        if w == 0 || h == 0 || w.checked_mul(h).map_or(true, |n| n > MAX_RASTER_PIXELS) {
+            return Raster::default();
+        }
+        let mut pixels = vec![0u32; w * h];
+        for s in &self.strokes {
+            paint_stroke(s, rect, scale, w, h, &mut pixels);
+        }
+        Raster { width: w, height: h, pixels }
+    }
+
+    /// Erases the strokes that pass within `radius` of `(x, y)`, as the reference vector eraser does (vector mode):
+    /// a stroke goes as a whole when any of its segments comes that close. A negative or non-finite radius, or a
+    /// non-finite point, erases nothing. Returns how many strokes were removed.
+    pub fn erase_strokes_at(&mut self, x: f32, y: f32, radius: f32) -> usize {
+        if !(x.is_finite() && y.is_finite() && radius.is_finite() && radius >= 0.0) {
+            return 0;
+        }
+        let before = self.strokes.len();
+        self.strokes.retain(|s| !stroke_within(s, x, y, radius));
+        before - self.strokes.len()
+    }
+
     /// The text form: a header line, then for each stroke a `stroke` line and one `point` line per point.
     /// Floats are written with their shortest exact form, so `from_text` gives back the same values.
     pub fn to_text(&self) -> String {
@@ -342,6 +377,109 @@ impl fmt::Display for DrawingError {
 }
 
 impl std::error::Error for DrawingError {}
+
+/// The largest raster `Drawing::image` will build, in pixels (about 256 MB as 0xAARRGGBB).
+const MAX_RASTER_PIXELS: usize = 1 << 26;
+
+/// A rendered drawing (the result of `image`): `width * height` pixels as 0xAARRGGBB with straight alpha, row by
+/// row from the top. Pixels with no ink are 0.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Raster {
+    pub width: usize,
+    pub height: usize,
+    pub pixels: Vec<u32>,
+}
+
+/// The pixel span `[a, b)` that drawing units `lo..hi` cover, when pixel 0 starts at `origin` and there are `scale`
+/// pixels per unit. The span is clipped to `0..max`.
+fn pixel_span(lo: f32, hi: f32, origin: f32, scale: f32, max: usize) -> (usize, usize) {
+    let a = ((lo - origin) * scale).floor().clamp(0.0, max as f32) as usize;
+    let b = ((hi - origin) * scale).ceil().clamp(0.0, max as f32) as usize;
+    (a, b.max(a))
+}
+
+/// Source-over blend of colour `rgb` with coverage `alpha` (0..=1) onto a straight-alpha pixel `dst`.
+fn over(rgb: u32, alpha: f32, dst: u32) -> u32 {
+    let da = (dst >> 24) as f32 / 255.0;
+    let out_a = alpha + da * (1.0 - alpha);
+    if out_a <= 0.0 {
+        return dst;
+    }
+    let mut out = ((out_a * 255.0).round().min(255.0) as u32) << 24;
+    for shift in [0u32, 8, 16] {
+        let s = ((rgb >> shift) & 0xff) as f32;
+        let d = ((dst >> shift) & 0xff) as f32;
+        let v = (s * alpha + d * da * (1.0 - alpha)) / out_a;
+        out |= (v.round().clamp(0.0, 255.0) as u32) << shift;
+    }
+    out
+}
+
+/// Paints one stroke into `pixels`, a `w` by `h` image over `rect` at `scale`. The coverage of each pixel is the
+/// largest over the stroke's segments, so joints do not darken, and the stroke is blended once per pixel.
+fn paint_stroke(s: &Stroke, rect: Rect, scale: f32, w: usize, h: usize, pixels: &mut [u32]) {
+    let bounds = match s.bounds() {
+        Some(b) => b,
+        None => return,
+    };
+    let radius = (s.ink.width * 0.5).max(0.0);
+    let reach = radius + 1.0 / scale;
+    let (x0, x1) = pixel_span(bounds.x - reach, bounds.x + bounds.w + reach, rect.x, scale, w);
+    let (y0, y1) = pixel_span(bounds.y - reach, bounds.y + bounds.h + reach, rect.y, scale, h);
+    if x0 >= x1 || y0 >= y1 {
+        return;
+    }
+    let cw = x1 - x0;
+    let mut cov = vec![0.0f32; cw * (y1 - y0)];
+    for (a, b) in segments(s) {
+        let (sx0, sx1) = pixel_span(a.0.min(b.0) - reach, a.0.max(b.0) + reach, rect.x, scale, w);
+        let (sy0, sy1) = pixel_span(a.1.min(b.1) - reach, a.1.max(b.1) + reach, rect.y, scale, h);
+        for j in sy0.max(y0)..sy1.min(y1) {
+            let cy = rect.y + (j as f32 + 0.5) / scale;
+            for i in sx0.max(x0)..sx1.min(x1) {
+                let cx = rect.x + (i as f32 + 0.5) / scale;
+                let c = ((radius - seg_dist(cx, cy, a, b)) * scale + 0.5).clamp(0.0, 1.0);
+                let cell = &mut cov[(j - y0) * cw + (i - x0)];
+                *cell = cell.max(c);
+            }
+        }
+    }
+    let alpha = (s.ink.color >> 24) as f32 / 255.0;
+    let rgb = s.ink.color & 0x00ff_ffff;
+    for j in y0..y1 {
+        for i in x0..x1 {
+            let c = cov[(j - y0) * cw + (i - x0)];
+            if c > 0.0 {
+                let p = &mut pixels[j * w + i];
+                *p = over(rgb, alpha * c, *p);
+            }
+        }
+    }
+}
+
+/// The segments of a stroke as `((x0, y0), (x1, y1))`. A stroke of one point gives a zero-length segment at that point,
+/// so a dot can still be hit or painted.
+fn segments(s: &Stroke) -> Vec<((f32, f32), (f32, f32))> {
+    match s.points.as_slice() {
+        [] => Vec::new(),
+        [p] => vec![((p.x, p.y), (p.x, p.y))],
+        pts => pts.windows(2).map(|w| ((w[0].x, w[0].y), (w[1].x, w[1].y))).collect(),
+    }
+}
+
+/// The distance from `(px, py)` to the segment from `a` to `b`.
+fn seg_dist(px: f32, py: f32, a: (f32, f32), b: (f32, f32)) -> f32 {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let len2 = dx * dx + dy * dy;
+    let t = if len2 > 0.0 { (((px - a.0) * dx + (py - a.1) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
+    let (cx, cy) = (a.0 + dx * t, a.1 + dy * t);
+    ((px - cx).powi(2) + (py - cy).powi(2)).sqrt()
+}
+
+/// Whether any segment of `s` lies within `radius` of `(x, y)`.
+fn stroke_within(s: &Stroke, x: f32, y: f32, radius: f32) -> bool {
+    segments(s).into_iter().any(|(a, b)| seg_dist(x, y, a, b) <= radius)
+}
 
 /// Parses one number and rejects NaN and the infinities.
 fn finite(text: &str) -> Option<f32> {
@@ -500,6 +638,89 @@ mod tests {
         let line = stroke(&[(0.0, 0.0), (20.0, 0.0)]);
         let out = Stroke::blend(&line, &corner(), 0.0);
         assert_eq!(xy(&out), vec![(0.0, 0.0), (10.0, 0.0), (20.0, 0.0)]);
+    }
+
+    fn ink_of(color: u32, width: f32) -> Ink {
+        Ink { kind: InkKind::Pen, color, width }
+    }
+
+    fn line_at_y5(color: u32, width: f32) -> Stroke {
+        Stroke { ink: ink_of(color, width), points: vec![StrokePoint::at(0.0, 5.0), StrokePoint::at(10.0, 5.0)] }
+    }
+
+    fn px(r: &Raster, x: usize, y: usize) -> u32 {
+        r.pixels[y * r.width + x]
+    }
+
+    #[test]
+    fn image_size_is_the_rect_times_the_scale() {
+        let d = Drawing::from_strokes(vec![stroke(&[(1.0, 1.0)])]);
+        let r = d.image(Rect { x: 0.0, y: 0.0, w: 10.0, h: 4.0 }, 2.0);
+        assert_eq!((r.width, r.height, r.pixels.len()), (20, 8, 160));
+        assert_eq!(d.image(Rect { x: 0.0, y: 0.0, w: 0.0, h: 4.0 }, 2.0), Raster::default());
+        assert_eq!(d.image(Rect { x: 0.0, y: 0.0, w: 10.0, h: 4.0 }, 0.0), Raster::default());
+        assert_eq!(d.image(Rect { x: f32::NAN, y: 0.0, w: 10.0, h: 4.0 }, 1.0), Raster::default());
+    }
+
+    #[test]
+    fn a_horizontal_line_paints_its_width_and_nothing_beyond_it() {
+        let d = Drawing::from_strokes(vec![line_at_y5(0xff00_00ff, 2.0)]);
+        let r = d.image(Rect { x: 0.0, y: 0.0, w: 10.0, h: 10.0 }, 1.0);
+        // A width of 2 covers the rows whose centres lie within 1 point of y = 5: rows 4 and 5.
+        assert_eq!(px(&r, 5, 4), 0xff00_00ff);
+        assert_eq!(px(&r, 5, 5), 0xff00_00ff);
+        assert_eq!(px(&r, 5, 3), 0);
+        assert_eq!(px(&r, 5, 6), 0);
+    }
+
+    #[test]
+    fn colour_alpha_scales_the_ink() {
+        let d = Drawing::from_strokes(vec![line_at_y5(0x8000_00ff, 2.0)]);
+        let r = d.image(Rect { x: 0.0, y: 0.0, w: 10.0, h: 10.0 }, 1.0);
+        assert_eq!(px(&r, 5, 5) >> 24, 0x80);
+        assert_eq!(px(&r, 5, 5) & 0x00ff_ffff, 0x0000_ff, "the colour itself is unchanged");
+    }
+
+    #[test]
+    fn later_strokes_are_painted_over_earlier_ones() {
+        let d = Drawing::from_strokes(vec![line_at_y5(0xff00_00ff, 2.0), line_at_y5(0xffff_0000, 2.0)]);
+        let r = d.image(Rect { x: 0.0, y: 0.0, w: 10.0, h: 10.0 }, 1.0);
+        assert_eq!(px(&r, 5, 5), 0xffff_0000);
+    }
+
+    #[test]
+    fn a_dot_paints_a_disc_around_its_point() {
+        let dot = Stroke { ink: ink_of(0xff00_0000, 4.0), points: vec![StrokePoint::at(5.0, 5.0)] };
+        let r = Drawing::from_strokes(vec![dot]).image(Rect { x: 0.0, y: 0.0, w: 10.0, h: 10.0 }, 1.0);
+        assert_eq!(px(&r, 5, 5), 0xff00_0000);
+        assert_eq!(px(&r, 0, 0), 0);
+    }
+
+    #[test]
+    fn strokes_outside_the_rect_are_clipped_without_panicking() {
+        let d = Drawing::from_strokes(vec![line_at_y5(0xff00_00ff, 2.0)]);
+        let r = d.image(Rect { x: 5.0, y: 0.0, w: 5.0, h: 10.0 }, 1.0);
+        assert_eq!((r.width, r.height), (5, 10));
+        assert_eq!(px(&r, 0, 5), 0xff00_00ff, "world x 5.5 is the first column");
+        let away = d.image(Rect { x: 100.0, y: 100.0, w: 5.0, h: 5.0 }, 1.0);
+        assert!(away.pixels.iter().all(|&p| p == 0));
+    }
+
+    #[test]
+    fn vector_eraser_removes_whole_strokes_within_the_radius() {
+        let mut d = Drawing::from_strokes(vec![
+            stroke(&[(0.0, 0.0), (10.0, 0.0)]),
+            stroke(&[(0.0, 10.0), (10.0, 10.0)]),
+            stroke(&[(20.0, 0.0), (20.0, 10.0)]),
+        ]);
+        assert_eq!(d.erase_strokes_at(5.0, 0.5, 1.0), 1, "only the first line is within reach");
+        assert_eq!(d.strokes().len(), 2);
+        assert_eq!(d.erase_strokes_at(5.0, 4.0, 1.0), 0, "a point between the lines hits nothing");
+        assert_eq!(d.erase_strokes_at(20.0, 5.0, 0.0), 1, "a zero radius hits a segment it lies on");
+        assert_eq!(d.strokes().len(), 1);
+        assert_eq!(d.erase_strokes_at(0.0, 0.0, f32::NAN), 0, "a NaN radius erases nothing");
+        assert_eq!(d.erase_strokes_at(0.0, 0.0, -1.0), 0, "a negative radius erases nothing");
+        assert_eq!(d.strokes().len(), 1);
     }
 
     #[test]

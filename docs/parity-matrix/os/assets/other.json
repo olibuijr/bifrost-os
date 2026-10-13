@@ -1,0 +1,364 @@
+{
+ "category": "assets",
+ "shard": "other",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/Fonts/ヒラギノ丸ゴ ProN W4.ttc",
+   "category": "assets",
+   "name": "ヒラギノ丸ゴ ProN W4.ttc",
+   "path": "/System/Library/Fonts/ヒラギノ丸ゴ ProN W4.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 9711308
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Fonts/ヒラギノ明朝 ProN.ttc",
+   "category": "assets",
+   "name": "ヒラギノ明朝 ProN.ttc",
+   "path": "/System/Library/Fonts/ヒラギノ明朝 ProN.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 19394720
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W0.ttc",
+   "category": "assets",
+   "name": "ヒラギノ角ゴシック W0.ttc",
+   "path": "/System/Library/Fonts/ヒラギノ角ゴシック W0.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 3567260
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W1.ttc",
+   "category": "assets",
+   "name": "ヒラギノ角ゴシック W1.ttc",
+   "path": "/System/Library/Fonts/ヒラギノ角ゴシック W1.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7270616
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W2.ttc",
+   "category": "assets",
+   "name": "ヒラギノ角ゴシック W2.ttc",
+   "path": "/System/Library/Fonts/ヒラギノ角ゴシック W2.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7253864
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
+   "category": "assets",
+   "name": "ヒラギノ角ゴシック W3.ttc",
+   "path": "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7848412
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc",
+   "category": "assets",
+   "name": "ヒラギノ角ゴシック W4.ttc",
+   "path": "/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7242460
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W5.ttc",
+   "category": "assets",
+   "name": "ヒラギノ角ゴシック W5.ttc",
+   "path": "/System/Library/Fonts/ヒラギノ角ゴシック W5.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7242924
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",
+   "category": "assets",
+   "name": "ヒラギノ角ゴシック W6.ttc",
+   "path": "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 7950428
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W7.ttc",
+   "category": "assets",
+   "name": "ヒラギノ角ゴシック W7.ttc",
+   "path": "/System/Library/Fonts/ヒラギノ角ゴシック W7.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 3603380
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W8.ttc",
+   "category": "assets",
+   "name": "ヒラギノ角ゴシック W8.ttc",
+   "path": "/System/Library/Fonts/ヒラギノ角ゴシック W8.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 3740272
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Fonts/ヒラギノ角ゴシック W9.ttc",
+   "category": "assets",
+   "name": "ヒラギノ角ゴシック W9.ttc",
+   "path": "/System/Library/Fonts/ヒラギノ角ゴシック W9.ttc",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 3465048
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/儷宋 Pro.ttf",
+   "category": "assets",
+   "name": "儷宋 Pro.ttf",
+   "path": "/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/儷宋 Pro.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 8796
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/儷黑 Pro.ttf",
+   "category": "assets",
+   "name": "儷黑 Pro.ttf",
+   "path": "/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/儷黑 Pro.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 5776
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/华文仿宋.ttf",
+   "category": "assets",
+   "name": "华文仿宋.ttf",
+   "path": "/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/华文仿宋.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 10744
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/华文细黑.ttf",
+   "category": "assets",
+   "name": "华文细黑.ttf",
+   "path": "/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/华文细黑.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 8500
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/华文黑体.ttf",
+   "category": "assets",
+   "name": "华文黑体.ttf",
+   "path": "/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/Subsets/华文黑体.ttf",
+   "kind": "font",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 9284
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: asset, inventory only, never copied",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

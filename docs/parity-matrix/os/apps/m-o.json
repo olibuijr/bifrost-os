@@ -1,0 +1,187 @@
+{
+ "category": "apps",
+ "shard": "m-o",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Applications/Mail.app",
+   "category": "apps",
+   "name": "Mail",
+   "path": "/System/Applications/Mail.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no mail app; defaultapps.rs names a mail handler only",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Maps.app",
+   "category": "apps",
+   "name": "Maps",
+   "path": "/System/Applications/Maps.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no maps app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Messages.app",
+   "category": "apps",
+   "name": "Messages",
+   "path": "/System/Applications/Messages.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no messages app; catalog id bifrost.messages only",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Mission Control.app",
+   "category": "apps",
+   "name": "Mission Control",
+   "path": "/System/Applications/Mission Control.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/overview.rs",
+   "status": "partial",
+   "note": "Overview, the shell's window overview",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Music.app",
+   "category": "apps",
+   "name": "Music",
+   "path": "/System/Applications/Music.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/music-desktop",
+   "status": "partial",
+   "note": "Music app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/News.app",
+   "category": "apps",
+   "name": "News",
+   "path": "/System/Applications/News.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/news-desktop",
+   "status": "partial",
+   "note": "News app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Notes.app",
+   "category": "apps",
+   "name": "Notes",
+   "path": "/System/Applications/Notes.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/notes-desktop",
+   "status": "partial",
+   "note": "Notes app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Utilities/Magnifier.app",
+   "category": "apps",
+   "name": "Magnifier",
+   "path": "/System/Applications/Utilities/Magnifier.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/magnifier.rs",
+   "status": "partial",
+   "note": "Magnifier (bifrost.magnifier) in the shell",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Utilities/Migration Assistant.app",
+   "category": "apps",
+   "name": "Migration Assistant",
+   "path": "/System/Applications/Utilities/Migration Assistant.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no migration assistant",
+   "rea": []
+  }
+ ]
+}

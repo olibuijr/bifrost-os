@@ -82,6 +82,33 @@ fn bad() -> u32 {
     Pair::new(rgba(255, 105, 97, 255), rgba(215, 0, 21, 255)).now()
 }
 
+/// Longest lock message kept; longer text is cut at a character boundary.
+pub const MESSAGE_MAX: usize = 200;
+
+/// The message shown on the locked screen (Settings > Lock Screen writes it): one `message=...` line in the
+/// `lock-message` file of the shell's data directory. Control characters are dropped, blank text means no message.
+pub fn parse_lock_message(text: &str) -> Option<String> {
+    let raw = text.lines().find_map(|l| l.strip_prefix("message="))?;
+    let clean: String = raw.chars().filter(|c| !c.is_control()).collect();
+    let clean = clean.trim();
+    if clean.is_empty() {
+        return None;
+    }
+    Some(clean.chars().take(MESSAGE_MAX).collect())
+}
+
+/// The lock message from the first data directory that has one (system file first, then the user's).
+pub fn load_lock_message() -> Option<String> {
+    let mut paths = vec![std::path::PathBuf::from("/var/lib/springboard/lock-message")];
+    if let Some(x) = std::env::var_os("XDG_DATA_HOME") {
+        paths.push(std::path::PathBuf::from(x).join("springboard/lock-message"));
+    }
+    if let Some(h) = std::env::var_os("HOME") {
+        paths.push(std::path::PathBuf::from(h).join(".local/share/springboard/lock-message"));
+    }
+    paths.iter().find_map(|p| std::fs::read_to_string(p).ok().and_then(|t| parse_lock_message(&t)))
+}
+
 /// What the root helper answered to `login.authenticate`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Reply {
@@ -159,6 +186,8 @@ pub struct Login {
     sheet: Option<Sheet>,
     /// the power button's menu (Sleep, Restart…, Shut Down…) is open
     power_open: bool,
+    /// the user's message for the locked screen, drawn low on the screen
+    pub lock_message: Option<String>,
     backend: Arc<dyn Backend>,
     w: i32,
     h: i32,
@@ -178,6 +207,7 @@ impl Login {
             pending: None,
             sheet: None,
             power_open: false,
+            lock_message: None,
             backend,
             w,
             h,
@@ -538,6 +568,10 @@ impl Login {
             let mi = ui.text(&m, 12.0, Weight::Regular, col);
             centred(s, &mi, cx, line as i32);
         }
+        if let Some(m) = &self.lock_message {
+            let mi = ui.text(m, 13.0, Weight::Regular, ink_2());
+            centred(s, &mi, cx, (h - ui.pt(64.0) - mi.h as f32) as i32);
+        }
         let (px, py, pd, _) = self.power_button(ui);
         if self.power_open {
             s.fill_rrect(px - ui.pt(3.0), py - ui.pt(3.0), pd + ui.pt(6.0), pd + ui.pt(6.0), ui.pt(6.0), rgba(255, 255, 255, 60));
@@ -762,7 +796,9 @@ impl super::Shell {
         }
         let Some(b) = self.login_backend.clone() else { return };
         let fallback = super::account::load().full_name;
-        self.login = Some(Login::new(b, &fallback, self.w, self.h, t));
+        let mut l = Login::new(b, &fallback, self.w, self.h, t);
+        l.lock_message = load_lock_message();
+        self.login = Some(l);
         self.dirty = true;
     }
 
@@ -988,5 +1024,14 @@ mod tests {
         assert_eq!(autologin_name("x\ny"), None);
         assert_eq!(autologin_name(&"a".repeat(65)), None);
         assert_eq!(autologin_name(&"a".repeat(64)).map(|n| n.len()), Some(64));
+    }
+
+    #[test]
+    fn lock_message_takes_one_clean_line() {
+        assert_eq!(parse_lock_message("message=Back at 5\n"), Some("Back at 5".to_string()));
+        assert_eq!(parse_lock_message("message=  \n"), None);
+        assert_eq!(parse_lock_message("other=x"), None);
+        assert_eq!(parse_lock_message("message=a\u{7}b").as_deref(), Some("ab"));
+        assert_eq!(parse_lock_message(&format!("message={}", "x".repeat(300))).map(|m| m.chars().count()), Some(MESSAGE_MAX));
     }
 }

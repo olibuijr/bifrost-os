@@ -114,7 +114,7 @@ Shell side (this round): the shell binds `ext_background_effect_manager_v1` when
 the blur capability. For each window with materials it then sends the material rects (shadow margin added) as the
 blur region and leaves the window translucent: no presenter blur, no inactive opaque plate.
 `BIFROST_WM_MATERIALS=0` keeps the presenter path. The SDK apps (`bifrost_app`) must use the same call; no client
-sends a region yet except the shell, so Files-class apps show no blur under bifrost-wm until step 3 below.
+sends a region yet except the shell and, through it, SDK apps (step 3 below).
 
 ### labwc: black Files and black Settings material (diagnosis, not reproduced)
 
@@ -131,10 +131,75 @@ composed black by labwc. Check on Midget with a screenshot while Files is open, 
 1. (done) Shell windows request blur through ext-background-effect when the server offers it.
 2. Move the region computation into `springboard/ui` (a `material` module), re-exported by `bifrost_app::controls`,
    so the shell and SDK apps share one call (the shell cannot import `bifrost_app`).
-3. SDK: `bifrost_app` windows send the blur region from the kit's `source_list` / `toolbar` material rects and keep
+3. (done for hosted apps) SDK: `bifrost_app` windows send the blur region from the kit's `source_list` / `toolbar` material rects and keep
    their buffer translucent there. Files then blurs like Settings.
+   Status: SDK apps hosted by the shell already declare their materials (`ToShell::Materials`, kit `source_list` /
+   `toolbar_band`); `Shell::take_wayland_materials` turns them into window px (`expand_material`, unit-tested) and
+   `Wayland::window_materials` sends them as the ext-background-effect blur region of the External(N) window, the
+   same path as Settings. No protocol change was needed. Direct apps that own a Wayland surface (route `Direct`)
+   do not send a region yet. Unverified on Midget.
 4. Server: draw the inactive-material plate in the window server (it knows activation) and send xdg `activated` to
    shell windows, so foreign focus no longer leaves the shell believing it is key.
 5. Shell chrome (menu bar, dock, panels) are layer clients (`bifrost-chrome`): give them blur regions too and drop
    `Presenter::set_window_stack` / `under`.
 6. Remove the presenter blur path and labwc after Midget acceptance.
+
+## Materials (2026-10-12)
+
+The window server composes all windows and backs every material, for built-in and external clients alike, the way
+the reference WindowServer does. Code: `wm/src/material_kind.rs` (recipes, pure), `wm/src/bifrost_material.rs`
+(protocol), `wm/src/render_server/scene_build.rs` (`material_nodes`), `render_server/material.rs` (blur passes),
+`wm/src/glass.rs` and `scene.rs` (GLES path).
+
+### `bifrost_material_v1` (`wm/protocol/bifrost-material-v1.xml`)
+
+`ext-background-effect-v1` has no material kind, so BifrOSt adds a private protocol. `bifrost_material_manager_v1.get_material(surface)`
+gives a `bifrost_material_surface_v1` (one per surface). Double-buffered, applied on `wl_surface.commit`:
+
+- `clear()` drops all regions; `destroy` removes them from the next commit.
+- `add_region(region, kind, state, blending, emphasized, radius_tl, radius_tr, radius_br, radius_bl)`: at most 16 per surface.
+  `kind`: titlebar, menu, popover, sidebar, header_view, sheet, window_background, hud_window, full_screen_ui, tool_tip,
+  content_background, under_window_background, under_page_background, glass_regular, glass_clear, selection. `state`: follows_window,
+  active, inactive. `blending`: behind_window, within_window.
+- With any material region, the surface's `ext-background-effect-v1` blur region is ignored; without, the blur region
+  is a `Plain` material (a white veil at 25 %, never replaced by a plate).
+
+### One model (2026-10-12)
+
+The shared model is `bifrost_ui::visual_effect` (`MaterialKind`, 14 kinds, plus `GlassKind` for Liquid Glass). The protocol
+values are fixed by `MaterialKind::window_server_wire` (ui) and `wm::material_kind::MaterialKind::from_model` (exhaustive
+match; `bifrost-wm` depends on `bifrost-ui`). The 16 protocol values are the 14 model kinds plus `glass_regular` (13) and
+`glass_clear` (14); a table test in `material_kind.rs` fails if a kind exists on one side only. The shell reaches the
+protocol from `src/bare/wayland.rs` (`material_client.rs`): when the compositor offers `bifrost_material_manager_v1` each
+window's regions are sent with `add_region` (kind, state, blending, emphasized, four radii; built-in windows and external
+apps alike, from `glass::Rect::detail`); otherwise it falls back to `ext-background-effect` blur regions. The shell/app wire
+carries the same fields (`proto::Material`, SDK protocol 2).
+
+### Recipe and rules
+
+Each kind has a `Recipe` (blur radius, saturation, Dark and Light tint, opaque inactive plate, noise, always-active).
+Tints equal the shell's `MATERIAL_*` pairs (`render/src/ui.rs`).
+
+- Behind-window: samples everything composited below the window (other clients, layers, wallpaper). The compose pass blurs
+  the target so far, so this is exact on the Vulkan path.
+- Active state: a `follows_window` region in a window that is not key draws the opaque inactive plate, except kinds that
+  follow no window state (menu, popover, sheet, HUD, tooltip, full-screen UI, plain). An explicit `active` or `inactive` wins.
+- Within-window: not isolated yet (the compose pass cannot sample one window's earlier pixels alone); resolves to the flat
+  plate of the kind. A gap, recorded in the parity rows.
+- Rounded mask: the largest corner radius masks a single-rectangle region with the compose shader's anti-aliased SDF.
+  Per-corner radii need a shader change (not done).
+- Emphasized: stronger tint (+10 % alpha) and saturation (+0.2).
+- Damage: unchanged. The Vulkan path blurs inside the frame damage; the GLES path re-blurs only when the signature of the
+  elements below (id, commit, geometry), the output size or the recipe saturation changes.
+- Budget: `budgeted_blur` lowers the number of dual-Kawase passes until the pyramid (levels written down and up) is at most
+  3.5 M texels, about 2 ms on a Skylake HD 530; a full 2560x1440 region costs about 2.5 M texels at 5 or 6 passes, so the budget only bites on larger outputs or radii.
+- Noise is in the recipe table but not drawn yet; the GLES path leaves the tint to the client and applies the saturation.
+- Appearance comes from `WmState::material_dark` (`BIFROST_WM_APPEARANCE=light` for Light); no appearance protocol yet.
+
+## Accessibility display options (for the window server)
+
+The shell writes `/run/bifrost/user/accessibility` (atomic rename) whenever Settings > Accessibility > Display changes
+Reduce Transparency, Increase Contrast or Button Shapes. Format: `key=0|1` lines for `reduce_transparency`,
+`increase_contrast`, `differentiate_without_color`. Increase Contrast implies Reduce Transparency (the reader applies it).
+A missing file means all off. Read it with `bifrost_render::appearance::DisplayOptions::read_from(DISPLAY_FILE)` (poll
+it, or watch the directory with inotify) and turn glass off (opaque material tints, no blur) while `reduce_transparency` is set.

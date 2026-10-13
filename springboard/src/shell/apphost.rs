@@ -318,6 +318,8 @@ pub struct AppHost {
     status: Status,
     pub wants_keyboard: bool,
     pub hello: bool,
+    /// the app speaks another SDK protocol (or its packets do not decode): its window shows "This app needs an update"
+    pub incompatible: bool,
     pub commands: bifrost_proto::Commands,
     /// the app's Edit menu titles for Undo and Redo (empty: the plain words)
     pub undo_titles: (String, String),
@@ -429,6 +431,7 @@ impl AppHost {
             status: Status::Running,
             wants_keyboard: false,
             hello: false,
+            incompatible: false,
             commands: bifrost_proto::Commands::default(),
             undo_titles: Default::default(),
             controls: Vec::new(),
@@ -636,7 +639,14 @@ impl AppHost {
         loop {
             match self.chan.recv(false) {
                 Ok(Recv::Packet(p, fds)) => {
-                    let Ok(msg) = ToShell::decode(&p) else { continue };
+                    let Ok(msg) = ToShell::decode(&p) else {
+                        // an app built for another protocol: say so once, stop it, and keep its window up with a message
+                        if !self.incompatible {
+                            eprintln!("springboard: app {} sent a packet this shell cannot decode (SDK protocol {SDK_VERSION}); needs an update", self.id);
+                            self.mark_incompatible();
+                        }
+                        continue;
+                    };
                     self.handle(msg, fds, &mut out);
                 }
                 Ok(Recv::Empty) => break,
@@ -661,7 +671,10 @@ impl AppHost {
     fn handle(&mut self, msg: ToShell, fds: Vec<sys::Owned>, out: &mut Pumped) {
         match msg {
             ToShell::Hello { sdk_version, app_id } => {
-                if sdk_version != SDK_VERSION || (!self.id.is_empty() && app_id != self.id) {
+                if sdk_version != SDK_VERSION {
+                    eprintln!("springboard: app {} speaks SDK protocol {sdk_version}, this shell {SDK_VERSION}; needs an update", self.id);
+                    self.mark_incompatible();
+                } else if !self.id.is_empty() && app_id != self.id {
                     eprintln!("springboard: app {} sent Hello sdk {sdk_version} id {app_id}; killing", self.id);
                     self.kill();
                     out.died = true;
@@ -816,6 +829,12 @@ impl AppHost {
     }
 
     /// Stops the app at once: SIGKILL, with a Quit first (and a polite moment) only when it is not suddenly terminable.
+    /// Stops an app whose protocol does not match and keeps its host, so the window says why instead of staying black.
+    fn mark_incompatible(&mut self) {
+        self.incompatible = true;
+        self.kill();
+    }
+
     pub fn kill(&mut self) {
         if let Some(c) = &mut self.child {
             if self.status == Status::Running {
@@ -1466,7 +1485,16 @@ impl Shell {
             _ => false,
         };
         if !full {
-            s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, super::ui::BLACK);
+            let outdated = matches!(self.ext.get(slot), Some(Some(h)) if h.incompatible);
+            if outdated {
+                let (w, h) = (self.w as f32, self.h as f32);
+                s.fill_rrect(0.0, 0.0, w, h, 0.0, super::ui::BLACK);
+                self.label("This app needs an update", super::ui::MAC_BODY_PT, super::ui::Weight::Semibold, super::ui::WHITE, |im| {
+                    s.blit(im, ((w - im.w as f32) / 2.0) as i32, ((h - im.h as f32) / 2.0) as i32, 255, 255);
+                });
+            } else {
+                s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, super::ui::BLACK);
+            }
         }
         if self.keyboard.shown() || self.keyboard.animating() {
             let kb_top = self.kb_top();
@@ -1547,6 +1575,17 @@ mod tests {
         let mut keyboard = AppHost::with_channel(KEYBOARD_APP_ID, channel, None, cfg);
         keyboard.handle(typed.clone(), vec![], &mut pumped);
         assert_eq!(pumped.requests, vec![typed]);
+    }
+
+    #[test]
+    fn a_hello_from_another_protocol_marks_the_host_incompatible_instead_of_closing_it() {
+        let (channel, _peer) = sys::socketpair_pair().unwrap();
+        let cfg = Configure { w: 4, h: 3, scale: 1., safe_top: 0., safe_bottom: 0., dark: true, text_scale: 1., reduce_motion: false };
+        let mut host = AppHost::with_channel("fixture", channel, None, cfg);
+        let mut pumped = Pumped::default();
+        host.handle(ToShell::Hello { sdk_version: SDK_VERSION + 1, app_id: "fixture".into() }, vec![], &mut pumped);
+        assert!(host.incompatible && !host.hello);
+        assert!(!pumped.died, "the window stays up to show the message");
     }
 
     #[test]

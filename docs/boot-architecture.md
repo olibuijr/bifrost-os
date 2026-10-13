@@ -81,13 +81,27 @@ package build (`packaging/arch/PKGBUILD`, which `package-files.sh` guards), `too
 
 ### One frame
 
-`bootweave-frame` (a `no_std` crate, `springboard/bootweave/frame`) is the single description and renderer of the boot frame:
-background colour, logo (the BifrOSt mark, scaled from the panel size), the progress bar's geometry and style, and the
-failure screens' layout. The loader (GOP blit), Bootweave (KMS dumb buffer), the installer and `bifrost-wm` (first
-scanout) all draw it from the same code, so the pixels are identical at every handover. Light and Dark follow the
-user's appearance, stored with the boot timing record.
+`bootweave-frame` (a `no_std` crate, `springboard/bootweave/frame`) is the single description and renderer of the boot frame.
+There is one boot screen (owner, 2026-10-12: "only show this boot loading"): the start-failed look without its buttons,
+the background and the BifrOSt mark with its orange arch, and **no progress bar**. The mark box is `mark_box(width,
+height)` in panel pixels, independent of any compositor scale. The loader (GOP blit, `efi/src/screen.rs`), Bootweave
+(`/dev/fb0`, `Bar::draw_frame`, and the failure screens through `present`), the installer and `bifrost-wm` all call
+`render`, so the pixels are identical at every handover. `render_bar` remains only as a no-op for old callers. Under
+labwc the shell draws no copy of the frame (its surface can be scaled): Bootweave's frame stays up until the desktop's
+first present, and the shell only writes the `desktop-*` marks.
 
-### The progress bar
+**Appearance source.** The user's Settings choice (`appearance_mode=`), else the boot timing record's appearance, else
+Dark (`supervisor::boot_appearance`). The loader reads the record, Bootweave writes the Settings choice into it, and
+`bifrost-wm` takes it from the published progress record, so a boot never switches between light and dark frames.
+
+**Crash-loop rule.** `takeover::begin` counts every start in `boot_attempts` (latch at `MAX_FAILED_BOOTS` = 3, cleared
+after 60 s up). A clean stop (SIGTERM from systemd, a requested reboot or shutdown, a requested restart) calls
+`takeover::clean_stop`, which writes `last_exit` and resets the counter; only crashes, panics, kills and stalls
+(a stall takes its attempt back) stay counted. Three quick benchmark reboots no longer show the start-failed screen.
+
+### The progress logic (not drawn)
+
+The position below is still computed and published (benches and the boot-time learning use it), but no bar is drawn.
 
 - The bar's position is `elapsed / predicted_total`, eased, clamped below the next checkpoint, and never moves
   backwards. Checkpoints are the stage boundaries (S1 end, S2 end, S3 desktop-ready).

@@ -1,0 +1,175 @@
+{
+ "category": "shaders",
+ "shard": "g-i",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/gpe_rt.metallib",
+   "category": "shaders",
+   "name": "gpe_rt.metallib",
+   "path": "/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/gpe_rt.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "AGXMetal13_3",
+   "facts": {
+    "size": 14261
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/Vision.framework/Versions/A/Resources/ImageFilters.metallib",
+   "category": "shaders",
+   "name": "ImageFilters.metallib",
+   "path": "/System/Library/Frameworks/Vision.framework/Versions/A/Resources/ImageFilters.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "Vision",
+   "facts": {
+    "size": 4719
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Gess_Kernels.metallib",
+   "category": "shaders",
+   "name": "Gess_Kernels.metallib",
+   "path": "/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Gess_Kernels.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CorePhotogrammetry",
+   "facts": {
+    "size": 100866
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe.metallib",
+   "category": "shaders",
+   "name": "harpe.metallib",
+   "path": "/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CoreUSDEdit",
+   "facts": {
+    "size": 2280794
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe_mtlx_base.metallib",
+   "category": "shaders",
+   "name": "harpe_mtlx_base.metallib",
+   "path": "/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe_mtlx_base.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CoreUSDEdit",
+   "facts": {
+    "size": 349668
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe_mtlx_lib_0.metallib",
+   "category": "shaders",
+   "name": "harpe_mtlx_lib_0.metallib",
+   "path": "/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe_mtlx_lib_0.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CoreUSDEdit",
+   "facts": {
+    "size": 567204
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe_mtlx_lib_1.metallib",
+   "category": "shaders",
+   "name": "harpe_mtlx_lib_1.metallib",
+   "path": "/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe_mtlx_lib_1.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CoreUSDEdit",
+   "facts": {
+    "size": 932116
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe_mtlx_lib_2.metallib",
+   "category": "shaders",
+   "name": "harpe_mtlx_lib_2.metallib",
+   "path": "/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/harpe_mtlx_lib_2.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CoreUSDEdit",
+   "facts": {
+    "size": 843908
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

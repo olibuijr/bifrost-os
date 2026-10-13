@@ -26,6 +26,8 @@ const DOCK_PAD_PT: f32 = 10.0;
 const DOCK_GAP_PT: f32 = 10.0;
 const DOCK_MARGIN_PT: f32 = 10.0;
 const DOCK_SEP_PT: f32 = 14.0;
+/// How far past the Dock a dragged icon must be released to leave it, in pt.
+const DOCK_REMOVE_PT: f32 = 40.0;
 /// The dock's Trash slot in the `desk_dock` list (after the divider, always last).
 pub(super) const DOCK_TRASH: usize = usize::MAX;
 /// The Files app the Trash opens, and the XDG trash it shows.
@@ -75,6 +77,18 @@ pub fn tile_rect(a: Rect, tile: Tile) -> Rect {
         Tile::Fill => a,
         Tile::Center => r(a.w / 6, a.h / 6, a.w * 2 / 3, a.h * 2 / 3),
     }
+}
+
+/// Split view: two windows share the work area side by side with a `divider` px gap between them. `lead_permille`
+/// (0..=1000) is the leading window's share of the usable width; each side keeps at least `min_w` px, so the ratio
+/// gives way on a narrow area. The rectangles always cover the area minus the divider.
+#[cfg_attr(not(test), allow(dead_code))] // wired by the split view entry (next round)
+pub fn split_view_rects(a: Rect, lead_permille: i32, divider: i32, min_w: i32) -> (Rect, Rect) {
+    let usable = (a.w - divider).max(0);
+    let lo = min_w.max(0).min(usable / 2);
+    let lead = (usable * lead_permille.clamp(0, 1000) / 1000).clamp(lo, usable - lo);
+    let trail = usable - lead;
+    (Rect { x: a.x, y: a.y, w: lead, h: a.h }, Rect { x: a.x + lead + divider, y: a.y, w: trail, h: a.h })
 }
 
 /// The tile a pointer at (`px`,`py`) snaps to while dragging a title bar: left or right edge = half,
@@ -653,36 +667,44 @@ impl Shell {
         for w in desk.wins.iter().filter(|w| !w.minimized) {
             let Some(id) = apps().iter().position(|a| a.id == w.app).map(|i| i as u32 + 1) else { continue };
             let top = title_of(w.app, &m) as f32;
-            let mut rects: Vec<(f32, f32, f32, f32, f32, bifrost_render::glass::Kind, Option<bool>)> = Vec::new();
+            let mut rects: Vec<(f32, f32, f32, f32, f32, bifrost_render::glass::Kind, Option<bool>, Option<bifrost_render::glass::Detail>)> = Vec::new();
             if vibrant {
                 match w.app {
                     AppId::External(slot) => {
                         if let Some(h) = self.ext.get(slot as usize).and_then(Option::as_ref).filter(|h| h.running()) {
                             for mat in h.materials.iter().take(bifrost_proto::MAX_MATERIALS) {
                                 let b = mat.rect;
-                                rects.push((b.x * m.pt, top + b.y * m.pt, b.w * m.pt, b.h * m.pt, mat.radius * m.pt, glass_kind(mat.kind), glass_active(mat.state)));
+                                let req = mat.request();
+                                let c = req.corners();
+                                let detail = bifrost_render::glass::Detail {
+                                    kind: mat.kind.window_server_wire(),
+                                    within_window: !req.for_window_server(),
+                                    emphasized: mat.emphasized,
+                                    radii: [c.tl * m.pt, c.tr * m.pt, c.br * m.pt, c.bl * m.pt],
+                                };
+                                let r = c.tl.max(c.tr).max(c.br).max(c.bl);
+                                rects.push((b.x * m.pt, top + b.y * m.pt, b.w * m.pt, b.h * m.pt, r * m.pt, glass_kind(mat.kind), glass_active(mat.state), Some(detail)));
                             }
                         }
                     }
                     AppId::Settings => {
                         if let Some(side) = self.settings.as_ref().map(|st| st.sidebar_px()).filter(|&p| p > 0) {
-                            rects.push((0.0, top, side as f32, (w.r.h as f32 - top).max(0.0), 0.0, bifrost_render::glass::Kind::Sidebar, None));
+                            rects.push((0.0, top, side as f32, (w.r.h as f32 - top).max(0.0), 0.0, bifrost_render::glass::Kind::Sidebar, None, None));
                         }
                     }
                     _ => {}
                 }
             }
-            let (ww, wh) = (w.r.w as f32, w.r.h as f32);
-            let glass = rects.into_iter().filter(|r| r.2 > 0.0 && r.3 > 0.0).map(|(x, y, rw, rh, r, kind, active)| {
-                if w.maximized {
-                    return bifrost_render::glass::Rect { x, y, w: rw, h: rh, r, kind, active };
-                }
-                let e = 0.5;
-                let x0 = if x <= e { 0.0 } else { (x - corner).max(0.0) };
-                let y0 = if y <= e { 0.0 } else { (y - corner).max(0.0) };
-                let x1 = if x + rw >= ww - e { ww } else { (x + rw + corner).min(ww) };
-                let y1 = if y + rh >= wh - e { wh } else { (y + rh + corner).min(wh) };
-                bifrost_render::glass::Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0, r: corner.max(r), kind, active }
+            let glass = rects.into_iter().filter(|r| r.2 > 0.0 && r.3 > 0.0).map(|(x, y, rw, rh, r, kind, active, detail)| {
+                let mut g = expand_material((x, y, rw, rh, r, kind, active), (w.r.w as f32, w.r.h as f32), w.maximized, corner);
+                // an expanded region takes the window radius on every corner; an untouched one keeps its own radii
+                g.detail = detail.map(|mut d| {
+                    if (g.x, g.y, g.w, g.h) != (x, y, rw, rh) {
+                        d.radii = [g.r; 4];
+                    }
+                    d
+                });
+                g
             }).collect();
             out.push((id, glass));
         }
@@ -1195,7 +1217,7 @@ impl Shell {
     pub(super) fn desk_event(&mut self, ev: Event, t: f64) -> Option<Vec<Effect>> {
         let m = self.desk_metrics();
         let (list, bar0, icons) = self.desk_dock(&m);
-        let (_, icons) = self.dock_live(bar0, &icons, t / 1000.0);
+        let (dock_bar, icons) = self.dock_live(bar0, &icons, t / 1000.0);
         match ev {
             Event::Down(x, y) => {
                 self.desk.as_mut()?.grab = None;
@@ -1339,7 +1361,10 @@ impl Shell {
                         // the neighbours already show the final order, so dropping them in place is seamless
                         let slot=self.desk.as_mut()?.dock_drop.take();
                         self.desk.as_ref()?.dock_slide.borrow_mut().clear();
-                        if let Some(target)=slot{self.dock_reorder(list[k],list[target],target>k);}
+                        // an app pinned in the Dock and dragged well off it leaves the Dock (its Pin toggles off)
+                        if slot.is_none() && self.dock_removable(list[k]) && super::desktop_dock::dock_drag_off(dock_bar, x, y, self.ui.pt(DOCK_REMOVE_PT)) {
+                            self.dock_change(super::desktop_dock::Change::Pin(list[k]), t);
+                        } else if let Some(target)=slot{self.dock_reorder(list[k],list[target],target>k);}
                         Some(vec![])
                     },
                     Some(Grab::DockDrag{from:k,..}) => {
@@ -1711,7 +1736,7 @@ impl Shell {
         let (bw, bh) = ((bar.w as usize).min(s.w.saturating_sub(bx)), (bar.h as usize).min(s.h.saturating_sub(by)));
         if bw > 0 && bh > 0 && bifrost_render::glass::gpu() {
             let rad = bar.w.min(bar.h) as f32 * DOCK_RADIUS_K;
-            bifrost_render::glass::push(bifrost_render::glass::Rect { x: bar.x as f32, y: bar.y as f32, w: bar.w as f32, h: bar.h as f32, r: rad, ..Default::default() });
+            bifrost_render::glass::push(super::control_center::shell_glass_rect(&bifrost_ui::material_request::ShellSurface::Dock.request((bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32), rad)));
             soft_shadow(s, ui, bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, rad);
             s.fill_rrect(bar.x as f32 - 1.0, bar.y as f32 - 1.0, bar.w as f32 + 2.0, bar.h as f32 + 2.0, rad + 1.0, rgba(255, 255, 255, 36));
             s.fill_rrect(bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, rad, bifrost_render::glass::tint(super::ui::DOCK_TINT.now()));
@@ -2147,6 +2172,27 @@ mod tests {
     }
 
     #[test]
+    fn split_view_shares_the_width_around_the_divider_and_keeps_both_sides_usable() {
+        let a = Rect { x: 0, y: 30, w: 1001, h: 601 };
+        let (l, r) = split_view_rects(a, 500, 8, 320);
+        assert_eq!(l.w + 8 + r.w, a.w, "the two sides and the divider cover the area");
+        assert_eq!((l.w, r.w), (496, 497), "an even split takes the usable width in halves");
+        assert_eq!((l.x, r.x), (0, 504), "the trailing side starts after the divider");
+        assert!(l.y == 30 && r.y == 30 && l.h == 601 && r.h == 601);
+        // the ratio is clamped so neither side drops below the minimum width
+        let (l, r) = split_view_rects(a, 50, 8, 320);
+        assert_eq!((l.w, r.w), (320, 1001 - 8 - 320));
+        let (l, r) = split_view_rects(a, 1000, 8, 320);
+        assert_eq!((l.w, r.w), (1001 - 8 - 320, 320));
+        // a narrow area splits in halves instead of honouring the minimum
+        let (l, r) = split_view_rects(Rect { x: 0, y: 0, w: 300, h: 200 }, 900, 8, 320);
+        assert_eq!((l.w, r.w), (146, 146));
+        // degenerate width never goes negative
+        let (l, r) = split_view_rects(Rect { x: 0, y: 0, w: 4, h: 10 }, 500, 8, 320);
+        assert!(l.w >= 0 && r.w >= 0);
+    }
+
+    #[test]
     fn moving_keeps_the_title_bar_reachable() {
         let m = metrics();
         let mut d = Desk::new();
@@ -2365,6 +2411,39 @@ impl Shell {
     pub(super) fn label<R>(&self, text: &str, pt: f32, weight: Weight, color: u32, f: impl FnOnce(&Image) -> R) -> R {
         let mut cache = self.chrome_text.borrow_mut();
         f(cache.get(&self.ui, text, pt, weight, color))
+    }
+}
+
+/// One material region (window px) as the blur region of its window: unless maximized, each side that lies inside the
+/// window grows by the window radius (the extra blur sits under opaque pixels) and the corner takes the window radius.
+#[cfg(feature = "desktop-wayland")]
+fn expand_material((x, y, rw, rh, r, kind, active): (f32, f32, f32, f32, f32, bifrost_render::glass::Kind, Option<bool>), (ww, wh): (f32, f32), maximized: bool, corner: f32) -> bifrost_render::glass::Rect {
+    if maximized {
+        return bifrost_render::glass::Rect { x, y, w: rw, h: rh, r, kind, active, detail: None };
+    }
+    let e = 0.5;
+    let x0 = if x <= e { 0.0 } else { (x - corner).max(0.0) };
+    let y0 = if y <= e { 0.0 } else { (y - corner).max(0.0) };
+    let x1 = if x + rw >= ww - e { ww } else { (x + rw + corner).min(ww) };
+    let y1 = if y + rh >= wh - e { wh } else { (y + rh + corner).min(wh) };
+    bifrost_render::glass::Rect { x: x0, y: y0, w: x1 - x0, h: y1 - y0, r: corner.max(r), kind, active, detail: None }
+}
+
+#[cfg(all(test, feature = "desktop-wayland"))]
+mod material_rect_tests {
+    use super::*;
+    use bifrost_render::glass::Kind;
+    #[test]
+    fn an_app_sidebar_region_reaches_the_window_edge_and_grows_inside() {
+        // sidebar at the window's left edge under a 28 px title bar, window 400x300, radius 10
+        let g = expand_material((0.0, 28.0, 120.0, 272.0, 0.0, Kind::Sidebar, None), (400.0, 300.0), false, 10.0);
+        assert_eq!((g.x, g.y, g.w, g.h), (0.0, 18.0, 130.0, 282.0));
+        assert_eq!(g.r, 10.0);
+    }
+    #[test]
+    fn a_maximized_window_keeps_the_declared_rect() {
+        let g = expand_material((0.0, 28.0, 120.0, 272.0, 6.0, Kind::Sidebar, None), (400.0, 300.0), true, 10.0);
+        assert_eq!((g.x, g.y, g.w, g.h, g.r), (0.0, 28.0, 120.0, 272.0, 6.0));
     }
 }
 

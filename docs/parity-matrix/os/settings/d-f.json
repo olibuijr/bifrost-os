@@ -1,0 +1,407 @@
+{
+ "category": "settings",
+ "shard": "d-f",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/DateAndTime Extension.appex",
+   "category": "settings",
+   "name": "DateAndTime Extension",
+   "path": "/System/Library/ExtensionKit/Extensions/DateAndTime Extension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Date & Time page (datetime_page.rs)",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/DateTimeIntentsExtension.appex",
+   "category": "settings",
+   "name": "DateTimeIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/DateTimeIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/DesktopSettings.appex",
+   "category": "settings",
+   "name": "DesktopSettings",
+   "path": "/System/Library/ExtensionKit/Extensions/DesktopSettings.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Desktop & Dock page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/DesktopSettingsIntents.appex",
+   "category": "settings",
+   "name": "DesktopSettingsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/DesktopSettingsIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/DisplaysExt.appex",
+   "category": "settings",
+   "name": "DisplaysExt",
+   "path": "/System/Library/ExtensionKit/Extensions/DisplaysExt.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Displays page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/DisplaysSettingsIntentsExtension.appex",
+   "category": "settings",
+   "name": "DisplaysSettingsIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/DisplaysSettingsIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FaceTimeNotificationExtension.appex",
+   "category": "settings",
+   "name": "FaceTimeNotificationExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/FaceTimeNotificationExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple calling service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FamilySettings.appex",
+   "category": "settings",
+   "name": "FamilySettings",
+   "path": "/System/Library/ExtensionKit/Extensions/FamilySettings.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Family Sharing service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FocusSettingsExtension.appex",
+   "category": "settings",
+   "name": "FocusSettingsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/FocusSettingsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/focus.rs",
+   "status": "partial",
+   "note": "Focus modes",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FollowUpSettingsExtension.appex",
+   "category": "settings",
+   "name": "FollowUpSettingsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/FollowUpSettingsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no follow-up reminders settings",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/DateAndTime.prefPane",
+   "category": "settings",
+   "name": "DateAndTime",
+   "path": "/System/Library/PreferencePanes/DateAndTime.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Date & Time page (datetime_page.rs)",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/DesktopScreenEffectsPref.prefPane",
+   "category": "settings",
+   "name": "DesktopScreenEffectsPref",
+   "path": "/System/Library/PreferencePanes/DesktopScreenEffectsPref.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/screensaver.rs",
+   "status": "partial",
+   "note": "screen saver and desktop effects",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/DigiHubDiscs.prefPane",
+   "category": "settings",
+   "name": "DigiHubDiscs",
+   "path": "/System/Library/PreferencePanes/DigiHubDiscs.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "optical disc media settings, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Displays.prefPane",
+   "category": "settings",
+   "name": "Displays",
+   "path": "/System/Library/PreferencePanes/Displays.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Displays page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Dock.prefPane",
+   "category": "settings",
+   "name": "Dock",
+   "path": "/System/Library/PreferencePanes/Dock.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Desktop & Dock page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/EnergySaver.prefPane",
+   "category": "settings",
+   "name": "EnergySaver",
+   "path": "/System/Library/PreferencePanes/EnergySaver.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Energy page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/EnergySaverPref.prefPane",
+   "category": "settings",
+   "name": "EnergySaverPref",
+   "path": "/System/Library/PreferencePanes/EnergySaverPref.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Energy page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Expose.prefPane",
+   "category": "settings",
+   "name": "Expose",
+   "path": "/System/Library/PreferencePanes/Expose.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/overview.rs",
+   "status": "partial",
+   "note": "Overview and hot corners",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Extensions.prefPane",
+   "category": "settings",
+   "name": "Extensions",
+   "path": "/System/Library/PreferencePanes/Extensions.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no extension manager page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/FamilySharingPrefPane.prefPane",
+   "category": "settings",
+   "name": "FamilySharingPrefPane",
+   "path": "/System/Library/PreferencePanes/FamilySharingPrefPane.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Family Sharing service",
+   "rea": []
+  }
+ ]
+}

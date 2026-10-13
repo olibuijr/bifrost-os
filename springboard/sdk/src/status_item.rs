@@ -156,3 +156,10 @@ mod tests {
         assert_ne!(bar.status_item(StatusItemLength::Square).id(), bar.status_item(StatusItemLength::Variable).id());
     }
 }
+
+/// The system menu extras (Search, Wi-Fi, Battery, Clock and the rest) as the shell lists them: ids, labels, default
+/// visibility and clock options. Shared with the shell through `bifrost_ui::menu_extras`; an app reads it, it does not
+/// draw these items (the shell owns them).
+pub mod system {
+    pub use bifrost_ui::menu_extras::{ClockStyle, SystemExtra};
+}

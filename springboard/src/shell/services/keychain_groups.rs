@@ -5,6 +5,8 @@
 //!
 //! Methods, all with JSON parameters and the secret as hex:
 //! - `groups` lists the caller's groups.
+//! - `list` takes `{group}` and answers an array of `{service, account, modified}` for every item in the group, sorted
+//!   by service then account. No secret is sent. A group the caller is not in answers an empty list.
 //! - `add`, `update`, `get`, `delete` take `{group, service, account}`, plus `value` for `add` and `update`. Each
 //!   answers `{status, value}`: `status` is the OSStatus (0 for success) and `value` the hex secret of `get`.
 //!   A group the caller is not in answers errSecNotAvailable. The group must be named on every call: unlike the
@@ -90,6 +92,25 @@ pub fn run(root: &Path, member: &[String], method: &str, params: &Json) -> Resul
         let body = Json::Arr(member.iter().map(|g| Json::Str(g.clone())).collect());
         return Ok(Done { body, changed: None });
     }
+    if method == "list" {
+        let group = params.get("group").and_then(|v| v.as_str()).ok_or_else(|| "keychain-groups list needs group".to_string())?;
+        if !member.iter().any(|g| g == group) {
+            return Ok(Done { body: Json::Arr(Vec::new()), changed: None });
+        }
+        let rows = Store::open_group(root, group).and_then(|s| s.list()).map_err(|e| format!("keychain-groups list: {e}"))?;
+        let body = Json::Arr(
+            rows.into_iter()
+                .map(|l| {
+                    Json::Obj(vec![
+                        ("service".into(), Json::Str(l.service)),
+                        ("account".into(), Json::Str(l.account)),
+                        ("modified".into(), Json::Num(l.modified as f64)),
+                    ])
+                })
+                .collect(),
+        );
+        return Ok(Done { body, changed: None });
+    }
     if !matches!(method, "add" | "get" | "update" | "delete") {
         return Err(format!("keychain-groups has no method {method}"));
     }
@@ -172,6 +193,30 @@ mod tests {
 
     fn members(g: &str) -> Vec<String> {
         vec![g.to_string()]
+    }
+
+    #[test]
+    fn list_names_each_item_without_its_secret() {
+        let d = dir("listitems");
+        let g = "is.bifrost.passwords";
+        let m = members(g);
+        let add = |svc: &str, acc: &str, v: &str| obj(&[("group", g), ("service", svc), ("account", acc), ("value", v)]);
+        run(&d, &m, "add", &add("b.example", "me", "6869")).unwrap();
+        run(&d, &m, "add", &add("a.example", "you", "7365637265")).unwrap();
+        let params = obj(&[("group", g)]);
+        let done = run(&d, &m, "list", &params).unwrap();
+        let Json::Arr(rows) = &done.body else { panic!("list is not an array: {:?}", done.body) };
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].get("service"), Some(&Json::Str("a.example".into())));
+        assert_eq!(rows[0].get("account"), Some(&Json::Str("you".into())));
+        assert_eq!(rows[1].get("service"), Some(&Json::Str("b.example".into())));
+        assert!(rows.iter().all(|r| r.get("value").is_none()), "no secret in a listing");
+        assert!(matches!(rows[0].get("modified"), Some(Json::Num(_))));
+        assert_eq!(done.changed, None);
+        let other = run(&d, &["is.other".to_string()], "list", &params).unwrap();
+        assert_eq!(other.body, Json::Arr(Vec::new()), "a group the caller is not in lists nothing");
+        assert!(run(&d, &m, "list", &Json::Null).is_err(), "list needs the group");
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]

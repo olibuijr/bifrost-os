@@ -18,6 +18,11 @@ callers pass times in seconds as `f64`.
   - `Recorder` holds availability, the running session, the microphone flag, the camera choice (`Front`, `Back`, or
     off), and an event queue drained with `take_events()`. Losing availability or an owner `fail(...)` ends a session
     with a `Failed` event.
+  - Sample routing: `SampleKind` (`Video`, `AppAudio`, `Microphone`, named after ReplayKit's `RPSampleBufferType`)
+    and `Recorder::push_sample(kind, time)`. Samples are kept only while a session runs; microphone samples need the
+    session's microphone flag; times must not go back within one kind. `sample_count` and `last_sample_time` stay
+    readable after the session ends, until the next `start`. Nothing feeds it yet: the owner that captures frames or
+    audio is the caller still to be written.
   - `Trim` is the kept range of a finished recording. Its start and end handles stay at least `MIN_TRIM` (0.1 s)
     apart and inside the recording. Non-finite values are ignored.
 
@@ -28,6 +33,7 @@ can reach `Recorder` through the SDK. Those are the next steps.
 
 Taken from the official DocC JSON (`tools/parity/docc.py`) and the rendered pages (REA evidence below).
 
+- ReplayKit `RPSampleBufferType` (`video`, `audioApp`, `audioMic`): `SampleKind`.
 - ReplayKit `RPScreenRecorder`: `isAvailable`, `isRecording`, `isMicrophoneEnabled`, `isCameraEnabled`, `cameraPosition`
   with `RPCameraPosition`, `delegate` / `RPScreenRecorderDelegate` (as the event queue), `startRecording(withMicrophoneEnabled:handler:)`,
   `stopRecording(handler:)`, `discardRecording(handler:)`, `startClipBuffering(completionHandler:)`,
@@ -55,6 +61,7 @@ rendered page.
 | screencapturekit | Clip buffering and recording editor (SCClipBufferingOutput, SCRecordingEditor, SCVideoEffectOutput) | partial | springboard/ui/src/clip_buffer.rs, springboard/ui/src/recording.rs (Trim) |
 | replaykit | App screen recording (RPScreenRecorder start/stop) | partial | springboard/ui/src/recording.rs (Recorder) |
 | replaykit | Clip buffering and export | partial | springboard/ui/src/clip_buffer.rs (ClipBuffer::export) |
+| replaykit | App and system audio capture (sample kinds, RPSampleBufferType shape) | partial (proposed; no loopback capture yet) | springboard/ui/src/recording.rs (SampleKind, Recorder::push_sample) |
 | replaykit | Capture delegate and availability | partial | springboard/ui/src/recording.rs (Recorder::is_available, set_available, take_events) |
 | replaykit | Camera preview during recording | partial | springboard/ui/src/recording.rs (CameraPosition, Recorder::set_camera); no preview view |
 | replaykit | Preview and edit UI for a recording | partial | springboard/ui/src/recording.rs (Trim); no preview or trim sheet |

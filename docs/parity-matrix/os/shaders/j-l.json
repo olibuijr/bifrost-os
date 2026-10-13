@@ -1,0 +1,70 @@
+{
+ "category": "shaders",
+ "shard": "j-l",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/PrivateFrameworks/GPUCompiler.framework/Versions/32023/Libraries/lib/clang/32023/lib/darwin/libtracepoint_rt_iosmac.metallib",
+   "category": "shaders",
+   "name": "libtracepoint_rt_iosmac.metallib",
+   "path": "/System/Library/PrivateFrameworks/GPUCompiler.framework/Versions/32023/Libraries/lib/clang/32023/lib/darwin/libtracepoint_rt_iosmac.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "GPUCompiler",
+   "facts": {
+    "size": 17268
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/GPUCompiler.framework/Versions/32023/Libraries/lib/clang/32023/lib/darwin/libtracepoint_rt_osx.metallib",
+   "category": "shaders",
+   "name": "libtracepoint_rt_osx.metallib",
+   "path": "/System/Library/PrivateFrameworks/GPUCompiler.framework/Versions/32023/Libraries/lib/clang/32023/lib/darwin/libtracepoint_rt_osx.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "GPUCompiler",
+   "facts": {
+    "size": 17252
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/TSReading.framework/Versions/A/Resources/KeynoteMetalLibrary.metallib",
+   "category": "shaders",
+   "name": "KeynoteMetalLibrary.metallib",
+   "path": "/System/iOSSupport/System/Library/PrivateFrameworks/TSReading.framework/Versions/A/Resources/KeynoteMetalLibrary.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "TSReading",
+   "facts": {
+    "size": 356616
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}
