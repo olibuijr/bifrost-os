@@ -12,6 +12,9 @@
 
 pub mod attach;
 pub mod folders;
+pub mod import;
+mod lists;
+mod table;
 mod chrome;
 pub mod icon;
 pub mod rpc;
@@ -172,6 +175,18 @@ enum Act {
     CheckSpelling,
     /// Find > Replace: opens the replace card for the find text
     Replace,
+    /// Sort direction: false is the key's natural order (newest first, A to Z), true the reverse
+    SortReverse(bool),
+    /// Format > Checklist: tick or untick every item of the open note
+    CheckAll,
+    UncheckAll,
+    /// Format > Indentation and Move Item, on the caret's list line
+    Indent,
+    Outdent,
+    MoveLineUp,
+    MoveLineDown,
+    /// Format > Table commands at the caret
+    Table(table::Op),
 }
 
 /// Find > Replace: the replacement text being typed in the replace card over the editor.
@@ -612,7 +627,7 @@ impl Notes {
         self.now_t = t;
         // sorting moves notes: the open one is found again by id
         let open = self.editing().map(|n| n.id.clone());
-        store::sort_by_key(&mut self.notes, self.prefs.sort, &self.pinned);
+        store::sort_by_key_dir(&mut self.notes, self.prefs.sort, self.prefs.reverse, &self.pinned);
         if let Some(id) = open {
             if let Some(i) = self.notes.iter().position(|n| n.id == id) {
                 self.screen = Screen::Editor(i);
@@ -892,6 +907,37 @@ impl Notes {
     pub fn show_note(&mut self, ui: &Ui, id: &str, t: f64) -> bool {
         let Some(i) = self.notes.iter().position(|n| n.id == id) else { return false };
         self.open_note(ui, i, false, t);
+        true
+    }
+
+    /// The newest `count` notes outside Recently Deleted as (id, title), newest first (File > Recent Notes).
+    pub fn recent(&self, count: usize) -> Vec<(String, String)> {
+        let mut all: Vec<&Note> = self.indexable().into_iter().map(|(n, _)| n).collect();
+        all.sort_by(|a, b| b.modified.cmp(&a.modified).then_with(|| a.id.cmp(&b.id)));
+        all.into_iter().take(count).map(|n| (n.id.clone(), n.title().to_string())).collect()
+    }
+
+    /// Whether the editor-bound menu commands apply (a note is open and not in Recently Deleted).
+    pub fn can_format(&self) -> bool {
+        self.editing().is_some_and(|n| self.loc_of(&n.id) != folders::TRASH)
+    }
+
+    /// A Format menu command by name: "check-all", "uncheck-all", "indent", "outdent", "move-up", "move-down".
+    /// False when the name is unknown or no editable note is open.
+    pub fn format_command(&mut self, ui: &Ui, name: &str, t: f64) -> bool {
+        if !self.can_format() {
+            return false;
+        }
+        let act = match name {
+            "check-all" => Act::CheckAll,
+            "uncheck-all" => Act::UncheckAll,
+            "indent" => Act::Indent,
+            "outdent" => Act::Outdent,
+            "move-up" => Act::MoveLineUp,
+            "move-down" => Act::MoveLineDown,
+            _ => return false,
+        };
+        self.run(ui, act, t);
         true
     }
 
@@ -1338,6 +1384,40 @@ impl Notes {
         self.rewrite(ui, &new, caret, t);
     }
 
+    /// Format > Checklist > Mark All Checked / Unmark All: one undo step.
+    fn set_all_checks(&mut self, ui: &Ui, done: bool, t: f64) {
+        let new = lists::set_all_checks(self.editor.text(), done);
+        let caret = self.editor.caret();
+        self.rewrite(ui, &new, caret, t);
+    }
+
+    /// Indent, outdent or move the caret's line (Format > Indentation, Move Item), as one undo step; the caret
+    /// stays on the same line content.
+    fn list_line_op(&mut self, ui: &Ui, op: Act, t: f64) {
+        let text = self.editor.text().to_string();
+        let (line, col) = lists::line_col(&text, self.editor.caret());
+        let (new, to_line, to_col) = match op {
+            Act::Indent => (lists::indent(&text, line), line, col + lists::INDENT),
+            Act::Outdent => (lists::outdent(&text, line), line, col.saturating_sub(lists::INDENT)),
+            Act::MoveLineUp => (lists::move_line(&text, line, true), line.saturating_sub(1), col),
+            Act::MoveLineDown => (lists::move_line(&text, line, false), line + 1, col),
+            _ => return,
+        };
+        let Some(new) = new else { return };
+        let len = new.split('\n').nth(to_line).map_or(0, |l| l.chars().count());
+        let caret = lists::line_start(&new, to_line) + to_col.min(len);
+        self.rewrite(ui, &new, caret, t);
+    }
+
+    /// A table command at the caret (add or delete a row or column, convert to text), as one undo step.
+    fn table_op(&mut self, ui: &Ui, op: table::Op, t: f64) {
+        let text = self.editor.text().to_string();
+        let (line, col) = lists::line_col(&text, self.editor.caret());
+        let Some(new) = table::apply(&text, line, col, op) else { return };
+        let caret = lists::line_start(&new, line);
+        self.rewrite(ui, &new, caret, t);
+    }
+
     /// Cycles the current paragraph through body, heading ("## ") and
     /// title ("# ") markers.
     fn cycle_format(&mut self, ui: &Ui, t: f64) {
@@ -1461,6 +1541,9 @@ impl Notes {
         for k in store::SortKey::ALL {
             items.push((format!("Sort by {}", k.label()), Act::Sort(k), self.prefs.sort == k));
         }
+        let (natural, reversed) = self.prefs.sort.directions();
+        items.push((natural.to_string(), Act::SortReverse(false), !self.prefs.reverse));
+        items.push((reversed.to_string(), Act::SortReverse(true), self.prefs.reverse));
         items.push(("Move Checked to Bottom".to_string(), Act::ToggleCheckedBottom, self.prefs.checked_to_bottom));
         let (mx, my, mw, mh) = self.title_rect(ui);
         self.show_menu(ui, items, mx + mw - ui.pt(MENU_W_PT), my + mh + ui.pt(SPACE_XS));
@@ -1490,6 +1573,23 @@ impl Notes {
             ("Replace in Note".to_string(), Act::Replace, false),
         ];
         if here != folders::TRASH {
+            let (line, _) = lists::line_col(self.editor.text(), self.editor.caret());
+            let current = self.editor.text().split('\n').nth(line).unwrap_or("").to_string();
+            if lists::is_list_line(&current) {
+                items.push(("Increase Indent".to_string(), Act::Indent, false));
+                items.push(("Decrease Indent".to_string(), Act::Outdent, false));
+            }
+            items.push(("Move Line Up".to_string(), Act::MoveLineUp, false));
+            items.push(("Move Line Down".to_string(), Act::MoveLineDown, false));
+            if self.notes[i].checklist().1 > 0 {
+                items.push(("Mark All Checked".to_string(), Act::CheckAll, false));
+                items.push(("Unmark All".to_string(), Act::UncheckAll, false));
+            }
+            if table::in_table(self.editor.text(), line) {
+                for op in table::Op::ALL {
+                    items.push((op.label().to_string(), Act::Table(op), false));
+                }
+            }
             if !here.is_empty() {
                 items.push(("Move to All Notes".to_string(), Act::MoveTo(String::new()), false));
             }
@@ -1685,6 +1785,15 @@ impl Notes {
                 self.save_prefs();
                 self.rebuild(ui, t);
             }
+            Act::SortReverse(r) => {
+                self.prefs.reverse = r;
+                self.save_prefs();
+                self.rebuild(ui, t);
+            }
+            Act::CheckAll => self.set_all_checks(ui, true, t),
+            Act::UncheckAll => self.set_all_checks(ui, false, t),
+            Act::Indent | Act::Outdent | Act::MoveLineUp | Act::MoveLineDown => self.list_line_op(ui, act.clone(), t),
+            Act::Table(op) => self.table_op(ui, op, t),
             Act::ToggleCheckedBottom => {
                 self.prefs.checked_to_bottom = !self.prefs.checked_to_bottom;
                 self.save_prefs();
@@ -3668,6 +3777,54 @@ mod tests {
         assert!(menu.items.iter().any(|(l, a, on)| l == "Sort by Date Created" && *a == Act::Sort(store::SortKey::DateCreated) && *on));
         draw(&mut n, &ui, 4.0);
         assert_eq!(app(&ui, &dir).prefs().sort, store::SortKey::DateCreated, "the choice survives a restart");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn sort_direction_reverses_the_list_and_persists() {
+        let ui = ui();
+        let dir = scratch("sort-dir");
+        let mut n = seeded(&ui, &dir);
+        let ids = |n: &Notes| n.listed().iter().map(|(id, _)| id.to_string()).collect::<Vec<_>>();
+        let natural = ids(&n);
+        n.run(&ui, Act::SortReverse(true), 1.0);
+        let mut flipped = natural.clone();
+        flipped.reverse();
+        assert_eq!(ids(&n), flipped);
+        n.open_list_menu(&ui);
+        assert!(n.menu.as_ref().unwrap().items.iter().any(|(l, a, on)| l == "Oldest First" && *a == Act::SortReverse(true) && *on));
+        draw(&mut n, &ui, 2.0);
+        assert!(app(&ui, &dir).prefs().reverse, "the direction survives a restart");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn checklist_mark_all_indent_move_and_table_commands_edit_the_open_note() {
+        let ui = ui();
+        let dir = scratch("format-cmds");
+        let mut n = seeded(&ui, &dir);
+        n.compose(&ui, 100.0);
+        n.editor.set_text(&ui, "Plan\n- [ ] a\n- [x] b\n| A | B |\n| --- | --- |\n| 1 | 2 |");
+        n.changed(&ui, 110.0);
+        n.run(&ui, Act::CheckAll, 120.0);
+        assert!(n.editor.text().contains("- [x] a") && n.editor.text().contains("- [x] b"));
+        n.run(&ui, Act::UncheckAll, 130.0);
+        assert!(n.editor.text().contains("- [ ] a") && n.editor.text().contains("- [ ] b"));
+
+        n.editor.set_caret(lists::line_start(n.editor.text(), 1) + 2);
+        n.run(&ui, Act::Indent, 140.0);
+        assert!(n.editor.text().contains("\n  - [ ] a\n"));
+        n.run(&ui, Act::Outdent, 150.0);
+        assert!(n.editor.text().contains("\n- [ ] a\n"));
+        n.run(&ui, Act::MoveLineDown, 160.0);
+        assert!(n.editor.text().starts_with("Plan\n- [ ] b\n- [ ] a\n"));
+        assert_eq!(lists::line_col(n.editor.text(), n.editor.caret()).0, 2, "the caret follows its line");
+
+        n.editor.set_caret(lists::line_start(n.editor.text(), 5) + 2);
+        n.run(&ui, Act::Table(table::Op::RowBelow), 170.0);
+        assert!(n.editor.text().ends_with("| 1 | 2 |\n|   |   |"));
+        n.run(&ui, Act::Table(table::Op::ToText), 180.0);
+        assert!(n.editor.text().ends_with("A\tB\n1\t2\n\t"), "got {:?}", n.editor.text());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -125,6 +125,20 @@ const MENU_DELETE: u32 = 2;
 const MENU_IMPORT: u32 = 3;
 const MENU_FIND: u32 = 4;
 const MENU_PRINT: u32 = 5;
+/// Format menu ids (command names for `Notes::format_command`)
+const FORMAT_ITEMS: [(u32, &str, &str, &str); 6] = [
+    (10, "Increase Indent", "cmd+]", "indent"),
+    (11, "Decrease Indent", "cmd+[", "outdent"),
+    (12, "Move Line Up", "ctrl+cmd+up", "move-up"),
+    (13, "Move Line Down", "ctrl+cmd+down", "move-down"),
+    (14, "Mark All Checked", "", "check-all"),
+    (15, "Unmark All", "", "uncheck-all"),
+];
+/// Recent Notes entries are `MENU_RECENT + position`
+const MENU_RECENT: u32 = 100;
+/// how many notes the Recent Notes submenu lists
+const RECENT_MENU_COUNT: usize = 10;
+const MENU_RECENT_END: u32 = MENU_RECENT + RECENT_MENU_COUNT as u32 - 1;
 /// the menu bar extra's entry: New Quick Note (its own id space, from `status_item_action`)
 const QUICK_NEW: u32 = 1;
 
@@ -143,7 +157,7 @@ const KEY_C: u32 = 46;
 impl NotesApp {
     /// File > Import to Notes (Cmd+O): the open panel answers in `document`.
     fn open_import(&mut self, ctx: &Ctx) {
-        self.import = Some(ctx.open_document(DocMode::Read, "Import to Notes", &["public.text"]));
+        self.import = Some(ctx.open_document(DocMode::Read, "Import to Notes", &notes::import::TYPES));
     }
 
     /// Share on the PC is Export (`NativeSavePanel`): the note goes to a file the user names, as Markdown.
@@ -216,6 +230,19 @@ impl App for NotesApp {
         let Some(n) = &self.notes else { return Vec::new() };
         // "Note" is the app's own menu: File, Edit, View, Window and Help are the shell's, so none is repeated.
         // Undo and Redo are the shell's Edit commands (`commands` and `Input::Command`), not items here.
+        let mut format = Vec::new();
+        for (id, title, key, _) in FORMAT_ITEMS {
+            let item = AppMenuItem::new(id, title).enabled(n.can_format());
+            format.push(if key.is_empty() { item } else { item.key(key) });
+        }
+        let mut recent = vec![AppMenuItem::submenu("Recent Notes")];
+        let notes_recent = n.recent(RECENT_MENU_COUNT);
+        if notes_recent.is_empty() {
+            recent.push(AppMenuItem::new(0, "No Recent Notes").enabled(false).depth(1));
+        }
+        for (k, (_, title)) in notes_recent.iter().enumerate() {
+            recent.push(AppMenuItem::new(MENU_RECENT + k as u32, title).depth(1));
+        }
         vec![AppMenu {
             title: "Note".into(),
             items: vec![
@@ -227,8 +254,11 @@ impl App for NotesApp {
                 AppMenuItem::new(MENU_FIND, "Find").key("cmd+f"),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(n.is_editing()),
-            ],
-        }]
+            ]
+            .into_iter()
+            .chain(recent)
+            .collect(),
+        }, AppMenu { title: "Format".into(), items: format }]
     }
 
     fn commands(&self, _ctx: &Ctx) -> Commands {
@@ -275,6 +305,17 @@ impl App for NotesApp {
                 true
             }
             MENU_DELETE => n.delete_current(&ctx.ui, now),
+            MENU_RECENT..=MENU_RECENT_END => match n.recent(RECENT_MENU_COUNT).get((id - MENU_RECENT) as usize) {
+                Some((note, _)) => {
+                    let note = note.clone();
+                    n.show_note(&ctx.ui, &note, now)
+                }
+                None => false,
+            },
+            _ if FORMAT_ITEMS.iter().any(|f| f.0 == id) => {
+                let name = FORMAT_ITEMS.iter().find(|f| f.0 == id).map_or("", |f| f.3);
+                n.format_command(&ctx.ui, name, now)
+            }
             MENU_FIND => {
                 n.find(&ctx.ui, now);
                 true
@@ -417,7 +458,15 @@ impl App for NotesApp {
                     return false;
                 }
                 let Some(n) = &mut self.notes else { return false };
-                n.import_note(&ctx.ui, &String::from_utf8_lossy(&bytes), bifrost_app::proto::sys::now_ms());
+                let text = notes::import::to_markdown(&doc.name, &bytes);
+                if text.trim().is_empty() {
+                    let mut summary = notes::import::Summary::default();
+                    summary.skip(&doc.name, "no text found");
+                    ctx.log(&format!("import: {}", summary.message()));
+                    ctx.release_document(doc.grant);
+                    return false;
+                }
+                n.import_note(&ctx.ui, &text, bifrost_app::proto::sys::now_ms());
                 // one import is one use of the file: the app keeps no grant to it
                 ctx.release_document(doc.grant);
                 true

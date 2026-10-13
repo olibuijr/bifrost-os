@@ -80,6 +80,14 @@ pub enum SortKey {
 impl SortKey {
     pub const ALL: [SortKey; 3] = [SortKey::DateEdited, SortKey::DateCreated, SortKey::Title];
 
+    /// The menu names of the two directions: (natural, reversed).
+    pub fn directions(self) -> (&'static str, &'static str) {
+        match self {
+            SortKey::Title => ("A to Z", "Z to A"),
+            _ => ("Newest First", "Oldest First"),
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             SortKey::DateEdited => "Date Edited",
@@ -112,12 +120,18 @@ pub fn created(note: &Note) -> i64 {
 
 /// Orders notes by `key` (newest or A-Z), pinned ones first.
 pub fn sort_by_key(notes: &mut [Note], key: SortKey, pinned: &HashSet<String>) {
+    sort_by_key_dir(notes, key, false, pinned);
+}
+
+/// Like [`sort_by_key`]; `reverse` flips the key's own order (oldest first, Z-A). Pinned notes stay first.
+pub fn sort_by_key_dir(notes: &mut [Note], key: SortKey, reverse: bool, pinned: &HashSet<String>) {
     notes.sort_by(|a, b| {
         let order = match key {
             SortKey::DateEdited => b.modified.cmp(&a.modified),
             SortKey::DateCreated => created(b).cmp(&created(a)),
             SortKey::Title => a.title().to_lowercase().cmp(&b.title().to_lowercase()),
         };
+        let order = if reverse { order.reverse() } else { order };
         pinned.contains(&b.id).cmp(&pinned.contains(&a.id)).then(order).then_with(|| b.id.cmp(&a.id))
     });
 }
@@ -188,11 +202,13 @@ pub struct Prefs {
     pub sort: SortKey,
     /// move a checklist item to the bottom of its list when ticked
     pub checked_to_bottom: bool,
+    /// flips the sort key's order (oldest first, Z to A)
+    pub reverse: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { sort: SortKey::DateEdited, checked_to_bottom: false }
+        Prefs { sort: SortKey::DateEdited, checked_to_bottom: false, reverse: false }
     }
 }
 
@@ -204,6 +220,7 @@ pub fn load_prefs(dir: &Path) -> Prefs {
         match line.split_once('=') {
             Some(("sort", v)) => p.sort = SortKey::parse(v.trim()).unwrap_or_default(),
             Some(("checked_to_bottom", v)) => p.checked_to_bottom = v.trim() == "1",
+            Some(("reverse", v)) => p.reverse = v.trim() == "1",
             _ => {}
         }
     }
@@ -211,7 +228,7 @@ pub fn load_prefs(dir: &Path) -> Prefs {
 }
 
 pub fn save_prefs(dir: &Path, p: Prefs) -> io::Result<()> {
-    springboard::shell::fsutil::write_atomic(&dir.join(PREFS_FILE), format!("sort={}\nchecked_to_bottom={}\n", p.sort.name(), p.checked_to_bottom as u8))
+    springboard::shell::fsutil::write_atomic(&dir.join(PREFS_FILE), format!("sort={}\nchecked_to_bottom={}\nreverse={}\n", p.sort.name(), p.checked_to_bottom as u8, p.reverse as u8))
 }
 
 /// Writes the note as `<title>.md` under `<dir>/.export` for sharing and
@@ -543,6 +560,18 @@ mod tests {
     }
 
     #[test]
+    fn reversed_sort_flips_the_order_but_keeps_pins_first() {
+        let mk = |id: &str, text: &str, m: i64| Note { id: id.into(), text: text.into(), modified: m };
+        let mut v = vec![mk("1", "b", 10), mk("2", "a", 20), mk("3", "c", 30)];
+        let pins: HashSet<String> = ["2".to_string()].into();
+        sort_by_key_dir(&mut v, SortKey::DateEdited, true, &pins);
+        assert_eq!(v.iter().map(|n| n.id.as_str()).collect::<Vec<_>>(), ["2", "1", "3"]);
+        sort_by_key_dir(&mut v, SortKey::Title, true, &HashSet::new());
+        assert_eq!(v.iter().map(|n| n.id.as_str()).collect::<Vec<_>>(), ["3", "1", "2"]);
+        assert_eq!(SortKey::Title.directions().1, "Z to A");
+    }
+
+    #[test]
     fn sort_keys_order_pinned_first() {
         let mut v = vec![note("1700000000000", "Banana", 500), note("1800000000000", "apricot", 100), note("1600000000000", "Cherry", 900), note("odd", "Date", 50)];
         let none = HashSet::new();
@@ -591,8 +620,8 @@ mod tests {
     fn prefs_round_trip_and_tolerate_garbage() {
         let dir = scratch("prefs");
         assert_eq!(load_prefs(&dir), Prefs::default());
-        save_prefs(&dir, Prefs { sort: SortKey::Title, checked_to_bottom: true }).unwrap();
-        assert_eq!(load_prefs(&dir), Prefs { sort: SortKey::Title, checked_to_bottom: true });
+        save_prefs(&dir, Prefs { sort: SortKey::Title, checked_to_bottom: true, reverse: true }).unwrap();
+        assert_eq!(load_prefs(&dir), Prefs { sort: SortKey::Title, checked_to_bottom: true, reverse: true });
         std::fs::write(dir.join(".springboard-notes-prefs"), "sort=nonsense\nzzz\nchecked_to_bottom=0\n").unwrap();
         assert_eq!(load_prefs(&dir), Prefs::default());
         let _ = std::fs::remove_dir_all(&dir);
