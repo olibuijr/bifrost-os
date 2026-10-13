@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0 — 2026-10-13
+
+- Open Movie intent (`open-movie`, parameter `path`): the shell hands the Video Player a movie file by path. The shell uses it to open a finished screen recording, which the player plays like a movie from the open panel.
+
 ## 0.1.0 — 2026-10-13
 
 - New app: Video Player plays a movie file in the shell's fullscreen player view over the shared media stack. Movies open from Movie > Open (the document panel), from a file handed to the app, or from the command line.
