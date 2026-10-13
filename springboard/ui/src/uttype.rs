@@ -2,7 +2,7 @@
 //! (`UTType.conforms(to:)`), so Files, drag and drop and pickers agree on what a file is.
 use std::collections::HashMap;
 use std::hash::{BuildHasherDefault, Hasher};
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 
 /// FNV-1a: the keys are short ASCII identifiers and extensions, so SipHash's DoS protection only costs time.
 #[derive(Default)]
@@ -21,13 +21,50 @@ impl Hasher for Fnv {
 }
 type Index = HashMap<&'static str, &'static Entry, BuildHasherDefault<Fnv>>;
 
-struct Entry {
-    id: &'static str,
-    parent: &'static [&'static str],
-    ext: &'static [&'static str],
-    mime: &'static str,
+pub(crate) struct Entry {
+    pub(crate) id: &'static str,
+    pub(crate) parent: &'static [&'static str],
+    pub(crate) ext: &'static [&'static str],
+    pub(crate) mime: &'static str,
     /// `UTType.localizedDescription`: what Files's Kind column shows.
-    desc: &'static str,
+    pub(crate) desc: &'static str,
+}
+
+/// Types an app declared (`uttype_declarations`): looked up after the built-in table, exported ones first.
+static DECLARED: RwLock<Vec<&'static Entry>> = RwLock::new(Vec::new());
+/// Dynamic types made for tags nobody declared; they only answer `entry`, never extension or MIME lookups.
+static DYNAMIC: RwLock<Vec<&'static Entry>> = RwLock::new(Vec::new());
+
+fn read(list: &RwLock<Vec<&'static Entry>>) -> Vec<&'static Entry> {
+    list.read().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+/// Replaces the app-declared set.
+pub(crate) fn set_declared(entries: Vec<&'static Entry>) {
+    *DECLARED.write().unwrap_or_else(|e| e.into_inner()) = entries;
+}
+
+/// Remembers a dynamic type; a second call with the same identifier keeps the first.
+pub(crate) fn add_dynamic(e: &'static Entry) {
+    let mut v = DYNAMIC.write().unwrap_or_else(|e| e.into_inner());
+    if !v.iter().any(|d| d.id == e.id) {
+        v.push(e);
+    }
+}
+
+/// True for a type in the built-in (system-declared) table.
+pub(crate) fn is_builtin(id: &str) -> bool {
+    TYPES.iter().any(|e| e.id == id)
+}
+
+/// True for a dynamic type made by `add_dynamic`.
+pub(crate) fn is_dynamic_entry(id: &str) -> bool {
+    read(&DYNAMIC).iter().any(|e| e.id == id)
+}
+
+/// True when the identifier is built in or declared by the app.
+pub(crate) fn is_known(id: &str) -> bool {
+    entry(id).is_some()
 }
 
 const TYPES: &[Entry] = &[
@@ -120,7 +157,10 @@ fn by_extension() -> &'static Index {
 
 fn entry(id: &str) -> Option<&'static Entry> {
     static INDEX: OnceLock<Index> = OnceLock::new();
-    INDEX.get_or_init(|| TYPES.iter().map(|e| (e.id, e)).collect()).get(id).copied()
+    if let Some(e) = INDEX.get_or_init(|| TYPES.iter().map(|e| (e.id, e)).collect()).get(id).copied() {
+        return Some(e);
+    }
+    read(&DECLARED).into_iter().chain(read(&DYNAMIC)).find(|e| e.id == id)
 }
 
 /// The type for a file name or extension (case-insensitive); `None` for an unknown extension.
@@ -128,7 +168,7 @@ pub fn type_for_extension(name: &str) -> Option<&'static str> {
     let ext = name.rsplit_once('.').map_or(name, |(_, e)| e);
     let lower;
     let ext = if ext.bytes().any(|b| b.is_ascii_uppercase()) { lower = ext.to_ascii_lowercase(); lower.as_str() } else { ext };
-    by_extension().get(ext).map(|e| e.id)
+    by_extension().get(ext).map(|e| e.id).or_else(|| read(&DECLARED).into_iter().find(|e| e.ext.contains(&ext)).map(|e| e.id))
 }
 
 /// `UTType.localizedDescription`: "PNG image", "Rust Source", "PDF document". Empty for an unknown identifier.
@@ -143,7 +183,7 @@ pub fn type_for_mime(mime: &str) -> Option<&'static str> {
     if essence.is_empty() {
         return None;
     }
-    TYPES.iter().find(|e| e.mime == essence).map(|e| e.id)
+    TYPES.iter().find(|e| e.mime == essence).map(|e| e.id).or_else(|| read(&DECLARED).into_iter().find(|e| e.mime == essence).map(|e| e.id))
 }
 
 /// `UTType.tags[.filenameExtension]`: every extension a type claims.

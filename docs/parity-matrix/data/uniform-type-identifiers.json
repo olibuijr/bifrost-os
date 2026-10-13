@@ -5,7 +5,7 @@
   "macos_since": "11.0",
   "status": "partial",
   "bifrost": "bifrost_app::controls::uttype (springboard/ui/src/uttype.rs), bifrost_app::document (springboard/sdk/src/document.rs), manifest handles (springboard/sdk/src/share.rs)",
-  "summary": "BifrOSt has a 58-type table with identifiers, conformance tree, extensions, MIME mapping and descriptions, exposed to apps through the SDK. Apps cannot declare their own exported or imported types, the tag-class API is limited to extension and MIME, and the Apple system type catalogue is much smaller than the official list.",
+  "summary": "BifrOSt has a 58-type table with identifiers, conformance tree, extensions, MIME mapping and descriptions, exposed to apps through the SDK. App-declared exported and imported types and a generic tag-class API exist as a host-tested registry but are not yet wired into app launch, and the Apple system type catalogue is much smaller than the official list.",
   "rea_evidence": "ev_03d0f522547c1dbb7ff5263ef5b55df5fdfe39a5f021efb828c9fe1b7befd971",
   "features": [
     {
@@ -46,16 +46,16 @@
     {
       "feature": "Generic tag classes",
       "apple": "UTTagClass and tags(), UTType.tags for other classes",
-      "bifrost": "springboard/ui/src/uttype.rs (TagClass",
+      "bifrost": "springboard/ui/src/uttype.rs (TagClass), springboard/ui/src/uttype_declarations.rs (UtTagClass, UtType::tag, UtType::tags)",
       "status": "partial",
-      "note": "Wave 5 (theme-07, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no API for tag classes other than filenameExtension and mimeType"
+      "note": "UtTagClass takes any class string (filename extension, MIME type, or a declared class from UTTypeTagSpecification); host unit tests only, not yet checked on Midget. No system tag classes beyond the two Apple ones"
     },
     {
       "feature": "App-declared exported and imported types",
       "apple": "UTExportedTypeDeclarations, UTImportedTypeDeclarations, Defining file and data types for your app",
-      "bifrost": "springboard/ui/src/utdecl.rs",
+      "bifrost": "springboard/ui/src/utdecl.rs (checks), springboard/ui/src/uttype_declarations.rs (parse_manifest, register_manifest, register_plist, UtType)",
       "status": "partial",
-      "note": "Wave 4 (theme-02, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. apps cannot register a proprietary UTI with an extension, MIME type and conformance; the manifest only lists types an app opens"
+      "note": "[[exported_types]]/[[imported_types]] manifest blocks and UTExportedTypeDeclarations-shaped entries register into the uttype lookups (extension, MIME, conformance to public.data, description); UtType has exported_as, imported_as, filename_extension, mime_type, tag, is_declared, is_dynamic, is_public. Exported beats imported; cycles and reserved ids are refused; built-in extensions stay with the system. Host unit tests only; the shell does not call register_manifest at app launch yet, not yet checked on Midget. One MIME type per declaration is indexed"
     },
     {
       "feature": "System-declared type catalogue",
@@ -94,8 +94,7 @@
     }
   ],
   "gaps": [
-    "App-declared exported and imported types with extension, MIME and conformance (UTExportedTypeDeclarations equivalent)",
-    "Generic UTTagClass API beyond filenameExtension and mimeType",
+    "Shell wiring: read the manifest type blocks at app launch and install the app type registry",
     "Most of the system-declared identifiers on the landing page, including 3D, Apple-only, Shazam and bundle types",
     "Writable types and type conversion for documents"
   ]

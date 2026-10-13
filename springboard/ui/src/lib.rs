@@ -596,6 +596,7 @@ pub mod panner;
 pub mod param_view;
 pub mod uttype;
 pub mod utdecl;
+pub mod uttype_declarations;
 pub mod accessible_look;
 pub mod shared_list;
 pub mod preview;
