@@ -7,7 +7,7 @@
 //! alignment or lists, which would lose a document's formatting on the first save, so the editor's codec works on the
 //! editor's own cells and carries all of it.
 
-use crate::rtf::nearest_color;
+use crate::rtf::{nearest_color, nearest_spacing};
 use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_TAB, FAMILIES, MAX_SIZE, MAX_TAB, MIN_SIZE, MIN_TAB, SPACINGS};
 
 /// Whether `bytes` look like an HTML file.
@@ -26,10 +26,6 @@ fn escape(ch: char, out: &mut String) {
         '\t' => out.push_str("&#9;"),
         c => out.push(c),
     }
-}
-
-fn same_run(a: &Style, b: &Style) -> bool {
-    a.bold == b.bold && a.italic == b.italic && a.underline == b.underline && a.size == b.size && a.font == b.font && a.color == b.color
 }
 
 fn align_css(a: Align) -> &'static str {
@@ -76,7 +72,7 @@ pub fn write(cells: &[Cell], tab: f32) -> Vec<u8> {
         let mut i = 0;
         while i < para.len() {
             let mut j = i + 1;
-            while j < para.len() && same_run(&para[i].style, &para[j].style) {
+            while j < para.len() && para[i].style.same_run(&para[j].style) {
                 j += 1;
             }
             let s = para[i].style;
@@ -292,6 +288,8 @@ impl Reader {
             }
             "p" | "div" | "li" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "pre" | "blockquote" => {
                 self.flush();
+                // a new block starts with no break of its own, so an empty block still makes its paragraph
+                self.broke = false;
                 self.para = Style::default();
                 if name == "li" {
                     self.para.list = self.lists.last().copied().unwrap_or(ListKind::Bullet);
@@ -459,7 +457,7 @@ fn size_of(v: &str) -> Option<f32> {
 /// The palette colour for `#rgb`, `#rrggbb` or `rgb(r, g, b)`; the default colour for black, white and anything else.
 fn color_of(v: &str) -> u8 {
     let v = v.trim();
-    let rgb: Option<[i32; 3]> = if let Some(hex) = v.strip_prefix('#') {
+    let rgb: Option<[i32; 3]> = if let Some(hex) = v.strip_prefix('#').filter(|h| h.is_ascii()) {
         match hex.len() {
             6 => (0..3).map(|k| i32::from_str_radix(&hex[2 * k..2 * k + 2], 16).ok()).collect::<Option<Vec<_>>>().map(|c| [c[0], c[1], c[2]]),
             3 => (0..3).map(|k| i32::from_str_radix(&hex[k..k + 1], 16).ok().map(|d| d * 17)).collect::<Option<Vec<_>>>().map(|c| [c[0], c[1], c[2]]),
@@ -477,16 +475,6 @@ fn color_of(v: &str) -> u8 {
         Some(c) => nearest_color(c),
         None => 0,
     }
-}
-
-fn nearest_spacing(multiple: f32) -> u8 {
-    let mut best = 0;
-    for (i, m) in SPACINGS.iter().enumerate() {
-        if (m - multiple).abs() < (SPACINGS[best] - multiple).abs() {
-            best = i;
-        }
-    }
-    best as u8
 }
 
 /// Decodes the entities of a text: the named ones HTML writers use and numeric ones.

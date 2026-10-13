@@ -4,7 +4,7 @@
 
 use crate::layout::{self, Layout, Marker, Measure};
 use crate::text::{Cell, COLORS, FAMILIES};
-use bifrost_app::print::PrintInfo;
+use bifrost_app::print::{PaperSize, PrintInfo};
 use std::ops::Range;
 
 /// The faces: each family in regular, bold, italic and bold italic order, the index being `family * 4 + bold + 2 * italic`.
@@ -16,6 +16,20 @@ const FACES: [&str; 12] = [
 
 /// How far past a line's top its baseline sits, as a multiple of the line's largest size.
 const BASELINE: f32 = 1.0;
+
+/// The paper sizes Page Setup offers, in menu order.
+pub const PAPERS: [PaperSize; 5] = [PaperSize::A4, PaperSize::Letter, PaperSize::Legal, PaperSize::A5, PaperSize::A3];
+
+/// The name of a paper size in the Page Setup menu.
+pub fn paper_name(paper: PaperSize) -> &'static str {
+    match paper {
+        PaperSize::A4 => "A4",
+        PaperSize::A3 => "A3",
+        PaperSize::A5 => "A5",
+        PaperSize::Letter => "US Letter",
+        PaperSize::Legal => "US Legal",
+    }
+}
 
 /// Splits the lines into pages of at most `height` points. A line taller than a page still gets a page of its own.
 pub fn pages(layout: &Layout, height: f32) -> Vec<Range<usize>> {
@@ -113,7 +127,7 @@ fn content(cells: &[Cell], layout: &Layout, lines: Range<usize>, info: &PrintInf
             if cell.ch == '\t' {
                 flush(&mut out, &mut run, rel);
             } else {
-                if run.as_ref().is_some_and(|(_, _, s)| !same_face(s, &cell.style)) {
+                if run.as_ref().is_some_and(|(_, _, s)| !s.same_run(&cell.style)) {
                     flush(&mut out, &mut run, rel);
                 }
                 run.get_or_insert_with(|| (String::new(), rel, cell.style)).0.push(cell.ch);
@@ -123,11 +137,6 @@ fn content(cells: &[Cell], layout: &Layout, lines: Range<usize>, info: &PrintInf
         flush(&mut out, &mut run, rel);
     }
     out
-}
-
-/// Whether two characters print with the same face, size and colour.
-fn same_face(a: &crate::text::Style, b: &crate::text::Style) -> bool {
-    a.bold == b.bold && a.italic == b.italic && a.size == b.size && a.font == b.font && a.color == b.color && a.underline == b.underline
 }
 
 fn show(out: &mut Vec<u8>, s: &crate::text::Style, text: &str, x: f32, y: f32) {
@@ -235,6 +244,13 @@ mod tests {
         let first_obj = text[xref..].lines().nth(3).unwrap();
         let offset: usize = first_obj.split_whitespace().next().unwrap().parse().unwrap();
         assert!(text[offset..].starts_with("1 0 obj"));
+    }
+
+    #[test]
+    fn every_paper_size_is_offered_once_with_a_name() {
+        let names: Vec<&str> = PAPERS.iter().map(|p| paper_name(*p)).collect();
+        assert_eq!(names, vec!["A4", "US Letter", "US Legal", "A5", "A3"]);
+        assert!(PAPERS.iter().all(|p| PAPERS.iter().filter(|q| *q == p).count() == 1));
     }
 
     #[test]

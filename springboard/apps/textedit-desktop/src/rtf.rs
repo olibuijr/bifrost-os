@@ -49,7 +49,7 @@ pub fn write_doc(cells: &[Cell], tab: f32) -> Vec<u8> {
             para_start = true;
             continue;
         }
-        if !last.is_some_and(|l| same_character(&l, &c.style)) {
+        if !last.is_some_and(|l| l.same_run(&c.style)) {
             out += &character_words(&c.style);
             last = Some(c.style);
         }
@@ -90,10 +90,6 @@ fn align_code(align: Align) -> char {
         Align::Right => 'r',
         Align::Justified => 'j',
     }
-}
-
-fn same_character(a: &Style, b: &Style) -> bool {
-    a.bold == b.bold && a.italic == b.italic && a.underline == b.underline && a.size == b.size && a.font == b.font && a.color == b.color
 }
 
 /// The control words of a paragraph's line spacing (`\sl` in twips with `\slmult1`) and list.
@@ -214,18 +210,21 @@ impl Reader {
                 }
                 b'\r' | b'\n' => {}
                 _ => {
+                    // a non-ASCII character is several bytes of UTF-8 (writers that do not escape it)
+                    let (ch, end) = utf8_char(bytes, i - 1);
+                    i = end;
                     self.take_group_start();
                     if self.skip.is_some() {
                         continue;
                     }
                     if self.table.is_some() {
-                        self.table_char(b as char);
+                        self.table_char(ch);
                     } else if self.ctable.is_some() {
-                        if b == b';' {
+                        if ch == ';' {
                             self.color_entry();
                         }
                     } else {
-                        self.literal(b as char);
+                        self.literal(ch);
                     }
                 }
             }
@@ -294,7 +293,7 @@ impl Reader {
                     self.take_group_start();
                     if let Some(byte) = hex {
                         if self.skip.is_none() {
-                            self.literal(byte as char);
+                            self.literal(cp1252(byte));
                         }
                         i += 2;
                     }
@@ -447,8 +446,60 @@ impl Reader {
     }
 }
 
+/// The character that starts at byte `at` of UTF-8 text, and the index after it. A byte that starts no valid sequence
+/// reads as the replacement character.
+fn utf8_char(bytes: &[u8], at: usize) -> (char, usize) {
+    let len = match bytes[at] {
+        0xC0..=0xDF => 2,
+        0xE0..=0xEF => 3,
+        0xF0..=0xF7 => 4,
+        _ => 1,
+    };
+    let end = (at + len).min(bytes.len());
+    match std::str::from_utf8(&bytes[at..end]).ok().and_then(|s| s.chars().next()) {
+        Some(ch) => (ch, end),
+        None => ('\u{fffd}', at + 1),
+    }
+}
+
+/// The character a Windows-1252 byte stands for (the code page `\'hh` escapes are written in): the printable
+/// characters of 0x80 to 0x9F differ from Latin-1, which is what every other byte is.
+fn cp1252(byte: u8) -> char {
+    let code = match byte {
+        0x80 => 0x20AC,
+        0x82 => 0x201A,
+        0x83 => 0x0192,
+        0x84 => 0x201E,
+        0x85 => 0x2026,
+        0x86 => 0x2020,
+        0x87 => 0x2021,
+        0x88 => 0x02C6,
+        0x89 => 0x2030,
+        0x8A => 0x0160,
+        0x8B => 0x2039,
+        0x8C => 0x0152,
+        0x8E => 0x017D,
+        0x91 => 0x2018,
+        0x92 => 0x2019,
+        0x93 => 0x201C,
+        0x94 => 0x201D,
+        0x95 => 0x2022,
+        0x96 => 0x2013,
+        0x97 => 0x2014,
+        0x98 => 0x02DC,
+        0x99 => 0x2122,
+        0x9A => 0x0161,
+        0x9B => 0x203A,
+        0x9C => 0x0153,
+        0x9E => 0x017E,
+        0x9F => 0x0178,
+        other => other as u32,
+    };
+    char::from_u32(code).unwrap_or('\u{fffd}')
+}
+
 /// The spacing index closest to a multiple of the natural line height.
-fn nearest_spacing(multiple: f32) -> u8 {
+pub fn nearest_spacing(multiple: f32) -> u8 {
     let mut best = 0;
     for (i, m) in SPACINGS.iter().enumerate() {
         if (m - multiple).abs() < (SPACINGS[best] - multiple).abs() {
@@ -548,6 +599,13 @@ mod tests {
     fn skips_destinations_it_does_not_use() {
         let back = read(b"{\\rtf1{\\info{\\title hidden}}{\\*\\generator Other;}{\\colortbl;\\red0;}visible}");
         assert_eq!(text_of(&back), "visible");
+    }
+
+    #[test]
+    fn raw_utf8_and_windows_1252_escapes_read_as_their_characters() {
+        // a writer that does not escape "é" writes its two UTF-8 bytes; \'92 is a Windows-1252 apostrophe
+        let back = read("{\\rtf1 é\\'92s}".as_bytes());
+        assert_eq!(text_of(&back), "é\u{2019}s");
     }
 
     #[test]
