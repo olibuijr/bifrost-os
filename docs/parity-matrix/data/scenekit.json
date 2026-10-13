@@ -17,9 +17,9 @@
     {
       "feature": "Views for 3D content",
       "apple": "SCNView, SCNRenderer, SCNLayer, SCNSceneRenderer, SCNHitTestResult",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "the GPU presenter (springboard/src/gpu/wl.rs) draws 2D surfaces only"
+      "bifrost": "springboard/ui/src/scene_view.rs",
+      "status": "partial",
+      "note": "built on parity/team-a-05; not yet verified on Midget. Model of the renderer queries (project, unproject, hit test) and the camera choice. Nothing draws the scene: the GPU presenter draws 2D surfaces only."
     },
     {
       "feature": "Cameras, lights and materials",
@@ -80,9 +80,9 @@
     {
       "feature": "Custom shaders and render passes",
       "apple": "SCNProgram, SCNShadable, SCNTechnique, SCNNodeRendererDelegate",
-      "bifrost": "springboard/render/src/gfx.rs",
-      "status": "gap",
-      "note": "the GPU path has no app-facing shader or technique API"
+      "bifrost": "springboard/ui/src/shader_library.rs",
+      "status": "partial",
+      "note": "built on parity/team-a-05; not yet verified on Midget. Shader function table: names, stages and pipeline-kind checks. No shader compilation, no GPU pipeline and no render pass API."
     },
     {
       "feature": "Scene asset import",

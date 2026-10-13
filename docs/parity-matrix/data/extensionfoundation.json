@@ -10,9 +10,9 @@
     {
       "feature": "Adding support for app extensions to your app",
       "apple": "Extension model: define extension points, talk to extensions at runtime",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No extension model in SDK"
+      "bifrost": "springboard/ui/src/extension.rs, springboard/core/src/extension_process.rs, springboard/sdk/src/extension.rs",
+      "status": "partial",
+      "note": "built on parity/team-a-05; not yet verified on Midget. The extension model (points, identities, registry and process table) from wave 1 covers this row, which was stale. Pure model, not wired into the shell."
     },
     {
       "feature": "Building an extension (AppExtension, AppExtensionConfiguration, ConnectionHandler)",
@@ -44,7 +44,7 @@
     }
   ],
   "gaps": [
-    "Extension point declaration and extension package type",
+    "Extension model is pure data: no shell wiring, no package loading and no XPC transport yet",
     "Discovery of installed extensions by host apps",
     "Host-initiated launch of an extension process in its own sandbox with a connection",
     "Share-sheet extensions installed by apps"
