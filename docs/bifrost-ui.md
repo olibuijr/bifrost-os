@@ -487,6 +487,28 @@ available whenever the shell runs), only `kSecClassGenericPassword` (no internet
 attributes beyond service and account (labels, comments, dates), no `kSecMatchLimitAll` listing, no iCloud sync, and
 `update` replaces the value only (no attribute update).
 
+## Accounts (`ACAccountStore`, `ACAccount`, `ACAccountType`, `ACAccountCredential`; `springboard/sdk/src/accounts.rs`)
+
+Pure model, host-tested. Parity row: `docs/parity-matrix/data/accounts.json` (status stays partial until a Midget check).
+
+- **Store**: `AccountStore::open(path)` keeps the store in a file; `AccountStore::shared_path()` is `$XDG_DATA_HOME/bifrost/accounts.ini`
+  (or `~/.local/share/bifrost/accounts.ini`). A missing file is an empty store; a malformed file is an `InvalidData` error.
+  `AccountStore::new()` lives only in the process (no file).
+- **Shared list**: every change (`save`, `remove`, `set_access`, `register_type`, a renewal) first reads the file's current contents,
+  applies the change, then writes the file atomically (`bifrost_core::fsutil::write_atomic`). A refused change writes nothing.
+  Another handle's changes appear after `reload()`, which returns whether anything changed.
+- **Change notification** (`ACAccountStoreDidChange`): `observe_did_change(FnMut)` returns a token; `unobserve(token)` removes it.
+  Observers run once per change that alters the state (a refused or no-op change runs none). `change_count()` counts them.
+- **Format**: `[store]`, `[type]` and `[account]` sections with `key = value` lines; values escape `\\`, newline and carriage return.
+  Unknown sections and keys are skipped. Identifiers `account-N` are never reused, even after a removal and a reopen.
+- **Credentials are not written to the file.** A handle keeps the credential it holds in memory across its own saves and reloads.
+  After a reopen the app sets the credential again from its keychain item (`Credential::encode` / `decode` give the bytes).
+- **Access grants persist**: `accessGranted` is kept in the file, so a grant survives a restart. There is still no user prompt
+  that grants a type, so `set_access` is called by the app's own grant path until one exists.
+- **Gaps**: no app reads the shared store yet, and the Settings Internet Accounts pane keeps its own list in
+  `internet-accounts.ini` (a different schema: mail, CalDAV and CardDAV kinds), so Mail, Calendar and Contacts still see separate
+  lists. Merging the two lists needs a decision on the schema, so it is not done here. Not yet tested on the VM or Midget.
+
 ## Website logins and secure notes (`bifrost_app::passwords`, credential exchange)
 
 Website logins, secure notes and certificates that an app saves once and reads later. Every item is one entry of the shared
