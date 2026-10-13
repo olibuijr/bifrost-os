@@ -68,14 +68,48 @@ wm_flags=()
 while IFS= read -r word; do [[ -n "$word" ]] && wm_flags+=("$word"); done < <(session_compositor_flags "$renderer" "$chrome" "$mode")
 # the first desktop of this boot fades in from the loader's frame; a session restart does not
 fade=; grep -q ' desktop-faded$' /run/bifrost/boot-marks 2>/dev/null || fade=1
+# Optional compositor environment (/etc/bifrost/wm.env): validated KEY=VALUE words, read as data like keyboard.env.
+wm_env=()
+while IFS= read -r word; do [[ -n "$word" ]] && wm_env+=("$word"); done < <(session_wm_env /etc/bifrost/wm.env)
+# A display driver Mesa does not know (a tablet's display controller beside a panfrost render node) needs a kmsro
+# driver name so Mesa pairs the card with the render node. A wm.env choice wins; on the x86 PC this stays empty.
+# If the window server then exits during start-up, it is started once more in software (kms_swrast), and the
+# marker keeps the restarts that follow on software instead of repeating the failing start.
+mesa_auto=
+if ! session_words_set MESA_LOADER_DRIVER_OVERRIDE ${wm_env[@]+"${wm_env[@]}"}; then
+    mesa_auto=$(session_mesa_override /sys/class/drm /usr/lib/dri "$(uname -m)")
+    if [[ -n "$mesa_auto" && -e /run/bifrost/mesa-software ]]; then mesa_auto=kms_swrast; fi
+fi
 # bifrost-wm owns the screen, so it shows the loader's frame and does the boot fade, not the shell
-as_user env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=131072 MALLOC_TOP_PAD_=65536 ${fade:+BIFROST_BOOT_FADE=1} \
-    ${wm_flags[@]+"${wm_flags[@]}"} /usr/bin/bifrost-wm --drm --socket wayland-0 1>&2 &
-compositor_pid=$!
-for ((i=0;i<250;i++)); do
-    [[ -S "$runtime/wayland-0" ]] && break
-    kill -0 "$compositor_pid" 2>/dev/null || exit 1
-    sleep .02
+start_wm() {
+    as_user env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=131072 MALLOC_TOP_PAD_=65536 ${fade:+BIFROST_BOOT_FADE=1} \
+        ${mesa_auto:+MESA_LOADER_DRIVER_OVERRIDE=$mesa_auto} ${wm_flags[@]+"${wm_flags[@]}"} ${wm_env[@]+"${wm_env[@]}"} \
+        /usr/bin/bifrost-wm --drm --socket wayland-0 1>&2 &
+    compositor_pid=$!
+}
+start_wm
+retried=
+while :; do
+    ready=
+    for ((i=0;i<250;i++)); do
+        [[ -S "$runtime/wayland-0" ]] && { ready=1; break; }
+        kill -0 "$compositor_pid" 2>/dev/null || break
+        sleep .02
+    done
+    [[ -n "$ready" ]] && break
+    # the window server never came up: one retry in software when the session chose the display driver itself
+    retry=$(session_wm_retry_override "$mesa_auto")
+    if [[ -z "$retried" && -n "$retry" ]]; then
+        echo "bifrost-wm did not start with MESA_LOADER_DRIVER_OVERRIDE=$mesa_auto: retrying with $retry" >&2
+        kill "$compositor_pid" 2>/dev/null || true
+        wait "$compositor_pid" 2>/dev/null || true
+        : > /run/bifrost/mesa-software
+        mesa_auto=$retry retried=1
+        rm -f "$runtime"/wayland-*
+        start_wm
+        continue
+    fi
+    exit 1
 done
 # the launchers' environment, the display mode refresh and the Settings portal
 as_user env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 /usr/lib/bifrost/session-env 1>&2 &
@@ -83,7 +117,11 @@ as_user env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 /usr/lib/bifros
 as_user env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 ${DBUS_SESSION_BUS_ADDRESS:+DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS} /usr/bin/bifrost-portal 1>&2 &
 for ((i=0;i<250;i++)); do
     [[ -S "$runtime/wayland-0" && -f "$runtime/session.json" ]] && break
-    kill -0 "$compositor_pid" 2>/dev/null || exit 1
+    if ! kill -0 "$compositor_pid" 2>/dev/null; then
+        # died after its socket appeared: let the restart systemd makes go straight to software
+        [[ -n "$(session_wm_retry_override "$mesa_auto")" ]] && : > /run/bifrost/mesa-software
+        exit 1
+    fi
     sleep .02
 done
 [[ -S "$runtime/wayland-0" && -f "$runtime/session.json" ]] || { echo 'Wayland startup timed out' >&2; exit 1; }
@@ -113,8 +151,9 @@ if [[ "$chrome" == 1 ]]; then
         as_user env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 "${wm_flags[@]}" "/usr/bin/$chrome_client" 1>&2 &
     done
 fi
-# learns the display mode for the next boot's command line; off the critical path
-/usr/lib/bifrost/video-arg >&2 &
+# learns the display mode for the next boot's command line; off the critical path. Only where an EFI loader reads
+# one (a board booted by U-Boot with a boot image has no such file).
+[[ -n "$(session_efi_cmdline /boot)" ]] && /usr/lib/bifrost/video-arg >&2 &
 set +e
 # The window server outlives the shell: outputs, the lock and app windows stay while only the shell restarts
 # (no-restart updates). The shell's own crash-loop latch still applies; three quick exits end the session.
