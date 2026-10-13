@@ -215,8 +215,8 @@ mod tests {
         assert_eq!(first.duration_s, 1500.0);
         assert_eq!(first.steps.len(), 2);
         assert_eq!(first.steps[0].instruction(), "Walk to Hlemmur");
-        // 1790000400000 ms is 12:40 UTC
-        assert_eq!(first.steps[1].instruction(), "Bus 14 from Hlemmur 12:40 to Hamraborg 12:56");
+        // 1790000400000 ms is 14:20 UTC
+        assert_eq!(first.steps[1].instruction(), "Bus 14 from Hlemmur 14:20 to Hamraborg 14:36");
         assert!((first.distance_m - 5500.5).abs() < 1e-6);
     }
 
@@ -240,8 +240,8 @@ mod tests {
 
     #[test]
     fn times_follow_the_agency_offset_and_wrap_the_day() {
-        assert_eq!(clock(1_790_000_400_000.0, 0.0), "12:40");
-        assert_eq!(clock(1_790_000_400_000.0, 3_600_000.0), "13:40");
+        assert_eq!(clock(1_790_000_400_000.0, 0.0), "14:20");
+        assert_eq!(clock(1_790_000_400_000.0, 3_600_000.0), "15:20");
         assert_eq!(clock(60_000.0, -120_000.0), "23:59");
     }
 

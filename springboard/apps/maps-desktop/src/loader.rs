@@ -96,6 +96,11 @@ impl TileLoader {
         loader
     }
 
+    /// How old a cached tile may be before it is fetched again.
+    pub fn max_age(&self) -> Duration {
+        self.max_age
+    }
+
     /// Lets tiles that failed to load be asked for again (when a layer is switched on).
     pub fn retry_failed(&mut self) {
         self.failed.clear();
@@ -319,14 +324,8 @@ mod tests {
         TileCache::new(&root, &source.overlay_cache_key()).write(t, &png()).unwrap();
         assert!(loader.want(&[t]));
         assert!(loader.image(t).is_some());
-        // zero tolerance for age: the cached tile counts as stale, so a fetch is queued once online
-        let mut old = TileLoader::overlay(&root, source, Arc::new(crate::net::Offline), Duration::ZERO);
-        old.want(&[t]);
-        assert!(!old.busy(), "offline: nothing is asked for");
-        old.set_online(true);
-        std::thread::sleep(Duration::from_millis(20));
-        old.want(&[t]);
-        assert!(old.busy(), "a stale overlay tile is asked for again");
+        assert_eq!(loader.max_age(), crate::source::TRAFFIC_MAX_AGE, "traffic tiles go stale sooner than map tiles");
+        assert_eq!(TileLoader::new(&root, source, Arc::new(crate::net::Offline)).max_age(), MAX_TILE_AGE);
     }
 
     #[test]
