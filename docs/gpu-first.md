@@ -2,7 +2,7 @@
 
 ## Compositor review (round 58)
 
-Findings from reading the presenter end to end (not yet measured on Midget; the lead builds after merging).
+Findings from reading the presenter end to end (round 58, written before the window server took over glass; the live-backdrop parts are history, see "Live materials" and "Live blur by compositor").
 
 **What was static.** Glass blurred only the wallpaper: one dual-Kawase pyramid computed per wallpaper
 change, sampled by every glass shape (bar, dock, menus, window sidebars). Windows, other panels and anything
@@ -73,17 +73,17 @@ rim lit from the top left with a weaker opposite edge (`u_rim`, normal from the 
 Kyant0/AndroidLiquidGlass's highlight), drawn only for `glass::Kind::{Chrome, Menu}`, and an interleaved-gradient
 dither (+-0.5/255) after the blur against 8-bit banding (KWin, Hyprland and scenefx add zero-centred or positive noise
 the same way). Mode 4 fills an inactive window's material with its opaque colour (`.followsWindowActiveState`).
-The front window's behind-window materials sample `Presenter::under`: the live backdrop without the front window, so
-a sidebar blurs the windows behind it; window contents are sampled with GL_LINEAR into the quarter-size base (no
-shimmer through glass).
+(History: the front window's behind-window materials once sampled `Presenter::under`, a live backdrop of the other windows. It is deleted; see "Live materials" above.)
 
 Glass: `Surface::glass_rrect` and the dock/bar/menu code call `bifrost_render::glass::push` when
 `glass::gpu()` is on and draw only the tint; the presenter draws the blur under each shape. The glass
 list is replaced on full-damage frames and accumulated otherwise. `glass::set_clarity` (0 clear,
-1 tinted) scales tints for the Golden Gate Liquid Glass setting (Settings UI not built yet).
+1 tinted) scales tints for the Golden Gate Liquid Glass setting (Settings > Displays, pref `liquid_glass`, applied in `shell/mod.rs`).
 
 Window vibrancy (`NSVisualEffectView` behind-window blending, .sidebar / .titlebar): windows may carry material
-rects in window px (`Wayland::window_materials(id, Vec<Glass>)`); the presenter draws such a window over the blurred
+rects in window px (`Wayland::window_materials(id, Vec<Glass>)`). Under bifrost-wm these go to the window server as
+`bifrost_material_v1` regions (or `ext-background-effect` blur regions) and the server blurs the real scene. In the
+presenter's own path (no material protocol) the presenter draws such a window over the blurred
 wallpaper at the window origin, so the blur shows through translucent (premultiplied) window pixels and nowhere
 else. `Wayland::set_scale(ui.pt(1.0))` sets points to px for the window metrics; `src/bin/shell.rs` calls it when
 the scale changes and calls `wayland_window_materials(shell.take_wayland_materials())` before `wayland_windows`.
@@ -125,8 +125,8 @@ only an external app open, 9.2 ms with Settings open (`tools/bench.py --midget`,
 4. Text and icon atlases on the GPU; per-layer transforms for window open/minimise/Mission Control animations.
 5. Done 0.4.57: Liquid Glass slider (Settings › Displays, pref `liquid_glass`), vibrancy and rim. Next: clarity also scales blur strength.
 6. Explicit sync (`wp_linux_drm_syncobj_v1`) for NVIDIA; format modifiers negotiated through dma-buf feedback (v4).
-7. Vulkan backend behind the same presenter API.
-8. Own compositor (BifrOSt WindowServer) so glass can blur other clients' windows, which a Wayland client cannot see.
+7. Vulkan: the window server has a Vulkan render server (`BIFROST_WM_RENDERER=vulkan`, `docs/graphics-architecture.md`); the shell presenter stays GLES.
+8. Done: own compositor (`bifrost-wm`, `docs/window-server.md`) blurs other clients' windows; labwc is removed.
 
 ## Debugging
 
@@ -153,7 +153,7 @@ only an external app open, 9.2 ms with Settings open (`tools/bench.py --midget`,
 
 The presenter has no live backdrop. Under bifrost-wm the shell sends material and ext-background-effect blur regions and
 the window server blurs the real scene (`docs/window-server.md`, "Live blur per compositor path"). Without the material
-protocol (safe mode) client windows draw the inactive opaque plate.
+protocol client windows draw the inactive opaque plate.
 
 ## Presenter pacing, buffer reuse and fallback (round 75)
 
@@ -167,9 +167,8 @@ fence; a native fence fd or a server-side wait would remove that stall (follow-u
 once and reused; a surface's content layer and every backdrop pyramid are textures created on size change and kept.
 A new dma-buf is only allocated when every drawable is held by the compositor, and the spare is freed after 5 s idle.
 
-**Glass caching.** The wallpaper blur is computed once per wallpaper change (`set_wallpaper` key). The live backdrop
-(`rebuild_live`) and each window's behind-window backdrop (`under`) rebuild only when their dirty flag is set and at
-most every 33 ms; a skipped rebuild is retried by a one-shot timer. An unchanged backdrop costs no blur passes.
+**Glass caching.** The wallpaper blur is computed once per wallpaper change (`set_wallpaper` key); an unchanged
+wallpaper costs no blur passes. (The live and per-window backdrop rebuilds with their 33 ms limit were removed with the live backdrop.)
 
 **Health and fallback.** `gpu/health.rs` holds the presenter's first failure. It is set by:
 - `eglMakeCurrent` failing (lost context, checked at the start of every draw);
@@ -183,6 +182,6 @@ damaged, and `Display::take_gpu_fallback` makes the shell draw a full CPU frame 
 was already allocated at startup, so the switch needs no new buffers. Failures are logged as
 `GPU presenter failed, falling back to the SHM path: <reason>` (journal, `presenter` logger).
 
-Backdrop allocation is all-or-nothing (`alloc_live`, the wallpaper chain in `set_wallpaper`): a failure part way
+Backdrop allocation is all-or-nothing (the wallpaper chain in `set_wallpaper`): a failure part way
 frees the textures it made. Tests: `gpu::health` (host), `wl::stack_tests`.
 Not measured on Midget yet: the fallback path has only been read through, not run on a lost context.
