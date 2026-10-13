@@ -29,6 +29,26 @@ impl Key {
     ];
 }
 
+impl Key {
+    /// The wire name of the key, as the `contacts` service and the SDK spell it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Key::GivenName => "given_name",
+            Key::FamilyName => "family_name",
+            Key::Organization => "organization",
+            Key::Phones => "phones",
+            Key::Emails => "emails",
+            Key::Address => "address",
+            Key::Note => "note",
+        }
+    }
+
+    /// The key a wire name stands for, or `None` for an unknown name.
+    pub fn from_name(name: &str) -> Option<Key> {
+        Key::ALL.iter().copied().find(|key| key.name() == name)
+    }
+}
+
 /// A field value: text, or a list (phone numbers, email addresses, postal addresses).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
@@ -76,6 +96,11 @@ pub struct Record {
 impl Record {
     pub fn new(id: u64) -> Self {
         Record { id, fields: BTreeMap::new() }
+    }
+
+    /// The value of a field the record holds, or `None` when it is blank or was never set.
+    pub fn get(&self, key: Key) -> Option<&Value> {
+        self.fields.get(&key)
     }
 
     /// Sets a field, replacing an earlier value. A value that is all blank removes the field.
@@ -187,6 +212,22 @@ mod tests {
         assert_eq!(p.text(Key::FamilyName), Ok("Lovelace"));
         assert_eq!(p.get(Key::Emails), Ok(Some(&Value::List(vec!["ada@example.com".into()]))));
         assert_eq!(p.get(Key::Address), Ok(None));
+    }
+
+    #[test]
+    fn every_key_has_a_wire_name_that_reads_back() {
+        for key in Key::ALL {
+            assert_eq!(Key::from_name(key.name()), Some(key));
+        }
+        assert_eq!(Key::from_name("nickname"), None);
+        assert_eq!(Key::GivenName.name(), "given_name");
+    }
+
+    #[test]
+    fn a_record_reads_back_the_fields_it_holds() {
+        let r = sample();
+        assert_eq!(r.get(Key::FamilyName), Some(&Value::Text("Lovelace".into())));
+        assert_eq!(r.get(Key::Note), None);
     }
 
     #[test]
