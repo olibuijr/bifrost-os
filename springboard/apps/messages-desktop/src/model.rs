@@ -292,7 +292,7 @@ pub enum Outgoing {
 /// What a one-line sheet asks for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PromptKind {
-    /// The user id of the person to message.
+    /// The user ids of the people to message: one starts a direct conversation, several a group.
     NewMessage,
     /// A new name for the room with this id.
     Rename(String),
@@ -316,6 +316,11 @@ impl Prompt {
         Prompt { kind: PromptKind::Rename(room.to_string()), value: current.to_string(), error: String::new(), busy: false }
     }
 
+    /// The people a checked New Message value names.
+    pub fn users(checked: &str) -> Vec<String> {
+        checked.split(',').filter(|u| !u.is_empty()).map(str::to_string).collect()
+    }
+
     pub fn title(&self) -> &'static str {
         match self.kind {
             PromptKind::NewMessage => "New Message",
@@ -325,7 +330,7 @@ impl Prompt {
 
     pub fn label(&self) -> &'static str {
         match self.kind {
-            PromptKind::NewMessage => "To (a Matrix user id)",
+            PromptKind::NewMessage => "To (Matrix user ids, separated by commas)",
             PromptKind::Rename(_) => "Name",
         }
     }
@@ -337,10 +342,11 @@ impl Prompt {
         }
     }
 
-    /// The checked value: a user id for New Message, a non-empty name for Rename.
+    /// The checked value: the user ids joined by commas for New Message (see [`Prompt::users`]), a non-empty name for
+    /// Rename.
     pub fn checked(&self) -> Result<String, String> {
         match self.kind {
-            PromptKind::NewMessage => protocol::checked_user_id(&self.value),
+            PromptKind::NewMessage => protocol::checked_user_ids(&self.value).map(|ids| ids.join(",")),
             PromptKind::Rename(_) => {
                 let name = self.value.trim();
                 if name.is_empty() {
@@ -1217,6 +1223,11 @@ mod tests {
         assert!(p.checked().is_err(), "a bare @ is not a user id");
         p.value = "@bob:example.org".into();
         assert_eq!(p.checked(), Ok("@bob:example.org".into()));
+        p.value = "@bob:example.org, @ann:example.org".into();
+        assert_eq!(
+            Prompt::users(&p.checked().unwrap()),
+            vec!["@bob:example.org".to_string(), "@ann:example.org".to_string()]
+        );
         let mut r = Prompt::rename("!a:x", "Old");
         r.value = "  ".into();
         assert_eq!(r.checked(), Err("Enter a name".into()));

@@ -228,6 +228,31 @@ pub fn create_direct_body(user_id: &str) -> String {
     .encode()
 }
 
+/// The body that makes a private group conversation and invites each of `users`.
+pub fn create_group_body(users: &[String]) -> String {
+    obj(vec![
+        ("preset", text("private_chat")),
+        ("invite", Json::Arr(users.iter().map(|u| text(u)).collect())),
+    ])
+    .encode()
+}
+
+/// The user ids of the New Message sheet: one or more, separated by commas or spaces, each checked like
+/// [`checked_user_id`]. A repeated id counts once.
+pub fn checked_user_ids(input: &str) -> Result<Vec<String>, String> {
+    let mut ids: Vec<String> = Vec::new();
+    for part in input.split(|c: char| c == ',' || c == ';' || c.is_whitespace()).filter(|p| !p.is_empty()) {
+        let id = checked_user_id(part)?;
+        if !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    if ids.is_empty() {
+        return Err("Enter a user id such as @alice:example.org".into());
+    }
+    Ok(ids)
+}
+
 /// A Matrix user id as the New Message sheet takes it: `@name:server`. Surrounding spaces go; a name without the `@` or
 /// the server is refused, because the homeserver would not know whom to invite.
 pub fn checked_user_id(input: &str) -> Result<String, String> {
@@ -897,6 +922,19 @@ mod tests {
         assert_eq!(room_name_url(b, "!r:x"), "https://h/_matrix/client/v3/rooms/%21r%3Ax/state/m.room.name");
         assert_eq!(create_room_url(b), "https://h/_matrix/client/v3/createRoom");
         assert_eq!(logout_url(b), "https://h/_matrix/client/v3/logout");
+    }
+
+    #[test]
+    fn a_group_invites_every_user_and_the_list_is_checked() {
+        let body = parse(&create_group_body(&["@bob:x".to_string(), "@ann:x".to_string()]));
+        assert_eq!(body.str_field("preset").as_deref(), Some("private_chat"));
+        assert!(body.get("is_direct").is_none(), "a group is not a direct conversation");
+        assert_eq!(body.get("invite").and_then(|i| i.as_array()).map(<[Json]>::len), Some(2));
+        assert_eq!(checked_user_ids("@bob:x, @ann:x ;@bob:x"), Ok(vec!["@bob:x".to_string(), "@ann:x".to_string()]));
+        assert_eq!(checked_user_ids(" @bob:x "), Ok(vec!["@bob:x".to_string()]));
+        assert!(checked_user_ids("@bob:x, ann").is_err(), "one bad id refuses the list");
+        assert!(checked_user_ids("  ,  ").is_err());
+        assert!(checked_user_ids("@").is_err());
     }
 
     #[test]

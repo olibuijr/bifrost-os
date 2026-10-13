@@ -133,9 +133,9 @@ pub fn redact(api: Arc<Api>, room: String, event: String, what: &'static str) ->
     Event::Changed { what, result: api.redact(&room, &event) }
 }
 
-/// Makes a direct conversation with `user_id`.
-pub fn create_direct(api: Arc<Api>, user_id: String) -> Event {
-    Event::Created { result: api.create_direct(&user_id) }
+/// Makes a conversation with `users`: direct for one, a group for several.
+pub fn create_conversation(api: Arc<Api>, users: Vec<String>) -> Event {
+    Event::Created { result: api.create_conversation(&users) }
 }
 
 /// Leaves and forgets `room`.

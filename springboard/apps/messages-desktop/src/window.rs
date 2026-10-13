@@ -761,7 +761,8 @@ impl MessagesWindow {
                     p.busy = true;
                     p.error.clear();
                 }
-                sync::spawn(self.tx.clone(), self.wake(), move || sync::create_direct(api, value));
+                let users = Prompt::users(&value);
+                sync::spawn(self.tx.clone(), self.wake(), move || sync::create_conversation(api, users));
             }
             PromptKind::Rename(room) => {
                 self.model.overlay = Overlay::None;

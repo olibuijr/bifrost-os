@@ -89,10 +89,16 @@ impl Api {
         protocol::parse_event_id(&answer).map(|_| ())
     }
 
-    /// Makes a private conversation with `user_id` and returns its room id.
-    pub fn create_direct(&self, user_id: &str) -> Result<String, String> {
+    /// Makes a private conversation with `users` and returns its room id: a direct conversation for one person, a
+    /// group for several. The signed-in user is left out of the invitations.
+    pub fn create_conversation(&self, users: &[String]) -> Result<String, String> {
+        let others: Vec<String> = users.iter().filter(|u| **u != self.user_id).cloned().collect();
+        let body = match others.as_slice() {
+            [] => return Err("Enter someone other than yourself".into()),
+            [one] => protocol::create_direct_body(one),
+            many => protocol::create_group_body(many),
+        };
         let url = protocol::create_room_url(&self.base);
-        let body = protocol::create_direct_body(user_id);
         let answer = call(&self.http, "POST", &url, Some(self.token.as_str()), Some((body.as_bytes(), "application/json")), CALL_LIMIT)?;
         protocol::parse_room_id(&answer)
     }
