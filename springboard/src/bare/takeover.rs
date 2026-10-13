@@ -121,8 +121,8 @@ extern "C" {
     fn signal(signum: i32, handler: usize) -> usize;
 }
 
-/// SIGTERM (systemd stopping the unit on reboot or shutdown) is a clean stop: a watcher thread, so a hung UI loop
-/// cannot hold it, writes `last_exit`, clears the counter and exits 0.
+/// SIGTERM (systemd stopping the unit on reboot or shutdown) is a clean stop: a watcher on the shared sys-watch
+/// thread, so a hung UI loop cannot hold it, writes `last_exit`, clears the counter and exits 0.
 fn watch_term(dir: &str) {
     use std::io::Read;
     use std::os::fd::AsRawFd;
@@ -138,17 +138,25 @@ fn watch_term(dir: &str) {
     // SAFETY: the handler only stores an atomic flag and writes one byte, both async-signal-safe.
     unsafe { signal(SIGTERM, on_term as *const () as usize) };
     let dir = dir.to_string();
-    crate::bare::sys::spawn_named("term-watch", move || loop {
-        let mut byte = [0u8; 1];
-        let woke = rx.read(&mut byte);
-        if TERM.load(std::sync::atomic::Ordering::SeqCst) {
-            clean_stop(&dir, 0, "SIGTERM from the service manager");
-            std::process::exit(0);
-        }
-        if matches!(woke, Ok(0) | Err(_)) {
-            // the pipe is gone (never, the write end is leaked on purpose): keep the old poll as a fallback
-            std::thread::sleep(Duration::from_millis(500));
-        }
+    super::sys_watch::register(super::sys_watch::Watch {
+        fds: vec![rx.as_raw_fd()],
+        due: None,
+        run: Box::new(move |ready, _now| {
+            if !ready[0] {
+                return None;
+            }
+            let mut byte = [0u8; 1];
+            let woke = rx.read(&mut byte);
+            if TERM.load(std::sync::atomic::Ordering::SeqCst) {
+                clean_stop(&dir, 0, "SIGTERM from the service manager");
+                std::process::exit(0);
+            }
+            if matches!(woke, Ok(0) | Err(_)) {
+                // the pipe is gone (never, the write end is leaked on purpose): keep the old poll as a fallback
+                std::thread::sleep(Duration::from_millis(500));
+            }
+            None
+        }),
     });
 }
 

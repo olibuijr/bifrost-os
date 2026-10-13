@@ -6,8 +6,8 @@
 //!   value is the CLOCK_MONOTONIC reading in whole milliseconds (it stops
 //!   during suspend, like the loop does). A reader that sees the value stand
 //!   still while the process lives can treat the UI as hung.
-//! - `watch()` runs a thread that, once the loop has not beaten for
-//!   STALL_MS (20 s), appends "ui loop stalled for Ns" to crash.log, writes
+//! - `watch()` registers a check with the shared sys-watch thread (see `sys_watch`) that, once the loop has not
+//!   beaten for STALL_MS (20 s), appends "ui loop stalled for Ns" to crash.log, writes
 //!   last_exit and exits the process with status STALL_EXIT (5). The launcher
 //!   may restart the shell or fall back to Android on 5.
 //!
@@ -24,7 +24,6 @@
 use super::{crashlog, sys};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
-use std::time::Duration;
 
 pub const STALL_MS: f64 = 20_000.0;
 /// Exit status when the UI loop stalled.
@@ -119,15 +118,16 @@ pub fn beat() {
     }
 }
 
-/// Starts the stall watcher thread (call after `init`).
+/// Registers the stall watcher with the shared sys-watch thread (call after `init`, before
+/// `sys_watch::start`). It runs every WATCH_EVERY_SECS, on the poll timeout.
 pub fn watch(dir: &str) {
     let dir = dir.to_string();
-    std::thread::Builder::new()
-        .name("heartbeat-watch".into())
-        .spawn(move || {
-            let mut total = sys::boottime_ms() - sys::now_ms();
-            loop {
-            std::thread::sleep(Duration::from_secs(WATCH_EVERY_SECS));
+    let period = WATCH_EVERY_SECS as f64 * 1e3;
+    let mut total = sys::boottime_ms() - sys::now_ms();
+    super::sys_watch::register(super::sys_watch::Watch {
+        fds: Vec::new(),
+        due: Some(sys::now_ms() + period),
+        run: Box::new(move |_ready, _now| {
             let now = sys::now_ms();
             let new_total = sys::boottime_ms() - now;
             if resumed(slept_between(total, new_total)) {
@@ -147,9 +147,9 @@ pub fn watch(dir: &str) {
                 eprintln!("springboard: ui loop stalled for {secs}s; exiting");
                 std::process::exit(STALL_EXIT);
             }
-            }
-        })
-        .ok();
+            Some(sys::now_ms() + period)
+        }),
+    });
 }
 
 #[cfg(test)]
