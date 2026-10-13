@@ -555,6 +555,10 @@ fn run() -> std::io::Result<()> {
         keys.read(&mut events);
         inputs.read(&mut events);
         inputs.tick(t, &mut events);
+        // a physical keyboard attached or removed (the first call also reports the start state)
+        if let Some(attached) = inputs.keyboard_change() {
+            shell.set_hardware_keyboard(attached, t);
+        }
         // the pointer moving or a button changing shows the cursor again
         let pointer_now = (inputs.pointer(), inputs.is_down());
         if pointer_now != last_pointer {
@@ -767,6 +771,12 @@ fn run() -> std::io::Result<()> {
                     } else if states.contains(&bifrost_ui::recognizer::GestureState::Cancelled) {
                         shell.cancel_home_gesture(t);
                     }
+                    // a system gesture that is active holds the finger: the foreground app loses the touches it had
+                    let taken = states.iter().any(|s| s.is_active());
+                    if taken {
+                        shell.ext_cancel_touches(at);
+                    }
+                    shell.ext_contact(id, phase, x, y, at, !taken);
                     continue;
                 }
                 input::Event::Key { code: input::KEY_WAKEUP, down: true } => Event::Wake,

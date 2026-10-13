@@ -3805,6 +3805,10 @@ Apps can take full touch events instead of the single-pointer `Input::Touch` str
   400 ms and the slop of the last tap; a drag, a hold over 500 ms or a cancel is not a tap).
 - Wire (`springboard/proto/src/touch.rs`): `ToApp::Touches(TouchEvent)`, tag `0x1f0`, at most 16 touches, locations in surface
   pixels like `ToApp::Touch`. The shell sends a frame ahead of the matching `ToApp::Touch`.
+- Shell side (`springboard/src/shell/touch_frames.rs`, `AppHost::feed_touch`): each app surface has a `TouchTracker` built with the
+  app's scale. Touchscreen contacts are direct samples under their finger id; the pointer is one indirect sample. The first
+  finger's pointer-stream copy is skipped while a contact is down. A synthesized accessibility tap (`ax press`) makes a frame too.
+  Focus loss, window close and a system gesture that takes the finger cancel every touch the app holds, in one frame.
 - SDK: `App::wants_touch_events()` opts in, `App::touches(ctx, &TouchEvent)` receives frames. `TouchEvent::to_points(scale)` and
   `in_view(scale, ox, oy)` convert to points / view coordinates. Apps that do not opt in keep `Input::Touch`. Once frames
   arrive the plain stream is dropped for opted-in apps; with a shell that sends only plain touches the SDK derives one indirect
