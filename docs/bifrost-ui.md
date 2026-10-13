@@ -3029,6 +3029,10 @@ attached (`Shell::set_hardware_keyboard`). Tapping outside a field dismisses it 
 `keyboard::set_disabled(true)` for the session; a tablet does not. Apps get `BIFROST_HARDWARE_KEYBOARD=1` only on a
 desktop.
 
+Not wired yet: nothing calls `Shell::set_hardware_keyboard` (the evdev discovery must), and the windowed desktop UI
+(`draw_desk`, `desk_event`) neither draws the keyboard nor routes touches to it, so on a tablet in that UI the policy
+allows a keyboard that is not yet visible. The Bifrost presentation draws and routes it as before.
+
 ## Module index: modules without their own section
 
 Every module below exists in the crate named and had no mention in this document. Each line is the first sentence of the
