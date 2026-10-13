@@ -4,7 +4,7 @@
   "macos_since": "10.9",
   "status": "partial",
   "bifrost": "springboard/sdk/src/widgets.rs (player), springboard/src/media/ (player, stream, capture), springboard/src/deildu/player_view.rs, springboard/src/shell/camera/",
-  "summary": "AVKit's playback side has partial BifrOSt counterparts: a video decoder and fullscreen player, and a floating audio mini player. Picture in Picture, route picking, the content-proposal and chapter UI, and capture hardware buttons, audio input picker and Continuity Camera have no counterpart; the PiP toggle in Settings is stored but nothing acts on it.",
+  "summary": "AVKit's playback side has partial BifrOSt counterparts: a video decoder and fullscreen player, and a floating audio mini player. Picture in Picture, route picking, display-mode choice and the capture view are modelled as pure state but not yet wired into the shell or the SDK, so apps cannot use them. The next-up proposal sheet and chapter UI, capture hardware buttons, audio input picker and Continuity Camera have no full counterpart; the PiP toggle in Settings is stored but nothing acts on it.",
   "rea_evidence": "ev_89fce22ae4427a965d86144f1281df4236dabe0684b3b0df3c32a8a3f1661041",
   "features": [
     {
@@ -52,16 +52,16 @@
     {
       "feature": "Display management (HDR, refresh mode switching)",
       "apple": "AVDisplayManager, AVDisplayDynamicRange",
-      "bifrost": "none found",
-      "status": "gap",
-      "note": "No display mode switching API; the video path is in springboard/src/media/ only."
+      "bifrost": "springboard/ui/src/display_manager.rs",
+      "status": "partial",
+      "note": "built on parity/team-k-avkit; not yet verified on Midget. Pure model with host unit tests: a playing app's refresh rate and dynamic range criteria, and the choice of a display mode that meets them, with a switch-in-progress flag. The shell's display list supplies the modes and performs the switch (see docs/parity/displays-modeset.md). Not wired into the SDK, so apps cannot declare criteria yet; HDR is not covered on hardware."
     },
     {
       "feature": "Route selection (AirPlay and nearby receivers)",
       "apple": "AVRoutePickerView, AVRoutePickerViewDelegate, AVRoutePickerViewButtonStyle",
-      "bifrost": "springboard/src/shell/pages.rs:598 (AirPlay & Handoff page), springboard/src/shell/settings.rs",
-      "status": "gap",
-      "note": "Settings page only; no route picker view. Deildu serves a LAN URL so an external TV can play the stream (springboard/CHANGELOG.md), which is not an AVRoutePicker equivalent."
+      "bifrost": "springboard/ui/src/route_picker.rs, springboard/ui/src/route_picker_view.rs",
+      "status": "partial",
+      "note": "built on parity/team-k-avkit; not yet verified on Midget. Pure models: route_picker builds the destination rows (local outputs first, then discovered receivers sorted by name, with the active flag from route_auth); route_picker_view tracks the button look (System, Inactive, Active) and the will-begin and did-end presenting events. No live receiver discovery feeds the list, the picker is not drawn, and no route is chosen from it."
     },
     {
       "feature": "Third-party casting and metadata identifiers",
@@ -73,9 +73,9 @@
     {
       "feature": "Capture view and camera viewfinder (AVCaptureView)",
       "apple": "AVCaptureView, AVCaptureViewDelegate",
-      "bifrost": "springboard/src/shell/camera/mod.rs (viewfinder, silent shutter, timer, grid, QR), springboard/src/shell/camera/qr.rs",
+      "bifrost": "springboard/src/shell/camera/mod.rs (viewfinder, silent shutter, timer, grid, QR), springboard/src/shell/camera/qr.rs, springboard/ui/src/capture_view.rs",
       "status": "partial",
-      "note": "The Camera app is a shell app, not an SDK view. Apps get no capture view or delegate, and the camera is not exposed as a reusable widget."
+      "note": "The Camera app is a shell app, not an SDK view. springboard/ui/src/capture_view.rs models the capture view as pure state: session binding with video and audio preview flags, controls style, video gravity, and the start-recording delegate event with its refusals. Not wired into the SDK or the Camera app, and not yet verified on Midget."
     },
     {
       "feature": "Capture events from hardware buttons",
@@ -87,9 +87,9 @@
     {
       "feature": "Camera facing direction",
       "apple": "AVCaptureDeviceDirectionCoordinator, AVCaptureDeviceDirectionMap, AVCaptureDeviceDescriptor",
-      "bifrost": "springboard/src/shell/camera/mod.rs (front/back switch)",
+      "bifrost": "springboard/src/shell/camera/mod.rs (front/back switch), springboard/ui/src/capture_direction.rs",
       "status": "partial",
-      "note": "Front and back switching exists; no direction coordinator or device descriptor API for apps."
+      "note": "Front and back switching exists in the Camera app. springboard/ui/src/capture_direction.rs models the direction coordinator and its map as pure state: device descriptors grouped into forward and backward facing lists relative to a view, a device-type filter, and a change report only when the grouping differs. Not wired to the capture service or the SDK; not yet verified on Midget."
     },
     {
       "feature": "Audio input picker",
@@ -121,12 +121,13 @@
     }
   ],
   "gaps": [
-    "Picture in Picture: no floating video window or PiP controller API; the Settings toggle pip_auto (springboard/src/shell/options.rs:72) is stored but never read by the shell.",
+    "Picture in Picture: no floating video window or PiP controller API in the shell; springboard/ui/src/pip_window.rs is a model only, and the Settings toggle pip_auto (springboard/src/shell/options.rs:72) is stored but never read by the shell.",
     "App-facing video player view: the SDK player() widget (springboard/sdk/src/widgets.rs:900) draws audio only; the fullscreen video HUD lives in springboard/src/deildu/player_view.rs and is not reusable by other apps.",
-    "Route picker: no AVRoutePickerView equivalent for AirPlay or nearby receivers; the AirPlay & Handoff page (springboard/src/shell/pages.rs:598) is a settings screen only.",
-    "Capture: no SDK capture view or delegate (AVCaptureView); the camera is a single shell app (springboard/src/shell/camera/mod.rs).",
-    "Capture events: no hardware button interaction API.",
+    "Route picker: springboard/ui/src/route_picker.rs and route_picker_view.rs are models only. No receiver discovery feeds them and nothing draws the picker; the AirPlay & Handoff page (springboard/src/shell/pages.rs:598) is a settings screen only.",
+    "Capture: springboard/ui/src/capture_view.rs is a model only. There is no SDK capture view or delegate in use, and the camera is a single shell app (springboard/src/shell/camera/mod.rs).",
+    "Capture events: springboard/ui/src/capture_event.rs is not wired to a hardware button handler.",
     "Audio input picker: audiod records (springboard/audiod/src/main.rs) but apps cannot choose a microphone through a system picker.",
-    "Content proposals, trimming and display-mode switching have no counterpart."
+    "Display management: springboard/ui/src/display_manager.rs chooses modes but is not wired into the SDK; HDR is not covered on hardware.",
+    "Content proposals and trimming have no shell counterpart; trimming is wired in the media apps only."
   ]
 }
