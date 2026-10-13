@@ -24,7 +24,16 @@ const DAY_NUM_Y_PT: f32 = 173.0;
 /// Year view: the top of the month grid.
 const YEAR_TOP_PT: f32 = 140.0;
 const ALLDAY_H: f32 = 28.0;
-const HOUR_H: f32 = 48.0;
+/// The hour row's height in points at the default zoom; View > Zoom In / Out step it by `ZOOM_STEP` between the limits.
+pub(super) const HOUR_H: f32 = 48.0;
+const ZOOM_STEP: f32 = 12.0;
+const ZOOM_MIN: f32 = 24.0;
+const ZOOM_MAX: f32 = 96.0;
+
+/// The hour height after one zoom step (`dir` > 0 zooms in, < 0 out), kept between the limits.
+pub(super) fn zoomed(hour_h: f32, dir: i32) -> f32 {
+    (hour_h + ZOOM_STEP * dir.signum() as f32).clamp(ZOOM_MIN, ZOOM_MAX)
+}
 const GUTTER: f32 = 52.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -83,12 +92,29 @@ impl Calendar {
 
     /// Scroll range of the hour grid.
     pub(super) fn time_scroll_max(&self, ui: &Ui) -> f32 {
-        ui.pt(GRID0 + ALLDAY_H + 24.0 * HOUR_H + 16.0) - self.bottom(ui)
+        ui.pt(GRID0 + ALLDAY_H + 24.0 * self.hour_h + 16.0) - self.bottom(ui)
     }
 
     /// Initial offset showing the morning (8 AM) at the top.
     pub(super) fn scroll_to_morning(&mut self, ui: &Ui) {
-        self.scroll.jump_to(ui.pt(8.0 * HOUR_H));
+        self.scroll.jump_to(ui.pt(8.0 * self.hour_h));
+    }
+
+    /// View > Zoom In / Zoom Out: changes the hour height and keeps the hour at the top of the grid where it was.
+    pub(super) fn zoom(&mut self, ui: &Ui, dir: i32) {
+        let next = zoomed(self.hour_h, dir);
+        if next == self.hour_h {
+            return;
+        }
+        let offset = self.scroll.offset() * next / self.hour_h;
+        self.hour_h = next;
+        self.scroll.set_max(self.time_scroll_max(ui));
+        self.scroll.jump_to(offset);
+    }
+
+    /// Whether another zoom step in `dir` is possible (the menu items dim at the limits).
+    pub(super) fn can_zoom(&self, dir: i32) -> bool {
+        self.time_view() && zoomed(self.hour_h, dir) != self.hour_h
     }
 
     /// Steps by the active view's unit.
@@ -112,7 +138,7 @@ impl Calendar {
         let (gut, col_w) = self.col_geometry(ui);
         let top = ui.pt(GRID0) - self.scroll.offset();
         let hours_top = top + ui.pt(ALLDAY_H);
-        let hh = ui.pt(HOUR_H);
+        let hh = ui.pt(self.hour_h);
         let mut out = vec![];
         for (i, d) in self.view_days().iter().enumerate() {
             let x0 = gut + col_w * i as f32;
@@ -218,7 +244,7 @@ impl Calendar {
         let off = self.scroll.offset();
         let top = ui.pt(GRID0) - off;
         let hours_top = top + ui.pt(ALLDAY_H);
-        let hh = ui.pt(HOUR_H);
+        let hh = ui.pt(self.hour_h);
         let rects = self.time_rects(ui);
         let c = tz::civil(self.wall.now(t), self.wall.offset);
         let now_min = c.hour * 60 + c.min;
@@ -364,5 +390,19 @@ impl Calendar {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod zoom_tests {
+    use super::*;
+
+    #[test]
+    fn zoom_steps_and_clamps() {
+        assert_eq!(zoomed(48.0, 1), 60.0);
+        assert_eq!(zoomed(48.0, -1), 36.0);
+        assert_eq!(zoomed(96.0, 1), 96.0);
+        assert_eq!(zoomed(24.0, -1), 24.0);
+        assert_eq!(zoomed(48.0, 0), 48.0);
     }
 }

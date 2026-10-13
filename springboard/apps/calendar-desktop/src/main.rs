@@ -4,12 +4,17 @@
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::controls::internet_accounts::Service;
 use bifrost_app::widgets_timeline;
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::proto::DocMode;
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
 use bifrost_calendar::calendar::connect::{self, Connect, Snap};
 use bifrost_calendar::calendar::{self, Command};
 use bifrost_core::json::Json;
 use springboard::shell::clock::Wall;
 use springboard::shell::keyboard::Out;
+use std::io::Read;
+
+/// The largest calendar file File > Import reads.
+const MAX_IMPORT: u64 = 8 * 1024 * 1024;
 
 struct CalendarApp {
     cal: Option<calendar::Calendar>,
@@ -66,7 +71,7 @@ impl App for CalendarApp {
         vec![
             AppMenu {
                 title: "File".into(),
-                items: vec![item(Command::NewEventFromText)],
+                items: vec![item(Command::NewEventFromText), item(Command::ImportCalendar)],
             },
             AppMenu {
                 title: "Event".into(),
@@ -74,6 +79,8 @@ impl App for CalendarApp {
                     item(Command::NewEvent),
                     item(Command::Save),
                     item(Command::Duplicate),
+                    item(Command::CopyEvent),
+                    item(Command::PasteEvent),
                     item(Command::ExportEvent),
                     item(Command::Delete),
                     AppMenuItem::separator(),
@@ -86,11 +93,15 @@ impl App for CalendarApp {
                     item(Command::Today),
                     item(Command::Previous),
                     item(Command::Next),
+                    item(Command::GoToDate),
                     AppMenuItem::separator(),
                     item(Command::ShowDay),
                     item(Command::ShowWeek),
                     item(Command::ShowMonth),
                     item(Command::ShowYear),
+                    AppMenuItem::separator(),
+                    item(Command::ZoomIn),
+                    item(Command::ZoomOut),
                     AppMenuItem::separator(),
                     item(Command::WeekNumbers),
                     item(Command::CalendarList),
@@ -102,15 +113,56 @@ impl App for CalendarApp {
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         let Some(cmd) = Command::from_id(id) else { return false };
         let t = bifrost_app::proto::sys::now_ms();
-        match &mut self.cal {
+        let done = match &mut self.cal {
             // the sentence is the pasteboard's text, read when the command runs
             Some(c) if cmd == Command::NewEventFromText => {
                 let text = ctx.pasteboard_string().unwrap_or_default();
                 c.enabled(cmd) && c.new_event_from_text(&ctx.ui, &text, t)
             }
+            // the pasteboard holds an event copied with Copy Event (or any calendar text)
+            Some(c) if cmd == Command::PasteEvent => {
+                if !c.enabled(cmd) {
+                    return false;
+                }
+                let text = ctx.pasteboard_string().unwrap_or_default();
+                if let Err(e) = c.paste_event(&text) {
+                    c.show_error(e);
+                }
+                true
+            }
+            Some(c) if cmd == Command::ImportCalendar => {
+                if !c.enabled(cmd) {
+                    return false;
+                }
+                let options = OpenOptions { mode: DocMode::Read, title: "Import".into(), filters: vec!["ics".into(), "vcs".into()], ..Default::default() };
+                ctx.open_panel(&options);
+                true
+            }
             Some(c) => c.perform(&ctx.ui, cmd, t),
             None => false,
+        };
+        if let Some(c) = &mut self.cal {
+            share_copy(c, ctx);
         }
+        done
+    }
+
+    /// The file chosen in File > Import...: read and added to the calendar.
+    fn document(&mut self, _ctx: &Ctx, ev: DocumentEvent) -> bool {
+        let docs = match ev {
+            DocumentEvent::Opened(doc) => vec![doc],
+            DocumentEvent::OpenedMany { docs, .. } => docs,
+            _ => return false,
+        };
+        let Some(c) = &mut self.cal else { return false };
+        for doc in docs {
+            let mut bytes = Vec::new();
+            match (&doc.file).take(MAX_IMPORT).read_to_end(&mut bytes) {
+                Ok(_) => c.import_report(&doc.name, &String::from_utf8_lossy(&bytes)),
+                Err(e) => c.show_error(format!("Could not read {}: {e}", doc.name)),
+            }
+        }
+        true
     }
 
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {

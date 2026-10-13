@@ -49,9 +49,9 @@
    "feature": "Go to Date sheet",
    "area": "panel",
    "apple": "GoToDay.nib; View > Go to Date",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:766",
+   "note": "Go to Date sheet (Go menu, Shift-Command-T) with year/month/day steppers, Return/Escape; no typed date or calendar-grid picker, no sheet accessibility nodes yet",
    "wire": "Add Command::GoToDate (cmd+shift+t) in calendar.rs:1295 with a date-picker sheet that sets the shown date; list it under Go in main.rs main_menu."
   },
   {
@@ -103,9 +103,9 @@
    "feature": "Cut / Copy / Paste events",
    "area": "menu",
    "apple": "MainMenu.nib Edit > Cut/Copy/Paste",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Edit commands only reach text fields",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:615",
+   "note": "Copy Event / Paste Event in the Event menu (.ics on the pasteboard, calendar/clipboard.rs); not routed through the shell Edit menu, copies only the open saved event, cut not done",
    "wire": "Implement copy/paste of the selected event (ICS on the pasteboard via exchange.rs export_event_ics, import_ics on paste onto the selected day); route the shell Edit commands through App::commands in main.rs."
   },
   {
@@ -131,8 +131,8 @@
    "area": "document",
    "apple": "Info.plist CFBundleDocumentTypes ICS/vCal; File > Import; ImportProgress.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/exchange.rs:82",
-   "note": "import_ics runs only for CalDAV sync results (main.rs:186); no File > Import, no document open",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:151",
+   "note": "File > Import... open panel (.ics/.vcs) with a count notice; opening .ics files from Files and import progress UI not done",
    "wire": "Add File > Import... (open panel filtered to .ics) calling Calendar::import_ics with a count toast, and handle opening .ics files from Files via the app open-file hook in main.rs."
   },
   {
@@ -337,9 +337,9 @@
    "feature": "Zoom in / out of the time grid",
    "area": "view",
    "apple": "View > Zoom In / Zoom Out",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/timeview.rs:104",
+   "note": "Go > Zoom In / Zoom Out (cmd+= / cmd+-) change the hour height 24-96 pt in Day and Week; zoom level is not persisted",
    "wire": "Add Zoom In/Out commands (cmd+= / cmd+-) changing the hour height in timeview.rs."
   },
   {
