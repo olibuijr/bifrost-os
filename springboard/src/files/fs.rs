@@ -620,7 +620,8 @@ pub(crate) mod tests {
         assert_eq!(sniff(b"hello\nworld"), Kind::Text);
         assert_eq!(sniff("héllo wörld".as_bytes()), Kind::Text);
         assert_eq!(sniff(&"é".as_bytes()[..1]), Kind::Text, "cut multibyte at the end");
-        assert_eq!(sniff(&[0x89, b'P', b'N', b'G']), Kind::Image);
+        // the whole 8-byte PNG signature: a 4-byte prefix is not enough for the decoder to call it PNG
+        assert_eq!(sniff(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]), Kind::Image);
         assert_eq!(sniff(b"\x7fELF\0\0"), Kind::Other);
         assert_eq!(sniff(b""), Kind::Other);
         assert_eq!(Kind::Text.label(), "Plain Text");
