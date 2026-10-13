@@ -209,11 +209,24 @@ pub struct CSSearchableItem {
     /// `domainIdentifier`: lets [`CSSearchableIndex::delete_searchable_items_with_domain_identifiers`] drop a group
     pub domain_identifier: String,
     pub attribute_set: CSSearchableItemAttributeSet,
+    /// `expirationDate`: seconds since the Unix epoch after which the item is dropped; `None` keeps it
+    pub expiration_date: Option<i64>,
 }
 
 impl CSSearchableItem {
     pub fn new(unique_identifier: &str, domain_identifier: &str, attribute_set: CSSearchableItemAttributeSet) -> Self {
-        CSSearchableItem { unique_identifier: unique_identifier.into(), domain_identifier: domain_identifier.into(), attribute_set }
+        CSSearchableItem { unique_identifier: unique_identifier.into(), domain_identifier: domain_identifier.into(), attribute_set, expiration_date: None }
+    }
+
+    /// Sets `expirationDate`.
+    pub fn expiration_date(mut self, secs: i64) -> Self {
+        self.expiration_date = Some(secs);
+        self
+    }
+
+    /// Whether the item has expired at `now` (Unix seconds). An item without an expiration date never does.
+    pub fn is_expired(&self, now: i64) -> bool {
+        self.expiration_date.is_some_and(|at| at <= now)
     }
 }
 
@@ -374,6 +387,10 @@ impl CSSearchableIndex {
 /// `CSSearchableIndexDescription` and the protection class of a named index (`bifrost_ui::searchindex`).
 pub use bifrost_ui::searchindex::{IndexDescription, NameError as IndexNameError, ProtectionClass};
 
+/// Per-app, per-name index stores (`bifrost_ui::searchstore`) and user queries with suggestions (`bifrost_ui::usersearch`).
+pub use bifrost_ui::searchstore::{BatchError as IndexBatchError, IndexStore, StoreSet, StoredItem};
+pub use bifrost_ui::usersearch::{run_user_query, Suggestion as CSSuggestion, SuggestionKind as CSSuggestionKind, UserQueryContext as CSUserQueryContext, UserQueryResults};
+
 /// The query model (`bifrost_ui::searchquery`): a query string, the fields it searches and its context.
 pub use bifrost_ui::searchquery::{Context as SearchQueryContext, Error as SearchQueryError, Field as SearchQueryField, Hit as SearchQueryHit, Query as SearchQuery};
 
@@ -399,6 +416,15 @@ pub fn search_items<'a>(query: &SearchQuery, items: &'a [CSSearchableItem]) -> R
 mod tests {
     use super::*;
     use crate::proto::Configure;
+
+    #[test]
+    fn an_item_expires_at_its_expiration_date() {
+        let plain = CSSearchableItem::new("a", "d", CSSearchableItemAttributeSet::new("Milk"));
+        assert!(!plain.is_expired(i64::MAX));
+        let timed = plain.expiration_date(100);
+        assert!(!timed.is_expired(99));
+        assert!(timed.is_expired(100));
+    }
 
     #[test]
     fn search_items_finds_by_title_description_and_keywords() {
