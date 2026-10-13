@@ -29,6 +29,7 @@ pub mod spaces;
 pub mod stage;
 pub mod state;
 pub mod sync;
+pub mod text_input;
 pub mod tiling;
 pub mod wm;
 #[cfg(feature = "xwayland")]

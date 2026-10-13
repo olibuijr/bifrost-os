@@ -108,6 +108,15 @@ fn items(renderer: &mut GlesRenderer, state: &WmState, output: &Output, scale: S
         };
         out.push(Item { key, elements: elements.into_iter().map(SceneElement::Surface).collect(), blur, saturation, tone });
     }
+    // an input method's candidate window, above the windows
+    for (surface, origin) in state.input_popups() {
+        let phys: Point<i32, Physical> = origin.to_physical_precise_round(scale);
+        let elements = render_elements_from_surface_tree(renderer, &surface, phys, scale, 1.0, Kind::Unspecified)
+            .into_iter()
+            .map(SceneElement::Surface)
+            .collect();
+        out.push(Item { key: surface_key(&surface), elements, blur: Vec::new(), saturation: SATURATION, tone: Tone::NONE });
+    }
     layer_items(renderer, &map, Layer::Top, scale, state.material_dark, &mut out);
     layer_items(renderer, &map, Layer::Overlay, scale, state.material_dark, &mut out);
     out

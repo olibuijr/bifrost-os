@@ -85,3 +85,10 @@ without a shell restart, like the Settings plan in `docs/settings-system-app.md`
 1. `tools/pc-app.py publish keyboard` (store publish), 2. `bifrost pc publish`, 3. update Midget (Settings > Software Update; the store check
 installs 1.1.0 for the system package). Order matters: a 0.4.77 shell without the 1.1.0 package shows no on-screen keyboard (height 0).
 The PC desktop never raises the on-screen keyboard (hardware keyboard), so nothing is visible there until a touch presentation uses it.
+
+## Wayland applications (compositor side, 2026-10-13)
+
+`bifrost-wm` serves `zwp_text_input_v3`, `zwp_input_method_v2` and `zwp_virtual_keyboard_v1` (`docs/window-server.md`, "Text
+input, input method and virtual keyboard"). For Wayland applications the shell is the input method: it forwards `activate`,
+`deactivate`, the surrounding text and the content type to this app as `KeyboardConfig`, `TextState` and `InputTraits`, and turns
+`KeyboardOut` back into `commit_string`, preedit and virtual-keyboard keys. The app itself needs no change.

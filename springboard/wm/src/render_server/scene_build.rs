@@ -315,6 +315,11 @@ pub fn build(state: &WmState, output: &Output, t: f64, server: &mut Server) -> V
         surface_nodes(importer, &wl, origin, scale, WINDOW_RADIUS, &mut out);
     }
 
+    // an input method's candidate window, above the windows
+    for (surface, origin) in state.input_popups() {
+        surface_nodes(importer, &surface, origin, scale, 0.0, &mut out);
+    }
+
     // layer trees: each context's presented layers, in context id order
     let mut ids: Vec<u32> = layers.contexts.keys().copied().collect();
     ids.sort_unstable();

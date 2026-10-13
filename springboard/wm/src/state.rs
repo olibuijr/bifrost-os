@@ -89,6 +89,8 @@ pub struct WmState {
     pub xwayland: crate::xwayland::XWaylandState,
     /// Session protocols: foreign toplevels, screencopy, output management and power, cursor shapes, activation.
     pub session: crate::session_protocols::SessionState,
+    /// Text input, input method and virtual keyboard (`text_input.rs`).
+    pub text_input: crate::text_input::TextInputProtocols,
 }
 
 impl WmState {
@@ -167,6 +169,7 @@ impl WmState {
             #[cfg(feature = "xwayland")]
             xwayland: crate::xwayland::XWaylandState::new(&dh),
             session,
+            text_input: crate::text_input::TextInputProtocols::new(&dh),
             dh,
         }
     }
@@ -270,6 +273,10 @@ impl WmState {
         if let Some(lock) = &self.lock_surface {
             smithay::desktop::utils::send_frames_surface_tree(lock.wl_surface(), output, elapsed, zero, |_, _| Some(output.clone()));
         }
+        // an input method's candidate window draws its next frame too
+        for popup in self.text_input.popup_surfaces() {
+            smithay::desktop::utils::send_frames_surface_tree(popup, output, elapsed, zero, |_, _| Some(output.clone()));
+        }
     }
 
     /// The client surface under a point, and that surface's origin.
@@ -290,6 +297,7 @@ impl WmState {
         use smithay::wayland::shell::wlr_layer::Layer;
         layer_hit(&Layer::Overlay)
             .or_else(|| layer_hit(&Layer::Top))
+            .or_else(|| self.input_popup_under(pos))
             .or_else(|| {
                 self.space.element_under(pos).and_then(|(window, loc)| {
                     window.surface_under(pos - loc.to_f64(), WindowSurfaceType::ALL).map(|(s, p)| (s, (p + loc).to_f64()))
