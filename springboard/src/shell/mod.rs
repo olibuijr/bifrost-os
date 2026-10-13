@@ -49,6 +49,7 @@ pub mod textinput;
 pub mod compose_window;
 pub mod kb_layouts;
 pub mod kb_capslock;
+pub mod kb_input;
 pub mod kb_clicks;
 pub mod hwkeys;
 pub mod backup;
@@ -1254,6 +1255,7 @@ impl Shell {
             self.set_text_scale(o.text_scale, o.bold_text);
         }
         self.keyboard.set_kb_prefs(kb_capslock::KbPrefs { enable_caps_lock: o.enable_caps_lock, period_shortcut: o.period_shortcut });
+        kb_input::set(o.key_prefs());
         if let Some(d) = &mut self.deildu {
             d.set_auto_caps(o.auto_caps);
         }

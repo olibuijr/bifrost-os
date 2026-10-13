@@ -1,6 +1,7 @@
 //! The user's Settings choices, persisted as keys in `settings.ini` (see
 //! `prefs`). `Options` is the typed view the pages edit; every setter saves.
 
+use super::kb_input::{self, KeyPrefs, Remap};
 use super::prefs::Prefs;
 use crate::bare::cpuprofile::Pref;
 use super::ui::{TEXT_SCALE_MAX, TEXT_SCALE_MIN};
@@ -18,6 +19,35 @@ pub const ICON_SIZES: [&str; 2] = ["More", "Bigger"];
 /// Pointer speed and scrolling multipliers: the Mouse and Trackpad sliders span this range.
 pub const SPEED_MIN: f32 = 0.25;
 pub const SPEED_MAX: f32 = 3.0;
+/// Keyboard › Key Repeat sliders: the hold time runs from Long (left) to Short (right), the rate from Slow to Fast.
+pub fn repeat_delay_slider(ms: u32) -> f32 {
+    let (lo, hi) = kb_input::REPEAT_DELAY_RANGE;
+    ((hi - ms.clamp(lo, hi)) as f32 / (hi - lo) as f32).clamp(0.0, 1.0)
+}
+
+/// The hold time in ms for a slider position in 0..1.
+pub fn repeat_delay_from_slider(v: f32) -> u32 {
+    let (lo, hi) = kb_input::REPEAT_DELAY_RANGE;
+    (hi as f32 - v.clamp(0.0, 1.0) * (hi - lo) as f32).round() as u32
+}
+
+/// The slider position (0..1) for repeats per second.
+pub fn repeat_rate_slider(rate: u32) -> f32 {
+    let (lo, hi) = kb_input::REPEAT_RATE_RANGE;
+    ((rate.clamp(lo, hi) - lo) as f32 / (hi - lo) as f32).clamp(0.0, 1.0)
+}
+
+/// Repeats per second for a slider position in 0..1.
+pub fn repeat_rate_from_slider(v: f32) -> u32 {
+    let (lo, hi) = kb_input::REPEAT_RATE_RANGE;
+    (lo as f32 + v.clamp(0.0, 1.0) * (hi - lo) as f32).round() as u32
+}
+
+/// A Modifier Keys choice read from settings: an index into `kb_input::REMAP_TARGETS`, 0 when missing or out of range.
+fn remap_choice(p: &Prefs, key: &str) -> usize {
+    p.get_parsed::<usize>(key).filter(|&i| i < kb_input::REMAP_TARGETS.len()).unwrap_or(0)
+}
+
 /// Trackpad › Secondary Click choices, as `Options::trackpad_secondary` indexes them.
 pub const TRACKPAD_SECONDARY: [&str; 2] = ["Click in Bottom-Right Corner", "Click with Two Fingers"];
 /// Settings › Sound › Alert Sound choices, as `Options::alert_sound` indexes them.
@@ -113,6 +143,21 @@ pub struct Options {
     pub trackpad_secondary: usize,
     /// Mouse › Swap Left and Right Buttons
     pub swap_buttons: bool,
+    /// Keyboard › Key Repeat › Delay Until Repeat, in ms (`kb_input::REPEAT_DELAY_RANGE`)
+    pub key_repeat_delay_ms: u32,
+    /// Keyboard › Key Repeat › Key Repeat, repeats per second (`kb_input::REPEAT_RATE_RANGE`)
+    pub key_repeat_rate: u32,
+    /// Keyboard › Modifier Keys: indexes into `kb_input::REMAP_TARGETS` for Caps Lock, Control, Option and Command
+    pub remap_caps_lock: usize,
+    pub remap_control: usize,
+    pub remap_option: usize,
+    pub remap_command: usize,
+    /// Keyboard › Function Keys: F1 to F12 type their standard keys
+    pub function_standard: bool,
+    /// Keyboard › Keyboard Navigation: Tab moves focus between controls
+    pub tab_navigation: bool,
+    /// Keyboard Shortcuts: bit `i` set turns off the shell shortcut `kb_input::BINDINGS[i]`
+    pub shortcuts_off: u32,
     /// Users & Groups › Login Options: the login window asks for a name and password, not a user picture
     pub login_name_password: bool,
     /// Users & Groups › Login Options: the login window shows password hints
@@ -121,11 +166,11 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, login_name_password: false, login_hints: false }
+        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, login_name_password: false, login_hints: false, key_repeat_delay_ms: KeyPrefs::DEFAULT.repeat_delay_ms, key_repeat_rate: KeyPrefs::DEFAULT.repeat_rate, remap_caps_lock: 0, remap_control: 0, remap_option: 0, remap_command: 0, function_standard: false, tab_navigation: true, shortcuts_off: 0 }
     }
 }
 
-const KEYS: [&str; 41] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "login_name_password", "login_hints"];
+const KEYS: [&str; 50] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "login_name_password", "login_hints", "key_repeat_delay_ms", "key_repeat_rate", "remap_caps_lock", "remap_control", "remap_option", "remap_command", "function_standard", "tab_navigation", "shortcuts_off"];
 
 impl Options {
     /// Reads every key, keeping the default for a missing or malformed one.
@@ -175,6 +220,15 @@ impl Options {
             swap_buttons: flag("swap_buttons", d.swap_buttons),
             login_name_password: flag("login_name_password", d.login_name_password),
             login_hints: flag("login_hints", d.login_hints),
+            key_repeat_delay_ms: p.get_parsed::<u32>("key_repeat_delay_ms").map_or(d.key_repeat_delay_ms, |v| v.clamp(kb_input::REPEAT_DELAY_RANGE.0, kb_input::REPEAT_DELAY_RANGE.1)),
+            key_repeat_rate: p.get_parsed::<u32>("key_repeat_rate").map_or(d.key_repeat_rate, |v| v.clamp(kb_input::REPEAT_RATE_RANGE.0, kb_input::REPEAT_RATE_RANGE.1)),
+            remap_caps_lock: remap_choice(p, "remap_caps_lock"),
+            remap_control: remap_choice(p, "remap_control"),
+            remap_option: remap_choice(p, "remap_option"),
+            remap_command: remap_choice(p, "remap_command"),
+            function_standard: flag("function_standard", d.function_standard),
+            tab_navigation: flag("tab_navigation", d.tab_navigation),
+            shortcuts_off: p.get_parsed::<u32>("shortcuts_off").unwrap_or(d.shortcuts_off),
         }
     }
 
@@ -223,6 +277,15 @@ impl Options {
             flag(self.swap_buttons).into(),
             flag(self.login_name_password).into(),
             flag(self.login_hints).into(),
+            self.key_repeat_delay_ms.to_string(),
+            self.key_repeat_rate.to_string(),
+            self.remap_caps_lock.to_string(),
+            self.remap_control.to_string(),
+            self.remap_option.to_string(),
+            self.remap_command.to_string(),
+            flag(self.function_standard).into(),
+            flag(self.tab_navigation).into(),
+            self.shortcuts_off.to_string(),
         ];
         let pairs: Vec<(&str, &str)> = KEYS.iter().copied().zip(values.iter().map(String::as_str)).collect();
         if let Err(e) = p.set_many(&pairs) {
@@ -241,6 +304,18 @@ impl Options {
             tap_to_click: self.tap_to_click,
             secondary: if self.trackpad_secondary == 0 { Secondary::Corner } else { Secondary::TwoFingers },
             swap_buttons: self.swap_buttons,
+        }
+    }
+
+    /// The keyboard choices the input path applies (see `kb_input`).
+    pub fn key_prefs(&self) -> KeyPrefs {
+        KeyPrefs {
+            repeat_delay_ms: self.key_repeat_delay_ms,
+            repeat_rate: self.key_repeat_rate,
+            remap: Remap { caps_lock: self.remap_caps_lock, control: self.remap_control, option: self.remap_option, command: self.remap_command },
+            function_standard: self.function_standard,
+            tab_navigation: self.tab_navigation,
+            shortcuts_off: self.shortcuts_off,
         }
     }
 
@@ -270,8 +345,13 @@ mod tests {
         assert_eq!(d, Options::default());
         assert_eq!(d.auto_lock_label(), "Never");
         assert_eq!(d.text_size_step(), 3);
-        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, keyboard_clicks: false, lock_sound: false, alert_sound: 2, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, login_name_password: true, login_hints: true };
+        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, keyboard_clicks: false, lock_sound: false, alert_sound: 2, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, login_name_password: true, login_hints: true, key_repeat_delay_ms: 1200, key_repeat_rate: 5, remap_caps_lock: 2, remap_control: 0, remap_option: 5, remap_command: 6, function_standard: true, tab_navigation: false, shortcuts_off: 0b101 };
         o.save(&mut p);
+        assert_eq!(p.get("key_repeat_delay_ms"), Some("1200"));
+        assert_eq!(p.get("key_repeat_rate"), Some("5"));
+        assert_eq!(p.get("remap_caps_lock"), Some("2"));
+        assert_eq!(p.get("function_standard"), Some("1"));
+        assert_eq!(p.get("shortcuts_off"), Some("5"));
         assert_eq!(p.get("auto_lock_ms"), Some("0"));
         assert_eq!(p.get("mouse_scroll_speed"), Some("0.50"));
         assert_eq!(p.get("natural_scroll"), Some("1"));
@@ -315,6 +395,34 @@ mod tests {
         assert_eq!(o.trackpad_secondary, Options::default().trackpad_secondary);
         p.set("alert_sound", "99").unwrap();
         assert_eq!(Options::load(&p).alert_sound, Options::default().alert_sound);
+        p.set("key_repeat_delay_ms", "5").unwrap();
+        p.set("key_repeat_rate", "900").unwrap();
+        p.set("remap_control", "42").unwrap();
+        let k = Options::load(&p);
+        assert_eq!(k.key_repeat_delay_ms, 100, "delay clamps to the allowed range");
+        assert_eq!(k.key_repeat_rate, 100);
+        assert_eq!(k.remap_control, 0, "an unknown choice is Default");
+    }
+
+    #[test]
+    fn keyboard_prefs_follow_the_options() {
+        let o = Options { remap_caps_lock: 1, tab_navigation: false, shortcuts_off: 3, ..Options::default() };
+        let k = o.key_prefs();
+        assert_eq!(k.remap.caps_lock, 1);
+        assert_eq!(k.repeat_delay_ms, Options::default().key_repeat_delay_ms);
+        assert!(!k.tab_navigation);
+        assert_eq!(k.shortcuts_off, 3);
+    }
+
+    #[test]
+    fn repeat_sliders_map_both_ways() {
+        assert_eq!(repeat_delay_from_slider(0.0), 2000, "Long is the left end");
+        assert_eq!(repeat_delay_from_slider(1.0), 100, "Short is the right end");
+        assert!((repeat_delay_slider(repeat_delay_from_slider(0.4)) - 0.4).abs() < 0.01);
+        assert_eq!(repeat_rate_from_slider(0.0), 1);
+        assert_eq!(repeat_rate_from_slider(1.0), 100);
+        assert_eq!(repeat_rate_from_slider(repeat_rate_slider(30)), 30);
+        assert_eq!(repeat_delay_from_slider(repeat_delay_slider(400)), 400, "the default delay sits on the slider");
     }
 
     #[test]

@@ -1232,6 +1232,7 @@ impl Shell {
             Out::Backspace => KeyInput::Code(8),
             Out::Enter => KeyInput::Code(13),
             Out::Named("Tab") => KeyInput::Code(9),
+            Out::Named(name) if super::kb_input::function_key_code(name).is_some() => KeyInput::Code(u32::from(super::kb_input::function_key_code(name).unwrap_or(0))),
             Out::Named("Left") => KeyInput::Code(37),
             Out::Named("Up") => KeyInput::Code(38),
             Out::Named("Right") => KeyInput::Code(39),

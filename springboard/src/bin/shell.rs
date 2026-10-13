@@ -350,6 +350,8 @@ fn run() -> std::io::Result<()> {
     // the input source the hardware layout last followed; the configured layout holds until it changes
     let mut seen_source = springboard::shell::kb_layouts::active();
     let mut key_repeat = springboard::shell::hwkeys::KeyRepeat::default();
+    // the word typed since the last break, for Settings > Keyboard > Text Replacements
+    let mut words = springboard::shell::kb_input::WordBuffer::default();
     // desktop pointer: the cursor stamped over presented CPU frames, when the pointer last moved or
     // clicked (it hides after a while), and the damage of a frame with the cursor's rectangles added
     let mut cursor = springboard::gfx::cursor::Cursor::default();
@@ -642,6 +644,7 @@ fn run() -> std::io::Result<()> {
         for ev in &events {
             let e = match *ev {
                 input::Event::Down { x, y, .. } => {
+                    words.clear();
                     let (x, y) = map(x, y);
                     Event::Down(x, y)
                 }
@@ -660,7 +663,11 @@ fn run() -> std::io::Result<()> {
                 input::Event::Key { code, down } => {
                     // session event taps see the key first and may drop or replace it
                     let Some(code) = shell.tap_key(code, down) else { continue };
-                    let raw_sc = hw_keys.key_in(code, down, shell.term_front());
+                    // Settings > Keyboard: modifier keys remapped, the repeat timing, and the shortcuts switched off
+                    let kp = springboard::shell::kb_input::get();
+                    let code = kp.remap.apply(code);
+                    key_repeat.set_timing(f64::from(kp.repeat_delay_ms), kp.repeat_rate);
+                    let raw_sc = hw_keys.key_in(code, down, shell.term_front()).filter(|sc| springboard::shell::kb_input::enabled(*sc, kp.shortcuts_off));
                     if trace {
                         eprintln!("springboard: key {code} {} shortcut={raw_sc:?}", if down { "down" } else { "up" });
                     }
@@ -702,6 +709,15 @@ fn run() -> std::io::Result<()> {
                     let typed = if down { hw_keys.typed(code) } else { None };
                     if let Some(out) = typed {
                         key_repeat.press(code, Some(out.clone()), t);
+                        // a replacement whose word this key ends: erase the word and type its phrase first
+                        let applies = shell.replacements_apply();
+                        let expansion = words.feed(&out, |w| if applies { springboard::shell::services::text_services::expand_word(w) } else { None });
+                        if let Some(exp) = expansion {
+                            for _ in 0..exp.erase {
+                                effects.extend(shell.hw_type(springboard::shell::keyboard::Out::Backspace, t));
+                            }
+                            effects.extend(shell.hw_type(springboard::shell::keyboard::Out::Text(exp.phrase), t));
+                        }
                         effects.extend(shell.hw_type(out, t));
                         continue;
                     }
