@@ -18,10 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/passwords_page.rs",
+   "bifrost": "springboard/apps/passwords-desktop",
    "status": "partial",
-   "note": "passwords page, no separate passwords app",
-   "rea": []
+   "note": "Passwords app: Logins, Notes, Certificates tabs, search, reveal, copy, generate, delete, CSV import and export; settings page stays in the shell; lacks verification codes and security recommendations",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Phone.app",
@@ -41,7 +42,8 @@
    "bifrost": "",
    "status": "n/a",
    "note": "Apple telephony",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Photo Booth.app",
@@ -58,10 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/camera/mod.rs",
+   "bifrost": "springboard/apps/photobooth-desktop",
    "status": "partial",
-   "note": "Camera (bifrost.camera), capture app",
-   "rea": []
+   "note": "Photo Booth app (main.rs about 680 lines) beside the shell Camera",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Photos.app",
@@ -81,7 +84,8 @@
    "bifrost": "springboard/src/shell/photos/mod.rs",
    "status": "partial",
    "note": "Photos (bifrost.photos) in the shell",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Podcasts.app",
@@ -101,7 +105,8 @@
    "bifrost": "springboard/apps/podcasts-desktop",
    "status": "partial",
    "note": "Podcasts app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Preview.app",
@@ -118,10 +123,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/pdfcraft-desktop",
+   "bifrost": "springboard/apps/preview-desktop",
    "status": "partial",
-   "note": "PDF viewing and editing; no image preview",
-   "rea": []
+   "note": "Viewer: images and PDFs, zoom and fit, rotate, thumbnails or outline, page move and delete, markup, Adjust Color, PNG/JPEG/PDF export; pdfcraft-desktop is a separate PDF editor; lacks form filling and Live Text",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/QuickTime Player.app",
@@ -141,7 +147,8 @@
    "bifrost": "springboard/src/shell/video.rs",
    "status": "partial",
    "note": "video playback in the shell",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Reminders.app",
@@ -161,7 +168,8 @@
    "bifrost": "springboard/apps/reminders-desktop",
    "status": "partial",
    "note": "Reminders app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Print Center.app",
@@ -178,10 +186,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/apps/printers-desktop, springboard/ui/src/cups.rs",
+   "bifrost": "springboard/apps/printers-desktop",
    "status": "partial",
-   "note": "no print queue app; print_sheet.rs only round 75, host only: app 0.1.0, job hold and release; was gap.",
-   "rea": []
+   "note": "print queue app over the CUPS scheduler (printers and jobs), plus springboard/ui/src/cups.rs",
+   "rea": [],
+   "method": "assessed"
   }
  ]
 }

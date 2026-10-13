@@ -16,12 +16,13 @@
     "size": 0
    },
    "description": "",
-   "role": "",
+   "role": "no journal app. Build: dated entries with photos and places, lock, search",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no journal app",
-   "rea": []
+   "note": "no journal app. Build: dated entries with photos and places, lock, search",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Keychain Access.app",
@@ -41,7 +42,8 @@
    "bifrost": "springboard/src/keychain.rs",
    "status": "partial",
    "note": "keychain store, no keychain viewer app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   }
  ]
 }

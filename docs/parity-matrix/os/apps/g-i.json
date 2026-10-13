@@ -21,7 +21,8 @@
    "bifrost": "springboard/apps/games-desktop",
    "status": "partial",
    "note": "Games app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Home.app",
@@ -41,7 +42,8 @@
    "bifrost": "",
    "status": "n/a",
    "note": "Apple HomeKit home app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Image Capture.app",
@@ -58,10 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/camera/import.rs",
+   "bifrost": "springboard/apps/image-capture-desktop",
    "status": "partial",
-   "note": "camera import, device image transfer",
-   "rea": []
+   "note": "app window with a worker thread for device listing and import, alongside shell camera import; lacks scanner support",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Image Playground.app",
@@ -81,7 +84,8 @@
    "bifrost": "",
    "status": "n/a",
    "note": "Apple generative image service",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Grapher.app",
@@ -96,12 +100,13 @@
     "size": 0
    },
    "description": "",
-   "role": "",
+   "role": "no graphing app. Build: 2D explicit and implicit equations, parametric curves, 3D surfaces, sliders, PNG/PDF export",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no graphing app",
-   "rea": []
+   "note": "no graphing app. Build: 2D explicit and implicit equations, parametric curves, 3D surfaces, sliders, PNG/PDF export",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/iPhone Mirroring.app",
@@ -121,7 +126,8 @@
    "bifrost": "",
    "status": "n/a",
    "note": "iPhone device mirroring",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/iOS App Installer.app",
@@ -141,7 +147,8 @@
    "bifrost": "",
    "status": "n/a",
    "note": "installs iOS apps on Apple silicon",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   }
  ]
 }

@@ -21,7 +21,8 @@
    "bifrost": "springboard/apps/dictionary-desktop",
    "status": "partial",
    "note": "the Dictionary settings page exists, no dictionary app round 75, host only: app: StarDict lookup, search field; was gap.",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/FaceTime.app",
@@ -41,7 +42,8 @@
    "bifrost": "",
    "status": "n/a",
    "note": "Apple calling service",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/FindMy.app",
@@ -61,7 +63,8 @@
    "bifrost": "",
    "status": "n/a",
    "note": "Apple device-location network",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Font Book.app",
@@ -81,7 +84,8 @@
    "bifrost": "springboard/src/shell/pages.rs; springboard/apps/fontbook-desktop",
    "status": "partial",
    "note": "Fonts settings page, no font manager app round 75, host only: app 0.2.0 (preview, remove font).",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Freeform.app",
@@ -101,7 +105,8 @@
    "bifrost": "springboard/apps/freeform-desktop",
    "status": "partial",
    "note": "Freeform app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Digital Color Meter.app",
@@ -121,7 +126,8 @@
    "bifrost": "springboard/apps/colormeter-desktop",
    "status": "partial",
    "note": "no colour picker utility round 75, host only: app 0.2.0 with screen sample service; was gap.",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Disk Utility.app",
@@ -141,7 +147,8 @@
    "bifrost": "springboard/apps/diskutil-desktop",
    "status": "partial",
    "note": "no disk utility app round 75, host only: sidebar, info, mount, eject; erase and first aid in core only; was gap.",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/DVD Player.app",
@@ -156,12 +163,13 @@
     "size": 0
    },
    "description": "",
-   "role": "",
+   "role": "no optical media player. Build: ISO/UDF playback, menus, chapters, audio and subtitle tracks, reusing videoplayer-desktop decoding",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no optical media player",
-   "rea": []
+   "note": "no optical media player. Build: ISO/UDF playback, menus, chapters, audio and subtitle tracks, reusing videoplayer-desktop decoding",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Desk View.app",
@@ -181,7 +189,8 @@
    "bifrost": "",
    "status": "n/a",
    "note": "Apple hardware camera view",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Directory Utility.app",
@@ -201,7 +210,8 @@
    "bifrost": "",
    "status": "n/a",
    "note": "Apple directory service administration",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Expansion Slot Utility.app",
@@ -221,7 +231,8 @@
    "bifrost": "",
    "status": "n/a",
    "note": "Apple hardware slot diagnostics",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Feedback Assistant.app",
@@ -241,7 +252,8 @@
    "bifrost": "",
    "status": "n/a",
    "note": "Apple feedback service",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Folder Actions Setup.app",
@@ -256,12 +268,13 @@
     "size": 0
    },
    "description": "",
-   "role": "",
+   "role": "no folder action hooks. Build: attach a script or shortcut to a folder, fired when items are added; needs a folder watcher in the shell",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no folder action hooks",
-   "rea": []
+   "note": "no folder action hooks. Build: attach a script or shortcut to a folder, fired when items are added; needs a folder watcher in the shell",
+   "rea": [],
+   "method": "assessed"
   }
  ]
 }

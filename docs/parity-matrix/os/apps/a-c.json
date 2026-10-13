@@ -21,7 +21,8 @@
    "bifrost": "springboard/src/shell/store/mod.rs",
    "status": "partial",
    "note": "App Store (bifrost.appstore) in the shell",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Apps.app",
@@ -41,7 +42,8 @@
    "bifrost": "springboard/src/shell/appgrid.rs",
    "status": "partial",
    "note": "app grid, the launch surface for installed apps",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Automator.app",
@@ -56,12 +58,13 @@
     "size": 0
    },
    "description": "",
-   "role": "",
+   "role": "no workflow builder. Build: action library, ordered workflow, variables, run, save as app or quick action; share the action model with shortcuts-desktop",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no workflow builder",
-   "rea": []
+   "note": "no workflow builder. Build: action library, ordered workflow, variables, run, save as app or quick action; share the action model with shortcuts-desktop",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Books.app",
@@ -81,7 +84,8 @@
    "bifrost": "springboard/apps/books-desktop",
    "status": "partial",
    "note": "Books app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Calculator.app",
@@ -101,7 +105,8 @@
    "bifrost": "springboard/apps/calculator-desktop",
    "status": "partial",
    "note": "Calculator app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Calendar.app",
@@ -121,7 +126,8 @@
    "bifrost": "springboard/apps/calendar-desktop",
    "status": "partial",
    "note": "Calendar app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Chess.app",
@@ -136,12 +142,13 @@
     "size": 0
    },
    "description": "",
-   "role": "",
+   "role": "no chess app; games-desktop has 2048, Minesweeper and Klondike only. Build: board, legal moves, check and mate, undo, simple engine, PGN save",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no chess app; games-desktop has other games",
-   "rea": []
+   "note": "no chess app; games-desktop has 2048, Minesweeper and Klondike only. Build: board, legal moves, check and mate, undo, simple engine, PGN save",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Clock.app",
@@ -161,7 +168,8 @@
    "bifrost": "springboard/apps/clock-desktop",
    "status": "partial",
    "note": "Clock app, shell/clock holds alarms and timers",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Contacts.app",
@@ -181,7 +189,8 @@
    "bifrost": "springboard/apps/contacts-desktop",
    "status": "partial",
    "note": "Contacts app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Activity Monitor.app",
@@ -198,10 +207,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no process monitor app yet",
-   "rea": []
+   "bifrost": "springboard/apps/activity-desktop",
+   "status": "partial",
+   "note": "process table with CPU, Memory, Energy, Disk and Network tabs, filter, sort, search, inspect and force quit, history graphs; lacks Sample Process, Spindump and open files/ports panes",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/AirPort Utility.app",
@@ -221,7 +231,8 @@
    "bifrost": "",
    "status": "n/a",
    "note": "Apple AirPort router administration",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Audio MIDI Setup.app",
@@ -241,7 +252,8 @@
    "bifrost": "springboard/apps/audio-setup-desktop",
    "status": "partial",
    "note": "audio device setup app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Bluetooth File Exchange.app",
@@ -256,12 +268,13 @@
     "size": 0
    },
    "description": "",
-   "role": "",
+   "role": "no Bluetooth file transfer app. Build: pick a file and a paired device, send by OBEX push, receive into Downloads",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no Bluetooth file transfer app",
-   "rea": []
+   "note": "no Bluetooth file transfer app. Build: pick a file and a paired device, send by OBEX push, receive into Downloads",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/ColorSync Utility.app",
@@ -276,12 +289,13 @@
     "size": 0
    },
    "description": "",
-   "role": "",
+   "role": "no colour profile utility. Build: profile list and viewer, device and filter assignment, verify; reuse colour maths from colormeter-desktop",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no colour profile utility",
-   "rea": []
+   "note": "no colour profile utility. Build: profile list and viewer, device and filter assignment, verify; reuse colour maths from colormeter-desktop",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Console.app",
@@ -301,7 +315,8 @@
    "bifrost": "springboard/apps/console-desktop",
    "status": "partial",
    "note": "Console app, unified log viewer round 75, host only: app 1.5.0 (log view, export).",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/About This Mac.app",
@@ -321,7 +336,8 @@
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
    "note": "About page in the settings specs",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Archive Utility.app",
@@ -338,10 +354,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "archives are handled by the files app only",
-   "rea": []
+   "bifrost": "springboard/apps/archive-desktop",
+   "status": "partial",
+   "note": "expands zip, tar, tar.gz and xz/bzip2/zstd (shared files module), compresses a folder to zip; progress, cancel, no-overwrite names, path-escape guard; lacks destination/post-expand preferences and encrypted zip",
+   "rea": [],
+   "method": "assessed"
   }
  ]
 }

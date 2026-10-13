@@ -21,7 +21,8 @@
    "bifrost": "springboard/apps/shortcuts-desktop",
    "status": "partial",
    "note": "Shortcuts app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Siri AI.app",
@@ -41,7 +42,8 @@
    "bifrost": "springboard/apps/assistant-desktop",
    "status": "partial",
    "note": "assistant app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Stickies.app",
@@ -60,8 +62,9 @@
    "doc": "",
    "bifrost": "springboard/apps/stickies-desktop",
    "status": "partial",
-   "note": "no sticky notes app yet round 75, host only: app 0.2.0; was gap.",
-   "rea": []
+   "note": "Sticky Notes app: coloured notes with text and persistence",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Stocks.app",
@@ -76,12 +79,13 @@
     "size": 0
    },
    "description": "",
-   "role": "",
+   "role": "no stocks app. Build: watchlist, quote and chart view; needs a user-configured quote source",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no stocks app",
-   "rea": []
+   "note": "no stocks app. Build: watchlist, quote and chart view; needs a user-configured quote source",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/System Settings.app",
@@ -101,7 +105,8 @@
    "bifrost": "springboard/src/shell/settings.rs",
    "status": "partial",
    "note": "Settings app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Screen Sharing.app",
@@ -121,7 +126,8 @@
    "bifrost": "springboard/apps/remote",
    "status": "partial",
    "note": "remote desktop app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Screenshot.app",
@@ -138,10 +144,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/screenshot.rs",
+   "bifrost": "springboard/apps/screenshot-desktop",
    "status": "partial",
-   "note": "screenshot tool in the shell",
-   "rea": []
+   "note": "screenshot crate (naming, options) plus the shell capture tool in springboard/src/shell/screenshot.rs; no standalone app window",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/Script Editor.app",
@@ -156,12 +163,13 @@
     "size": 0
    },
    "description": "",
-   "role": "",
+   "role": "no script editor. Build: edit and run scripts with a result pane and a dictionary browser",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no script editor",
-   "rea": []
+   "note": "no script editor. Build: edit and run scripts with a result pane and a dictionary browser",
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Utilities/System Information.app",
@@ -178,10 +186,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no system information app yet",
-   "rea": []
+   "bifrost": "springboard/apps/sysinfo-desktop",
+   "status": "partial",
+   "note": "category tree (hardware, network, software) with rows from bifrost_core::sysinfo; lacks Save report and per-bus detail panes",
+   "rea": [],
+   "method": "assessed"
   }
  ]
 }

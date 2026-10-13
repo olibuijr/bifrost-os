@@ -21,7 +21,8 @@
    "bifrost": "springboard/apps/weather-desktop",
    "status": "partial",
    "note": "Weather app",
-   "rea": []
+   "rea": [],
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Wireless Diagnostics.app",
@@ -36,12 +37,13 @@
     "size": 0
    },
    "description": "",
-   "role": "",
+   "role": "no wireless diagnostics app. Build: nearby network scan, signal and noise charts, log capture; reuse the shell Wi-Fi scan",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no wireless diagnostics app",
-   "rea": []
+   "note": "no wireless diagnostics app. Build: nearby network scan, signal and noise charts, log capture; reuse the shell Wi-Fi scan",
+   "rea": [],
+   "method": "assessed"
   }
  ]
 }
