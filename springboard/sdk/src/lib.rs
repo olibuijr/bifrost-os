@@ -254,6 +254,7 @@ pub mod image_source;
 pub mod photo_library;
 pub mod image_blur;
 pub mod image_filter;
+pub mod image_effects;
 pub use restoration::RestorableState;
 pub mod attributed;
 pub mod layer_kinds;
