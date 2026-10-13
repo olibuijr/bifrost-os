@@ -80,6 +80,16 @@ impl NotifyBus {
         self.owners.values().filter(|o| o.app == app).count()
     }
 
+    /// Cancels the tokens of every app that `running` does not name. An app that exits never cancels its tokens,
+    /// so without this its tokens would stay posted to and count against [`MAX_TOKENS_PER_APP`] on every later launch.
+    fn prune(&mut self, running: impl Fn(&str) -> bool) {
+        let gone: Vec<u32> = self.owners.iter().filter(|(_, o)| !running(&o.app)).map(|(&t, _)| t).collect();
+        for token in gone {
+            self.center.cancel(token);
+            self.owners.remove(&token);
+        }
+    }
+
     /// Answers one call from `app`. The shell's [`SystemService::call`] delegates here, so the rules can be tested
     /// without a shell.
     fn handle(&mut self, app: &str, method: &str, params: &Json) -> Result<Json, String> {
@@ -185,6 +195,8 @@ impl SystemService for NotifyBus {
     }
 
     fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
+        let running = |app: &str| super::apphost::slot_of(app).is_some_and(|slot| shell.ext.get(slot).is_some_and(|h| h.is_some()));
+        self.prune(running);
         let now = Seen {
             light: bifrost_render::appearance::target_is_light(),
             locked: shell.is_locked(),
@@ -341,6 +353,32 @@ mod tests {
         }
         assert!(bus.handle("app.a", "register", &name("app.x.many")).is_err());
         assert!(bus.handle("app.b", "register", &name("app.x.many")).is_ok());
+    }
+
+    #[test]
+    fn an_exited_app_loses_its_tokens_so_its_next_launch_can_register_again() {
+        let mut bus = NotifyBus::default();
+        for _ in 0..MAX_TOKENS_PER_APP {
+            bus.handle("app.a", "register", &name("app.x.many")).unwrap();
+        }
+        let kept = number(&bus.handle("app.b", "register", &name("app.x.many")), "token") as u32;
+        bus.prune(|app| app == "app.b");
+        assert_eq!(bus.owners.len(), 1, "only the running app keeps its token");
+        assert!(bus.owners.contains_key(&kept));
+        assert!(!bus.center.is_valid(1), "the exited app's token is cancelled in the centre");
+        assert_eq!(bus.held_by("app.a"), 0);
+        assert!(bus.handle("app.a", "register", &name("app.x.many")).is_ok(), "a relaunch registers again");
+        assert_eq!(number(&bus.handle("app.c", "post", &name("app.x.many")), "delivered"), 2.0, "the running app and the relaunched one");
+    }
+
+    #[test]
+    fn pruning_with_every_app_running_keeps_every_token() {
+        let mut bus = NotifyBus::default();
+        bus.handle("app.a", "register", &name("app.x.keep")).unwrap();
+        bus.handle("app.b", "register", &name("app.x.keep")).unwrap();
+        bus.prune(|_| true);
+        assert_eq!(bus.owners.len(), 2);
+        assert_eq!(number(&bus.handle("app.c", "post", &name("app.x.keep")), "delivered"), 2.0);
     }
 
     #[test]

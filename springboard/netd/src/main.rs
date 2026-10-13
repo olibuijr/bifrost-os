@@ -14,7 +14,9 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 struct Core {
     wifi: Wifi,
-    subscribers: Vec<UnixStream>,
+    /// Status listeners, each with the id its connection removes it by when the connection ends.
+    subscribers: Vec<(u64, UnixStream)>,
+    next_sub: u64,
 }
 
 fn status(s: wifi::Status) -> Status {
@@ -46,7 +48,7 @@ impl Core {
 
     fn broadcast(&mut self, evt: &Evt) {
         let bytes = evt.encode();
-        self.subscribers.retain_mut(|s| svc::write_frame(s, &bytes).is_ok());
+        self.subscribers.retain_mut(|(_, s)| svc::write_frame(s, &bytes).is_ok());
     }
 
     fn apply(&mut self, cmd: Cmd) -> Option<Evt> {
@@ -75,6 +77,7 @@ fn serve(core: Arc<Mutex<Core>>, mut stream: UnixStream) {
     let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
     let Ok(writer) = stream.try_clone() else { return };
     let mut writer = Some(writer);
+    let mut sub_id: Option<u64> = None;
     while let Ok(frame) = svc::read_frame(&mut stream) {
         let Ok(cmd) = Cmd::decode(&frame) else { continue };
         let subscribe = cmd == Cmd::Subscribe;
@@ -82,7 +85,10 @@ fn serve(core: Arc<Mutex<Core>>, mut stream: UnixStream) {
         let reply = c.apply(cmd);
         if subscribe {
             if let Some(w) = writer.take() {
-                c.subscribers.push(w);
+                let id = c.next_sub + 1;
+                c.next_sub = id;
+                sub_id = Some(id);
+                c.subscribers.push((id, w));
                 SUBSCRIBED.notify_all();
             }
         }
@@ -92,12 +98,21 @@ fn serve(core: Arc<Mutex<Core>>, mut stream: UnixStream) {
             }
         }
     }
+    // the connection is gone: drop its status writer now rather than at the next status change
+    if let Some(id) = sub_id {
+        drop_subscriber(&mut core.lock().unwrap().subscribers, id);
+    }
+}
+
+/// Removes the status listener `id`; its writer closes when the list lets go of it.
+fn drop_subscriber(subscribers: &mut Vec<(u64, UnixStream)>, id: u64) {
+    subscribers.retain(|(i, _)| *i != id);
 }
 
 fn main() -> std::io::Result<()> {
     let sock = std::env::var("BIFROST_SERVICE_SOCK").unwrap_or_else(|_| format!("/var/lib/springboard/run/{ID}.sock"));
     let dir = std::env::var("BIFROST_SHELL_DIR").unwrap_or_else(|_| "/var/lib/springboard".into());
-    let core = Arc::new(Mutex::new(Core { wifi: Wifi::start(&dir), subscribers: Vec::new() }));
+    let core = Arc::new(Mutex::new(Core { wifi: Wifi::start(&dir), subscribers: Vec::new(), next_sub: 0 }));
     // socket activation: bifrostd binds the socket and starts this process on the first connection
     let listener = svc::listen(std::path::Path::new(&sock))?;
     eprintln!("netd {VERSION} listening on {sock}");
@@ -130,6 +145,19 @@ fn main() -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_finished_connection_removes_only_its_own_status_listener() {
+        let mut subs: Vec<(u64, UnixStream)> = Vec::new();
+        let (a, _a_peer) = UnixStream::pair().expect("pair");
+        let (b, _b_peer) = UnixStream::pair().expect("pair");
+        subs.push((1, a));
+        subs.push((2, b));
+        drop_subscriber(&mut subs, 1);
+        assert_eq!(subs.iter().map(|(i, _)| *i).collect::<Vec<_>>(), vec![2]);
+        drop_subscriber(&mut subs, 1);
+        assert_eq!(subs.len(), 1, "an id that is gone changes nothing");
+    }
 
     #[test]
     fn state_maps_to_wire_numbers() {

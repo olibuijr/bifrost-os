@@ -34,6 +34,9 @@ struct Registration {
 
 /// Largest signal number a signal token may name. The range is 1 to this value, inclusive.
 pub const MAX_SIGNAL: i32 = 64;
+/// Most queued signals kept between two `take_signals` calls. A caller that stops reading must not grow the queue
+/// without bound; past this, the oldest signals are dropped (the pending marks still record every post).
+pub const MAX_QUEUED_SIGNALS: usize = 1024;
 
 /// The table of registrations and the state values. Not shared between threads; a caller wraps it in its own lock.
 #[derive(Debug, Default)]
@@ -141,6 +144,10 @@ impl NotifyCenter {
                 // A full buffer means the reader is behind. The pending mark is still set, so nothing is lost.
                 let _ = sink.send(&[1]);
             }
+        }
+        if self.signals.len() > MAX_QUEUED_SIGNALS {
+            let excess = self.signals.len() - MAX_QUEUED_SIGNALS;
+            self.signals.drain(..excess);
         }
         count
     }
@@ -298,5 +305,20 @@ mod tests {
         c.register_signal("x", 10).expect("valid");
         assert_eq!(c.post("y"), 0);
         assert!(c.take_signals().is_empty());
+    }
+
+    #[test]
+    fn an_unread_signal_queue_stays_bounded_and_keeps_the_newest_signals() {
+        let mut c = NotifyCenter::new();
+        c.register_signal("n", 1).expect("valid");
+        c.register_signal("n", 2).expect("valid");
+        for _ in 0..(MAX_QUEUED_SIGNALS * 3) {
+            c.post("n");
+        }
+        assert!(c.signals.len() <= MAX_QUEUED_SIGNALS, "queue holds {}", c.signals.len());
+        let got = c.take_signals();
+        assert_eq!(got.len(), MAX_QUEUED_SIGNALS);
+        assert_eq!(*got.last().expect("non-empty"), 2, "the newest post is kept");
+        assert!(c.check(1) && c.check(2), "pending marks still record every post");
     }
 }
