@@ -310,6 +310,41 @@ pub fn valid_device_uri(uri: &str) -> bool {
     ["ipp://", "ipps://", "socket://", "usb://"].iter().any(|s| uri.starts_with(s) && uri.len() > s.len())
 }
 
+/// A queue name from a device address: its host (or the USB or socket target) with characters the scheduler does
+/// not take replaced by hyphens. `taken` names are numbered (`-2`, `-3`) so an existing queue is never replaced.
+pub fn queue_name(device_uri: &str, taken: &[String]) -> String {
+    let rest = device_uri.split_once("://").map_or(device_uri, |(_, r)| r);
+    let host: String = rest
+        .split(|c| c == '/' || c == ':')
+        .next()
+        .unwrap_or("")
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .take(60)
+        .collect();
+    let base = if host.trim_matches('-').is_empty() { "Printer".to_string() } else { host.trim_matches('-').to_string() };
+    let mut name = base.clone();
+    let mut n = 2;
+    while taken.iter().any(|t| t == &name) {
+        name = format!("{base}-{n}");
+        n += 1;
+    }
+    name
+}
+
+/// Adds a queue for the device at `device_uri` (driverless) under a name no existing queue uses, and returns that
+/// name. The address is trimmed first; an address the scheduler does not take is refused before any request.
+pub fn add_device<T: Transport>(client: &mut Client<T>, device_uri: &str) -> Result<String, CupsError> {
+    let device = device_uri.trim();
+    if !valid_device_uri(device) {
+        return Err(CupsError::BadDeviceUri(device.to_string()));
+    }
+    let taken: Vec<String> = client.printers()?.into_iter().map(|p| p.name).collect();
+    let name = queue_name(device, &taken);
+    client.add_driverless_printer(&name, device)?;
+    Ok(name)
+}
+
 fn base(operation: u16) -> Request {
     Request::new(operation)
         .with(group::OPERATION, "attributes-charset", vec![Value::charset("utf-8")])
@@ -640,6 +675,38 @@ mod tests {
         let sent = &client.transport.sent[0];
         assert!(find(sent, b"everywhere").is_some());
         assert!(find(sent, b"ipp://192.168.1.50/ipp/print").is_some());
+    }
+
+    #[test]
+    fn queue_names_come_from_the_host_and_never_repeat() {
+        assert_eq!(queue_name("ipp://printer.local/ipp/print", &[]), "printer-local");
+        assert_eq!(queue_name("socket://192.168.1.20:9100", &[]), "192-168-1-20");
+        assert_eq!(queue_name("usb://HP/LaserJet", &[]), "HP");
+        assert_eq!(queue_name("usb:///", &[]), "Printer");
+        let taken = vec!["HP".to_string(), "HP-2".to_string()];
+        assert_eq!(queue_name("usb://HP/LaserJet", &taken), "HP-3");
+    }
+
+    #[test]
+    fn add_device_lists_the_queues_then_adds_under_a_free_name() {
+        let canned = Canned::new(vec![
+            default_reply(1, "HP"),
+            reply(0, 2, vec![printer_group("HP", 3, true)]),
+            reply(0, 3, vec![]),
+        ]);
+        let mut client = Client::new(canned);
+        let name = add_device(&mut client, "  usb://HP/LaserJet  ").unwrap();
+        assert_eq!(name, "HP-2");
+        let sent = &client.transport.sent[2];
+        assert!(find(sent, b"usb://HP/LaserJet").is_some(), "the trimmed address is sent");
+        assert!(find(sent, b"HP-2").is_some());
+    }
+
+    #[test]
+    fn add_device_refuses_an_address_the_scheduler_does_not_take_without_a_request() {
+        let mut client = Client::new(Canned::new(vec![]));
+        assert_eq!(add_device(&mut client, "ftp://x"), Err(CupsError::BadDeviceUri("ftp://x".into())));
+        assert!(client.transport.sent.is_empty());
     }
 
     #[test]
