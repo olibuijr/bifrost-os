@@ -6,6 +6,8 @@
 //! ([`ColorToken`], resolved with `Pair::now()` so they follow Light and Dark). No literal sizes or colours.
 use bifrost_render::ui::{self, system};
 use bifrost_ui::paragraph::ParagraphStyle;
+/// The list model of rich text: the marker format of a list and one list.
+pub use bifrost_ui::textlist::{Format as ListFormat, List as TextList};
 use bifrost_ui::typeset::UnderlineStyle;
 use bifrost_ui::undo::UndoManager;
 use std::ops::Range;
@@ -163,6 +165,8 @@ pub struct Attrs {
     pub underline_style: UnderlineStyle,
     /// The paragraph style, read from the first character of each paragraph.
     pub paragraph: Option<ParagraphStyle>,
+    /// The list the paragraph is an item of, read from the first character of each paragraph.
+    pub text_list: Option<TextList>,
 }
 
 /// One attribute and its value (`NativeAttributedString.Key` plus value).
@@ -189,6 +193,7 @@ pub enum Attribute {
     UnderlineColor(Option<u32>),
     UnderlineStyle(UnderlineStyle),
     Paragraph(Option<ParagraphStyle>),
+    TextList(Option<TextList>),
 }
 
 /// Which attribute to enumerate (`enumerateAttribute(_:in:)`).
@@ -215,6 +220,7 @@ pub enum AttributeKey {
     UnderlineColor,
     UnderlineStyle,
     Paragraph,
+    TextList,
 }
 
 impl Attrs {
@@ -241,6 +247,7 @@ impl Attrs {
             Attribute::UnderlineColor(v) => self.underline_color = v,
             Attribute::UnderlineStyle(v) => self.underline_style = v,
             Attribute::Paragraph(v) => self.paragraph = v,
+            Attribute::TextList(v) => self.text_list = v,
         }
     }
     pub fn get(&self, k: AttributeKey) -> Attribute {
@@ -266,6 +273,7 @@ impl Attrs {
             AttributeKey::UnderlineColor => Attribute::UnderlineColor(self.underline_color),
             AttributeKey::UnderlineStyle => Attribute::UnderlineStyle(self.underline_style),
             AttributeKey::Paragraph => Attribute::Paragraph(self.paragraph.clone()),
+            AttributeKey::TextList => Attribute::TextList(self.text_list),
         }
     }
 }
@@ -321,6 +329,38 @@ impl AttributedString {
         self.runs.iter().map(|r| r.text.as_str()).collect()
     }
     /// Attributes of the character at `index` (`attributes(at:)`); the last run's for `index == len`.
+    /// The list markers of the paragraphs, in order: the character index where each list item starts and the marker
+    /// text of the item. A paragraph's list is read from its first character; consecutive items of the same list
+    /// count up from the list's starting item number, and any other paragraph ends the count.
+    pub fn list_markers(&self) -> Vec<(usize, String)> {
+        let mut out = Vec::new();
+        let mut open: Option<(TextList, usize)> = None;
+        let mut pos = 0usize;
+        let mut para_start = true;
+        for r in &self.runs {
+            for c in r.text.chars() {
+                if para_start {
+                    para_start = false;
+                    match r.attrs.text_list {
+                        Some(list) => {
+                            let index = match open {
+                                Some((l, n)) if l == list => n,
+                                _ => 0,
+                            };
+                            out.push((pos, list.marker(index, None)));
+                            open = Some((list, index + 1));
+                        }
+                        None => open = None,
+                    }
+                }
+                if crate::richlayout::is_separator(c) {
+                    para_start = true;
+                }
+                pos += 1;
+            }
+        }
+        out
+    }
     pub fn attributes_at(&self, index: usize) -> Attrs {
         let mut pos = 0;
         for r in &self.runs {
@@ -972,6 +1012,16 @@ impl RichTextView {
             t.selection = r.start..r.start;
         });
     }
+    /// Makes every paragraph the selection touches an item of `list`; `None` ends the list. A caret acts on the
+    /// paragraph it sits in.
+    pub fn set_list(&mut self, list: Option<ListFormat>) {
+        self.edit("List", |t| {
+            let r = t.selection.clone();
+            let start = t.content.utf16_index_from_char(r.start);
+            let end = t.content.utf16_index_from_char(r.end);
+            t.content.set_text_list_utf16(start..end, list.map(TextList::new));
+        });
+    }
     /// Toggles a trait over the selection (all on turns it off, otherwise on), or on the typing attributes at a caret.
     pub fn toggle(&mut self, tr: Trait) {
         let (name, key, mk): (&str, AttributeKey, fn(bool) -> Attribute) = match tr {
@@ -1201,5 +1251,59 @@ mod tests {
         let mut seen = Vec::new();
         s.enumerate_attribute(AttributeKey::Features, 0..12, |r, v| seen.push((r, v)));
         assert_eq!(seen[0], (0..6, Attribute::Features(f)));
+    }
+}
+
+#[cfg(test)]
+mod list_tests {
+    use super::*;
+    use bifrost_ui::textlist::Format;
+
+    #[test]
+    fn list_markers_count_consecutive_items_and_restart_after_a_plain_paragraph() {
+        let mut s = AttributedString::plain("one\ntwo\nthree\nafter");
+        s.set_text_list_utf16(0..13, Some(TextList::new(Format::Decimal)));
+        assert_eq!(s.list_markers(), vec![(0, "1.".to_string()), (4, "2.".to_string()), (8, "3.".to_string())]);
+
+        let mut t = AttributedString::plain("a\nb\nc");
+        t.set_text_list_utf16(0..1, Some(TextList::new(Format::Decimal)));
+        t.set_text_list_utf16(4..5, Some(TextList::new(Format::Decimal)));
+        assert_eq!(t.list_markers(), vec![(0, "1.".to_string()), (4, "1.".to_string())]);
+    }
+
+    #[test]
+    fn a_change_of_list_format_starts_a_new_count() {
+        let mut s = AttributedString::plain("a\nb");
+        s.set_text_list_utf16(0..1, Some(TextList::new(Format::Disc)));
+        s.set_text_list_utf16(2..3, Some(TextList::new(Format::Decimal)));
+        assert_eq!(s.list_markers(), vec![(0, "•".to_string()), (2, "1.".to_string())]);
+    }
+
+    #[test]
+    fn starting_item_number_sets_the_first_marker() {
+        let mut list = TextList::new(Format::Decimal);
+        list.starting_item_number = 5;
+        let mut s = AttributedString::plain("a\nb");
+        s.set_text_list_utf16(0..3, Some(list));
+        assert_eq!(s.list_markers(), vec![(0, "5.".to_string()), (2, "6.".to_string())]);
+    }
+
+    #[test]
+    fn ending_a_list_removes_its_markers() {
+        let mut s = AttributedString::plain("a\nb");
+        s.set_text_list_utf16(0..3, Some(TextList::new(Format::Square)));
+        assert_eq!(s.list_markers().len(), 2);
+        s.set_text_list_utf16(0..3, None);
+        assert!(s.list_markers().is_empty());
+    }
+
+    #[test]
+    fn rich_text_view_set_list_covers_the_selected_paragraphs() {
+        let mut v = RichTextView::new(AttributedString::plain("one\ntwo"));
+        v.set_selection(0..7);
+        v.set_list(Some(Format::Disc));
+        assert_eq!(v.text.content.list_markers().len(), 2);
+        v.undo.undo(&mut v.text);
+        assert!(v.text.content.list_markers().is_empty());
     }
 }
