@@ -56,6 +56,7 @@ pub mod disk_format;
 pub mod disk_run;
 pub mod disk_scan;
 pub mod disk_request;
+pub mod privd_wire;
 pub mod txt_record;
 pub mod dnssd;
 pub mod dnssd_ref;

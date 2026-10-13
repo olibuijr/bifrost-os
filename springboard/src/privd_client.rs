@@ -6,8 +6,7 @@
 //! `login.authenticate` is kept in memory with `set_token` and added to every authenticated call.
 
 use crate::privd::{self, methods, PErr};
-use bifrost_core::json::{self, Json};
-use std::os::unix::net::UnixStream;
+use bifrost_core::json::Json;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -42,9 +41,6 @@ impl From<PErr> for ClientError {
     }
 }
 
-fn unavailable(e: impl std::fmt::Display) -> ClientError {
-    ClientError { code: "unavailable".into(), message: format!("Login service unavailable: {e}") }
-}
 
 /// What `update.check` found.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -109,24 +105,25 @@ impl Client {
     }
 
     pub fn call_timeout(&self, method: &str, params: Vec<(&str, Json)>, timeout: Duration) -> Result<Json, ClientError> {
-        let mut fields: Vec<(String, Json)> = params.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+        let fields: Vec<(String, Json)> = params.into_iter().map(|(k, v)| (k.to_string(), v)).collect();
         let Some(sock) = &self.sock else {
             return methods::call(method, &Json::Obj(fields)).map_err(Into::into);
         };
-        if let Some(t) = TOKEN.lock().ok().and_then(|g| g.clone()) {
-            fields.push(("t".into(), Json::Str(t)));
-        }
-        let req = privd::obj(vec![("id", Json::Num(1.0)), ("method", privd::s(method)), ("params", Json::Obj(fields))]);
-        let mut c = UnixStream::connect(sock).map_err(unavailable)?;
-        c.set_read_timeout(Some(timeout)).and_then(|_| c.set_write_timeout(Some(timeout))).map_err(unavailable)?;
-        privd::write_frame(&mut c, &privd::to_string(&req)).map_err(unavailable)?;
-        let text = privd::read_frame(&mut c).map_err(unavailable)?.ok_or_else(|| unavailable("connection closed"))?;
-        let reply = json::parse(&text).map_err(unavailable)?;
-        if reply.get("ok") == Some(&Json::Bool(true)) {
-            return Ok(reply.get("result").cloned().unwrap_or(Json::Null));
-        }
-        let e = reply.get("error");
-        Err(ClientError { code: e.and_then(|e| e.str_field("code")).unwrap_or_else(|| "internal".into()), message: e.and_then(|e| e.str_field("message")).unwrap_or_default() })
+        let token = TOKEN.lock().ok().and_then(|g| g.clone());
+        bifrost_core::privd_wire::call(sock, token.as_deref(), method, fields, timeout).map_err(|e| ClientError { code: e.code, message: e.message })
+    }
+
+    /// Runs one privileged disk request (`disk.*`, see `bifrost_core::disk_request`) and returns the tools that
+    /// completed, in order. The helper plans it against its own snapshot of the disks; a refusal comes back as
+    /// `bad_params` with the reason as the message.
+    pub fn disk_request(&self, request: &bifrost_core::disk_request::DiskRequest) -> Result<Vec<String>, ClientError> {
+        let fields = match request.to_params() {
+            Json::Obj(fields) => fields,
+            _ => Vec::new(),
+        };
+        let params = fields.iter().map(|(k, v)| (k.as_str(), v.clone())).collect();
+        let r = self.call_timeout(request.method(), params, Duration::from_secs(3600))?;
+        Ok(r.get("steps").and_then(Json::as_array).map(|a| a.iter().filter_map(|j| j.as_str().map(str::to_string)).collect()).unwrap_or_default())
     }
 
     pub fn ping(&self) -> Result<String, ClientError> {
