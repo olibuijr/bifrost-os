@@ -29,6 +29,7 @@ enum Section {
     Mute,
     Dnd,
     Asked,
+    Focus,
 }
 
 impl Notification {
@@ -72,11 +73,13 @@ pub struct Store {
     asked: Vec<AppId>,
     /// the Do Not Disturb schedule
     schedule: Schedule,
+    /// apps whose notifications still show while Focus is on
+    focus_allowed: Vec<AppId>,
 }
 
 impl Default for Store {
     fn default() -> Self {
-        Store { path: None, items: Vec::new(), next_id: 1, muted: Vec::new(), asked: Vec::new(), schedule: Schedule::default() }
+        Store { path: None, items: Vec::new(), next_id: 1, muted: Vec::new(), asked: Vec::new(), schedule: Schedule::default(), focus_allowed: Vec::new() }
     }
 }
 
@@ -104,6 +107,7 @@ impl Store {
         let mut muted: Vec<AppId> = Vec::new();
         let mut asked: Vec<AppId> = Vec::new();
         let mut schedule = Schedule::default();
+        let mut focus_allowed: Vec<AppId> = Vec::new();
         let mut current: Option<Notification> = None;
         let mut section = Section::Item;
         for line in text.lines() {
@@ -117,6 +121,7 @@ impl Store {
                     "mute" => Section::Mute,
                     "asked" => Section::Asked,
                     "dnd" => Section::Dnd,
+                    "focus" => Section::Focus,
                     _ => Section::Item,
                 };
                 if section == Section::Item {
@@ -138,6 +143,13 @@ impl Store {
                     if let (true, Some(app)) = (k == "app", app_from_key(v)) {
                         if !asked.contains(&app) {
                             asked.push(app);
+                        }
+                    }
+                }
+                Section::Focus => {
+                    if let (true, Some(app)) = (k == "app", app_from_key(v)) {
+                        if !focus_allowed.contains(&app) {
+                            focus_allowed.push(app);
                         }
                     }
                 }
@@ -169,7 +181,7 @@ impl Store {
             items.drain(..items.len() - KEEP);
         }
         let next_id = items.last().map_or(1, |n| n.id + 1);
-        Store { path: None, items, next_id, muted, asked, schedule }
+        Store { path: None, items, next_id, muted, asked, schedule, focus_allowed }
     }
 
     fn serialize(&self) -> String {
@@ -182,6 +194,12 @@ impl Store {
         if !self.muted.is_empty() {
             out.push_str("[mute]\n");
             for &app in &self.muted {
+                out.push_str(&format!("app={}\n", app_key(app)));
+            }
+        }
+        if !self.focus_allowed.is_empty() {
+            out.push_str("[focus]\n");
+            for &app in &self.focus_allowed {
                 out.push_str(&format!("app={}\n", app_key(app)));
             }
         }
@@ -235,6 +253,24 @@ impl Store {
             self.muted.push(app);
         } else {
             self.muted.retain(|&a| a != app);
+        }
+        self.save();
+    }
+
+    /// Whether `app` may show its notifications while Focus is on.
+    pub fn is_focus_allowed(&self, app: AppId) -> bool {
+        self.focus_allowed.contains(&app)
+    }
+
+    /// Lets `app` through Focus, or holds it back, and saves.
+    pub fn set_focus_allowed(&mut self, app: AppId, allowed: bool) {
+        if self.is_focus_allowed(app) == allowed {
+            return;
+        }
+        if allowed {
+            self.focus_allowed.push(app);
+        } else {
+            self.focus_allowed.retain(|&a| a != app);
         }
         self.save();
     }
@@ -488,6 +524,25 @@ mod tests {
         assert!(again.is_asked(AppId::Files) && !again.is_asked(AppId::Terminal));
         assert!(!again.is_muted(AppId::Files), "asking is not muting");
         assert!(Store::parse("[asked]\napp=bifrost.files\napp=nope\n").is_asked(AppId::Files));
+    }
+
+    #[test]
+    fn focus_allowed_apps_are_kept_once_and_saved() {
+        let path = scratch("focus-allowed-in-store.ini");
+        let _ = std::fs::remove_file(&path);
+        let mut s = Store::load(&path);
+        assert!(!s.is_focus_allowed(AppId::Files));
+        s.set_focus_allowed(AppId::Files, true);
+        s.set_focus_allowed(AppId::Files, true);
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(text.matches("[focus]").count(), 1, "{text}");
+        let again = Store::load(&path);
+        assert!(again.is_focus_allowed(AppId::Files) && !again.is_focus_allowed(AppId::Terminal));
+        assert!(!again.is_muted(AppId::Files), "allowed during Focus is not a mute");
+        let mut again = again;
+        again.set_focus_allowed(AppId::Files, false);
+        assert!(!Store::load(&path).is_focus_allowed(AppId::Files));
+        assert!(Store::parse("[focus]\napp=bifrost.files\napp=nope\n").is_focus_allowed(AppId::Files));
     }
 
     #[test]

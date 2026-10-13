@@ -1966,9 +1966,10 @@ impl Shell {
         if app == AppId::Settings {
             let muted = apps().iter().map(|a| a.id).filter(|&a| self.notify.store().is_muted(a)).collect();
             let apps = apps().iter().filter_map(|a| self.prefs.get(&notify_page::pref_key(a.id)).map(|v| (a.id, notify_page::AppNotif::decode(v)))).collect();
+            let focus_allowed = apps().iter().map(|a| a.id).filter(|&a| self.notify.store().is_focus_allowed(a)).collect();
             let schedule = self.notify.store().schedule();
             if let Some(st) = &mut self.settings {
-                st.set_notify(&self.ui, schedule, muted, apps);
+                st.set_notify(&self.ui, schedule, muted, apps, focus_allowed);
             }
         }
         if app == AppId::Terminal {
@@ -2571,8 +2572,10 @@ impl Shell {
                     match change {
                         notify_page::NotifyChange::Schedule(s) => self.set_dnd_schedule(s),
                         notify_page::NotifyChange::ToggleMute(a) => self.toggle_mute(a),
+                        notify_page::NotifyChange::FocusAllowed(a, on) => self.set_focus_allowed(a, on),
                         notify_page::NotifyChange::App(a, n) => {
                             let _ = self.prefs.set(&notify_page::pref_key(a), &n.encode());
+                            self.store_changed();
                         }
                     }
                 }

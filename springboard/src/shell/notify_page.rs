@@ -17,6 +17,8 @@ pub struct NotifyPrefs {
     pub clock_24h: bool,
     /// per-app options other than Allow Notifications (that is `muted`)
     pub apps: Vec<(AppId, AppNotif)>,
+    /// apps whose notifications still show while Focus is on
+    pub focus_allowed: Vec<AppId>,
 }
 
 /// One app's page of Settings > Notifications (bifrost defaults: everything on, Temporary banners).
@@ -126,6 +128,10 @@ impl NotifyPrefs {
     pub fn is_muted(&self, app: AppId) -> bool {
         self.muted.contains(&app)
     }
+
+    pub fn focus_allows(&self, app: AppId) -> bool {
+        self.focus_allowed.contains(&app)
+    }
 }
 
 /// What a row of these pages does.
@@ -141,6 +147,8 @@ pub enum NotifyEdit {
     Mute(AppId),
     /// a row of one app's page
     App(AppId, AppField),
+    /// the Allow During Focus switch of one app
+    FocusAllowed(AppId),
 }
 
 /// An edit the shell must apply to its notification store.
@@ -150,6 +158,8 @@ pub enum NotifyChange {
     ToggleMute(AppId),
     /// an app's options changed (persisted by the shell)
     App(AppId, AppNotif),
+    /// an app was allowed through Focus, or held back (persisted by the shell)
+    FocusAllowed(AppId, bool),
 }
 
 fn clock(minute: u16, h24: bool) -> String {
@@ -219,6 +229,7 @@ pub fn app_spec(p: &NotifyPrefs, name: &str) -> Spec {
             ])
             .header("LOCK SCREEN APPEARANCE"),
         );
+        groups.push(Group::new(vec![Item::new("Allow During Focus").switch(p.focus_allows(app), Action::Notify(NotifyEdit::FocusAllowed(app)))]).footer("Focus still holds back the other apps."));
     }
     Spec { id: PageId::NotificationApp, title: name.into(), large: false, groups }
 }
@@ -239,7 +250,7 @@ mod tests {
 
     #[test]
     fn schedule_rows_show_the_window() {
-        let p = NotifyPrefs { schedule: Schedule { enabled: true, start: 22 * 60, end: 7 * 60 }, muted: vec![], clock_24h: true, apps: vec![] };
+        let p = NotifyPrefs { schedule: Schedule { enabled: true, start: 22 * 60, end: 7 * 60 }, muted: vec![], clock_24h: true, apps: vec![], focus_allowed: vec![] };
         let g = schedule_group(&p);
         assert_eq!(g.items[0].accessory, super::super::list::Accessory::Switch(true));
         assert_eq!((g.items[1].value.as_str(), g.items[2].value.as_str()), ("22:00", "7:00"));
@@ -289,6 +300,17 @@ mod tests {
         assert_eq!(style.items[0].action, Action::Notify(NotifyEdit::App(AppId::Photos, AppField::Style(0))));
         let off = app_spec(&NotifyPrefs { muted: vec![AppId::Photos], ..Default::default() }, "Photos");
         assert_eq!(off.groups.len(), 1, "a muted app shows no alert style");
+    }
+
+    #[test]
+    fn allow_during_focus_is_a_switch_on_an_allowed_app_page() {
+        let p = NotifyPrefs { focus_allowed: vec![AppId::Photos], ..Default::default() };
+        let s = app_spec(&p, "Photos");
+        let last = s.groups.last().unwrap();
+        assert_eq!(last.items[0].label, "Allow During Focus");
+        assert_eq!(last.items[0].accessory, super::super::list::Accessory::Switch(true));
+        assert_eq!(last.items[0].action, Action::Notify(NotifyEdit::FocusAllowed(AppId::Photos)));
+        assert_eq!(app_spec(&NotifyPrefs { muted: vec![AppId::Photos], ..Default::default() }, "Photos").groups.len(), 1);
     }
 
     #[test]

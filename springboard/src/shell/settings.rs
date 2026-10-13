@@ -760,8 +760,8 @@ impl Settings {
     }
 
     /// Loads the notification state (schedule, muted apps) from the shell.
-    pub(super) fn set_notify(&mut self, ui: &Ui, schedule: super::notify::Schedule, muted: Vec<super::AppId>, apps: Vec<(super::AppId, notify_page::AppNotif)>) {
-        self.notify = NotifyPrefs { schedule, muted, clock_24h: self.opts.clock_24h, apps };
+    pub(super) fn set_notify(&mut self, ui: &Ui, schedule: super::notify::Schedule, muted: Vec<super::AppId>, apps: Vec<(super::AppId, notify_page::AppNotif)>, focus_allowed: Vec<super::AppId>) {
+        self.notify = NotifyPrefs { schedule, muted, clock_24h: self.opts.clock_24h, apps, focus_allowed };
         self.rebuild(ui);
     }
 
@@ -865,6 +865,15 @@ impl Settings {
                 self.notify.apps.retain(|(a, _)| *a != app);
                 self.notify.apps.push((app, n));
                 self.notify_out.push(NotifyChange::App(app, n));
+                self.rebuild(ui);
+            }
+            NotifyEdit::FocusAllowed(app) => {
+                let on = !self.notify.focus_allows(app);
+                self.notify.focus_allowed.retain(|&a| a != app);
+                if on {
+                    self.notify.focus_allowed.push(app);
+                }
+                self.notify_out.push(NotifyChange::FocusAllowed(app, on));
                 self.rebuild(ui);
             }
             NotifyEdit::From | NotifyEdit::To => {
