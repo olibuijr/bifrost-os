@@ -1,5 +1,7 @@
 # Boot task 03: loader progress, timing record, options
 
+> Status 2026-10-13: the loader no longer draws a bar; the timing record and progress position are still computed and published. Bootweave frame, UKI and unlock have since merged, so the todo blockers below are closed.
+
 Task file: `tasks/boot/03-loader-progress.md` (git-ignored). Contract: `docs/boot-architecture.md`, "Stages", "One frame",
 "The progress bar", "Budgets". Branch `boot/03-loader-progress`, built on `main` at 5d0c9cc1 (the bootweave skeleton).
 
