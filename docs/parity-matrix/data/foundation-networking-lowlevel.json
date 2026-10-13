@@ -12,7 +12,7 @@
       "apple": "URLSession, URLRequest, URLSessionDataTask, URLSessionDownloadTask",
       "bifrost": "springboard/sdk/src/url.rs; springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section)",
       "status": "partial",
-      "note": "shared session, data_task, download_task with progress, streaming bytes, redirects up to 5; no upload tasks, background sessions, delegates or configurations"
+      "note": "shared session, data_task, download_task with progress, upload_task (from data) and upload_task_from_file (streamed) with didSendBodyData progress, countOfBytesSent and countOfBytesExpectedToSend, streaming bytes, redirects up to 5; no background sessions, delegates or configurations"
     },
     {
       "feature": "URL Loading: caching",
@@ -96,7 +96,7 @@
     "Bonjour/mDNS discovery and advertising",
     "WebSocket and stream tasks",
     "Cookie storage, credentials and auth challenges in URLSession",
-    "Upload tasks, background sessions, disk URLCache",
+    "Background URLSession sessions, disk URLCache",
     "General XPC-style service connections",
     "OperationQueue, RunLoop and Timer-style scheduling",
     "Stream and Port abstractions"

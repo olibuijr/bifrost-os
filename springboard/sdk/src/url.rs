@@ -9,7 +9,7 @@ use crate::dispatch::{DispatchQueue, Qos};
 use springboard::deildu::http::{Stream, Tls, Transport};
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -147,10 +147,21 @@ pub struct URLSession {
     cache: Option<Arc<URLCache>>,
 }
 
-/// Handle for cancelling a task (`URLSessionTask.cancel()`).
-#[derive(Clone, Default)]
+/// `NSURLSessionTransferSizeUnknown`.
+const TRANSFER_SIZE_UNKNOWN: i64 = -1;
+
+/// Handle for cancelling a task (`URLSessionTask.cancel()`) and reading its upload counts.
+#[derive(Clone)]
 pub struct URLSessionTask {
     cancel: Arc<AtomicBool>,
+    sent: Arc<AtomicU64>,
+    expected: Arc<AtomicI64>,
+}
+
+impl Default for URLSessionTask {
+    fn default() -> Self {
+        URLSessionTask { cancel: Arc::default(), sent: Arc::default(), expected: Arc::new(AtomicI64::new(TRANSFER_SIZE_UNKNOWN)) }
+    }
 }
 
 impl URLSessionTask {
@@ -160,6 +171,72 @@ impl URLSessionTask {
     pub fn is_cancelled(&self) -> bool {
         self.cancel.load(Ordering::Relaxed)
     }
+    /// `countOfBytesSent`: request body bytes written to the connection so far (upload tasks; 0 otherwise).
+    pub fn count_of_bytes_sent(&self) -> u64 {
+        self.sent.load(Ordering::Relaxed)
+    }
+    /// `countOfBytesExpectedToSend`: the body length, or -1 (`NSURLSessionTransferSizeUnknown`) when not known.
+    pub fn count_of_bytes_expected_to_send(&self) -> i64 {
+        self.expected.load(Ordering::Relaxed)
+    }
+}
+
+/// A request body: bytes already in memory, or a file that is streamed from disk (`uploadTask(with:fromFile:)`).
+enum Payload {
+    Bytes(Vec<u8>),
+    File { path: std::path::PathBuf, len: u64 },
+}
+
+/// Body chunk size: the unit of `didSendBodyData` progress and of cancel checks.
+const UPLOAD_CHUNK: usize = 64 << 10;
+
+impl Payload {
+    /// Stats the file once, so a missing or unreadable file fails before any request is made.
+    fn open(path: &std::path::Path) -> Result<Payload, URLError> {
+        let len = std::fs::metadata(path).map_err(|e| URLError::FileError(e.to_string()))?.len();
+        Ok(Payload::File { path: path.to_path_buf(), len })
+    }
+    fn len(&self) -> u64 {
+        match self {
+            Payload::Bytes(b) => b.len() as u64,
+            Payload::File { len, .. } => *len,
+        }
+    }
+    /// Writes the body in chunks. `check` runs before each chunk (cancel, deadline); `on_sent` gets each chunk's size.
+    fn write_to<W: Write + ?Sized>(&self, conn: &mut W, check: &dyn Fn() -> Result<(), URLError>, on_sent: &mut dyn FnMut(u64)) -> Result<(), URLError> {
+        let net = |e: std::io::Error| URLError::CannotConnect(e.to_string());
+        match self {
+            Payload::Bytes(b) => {
+                for chunk in b.chunks(UPLOAD_CHUNK) {
+                    check()?;
+                    conn.write_all(chunk).map_err(net)?;
+                    on_sent(chunk.len() as u64);
+                }
+            }
+            Payload::File { path, len } => {
+                let mut file = std::fs::File::open(path).map_err(|e| URLError::FileError(e.to_string()))?;
+                let mut buf = vec![0u8; UPLOAD_CHUNK];
+                let mut left = *len;
+                while left > 0 {
+                    check()?;
+                    let want = buf.len().min(left as usize);
+                    let n = file.read(&mut buf[..want]).map_err(|e| URLError::FileError(e.to_string()))?;
+                    if n == 0 {
+                        return Err(URLError::FileError("the file shrank during the upload".into()));
+                    }
+                    conn.write_all(&buf[..n]).map_err(net)?;
+                    left -= n as u64;
+                    on_sent(n as u64);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// The body a request carries: `httpBody` for data, download and streaming requests.
+fn payload_of(req: &URLRequest) -> Option<Payload> {
+    req.body.clone().map(Payload::Bytes)
 }
 
 impl URLSession {
@@ -204,6 +281,46 @@ impl URLSession {
         task
     }
 
+    /// `uploadTask(with:from:completionHandler:)`: sends `body` as the request body (`Content-Length` is set from it).
+    /// `progress(bytes_in_chunk, total_bytes_sent, total_bytes_expected)` is the `didSendBodyData` call and runs on the
+    /// main queue; `completion` runs on the main queue too. The request's own `body` is replaced by `body`.
+    pub fn upload_task<P, F>(&self, req: URLRequest, body: Vec<u8>, progress: P, completion: F) -> URLSessionTask
+    where
+        P: Fn(u64, u64, u64) + Send + Sync + 'static,
+        F: FnOnce(Reply) + Send + 'static,
+    {
+        self.spawn_upload(req, progress, completion, move || Ok(Payload::Bytes(body)))
+    }
+
+    /// `uploadTask(with:fromFile:completionHandler:)`: streams `file` as the request body in 64 KiB chunks. A file that
+    /// cannot be stat'ed completes with `FileError` and no request is made. Progress as for `upload_task`.
+    pub fn upload_task_from_file<P, F>(&self, req: URLRequest, file: std::path::PathBuf, progress: P, completion: F) -> URLSessionTask
+    where
+        P: Fn(u64, u64, u64) + Send + Sync + 'static,
+        F: FnOnce(Reply) + Send + 'static,
+    {
+        self.spawn_upload(req, progress, completion, move || Payload::open(&file))
+    }
+
+    fn spawn_upload<P, F, S>(&self, req: URLRequest, progress: P, completion: F, source: S) -> URLSessionTask
+    where
+        P: Fn(u64, u64, u64) + Send + Sync + 'static,
+        F: FnOnce(Reply) + Send + 'static,
+        S: FnOnce() -> Result<Payload, URLError> + Send + 'static,
+    {
+        let task = URLSessionTask::default();
+        let (this, handle) = (self.clone(), task.clone());
+        let progress = Arc::new(progress);
+        DispatchQueue::global(Qos::UserInitiated).async_(move || {
+            let r = this.upload_with(&req, source, &handle, &mut |chunk, sent, total| {
+                let p = progress.clone();
+                DispatchQueue::main().async_(move || p(chunk, sent, total));
+            });
+            DispatchQueue::main().async_(move || completion(r));
+        });
+        task
+    }
+
     /// `URLSession.bytes(for:)`: blocking, call from a background thread. `on_response` runs once with the final head;
     /// `on_chunk` gets decoded body bytes (any status) and returns false to stop (result `Cancelled`).
     pub fn bytes(
@@ -213,7 +330,32 @@ impl URLSession {
         on_response: &mut dyn FnMut(&HTTPURLResponse),
         on_chunk: &mut dyn FnMut(&[u8]) -> bool,
     ) -> Result<HTTPURLResponse, URLError> {
-        self.fetch(req, cancel, on_response, on_chunk)
+        self.fetch(req, payload_of(req).as_ref(), cancel, &mut |_| {}, on_response, on_chunk)
+    }
+
+    /// The blocking upload behind `upload_task*`: `source` yields the body (opening the file, for uploads from disk),
+    /// `task` carries cancel and the counts, and `progress` gets every chunk (`didSendBodyData`).
+    fn upload_with<S>(&self, req: &URLRequest, source: S, task: &URLSessionTask, progress: &mut dyn FnMut(u64, u64, u64)) -> Reply
+    where
+        S: FnOnce() -> Result<Payload, URLError>,
+    {
+        if task.is_cancelled() {
+            return Err(URLError::Cancelled);
+        }
+        let payload = source()?;
+        let expected = payload.len();
+        task.expected.store(expected as i64, Ordering::Relaxed);
+        let sent = task.sent.clone();
+        let mut on_sent = |n: u64| {
+            let total = sent.fetch_add(n, Ordering::Relaxed) + n;
+            progress(n, total, expected);
+        };
+        let mut body = Vec::new();
+        let resp = self.fetch(req, Some(&payload), &task.cancel, &mut on_sent, &mut |_| {}, &mut |c| {
+            body.extend_from_slice(c);
+            true
+        })?;
+        Ok((resp, body))
     }
 
     fn data_blocking(&self, mut req: URLRequest, cancel: &AtomicBool) -> Reply {
@@ -229,7 +371,8 @@ impl URLSession {
             }
         }
         let mut body = Vec::new();
-        let resp = self.fetch(&req, cancel, &mut |_| {}, &mut |c| {
+        let payload = payload_of(&req);
+        let resp = self.fetch(&req, payload.as_ref(), cancel, &mut |_| {}, &mut |_| {}, &mut |c| {
             body.extend_from_slice(c);
             true
         })?;
@@ -257,9 +400,12 @@ impl URLSession {
         let expected: std::cell::Cell<Option<u64>> = std::cell::Cell::new(None);
         let mut werr = None;
         let ok = std::cell::Cell::new(false);
+        let payload = payload_of(&req);
         let result = self.fetch(
             &req,
+            payload.as_ref(),
             cancel,
+            &mut |_| {},
             &mut |r| {
                 ok.set((200..300).contains(&r.status_code));
                 expected.set(r.value("Content-Length").and_then(|v| v.parse().ok()));
@@ -292,18 +438,27 @@ impl URLSession {
         }
     }
 
-    /// One request with redirects. Redirect bodies are skipped; `on_response`/`on_chunk` see the final reply.
-    fn fetch(&self, req: &URLRequest, cancel: &AtomicBool, on_response: &mut dyn FnMut(&HTTPURLResponse), on_chunk: &mut dyn FnMut(&[u8]) -> bool) -> Result<HTTPURLResponse, URLError> {
+    /// One request with redirects. Redirect bodies are skipped; `on_sent` sees each body chunk written, and
+    /// `on_response`/`on_chunk` see the final reply.
+    fn fetch(
+        &self,
+        req: &URLRequest,
+        payload: Option<&Payload>,
+        cancel: &AtomicBool,
+        on_sent: &mut dyn FnMut(u64),
+        on_response: &mut dyn FnMut(&HTTPURLResponse),
+        on_chunk: &mut dyn FnMut(&[u8]) -> bool,
+    ) -> Result<HTTPURLResponse, URLError> {
         let deadline = Instant::now() + req.timeout;
-        let (mut url, mut method, mut body) = (req.url.clone(), req.method.clone(), req.body.clone());
+        let (mut url, mut method, mut payload) = (req.url.clone(), req.method.clone(), payload);
         for _ in 0..=MAX_REDIRECTS {
-            let (resp, redirect) = self.once(&url, &method, &req.headers, body.as_deref(), cancel, deadline, on_response, on_chunk)?;
+            let (resp, redirect) = self.once(&url, &method, &req.headers, payload, cancel, deadline, on_sent, on_response, on_chunk)?;
             match redirect {
                 Some(loc) => {
                     url = resolve(&url, &loc)?;
                     if resp.status_code == 303 || (resp.status_code != 307 && resp.status_code != 308 && method == "POST") {
                         method = "GET".into();
-                        body = None;
+                        payload = None;
                     }
                 }
                 None => return Ok(resp),
@@ -318,9 +473,10 @@ impl URLSession {
         url: &str,
         method: &str,
         headers: &[(String, String)],
-        body: Option<&[u8]>,
+        payload: Option<&Payload>,
         cancel: &AtomicBool,
         deadline: Instant,
+        on_sent: &mut dyn FnMut(u64),
         on_response: &mut dyn FnMut(&HTTPURLResponse),
         on_chunk: &mut dyn FnMut(&[u8]) -> bool,
     ) -> Result<(HTTPURLResponse, Option<String>), URLError> {
@@ -330,12 +486,10 @@ impl URLSession {
         for (k, v) in headers {
             head.push_str(&format!("{k}: {v}\r\n"));
         }
-        if let Some(b) = body {
+        if let Some(b) = payload {
             head.push_str(&format!("Content-Length: {}\r\n", b.len()));
         }
         head.push_str("\r\n");
-        conn.write_all(head.as_bytes()).and_then(|_| conn.write_all(body.unwrap_or(&[]))).and_then(|_| conn.flush()).map_err(|e| URLError::CannotConnect(e.to_string()))?;
-
         let check = || -> Result<(), URLError> {
             if cancel.load(Ordering::Relaxed) {
                 Err(URLError::Cancelled)
@@ -345,6 +499,11 @@ impl URLSession {
                 Ok(())
             }
         };
+        conn.write_all(head.as_bytes()).map_err(|e| URLError::CannotConnect(e.to_string()))?;
+        if let Some(b) = payload {
+            b.write_to(&mut *conn, &check, on_sent)?;
+        }
+        conn.flush().map_err(|e| URLError::CannotConnect(e.to_string()))?;
         let read = |conn: &mut Box<dyn Stream>, buf: &mut [u8]| -> Result<usize, URLError> {
             conn.read(buf).map_err(|e| match e.kind() {
                 std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut => URLError::TimedOut,
@@ -570,5 +729,161 @@ mod cookie_tests {
         let mut jar = HTTPCookieStorage::new();
         assert_eq!(store_cookies(&reply("https://shop.example/", &["x=1; Domain=other.example"]), &mut jar, 100), 0);
         assert!(jar.cookies().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod upload_tests {
+    use super::*;
+    use std::io::Cursor;
+    use std::sync::atomic::AtomicUsize;
+
+    /// Answers every connection with `reply` and keeps the bytes the client wrote, so a test can read the request.
+    struct FakeTransport {
+        reply: Vec<u8>,
+        written: Arc<Mutex<Vec<u8>>>,
+        connects: Arc<AtomicUsize>,
+    }
+
+    struct FakeConn {
+        reply: Cursor<Vec<u8>>,
+        written: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl Read for FakeConn {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            self.reply.read(buf)
+        }
+    }
+
+    impl Write for FakeConn {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.written.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Transport for FakeTransport {
+        fn connect(&self, _host: &str, _port: u16, _tls: bool) -> std::io::Result<Box<dyn Stream>> {
+            self.connects.fetch_add(1, Ordering::SeqCst);
+            Ok(Box::new(FakeConn { reply: Cursor::new(self.reply.clone()), written: self.written.clone() }))
+        }
+    }
+
+    struct Rig {
+        session: URLSession,
+        written: Arc<Mutex<Vec<u8>>>,
+        connects: Arc<AtomicUsize>,
+    }
+
+    fn rig() -> Rig {
+        let written = Arc::new(Mutex::new(Vec::new()));
+        let connects = Arc::new(AtomicUsize::new(0));
+        let transport = FakeTransport {
+            reply: b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok".to_vec(),
+            written: written.clone(),
+            connects: connects.clone(),
+        };
+        Rig { session: URLSession::with_transport(Arc::new(transport), None), written, connects }
+    }
+
+    fn upload_request() -> URLRequest {
+        let mut req = URLRequest::new("http://upload.test/inbox");
+        req.method = "POST".into();
+        req
+    }
+
+    /// The request head as text, and the bytes after its blank line.
+    fn split_request(raw: &[u8]) -> (String, Vec<u8>) {
+        let at = raw.windows(4).position(|w| w == b"\r\n\r\n").expect("a blank line ends the head");
+        (String::from_utf8_lossy(&raw[..at]).into_owned(), raw[at + 4..].to_vec())
+    }
+
+    fn temp_file(bytes: &[u8]) -> (tempfile::TempDir, std::path::PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("payload.bin");
+        std::fs::write(&path, bytes).unwrap();
+        (dir, path)
+    }
+
+    #[test]
+    fn a_new_task_reports_no_expected_length_yet() {
+        assert_eq!(URLSessionTask::default().count_of_bytes_expected_to_send(), TRANSFER_SIZE_UNKNOWN);
+        assert_eq!(URLSessionTask::default().count_of_bytes_sent(), 0);
+    }
+
+    #[test]
+    fn a_data_upload_sends_the_body_with_content_length_and_reports_progress() {
+        let r = rig();
+        let task = URLSessionTask::default();
+        let mut progress = Vec::new();
+        let (resp, body) = r
+            .session
+            .upload_with(&upload_request(), || Ok(Payload::Bytes(b"hello".to_vec())), &task, &mut |c, sent, total| progress.push((c, sent, total)))
+            .unwrap();
+        assert_eq!((resp.status_code, body.as_slice()), (200, &b"ok"[..]));
+        let (head, sent_body) = split_request(&r.written.lock().unwrap());
+        assert!(head.starts_with("POST /inbox HTTP/1.1\r\n"));
+        assert!(head.contains("Content-Length: 5\r\n"));
+        assert_eq!(sent_body, b"hello");
+        assert_eq!(progress, vec![(5, 5, 5)]);
+        assert_eq!((task.count_of_bytes_sent(), task.count_of_bytes_expected_to_send()), (5, 5));
+    }
+
+    #[test]
+    fn a_file_upload_streams_the_file_with_monotonic_progress_ending_at_total() {
+        let r = rig();
+        let bytes: Vec<u8> = (0..150_000u32).map(|i| (i % 251) as u8).collect();
+        let (_dir, path) = temp_file(&bytes);
+        let task = URLSessionTask::default();
+        let mut progress = Vec::new();
+        r.session.upload_with(&upload_request(), || Payload::open(&path), &task, &mut |c, sent, total| progress.push((c, sent, total))).unwrap();
+        let (head, body) = split_request(&r.written.lock().unwrap());
+        assert!(head.contains("Content-Length: 150000\r\n"));
+        assert_eq!(body, bytes);
+        assert!(progress.len() > 1, "a 150 kB file goes out in several chunks");
+        assert!(progress.windows(2).all(|w| w[0].1 <= w[1].1), "the sent total never goes down");
+        assert!(progress.iter().all(|&(_, _, total)| total == 150_000));
+        assert_eq!(progress.iter().map(|p| p.0).sum::<u64>(), 150_000);
+        assert_eq!(progress.last().unwrap().1, 150_000);
+        assert_eq!(task.count_of_bytes_sent(), 150_000);
+    }
+
+    #[test]
+    fn cancel_before_the_upload_starts_yields_cancelled_and_sends_nothing() {
+        let r = rig();
+        let task = URLSessionTask::default();
+        task.cancel();
+        let res = r.session.upload_with(&upload_request(), || Ok(Payload::Bytes(b"x".to_vec())), &task, &mut |_, _, _| {});
+        assert_eq!(res.unwrap_err(), URLError::Cancelled);
+        assert_eq!(r.connects.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn cancel_during_a_file_upload_stops_between_chunks() {
+        let r = rig();
+        let (_dir, path) = temp_file(&vec![1u8; 300_000]);
+        let task = URLSessionTask::default();
+        let stopper = task.clone();
+        let res = r.session.upload_with(&upload_request(), || Payload::open(&path), &task, &mut |_, sent, _| {
+            if sent >= UPLOAD_CHUNK as u64 {
+                stopper.cancel();
+            }
+        });
+        assert_eq!(res.unwrap_err(), URLError::Cancelled);
+        assert!(task.count_of_bytes_sent() < 300_000);
+    }
+
+    #[test]
+    fn a_missing_file_fails_before_any_request_is_made() {
+        let r = rig();
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("gone.bin");
+        let res = r.session.upload_with(&upload_request(), || Payload::open(&missing), &URLSessionTask::default(), &mut |_, _, _| {});
+        assert!(matches!(res, Err(URLError::FileError(_))));
+        assert_eq!(r.connects.load(Ordering::SeqCst), 0);
     }
 }
