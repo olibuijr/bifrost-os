@@ -2,7 +2,7 @@
 //! give, so every caller of [`crate::plist::parse_bytes`] gets binary files for free.
 //!
 //! Mapping: a null object reads as an empty string (the XML writer does the same), dates are converted from seconds
-//! since 2001-01-01 to the UTC text form `YYYY-MM-DDTHH:MM:SSZ` (whole seconds), and UIDs are refused because the
+//! since 2001-01-01 to the UTC text form `YYYY-MM-DDTHH:MM:SSZ` (whole seconds), and UID values are refused because the
 //! model has no place for them outside keyed archives. Object graphs that nest deeper than [`MAX_DEPTH`] are refused,
 //! which also stops cyclic references from recursing forever.
 

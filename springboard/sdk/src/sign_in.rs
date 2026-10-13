@@ -1,4 +1,4 @@
-//! Sign-in for apps: the web sign-in session, the authorization request controller, the one-time code finder and the
+//! Sign-in for apps: the web sign-in session, the authorization request controller, the one-time code lookup and the
 //! credential identity store. Each one is the pure model that the shell and the SDK share; this module is the
 //! app-facing path to them.
 //!
