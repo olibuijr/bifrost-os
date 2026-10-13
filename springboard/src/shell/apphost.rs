@@ -289,6 +289,8 @@ struct Buf {
 
 /// Packets queued for an app whose socket is full; past this the app is killed.
 const MAX_BACKLOG: usize = 256;
+/// Messages read from one app per shell pass: a flood past this waits for the next pass instead of starving the rest.
+const MAX_PUMP: usize = 256;
 /// How long (ms) an app may leave its socket full before it is killed.
 const STALL_MS: f64 = 5000.0;
 
@@ -634,14 +636,19 @@ impl AppHost {
         // the app redraws on Resume; until then keep showing the last frame
     }
 
-    /// Reads every queued message without blocking.
+    /// Reads every queued message without blocking, at most `MAX_PUMP` of them; the rest stay in the socket and
+    /// wake the shell's loop again (the socket is in its poll set).
     pub fn pump(&mut self) -> Pumped {
+        self.pump_up_to(MAX_PUMP)
+    }
+
+    fn pump_up_to(&mut self, max: usize) -> Pumped {
         let mut out = Pumped::default();
         if !self.running() {
             return out;
         }
         self.flush();
-        loop {
+        for _ in 0..max {
             match self.chan.recv(false) {
                 Ok(Recv::Packet(p, fds)) => {
                     let Ok(msg) = ToShell::decode(&p) else {
@@ -826,9 +833,16 @@ impl AppHost {
         if !self.running() {
             return;
         }
-        let code = match self.child.as_mut().map(|c| c.wait()) {
-            Some(Ok(st)) => st.code().unwrap_or_else(|| 128 + st.signal().unwrap_or(0)),
-            _ => 0,
+        let code = match self.child.as_mut() {
+            None => 0,
+            Some(c) => match c.try_wait() {
+                Ok(Some(st)) => st.code().unwrap_or_else(|| 128 + st.signal().unwrap_or(0)),
+                // the socket is gone but the process still runs: SIGKILL it rather than wait for it on the shell thread
+                _ => {
+                    let _ = c.kill();
+                    c.wait().ok().map_or(137, |st| st.code().unwrap_or_else(|| 128 + st.signal().unwrap_or(0)))
+                }
+            },
         };
         self.finish(code);
     }
@@ -844,7 +858,8 @@ impl AppHost {
         if let Some(c) = &mut self.child {
             if self.status == Status::Running {
                 if !self.sudden {
-                    let _ = self.chan.send(&ToApp::Quit.encode(), &[]);
+                    // best effort: a full socket (an app that stopped reading) must not block the shell thread
+                    let _ = self.chan.try_send(&ToApp::Quit.encode(), &[]);
                     for _ in 0..5 {
                         if matches!(c.try_wait(), Ok(Some(_))) {
                             break;
@@ -883,7 +898,8 @@ impl AppHost {
         match quit_plan(self.sudden) {
             QuitPlan::KillNow => self.sigkill(),
             QuitPlan::QuitThenKill(ms) => {
-                let _ = self.chan.send(&ToApp::Quit.encode(), &[]);
+                // best effort, as in `kill`: the quit deadline kills the app when Quit cannot be queued
+                let _ = self.chan.try_send(&ToApp::Quit.encode(), &[]);
                 self.quit_at = Some(now + ms);
             }
         }
@@ -1913,5 +1929,31 @@ mod route_tests {
             }
         }
         assert!(host.backlog.len() <= MAX_BACKLOG);
+    }
+
+    #[test]
+    fn a_flooding_app_is_read_in_bounded_passes() {
+        let (mut host, peer) = fixture_host();
+        for i in 0..10u32 {
+            peer.send(&ToShell::Notify { title: i.to_string(), body: String::new() }.encode(), &[]).unwrap();
+        }
+        let first = host.pump_up_to(3);
+        assert_eq!(first.requests.len(), 3, "one pass reads at most its budget");
+        let second = host.pump_up_to(3);
+        assert_eq!(second.requests.len(), 3);
+        let rest = host.pump_up_to(usize::MAX);
+        assert_eq!(rest.requests.len(), 4, "the rest of the flood is read on the next passes, in order");
+        assert_eq!(rest.requests.first(), Some(&ToShell::Notify { title: "6".into(), body: String::new() }));
+        assert!(matches!(peer.recv(false), Ok(Recv::Empty)));
+    }
+
+    #[test]
+    fn quitting_never_blocks_on_an_app_that_stopped_reading() {
+        let (mut host, _peer) = fixture_host();
+        // fill the socket: nothing reads the peer end
+        while host.chan.try_send(&[0u8; 64], &[]).is_ok() {}
+        host.sudden = false;
+        let _ = host.begin_quit(0.0);
+        host.kill();
     }
 }
