@@ -22,6 +22,13 @@ if [[ -f /etc/bifrost/keyboard.env ]]; then
     done < /etc/bifrost/keyboard.env
 fi
 uid=$(id -u "$account")
+# The session's processes run as the account without a PAM session: runuser's pam_systemd started the account's
+# systemd user manager synchronously before the compositor could launch (~0.6 s of every boot on the lab PC, round
+# 75). The runtime directory and the seat (seatd) are set up here, so nothing in the session needs that login.
+as_user() {
+    setpriv --reuid="$uid" --regid="$(id -g "$account")" --init-groups \
+        env HOME="$(getent passwd "$account" | cut -d: -f6)" USER="$account" LOGNAME="$account" "$@"
+}
 runtime=/run/bifrost/user
 install -d -m700 -o "$uid" -g "$(id -g "$account")" "$runtime"
 # A dedicated session runtime is safe to clean after systemd stops the old
@@ -43,7 +50,7 @@ trap cleanup EXIT
 trap stopped TERM INT
 # Session bus at a fixed path so apps (and the sandbox) can reach it; activates bifrost-portal (Settings portal).
 if [[ ${BIFROST_SESSION_MODE:-desktop} != installer ]] && command -v dbus-daemon >/dev/null; then
-    runuser -u "$account" -- dbus-daemon --session --nofork --nopidfile --address="unix:path=$runtime/bus" 1>&2 &
+    as_user dbus-daemon --session --nofork --nopidfile --address="unix:path=$runtime/bus" 1>&2 &
     bus_pid=$!
     export DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus"
     # the launchers' environment update (labwc autostart, session-env) needs the socket: wait for it, at most 2 s
@@ -70,7 +77,7 @@ fade=; grep -q ' desktop-faded$' /run/bifrost/boot-marks 2>/dev/null || fade=1
 runtime_env=(MALLOC_ARENA_MAX=2 MALLOC_TRIM_THRESHOLD_=131072 MALLOC_TOP_PAD_=65536 WLR_RENDERER=gles2)
 if [[ "$compositor" == bifrost-wm ]]; then
     # bifrost-wm owns the screen, so it shows the loader's frame and does the boot fade, not the shell
-    runuser -u "$account" -- env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd MALLOC_ARENA_MAX=2 ${fade:+BIFROST_BOOT_FADE=1} \
+    as_user env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd MALLOC_ARENA_MAX=2 ${fade:+BIFROST_BOOT_FADE=1} \
         "${wm_flags[@]}" /usr/bin/bifrost-wm --drm --socket wayland-0 1>&2 &
     compositor_pid=$!
     for ((i=0;i<250;i++)); do
@@ -79,10 +86,10 @@ if [[ "$compositor" == bifrost-wm ]]; then
         sleep .02
     done
     # what labwc's autostart does: the launchers' environment and the Settings portal
-    runuser -u "$account" -- env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 /usr/lib/bifrost/session-env 1>&2 &
-    runuser -u "$account" -- env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 ${DBUS_SESSION_BUS_ADDRESS:+DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS} /usr/bin/bifrost-portal 1>&2 &
+    as_user env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 /usr/lib/bifrost/session-env 1>&2 &
+    as_user env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 ${DBUS_SESSION_BUS_ADDRESS:+DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS} /usr/bin/bifrost-portal 1>&2 &
 else
-    runuser -u "$account" -- env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd "${runtime_env[@]}" \
+    as_user env XDG_RUNTIME_DIR="$runtime" LIBSEAT_BACKEND=seatd "${runtime_env[@]}" \
         labwc --verbose --config-dir /usr/share/bifrost/wayland 1>&2 &
     compositor_pid=$!
 fi
@@ -115,7 +122,7 @@ launch_shell
 if [[ "$compositor" == bifrost-wm && "$chrome" == 1 ]]; then
     for chrome_client in bifrost-menubar bifrost-dock bifrost-panels; do
         [[ -x /usr/bin/$chrome_client ]] || continue
-        runuser -u "$account" -- env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 "${wm_flags[@]}" "/usr/bin/$chrome_client" 1>&2 &
+        as_user env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY=wayland-0 "${wm_flags[@]}" "/usr/bin/$chrome_client" 1>&2 &
     done
 fi
 # learns the display mode for the next boot's command line; off the critical path

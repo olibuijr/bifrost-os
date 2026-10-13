@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.10 — 2026-10-13
+
+- Boot: the session starts the bus, the compositor and the portal as the account with `setpriv`, without a PAM session: `runuser`'s pam_systemd started the account's user manager synchronously first. The desktop's first frame comes 0.8 s sooner on the lab PC (7.60 to 6.77 s after the kernel starts).
+
 ## 0.7.9 — 2026-10-13
 
 - Idle: the clock service reads the Clock app's alarm files once a second only while the app runs (once a minute otherwise), and the microphone probe looks every 10 s instead of 2 s.
