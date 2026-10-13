@@ -1,5 +1,13 @@
 # Settings as an OTA-updatable System App (plan, 2026-10-09)
 
+Status (2026-10-13): not started. There is no `springboard/apps/settings`; Settings is still compiled into the shell and has grown
+(`settings.rs`, `pages.rs`, `list.rs` and `settings_search.rs` are about 7,800 lines, plus one `*_page.rs` module per large page:
+users, mouse, print and scan, sharing, sound, storage, Wi-Fi, passwords and others). There is no `SettingsHost` trait yet. Step 3 is
+partly there: apps already call shell services by name (`ToShell::ServiceCall`, `springboard/src/shell/services/`, SDK
+`bifrost_app::service`), and the manifest permissions `accessibility` and `display-config` gate two of them, so the system
+channel for a Settings app could be one more service instead of a new message pair. The layout is measured in
+[settings-layout-spec.md](settings-layout-spec.md).
+
 Goal: Settings ships as its own package, so a Settings update arrives through the App Store/OTA path without restarting the shell
 (today it is compiled into `springboard`, ~6,600 lines in `springboard/src/shell/{settings,pages,list,...}.rs`).
 

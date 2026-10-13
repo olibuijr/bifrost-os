@@ -4,7 +4,7 @@ Source: `goldengate_refimages/27-Golden-Gate-Settings-General.png` (1704x1604, 2
 Only geometry, spacing, colour and type are taken from it. No Apple names, icons or artwork are copied; every
 glyph is our own and every label is ours.
 
-Measured on the light appearance. A dark set must be derived from the same geometry with our own dark tokens.
+Measured on the light appearance. A dark set must be derived from the same geometry with our own dark tokens (light and dark are both drawn from `Pair` tokens now).
 
 ## Window (pt)
 
@@ -51,16 +51,23 @@ Measured on the light appearance. A dark set must be derived from the same geome
 
 | Spec | Today |
 |---|---|
-| `SIDEBAR_PT` 232 | `list.rs` `SIDEBAR_PT` = 320 |
-| Row height 49 / pitch 32 | `list.rs` row height from `RADIUS_PT`/iPad metrics, 6 pt radius cap ("flat corners" rule) |
-| Search field in sidebar | `settings_search::FIELD_PT`, drawn only when `!pane.sidebar` |
-| Toolbar pill | no equivalent; the nav bar is `IPAD_NAV_PT` = 50 |
-| Header card | none |
-| Detail row icons | `icons::tile` is used in sidebar rows only |
+The measurements are now constants in `springboard/ui/src/prefs_layout.rs` (`m::*`) and the Settings drawing in `springboard/src/shell/list.rs` and
+`settings.rs` uses them (checked 2026-10-13; the table below is what it said before that work):
 
-Conflict to settle with the owner: the repo rule "every radius is at most 6" (`list.rs`, `ui.rs`) contradicts the
-reference radii (card about 13, window about 26, selected row about 9). A pixel-matching recreation needs the radius
-tokens raised; the rule has to change first.
+| Spec | Now |
+|---|---|
+| Sidebar width 232 | `m::SIDEBAR_W`; `list.rs` `SIDEBAR_PT` is that constant |
+| Row height 49, sidebar pitch 32 and row 30, inset 10 | `m::ROW_H`, `SIDEBAR_ROW_PITCH`, `SIDEBAR_ROW_H`, `SIDEBAR_INSET` |
+| Search field in the sidebar | drawn at `m::SEARCH_Y` when the pane has a sidebar (`list.rs`) |
+| Toolbar pill (back/forward) | `m::TOOLBAR_*` in `list.rs`, drawn when the page has a back target |
+| Header card | `m::HEADER_H` (`list.rs`) |
+| Detail row icons | `m::ROW_ICON`, `ROW_ICON_X`, `ROW_LABEL_X` |
+| Account block | `m::ACCOUNT_*` (avatar in `list.rs`) |
+| Radii | `m::WINDOW_RADIUS` 17, `CARD_RADIUS` 13, `SELECTION_RADIUS` 9, `ICON_RADIUS` 5 |
+
+Settled (owner decision 2026-10-09): the old rule "every radius is at most 6" is replaced by the radii above (window 17, card 13,
+selection plate 9, icon tile 5, search fields are capsules). Small legacy controls keep 6 pt until restyled. The sidebar group
+gap in code is 13 pt (`m::SIDEBAR_GROUP_GAP`), not the 18 pt first read off the capture.
 
 
 ## Shell chrome (measured from the Golden Gate desktop captures)
@@ -94,9 +101,10 @@ Checked against the settings extensions and preference panes in the reference in
 | Lock Screen | `PageId::LockScreen`: Passcode, Lock After Inactivity, Screen Saver | added (links only) |
 | Software Update, Date & Time, Language & Region, Login Items, Default Apps, Fonts, Keyboard, Game Controllers, Storage, Backup | present | present |
 | Privacy & Security, Passwords, Accessibility, Battery | present | present |
-| Trackpad, Mouse | none | gap: needs pointer prefs (tracking speed, natural scroll, tap to click) in `Options` |
-| Users & Groups | none | gap: needs the account and login options data |
-| Printers & Scanners | none | gap: needs a print service |
+| Trackpad, Mouse | `PageId::Trackpad`, `PageId::Mouse` | present (tracking and scroll speed, natural scroll, tap to click, secondary click, button swap, double-click speed in `Options`) |
+| Users & Groups | `PageId::Users`, `UserDetail`, `Groups`, `GroupDetail` | present (privileged work through privd `user.*`, `group.*`, [privd-protocol.md](privd-protocol.md)) |
+| Printers & Scanners | `PageId::PrintScan` | present as a page; printing itself is the Print Center app (`printers-desktop`) |
+| Keyboard modifier keys, Hot Corners, Shortcuts, Game Controllers, Menu Bar, Login Items & Extensions | `ModifierKeys`, `HotCorners`, `Shortcuts`, `GameControllers`, `MenuBar`, `LoginItems` | present |
 | Spotlight, Siri | none | gap: needs search and assistant prefs |
 | Startup Disk, Time Machine (as Backup), Internet Accounts, Wallet, Family, Profiles, Extensions | none or Backup only | gap: no backing service yet |
 
