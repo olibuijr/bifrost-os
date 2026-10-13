@@ -87,7 +87,7 @@
    "area": "panel",
    "apple": "File > New Smart Album; IPXSmartAlbumEditorView.nib",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/mod.rs:1034",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1037",
    "note": "A search can be saved as a smart album (More > Save Search as Smart Album). It lists every photo that matches its rules as the library changes (date, favourite, edited, file type, rating, keyword, file name), its rules can be edited as text and it can be deleted, with Undo. Rules are the search words, not condition rows in an editor sheet. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add a smart album model (conditions on date, favourite, file type, keyword, filename) in albums.rs, evaluated in album_list (mod.rs:491); an editor sheet with condition rows reachable from the album menu"
   },
@@ -96,7 +96,7 @@
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Edit Title; Sort > By Custom Order / By Name",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/extras.rs:345",
+   "bifrost": "springboard/src/shell/photos/extras.rs:350",
    "note": "Album picker rows: Delete Album (later albums move down, albums.rs delete_album_writes), Sort Albums (creation order or by name, albums.rs album_order) and More > Rename Album, which types the new name into the text card (undoable). Tested. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add rename (TextField) and delete rows to the album menu plus sort by name; persist in albums.rs"
   },
@@ -177,7 +177,7 @@
    "area": "panel",
    "apple": "IPXMetadataEditorTitle/Caption ViewController, IPXMetadataKeywordTokensController.nib",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/extras.rs:452",
+   "bifrost": "springboard/src/shell/photos/extras.rs:457",
    "note": "Info > Edit Details opens a Details sheet; each row edits its field in the text card. The values are kept beside the edit recipe in photos.ini (meta.rs), not in the picture file, travel with Duplicate and are searched. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add editable title/caption/keywords rows to the Info sheet, persisted in a sidecar next to the edit recipe (recipe.rs) and included in search"
   },
@@ -186,7 +186,7 @@
    "area": "panel",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Window > Keyword Manager; IPXKeywordsManager.nib",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/extras.rs:623",
+   "bifrost": "springboard/src/shell/photos/extras.rs:628",
    "note": "Album picker > More > Keywords lists every keyword with its photo count (scrolls); a tap searches by it and Rename (an empty name deletes) changes it on every photo. More > Add Keyword to Selection tags the selected photos. Tested in meta.rs and extras.rs. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "After keywords exist, add a keyword list panel to create/rename/delete keywords and apply them to the selection"
   },
@@ -195,7 +195,7 @@
    "area": "panel",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Adjust Date and Time; IPXAdjustAssetsDateTimeViewController.nib",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/extras.rs:417",
+   "bifrost": "springboard/src/shell/photos/extras.rs:422",
    "note": "Edit Details > Date and Time takes a date, a time or both; the photo is re-sorted at once and an empty entry restores the time of the file. The corrected time is kept in photos.ini (meta.rs apply_taken) and the picture file is not changed. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add a date picker sheet from Info that writes an override capture date to the sidecar and re-sorts (library.rs)"
   },
@@ -204,7 +204,7 @@
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Location; IPXMetadataPlacesViewController.nib",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/extras.rs:498",
+   "bifrost": "springboard/src/shell/photos/extras.rs:503",
    "note": "Edit Details > Location names a place (searchable), and Copy Location puts the place or the EXIF position on the pasteboard. Hide Location is not done: sharing and exporting still carry the position the file has. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add a place field and Hide Location toggle to the Info sheet (sidecar); Copy Location to the pasteboard"
   },
@@ -285,7 +285,7 @@
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Copy Edits / Paste Edits",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/mod.rs:1882",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1885",
    "note": "The editor's Tools page has Copy Edits and Paste Edits (the look is copied; rotation, crop and flips of the target stay), and More > Paste Edits to Selection applies the copied look to the selected photos (undoable, extras.rs paste_edits). Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Keep the current recipe (recipe.rs) in a Photos clipboard and apply it to the selection"
   },
@@ -357,7 +357,7 @@
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > Import; IPXImportDuplicatePanelController.nib",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/extras.rs:308",
+   "bifrost": "springboard/src/shell/photos/extras.rs:313",
    "note": "Album picker > More > Import from Folder takes a folder path in the text card and copies its pictures into Pictures on a worker thread (import.rs); a note reports how many were copied and how many the library already had. No folder chooser and no review sheet. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add File > Import... opening the shell open panel for a folder, calling import::import into the library dir and showing the Report (copied/skipped)"
   },
@@ -402,7 +402,7 @@
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Edit > Undo / Redo",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/extras.rs:152",
+   "bifrost": "springboard/src/shell/photos/extras.rs:157",
    "note": "Undo and Redo step through favourites, ratings, hiding, saved edits, album membership, album names, details, keywords, smart albums, paste edits, merging duplicates and deleting (undo.rs, 50 steps). They are rows on the album picker's More page and answer the Undo and Redo keys of a physical keyboard; the shell Edit menu does not list them for this app. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add an undo stack for delete, favourite, album and edit-save; wire the shell Edit menu"
   },
@@ -411,7 +411,7 @@
    "area": "toolbar",
    "apple": "sidebar Search",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/mod.rs:918",
+   "bifrost": "springboard/src/shell/photos/mod.rs:921",
    "note": "Album picker > More > Search opens a text card with the on-screen or a physical keyboard; the grid follows the typing. Words match file name, album, date, title, caption, place and keywords (meta.rs Query); #keyword, is:favorite, is:edited, is:screenshot, kind:png and rating:3 narrow it, and a typed date or month filters by date. It is a card in the album picker, not a field in the toolbar. Built on parity/team-d-photos; not yet verified on Midget.",
    "wire": "Add a toolbar search field matching filename, album, date and keywords, feeding set_filter (mod.rs:570)"
   },
