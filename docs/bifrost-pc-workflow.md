@@ -406,7 +406,15 @@ Release order used for system 0.4.47 to 0.4.49 and Files 1.10.x:
    `bifrost pc gallery` and `bifrost pc adoption`.
 2. Bump `springboard/Cargo.toml` and `springboard/CHANGELOG.md` (a new `## x.y.z — date` heading);
    commit as `release: system x.y.z`.
-3. `bifrost pc publish` (about 45 s). It refuses a version that is not newer than the published one.
+3. `bifrost pc publish` (about 45 s). First it runs `tools/pc_mirror.py`: Midget installs every package from titan's
+   mirror `http://192.168.1.12:8079/mirror/$repo/os/$arch` (`out/pc-repo/mirror/{core,extra}/os/x86_64`, nothing but
+   `pc-publish.py` serves it). The step downloads the current core/extra dbs and every package file the
+   `runtime-packages.txt`, base and GPU closure needs (list from `tools/lab-mirror.sh --list`, closure resolved from the
+   db), only what is missing, dbs replaced last, so files always match the served db versions. It then fails the publish
+   naming every missing file, so a release can never ship a dependency Midget cannot download (0.7.25 rolled back on
+   fonts that had no file). Upstream: `BIFROST_UPSTREAM_MIRROR` or the first Server in `/etc/pacman.d/mirrorlist`;
+   `--skip-mirror-sync` only checks. Run it alone with `python3 tools/pc_mirror.py [--sync|--check]`; tests:
+   `python3 -I tools/test_pc_mirror.py`. Midget's mirrorlist must point at that URL (not written by the installer). It refuses a version that is not newer than the published one.
 4. Apps: bump manifest and Cargo versions with the CHANGELOG entry, commit, then
    `python3 tools/pc-app.py publish <app dir>`.
 5. Midget: `bifrost pc midget update --restart` stages the system; `bifrost pc midget reboot`

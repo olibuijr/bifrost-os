@@ -7,6 +7,8 @@ Installed systems have it in /etc/pacman.conf). Machines then update with Settin
 """
 import argparse, glob, os, re, shutil, subprocess, sys, time
 
+import pc_mirror
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 POOL = os.path.join(REPO, "out/pc-repo/bifrost/x86_64")
 PIDF = os.path.join(REPO, "out/pc-repo/server.pid")
@@ -41,9 +43,17 @@ def main():
     ap.add_argument("--release", action="store_true")
     ap.add_argument("--skip-build", action="store_true")
     ap.add_argument("--no-serve", action="store_true")
+    ap.add_argument("--skip-mirror-sync", action="store_true", help="only check the 8079 mirror, do not download")
     a = ap.parse_args()
     prof = "release" if a.release else "fast"
     t0 = time.time()
+    # the 8079 mirror must hold every package the new springboard-shell depends on, or Midget's update 404s and rolls back
+    if not a.skip_mirror_sync:
+        try:
+            pc_mirror.sync()
+        except Exception as e:  # offline titan: the check below still decides
+            print(f"pc-mirror: sync failed ({e}); checking what is there", file=sys.stderr)
+    pc_mirror.check()
     if not a.skip_build:
         run(["cargo", "build", "--profile", prof, "--bin", "shell", "--bin", "bootweave", "--bin", "bifrost-portal", "--bin", "bifrost-privd", "--features", "desktop-wayland", "--timings"], cwd=os.path.join(REPO, "springboard"))
         run(["cargo", "build", "--profile", prof, "-p", "bifrost-mcp", "-p", "bifrostd", "-p", "bifrost-audiod", "-p", "bifrost-audio-bench", "-p", "bifrost-alsa-plugin"], cwd=os.path.join(REPO, "springboard"))
