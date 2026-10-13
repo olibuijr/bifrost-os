@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.9.0 — 2026-10-13
+
+- Programmer mode (toolbar segment and View menu): an integer calculator on an 8, 16, 32 or 64-bit word in binary,
+  octal, decimal (signed) or hexadecimal, with A to F, 00 and FF keys, AND, OR, XOR, NOR, NOT, two's complement,
+  shifts by one bit and by an amount, rotates, byte and word flips, a clickable binary row and a Unicode readout.
+  Hex digits and `& | ^ ~ < >` work from the keyboard.
+- RPN mode (View > RPN Mode): the basic keypad drives a stack. Enter pushes, an operator takes the top two values, and
+  the new Stack menu has Swap, Drop, Roll Up and Roll Down. The values under X show above the display.
+- App menus: Edit gains Copy Expression and Copy Last Result; View has Basic, Scientific, Programmer, RPN Mode, Unit
+  Conversion, Show History, Thousands Separator, Decimal Places (Automatic, 0 to 15), Scientific Notation and Word Size.
+- Display settings: thousands separators can be switched off, results can use a fixed number of decimal places or
+  scientific notation. They are saved with the other settings; an entry being typed is never rewritten.
+- Second layer of the scientific keypad: y to the x (under e to the x), 2 to the x (under 10 to the x), log base y
+  (under ln) and the x-th root of y (under the y-th root key). `logy` and `rootx` are infix words in the evaluator.
+- History: the first calculation of each day carries a day caption, a swipe to the left or the right-click menu
+  deletes one calculation (the menu also copies its result or expression), and Clear History needs a second tap.
+- Keyboard entry on the scientific keypad: `( ) ^ ! e p`, Shift-E for the exponent and Option-minus for the sign.
+- Convert: area, time, data size, energy, pressure, power, angle and fuel economy join the five categories; the
+  category segments take two rows.
+
 ## 1.8.1 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

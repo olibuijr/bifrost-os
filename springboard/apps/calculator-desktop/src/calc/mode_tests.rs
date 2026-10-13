@@ -103,6 +103,7 @@ fn tapping_a_bit_flips_it_and_the_bits_are_controls() {
     tap(&mut app, &ui, x, y);
     assert_eq!(app.programmer.as_ref().unwrap().value(), 0x8000_0000_0000_0000);
     let controls = app.controls(&ui);
+    assert!(controls.len() <= 128, "the shell keeps at most 128 controls, got {}", controls.len());
     let bit = |n: u8| controls.iter().find(|c| c.label == format!("Bit {n}")).unwrap();
     assert_eq!(bit(63).value, "1");
     assert_eq!(bit(0).value, "0");
