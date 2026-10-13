@@ -66,6 +66,7 @@ pub mod usernotif;
 pub mod extras;
 pub mod spotindex;
 pub mod sharing;
+pub mod services_menu;
 pub mod forms;
 pub mod users_page;
 pub mod sharing_page;

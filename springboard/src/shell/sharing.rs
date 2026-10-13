@@ -224,15 +224,21 @@ impl super::Shell {
         true
     }
 
+    /// Brings the app in slot `to` to the front to receive an item: on the desktop as a window, else full screen.
     #[cfg(feature = "desktop-wayland")]
-    fn share_deliver(&mut self, p: &Pending, app: &str, t: f64) -> bool {
-        let Some(to) = super::apphost::slot_of(app) else { return false };
-        let sender = self.ext.get(p.slot as usize).and_then(Option::as_ref).map(|h| h.id.clone());
+    pub(super) fn open_for_inbound(&mut self, to: usize, t: f64) {
         if self.desk_active() {
             self.desk_open(super::AppId::External(to as u8), t);
         } else {
             self.ext_open(to);
         }
+    }
+
+    #[cfg(feature = "desktop-wayland")]
+    fn share_deliver(&mut self, p: &Pending, app: &str, t: f64) -> bool {
+        let Some(to) = super::apphost::slot_of(app) else { return false };
+        let sender = self.ext.get(p.slot as usize).and_then(Option::as_ref).map(|h| h.id.clone());
+        self.open_for_inbound(to, t);
         let mut files = Vec::new();
         for item in &p.items {
             match item {

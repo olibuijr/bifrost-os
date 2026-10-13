@@ -366,6 +366,13 @@ impl Shell {
         if code == 32 && mods == (CHORD_META | CHORD_ALT) && self.dock_toggle_autohide() {
             return true;
         }
+        // Ctrl+Cmd+D (KEY_D): Look Up the clipboard text in the Look Up popover on the desktop
+        #[cfg(feature = "desktop-wayland")]
+        {
+            if code == 32 && mods == (CHORD_META | CHORD_CTRL) && self.desk_active() && !self.is_locked() && self.look_up_popover() {
+                return true;
+            }
+        }
         if !self.screen_on || !matches!(self.screen, Screen::App(AppId::External(_))) {
             return false;
         }

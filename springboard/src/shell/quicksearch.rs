@@ -707,6 +707,12 @@ impl QuickSearch {
         !matches!(self.state, State::Hidden)
     }
 
+    /// Puts `text` in the search field and searches for it (a Services request sends its text this way).
+    pub fn set_query(&mut self, ui: &Ui, h: i32, text: &str) {
+        self.field.set_text(ui, text);
+        self.search(ui, h);
+    }
+
     pub fn is_shown(&self) -> bool {
         matches!(self.state, State::Shown)
     }

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Services: Edit lists a Services submenu for the clipboard text (Look Up in Dictionary, New Note With Selection, Open URL, Search With quick search, Make New Sticky Note). Ctrl+Cmd+D opens the Look Up popover on the desktop. Apps: Notes 1.15.0, Stickies 0.3.0 and Dictionary 0.2.0 take text sent from another app.
 - Terminal: More menu row "Open link in selection" opens the first web link in the selected text in the browser
   (`terminal/links.rs`, reusing the URL detection in `profile_table.rs`).
 - SDK: text layout objects (`bifrost_ui::typeset`: typesetter, framesetter, frame, line, run) with Unicode line break and
