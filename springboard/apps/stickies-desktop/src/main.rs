@@ -19,7 +19,7 @@ use bifrost_app::proto::{DocErrorCode, DocMode};
 use bifrost_app::widgets;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use history::History;
-use model::{Arrange, Board, Case, Colour, Ink, Move, Part, Style, TextSize};
+use model::{Arrange, Baseline, Board, Case, Colour, Ink, Move, Part, Style, TextSize};
 use std::io::{Read, Write};
 
 const MENU_NEW: u32 = 1;
@@ -64,6 +64,10 @@ const MENU_ARRANGE_BASE: u32 = 52; // 52..=56, one per Arrange
 const MENU_INK_BASE: u32 = 60; // 60..=64, one per Ink
 const MENU_INFO_CREATED: u32 = 70;
 const MENU_INFO_MODIFIED: u32 = 71;
+const MENU_OUTLINE: u32 = 72;
+const MENU_BASELINE_BASE: u32 = 73; // 73, 74, 75: normal, superscript, subscript
+const MENU_REPLACE: u32 = 80;
+const MENU_REPLACE_ALL: u32 = 81;
 
 /// The buttons of the delete confirmation.
 const SHEET_CANCEL: u32 = 1;
@@ -116,7 +120,7 @@ fn undo_name(id: u32) -> Option<&'static str> {
         MENU_DELETE => "Delete",
         MENU_DUPLICATE => "Duplicate",
         MENU_COLLAPSE | MENU_COLLAPSE_ALL | MENU_EXPAND_ALL => "Collapse",
-        MENU_BOLD | MENU_ITALIC | MENU_UNDERLINE | MENU_STRIKE | MENU_BIGGER | MENU_SMALLER | MENU_PASTE_STYLE | MENU_USE_DEFAULT => "Style",
+        MENU_BOLD | MENU_ITALIC | MENU_UNDERLINE | MENU_STRIKE | MENU_OUTLINE | MENU_BASELINE_BASE..=75 | MENU_BIGGER | MENU_SMALLER | MENU_PASTE_STYLE | MENU_USE_DEFAULT => "Style",
         MENU_SIZE_BASE..=8 => "Text Size",
         MENU_INK_BASE..=64 => "Text Colour",
         MENU_COLOUR_BASE..=15 => "Colour",
@@ -124,6 +128,7 @@ fn undo_name(id: u32) -> Option<&'static str> {
         MENU_PASTE | MENU_PASTE_PLAIN => "Paste",
         MENU_UPPER | MENU_LOWER | MENU_CAPITALISE => "Transformation",
         MENU_TRANSLUCENT => "Translucent",
+        MENU_REPLACE | MENU_REPLACE_ALL => "Replace",
         MENU_ZOOM => "Zoom",
         MENU_ARRANGE_BASE..=56 => "Arrange",
         _ => return None,
@@ -141,6 +146,10 @@ struct StickiesApp {
     history: History,
     /// The find bar's text while the bar is open.
     find: Option<String>,
+    /// The replacement text while the find bar shows its replace field.
+    replace: Option<String>,
+    /// Whether typing goes to the replace field instead of the find field (Tab switches).
+    replace_active: bool,
     /// The last find text, which Find Next uses once the bar is closed.
     last_find: String,
     confirm: Option<Confirm>,
@@ -162,6 +171,8 @@ impl StickiesApp {
             import: None,
             history: History::default(),
             find: None,
+            replace: None,
+            replace_active: false,
             last_find: String::new(),
             confirm: None,
             style_clip: None,
@@ -404,8 +415,15 @@ impl StickiesApp {
 
     /// Keys while the find bar is open: they edit the find text instead of a note.
     fn find_key(&mut self, key: &KeyInput) -> bool {
+        if self.replace_active {
+            return self.replace_key(key);
+        }
         let Some(query) = &mut self.find else { return false };
         match key {
+            KeyInput::Code(9) if self.replace.is_some() => {
+                self.replace_active = true;
+                return true;
+            }
             KeyInput::Text(text) => query.extend(text.chars().filter(|c| !c.is_control())),
             KeyInput::Code(8) => {
                 if query.pop().is_none() {
@@ -418,6 +436,8 @@ impl StickiesApp {
             }
             KeyInput::Code(27) => {
                 self.find = None;
+                self.replace = None;
+                self.replace_active = false;
                 return true;
             }
             _ => return false,
@@ -429,6 +449,43 @@ impl StickiesApp {
             note.set_caret(start, false);
         }
         self.step_find(true);
+        true
+    }
+
+    /// Keys while the replace field has the typing: Enter replaces the current match and steps to the next.
+    fn replace_key(&mut self, key: &KeyInput) -> bool {
+        let Some(with) = &mut self.replace else {
+            self.replace_active = false;
+            return false;
+        };
+        match key {
+            KeyInput::Text(text) => with.extend(text.chars().filter(|c| !c.is_control())),
+            KeyInput::Code(8) => {
+                if with.pop().is_none() {
+                    return false;
+                }
+            }
+            KeyInput::Code(9) => self.replace_active = false,
+            KeyInput::Code(13) => {
+                let before = self.board.clone();
+                let (query, with) = (self.find.clone().unwrap_or_default(), with.clone());
+                let now = Self::now();
+                let replaced = self.board.as_mut().is_some_and(|b| b.replace_selected(&query, &with, now));
+                if replaced {
+                    if let Some(before) = before {
+                        self.history.push("Replace", before);
+                    }
+                    self.dirty = true;
+                }
+                self.step_find(true);
+            }
+            KeyInput::Code(27) => {
+                self.find = None;
+                self.replace = None;
+                self.replace_active = false;
+            }
+            _ => return false,
+        }
         true
     }
 
@@ -577,14 +634,21 @@ impl StickiesApp {
                 let collapse = id == MENU_COLLAPSE_ALL;
                 self.board.as_mut().is_some_and(|b| b.set_all_collapsed(collapse)) && self.changed()
             }
-            MENU_BOLD | MENU_ITALIC | MENU_UNDERLINE | MENU_STRIKE => {
+            MENU_BOLD | MENU_ITALIC | MENU_UNDERLINE | MENU_STRIKE | MENU_OUTLINE => {
                 let Some(note) = self.board.as_mut().and_then(|b| b.focused_mut()) else { return false };
                 match id {
                     MENU_BOLD => note.style.bold = !note.style.bold,
                     MENU_ITALIC => note.style.italic = !note.style.italic,
                     MENU_UNDERLINE => note.style.underline = !note.style.underline,
+                    MENU_OUTLINE => note.style.outline = !note.style.outline,
                     _ => note.style.strike = !note.style.strike,
                 }
+                self.changed()
+            }
+            MENU_BASELINE_BASE..=75 => {
+                let baseline = [Baseline::Normal, Baseline::Superscript, Baseline::Subscript][(id - MENU_BASELINE_BASE) as usize];
+                let Some(note) = self.board.as_mut().and_then(|b| b.focused_mut()) else { return false };
+                note.style.baseline = baseline;
                 self.changed()
             }
             MENU_BIGGER | MENU_SMALLER => {
@@ -681,6 +745,23 @@ impl StickiesApp {
                 self.step_find(id == MENU_FIND_NEXT);
                 true
             }
+            MENU_REPLACE => {
+                // opens the find bar with its replace field, which takes the typing
+                if self.find.is_none() {
+                    self.find = Some(self.last_find.clone());
+                }
+                self.replace.get_or_insert_with(String::new);
+                self.replace_active = true;
+                true
+            }
+            MENU_REPLACE_ALL => {
+                let (Some(query), Some(with)) = (self.find.clone(), self.replace.clone()) else { return false };
+                let count = self.board.as_mut().map_or(0, |b| b.replace_all(&query, &with, now));
+                if count > 0 {
+                    ctx.notify("Sticky Notes", &format!("Replaced {count} {}", if count == 1 { "match" } else { "matches" }));
+                }
+                count > 0 && self.changed()
+            }
             MENU_USE_SELECTION => {
                 let selected = self.board.as_ref().and_then(|b| b.focused()).map(|n| n.selected_text().lines().next().unwrap_or("").to_string());
                 match selected {
@@ -754,6 +835,8 @@ impl StickiesApp {
                 AppMenuItem::new(MENU_SELECT_ALL, "Select All").key("cmd+a").enabled(has_focus),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_FIND, "Find...").key("cmd+f").enabled(any),
+                AppMenuItem::new(MENU_REPLACE, "Replace...").key("cmd+alt+f").enabled(any),
+                AppMenuItem::new(MENU_REPLACE_ALL, "Replace All").enabled(any && self.replace.is_some()),
                 AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(any && has_find),
                 AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(any && has_find),
                 AppMenuItem::new(MENU_USE_SELECTION, "Use Selection for Find").key("cmd+e").enabled(has_selection),
@@ -775,6 +858,11 @@ impl StickiesApp {
             AppMenuItem::new(MENU_ITALIC, "Italic").key("cmd+i").enabled(has_focus).checked(on(|s| s.italic)),
             AppMenuItem::new(MENU_UNDERLINE, "Underline").key("cmd+u").enabled(has_focus).checked(on(|s| s.underline)),
             AppMenuItem::new(MENU_STRIKE, "Strikethrough").enabled(has_focus).checked(on(|s| s.strike)),
+            AppMenuItem::new(MENU_OUTLINE, "Outline").enabled(has_focus).checked(on(|s| s.outline)),
+            AppMenuItem::submenu("Baseline"),
+            AppMenuItem::new(MENU_BASELINE_BASE, "Use Default").enabled(has_focus).checked(on(|s| s.baseline == Baseline::Normal)).depth(1),
+            AppMenuItem::new(MENU_BASELINE_BASE + 1, "Superscript").enabled(has_focus).checked(on(|s| s.baseline == Baseline::Superscript)).depth(1),
+            AppMenuItem::new(MENU_BASELINE_BASE + 2, "Subscript").enabled(has_focus).checked(on(|s| s.baseline == Baseline::Subscript)).depth(1),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_BIGGER, "Bigger").key("cmd+=").enabled(style.is_some_and(|s| s.size != TextSize::Large)),
             AppMenuItem::new(MENU_SMALLER, "Smaller").key("cmd+-").enabled(style.is_some_and(|s| s.size != TextSize::Small)),
@@ -954,7 +1042,7 @@ impl App for StickiesApp {
         if let Some(board) = &self.board {
             board::draw(canvas, &ctx.ui, board);
             if let Some(query) = &self.find {
-                board::draw_find(canvas, &ctx.ui, query, board.matches(query).len());
+                board::draw_find(canvas, &ctx.ui, query, self.replace.as_deref(), self.replace_active, board.matches(query).len());
             }
         }
         if let Some(confirm) = &self.confirm {
@@ -1033,6 +1121,39 @@ mod tests {
         assert_eq!(app.board.as_ref().unwrap().notes.len(), 1);
         assert!(!app.history.can_undo());
         assert!(!app.answer(SHEET_CANCEL), "nothing is open any more");
+    }
+
+    #[test]
+    fn replace_field_takes_typing_after_tab_and_enter_replaces_the_match() {
+        let mut app = app_with(&["alpha beta"]);
+        app.find = Some(String::new());
+        app.replace = Some(String::new());
+        for c in "beta".chars() {
+            assert!(app.find_key(&KeyInput::Text(c.to_string())));
+        }
+        assert!(app.find_key(&KeyInput::Code(9)));
+        assert!(app.replace_active);
+        for c in "gamma".chars() {
+            assert!(app.find_key(&KeyInput::Text(c.to_string())));
+        }
+        assert_eq!(app.replace.as_deref(), Some("gamma"));
+        assert_eq!(app.find.as_deref(), Some("beta"));
+        assert!(app.find_key(&KeyInput::Code(13)));
+        assert_eq!(app.board.as_ref().unwrap().notes[0].text, "alpha gamma");
+        assert!(app.history.can_undo());
+        assert!(app.undo());
+        assert_eq!(app.board.as_ref().unwrap().notes[0].text, "alpha beta");
+        // Escape closes the bar and the replace field together
+        assert!(app.find_key(&KeyInput::Code(27)));
+        assert!(app.find.is_none() && app.replace.is_none() && !app.replace_active);
+    }
+
+    #[test]
+    fn outline_and_baseline_menu_ids_are_undoable_style_changes() {
+        for id in [MENU_OUTLINE, MENU_BASELINE_BASE, MENU_BASELINE_BASE + 2, MENU_REPLACE_ALL] {
+            assert!(undo_name(id).is_some(), "id {id}");
+        }
+        assert!(undo_name(MENU_REPLACE).is_some());
     }
 
     #[test]

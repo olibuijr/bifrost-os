@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- Edit > Replace... opens the find bar with a replace field (Tab switches between the two). Return replaces the current match and steps to the next; Edit > Replace All replaces every match in every note.
+- Font > Outline rings the letters of a note in the text colour. Font > Baseline sets superscript, subscript or the default position.
+
 ## 0.4.0
 
 - Window > Arrange By Location orders the notes by where they sit now (top to bottom, then left to right) and lays them out in rows.
