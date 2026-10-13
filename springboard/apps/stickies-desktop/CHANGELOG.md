@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- Custom colours: Colour, Custom Colour... opens a bar for a `#RRGGBB` value with a live swatch; Return applies it. A custom colour is saved with the note, undoable, and carried to new notes by Use as Default.
+- Make New Sticky Note in the Services menu now creates a note from the selected text, also when Sticky Notes is not running.
+- Edit, Speech: Start Speaking reads the selection (or the whole note) aloud through the system speech engine (espeak-ng), Stop Speaking ends it. Nothing speaks unless asked.
+- Edit, Replace and Replace All: Tab in the find bar switches between the find and the replace field, Return replaces the selected match and moves to the next. One undo step each.
+- Window, Arrange By, Location: lays the notes out in reading order by where they sit now.
+
 ## 0.3.0
 
 - A caret and a selection in every note: typing goes in at the caret, click to place it, drag to select, double-press to select a word, arrow keys, Home, End and forward Delete. Cut, Copy, Paste and Select All work on the selection.

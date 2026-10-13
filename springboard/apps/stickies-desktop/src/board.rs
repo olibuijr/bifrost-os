@@ -3,6 +3,7 @@
 
 use crate::layout::{self, Line};
 use crate::model::{self, Board, Colour, Ink, Note, Style, TextSize, DISCLOSURE_PT, PAD_PT, TITLE_H};
+use crate::swatch;
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::canvas::{Canvas, RectF};
 use bifrost_app::kit::rgba;
@@ -44,6 +45,14 @@ pub fn colour_value(c: Colour) -> u32 {
         Colour::Teal => SYSTEM_TEAL,
         Colour::Pink => SYSTEM_PINK,
         Colour::Purple => SYSTEM_PURPLE,
+    }
+}
+
+/// The fill of a note: its custom colour when it has one, else the token of its preset.
+pub fn note_fill(note: &Note) -> u32 {
+    match note.rgb {
+        Some((r, g, b)) => rgba(r, g, b, 255),
+        None => colour_value(note.colour),
     }
 }
 
@@ -133,7 +142,7 @@ fn draw_note(c: &mut dyn Canvas, ui: &Ui, note: &Note, focused: bool) {
         widgets::material(c, ui, frame, RADIUS_PT, Material::Popover);
     }
     c.push_opacity(if see_through { INACTIVE_ALPHA } else { 1.0 });
-    c.fill_rrect(rect, radius, colour_value(note.colour));
+    c.fill_rrect(rect, radius, note_fill(note));
     c.push_clip(rect, radius);
     c.fill_rect(RectF::new(x, y, w, ui.pt(TITLE_H)), title_shade());
 
@@ -228,14 +237,13 @@ pub fn find_bar_rect(ui: &Ui, width: u32, height: u32) -> Rect {
     Rect { x: (w - bar_w) / 2.0, y: h - FIND_BOTTOM_PT - FIND_H_PT, w: bar_w, h: FIND_H_PT }
 }
 
-/// The find bar: the search text and how many places it was found in.
-pub fn draw_find(c: &mut dyn Canvas, ui: &Ui, query: &str, found: usize) {
+/// The find bar: the search text, the replacement and how many places the search text was found in. The field that
+/// takes typing shows the caret.
+pub fn draw_find(c: &mut dyn Canvas, ui: &Ui, query: &str, replace: &str, replacing: bool, found: usize) {
     let (cw, ch) = c.size();
     let bar = find_bar_rect(ui, cw, ch);
     widgets::material(c, ui, bar, FIND_RADIUS_PT, Material::Popover);
     let pad = ui.pt(10.0);
-    let shown = if query.is_empty() { "Find".to_string() } else { format!("{query}|") };
-    let colour = if query.is_empty() { LABEL_2.now() } else { LABEL.now() };
     let status = match (query.is_empty(), found) {
         (true, _) => String::new(),
         (false, 0) => "Not found".to_string(),
@@ -243,13 +251,56 @@ pub fn draw_find(c: &mut dyn Canvas, ui: &Ui, query: &str, found: usize) {
         (false, n) => format!("{n} matches"),
     };
     let status_img = ui.text(&status, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
-    let field_px = ui.pt(bar.w) - 3.0 * pad - status_img.w as f32;
-    let img = ui.text(&ui.fit(&shown, MAC_BODY_PT, field_px.max(0.0)), MAC_BODY_PT, Weight::Regular, colour);
     let (bx, by, bh) = (ui.pt(bar.x), ui.pt(bar.y), ui.pt(bar.h));
-    widgets::blit(c, &img, (bx + pad) as i32, (by + (bh - img.h as f32) / 2.0) as i32);
+    let fields_px = (ui.pt(bar.w) - 4.0 * pad - status_img.w as f32).max(0.0);
+    let field_px = fields_px / 2.0;
+    let mut x = bx + pad;
+    for (text, placeholder, active) in [(query, "Find", !replacing), (replace, "Replace", replacing)] {
+        let shown = field_text(text, placeholder, active);
+        let colour = if text.is_empty() { LABEL_2.now() } else { LABEL.now() };
+        let img = ui.text(&ui.fit(&shown, MAC_BODY_PT, field_px), MAC_BODY_PT, Weight::Regular, colour);
+        widgets::blit(c, &img, x as i32, (by + (bh - img.h as f32) / 2.0) as i32);
+        x += field_px + pad;
+    }
     if !status.is_empty() {
         widgets::blit(c, &status_img, (bx + ui.pt(bar.w) - pad - status_img.w as f32) as i32, (by + (bh - status_img.h as f32) / 2.0) as i32);
     }
+}
+
+/// What a bar field shows: the text with a caret while it takes typing, or the placeholder when empty and idle.
+pub fn field_text(text: &str, placeholder: &str, active: bool) -> String {
+    match (text.is_empty(), active) {
+        (true, false) => placeholder.to_string(),
+        (_, true) => format!("{text}|"),
+        (false, false) => text.to_string(),
+    }
+}
+
+/// The custom colour bar: the typed `#RRGGBB`, a swatch of the colour once it reads as one, and the hint.
+pub fn draw_colour_entry(c: &mut dyn Canvas, ui: &Ui, entry: &str) {
+    let (cw, ch) = c.size();
+    let bar = find_bar_rect(ui, cw, ch);
+    widgets::material(c, ui, bar, FIND_RADIUS_PT, Material::Popover);
+    let pad = ui.pt(10.0);
+    let (bx, by, bh) = (ui.pt(bar.x), ui.pt(bar.y), ui.pt(bar.h));
+    let colour = swatch::parse(entry);
+    let hint = match (colour, entry.chars().filter(char::is_ascii_hexdigit).count()) {
+        (Some(_), _) => "Return to apply",
+        (None, 0) => "Type a hex colour",
+        (None, _) => "Not a colour yet",
+    };
+    let hint_img = ui.text(hint, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now());
+    let swatch_px = ui.pt(16.0);
+    let right = bx + ui.pt(bar.w) - pad;
+    widgets::blit(c, &hint_img, (right - hint_img.w as f32) as i32, (by + (bh - hint_img.h as f32) / 2.0) as i32);
+    if let Some((r, g, b)) = colour {
+        let sx = right - hint_img.w as f32 - pad - swatch_px;
+        c.fill_rrect(RectF::new(sx, by + (bh - swatch_px) / 2.0, swatch_px, swatch_px), ui.pt(3.0), rgba(r, g, b, 255));
+    }
+    let field_px = (ui.pt(bar.w) - 3.0 * pad - hint_img.w as f32 - swatch_px - pad).max(0.0);
+    let shown = format!("{entry}|");
+    let img = ui.text(&ui.fit(&shown, MAC_BODY_PT, field_px), MAC_BODY_PT, Weight::Regular, LABEL.now());
+    widgets::blit(c, &img, (bx + pad) as i32, (by + (bh - img.h as f32) / 2.0) as i32);
 }
 
 #[cfg(test)]
@@ -264,6 +315,24 @@ mod tests {
                 assert_ne!(a, b);
             }
         }
+    }
+
+    #[test]
+    fn a_custom_colour_fills_the_note_instead_of_its_preset() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        assert_eq!(note_fill(&n), colour_value(Colour::Yellow));
+        n.rgb = Some((10, 20, 30));
+        assert_eq!(note_fill(&n), rgba(10, 20, 30, 255));
+        n.set_preset(Colour::Teal);
+        assert_eq!(note_fill(&n), colour_value(Colour::Teal));
+    }
+
+    #[test]
+    fn a_bar_field_shows_a_caret_when_active_and_its_placeholder_when_empty() {
+        assert_eq!(field_text("", "Find", false), "Find");
+        assert_eq!(field_text("", "Find", true), "|");
+        assert_eq!(field_text("abc", "Find", true), "abc|");
+        assert_eq!(field_text("abc", "Find", false), "abc");
     }
 
     #[test]

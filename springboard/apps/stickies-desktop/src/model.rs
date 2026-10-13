@@ -3,6 +3,7 @@
 //! directory. No drawing here.
 
 use bifrost_app::controls::text::TextBuffer;
+use crate::swatch::{self, Rgb};
 use bifrost_core::json::{self, Json};
 use std::ops::Range;
 
@@ -29,6 +30,8 @@ pub const ZOOM_W: f32 = 460.0;
 pub const ZOOM_H: f32 = 380.0;
 /// Margin and gap of the grid that Arrange By lays the notes out in, in points.
 pub const ARRANGE_MARGIN_PT: f32 = 16.0;
+/// Height of the bands that Arrange By Location reads as one row of notes, in points.
+pub const LOCATION_BAND_PT: f32 = 60.0;
 
 /// The six sticky colours, in menu order.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -154,10 +157,11 @@ pub enum Arrange {
     Content,
     Created,
     Modified,
+    Location,
 }
 
 impl Arrange {
-    pub const ALL: [Arrange; 4] = [Arrange::Colour, Arrange::Content, Arrange::Created, Arrange::Modified];
+    pub const ALL: [Arrange; 5] = [Arrange::Colour, Arrange::Content, Arrange::Created, Arrange::Modified, Arrange::Location];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -165,6 +169,7 @@ impl Arrange {
             Arrange::Content => "Content",
             Arrange::Created => "Date Created",
             Arrange::Modified => "Date Modified",
+            Arrange::Location => "Location",
         }
     }
 }
@@ -244,6 +249,8 @@ pub enum Move {
 pub struct Note {
     pub id: u64,
     pub colour: Colour,
+    /// A custom colour (Colour > Custom Colour...), which replaces `colour` while it is set.
+    pub rgb: Option<Rgb>,
     /// Frame in points, board space.
     pub x: f32,
     pub y: f32,
@@ -269,6 +276,7 @@ impl Note {
         Note {
             id,
             colour: Colour::Yellow,
+            rgb: None,
             x,
             y,
             w: DEFAULT_W,
@@ -321,6 +329,12 @@ impl Note {
     pub fn resize(&mut self, w: f32, h: f32) {
         self.w = w.max(MIN_W);
         self.h = h.max(MIN_H);
+    }
+
+    /// Takes one of the six colours and drops any custom colour.
+    pub fn set_preset(&mut self, colour: Colour) {
+        self.colour = colour;
+        self.rgb = None;
     }
 
     /// Runs `f` on a text buffer holding the body and the selection, then takes the result back.
@@ -499,6 +513,7 @@ pub struct Board {
     pub focus: Option<u64>,
     /// The colour and text style that new notes start with (Use as Default).
     pub default_colour: Colour,
+    pub default_rgb: Option<Rgb>,
     pub default_style: Style,
 }
 
@@ -526,6 +541,7 @@ impl Board {
         let id = self.next_id;
         let mut note = Note::new(id, x, y, now);
         note.colour = self.default_colour;
+        note.rgb = self.default_rgb;
         note.style = self.default_style;
         self.notes.push(note);
         self.focus = Some(id);
@@ -534,8 +550,9 @@ impl Board {
 
     /// Makes the focused note's colour and text style the ones new notes start with. False without a focused note.
     pub fn use_as_default(&mut self) -> bool {
-        let Some((colour, style)) = self.focused().map(|n| (n.colour, n.style)) else { return false };
+        let Some((colour, rgb, style)) = self.focused().map(|n| (n.colour, n.rgb, n.style)) else { return false };
         self.default_colour = colour;
+        self.default_rgb = rgb;
         self.default_style = style;
         true
     }
@@ -610,10 +627,15 @@ impl Board {
             return false;
         }
         match by {
-            Arrange::Colour => self.notes.sort_by_key(|n| n.colour.index()),
+            Arrange::Colour => self.notes.sort_by_key(|n| (n.rgb.is_some(), n.colour.index(), n.rgb)),
             Arrange::Content => self.notes.sort_by_key(|n| n.title().to_lowercase()),
             Arrange::Created => self.notes.sort_by_key(|n| n.created),
             Arrange::Modified => self.notes.sort_by_key(|n| n.modified),
+            // reading order: rows of notes from the top, left to right inside a row
+            Arrange::Location => self.notes.sort_by(|a, b| {
+                let row = |n: &Note| (n.y / LOCATION_BAND_PT).floor() as i64;
+                row(a).cmp(&row(b)).then(a.x.total_cmp(&b.x)).then(a.y.total_cmp(&b.y))
+            }),
         }
         let (mut x, mut y, mut row_h) = (ARRANGE_MARGIN_PT, ARRANGE_MARGIN_PT, 0.0f32);
         for n in &mut self.notes {
@@ -699,6 +721,47 @@ impl Board {
             n.caret = m.end;
         }
     }
+
+    /// Replaces the selection of the focused note with `with` when the selection is a match of `query` (ignoring
+    /// ASCII case). False when it is not, so Replace on a stray selection changes nothing.
+    pub fn replace_selected(&mut self, query: &str, with: &str, now: u64) -> bool {
+        let Some(note) = self.focused_mut() else { return false };
+        if query.is_empty() || !note.has_selection() || !note.selected_text().eq_ignore_ascii_case(query) {
+            return false;
+        }
+        note.type_text(with, now);
+        true
+    }
+
+    /// Replaces every match of `query` in every note with `with` (Replace All). Returns how many were replaced.
+    pub fn replace_all(&mut self, query: &str, with: &str, now: u64) -> usize {
+        if query.is_empty() {
+            return 0;
+        }
+        let needle = query.to_ascii_lowercase();
+        let mut total = 0;
+        for note in &mut self.notes {
+            // lower-casing ASCII keeps every byte offset, so the positions in `hay` index `note.text` too
+            let hay = note.text.to_ascii_lowercase();
+            let mut out = String::with_capacity(note.text.len());
+            let (mut pos, mut count) = (0, 0);
+            while let Some(i) = hay[pos..].find(&needle) {
+                let start = pos + i;
+                out.push_str(&note.text[pos..start]);
+                out.push_str(with);
+                pos = start + needle.len();
+                count += 1;
+            }
+            if count == 0 {
+                continue;
+            }
+            out.push_str(&note.text[pos..]);
+            note.set_text(&out);
+            note.modified = now;
+            total += count;
+        }
+        total
+    }
 }
 
 fn style_fields(style: &Style) -> Vec<(String, Json)> {
@@ -746,6 +809,9 @@ pub fn encode(board: &Board) -> String {
                 ("collapsed".into(), Json::Bool(n.collapsed)),
                 ("translucent".into(), Json::Bool(n.translucent)),
             ];
+            if let Some(rgb) = n.rgb {
+                fields.push(("rgb".into(), Json::Str(swatch::hex(rgb))));
+            }
             fields.extend(style_fields(&n.style));
             fields.push(("text".into(), Json::Str(n.text.clone())));
             if let Some((w, h)) = n.restore {
@@ -758,6 +824,9 @@ pub fn encode(board: &Board) -> String {
         })
         .collect();
     let mut default: Vec<(String, Json)> = vec![("colour".into(), Json::Str(board.default_colour.name().into()))];
+    if let Some(rgb) = board.default_rgb {
+        default.push(("rgb".into(), Json::Str(swatch::hex(rgb))));
+    }
     default.extend(style_fields(&board.default_style));
     Json::Obj(vec![
         ("version".into(), Json::Num(1.0)),
@@ -779,6 +848,7 @@ pub fn decode(text: &str) -> Result<Board, String> {
         let num = |k: &str, d: f32| item.get(k).and_then(Json::number).map_or(d, |v| v as f32);
         let mut note = Note::new(id as u64, num("x", 40.0), num("y", 60.0), 0);
         note.colour = item.get("colour").and_then(Json::as_str).and_then(Colour::from_name).unwrap_or(Colour::Yellow);
+        note.rgb = item.get("rgb").and_then(Json::as_str).and_then(swatch::parse);
         note.resize(num("w", DEFAULT_W), num("h", DEFAULT_H));
         note.collapsed = flag(item, "collapsed", false);
         note.translucent = flag(item, "translucent", true);
@@ -793,6 +863,7 @@ pub fn decode(text: &str) -> Result<Board, String> {
     }
     if let Some(default) = root.get("default") {
         board.default_colour = default.get("colour").and_then(Json::as_str).and_then(Colour::from_name).unwrap_or_default();
+        board.default_rgb = default.get("rgb").and_then(Json::as_str).and_then(swatch::parse);
         board.default_style = style_from(default);
     }
     board.next_id = root.get("next_id").and_then(Json::number).map_or(0, |v| v as u64);
@@ -1084,6 +1155,86 @@ mod tests {
     }
 
     #[test]
+    fn arrange_by_location_reads_rows_top_down_and_left_to_right() {
+        let mut b = Board::default();
+        let low_left = b.add_text("c", 10.0, 300.0, 0);
+        let top_right = b.add_text("b", 400.0, 20.0, 0);
+        let top_left = b.add_text("a", 20.0, 30.0, 0);
+        assert!(b.arrange(Arrange::Location, 2000.0));
+        let order: Vec<u64> = b.notes.iter().map(|n| n.id).collect();
+        assert_eq!(order, vec![top_left, top_right, low_left], "the two upper notes share a row band");
+        assert_eq!(Arrange::ALL.len(), 5);
+        assert_eq!(Arrange::Location.title(), "Location");
+    }
+
+    #[test]
+    fn arrange_by_colour_puts_custom_colours_after_the_six() {
+        let mut b = Board::default();
+        let custom = b.add_text("custom", 0.0, 0.0, 0);
+        let purple = b.add_text("purple", 0.0, 0.0, 0);
+        b.find_mut(custom).unwrap().rgb = Some((1, 2, 3));
+        b.find_mut(purple).unwrap().colour = Colour::Purple;
+        b.arrange(Arrange::Colour, 2000.0);
+        assert_eq!(b.notes.iter().map(|n| n.id).collect::<Vec<_>>(), vec![purple, custom]);
+    }
+
+    #[test]
+    fn a_custom_colour_replaces_the_preset_until_one_is_chosen_again() {
+        let mut n = Note::new(1, 0.0, 0.0, 0);
+        n.rgb = Some((200, 100, 50));
+        n.set_preset(Colour::Teal);
+        assert_eq!((n.colour, n.rgb), (Colour::Teal, None));
+    }
+
+    #[test]
+    fn the_default_colour_carries_a_custom_colour_to_new_notes() {
+        let mut b = Board::default();
+        let a = b.new_note(0.0, 0.0, 0);
+        b.find_mut(a).unwrap().rgb = Some((10, 20, 30));
+        assert!(b.use_as_default());
+        let c = b.new_note(0.0, 0.0, 1);
+        assert_eq!(b.find(c).unwrap().rgb, Some((10, 20, 30)));
+        b.find_mut(a).unwrap().set_preset(Colour::Pink);
+        assert!(b.use_as_default());
+        let d = b.new_note(0.0, 0.0, 2);
+        assert_eq!(b.find(d).unwrap().rgb, None);
+    }
+
+    #[test]
+    fn replace_selected_only_replaces_a_selection_that_matches() {
+        let mut b = Board::default();
+        let a = b.add_text("Foo and foo", 0.0, 0.0, 0);
+        assert!(!b.replace_selected("foo", "bar", 1), "nothing is selected");
+        b.find_mut(a).unwrap().set_caret(0, false);
+        b.find_mut(a).unwrap().set_caret(3, true);
+        assert!(!b.replace_selected("and", "bar", 1), "the selection is another word");
+        assert!(b.replace_selected("foo", "bar", 2), "case is ignored");
+        assert_eq!(b.find(a).unwrap().text, "bar and foo");
+        assert_eq!(b.find(a).unwrap().modified, 2);
+        assert!(!b.replace_selected("", "x", 3));
+    }
+
+    #[test]
+    fn replace_all_replaces_in_every_note_ignoring_case() {
+        let mut b = Board::default();
+        let a = b.add_text("Foo bar FOO", 0.0, 0.0, 0);
+        let c = b.add_text("none here", 0.0, 0.0, 0);
+        let d = b.add_text("foo", 0.0, 0.0, 0);
+        assert_eq!(b.replace_all("foo", "x", 9), 3);
+        assert_eq!(b.find(a).unwrap().text, "x bar x");
+        assert_eq!(b.find(c).unwrap().text, "none here");
+        assert_eq!(b.find(c).unwrap().modified, 0, "an untouched note keeps its date");
+        assert_eq!((b.find(d).unwrap().text.as_str(), b.find(d).unwrap().modified), ("x", 9));
+        assert_eq!(b.replace_all("zzz", "y", 9), 0);
+        assert_eq!(b.replace_all("", "y", 9), 0);
+        // deleting with an empty replacement, and a replacement that contains the search text
+        assert_eq!(b.replace_all("x", "", 10), 3);
+        assert_eq!(b.find(a).unwrap().text, " bar ");
+        b.add_text("a", 0.0, 0.0, 0);
+        assert_eq!(b.replace_all("a", "aa", 11), 2);
+    }
+
+    #[test]
     fn find_lists_every_match_ignoring_ascii_case() {
         let mut b = Board::default();
         let a = b.add_text("Foo bar foo", 0.0, 0.0, 0);
@@ -1163,9 +1314,11 @@ mod tests {
             n.resize(300.0, 240.0);
             n.restore = Some((220.0, 200.0));
             n.modified = 150;
+            n.rgb = Some((255, 128, 0));
         }
         b.add_text("second", 0.0, 0.0, 101);
         b.default_colour = Colour::Teal;
+        b.default_rgb = Some((1, 2, 3));
         b.default_style = Style { underline: true, ..Style::default() };
         let decoded = decode(&encode(&b)).unwrap();
         assert_eq!(decoded, b);

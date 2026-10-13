@@ -1,6 +1,6 @@
 id = "is.olibuijr.stickies.desktop"
 name = "Sticky Notes"
-version = "0.3.0"
+version = "0.4.0"
 exec = "bifrost-stickies"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -9,6 +9,13 @@ category = "Productivity"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents"]
 window = "full-size"
+
+[[intent]]
+id = "create-sticky"
+title = "Make New Sticky Note"
+description = "Creates a sticky note holding the given text."
+shortcut = false
+params = ["text:string"]
 
 [[log.subsystem]]
 id = "is.olibuijr.stickies"

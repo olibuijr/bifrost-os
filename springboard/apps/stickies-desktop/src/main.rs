@@ -7,16 +7,21 @@ mod dates;
 mod history;
 mod layout;
 mod model;
+mod speech;
 mod store;
+mod swatch;
 
+use bifrost_app::control::RpcError;
 use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton};
 use bifrost_app::controls::Rect;
+use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::print::{PrintError, PrintOperation};
 use bifrost_app::proto::{DocErrorCode, DocMode};
 use bifrost_app::widgets;
+use bifrost_core::json::Json;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use history::History;
 use model::{Arrange, Board, Case, Colour, Ink, Move, Part, Style, TextSize};
@@ -30,6 +35,7 @@ const MENU_BOLD: u32 = 4;
 const MENU_ITALIC: u32 = 5;
 const MENU_SIZE_BASE: u32 = 6; // 6, 7, 8: small, medium, large
 const MENU_COLOUR_BASE: u32 = 10; // 10..=15, one per colour
+const MENU_COLOUR_CUSTOM: u32 = 16;
 const MENU_IMPORT: u32 = 20;
 const MENU_EXPORT: u32 = 21;
 const MENU_EXPORT_ALL: u32 = 22;
@@ -60,10 +66,14 @@ const MENU_COLLAPSE_ALL: u32 = 47;
 const MENU_EXPAND_ALL: u32 = 48;
 const MENU_TRANSLUCENT: u32 = 49;
 const MENU_ZOOM: u32 = 50;
-const MENU_ARRANGE_BASE: u32 = 52; // 52..=55, one per Arrange
+const MENU_ARRANGE_BASE: u32 = 52; // 52..=56, one per Arrange
 const MENU_INK_BASE: u32 = 60; // 60..=64, one per Ink
 const MENU_INFO_CREATED: u32 = 70;
 const MENU_INFO_MODIFIED: u32 = 71;
+const MENU_SPEAK_START: u32 = 72;
+const MENU_SPEAK_STOP: u32 = 73;
+const MENU_REPLACE: u32 = 74;
+const MENU_REPLACE_ALL: u32 = 75;
 
 /// The buttons of the delete confirmation.
 const SHEET_CANCEL: u32 = 1;
@@ -125,7 +135,7 @@ fn undo_name(id: u32) -> Option<&'static str> {
         MENU_UPPER | MENU_LOWER | MENU_CAPITALISE => "Transformation",
         MENU_TRANSLUCENT => "Translucent",
         MENU_ZOOM => "Zoom",
-        MENU_ARRANGE_BASE..=55 => "Arrange",
+        MENU_ARRANGE_BASE..=56 => "Arrange",
         _ => return None,
     })
 }
@@ -143,6 +153,12 @@ struct StickiesApp {
     find: Option<String>,
     /// The last find text, which Find Next uses once the bar is closed.
     last_find: String,
+    /// The text Replace puts in, and whether the find bar's typing goes to it (Tab switches fields).
+    replace: String,
+    replacing: bool,
+    /// The custom colour entry while its bar is open.
+    colour_entry: Option<String>,
+    speaker: speech::Speaker,
     confirm: Option<Confirm>,
     /// The style Copy Style took, for Paste Style.
     style_clip: Option<Style>,
@@ -163,6 +179,10 @@ impl StickiesApp {
             history: History::default(),
             find: None,
             last_find: String::new(),
+            replace: String::new(),
+            replacing: false,
+            colour_entry: None,
+            speaker: speech::Speaker::default(),
             confirm: None,
             style_clip: None,
             last_press: None,
@@ -213,6 +233,32 @@ impl StickiesApp {
         let (x, y) = Self::cascade_position(board);
         board.new_note(x, y, Self::now());
         self.changed()
+    }
+
+    /// Adds a note holding `text` in front, as one undo step, and returns its id. Before the app has loaded its board
+    /// the note goes into the saved file instead, which the app reads on launch.
+    fn create_sticky(&mut self, data_dir: &std::path::Path, text: &str) -> Result<u64, String> {
+        if text.trim().is_empty() {
+            return Err("There is no text for the sticky note".to_string());
+        }
+        let now = Self::now();
+        match &mut self.board {
+            Some(board) => {
+                let before = board.clone();
+                let (x, y) = Self::cascade_position(board);
+                let id = board.add_text(text, x, y, now);
+                self.history.push("New Note", before);
+                self.dirty = true;
+                Ok(id)
+            }
+            None => {
+                let mut board = store::load(data_dir);
+                let (x, y) = Self::cascade_position(&board);
+                let id = board.add_text(text, x, y, now);
+                store::save(data_dir, &board).map_err(|e| e.to_string())?;
+                Ok(id)
+            }
+        }
     }
 
     fn touch(&mut self, ctx: &Ctx, kind: TouchKind, x: f32, y: f32, t: f64) -> bool {
@@ -343,6 +389,9 @@ impl StickiesApp {
             }
             return false;
         }
+        if self.colour_entry.is_some() {
+            return self.colour_key(key);
+        }
         if self.find.is_some() {
             return self.find_key(key);
         }
@@ -404,6 +453,17 @@ impl StickiesApp {
 
     /// Keys while the find bar is open: they edit the find text instead of a note.
     fn find_key(&mut self, key: &KeyInput) -> bool {
+        if self.find.is_none() {
+            return false;
+        }
+        // Tab moves between the find and the replace field
+        if matches!(key, KeyInput::Code(9)) || matches!(key, KeyInput::Text(t) if t.contains('\t')) {
+            self.replacing = !self.replacing;
+            return true;
+        }
+        if self.replacing {
+            return self.replace_key(key);
+        }
         let Some(query) = &mut self.find else { return false };
         match key {
             KeyInput::Text(text) => query.extend(text.chars().filter(|c| !c.is_control())),
@@ -418,6 +478,7 @@ impl StickiesApp {
             }
             KeyInput::Code(27) => {
                 self.find = None;
+                self.replacing = false;
                 return true;
             }
             _ => return false,
@@ -430,6 +491,97 @@ impl StickiesApp {
         }
         self.step_find(true);
         true
+    }
+
+    /// Keys in the replace field of the find bar. Return replaces the selected match and moves to the next one.
+    fn replace_key(&mut self, key: &KeyInput) -> bool {
+        match key {
+            KeyInput::Text(text) => self.replace.extend(text.chars().filter(|c| !c.is_control())),
+            KeyInput::Code(8) => {
+                if self.replace.pop().is_none() {
+                    return false;
+                }
+            }
+            KeyInput::Code(13) => return self.replace(false),
+            KeyInput::Code(27) => {
+                self.find = None;
+                self.replacing = false;
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    /// Replaces the selected match (and steps to the next), or every match with `all`, and records one undo step
+    /// when something was replaced. With no find text the find bar opens instead.
+    fn replace(&mut self, all: bool) -> bool {
+        let before = self.board.clone();
+        if self.replace_step(all, Self::now()) > 0 {
+            if let Some(before) = before {
+                self.history.push("Replace", before);
+            }
+        }
+        true
+    }
+
+    /// The replacement itself, with no undo step. Returns how many matches were replaced.
+    fn replace_step(&mut self, all: bool, now: u64) -> usize {
+        let query = self.find.clone().unwrap_or_else(|| self.last_find.clone());
+        if query.is_empty() {
+            self.find = Some(String::new());
+            return 0;
+        }
+        let with = self.replace.clone();
+        let Some(board) = &mut self.board else { return 0 };
+        let done = if all { board.replace_all(&query, &with, now) } else { usize::from(board.replace_selected(&query, &with, now)) };
+        if done > 0 {
+            self.dirty = true;
+        }
+        if !all {
+            self.step_find(true);
+        }
+        done
+    }
+
+    /// Keys in the custom colour bar: hex digits build the colour, Return applies it, Escape closes the bar.
+    fn colour_key(&mut self, key: &KeyInput) -> bool {
+        let Some(entry) = &mut self.colour_entry else { return false };
+        match key {
+            KeyInput::Text(text) => {
+                let mut taken = false;
+                for c in text.chars() {
+                    taken |= swatch::push(entry, c);
+                }
+                taken
+            }
+            KeyInput::Code(8) => entry.pop().is_some(),
+            KeyInput::Code(13) => match swatch::parse(entry) {
+                Some(rgb) => {
+                    self.colour_entry = None;
+                    self.apply_custom(rgb);
+                    true
+                }
+                None => false,
+            },
+            KeyInput::Code(27) => {
+                self.colour_entry = None;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Gives the focused note a custom colour, as one undo step. False without a focused note or a change.
+    fn apply_custom(&mut self, rgb: swatch::Rgb) -> bool {
+        let Some(board) = &mut self.board else { return false };
+        let before = board.clone();
+        let Some(note) = board.focused_mut() else { return false };
+        if note.rgb == Some(rgb) {
+            return false;
+        }
+        note.rgb = Some(rgb);
+        self.history.push("Colour", before);
+        self.changed()
     }
 
     /// Selects the next or previous match of the find text. With no text the find bar opens.
@@ -617,8 +769,16 @@ impl StickiesApp {
             MENU_COLOUR_BASE..=15 => {
                 let colour = Colour::from_index((id - MENU_COLOUR_BASE) as usize);
                 let Some(note) = self.board.as_mut().and_then(|b| b.focused_mut()) else { return false };
-                note.colour = colour;
+                note.set_preset(colour);
                 self.changed()
+            }
+            MENU_COLOUR_CUSTOM => {
+                let Some(note) = self.board.as_ref().and_then(|b| b.focused()) else { return false };
+                let start = note.rgb.map_or_else(|| "#".to_string(), swatch::hex);
+                self.find = None;
+                self.replacing = false;
+                self.colour_entry = Some(start);
+                true
             }
             MENU_TRANSLUCENT => {
                 let Some(note) = self.board.as_mut().and_then(|b| b.focused_mut()) else { return false };
@@ -630,7 +790,7 @@ impl StickiesApp {
                 note.toggle_zoom();
                 self.changed()
             }
-            MENU_ARRANGE_BASE..=55 => {
+            MENU_ARRANGE_BASE..=56 => {
                 let by = Arrange::ALL[(id - MENU_ARRANGE_BASE) as usize];
                 let width = Self::window_rect(ctx).w;
                 self.board.as_mut().is_some_and(|b| b.arrange(by, width)) && self.changed()
@@ -672,6 +832,7 @@ impl StickiesApp {
                 note.transform(case, now) && self.changed()
             }
             MENU_FIND => {
+                self.colour_entry = None;
                 if self.find.is_none() {
                     self.find = Some(self.last_find.clone());
                 }
@@ -693,6 +854,21 @@ impl StickiesApp {
                     }
                     _ => false,
                 }
+            }
+            MENU_REPLACE | MENU_REPLACE_ALL => {
+                self.colour_entry = None;
+                self.replace(id == MENU_REPLACE_ALL)
+            }
+            MENU_SPEAK_START => {
+                let Some(text) = self.board.as_ref().and_then(|b| b.focused()).and_then(speech::text_to_speak) else { return false };
+                if let Err(speech::SpeakError::NoEngine) = self.speaker.start(&text) {
+                    ctx.notify("Sticky Notes", "No speech engine is installed. Install espeak-ng to have notes read aloud.");
+                }
+                false
+            }
+            MENU_SPEAK_STOP => {
+                self.speaker.stop();
+                false
             }
             MENU_OPEN_LINK => {
                 let url = self.board.as_ref().and_then(|b| b.focused()).and_then(|n| n.link_at(n.caret));
@@ -741,6 +917,8 @@ impl StickiesApp {
         let can_paste = has_focus && ctx.pasteboard_string().is_some();
         let has_find = !self.last_find.is_empty() || self.find.as_ref().is_some_and(|q| !q.is_empty());
         let any = self.board.as_ref().is_some_and(|b| !b.notes.is_empty());
+        let can_speak = note.and_then(speech::text_to_speak).is_some();
+        let can_replace = any && has_find;
         AppMenu {
             title: "Edit".into(),
             items: vec![
@@ -757,12 +935,17 @@ impl StickiesApp {
                 AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(any && has_find),
                 AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(any && has_find),
                 AppMenuItem::new(MENU_USE_SELECTION, "Use Selection for Find").key("cmd+e").enabled(has_selection),
+                AppMenuItem::new(MENU_REPLACE, "Replace").enabled(can_replace),
+                AppMenuItem::new(MENU_REPLACE_ALL, "Replace All").enabled(can_replace),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_OPEN_LINK, "Open Link").enabled(has_link),
                 AppMenuItem::submenu("Transformations"),
                 AppMenuItem::new(MENU_UPPER, "Make Upper Case").enabled(has_selection).depth(1),
                 AppMenuItem::new(MENU_LOWER, "Make Lower Case").enabled(has_selection).depth(1),
                 AppMenuItem::new(MENU_CAPITALISE, "Capitalise").enabled(has_selection).depth(1),
+                AppMenuItem::submenu("Speech"),
+                AppMenuItem::new(MENU_SPEAK_START, "Start Speaking").enabled(can_speak).depth(1),
+                AppMenuItem::new(MENU_SPEAK_STOP, "Stop Speaking").enabled(self.speaker.is_speaking()).depth(1),
             ],
         }
     }
@@ -796,12 +979,16 @@ impl StickiesApp {
     }
 
     fn colour_menu(&self, has_focus: bool) -> AppMenu {
-        let colour = self.board.as_ref().and_then(|b| b.focused()).map(|n| n.colour);
-        let items = Colour::ALL
+        let note = self.board.as_ref().and_then(|b| b.focused());
+        // a custom colour replaces the preset, so no preset is checked then
+        let colour = note.filter(|n| n.rgb.is_none()).map(|n| n.colour);
+        let mut items: Vec<AppMenuItem> = Colour::ALL
             .iter()
             .enumerate()
             .map(|(i, c)| AppMenuItem::new(MENU_COLOUR_BASE + i as u32, c.name()).enabled(has_focus).checked(colour == Some(*c)))
             .collect();
+        items.push(AppMenuItem::separator());
+        items.push(AppMenuItem::new(MENU_COLOUR_CUSTOM, "Custom Colour...").enabled(has_focus).checked(note.is_some_and(|n| n.rgb.is_some())));
         AppMenu { title: "Colour".into(), items }
     }
 
@@ -839,6 +1026,25 @@ impl App for StickiesApp {
     fn configure(&mut self, ctx: &Ctx) {
         if self.board.is_none() {
             self.board = Some(store::load(&ctx.data_dir));
+        }
+    }
+
+    /// The Make New Sticky Note service of the Services menu sends its selection here.
+    fn intents(&self) -> Vec<Intent> {
+        vec![Intent::new("create-sticky", "Make New Sticky Note", "Creates a sticky note holding the given text.").param(Param::new("text", "Text", ParamType::String))]
+    }
+
+    fn perform_intent(&mut self, ctx: Option<&Ctx>, data_dir: &std::path::Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
+        match id {
+            "create-sticky" => {
+                let text = intents::str_param(params, "text")?;
+                self.create_sticky(data_dir, text).map_err(intents::failed)?;
+                if let Some(ctx) = ctx {
+                    self.flush(ctx);
+                }
+                Ok(IntentResult::dialog("Created a sticky note"))
+            }
+            _ => Err(RpcError::new(bifrost_app::control::METHOD_NOT_FOUND, format!("no intent {id}"))),
         }
     }
 
@@ -954,7 +1160,10 @@ impl App for StickiesApp {
         if let Some(board) = &self.board {
             board::draw(canvas, &ctx.ui, board);
             if let Some(query) = &self.find {
-                board::draw_find(canvas, &ctx.ui, query, board.matches(query).len());
+                board::draw_find(canvas, &ctx.ui, query, &self.replace, self.replacing, board.matches(query).len());
+            }
+            if let Some(entry) = &self.colour_entry {
+                board::draw_colour_entry(canvas, &ctx.ui, entry);
             }
         }
         if let Some(confirm) = &self.confirm {
@@ -1086,6 +1295,150 @@ mod tests {
         assert!(app.board.as_ref().unwrap().find(second).unwrap().style.underline);
         assert!(!app.paste_style(), "the style is already there");
         assert_eq!(undo_name(MENU_PASTE_STYLE), Some("Style"));
+    }
+
+    #[test]
+    fn the_colour_bar_applies_a_typed_colour_as_one_undo_step() {
+        let mut app = app_with(&["note"]);
+        app.colour_entry = Some("#".into());
+        for c in "0a84ff".chars() {
+            assert!(app.colour_key(&KeyInput::Text(c.to_string())));
+        }
+        assert_eq!(app.colour_entry.as_deref(), Some("#0A84FF"));
+        assert!(!app.colour_key(&KeyInput::Text("a".into())), "a seventh digit");
+        assert!(app.colour_key(&KeyInput::Code(13)));
+        assert!(app.colour_entry.is_none());
+        assert_eq!(app.board.as_ref().unwrap().focused().unwrap().rgb, Some((10, 132, 255)));
+        assert_eq!(app.history.undo_title(), "Undo Colour");
+        assert!(app.undo());
+        assert_eq!(app.board.as_ref().unwrap().focused().unwrap().rgb, None);
+    }
+
+    #[test]
+    fn the_colour_bar_refuses_an_unfinished_colour_and_escape_closes_it() {
+        let mut app = app_with(&["note"]);
+        app.colour_entry = Some("#12".into());
+        assert!(!app.colour_key(&KeyInput::Code(13)));
+        assert!(app.colour_entry.is_some());
+        assert!(app.colour_key(&KeyInput::Code(8)));
+        assert_eq!(app.colour_entry.as_deref(), Some("#1"));
+        assert!(app.colour_key(&KeyInput::Code(27)));
+        assert!(app.colour_entry.is_none());
+        assert_eq!(app.board.as_ref().unwrap().focused().unwrap().rgb, None);
+        assert!(!app.history.can_undo());
+    }
+
+    #[test]
+    fn choosing_a_preset_colour_drops_the_custom_one() {
+        let mut app = app_with(&["note"]);
+        assert!(app.apply_custom((1, 2, 3)));
+        assert!(!app.apply_custom((1, 2, 3)), "the same colour again");
+        let note = app.board.as_mut().unwrap().focused_mut().unwrap();
+        note.set_preset(Colour::Green);
+        assert_eq!((note.colour, note.rgb), (Colour::Green, None));
+    }
+
+    #[test]
+    fn tab_moves_to_the_replace_field_and_return_replaces_the_match_and_steps_on() {
+        let mut app = app_with(&["foo one", "foo two"]);
+        let first = app.board.as_ref().unwrap().notes[0].id;
+        app.find = Some(String::new());
+        for c in "foo".chars() {
+            assert!(app.find_key(&KeyInput::Text(c.to_string())));
+        }
+        assert!(app.find_key(&KeyInput::Code(9)));
+        assert!(app.replacing);
+        for c in "bar".chars() {
+            assert!(app.find_key(&KeyInput::Text(c.to_string())));
+        }
+        assert_eq!(app.replace, "bar");
+        assert_eq!(app.find.as_deref(), Some("foo"), "typing went to the replace field");
+        assert!(app.find_key(&KeyInput::Code(13)));
+        let board = app.board.as_ref().unwrap();
+        assert_eq!(board.find(first).unwrap().text, "bar one");
+        assert_eq!(board.focused().unwrap().text, "foo two", "the next match is selected");
+        assert_eq!(board.focused().unwrap().selected_text(), "foo");
+        assert!(app.dirty);
+        assert_eq!(app.history.undo_title(), "Undo Replace");
+        assert!(app.undo());
+        assert_eq!(app.board.as_ref().unwrap().find(first).unwrap().text, "foo one");
+        // Tab goes back to the find field, and Escape from either closes the bar
+        assert!(app.find_key(&KeyInput::Code(9)));
+        assert!(!app.replacing);
+        assert!(app.find_key(&KeyInput::Code(9)));
+        assert!(app.find_key(&KeyInput::Code(27)));
+        assert!(app.find.is_none() && !app.replacing);
+    }
+
+    #[test]
+    fn replace_all_changes_every_note_in_one_undo_step() {
+        let mut app = app_with(&["foo one", "Foo two"]);
+        app.find = Some("foo".into());
+        app.replace = "baz".into();
+        assert!(app.replace(true));
+        let texts: Vec<&str> = app.board.as_ref().unwrap().notes.iter().map(|n| n.text.as_str()).collect();
+        assert_eq!(texts, vec!["baz one", "baz two"]);
+        assert!(app.undo());
+        let texts: Vec<&str> = app.board.as_ref().unwrap().notes.iter().map(|n| n.text.as_str()).collect();
+        assert_eq!(texts, vec!["foo one", "Foo two"]);
+        assert!(!app.history.can_undo(), "one step");
+    }
+
+    #[test]
+    fn replace_with_nothing_found_makes_no_undo_step_and_without_find_text_opens_the_bar() {
+        let mut app = app_with(&["alpha"]);
+        app.find = Some("zzz".into());
+        assert!(app.replace(true));
+        assert!(!app.history.can_undo());
+        app.find = None;
+        assert!(app.replace(false));
+        assert_eq!(app.find.as_deref(), Some(""), "no find text: the bar opens");
+        assert!(!app.history.can_undo());
+    }
+
+    #[test]
+    fn the_make_sticky_service_adds_a_note_and_can_be_undone() {
+        let mut app = app_with(&["old"]);
+        let declared = app.intents();
+        assert_eq!(declared.len(), 1);
+        assert_eq!(declared[0].id, "create-sticky");
+        let dir = std::env::temp_dir();
+        let params = Json::Obj(vec![("text".into(), Json::Str("from a selection".into()))]);
+        assert!(app.perform_intent(None, &dir, "create-sticky", &params).is_ok());
+        let board = app.board.as_ref().unwrap();
+        assert_eq!(board.notes.len(), 2);
+        assert_eq!(board.focused().unwrap().text, "from a selection");
+        assert!(app.dirty);
+        assert!(app.undo());
+        assert_eq!(app.board.as_ref().unwrap().notes.len(), 1);
+        let blank = Json::Obj(vec![("text".into(), Json::Str("  \n".into()))]);
+        assert!(app.perform_intent(None, &dir, "create-sticky", &blank).is_err());
+        assert!(app.perform_intent(None, &dir, "no-such-intent", &params).is_err());
+        assert!(app.perform_intent(None, &dir, "create-sticky", &Json::Obj(Vec::new())).is_err(), "the text is required");
+    }
+
+    #[test]
+    fn the_make_sticky_service_before_the_board_is_loaded_writes_the_saved_file() {
+        let dir = std::env::temp_dir().join(format!("stickies-intent-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut app = StickiesApp::new();
+        app.create_sticky(&dir, "first").unwrap();
+        app.create_sticky(&dir, "second").unwrap();
+        let saved = store::load(&dir);
+        assert_eq!(saved.notes.iter().map(|n| n.text.as_str()).collect::<Vec<_>>(), vec!["first", "second"]);
+        assert!(saved.notes[1].x > saved.notes[0].x, "the second note cascades");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn replace_and_custom_colour_ids_do_not_clash_with_the_other_menu_ids() {
+        let ids = [MENU_COLOUR_CUSTOM, MENU_SPEAK_START, MENU_SPEAK_STOP, MENU_REPLACE, MENU_REPLACE_ALL];
+        for (i, a) in ids.iter().enumerate() {
+            assert!(!(MENU_COLOUR_BASE..=15).contains(a) && !(MENU_ARRANGE_BASE..=56).contains(a) && !(MENU_INK_BASE..=64).contains(a));
+            assert!(![MENU_INFO_CREATED, MENU_INFO_MODIFIED, MENU_ZOOM, MENU_TRANSLUCENT].contains(a));
+            assert!(!ids[i + 1..].contains(a));
+        }
+        assert_eq!(undo_name(MENU_ARRANGE_BASE + 4), Some("Arrange"), "Location");
     }
 
     #[test]
