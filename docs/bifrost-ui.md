@@ -2377,3 +2377,21 @@ All four are host-tested only; rows stay `partial` until checked on Midget.
 - The only encoder is lossless intra-only (one PNG per frame, all key frames). `Codec::H264` and `Codec::Hevc` fail with `Status::CouldNotFindVideoEncoder`.
 - Multi-pass: `FrameSilo` (`add_sample`, `for_each_sample`), `MultiPassStorage` (`set`, `get`, `close`, `to_bytes` / `from_bytes`), and `set_multi_pass`, `begin_pass`, `end_pass` (true when another pass is wanted).
 - Frame processing: `FrameProcessor` trait, `FrameProcessorSession` (start, process, end) and `SuperResolutionScaler` (integer upscale); `set_frame_processor` runs it before encoding.
+
+## Core Audio: aggregate devices, process objects, process taps (`bifrost_app::audio_aggregate`, `bifrost_app::audio_process`)
+
+Apple reference: `AudioHardwareCreateAggregateDevice` and the `kAudioAggregateDevice*Key` dictionary,
+`kAudioDevicePropertyClockDomain`, `kAudioHardwarePropertyProcessObjectList`, the audio process properties and
+`CATapDescription` with `AudioHardwareCreateProcessTap`. Pure models, tested without hardware:
+
+- `audio_aggregate::AggregateDescription` (name, uid, sub-devices with drift flag, main sub-device, clock device,
+  private, stacked) validates and serialises with Apple's keys (`name`, `uid`, `subdevices`, `master`, `clock`,
+  `private`, `stacked`, per sub-device `uid` and `drift`). `ClockDomain` and `drift_compensation_needed` say which
+  sub-devices sit in another clock domain than the clock source.
+- `audio_process::ProcessObject` (pid, bundle id, running input and output) with `list_request` and
+  `decode_processes`; `TapDescription` has the four `CATapDescription` initialisers, `captures(pid)`, mute behavior
+  (`Unmuted`, `Muted`, `MutedWhenTapped`) and a wire shape.
+
+Gaps, stated honestly: audiod has no command for any of this yet, so nothing creates an aggregate device, reports
+processes or captures audio; drift compensation is a flag only; driver plug-ins and boxes stay gap. Rows in
+`core-audio.json` are partial until a Midget check.
