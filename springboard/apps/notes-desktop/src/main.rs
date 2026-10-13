@@ -181,6 +181,7 @@ fn format_table() -> Vec<Option<(&'static str, &'static str, FormatCmd)>> {
         Some(("Mark All", "", Do(Format::CheckAll))),
         Some(("Unmark All", "", Do(Format::UncheckAll))),
         None,
+        Some(("Add Link...", "cmd+k", Do(Format::AddLink))),
         Some(("Calculate Math Results", "", Do(Format::CalculateMath))),
     ]
 }

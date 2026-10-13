@@ -313,6 +313,40 @@ pub fn toggle_wrap(text: &str, sel: Range<usize>, marker: &str) -> Replace {
     Replace { range: a..b, with: format!("{marker}{inner}{marker}"), select: a + ml..b + ml }
 }
 
+/// A web address as it goes into a link: a missing scheme becomes `https://`, spaces and brackets are escaped. `None`
+/// when nothing is left after the scheme.
+fn link_target(raw: &str) -> Option<String> {
+    let t = raw.trim();
+    let full = if t.contains("://") || t.starts_with("mailto:") { t.to_string() } else { format!("https://{t}") };
+    let after = full.split_once("://").map_or_else(|| full.strip_prefix("mailto:").unwrap_or(""), |(_, rest)| rest);
+    if after.trim().is_empty() {
+        return None;
+    }
+    let mut out = String::new();
+    for c in full.chars().filter(|c| !c.is_control()) {
+        match c {
+            ' ' => out.push_str("%20"),
+            '(' => out.push_str("%28"),
+            ')' => out.push_str("%29"),
+            c => out.push(c),
+        }
+    }
+    Some(out)
+}
+
+/// Add Link: wraps the selection as `[text](address)`. With nothing selected the address itself, without its scheme,
+/// is the text. `select` covers the whole link. `None` when the address is empty.
+pub fn link_markdown(text: &str, sel: Range<usize>, url: &str) -> Option<Replace> {
+    let url = link_target(url)?;
+    let chars: Vec<char> = text.chars().collect();
+    let (a, b) = (sel.start.min(chars.len()), sel.end.min(chars.len()).max(sel.start.min(chars.len())));
+    let inner: String = chars[a..b].iter().filter(|c| !matches!(**c, '[' | ']' | '\n')).collect();
+    let label = if inner.trim().is_empty() { url.split_once("://").map_or_else(|| url.clone(), |(_, rest)| rest.to_string()) } else { inner };
+    let with = format!("[{label}]({url})");
+    let len = with.chars().count();
+    Some(Replace { range: a..b, with, select: a..a + len })
+}
+
 /// Words in a note: runs of non-space chars holding a letter or digit
 /// (list markers and rules do not count).
 pub fn word_count(text: &str) -> usize {
@@ -555,6 +589,24 @@ mod tests {
         let line = "x ~~s~~ ==h== ++u++ **b**";
         let total: usize = spans(line, 0).iter().map(|s| s.range.len()).sum();
         assert_eq!(total, line.chars().count());
+    }
+
+    #[test]
+    fn add_link_wraps_the_selection_or_the_address_itself() {
+        let r = link_markdown("See docs here", 4..8, "example.com/a b").unwrap();
+        assert_eq!(r.range, 4..8);
+        assert_eq!(r.with, "[docs](https://example.com/a%20b)");
+        assert_eq!(r.select, 4..4 + r.with.chars().count());
+        let r = link_markdown("x", 1..1, "https://rust-lang.org").unwrap();
+        assert_eq!((r.range, r.with.as_str()), (1..1, "[rust-lang.org](https://rust-lang.org)"));
+        assert_eq!(link_markdown("go", 0..2, "  http://a.b/(x)  ").unwrap().with, "[go](http://a.b/%28x%29)");
+        assert_eq!(link_markdown("[a]", 0..3, "a.b").unwrap().with, "[a](https://a.b)", "brackets in the text would break the link");
+        assert_eq!(link_markdown("m", 0..1, "mailto:me@x.y").unwrap().with, "[m](mailto:me@x.y)");
+        for empty in ["", "   ", "https://", "http://  "] {
+            assert!(link_markdown("t", 0..1, empty).is_none(), "{empty:?} is no address");
+        }
+        // a selection past the end is clamped
+        assert_eq!(link_markdown("ab", 1..9, "c.d").unwrap().range, 1..2);
     }
 
     #[test]

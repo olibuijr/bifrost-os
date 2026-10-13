@@ -122,6 +122,8 @@ pub const RECENT_MENU: usize = 5;
 const KEY_UP: u32 = 103;
 const KEY_DOWN: u32 = 108;
 const KEY_TAB: u32 = 15;
+/// evdev K (Cmd+K adds a link).
+const KEY_K: u32 = 37;
 const MENU_ROW_PT: f32 = bifrost_app::widgets::MENU_ROW_PT;
 const MENU_PAD_PT: f32 = bifrost_app::widgets::MENU_PAD_PT;
 /// width of one formatting button in the shortcut row
@@ -180,6 +182,8 @@ pub enum Format {
     UncheckAll,
     /// An operation on the table under the caret.
     Table(table::Op),
+    /// Ask for a web address and make the selection a link (Cmd+K).
+    AddLink,
     /// Answer every line that ends with `=` after a calculation.
     CalculateMath,
 }
@@ -266,10 +270,12 @@ struct Menu {
     y: f32,
 }
 
-/// The folder-name prompt: `old` is the folder being renamed.
+/// The one-line prompt over the list: a folder name (`old` is the folder being renamed) or, for Add Link, a web
+/// address (`link` is the editor range the link wraps).
 struct Naming {
     old: Option<String>,
     field: TextField,
+    link: Option<Range<usize>>,
 }
 
 /// Something a touch can land on.
@@ -1610,6 +1616,7 @@ impl Notes {
             Format::UncheckAll => self.set_checks(ui, false, t),
             Format::Table(op) => self.edit_table(ui, op, t),
             Format::CalculateMath => self.calculate(ui, t),
+            Format::AddLink => self.start_link(ui, t),
         }
     }
 
@@ -1898,6 +1905,7 @@ impl Notes {
         for op in table::available(&text, caret) {
             items.push((op.label().to_string(), Act::Do(Format::Table(op)), false));
         }
+        items.push(("Add Link...".to_string(), Act::Do(Format::AddLink), false));
         items.push(("Calculate Math Results".to_string(), Act::Do(Format::CalculateMath), false));
         items.push(("Math Results".to_string(), Act::ToggleMath, self.prefs.math_results));
         let (mx, my, _, mh) = self.editor_more_rect(ui);
@@ -1918,10 +1926,43 @@ impl Notes {
         let mut field = TextField::new(ui, "Folder Name", MAC_BODY_PT, false, 40);
         field.set_text(ui, &old.clone().unwrap_or_else(|| folders::unique_name(&self.folders, "New Folder")));
         field.focused = true;
-        self.naming = Some(Naming { old, field });
+        self.naming = Some(Naming { old, field, link: None });
         self.searching = false;
         self.search.focused = false;
         self.keyboard.set_shown(!self.hw_kb, t);
+    }
+
+    /// Add Link (Cmd+K): asks for a web address and wraps the selection (or the caret) as `[text](address)`.
+    fn start_link(&mut self, ui: &Ui, t: f64) {
+        if !self.is_editing() {
+            return;
+        }
+        let caret = self.editor.caret();
+        let sel = self.editor.selection().unwrap_or(caret..caret);
+        let mut field = TextField::new(ui, "Web Address", MAC_BODY_PT, false, 400);
+        field.set_text(ui, "https://");
+        field.focused = true;
+        self.naming = Some(Naming { old: None, field, link: Some(sel) });
+        self.searching = false;
+        self.search.focused = false;
+        self.keyboard.set_shown(!self.hw_kb, t);
+    }
+
+    /// The address was entered: the link replaces the range, or the note says the address is empty.
+    fn finish_link(&mut self, ui: &Ui, sel: Range<usize>, url: &str, t: f64) {
+        if !self.is_editing() {
+            return;
+        }
+        let text = self.editor.text().to_string();
+        match md::link_markdown(&text, sel, url) {
+            Some(link) => {
+                self.notice = None;
+                self.editor.replace_range(ui, link.range, &link.with, t, false);
+                self.editor.select(link.select);
+                self.changed(ui, t);
+            }
+            None => self.notice = Some("Enter a web address for the link".to_string()),
+        }
     }
 
     fn cancel_naming(&mut self, t: f64) {
@@ -1934,6 +1975,10 @@ impl Notes {
         let Some(naming) = self.naming.take() else { return };
         self.keyboard.set_shown(false, t);
         let name = naming.field.text().to_string();
+        if let Some(range) = naming.link.clone() {
+            self.finish_link(ui, range, &name, t);
+            return;
+        }
         let result = match &naming.old {
             None => folders::create(&self.dir, &name),
             Some(old) => folders::rename(&self.dir, old, &name),
@@ -2538,6 +2583,11 @@ impl Notes {
             self.move_items(ui, key == KEY_UP, t);
             return true;
         }
+        if key == KEY_K && !shift && matches!(self.screen, Screen::Editor(_)) {
+            // Cmd+K asks for a web address
+            self.start_link(ui, t);
+            return true;
+        }
         if key == 14 && !shift && self.screen == Screen::List {
             // Cmd+Backspace deletes the arrow-selected note
             let Some(i) = self.selected_index() else { return false };
@@ -3059,13 +3109,17 @@ impl Notes {
         let (x, y, w, h) = (lx + pad, ui.pt(nav_bottom_pt()) + pad, lw - 2.0 * pad, ui.pt(56.0));
         s.fill_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), CARD_BG.now());
         s.stroke_rrect(x, y, w, h, ui.pt(m::CARD_RADIUS), 1.0, SEPARATOR_C.now());
-        let label = if naming.old.is_some() { "Rename Folder" } else { "New Folder" };
+        let (label, placeholder) = match (&naming.link, &naming.old) {
+            (Some(_), _) => ("Add Link", "Web Address"),
+            (None, Some(_)) => ("Rename Folder", "Folder Name"),
+            (None, None) => ("New Folder", "Folder Name"),
+        };
         let mut field = bifrost_app::controls::TextField::new();
         field.push_str(naming.field.text());
         let img = self.labels.get(ui, label, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now());
         s.blit(img, (x + ui.pt(SPACE_S)) as i32, (y + ui.pt(SPACE_XS)) as i32, 255, 255);
         let r = chrome::pt_rect(ui, (x + ui.pt(SPACE_S), y + ui.pt(SPACE_L + SPACE_XS), w - ui.pt(SPACE_L), ui.pt(SPACE_XXL)));
-        bifrost_app::widgets::text_field(s, ui, &field, r, "Folder Name", true);
+        bifrost_app::widgets::text_field(s, ui, &field, r, placeholder, true);
     }
 
     /// The open menu: the kit's `NativeMenu` drawing on the popover material.
@@ -4585,6 +4639,34 @@ mod tests {
         assert!(app(&ui, &dir).prefs().group_by_date, "the setting persists");
         n.run(&ui, Act::ToggleGroupDate, 6.0);
         assert!(!n.prefs.group_by_date);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn add_link_asks_for_an_address_and_wraps_the_selection() {
+        use bifrost_app::proto::CHORD_META;
+        let ui = ui();
+        let dir = scratch("link");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "Note\nSee docs here");
+        let start = "Note\nSee ".chars().count();
+        n.editor.select(start..start + 4);
+        assert!(n.chord(&ui, 37, CHORD_META, 2000.0), "Cmd+K");
+        assert_eq!(n.naming.as_ref().unwrap().field.text(), "https://");
+        n.naming.as_mut().unwrap().field.set_text(&ui, "example.com/a b");
+        n.key(&ui, Out::Enter, 2100.0);
+        assert!(n.naming.is_none());
+        assert_eq!(n.editor.text(), "Note\nSee [docs](https://example.com/a%20b) here");
+        assert_eq!(n.editing().unwrap().text, n.editor.text(), "the note follows the editor");
+        // an address with nothing after the scheme is refused and the text stays
+        n.run(&ui, Act::Do(Format::AddLink), 2200.0);
+        n.key(&ui, Out::Enter, 2300.0);
+        assert_eq!(n.notice.as_deref(), Some("Enter a web address for the link"));
+        assert_eq!(n.editor.text(), "Note\nSee [docs](https://example.com/a%20b) here");
+        // Escape cancels the prompt
+        n.run(&ui, Act::Do(Format::AddLink), 2400.0);
+        assert!(n.escape(&ui, 2500.0));
+        assert!(n.naming.is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
