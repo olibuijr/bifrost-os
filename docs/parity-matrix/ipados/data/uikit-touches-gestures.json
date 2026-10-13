@@ -1,0 +1,116 @@
+{
+ "framework": "UIKit (Touches, presses, and gestures)",
+ "doc": "https://developer.apple.com/documentation/uikit/touches-presses-and-gestures",
+ "macos_since": "",
+ "status": "partial",
+ "bifrost": "springboard/ui/src/gesture.rs, springboard/ui/src/responder.rs, springboard/sdk/src/view/mod.rs, springboard/src/shell/gestures.rs, springboard/src/pager.rs",
+ "summary": "Tap, long press, pan, pinch and rotation recognizers exist as pure state machines, and the responder chain is shared. Apps receive touches with an id on the wire, but the retained view layer drops the id, so multi-touch gestures, recognizer arbitration, swipe, edge pan and hover recognizers are missing.",
+ "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+ "features": [
+  {
+   "feature": "Responder chain",
+   "apple": "UIResponder, Using responders and the responder chain to handle events",
+   "bifrost": "springboard/ui/src/responder.rs, springboard/sdk/src/view/mod.rs",
+   "status": "partial",
+   "note": "actions go to the first responder and outwards; menu items and toolbar buttons are enabled by the same walk. No touchesBegan family: views get Pointer(Down, Move, Up) and Cancel"
+  },
+  {
+   "feature": "Events and touches",
+   "apple": "UIEvent, UITouch (location, phase, tapCount, majorRadius, timestamp, type)",
+   "bifrost": "springboard/proto/src/lib.rs, springboard/sdk/src/runtime.rs",
+   "status": "partial",
+   "note": "ToApp::Touch carries kind, touch id, position and time per contact, so multi-touch reaches App::event. ViewEvent::from_input drops the id and the time; no tap count, radius, phase set or touch type (finger, pen, indirect pointer)"
+  },
+  {
+   "feature": "Tap gesture",
+   "apple": "UITapGestureRecognizer (numberOfTapsRequired, numberOfTouchesRequired)",
+   "bifrost": "springboard/ui/src/gesture.rs",
+   "status": "partial",
+   "note": "Tap handles single and multiple taps with slop and interval limits; single-finger only"
+  },
+  {
+   "feature": "Long press gesture",
+   "apple": "UILongPressGestureRecognizer",
+   "bifrost": "springboard/ui/src/gesture.rs",
+   "status": "partial",
+   "note": "LongPress with minimum duration and allowable movement; one finger"
+  },
+  {
+   "feature": "Pan gesture",
+   "apple": "UIPanGestureRecognizer (translation, velocity, minimumNumberOfTouches)",
+   "bifrost": "springboard/ui/src/gesture.rs",
+   "status": "partial",
+   "note": "Pan gives translation and velocity for one finger; no multi-touch pan"
+  },
+  {
+   "feature": "Pinch and rotation gestures",
+   "apple": "UIPinchGestureRecognizer, UIRotationGestureRecognizer",
+   "bifrost": "springboard/ui/src/gesture.rs",
+   "status": "partial",
+   "note": "Magnify (two-finger spacing ratio) and Rotate (unwrapped angle) as pure models; nothing delivers two contacts to a view yet"
+  },
+  {
+   "feature": "Swipe gesture",
+   "apple": "UISwipeGestureRecognizer (direction, numberOfTouchesRequired)",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "no discrete swipe recognizer; the shell has private swipe code for the home pager (springboard/src/pager.rs). Add Swipe next to Pan in springboard/ui/src/gesture.rs"
+  },
+  {
+   "feature": "Screen edge pan",
+   "apple": "UIScreenEdgePanGestureRecognizer",
+   "bifrost": "springboard/src/shell/gestures.rs",
+   "status": "os",
+   "note": "the shell recognizes edge drags (Control Center, home indicator swipe) for itself; apps cannot request an edge pan"
+  },
+  {
+   "feature": "Hover gesture",
+   "apple": "UIHoverGestureRecognizer",
+   "bifrost": "springboard/ui/src/tracking.rs",
+   "status": "partial",
+   "note": "tracking areas report pointer enter, exit and move as a model; the app protocol has no hover event"
+  },
+  {
+   "feature": "Gesture recognizer base and delegate",
+   "apple": "UIGestureRecognizer (state, view, requiresFailureOf), UIGestureRecognizerDelegate",
+   "bifrost": "springboard/ui/src/gesture.rs",
+   "status": "partial",
+   "note": "common State enum only; no recognizer base trait, no failure requirements, no simultaneous recognition, no shouldReceive or shouldBegin delegate, so a scroll pan and a tap on the same view cannot be arbitrated"
+  },
+  {
+   "feature": "Custom gesture recognizers",
+   "apple": "Implementing a custom gesture recognizer",
+   "bifrost": "springboard/ui/src/gesture.rs",
+   "status": "partial",
+   "note": "each recognizer is a plain struct fed events by the caller; apps can write more, but there is no shared protocol to attach them to a view"
+  },
+  {
+   "feature": "Button presses",
+   "apple": "UIPress, UIPressesEvent",
+   "bifrost": "springboard/sdk/src/runtime.rs",
+   "status": "partial",
+   "note": "Input::Key delivers key events; remote and game controller presses are separate (springboard/sdk/src/gamepad_service.rs)"
+  },
+  {
+   "feature": "Pencil and force input",
+   "apple": "Handling input from Apple Pencil, force, altitude, azimuth",
+   "bifrost": "springboard/ui/src/stylus.rs, springboard/ui/src/drawing.rs",
+   "status": "partial",
+   "note": "stylus samples map to stroke points with force, altitude and azimuth; the app protocol touch has no pressure or tilt fields yet"
+  },
+  {
+   "feature": "3D Touch previews",
+   "apple": "UIPreviewInteraction, UIPreviewActionItem",
+   "bifrost": "none",
+   "status": "n/a",
+   "note": "pressure-sensitive hardware is no longer shipped; context menus cover the use"
+  }
+ ],
+ "gaps": [
+  "Pass touch id and time into ViewEvent so views can see several fingers",
+  "Recognizer base trait with failure requirements and simultaneous recognition, attached to views",
+  "Swipe and screen-edge-pan recognizers for apps",
+  "Hover events from the pointer to apps",
+  "Pressure, tilt and touch type on the touch wire"
+ ]
+}

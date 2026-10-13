@@ -1,0 +1,108 @@
+{
+ "framework": "UIKit (Accessibility)",
+ "doc": "https://developer.apple.com/documentation/uikit/accessibility-for-uikit",
+ "macos_since": "",
+ "status": "partial",
+ "bifrost": "springboard/ui/src/ax.rs, springboard/src/shell/accessibility, springboard/src/shell/atspi, springboard/sdk/src/accessibility_display.rs, springboard/ui/src/switch_scan.rs",
+ "summary": "An accessibility element map, a screen reader with earcons and speech, an AT-SPI bridge, zoom, display options and switch scanning exist. Touch exploration, custom rotors, accessibility containers and the assistive-technology status queries are missing or desktop oriented.",
+ "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+ "features": [
+  {
+   "feature": "Accessibility elements and tree",
+   "apple": "UIAccessibility, UIAccessibilityElement, UIAccessibilityContainer",
+   "bifrost": "springboard/ui/src/ax.rs, springboard/sdk/src/view/mod.rs",
+   "status": "partial",
+   "note": "View::ax_node and Window::ax_tree give a labelled element tree; ViewApp reports it to the shell"
+  },
+  {
+   "feature": "Screen reader",
+   "apple": "VoiceOver, UIAccessibilityFocus, post(notification:)",
+   "bifrost": "springboard/src/shell/accessibility/reader.rs, springboard/src/shell/accessibility/speech.rs, springboard/sdk/src/runtime.rs",
+   "status": "partial",
+   "note": "reader walks the tree, speaks and plays earcons; Ctx::announce posts announcements. No touch exploration (touch to hear, double tap to activate), which the tablet needs"
+  },
+  {
+   "feature": "Actions",
+   "apple": "UIAccessibilityCustomAction, activation, increment, decrement",
+   "bifrost": "springboard/src/shell/accessibility/actions.rs, springboard/ui/src/ax.rs",
+   "status": "partial",
+   "note": "press and set value actions; no custom actions list"
+  },
+  {
+   "feature": "Rotors and navigation",
+   "apple": "UIAccessibilityCustomRotor",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "item navigation by headings, links and custom rotors"
+  },
+  {
+   "feature": "Data table containers",
+   "apple": "UIAccessibilityContainerDataTable",
+   "bifrost": "springboard/ui/src/chart_ax.rs",
+   "status": "partial",
+   "note": "a point-by-point cursor exists for charts only; no general table container"
+  },
+  {
+   "feature": "Switch control",
+   "apple": "isSwitchControlRunning",
+   "bifrost": "springboard/ui/src/switch_scan.rs",
+   "status": "partial",
+   "note": "auto and manual scanning model"
+  },
+  {
+   "feature": "AssistiveTouch",
+   "apple": "isAssistiveTouchRunning",
+   "bifrost": "springboard/src/shell/assistive_touch.rs",
+   "status": "os",
+   "note": "floating button and system shortcuts in the shell"
+  },
+  {
+   "feature": "Zoom and magnifier",
+   "apple": "zoomFocusChanged, magnification",
+   "bifrost": "springboard/src/shell/accessibility/zoom.rs, springboard/src/shell/magnifier.rs",
+   "status": "os",
+   "note": "screen zoom in the shell; apps cannot report the focus area"
+  },
+  {
+   "feature": "Display settings",
+   "apple": "isReduceMotionEnabled, isReduceTransparencyEnabled, isBoldTextEnabled, isDarkerSystemColorsEnabled",
+   "bifrost": "springboard/render/src/appearance.rs, springboard/ui/src/accessible_look.rs, springboard/sdk/src/accessibility_display.rs",
+   "status": "partial",
+   "note": "reduce transparency, increase contrast, button shapes (differentiate without colour) and dim flashing lights reach apps; reduce motion arrives as Configure.reduce_motion and Bold Text as Ui::bold"
+  },
+  {
+   "feature": "Reading content and braille",
+   "apple": "UIAccessibilityReadingContent",
+   "bifrost": "springboard/ui/src/braille.rs",
+   "status": "partial",
+   "note": "braille translation model; no reading content protocol"
+  },
+  {
+   "feature": "Audits",
+   "apple": "accessibility audit",
+   "bifrost": "springboard/ui/src/ax_audit.rs",
+   "status": "partial",
+   "note": "audit model over the element tree"
+  },
+  {
+   "feature": "Guided Access",
+   "apple": "requestGuidedAccessSession",
+   "bifrost": "none",
+   "status": "gap",
+   "note": "single-app mode"
+  },
+  {
+   "feature": "Large text sizes",
+   "apple": "UIContentSizeCategory, preferred content size",
+   "bifrost": "springboard/render/src/ui.rs, springboard/proto/src/lib.rs",
+   "status": "partial",
+   "note": "Settings sets one continuous text scale (0.85 to 1.3) that reaches apps as Configure.text_scale and scales every text size; no discrete content size categories, no accessibility sizes, no change notification object, and geometry does not follow the text"
+  }
+ ],
+ "gaps": [
+  "Touch exploration mode for the screen reader",
+  "Custom rotors and custom actions",
+  "Discrete content size categories and accessibility sizes on top of the text scale",
+  "Zoom focus reporting from apps"
+ ]
+}
