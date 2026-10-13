@@ -162,9 +162,6 @@ struct CachedWindow {
     focused:bool, maximized:bool, hover:bool, drawn:f64,
 }
 
-/// How long the scratch buffers stay allocated after the last full window redraw (ms).
-const SCRATCH_IDLE_MS: f64 = 2000.0;
-
 /// Two title-bar presses this close (ms) are a double-click, which zooms the window as Golden Gate does.
 const DOUBLE_CLICK_MS: f64 = 400.0;
 
@@ -211,8 +208,6 @@ pub struct Desk {
     /// scratch for drawing one window in the Wayland path
     #[cfg(feature = "desktop-wayland")]
     window_buf: Vec<u32>,
-    /// when a full window redraw last used the scratch buffers above; idle for `SCRATCH_IDLE_MS` they are released
-    scratch_used: f64,
     /// how many windows have been opened, to cascade them
     opened: usize,
     /// running open, minimize, restore and zoom effects (empty at rest: no frames, no timers)
@@ -1533,19 +1528,6 @@ impl Shell {
 
     /// The wallpaper, the windows back to front, the menu bar and the dock.
     pub(super) fn draw_desk(&mut self, s: &mut Surface, t: f64) {
-        // the two full-window scratch buffers are only needed while a window is redrawn in full: an idle desktop gives
-        // their memory back (two window-sized buffers, ~8 MB at 2560x1440 on the lab PC, round 75)
-        if let Some(d) = self.desk.as_mut() {
-            if t - d.scratch_used > SCRATCH_IDLE_MS {
-                #[cfg(feature = "desktop-wayland")]
-                if d.window_buf.capacity() > 0 {
-                    d.window_buf = Vec::new();
-                }
-                if d.buf.capacity() > 0 {
-                    d.buf = Vec::new();
-                }
-            }
-        }
         let m = self.desk_metrics();
         self.draw_wallpaper_layer(s);
         // windows are read by index, so a frame copies no window list
@@ -1684,7 +1666,6 @@ impl Shell {
                     && (w.app != AppId::Settings || self.settings.as_ref().is_some_and(|st| st.next_wake(t).map_or(true, |x| x > t)));
                 self.desk.as_mut().unwrap().reuse_body = quiet_body.then_some(w.app);
                 // Reuse the shared scratch buffer instead of a fresh zeroed allocation per window per frame.
-                self.desk.as_mut().unwrap().scratch_used = t;
                 let mut px = std::mem::take(&mut self.desk.as_mut().unwrap().window_buf);
                 px.clear(); px.resize(w.r.w as usize * w.r.h as usize, 0);
                 let mut image = Image { w: w.r.w as usize, h: w.r.h as usize, px };
@@ -1772,7 +1753,6 @@ impl Shell {
         #[cfg(not(feature = "desktop-wayland"))]
         let builtin = false;
         let reuse = builtin && self.desk.as_mut().unwrap().reuse_body.take() == Some(w.app) && !self.keyboard.shown() && !self.keyboard.animating();
-        self.desk.as_mut().unwrap().scratch_used = t;
         #[cfg(feature = "desktop-wayland")]
         let mut buf = if persistent || builtin { self.desk.as_mut().unwrap().body_cache.remove(&w.app).unwrap_or_default() } else { std::mem::take(&mut self.desk.as_mut().unwrap().buf) };
         #[cfg(not(feature = "desktop-wayland"))]
