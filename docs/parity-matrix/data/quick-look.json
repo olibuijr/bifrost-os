@@ -24,9 +24,9 @@
     {
       "feature": "Thumbnail generation and cache",
       "apple": "QLThumbnailGenerator, QLThumbnailImageCreate, QLThumbnailRequest* (https://developer.apple.com/documentation/quicklook/previews-or-thumbnail-images-for-macos-10-14-or-earlier)",
-      "bifrost": "springboard/sdk/src/peek.rs (thumbnail_path, ThumbnailCache::best_representation)",
+      "bifrost": "springboard/sdk/src/peek.rs (thumbnail_path, ThumbnailCache::best_representation); springboard/sdk/src/thumbnails.rs (GeneratorRequest, RepresentationType, Representation, Generation)",
       "status": "partial",
-      "note": "Names and caches a PNG path (under $XDG_CACHE_HOME/bifrost-peek). The caller renders the image. No generator, no icon mode, no update handlers, and nothing draws the cached thumbnail in the panel."
+      "note": "Names and caches a PNG path (under $XDG_CACHE_HOME/bifrost-peek). The SDK now has a generator request model (representation types icon, low quality, full; delivery plan and a never-regress update tracker) over the thumbnails service; host unit tests only, not yet checked on Midget. PDF page rasterising and per-type providers are still open."
     },
     {
       "feature": "In-app preview of common file types",
