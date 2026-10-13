@@ -10,9 +10,12 @@
 //! `-i` (a dragged selection) and `-w` (a window picked by its frame, with its shadow) start the shell's screenshot toolbar,
 //! the same overlay as Shift-Cmd-5. The command returns once the toolbar is up; the capture is saved to Photos when the user
 //! finishes, so `-i` and `-w` take no `-c`, `-R`, `-T` or file name.
+//! `-v` records a movie of the screen (or of `-R`) through the desktop until the recording is stopped from the menu bar,
+//! and `-V seconds` records for that long. `-T` waits before the recording starts. The movie goes to the file operand
+//! (relative to the current folder), else to the desktop's dated file. Video takes no `-c`, `-i` or `-w`.
 //! Refused with a message rather than run wrongly: the other selection modes (`-W -s -S -l`), the cursor
-//! (`-C`), video (`-v -V -G -g -k`), the built-in function strip (`-b`), the other formats, and the options that open or send the picture
-//! somewhere (`-M -P -B -p -u -U -J -o -d`).
+//! (`-C`), the sound and key-stroke options (`-G -g -k`), the built-in function strip (`-b`), the other formats, and the
+//! options that open or send the picture somewhere (`-M -P -B -p -u -U -J -o -d`).
 //! Gap: `-R` coordinates are panel pixels, not points, and the capture has no cursor.
 
 use crate::control;
@@ -21,7 +24,7 @@ use std::process::{Command, Stdio};
 use std::io::Write;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-pub const USAGE: &str = "usage: screencapture [-x] [-m] [-r] [-a] [-c] [-i | -w] [-R x,y,w,h] [-T seconds] [-t png] [-D 1] [file]";
+pub const USAGE: &str = "usage: screencapture [-x] [-m] [-r] [-a] [-c] [-i | -w] [-v [-V seconds]] [-R x,y,w,h] [-T seconds] [-t png] [-D 1] [file]";
 /// The MIME type the clipboard takes a picture under.
 pub const PNG_MIME: &str = "image/png";
 /// The shell's raw frame magic.
@@ -57,6 +60,10 @@ pub struct Options {
     pub rect: Option<Rect>,
     /// `-T`: seconds to wait before the capture.
     pub delay: u32,
+    /// `-v` or `-V`: record a movie instead of taking a picture.
+    pub video: bool,
+    /// `-V`: the length of the recording in seconds (without it, the recording runs until it is stopped).
+    pub seconds: Option<u32>,
     /// The file to write (one file for the one display).
     pub file: Option<String>,
 }
@@ -81,7 +88,7 @@ fn refusal(c: char) -> String {
     match c {
         'W' | 's' | 'S' | 'l' => format!("-{c}: this selection mode is not supported yet"),
         'C' => "-C: the cursor is not part of the desktop's frame yet".into(),
-        'v' | 'V' | 'G' | 'g' | 'k' => format!("-{c}: video capture is not supported yet"),
+        'G' | 'g' | 'k' => format!("-{c}: sound and key-stroke capture are not supported yet"),
         'b' => "-b: the function strip is not part of this desktop".into(),
         'M' | 'P' | 'B' | 'p' | 'u' | 'U' | 'J' | 'o' | 'd' => format!("-{c} is not supported yet"),
         other => format!("unknown option -{other}"),
@@ -105,6 +112,7 @@ pub fn parse(args: &[String]) -> Result<Parsed, String> {
         while let Some(c) = chars.next() {
             match c {
                 'c' => o.clipboard = true,
+                'v' => o.video = true,
                 'i' | 'w' => {
                     if o.interactive.is_some() {
                         return Err("-i and -w pick one mode".into());
@@ -112,7 +120,7 @@ pub fn parse(args: &[String]) -> Result<Parsed, String> {
                     o.interactive = Some(if c == 'i' { Interactive::Select } else { Interactive::Window });
                 }
                 'x' | 'm' | 'r' | 'a' => {}
-                'T' | 'R' | 't' | 'D' => {
+                'T' | 'R' | 't' | 'D' | 'V' => {
                     let rest: String = chars.by_ref().collect();
                     let value = if rest.is_empty() { it.next().cloned().ok_or(format!("-{c} needs a value"))? } else { rest };
                     apply_value(&mut o, c, &value)?;
@@ -128,6 +136,9 @@ pub fn parse(args: &[String]) -> Result<Parsed, String> {
     o.file = operands.pop();
     if o.interactive.is_some() && (o.clipboard || o.rect.is_some() || o.delay > 0 || o.file.is_some()) {
         return Err("-i and -w save to Photos from the desktop: they take no -c, -R, -T or file name".into());
+    }
+    if o.video && (o.clipboard || o.interactive.is_some()) {
+        return Err("-v records a movie file: it takes no -c, -i or -w".into());
     }
     Ok(Parsed::Run(o))
 }
@@ -160,6 +171,10 @@ fn apply_value(o: &mut Options, c: char, value: &str) -> Result<(), String> {
         't' => return Err(format!("the {value} format is not supported yet (png only)")),
         'D' if value == "1" => {}
         'D' => return Err(format!("display {value} is not reachable: the desktop drives one panel (-D 1)")),
+        'V' => {
+            o.video = true;
+            o.seconds = Some(value.trim().parse().map_err(|_| format!("-V needs a number of seconds, not {value}"))?);
+        }
         _ => unreachable!("only value options reach apply_value"),
     }
     Ok(())
@@ -233,8 +248,54 @@ pub fn copy_png(png: &[u8]) -> Result<(), String> {
     }
 }
 
+/// Sends a control request and returns the desktop's text answer, or its error.
+fn ask(line: &str, port: u16) -> Result<String, String> {
+    let answer = String::from_utf8_lossy(&control::request(line, port)?).trim().to_string();
+    match answer.strip_prefix("error: ") {
+        Some(e) => Err(e.to_string()),
+        None => Ok(answer),
+    }
+}
+
+/// Records the screen through the desktop: for `-V` seconds, else until the recording is stopped from the menu bar.
+/// The command returns once the recording has ended.
+fn record(o: &Options, port: u16) -> Result<(), String> {
+    if o.delay > 0 {
+        std::thread::sleep(Duration::from_secs(o.delay as u64));
+    }
+    let area = match o.rect {
+        Some(r) => format!(" {},{},{},{}", r.x, r.y, r.w, r.h),
+        None => " screen".to_string(),
+    };
+    let file = match &o.file {
+        Some(f) => {
+            let path = std::env::current_dir().map_err(|e| e.to_string())?.join(f);
+            format!(" {}", springboard::bare::control::pct_encode(&path.to_string_lossy()))
+        }
+        None => String::new(),
+    };
+    ask(&format!("rec start{area}{file}"), port)?;
+    match o.seconds {
+        Some(s) => {
+            std::thread::sleep(Duration::from_secs(s as u64));
+            ask("rec stop", port)?;
+        }
+        None => loop {
+            std::thread::sleep(Duration::from_millis(500));
+            if !ask("rec status", port)?.starts_with("recording") {
+                break;
+            }
+        },
+    }
+    Ok(())
+}
+
 /// Runs a capture: waits the delay, grabs the panel, crops it, then writes the file or the clipboard.
 pub fn run(o: &Options, port: u16) -> Result<PathBuf, String> {
+    if o.video {
+        record(o, port)?;
+        return Ok(PathBuf::from("recording"));
+    }
     if let Some(mode) = o.interactive {
         start_interactive(mode, port)?;
         return Ok(PathBuf::from("Photos"));
@@ -287,9 +348,25 @@ mod tests {
     }
 
     #[test]
+    fn video_options_record_until_stopped_or_for_a_length() {
+        let Parsed::Run(v) = parse(&args(&["-v"])).unwrap() else { panic!("help") };
+        assert!(v.video);
+        assert_eq!(v.seconds, None);
+        let Parsed::Run(timed) = parse(&args(&["-V", "5", "clip.mov"])).unwrap() else { panic!("help") };
+        assert!(timed.video);
+        assert_eq!(timed.seconds, Some(5));
+        assert_eq!(timed.file.as_deref(), Some("clip.mov"));
+        let Parsed::Run(attached) = parse(&args(&["-V5"])).unwrap() else { panic!("help") };
+        assert_eq!(attached.seconds, Some(5));
+        assert!(parse(&args(&["-V", "soon"])).unwrap_err().contains("seconds"));
+        assert!(parse(&args(&["-v", "-c"])).unwrap_err().contains("movie"));
+        assert!(parse(&args(&["-v", "-i"])).unwrap_err().contains("movie"));
+    }
+
+    #[test]
     fn interactive_and_video_modes_are_refused_by_name() {
         assert!(parse(&args(&["-W"])).unwrap_err().contains("-W"));
-        assert!(parse(&args(&["-V", "5"])).unwrap_err().contains("video"));
+        assert!(parse(&args(&["-G"])).unwrap_err().contains("sound"));
         assert!(parse(&args(&["-t", "jpg"])).unwrap_err().contains("png only"));
         assert!(parse(&args(&["-D", "2"])).unwrap_err().contains("-D 1"));
         assert!(parse(&args(&["-q"])).unwrap_err().contains("unknown option -q"));
