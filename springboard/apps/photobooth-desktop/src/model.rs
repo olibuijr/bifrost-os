@@ -99,10 +99,13 @@ pub enum Effect {
     Posterize,
     Vignette,
     Invert,
+    Bulge,
+    Twirl,
+    Mirror,
 }
 
 impl Effect {
-    pub const ALL: [Effect; 10] = [
+    pub const ALL: [Effect; 13] = [
         Effect::None,
         Effect::Mono,
         Effect::Noir,
@@ -113,6 +116,9 @@ impl Effect {
         Effect::Posterize,
         Effect::Vignette,
         Effect::Invert,
+        Effect::Bulge,
+        Effect::Twirl,
+        Effect::Mirror,
     ];
 
     pub fn title(self) -> &'static str {
@@ -127,13 +133,16 @@ impl Effect {
             Effect::Posterize => "Posterize",
             Effect::Vignette => "Vignette",
             Effect::Invert => "Invert",
+            Effect::Bulge => "Bulge",
+            Effect::Twirl => "Twirl",
+            Effect::Mirror => "Mirror",
         }
     }
 
     /// The filters of this preset in order: name, then (input key, value) pairs.
     fn steps(self) -> &'static [(&'static str, &'static [(&'static str, f32)])] {
         match self {
-            Effect::None => &[],
+            Effect::None | Effect::Bulge | Effect::Twirl | Effect::Mirror => &[],
             Effect::Mono => &[("saturation", &[("amount", 0.0)])],
             Effect::Noir => &[("saturation", &[("amount", 0.0)]), ("contrast", &[("amount", 1.6)])],
             Effect::Sepia => &[("sepia", &[("amount", 1.0)])],
@@ -143,6 +152,25 @@ impl Effect {
             Effect::Posterize => &[("posterize", &[("levels", 5.0)])],
             Effect::Vignette => &[("vignette", &[("strength", 0.6)])],
             Effect::Invert => &[("invert", &[])],
+        }
+    }
+
+    /// The geometric warp of this preset, if it is a distortion rather than a colour chain.
+    pub fn warp(self) -> Option<Warp> {
+        match self {
+            Effect::Bulge => Some(Warp::Bulge),
+            Effect::Twirl => Some(Warp::Twirl),
+            Effect::Mirror => Some(Warp::Mirror),
+            _ => None,
+        }
+    }
+
+    /// The preset applied to `img`: the colour chain, then the warp.
+    pub fn apply(self, img: &Image) -> Image {
+        let coloured = if self.steps().is_empty() { img.clone() } else { self.chain().apply(img).unwrap_or_else(|_| img.clone()) };
+        match self.warp() {
+            Some(warp) => warp_image(&coloured, warp),
+            None => coloured,
         }
     }
 
@@ -159,6 +187,78 @@ impl Effect {
         }
         chain
     }
+}
+
+/// A distortion of the picture geometry (the effects browser's warps).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Warp {
+    /// magnifies the middle like a fisheye lens
+    Bulge,
+    /// rotates the picture more the closer it is to the middle
+    Twirl,
+    /// the left half is reflected onto the right half
+    Mirror,
+}
+
+/// `img` with `warp` applied: each output pixel samples its source by inverse mapping (nearest), so the size is kept.
+pub fn warp_image(img: &Image, warp: Warp) -> Image {
+    let (w, h) = (img.w, img.h);
+    if w == 0 || h == 0 || img.px.len() < w * h {
+        return img.clone();
+    }
+    let (cx, cy) = (w as f32 / 2.0, h as f32 / 2.0);
+    let radius = cx.min(cy).max(1.0);
+    let mut px = Vec::with_capacity(w * h);
+    for y in 0..h {
+        for x in 0..w {
+            let (sx, sy) = match warp {
+                Warp::Mirror => (if (x as f32 + 0.5) >= cx { (w - 1 - x) as f32 } else { x as f32 }, y as f32),
+                Warp::Bulge | Warp::Twirl => {
+                    let (dx, dy) = (x as f32 + 0.5 - cx, y as f32 + 0.5 - cy);
+                    let r = (dx * dx + dy * dy).sqrt() / radius;
+                    if r >= 1.0 {
+                        (x as f32, y as f32)
+                    } else if warp == Warp::Bulge {
+                        let k = r.powf(0.8);
+                        (cx + dx * k, cy + dy * k)
+                    } else {
+                        let a = (1.0 - r) * (1.0 - r) * 2.0;
+                        let (s, c) = a.sin_cos();
+                        (cx + dx * c - dy * s, cy + dx * s + dy * c)
+                    }
+                }
+            };
+            let ix = (sx as i64).clamp(0, w as i64 - 1) as usize;
+            let iy = (sy as i64).clamp(0, h as i64 - 1) as usize;
+            px.push(img.px[iy * w + ix]);
+        }
+    }
+    Image { w, h, px }
+}
+
+/// `img` reflected left to right (Auto Flip, so the picture reads like a mirror).
+pub fn flip_horizontal(img: &Image) -> Image {
+    let mut px = Vec::with_capacity(img.px.len());
+    if img.w > 0 {
+        for row in img.px.chunks(img.w) {
+            px.extend(row.iter().rev());
+        }
+    }
+    Image { w: img.w, h: img.h, px }
+}
+
+/// Where the slideshow goes after `index` among `total` captures, wrapping; `forward` false steps back.
+pub fn slide_step(index: usize, total: usize, forward: bool) -> usize {
+    if total == 0 {
+        return 0;
+    }
+    if forward { (index + 1) % total } else { (index + total - 1) % total }
+}
+
+/// The selection after the capture at `removed` leaves a strip of `remaining` captures: the one that took its place,
+/// else the new last one, else none.
+pub fn selection_after_delete(removed: usize, remaining: usize) -> Option<usize> {
+    if remaining == 0 { None } else { Some(removed.min(remaining - 1)) }
 }
 
 /// A rectangle in points, from the top-left of the window.
@@ -311,9 +411,65 @@ mod tests {
     #[test]
     fn original_is_an_empty_chain_and_the_others_are_not() {
         assert!(Effect::None.chain().is_empty());
-        for effect in Effect::ALL.iter().skip(1) {
+        for effect in Effect::ALL.iter().skip(1).filter(|e| e.warp().is_none()) {
             assert!(!effect.chain().is_empty(), "{effect:?}");
         }
+    }
+
+    fn ramp(w: usize, h: usize) -> Image {
+        Image { w, h, px: (0..w * h).map(|i| pack((i % 251) as u8, (i / 3 % 251) as u8, 7, 255)).collect() }
+    }
+
+    #[test]
+    fn warps_keep_the_size_and_change_the_picture() {
+        let img = ramp(16, 12);
+        for effect in [Effect::Bulge, Effect::Twirl, Effect::Mirror] {
+            let out = effect.apply(&img);
+            assert_eq!((out.w, out.h, out.px.len()), (16, 12, 192), "{effect:?}");
+            assert_ne!(out, img, "{effect:?}");
+        }
+        assert_eq!(Effect::None.apply(&img), img);
+    }
+
+    #[test]
+    fn mirror_reflects_the_left_half_onto_the_right() {
+        let img = ramp(8, 2);
+        let out = warp_image(&img, Warp::Mirror);
+        assert_eq!(out.px[0], img.px[0]);
+        assert_eq!(out.px[7], img.px[0]);
+        assert_eq!(out.px[4], img.px[3]);
+    }
+
+    #[test]
+    fn bulge_and_twirl_leave_the_corners_alone() {
+        let img = ramp(20, 20);
+        for warp in [Warp::Bulge, Warp::Twirl] {
+            let out = warp_image(&img, warp);
+            assert_eq!(out.px[0], img.px[0]);
+            assert_eq!(out.px[399], img.px[399]);
+        }
+    }
+
+    #[test]
+    fn flipping_twice_is_the_identity_and_once_reverses_rows() {
+        let img = ramp(5, 3);
+        let f = flip_horizontal(&img);
+        assert_eq!(f.px[0], img.px[4]);
+        assert_eq!(flip_horizontal(&f), img);
+    }
+
+    #[test]
+    fn slideshow_steps_wrap_both_ways() {
+        assert_eq!(slide_step(2, 3, true), 0);
+        assert_eq!(slide_step(0, 3, false), 2);
+        assert_eq!(slide_step(0, 0, true), 0);
+    }
+
+    #[test]
+    fn deleting_selects_the_neighbour_or_nothing() {
+        assert_eq!(selection_after_delete(1, 2), Some(1));
+        assert_eq!(selection_after_delete(2, 2), Some(1));
+        assert_eq!(selection_after_delete(0, 0), None);
     }
 
     #[test]
