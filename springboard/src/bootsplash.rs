@@ -55,6 +55,21 @@ pub fn mark(event: &str) {
     }
 }
 
+/// Set once the shell has committed its first desktop frame in this process (see `note_first_desktop_frame`).
+static FIRST_DESKTOP_FRAME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Records that the first desktop frame was committed. True only for the call that records it, so the caller can
+/// write the boot marks once.
+pub fn note_first_desktop_frame() -> bool {
+    !FIRST_DESKTOP_FRAME.swap(true, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Whether this process has committed its first desktop frame. Work that is not needed for the first frame (login
+/// items, restored windows) waits for this.
+pub fn first_desktop_frame_presented() -> bool {
+    FIRST_DESKTOP_FRAME.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -82,5 +97,15 @@ mod tests {
         assert!(valid_event("installer_faded"));
         assert!(!valid_event("bad name"));
         assert!(!valid_event("a/b"));
+    }
+
+    #[test]
+    fn the_first_desktop_frame_is_noted_once_and_then_reported_presented() {
+        // only this test touches the process-wide flag, so the order of the checks is fixed here
+        let was = first_desktop_frame_presented();
+        let first = note_first_desktop_frame();
+        assert_eq!(first, !was);
+        assert!(first_desktop_frame_presented());
+        assert!(!note_first_desktop_frame());
     }
 }
