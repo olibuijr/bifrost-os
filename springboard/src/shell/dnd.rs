@@ -11,12 +11,13 @@
 //!
 //! `Session` is the pure state machine; `Shell::dnd_*` feed it from the sockets and the pointer.
 
-use super::sharing::INBOUND;
+use super::sharing::{text_url, INBOUND};
 use super::apps::apps;
 use super::AppId;
-use bifrost_proto::{dragop, DocMode, DragItem, DragPhase, DragPreview, GrantId, Payload, ToApp, ToShell};
+use crate::files::batch;
+use bifrost_proto::{dragop, DragItem, DragPhase, DragPreview, GrantId, Payload, ToApp, ToShell};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Where a drop that no app window takes goes: a Dock icon, or the desktop.
 #[derive(Clone, Debug, PartialEq)]
@@ -177,18 +178,6 @@ pub fn preview_image(p: &DragPreview) -> Option<bifrost_render::gfx::Image> {
     Some(bifrost_render::gfx::Image { w: p.w as usize, h: p.h as usize, px })
 }
 
-/// The name a copy takes in a folder that already holds `taken`: `name`, else `name 2`, `name 3`... (before the extension).
-pub fn free_name(taken: &[String], name: &str) -> String {
-    if !taken.iter().any(|t| t == name) {
-        return name.to_string();
-    }
-    let (stem, ext) = match name.rsplit_once('.') {
-        Some((stem, ext)) if !stem.is_empty() => (stem, format!(".{ext}")),
-        _ => (name, String::new()),
-    };
-    (2..).map(|n| format!("{stem} {n}{ext}")).find(|c| !taken.iter().any(|t| t == c)).unwrap_or_else(|| name.to_string())
-}
-
 /// Checks the items of a new session: at least one, every item offered as at least one type, and only files the caller can
 /// name. (The broker checks the grants themselves when the files are handed over.)
 pub fn valid_items(items: &[DragItem]) -> bool {
@@ -345,12 +334,14 @@ impl super::Shell {
         (!over_window && y as i32 > m.menubar).then_some(Zone::Desktop)
     }
 
-    /// Hands the session's files to `zone`; returns the operation the source hears (0 when nothing took them).
+    /// Hands the session's items to `zone`; returns the operation the source hears (0 when nothing took them). The Dock icon
+    /// opens its app with the text and URLs (`ToApp::Open`, as a share does) and with the files (`inbound_files`); the desktop
+    /// copies the files and folders in the background (`dnd_copy_to_desktop`).
     fn dnd_zone_drop(&mut self, sess: &Session, zone: Zone, t: f64) -> u8 {
-        let grants: Vec<GrantId> = sess.items.iter().filter_map(|i| if let Payload::File { grant, .. } = &i.payload { Some(*grant) } else { None }).collect();
-        if grants.is_empty() || sess.allowed & dragop::COPY == 0 {
+        if sess.allowed & dragop::COPY == 0 {
             return 0;
         }
+        let grants: Vec<GrantId> = sess.items.iter().filter_map(|i| if let Payload::File { grant, .. } = &i.payload { Some(*grant) } else { None }).collect();
         match zone {
             Zone::Dock(key) => {
                 let Some(app) = apps().iter().find(|a| a.icon == key).map(|a| a.id) else { return 0 };
@@ -360,9 +351,28 @@ impl super::Shell {
                 };
                 let AppId::External(to) = app else { return 0 };
                 self.desk_open_or_start(app, t);
-                let request = self.app_share.next_inbound();
-                self.inbound_files(&sess.source_app, &key, to, request, &grants);
-                dragop::COPY
+                let mut taken = false;
+                for item in &sess.items {
+                    let url = match &item.payload {
+                        Payload::Url(u) => Some(u.clone()),
+                        Payload::Text(s) => Some(text_url(s)),
+                        Payload::File { .. } => None,
+                    };
+                    if let Some(url) = url {
+                        self.ext_send(to as usize, &ToApp::Open { url });
+                        taken = true;
+                    }
+                }
+                if !grants.is_empty() {
+                    let request = self.app_share.next_inbound();
+                    self.inbound_files(&sess.source_app, &key, to, request, &grants);
+                    taken = true;
+                }
+                if taken {
+                    dragop::COPY
+                } else {
+                    0
+                }
             }
             Zone::Desktop => {
                 if self.dnd_copy_to_desktop(&sess.source_app, &grants) {
@@ -374,33 +384,25 @@ impl super::Shell {
         }
     }
 
-    /// Copies the files of `grants` (made for `source_app`) into the account's Desktop folder, made if missing. A name
-    /// already there gets a number. Folders are skipped. True when at least one file was copied.
+    /// Copies the files and folders of `grants` (made for `source_app`) into the account's Desktop folder, made if missing.
+    /// The copy runs on its own thread, so the shell keeps drawing: a folder is copied with everything in it (`batch`), and
+    /// a name already there gets a number. The copy reads the paths, so the grants are not needed after this. True when the
+    /// copy was started.
     fn dnd_copy_to_desktop(&mut self, source_app: &str, grants: &[GrantId]) -> bool {
         let Some(b) = self.doc_broker() else { return false };
-        let dir = Path::new("Desktop");
-        let _ = b.opener.make_dir(Path::new(""), "Desktop");
-        let mut taken: Vec<String> = b.opener.list(dir).unwrap_or_default().into_iter().map(|(n, _)| n).collect();
-        let mut copied = false;
-        for g in grants {
-            let Ok(grant) = b.grants.get(source_app, g) else { continue };
-            let Some(file_name) = grant.path.file_name().map(|n| n.to_string_lossy().into_owned()) else { continue };
-            let Ok(mut src) = b.opener.open_any(&grant.path, DocMode::Read) else { continue };
-            if !src.metadata().is_ok_and(|m| m.is_file()) {
-                continue;
-            }
-            let name = free_name(&taken, &file_name);
-            let Ok((pending, mut out)) = b.opener.begin_save(dir, &name) else { continue };
-            if std::io::copy(&mut src, &mut out).is_ok() {
-                if pending.commit(&b.opener).is_ok() {
-                    taken.push(name);
-                    copied = true;
-                }
-            } else {
-                pending.abort(&b.opener);
-            }
+        let home = b.opener.home().to_path_buf();
+        let sources: Vec<PathBuf> = grants.iter().filter_map(|g| b.grants.get(source_app, g).ok()).map(|g| home.join(&g.path)).filter(|p| p.symlink_metadata().is_ok()).collect();
+        if sources.is_empty() {
+            return false;
         }
-        copied
+        let desktop = home.join("Desktop");
+        let _ = std::fs::create_dir_all(&desktop);
+        crate::bare::sys::spawn_named("desktop-drop", move || {
+            let mut keep_both = |_: &Path| Some((batch::Resolution::KeepBoth, true));
+            let mut tick = |_: &batch::Progress| true;
+            batch::transfer(batch::Op::Copy, &sources, &desktop, &mut keep_both, &mut tick);
+        });
+        true
     }
 
     /// The grants a drag made for its file items go when the drag ends. The destinations' own grants stay.
@@ -645,15 +647,6 @@ mod tests {
         assert_eq!(img.px[1] >> 24, 0);
         assert!(preview_image(&DragPreview::default()).is_none());
         assert!(preview_image(&DragPreview { w: 4, h: 4, rgba: vec![0; 3] }).is_none());
-    }
-
-    #[test]
-    fn copies_take_a_free_name_before_the_extension() {
-        let taken = vec!["a.png".to_string(), "a 2.png".to_string(), "notes".to_string()];
-        assert_eq!(free_name(&taken, "b.png"), "b.png");
-        assert_eq!(free_name(&taken, "a.png"), "a 3.png");
-        assert_eq!(free_name(&taken, "notes"), "notes 2");
-        assert_eq!(free_name(&[".hidden".to_string()], ".hidden"), ".hidden 2", "a leading dot is not an extension");
     }
 
     #[test]
