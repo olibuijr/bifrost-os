@@ -119,6 +119,8 @@ pub enum PageId {
     Groups,
     /// Groups > one group (the detail is its name)
     GroupDetail,
+    /// Keyboard > Modifier Keys: what Caps Lock, Control, Option and Command do (see `kb_input`)
+    ModifierKeys,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -191,10 +193,18 @@ pub enum Toggle {
     LoginNamePassword,
     /// Users & Groups > Login Options: password hints at sign-in
     LoginHints,
+    /// Keyboard > Function Keys: F1 to F12 type their standard keys
+    FunctionStandard,
+    /// Keyboard > Keyboard Navigation: Tab moves focus between controls
+    TabNavigation,
+    /// Keyboard Shortcuts: switches one shell shortcut on or off (index into `kb_input::BINDINGS`)
+    Shortcut(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pick {
+    /// Keyboard > Modifier Keys: the modifier key (index into `kb_input::REMAPPABLE`) sends the choice (index into `kb_input::REMAP_TARGETS`)
+    Remap(usize, usize),
     /// Settings > Sound: the n-th listed output / input becomes the default
     SoundOutput(usize),
     SoundInput(usize),
@@ -239,6 +249,10 @@ pub enum Pick {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slider {
+    /// Keyboard > Key Repeat > Delay Until Repeat (`options::repeat_delay_from_slider`)
+    KeyRepeatDelay,
+    /// Keyboard > Key Repeat > Key Repeat (`options::repeat_rate_from_slider`)
+    KeyRepeatRate,
     Brightness,
     Volume,
     TextSize,
@@ -929,7 +943,39 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 ])
                 .header("ALL KEYBOARDS")
                 .footer("Double-tapping the space bar will insert a period followed by a space."),
+                Group::new(vec![
+                    Item::slider(Ends::Delay, super::options::repeat_delay_slider(o.key_repeat_delay_ms), Action::Slider(Slider::KeyRepeatDelay)),
+                    Item::slider(Ends::Rate, super::options::repeat_rate_slider(o.key_repeat_rate), Action::Slider(Slider::KeyRepeatRate)),
+                ])
+                .header("KEY REPEAT")
+                .footer("Delay Until Repeat is how long a key is held before it repeats. Key Repeat is how fast it repeats after that."),
+                Group::new(vec![Item::new("Modifier Keys").link(PageId::ModifierKeys)])
+                    .footer("Choose what Caps Lock, Control, Option and Command do."),
+                Group::new(vec![Item::new("Use F1, F2, etc. as Standard Function Keys").switch(o.function_standard, Action::Toggle(Toggle::FunctionStandard))])
+                    .footer("When on, the function keys type F1 to F12 into apps and the terminal. When off, they keep the shell's own actions."),
+                Group::new(vec![Item::new("Tab Moves Focus Between Controls").switch(o.tab_navigation, Action::Toggle(Toggle::TabNavigation))])
+                    .header("KEYBOARD NAVIGATION")
+                    .footer("When off, Tab does not move focus between controls. The terminal still receives Tab for completion."),
             ],
+        ),
+        PageId::ModifierKeys => page(
+            "Modifier Keys",
+            false,
+            MODIFIER_HEADERS
+                .iter()
+                .enumerate()
+                .map(|(slot, header)| {
+                    let current = o.key_prefs().remap.slot(slot);
+                    Group::new(
+                        super::kb_input::REMAP_TARGETS
+                            .iter()
+                            .enumerate()
+                            .map(|(t, (label, _))| Item::new(*label).check(t == current, Action::Pick(Pick::Remap(slot, t))))
+                            .collect(),
+                    )
+                    .header(header)
+                })
+                .collect(),
         ),
         PageId::Keyboards => page(
             "Keyboards",
@@ -1066,7 +1112,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::DisplayZoom => page("Display Zoom", false, vec![Group::new(ZOOMS.iter().enumerate().map(|(i, (l, _))| Item::new(*l).check(i == m.a11y.zoom, Action::Pick(Pick::DisplayZoom(i)))).collect()).header("VIEW")]),
         PageId::Appearance => appearance_page(m, &DeskPrefs::default()),
         PageId::HotCorners => hot_corners_page(&DeskPrefs::default()),
-        PageId::Shortcuts => shortcuts_page(),
+        PageId::Shortcuts => shortcuts_page(o),
         PageId::Overview => overview_page(&DeskPrefs::default()),
         PageId::InterfaceScale => {
             let now = crate::layout::user_scale();
@@ -1346,15 +1392,28 @@ pub fn overview_page(d: &DeskPrefs) -> Spec {
 
 /// The shortcuts the shell answers to, as (heading, [(action, keys)]).
 pub const SHORTCUTS: [(&str, &[(&str, &str)]); 4] = [
-    ("DESKTOP", &[("Search", "Cmd+Space"), ("Switch Application", "Cmd+Tab"), ("Settings", "Cmd+,"), ("Back", "Escape")]),
-    ("WINDOWS", &[("Close Window", "Cmd+W"), ("Minimize Window", "Cmd+M"), ("Quit Application", "Cmd+Q")]),
+    ("DESKTOP", &[("Back", "Escape")]),
+    ("WINDOWS", &[("Quit Application", "Cmd+Q")]),
     ("EDITING", &[("Undo", "Cmd+Z"), ("Redo", "Cmd+Shift+Z"), ("Cut", "Cmd+X"), ("Copy", "Cmd+C"), ("Paste", "Cmd+V"), ("Select All", "Cmd+A")]),
     ("FIND AND TEXT SIZE", &[("Find", "Cmd+F"), ("Find Next", "Cmd+G"), ("Find Previous", "Cmd+Shift+G"), ("Actual Size", "Cmd+0"), ("Bigger", "Cmd+="), ("Smaller", "Cmd+-")]),
 ];
 
-/// Keyboard Shortcuts: read-only lists.
-pub fn shortcuts_page() -> Spec {
-    let groups = SHORTCUTS.iter().map(|(h, rows)| Group::new(rows.iter().map(|(a, k)| Item::new(*a).value(*k)).collect()).header(*h)).collect();
+/// The headers of the Modifier Keys groups, in `kb_input::REMAPPABLE` order.
+const MODIFIER_HEADERS: [&str; 4] = ["CAPS LOCK KEY", "CONTROL KEY", "OPTION KEY", "COMMAND KEY"];
+
+/// Keyboard Shortcuts: the shell's own shortcuts as switches (they can be turned off to give the keys back to the
+/// app in front), then the reference lists of the other shortcuts.
+pub fn shortcuts_page(o: &Options) -> Spec {
+    let mut groups = vec![Group::new(
+        super::kb_input::BINDINGS
+            .iter()
+            .enumerate()
+            .map(|(i, (action, keys))| Item::new(*action).value(*keys).switch(o.shortcuts_off & (1 << i) == 0, Action::Toggle(Toggle::Shortcut(i))))
+            .collect(),
+    )
+    .header("SYSTEM")
+    .footer("A switched-off shortcut does nothing, and its keys go to the app in front.")];
+    groups.extend(SHORTCUTS.iter().map(|(h, rows)| Group::new(rows.iter().map(|(a, k)| Item::new(*a).value(*k)).collect()).header(*h)));
     Spec { id: PageId::Shortcuts, title: "Keyboard Shortcuts".into(), large: false, groups }
 }
 

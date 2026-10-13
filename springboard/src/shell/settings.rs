@@ -709,6 +709,11 @@ impl Settings {
         crate::bare::pointer_prefs::set(self.opts.pointer_tuning());
     }
 
+    /// Publishes the keyboard choices the hardware-key path uses (see `kb_input`).
+    fn apply_keys(&self) {
+        super::kb_input::set(self.opts.key_prefs());
+    }
+
     /// The accessibility settings as the user has set them.
     pub fn accessibility(&self) -> &AccessibilitySettings {
         &self.a11y
@@ -1762,6 +1767,19 @@ impl Settings {
                 }
                 vec![]
             }
+            Slider::KeyRepeatDelay | Slider::KeyRepeatRate => {
+                let v = v.clamp(0., 1.);
+                match which {
+                    Slider::KeyRepeatDelay => self.opts.key_repeat_delay_ms = super::options::repeat_delay_from_slider(v),
+                    _ => self.opts.key_repeat_rate = super::options::repeat_rate_from_slider(v),
+                }
+                self.list_mut().expect("list").set_slider(g, i, v);
+                self.apply_keys();
+                if release {
+                    self.opts.save(prefs);
+                }
+                vec![]
+            }
             Slider::MouseSpeed | Slider::MouseScroll | Slider::TrackpadSpeed => {
                 let v = v.clamp(0., 1.);
                 let speed = super::options::speed_from_slider(v);
@@ -1978,6 +1996,18 @@ impl Settings {
                         self.desk.sidebar_icons = k.min(super::pages::SIDEBAR_ICON_SIZES.len() - 1);
                         let _ = prefs.set(super::pages::SIDEBAR_ICON_PREF, &self.desk.sidebar_icons.to_string());
                         self.desk.apply();
+                        vec![]
+                    }
+                    Pick::Remap(slot, target) => {
+                        let target = target.min(super::kb_input::REMAP_TARGETS.len() - 1);
+                        match slot {
+                            0 => self.opts.remap_caps_lock = target,
+                            1 => self.opts.remap_control = target,
+                            2 => self.opts.remap_option = target,
+                            _ => self.opts.remap_command = target,
+                        }
+                        self.opts.save(prefs);
+                        self.apply_keys();
                         vec![]
                     }
                     Pick::TrackpadSecondary(k) => {
@@ -2206,6 +2236,22 @@ impl Settings {
             }
             Toggle::LoginNamePassword => flip(&mut self.opts.login_name_password),
             Toggle::LoginHints => flip(&mut self.opts.login_hints),
+            Toggle::FunctionStandard => {
+                let on = flip(&mut self.opts.function_standard);
+                self.apply_keys();
+                on
+            }
+            Toggle::TabNavigation => {
+                let on = flip(&mut self.opts.tab_navigation);
+                self.apply_keys();
+                on
+            }
+            Toggle::Shortcut(i) => {
+                let bit = 1u32 << i.min(super::kb_input::BINDINGS.len() - 1);
+                self.opts.shortcuts_off ^= bit;
+                self.apply_keys();
+                self.opts.shortcuts_off & bit == 0
+            }
             Toggle::AssistiveTouch => flip(&mut self.opts.assistive_touch),
             Toggle::ReduceMotion => flip(&mut self.a11y.reduce_motion),
             Toggle::IncreaseContrast => flip(&mut self.a11y.increase_contrast),
@@ -2829,6 +2875,8 @@ mod tests {
             (vec!["General", "Fonts", "System Font"], PageId::FontPick(bifrost_render::fontprefs::FontRole::System)),
             (vec!["General", "Keyboard"], PageId::Keyboard),
             (vec!["General", "Keyboard", "Keyboards"], PageId::Keyboards),
+            (vec!["General", "Keyboard", "Text Replacements"], PageId::TextReplacements),
+            (vec!["General", "Keyboard", "Modifier Keys"], PageId::ModifierKeys),
             (vec!["General", "Language & Region"], PageId::Language),
             (vec!["General", "Transfer or Reset Tab"], PageId::Reset),
             (vec!["Control Centre"], PageId::ControlCentre),

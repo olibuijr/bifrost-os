@@ -61,6 +61,10 @@ pub enum Accessory {
 /// The ends of a slider.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Ends {
+    /// Keyboard > Key Repeat > Delay Until Repeat: Long and Short
+    Delay,
+    /// Keyboard > Key Repeat > Key Repeat: Slow and Fast
+    Rate,
     Brightness,
     Volume,
     TextSize,
@@ -1058,6 +1062,14 @@ impl ListPage {
                     } else {
                         s.stroke_rrect(cx - d / 2.0, ty - d / 2.0, d, d, ui.pt(4.0), ui.pt(1.5), SECONDARY);
                     }
+                }
+            }
+            Ends::Delay | Ends::Rate => {
+                let (left, right) = if ends == Ends::Delay { ("Long", "Short") } else { ("Slow", "Fast") };
+                for (cx, label) in [(lx, left), (rx, right)] {
+                    let a = ui.chrome(label, 11.0, Weight::Regular, SECONDARY);
+                    let x = if cx < tx { m } else { tx + tw + ui.pt(26.0) * 2.0 - a.w as f32 };
+                    s.blit(&a, x as i32, (ty + ui.pt(KNOB_PT) / 2.0 + ui.pt(4.0)) as i32, 255, 255);
                 }
             }
             Ends::Speed => {
