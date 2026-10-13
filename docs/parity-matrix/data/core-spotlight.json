@@ -10,23 +10,23 @@
     {
       "feature": "Searchable items and attribute sets",
       "apple": "CSSearchableItem, CSSearchableItemAttributeSet",
-      "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableItemAttributeSet::new, content_description, keywords, thumbnail_path, content_url; CSSearchableItem::new); wired: springboard/src/shell/spotindex.rs (kind_of, load_thumbnail, decode_thumbnail); springboard/src/shell/quicksearch.rs (indexed_label, thumbnail cache in search() and draw())",
+      "bifrost": "springboard/sdk/src/quicksearch.rs (CSSearchableItemAttributeSet::new, content_description, keywords, thumbnail_path, content_url; CSSearchableItem::new); wired: springboard/src/shell/spotindex.rs (kind_of, load_thumbnail, decode_thumbnail); springboard/src/shell/quicksearch.rs (indexed_label, thumbnail cache in search() and draw()); springboard/sdk/src/quicksearch.rs (content_type, content_creation_date, author_names, display_name, ranking_hint, CSCustomAttributeKey)",
       "status": "partial",
-      "note": "title, description, keywords, thumbnail path and content URL only; no other Apple attribute keys Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "title, description, keywords, thumbnail path, content URL, content type, creation and modification dates, author names, display name, ranking hint and CSCustomAttributeKey values (searchable or not), plus persons and localized titles. Dates, authors, type and searchable custom values are folded into the indexed keywords. Host tests only; verify on Midget for parity."
     },
     {
       "feature": "Indexing items in an on-device index",
       "apple": "CSSearchableIndex.indexSearchableItems",
-      "bifrost": "springboard/sdk/src/quicksearch.rs:83 (index_searchable_items); springboard/src/shell/spotindex.rs:54 (Index::index)",
+      "bifrost": "springboard/sdk/src/quicksearch.rs:83 (index_searchable_items); springboard/src/shell/spotindex.rs:54 (Index::index); springboard/sdk/src/search_index_batch.rs (SearchIndexLedger, CSIndexError, index_searchable_items_with_completion, begin_batch/end_batch, fetch_last_client_state)",
       "status": "partial",
-      "note": "fire-and-forget message to the shell; no completion handler, so the app learns nothing about success or failure; identifier reuse replaces the item"
+      "note": "completion results as Result<(), CSIndexError> (invalidItem, invalidClientState, indexUnavailable, quotaExceeded) from an app-side ledger; the 1000-item cap reports quotaExceeded in the SDK; batches commit all or none with client state. The shell still evicts oldest-first and sends no acknowledgement, so remoteConnectionError is not raised yet. Host tests only."
     },
     {
       "feature": "Deleting indexed items",
       "apple": "CSSearchableIndex.deleteSearchableItems(withIdentifiers:), deleteSearchableItems(withDomainIdentifiers:), deleteAllSearchableItems",
       "bifrost": "springboard/sdk/src/quicksearch.rs:103-113; springboard/src/shell/spotindex.rs:70 (Index::delete)",
       "status": "parity",
-      "note": "delete by identifier, by domain and all items; the Apple completion handlers are not present"
+      "note": "delete by identifier, by domain and all items; completion variants for identifiers and delete-all via the ledger (host tests only)"
     },
     {
       "feature": "Index storage, bounds and lifecycle",
@@ -116,9 +116,8 @@
   "gaps": [
     "No app-facing query API (CSSearchQuery, CSUserQuery) and no suggestions, so apps cannot search their own index or build a search field on it.",
     "No index client delegate and no index extensions for on-demand regeneration (CSSearchableIndexDelegate, CSIndexExtensionRequestHandler, CSImportExtension).",
-    "Indexing reports no completion or error results (CSIndexError equivalents are missing), so apps cannot tell when an update failed.",
-    "Item attributes are limited to title, description, keywords, thumbnail and URL; Apple's custom attribute keys, localized strings and person records are missing.",
     "No Foundation models search tool (SpotlightSearchTool and its pipeline types), so indexed content cannot be given to the on-device assistant as context.",
-    "No index descriptions or protection classes; the shell index is a single JSON file per app with oldest-first eviction at 1000 items."
+    "No index descriptions or protection classes; the shell index is a single JSON file per app with oldest-first eviction at 1000 items.",
+    "The shell index does not acknowledge calls, so remoteConnectionError is never raised and the shell's own oldest-first eviction is not visible to the SDK ledger."
   ]
 }
