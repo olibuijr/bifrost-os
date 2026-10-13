@@ -140,6 +140,7 @@ fn watch_term(dir: &str) {
     let dir = dir.to_string();
     super::sys_watch::register(super::sys_watch::Watch {
         fds: vec![rx.as_raw_fd()],
+        events: crate::bare::sys::POLLIN,
         due: None,
         run: Box::new(move |ready, _now| {
             if !ready[0] {

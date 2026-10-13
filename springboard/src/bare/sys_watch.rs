@@ -17,6 +17,9 @@ pub type Run = Box<dyn FnMut(&[bool], f64) -> Option<f64> + Send>;
 
 pub struct Watch {
     pub fds: Vec<c_int>,
+    /// The poll events wanted on every fd: `sys::POLLIN` for pipes and sockets, `sys::POLLPRI` for PSI triggers
+    /// (a proc file always polls readable, so POLLIN there would never sleep).
+    pub events: i16,
     pub due: Option<f64>,
     pub run: Run,
 }
@@ -38,14 +41,16 @@ pub fn start() {
 }
 
 fn run(mut watches: Vec<Watch>) {
-    let (mut fds, mut ready, mut revents) = (Vec::new(), Vec::new(), Vec::new());
+    let (mut fds, mut events, mut ready, mut revents) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     loop {
         fds.clear();
+        events.clear();
         let spans: Vec<std::ops::Range<usize>> = watches
             .iter()
             .map(|w| {
                 let start = fds.len();
                 fds.extend_from_slice(&w.fds);
+                events.extend(w.fds.iter().map(|_| w.events));
                 start..fds.len()
             })
             .collect();
@@ -56,7 +61,7 @@ fn run(mut watches: Vec<Watch>) {
             .filter_map(|w| w.due)
             .reduce(f64::min)
             .map_or(-1, |due| (due - now).ceil().max(0.0) as i32);
-        sys::poll_revents(&fds, sys::POLLIN | sys::POLLPRI, timeout, &mut revents);
+        sys::poll_revents(&fds, &events, timeout, &mut revents);
         let now = sys::now_ms();
         let mut dead = Vec::new();
         for (i, (w, span)) in watches.iter_mut().zip(spans).enumerate() {
@@ -65,7 +70,7 @@ fn run(mut watches: Vec<Watch>) {
                 continue;
             }
             ready.clear();
-            ready.extend(revents[span].iter().map(|&r| r & (sys::POLLIN | sys::POLLPRI | sys::POLLHUP) != 0));
+            ready.extend(revents[span.clone()].iter().zip(&events[span]).map(|(&r, &e)| r & (e | sys::POLLHUP) != 0));
             let due = w.due.is_some_and(|d| now >= d);
             if due || ready.iter().any(|&r| r) {
                 w.due = (w.run)(&ready, now);
@@ -75,5 +80,22 @@ fn run(mut watches: Vec<Watch>) {
             eprintln!("springboard: sys-watch: dropping a watcher whose fd failed");
             watches.swap_remove(i);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::fd::AsRawFd;
+
+    #[test]
+    fn a_proc_file_polls_readable_but_not_priority() {
+        // the 0.7.17 spin: PSI triggers are proc files, which always poll readable
+        let f = std::fs::File::open("/proc/self/status").unwrap();
+        let mut out = Vec::new();
+        sys::poll_revents(&[f.as_raw_fd()], &[sys::POLLIN], 0, &mut out);
+        assert_ne!(out[0] & sys::POLLIN, 0);
+        sys::poll_revents(&[f.as_raw_fd()], &[sys::POLLPRI], 0, &mut out);
+        assert_eq!(out[0] & sys::POLLPRI, 0);
     }
 }

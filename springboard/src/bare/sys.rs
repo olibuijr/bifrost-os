@@ -166,9 +166,9 @@ pub fn wait_into(fds: &[c_int], timeout_ms: i32, out: &mut Vec<bool>) {
     });
 }
 
-/// `poll(2)` over `fds` for `events` (one mask for all); `out` gets each fd's `revents` (cleared first).
-pub fn poll_revents(fds: &[c_int], events: i16, timeout_ms: i32, out: &mut Vec<i16>) {
-    let mut p: Vec<pollfd> = fds.iter().map(|&fd| pollfd { fd, events, revents: 0 }).collect();
+/// `poll(2)` over `fds`, each with its own `events` mask; `out` gets each fd's `revents` (cleared first).
+pub fn poll_revents(fds: &[c_int], events: &[i16], timeout_ms: i32, out: &mut Vec<i16>) {
+    let mut p: Vec<pollfd> = fds.iter().zip(events).map(|(&fd, &events)| pollfd { fd, events, revents: 0 }).collect();
     unsafe { poll(p.as_mut_ptr(), p.len() as nfds_t, timeout_ms) };
     out.clear();
     out.extend(p.iter().map(|f| f.revents));

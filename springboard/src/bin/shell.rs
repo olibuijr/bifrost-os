@@ -115,7 +115,7 @@ fn run() -> std::io::Result<()> {
     // memory pressure (the purgeable caches' PSI triggers) on the same thread, not one of its own
     #[cfg(target_os = "linux")]
     if let Some((fds, run)) = bifrost_render::purgeable::hosted_watcher() {
-        springboard::bare::sys_watch::register(springboard::bare::sys_watch::Watch { fds, due: None, run });
+        springboard::bare::sys_watch::register(springboard::bare::sys_watch::Watch { fds, events: springboard::bare::sys::POLLPRI, due: None, run });
     }
     springboard::bare::sys_watch::start();
     springboard::shell::apphost::register(std::path::Path::new(&dir));

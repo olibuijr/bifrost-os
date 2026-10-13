@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.18 — 2026-10-13
+
+- Fixes 0.7.17 spinning a core: `sys-watch` polled the PSI trigger files for POLLIN, which a proc file always reports. Each watcher now has its own event mask (PSI waits on POLLPRI only); regression test `a_proc_file_polls_readable_but_not_priority`.
+
 ## 0.7.17 — 2026-10-13
 
 - The memory-pressure (PSI) watcher runs on the shell's `sys-watch` thread (`purgeable::hosted_watcher`); `sys-watch` polls POLLPRI and drops a watcher whose fd fails instead of spinning.

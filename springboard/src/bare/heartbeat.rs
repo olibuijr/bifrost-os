@@ -126,6 +126,7 @@ pub fn watch(dir: &str) {
     let mut total = sys::boottime_ms() - sys::now_ms();
     super::sys_watch::register(super::sys_watch::Watch {
         fds: Vec::new(),
+        events: 0,
         due: Some(sys::now_ms() + period),
         run: Box::new(move |_ready, _now| {
             let now = sys::now_ms();
