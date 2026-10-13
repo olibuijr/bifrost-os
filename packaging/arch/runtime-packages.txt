@@ -101,9 +101,11 @@ strace
 sysstat
 tcpdump
 tcsh
+tftp-hpa
 tidy
 traceroute
 unzip
+usd
 vim
 which
 whois
