@@ -100,6 +100,76 @@ impl Rect {
     }
 }
 
+/// A displacement in the plane: how far to move along x and y (`CGVector`). It is a direction and a length, not a
+/// position, so it has no origin; add it to a point to move the point.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Vector {
+    pub dx: f32,
+    pub dy: f32,
+}
+
+impl Vector {
+    pub const ZERO: Vector = Vector { dx: 0.0, dy: 0.0 };
+
+    pub fn new(dx: f32, dy: f32) -> Self {
+        Vector { dx, dy }
+    }
+    /// The displacement from point `a` to point `b`.
+    pub fn between(a: (f32, f32), b: (f32, f32)) -> Self {
+        Vector { dx: b.0 - a.0, dy: b.1 - a.1 }
+    }
+    pub fn length(self) -> f32 {
+        self.dx.hypot(self.dy)
+    }
+    pub fn dot(self, o: Vector) -> f32 {
+        self.dx * o.dx + self.dy * o.dy
+    }
+    pub fn scaled(self, k: f32) -> Vector {
+        Vector { dx: self.dx * k, dy: self.dy * k }
+    }
+    /// The vector of length 1 in the same direction; the zero vector stays zero.
+    pub fn normalized(self) -> Vector {
+        let l = self.length();
+        if l == 0.0 {
+            Vector::ZERO
+        } else {
+            self.scaled(1.0 / l)
+        }
+    }
+    /// The point `p` moved by this vector.
+    pub fn apply(self, p: (f32, f32)) -> (f32, f32) {
+        (p.0 + self.dx, p.1 + self.dy)
+    }
+}
+
+impl std::ops::Add for Vector {
+    type Output = Vector;
+    fn add(self, o: Vector) -> Vector {
+        Vector { dx: self.dx + o.dx, dy: self.dy + o.dy }
+    }
+}
+
+impl std::ops::Sub for Vector {
+    type Output = Vector;
+    fn sub(self, o: Vector) -> Vector {
+        Vector { dx: self.dx - o.dx, dy: self.dy - o.dy }
+    }
+}
+
+impl std::ops::Neg for Vector {
+    type Output = Vector;
+    fn neg(self) -> Vector {
+        Vector { dx: -self.dx, dy: -self.dy }
+    }
+}
+
+impl Rect {
+    /// The rectangle moved by a vector; the size is unchanged.
+    pub fn offset_by(self, v: Vector) -> Rect {
+        Rect { x: self.x + v.dx, y: self.y + v.dy, ..self }
+    }
+}
+
 /// A set of points kept as disjoint rectangles: the shape a hit area, a clip or a window outline is built from.
 /// Every operation returns a new region. Empty rectangles are dropped and neighbouring pieces with the same edge are joined.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -204,6 +274,32 @@ fn push_joined(out: &mut Vec<Rect>, r: Rect) {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_vector_measures_and_moves() {
+        let v = Vector::between((1.0, 2.0), (4.0, 6.0));
+        assert_eq!(v, Vector::new(3.0, 4.0));
+        assert_eq!(v.length(), 5.0);
+        assert_eq!(v.apply((1.0, 2.0)), (4.0, 6.0));
+        assert_eq!(v.dot(Vector::new(1.0, 0.0)), 3.0);
+        assert_eq!(v.scaled(2.0), Vector::new(6.0, 8.0));
+        assert_eq!(-v, Vector::new(-3.0, -4.0));
+        assert_eq!(v + Vector::new(1.0, 1.0), Vector::new(4.0, 5.0));
+        assert_eq!(v - v, Vector::ZERO);
+    }
+
+    #[test]
+    fn normalizing_gives_unit_length_and_keeps_zero() {
+        let n = Vector::new(0.0, -8.0).normalized();
+        assert_eq!(n, Vector::new(0.0, -1.0));
+        assert_eq!(Vector::ZERO.normalized(), Vector::ZERO);
+    }
+
+    #[test]
+    fn a_rectangle_moves_by_a_vector() {
+        let r = Rect { x: 1.0, y: 1.0, w: 5.0, h: 6.0 };
+        assert_eq!(r.offset_by(Vector::new(2.0, -1.0)), Rect { x: 3.0, y: 0.0, w: 5.0, h: 6.0 });
+    }
     use super::*;
     const R: Rect = Rect { x: 10.0, y: 20.0, w: 100.0, h: 50.0 };
 

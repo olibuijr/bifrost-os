@@ -5,3 +5,4 @@ edition = "2021"
 description = "Independent BifrOSt control semantics, focus, commands and text editing"
 [dependencies]
 bifrost-audio-types = { path = "../audio/types" }
+bifrost-core = { path = "../core" }
