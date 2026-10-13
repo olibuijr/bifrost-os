@@ -148,19 +148,95 @@ pub enum Tool {
     Pick(Pick),
     /// Records the region dragged (`Region`) or the whole screen (`Screen`) instead of taking a picture.
     Record(Pick),
+    /// Opens or closes the Options menu above the bar.
+    Options,
+    Cancel,
+}
+
+/// Where a recording is saved: a folder in the home directory.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SaveTo {
+    #[default]
+    Desktop,
+    Documents,
+}
+
+impl SaveTo {
+    /// The folder name under the home directory.
+    pub fn folder(self) -> &'static str {
+        match self {
+            SaveTo::Desktop => "Desktop",
+            SaveTo::Documents => "Documents",
+        }
+    }
+}
+
+/// The choices of the toolbar's Options menu. They last across capture sessions: the shell keeps them and each session
+/// starts from them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Prefs {
+    /// the folder a recording is saved to
+    pub save_to: SaveTo,
+    /// seconds to wait before a capture: 0, 5 or 10
+    pub timer: u32,
+    /// whether the pointer is drawn into a picture
+    pub pointer: bool,
+    /// whether a recording takes the microphone too, through the audio service
+    pub microphone: bool,
+}
+
+/// A row of the Options menu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OptionRow {
+    SaveTo,
     Timer,
     Pointer,
-    Cancel,
+    Microphone,
+}
+
+/// The Options menu's rows, top to bottom.
+pub const OPTION_ROWS: [OptionRow; 4] = [OptionRow::SaveTo, OptionRow::Timer, OptionRow::Pointer, OptionRow::Microphone];
+
+impl Prefs {
+    /// Applies a menu row: Save To and Timer cycle through their choices, the switches flip.
+    pub fn choose(&mut self, row: OptionRow) {
+        match row {
+            OptionRow::SaveTo => {
+                self.save_to = match self.save_to {
+                    SaveTo::Desktop => SaveTo::Documents,
+                    SaveTo::Documents => SaveTo::Desktop,
+                }
+            }
+            OptionRow::Timer => self.timer = next_timer(self.timer),
+            OptionRow::Pointer => self.pointer = !self.pointer,
+            OptionRow::Microphone => self.microphone = !self.microphone,
+        }
+    }
+
+    /// The row's text, such as `Timer: 5 s`.
+    pub fn text(&self, row: OptionRow) -> String {
+        let onoff = |on: bool| if on { "On" } else { "Off" };
+        match row {
+            OptionRow::SaveTo => format!("Save To: {}", self.save_to.folder()),
+            OptionRow::Timer => {
+                if self.timer == 0 {
+                    "Timer: Off".to_string()
+                } else {
+                    format!("Timer: {} s", self.timer)
+                }
+            }
+            OptionRow::Pointer => format!("Show Pointer: {}", onoff(self.pointer)),
+            OptionRow::Microphone => format!("Microphone: {}", onoff(self.microphone)),
+        }
+    }
 }
 
 /// One open capture session: the toolbar's choices, the drag in progress and a capture waiting on its countdown.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Session {
     pub pick: Pick,
-    /// Seconds to wait before the capture: 0, 5 or 10.
-    pub timer: u32,
-    /// Whether the pointer is drawn into the capture.
-    pub pointer: bool,
+    /// The Options menu's choices (timer, pointer, save location, microphone).
+    pub prefs: Prefs,
     /// The last pointer position in screen pixels.
     pub at: (f32, f32),
     pub drag: Drag,
@@ -170,6 +246,8 @@ pub struct Session {
     pub pending: Option<(Rect, Countdown)>,
     /// Whether the chosen rectangle is recorded as a movie instead of saved as a picture (Record buttons).
     pub record: bool,
+    /// The Options menu is open above the bar.
+    pub menu: bool,
 }
 
 impl Default for Session {
@@ -179,9 +257,14 @@ impl Default for Session {
 }
 
 impl Session {
-    /// A fresh session: a selection, no timer, no pointer.
+    /// A fresh session: a selection, with the default options.
     pub fn new() -> Self {
-        Session { pick: Pick::Region, timer: 0, pointer: false, at: (0.0, 0.0), drag: Drag::default(), pressed: None, pending: None, record: false }
+        Session::with_prefs(Prefs::default())
+    }
+
+    /// A fresh session that starts with the options the shell kept from the last one.
+    pub fn with_prefs(prefs: Prefs) -> Self {
+        Session { pick: Pick::Region, prefs, at: (0.0, 0.0), drag: Drag::default(), pressed: None, pending: None, record: false, menu: false }
     }
 
     /// A press on the screen (not on the toolbar): a selection starts here.
@@ -221,8 +304,7 @@ impl Session {
                 self.pick = p;
                 self.record = true;
             }
-            Tool::Timer => self.timer = next_timer(self.timer),
-            Tool::Pointer => self.pointer = !self.pointer,
+            Tool::Options => self.menu = !self.menu,
             Tool::Cancel => return true,
         }
         false
@@ -247,10 +329,8 @@ impl Session {
             let label = if p == Pick::Region { "Record Selection" } else { "Record Screen" };
             items.push((Tool::Record(p), ui.text(label, LABEL_PT, Weight::Medium, color)));
         }
-        let timer = if self.timer == 0 { "Timer: Off".to_string() } else { format!("Timer: {} s", self.timer) };
-        items.push((Tool::Timer, ui.text(&timer, LABEL_PT, Weight::Medium, WHITE)));
-        let pointer = if self.pointer { "Pointer: On" } else { "Pointer: Off" };
-        items.push((Tool::Pointer, ui.text(pointer, LABEL_PT, Weight::Medium, WHITE)));
+        let options = if self.menu { WHITE } else { SECONDARY };
+        items.push((Tool::Options, ui.text("Options", LABEL_PT, Weight::Medium, options)));
         items.push((Tool::Cancel, ui.text("Cancel", LABEL_PT, Weight::Medium, TINT)));
 
         let pad = (8.0 * s).round() as i32;
@@ -269,6 +349,41 @@ impl Session {
             x += bw + gap;
         }
         (bar, buttons)
+    }
+
+    /// The Options menu's card and its rows (with their text), when the menu is open. The card sits above the bar,
+    /// centred, one bar-height row per option.
+    pub fn menu_rows(&self, ui: &Ui, w: i32, h: i32) -> Option<(Rect, Vec<(OptionRow, Rect, Image)>)> {
+        if !self.menu {
+            return None;
+        }
+        let s = ui.s;
+        let (bar, _) = self.toolbar(ui, w, h);
+        let texts: Vec<(OptionRow, Image)> = OPTION_ROWS.iter().map(|&row| (row, ui.text(&self.prefs.text(row), LABEL_PT, Weight::Medium, WHITE))).collect();
+        let pad = (8.0 * s).round() as i32;
+        let gap = (6.0 * s).round() as i32;
+        let side = (16.0 * s).round() as i32;
+        let row_h = (BAR_PT * s).round() as i32;
+        let text_w = texts.iter().map(|(_, img)| img.w as i32).max().unwrap_or(0);
+        let card_w = text_w + 2 * side + 2 * pad;
+        let card_h = row_h * OPTION_ROWS.len() as i32 + 2 * pad;
+        let card = Rect { x: ((w - card_w) / 2).max(0), y: (bar.y - gap - card_h).max(0), w: card_w, h: card_h };
+        let rows = texts
+            .into_iter()
+            .enumerate()
+            .map(|(i, (row, img))| (row, Rect { x: card.x + pad, y: card.y + pad + i as i32 * row_h, w: card_w - 2 * pad, h: row_h }, img))
+            .collect();
+        Some((card, rows))
+    }
+
+    /// The Options menu row under the point, if the menu is open and the point is on one.
+    pub fn option_at(&self, ui: &Ui, w: i32, h: i32, x: f32, y: f32) -> Option<OptionRow> {
+        self.menu_rows(ui, w, h)?.1.into_iter().find(|(_, r, _)| r.contains(x, y)).map(|(row, _, _)| row)
+    }
+
+    /// True when the point is on the open Options menu's card.
+    pub fn on_menu(&self, ui: &Ui, w: i32, h: i32, x: f32, y: f32) -> bool {
+        self.menu_rows(ui, w, h).is_some_and(|(card, _)| card.contains(x, y))
     }
 
     /// The toolbar button under the point, if any.
@@ -310,13 +425,19 @@ impl Session {
             let on = match tool {
                 Tool::Pick(p) => self.pick == p && !self.record,
                 Tool::Record(p) => self.pick == p && self.record,
-                Tool::Pointer => self.pointer,
+                Tool::Options => self.menu,
                 _ => false,
             };
             if on {
                 s.fill_rrect(r.x as f32, r.y as f32, r.w as f32, r.h as f32, r.h as f32 / 2.0, TINT);
             }
             s.blit(&img, r.x + (r.w - img.w as i32) / 2, r.y + (r.h - img.h as i32) / 2, 255, 255);
+        }
+        if let Some((card, rows)) = self.menu_rows(ui, w, h) {
+            s.fill_rrect(card.x as f32, card.y as f32, card.w as f32, card.h as f32, 10.0 * k, CELL);
+            for (_, r, img) in rows {
+                s.blit(&img, r.x + (16.0 * k).round() as i32, r.y + (r.h - img.h as i32) / 2, 255, 255);
+            }
         }
     }
 }
@@ -441,11 +562,42 @@ mod tests {
         let mut s = Session::new();
         assert!(!s.apply(Tool::Pick(Pick::Window)));
         assert_eq!(s.pick, Pick::Window);
-        s.apply(Tool::Timer);
-        assert_eq!(s.timer, 5);
-        s.apply(Tool::Pointer);
-        assert!(s.pointer);
+        assert!(!s.menu, "the Options menu starts closed");
+        s.apply(Tool::Options);
+        assert!(s.menu, "Options opens the menu");
+        s.apply(Tool::Options);
+        assert!(!s.menu, "and a second press closes it");
         assert!(s.apply(Tool::Cancel), "cancel ends the session");
+    }
+
+    #[test]
+    fn options_rows_change_the_prefs_they_name() {
+        let mut p = Prefs::default();
+        assert_eq!(p.save_to, SaveTo::Desktop, "recordings go to the Desktop first");
+        p.choose(OptionRow::SaveTo);
+        assert_eq!(p.save_to, SaveTo::Documents);
+        p.choose(OptionRow::SaveTo);
+        assert_eq!(p.save_to, SaveTo::Desktop);
+        p.choose(OptionRow::Timer);
+        assert_eq!(p.timer, 5);
+        assert_eq!(p.text(OptionRow::Timer), "Timer: 5 s");
+        p.choose(OptionRow::Pointer);
+        assert!(p.pointer);
+        assert_eq!(p.text(OptionRow::Pointer), "Show Pointer: On");
+        p.choose(OptionRow::Microphone);
+        assert!(p.microphone);
+        assert_eq!(p.text(OptionRow::Microphone), "Microphone: On");
+        assert_eq!(p.text(OptionRow::SaveTo), "Save To: Desktop");
+        p.timer = 0;
+        assert_eq!(p.text(OptionRow::Timer), "Timer: Off");
+    }
+
+    #[test]
+    fn a_new_session_starts_from_the_kept_prefs() {
+        let prefs = Prefs { save_to: SaveTo::Documents, timer: 10, pointer: true, microphone: false };
+        let s = Session::with_prefs(prefs);
+        assert_eq!(s.prefs, prefs);
+        assert!(!s.menu);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 id = "is.olibuijr.videoplayer.desktop"
 name = "Video Player"
-version = "0.1.0"
+version = "0.2.0"
 exec = "bifrost-videoplayer"
 icon = "icon.png"
 min_shell = "0.6.5"
@@ -9,3 +9,10 @@ category = "Photo & Video"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents", "audio"]
 window = "full-size"
+
+[[intent]]
+id = "open-movie"
+title = "Open Movie"
+description = "Opens a movie file in the player."
+shortcut = false
+params = ["path:string"]

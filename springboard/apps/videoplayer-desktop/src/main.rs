@@ -12,8 +12,10 @@ mod movie;
 use bifrost_app::audio;
 use bifrost_app::controls::recording::{RecordError, Recorder};
 use bifrost_app::kit::{pack, rgba, Damage, Event, Image, Surface, Ui, Weight};
+use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::proto::DocMode;
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
+use bifrost_core::json::Json;
 use springboard::deildu::player_view::Outcome;
 use springboard::shell::clock::Wall;
 use springboard::shell::photos::library;
@@ -344,6 +346,28 @@ impl App for VideoPlayerApp {
                 true
             }
             _ => false,
+        }
+    }
+
+    /// `open-movie`: the shell hands over a movie file by path (a finished screen recording). It plays like a movie from
+    /// the open panel, but the file is opened by path, not through a document grant.
+    fn intents(&self) -> Vec<Intent> {
+        vec![Intent::new("open-movie", "Open Movie", "Opens a movie file in the player.").param(Param::new("path", "Path", ParamType::String))]
+    }
+
+    fn perform_intent(&mut self, ctx: Option<&Ctx>, _data_dir: &Path, id: &str, params: &Json) -> Result<IntentResult, bifrost_app::control::RpcError> {
+        match id {
+            "open-movie" => {
+                let Some(ctx) = ctx else { return Err(intents::failed("Video Player is not running yet")) };
+                let path = PathBuf::from(intents::str_param(params, "path")?);
+                let title = title_of(&path);
+                if self.open_path(ctx, &path, &title) {
+                    Ok(IntentResult::dialog(&format!("Playing {title}")))
+                } else {
+                    Err(intents::failed(self.notice.clone()))
+                }
+            }
+            _ => Err(bifrost_app::control::RpcError::new(bifrost_app::control::INVALID_PARAMS, format!("no intent {id}"))),
         }
     }
 

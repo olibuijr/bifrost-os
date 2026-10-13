@@ -450,6 +450,12 @@ fn run() -> std::io::Result<()> {
         #[cfg(feature = "desktop-wayland")]
         let previous_present = last_present;
         if disp.boot_fading() { shell.force_full_redraw(); }
+        // a screen recording follows the display's rate while the GPU path is up (`screenrec::frame_rate`)
+        #[cfg(feature = "desktop-wayland")]
+        let gpu = wayland && disp.wayland_gpu_active();
+        #[cfg(not(feature = "desktop-wayland"))]
+        let gpu = false;
+        shell.set_display(disp.mode.vrefresh, gpu);
         let animating = shell.needs_frame() || disp.boot_fading();
         // Animating: draw as soon as the previous flip has landed, otherwise
         // sleep until the flip event (paced by the display, not a timer).

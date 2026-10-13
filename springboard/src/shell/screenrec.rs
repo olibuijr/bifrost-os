@@ -1,26 +1,46 @@
-//! Screen recording. The shell records the frames it draws (the same drawing a screenshot takes) at `FPS`, cropped to the
-//! chosen area, and an encoder writes them. The encoder is the system `ffmpeg` when the PATH holds one (H.264 in a
-//! `.mov`), else a built-in Motion JPEG AVI writer. Recordings start from the screenshot toolbar's Record buttons and from
-//! the control port (`rec start`, which `screencapture -v` and `-V` use), and end from the menu bar's Stop Recording item,
-//! `rec stop` or the end of `-V`.
+//! Screen recording. The shell records the frames it draws (the same drawing a screenshot takes), cropped to the chosen
+//! area, and an encoder writes them. The encoder is the system `ffmpeg` when the PATH holds one (H.264 in a `.mov`), else
+//! a built-in Motion JPEG AVI writer. The frame rate follows the display while the GPU path is up (`frame_rate`), else
+//! `FPS`. With ffmpeg and the Options menu's Microphone on, the audio service records a WAV take beside the movie, and
+//! `mux_audio` adds it to the movie once the service has written it.
 //!
-//! Not yet: apps cannot record (no capture stream in the SDK), and gstreamer is not a second encoder.
+//! Recordings start from the screenshot toolbar's Record buttons and from the control port (`rec start`, which
+//! `screencapture -v` and `-V` use), and end from the menu bar's Stop Recording item, `rec stop` or the end of `-V`. A
+//! finished recording opens in the Video Player through its `open-movie` intent.
+//!
+//! Not yet: apps cannot record (no capture stream in the SDK), gstreamer is not a second encoder, and the pointer is not
+//! drawn into a movie (only into pictures).
 
 use super::camera::jpeg;
 use super::photos::library::civil;
+use super::services::privacy_permissions::{self, Kind};
 use super::Shell;
 use crate::gfx::Image;
+use bifrost_ui::capture_access::{Media, Status};
 use std::fs::File;
 use std::io::{Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::thread::JoinHandle;
+use std::time::Duration;
 
-/// Frames per second the shell records at.
+/// Frames per second the shell records at while the GPU path is not up (a frame is drawn in full, in software).
 pub const FPS: u32 = 10;
-/// Milliseconds between two recorded frames.
-const INTERVAL_MS: f64 = 1000.0 / FPS as f64;
+/// The fastest a recording follows the display.
+pub const MAX_FPS: u32 = 60;
+/// The app whose microphone answer covers the shell's own recordings (the prompt says "Screenshot").
+const CAPTURE_APP: &str = "is.olibuijr.screenshot.desktop";
+const CAPTURE_NAME: &str = "Screenshot";
+/// The Video Player, which opens a finished recording through its `open-movie` intent.
+const PLAYER_APP: &str = "is.olibuijr.videoplayer.desktop";
+const OPEN_INTENT: &str = "open-movie";
+/// How long an open waits for the player's control socket after the player is started.
+const OPEN_WAIT: Duration = Duration::from_secs(8);
+/// How long a finished recording waits for its audio take before it opens without sound (ms).
+const AUDIO_WAIT_MS: f64 = 15_000.0;
+/// How soon the loop comes round again while a take is on its way or being muxed (ms).
+const MUX_POLL_MS: f64 = 50.0;
 /// JPEG quality of the built-in writer.
 const JPEG_QUALITY: u8 = 80;
 /// Frames queued for the encoder before a frame is skipped instead of waited for.
@@ -85,6 +105,28 @@ pub fn ffmpeg_args(w: u32, h: u32, fps: u32, out: &Path) -> Vec<String> {
     a.extend(["-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-movflags", "+faststart"].iter().map(|s| s.to_string()));
     a.push(out.to_string_lossy().into_owned());
     a
+}
+
+/// The ffmpeg arguments that copy the video of `movie` and add the WAV take `audio` as AAC, ending with the shorter of the
+/// two, into `out`.
+pub fn mux_args(movie: &Path, audio: &Path, out: &Path) -> Vec<String> {
+    let mut a: Vec<String> = ["-hide_banner", "-loglevel", "error", "-y", "-i"].iter().map(|s| s.to_string()).collect();
+    a.push(movie.to_string_lossy().into_owned());
+    a.push("-i".to_string());
+    a.push(audio.to_string_lossy().into_owned());
+    a.extend(["-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-shortest", "-movflags", "+faststart"].iter().map(|s| s.to_string()));
+    a.push(out.to_string_lossy().into_owned());
+    a
+}
+
+/// The frame rate of a recording: the display's refresh rate (within `FPS` to `MAX_FPS`) while the GPU path is up, else
+/// `FPS`.
+pub fn frame_rate(display_hz: u32, gpu: bool) -> u32 {
+    if gpu {
+        display_hz.clamp(FPS, MAX_FPS)
+    } else {
+        FPS
+    }
 }
 
 /// The area recorded: the whole screen, or `area` inside it, made even in both sides for the encoder.
@@ -248,9 +290,9 @@ enum Sink {
     Avi(AviWriter<File>),
 }
 
-fn spawn_ffmpeg(bin: &Path, area: Area, path: &Path) -> Result<Child, String> {
+fn spawn_ffmpeg(bin: &Path, area: Area, fps: u32, path: &Path) -> Result<Child, String> {
     Command::new(bin)
-        .args(ffmpeg_args(area.w, area.h, FPS, path))
+        .args(ffmpeg_args(area.w, area.h, fps, path))
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::inherit())
@@ -258,9 +300,9 @@ fn spawn_ffmpeg(bin: &Path, area: Area, path: &Path) -> Result<Child, String> {
         .map_err(|e| format!("ffmpeg: {e}"))
 }
 
-fn open_avi(path: &Path, area: Area) -> Result<AviWriter<File>, String> {
+fn open_avi(path: &Path, area: Area, fps: u32) -> Result<AviWriter<File>, String> {
     let f = File::create(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    AviWriter::new(f, area.w, area.h, FPS).map_err(|e| format!("{}: {e}", path.display()))
+    AviWriter::new(f, area.w, area.h, fps).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 /// The encoder thread: takes frames until the channel closes, then closes the file. Returns the frame count.
@@ -294,32 +336,69 @@ fn encode(rx: Receiver<Vec<u32>>, mut sink: Sink, area: Area) -> Result<usize, S
     Ok(n)
 }
 
+/// The microphone take a recording makes beside its movie: the WAV the audio service writes, and the ffmpeg that muxes it
+/// into the movie.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Audio {
+    pub wav: PathBuf,
+    pub ffmpeg: PathBuf,
+}
+
 /// A recording in progress: the shell hands it frames, and the encoder thread owns the file.
 pub struct Session {
     path: PathBuf,
     area: Area,
+    /// frames per second the movie is written at (`frame_rate`)
+    pub fps: u32,
+    /// the microphone take, when the recording has one
+    pub audio: Option<Audio>,
     tx: Option<SyncSender<Vec<u32>>>,
     worker: Option<JoinHandle<Result<usize, String>>>,
     /// the time (ms) the next frame is due
     next_due: f64,
+    /// milliseconds between two recorded frames
+    interval: f64,
+}
+
+/// A finished recording whose audio take is still on its way from the audio service.
+pub struct PendingMux {
+    movie: PathBuf,
+    audio: Audio,
+    /// the time (ms) the recording stopped
+    since: f64,
+}
+
+/// Muxes the take into the movie: the video is copied and the take added as AAC. The movie is replaced only when ffmpeg
+/// wrote the new file; a take the audio service never wrote leaves the movie as it is.
+fn mux_audio(movie: &Path, audio: &Audio) {
+    if audio.wav.is_file() {
+        let out = movie.with_extension("muxing.mov");
+        let muxed = Command::new(&audio.ffmpeg).args(mux_args(movie, &audio.wav, &out)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::inherit()).status().is_ok_and(|s| s.success()) && std::fs::rename(&out, movie).is_ok();
+        if !muxed {
+            let _ = std::fs::remove_file(&out);
+            eprintln!("springboard: recording: could not add the audio to {}", movie.display());
+        }
+    }
+    let _ = std::fs::remove_file(&audio.wav);
 }
 
 impl Session {
-    /// Starts recording `area` to `path` with `encoder`; the first frame is due at `t` (ms).
-    pub fn start(path: PathBuf, encoder: Encoder, area: Area, t: f64) -> Result<Session, String> {
+    /// Starts recording `area` to `path` with `encoder` at `fps` frames a second; the first frame is due at `t` (ms).
+    pub fn start(path: PathBuf, encoder: Encoder, area: Area, fps: u32, t: f64) -> Result<Session, String> {
+        let fps = fps.clamp(1, MAX_FPS);
         if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
             std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         }
         let sink = match encoder {
-            Encoder::Ffmpeg(bin) => Sink::Ffmpeg(spawn_ffmpeg(&bin, area, &path)?),
-            Encoder::Avi => Sink::Avi(open_avi(&path, area)?),
+            Encoder::Ffmpeg(bin) => Sink::Ffmpeg(spawn_ffmpeg(&bin, area, fps, &path)?),
+            Encoder::Avi => Sink::Avi(open_avi(&path, area, fps)?),
         };
         let (tx, rx) = sync_channel::<Vec<u32>>(QUEUE);
         let worker = std::thread::spawn(move || {
             crate::gfx::affinity::background_thread();
             encode(rx, sink, area)
         });
-        Ok(Session { path, area, tx: Some(tx), worker: Some(worker), next_due: t })
+        Ok(Session { path, area, fps, audio: None, tx: Some(tx), worker: Some(worker), next_due: t, interval: 1000.0 / fps as f64 })
     }
 
     /// Takes the frame `img` when one is due at `t` (ms). A frame the encoder cannot take yet is skipped, not waited for.
@@ -327,7 +406,7 @@ impl Session {
         if t < self.next_due {
             return;
         }
-        self.next_due = t + INTERVAL_MS;
+        self.next_due = t + self.interval;
         if let Some(tx) = &self.tx {
             match tx.try_send(crop_pixels(img, self.area)) {
                 Ok(()) | Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {}
@@ -374,17 +453,118 @@ impl Shell {
                 self.recording_dir().join(name)
             }
         };
-        let session = Session::start(path.clone(), encoder, area, t)?;
+        // the take is muxed with ffmpeg, so only an ffmpeg recording can carry sound
+        let ffmpeg = match &encoder {
+            Encoder::Ffmpeg(bin) => Some(bin.clone()),
+            Encoder::Avi => None,
+        };
+        let fps = frame_rate(self.rec_display.0, self.rec_display.1);
+        let mut session = Session::start(path.clone(), encoder, area, fps, t)?;
+        if let Some(bin) = ffmpeg.filter(|_| self.capture_prefs.microphone) {
+            session.audio = self.recording_audio(&path, &bin);
+        }
         self.rec = Some(session);
+        self.rec_clock = t;
         self.dirty = true;
         Ok(path)
     }
 
-    /// Ends the recording and returns its file.
+    /// Ends the recording and returns its file. The file opens in the Video Player once it is final.
     pub fn recording_stop(&mut self) -> Result<PathBuf, String> {
         let session = self.rec.take().ok_or("not recording")?;
         self.dirty = true;
-        session.finish()
+        let audio = session.audio.clone();
+        if audio.is_some() {
+            self.audio.record_stop();
+        }
+        let movie = session.finish()?;
+        self.recording_done(movie.clone(), audio);
+        Ok(movie)
+    }
+
+    /// Records the display's refresh rate and whether the GPU path is up. The loop calls it every pass; the next recording
+    /// takes its frame rate from it (`frame_rate`).
+    pub fn set_display(&mut self, hz: u32, gpu: bool) {
+        self.rec_display = (hz, gpu);
+    }
+
+    /// The Options menu turned the microphone on: asks for it now when the person has not answered yet.
+    pub fn ask_microphone(&self) {
+        if self.capture_prefs.microphone && matches!(privacy_permissions::access(CAPTURE_APP).status(Media::Audio), Status::NotDetermined) {
+            privacy_permissions::queue_prompt(CAPTURE_APP, CAPTURE_NAME, Kind::Media(Media::Audio));
+        }
+    }
+
+    /// The microphone take for a recording to `movie`: starts the audio service recording a WAV beside it. None (the
+    /// recording is silent) while the microphone is not allowed or the audio service does not take the start.
+    fn recording_audio(&mut self, movie: &Path, ffmpeg: &Path) -> Option<Audio> {
+        match privacy_permissions::access(CAPTURE_APP).status(Media::Audio) {
+            Status::Authorized => {}
+            Status::NotDetermined => {
+                privacy_permissions::queue_prompt(CAPTURE_APP, CAPTURE_NAME, Kind::Media(Media::Audio));
+                eprintln!("springboard: recording: the microphone needs an answer first; this recording is silent");
+                return None;
+            }
+            _ => {
+                eprintln!("springboard: recording: microphone access is off; this recording is silent");
+                return None;
+            }
+        }
+        let stem = movie.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let wav = movie.with_file_name(format!(".{stem}.audio.wav"));
+        if !self.audio.record_start(&wav.to_string_lossy()) {
+            eprintln!("springboard: recording: no audio service; this recording is silent");
+            return None;
+        }
+        Some(Audio { wav, ffmpeg: ffmpeg.to_path_buf() })
+    }
+
+    /// A recording is written: it opens in the Video Player, after its audio take is muxed in when it has one.
+    fn recording_done(&mut self, movie: PathBuf, audio: Option<Audio>) {
+        match audio {
+            Some(audio) => self.rec_mux.push(PendingMux { movie, audio, since: self.rec_clock }),
+            None => self.open_recording(movie),
+        }
+    }
+
+    /// Opens a finished recording in the Video Player: the player is started when it is not running, then it is asked
+    /// for the movie through its `open-movie` intent.
+    fn open_recording(&mut self, movie: PathBuf) {
+        let t = self.rec_clock;
+        if !self.desktop_open_app(PLAYER_APP, t) {
+            eprintln!("springboard: recording: {PLAYER_APP} is not available; {} is saved", movie.display());
+            return;
+        }
+        let path = movie.to_string_lossy().into_owned();
+        std::thread::spawn(move || {
+            if let Err(e) = super::intents::run_with(PLAYER_APP, OPEN_INTENT, &[("path", path.as_str())], OPEN_WAIT) {
+                eprintln!("springboard: recording: {PLAYER_APP} {OPEN_INTENT}: {e}");
+            }
+        });
+    }
+
+    /// Muxes each finished recording whose audio take has arrived (or is overdue) on a thread; the movie opens when the
+    /// thread is done (`recording_tick` receives it). Called every pass of the loop.
+    fn finish_mux(&mut self, t: f64) {
+        if self.rec_mux.is_empty() {
+            return;
+        }
+        let done = self.audio.take_recordings();
+        let mut waiting = Vec::new();
+        for p in self.rec_mux.drain(..) {
+            let arrived = done.iter().any(|(path, _)| Path::new(path) == p.audio.wav.as_path());
+            if !arrived && t - p.since < AUDIO_WAIT_MS {
+                waiting.push(p);
+                continue;
+            }
+            self.rec_muxing += 1;
+            let tx = self.rec_ready.0.clone();
+            std::thread::spawn(move || {
+                mux_audio(&p.movie, &p.audio);
+                let _ = tx.send(p.movie);
+            });
+        }
+        self.rec_mux = waiting;
     }
 
     /// The menu bar's Stop Recording item: ends the recording, reporting a failure on the log.
@@ -402,8 +582,15 @@ impl Shell {
         }
     }
 
-    /// Records the frame that is due at `t` (ms). Called once per pass of the loop.
+    /// Records the frame that is due at `t` (ms), and opens the recordings whose audio is in. Called once per pass of the
+    /// loop.
     pub fn recording_tick(&mut self, t: f64) {
+        self.rec_clock = t;
+        while let Ok(movie) = self.rec_ready.1.try_recv() {
+            self.rec_muxing = self.rec_muxing.saturating_sub(1);
+            self.open_recording(movie);
+        }
+        self.finish_mux(t);
         if !self.rec.as_ref().is_some_and(|r| t >= r.next_due) {
             return;
         }
@@ -413,14 +600,20 @@ impl Shell {
         }
     }
 
-    /// When the next frame is due while a recording runs (ms), so the loop wakes for it.
+    /// When the loop must come round next for the recording (ms): the next frame while one runs, and soon while a finished
+    /// recording waits for its audio take or is being muxed.
     pub fn recording_wake(&self) -> Option<f64> {
-        self.rec.as_ref().map(|r| r.next_due)
+        match &self.rec {
+            Some(r) => Some(r.next_due),
+            None if !self.rec_mux.is_empty() || self.rec_muxing > 0 => Some(self.rec_clock + MUX_POLL_MS),
+            None => None,
+        }
     }
 
+    /// The folder a recording is saved to: the Options menu's choice in the home directory (the data folder without one).
     fn recording_dir(&self) -> PathBuf {
         match std::env::var_os("HOME") {
-            Some(home) => PathBuf::from(home).join("Desktop"),
+            Some(home) => PathBuf::from(home).join(self.capture_prefs.save_to.folder()),
             None => self.data_dir.clone(),
         }
     }
@@ -512,7 +705,7 @@ mod tests {
         let dir = scratch("screenrec-session");
         let path = dir.join("Screen Recording.avi");
         let area = Area { x: 0, y: 0, w: 4, h: 2 };
-        let mut s = Session::start(path.clone(), Encoder::Avi, area, 0.0).unwrap();
+        let mut s = Session::start(path.clone(), Encoder::Avi, area, FPS, 0.0).unwrap();
         let img = Image { w: 4, h: 2, px: vec![pack(9, 9, 9, 255); 8] };
         s.push(&img, 0.0);
         s.push(&img, 50.0);
@@ -522,5 +715,44 @@ mod tests {
         assert_eq!(&bytes[..4], b"RIFF");
         assert_eq!(u32::from_le_bytes(bytes[48..52].try_into().unwrap()), 2, "two frames were due");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_frame_rate_follows_the_display_only_on_the_gpu_path() {
+        assert_eq!(frame_rate(60, true), 60, "the display's rate while the GPU path is up");
+        assert_eq!(frame_rate(144, true), MAX_FPS, "capped at the fastest recording");
+        assert_eq!(frame_rate(24, true), FPS, "never below the software rate");
+        assert_eq!(frame_rate(60, false), FPS, "the software path records at 10 frames a second");
+    }
+
+    #[test]
+    fn a_fast_session_writes_a_frame_per_display_interval() {
+        let dir = scratch("screenrec-fps");
+        let path = dir.join("Screen Recording.avi");
+        let area = Area { x: 0, y: 0, w: 4, h: 2 };
+        let mut s = Session::start(path.clone(), Encoder::Avi, area, 60, 0.0).unwrap();
+        assert_eq!(s.fps, 60);
+        let img = Image { w: 4, h: 2, px: vec![pack(9, 9, 9, 255); 8] };
+        // due at 0, 16.7 and 33.3 ms; the frame at 10 ms is too early
+        for t in [0.0, 10.0, 17.0, 34.0] {
+            s.push(&img, t);
+        }
+        s.finish().unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        assert_eq!(u32::from_le_bytes(bytes[48..52].try_into().unwrap()), 3, "three frames were due");
+        assert_eq!(u32::from_le_bytes(bytes[32 + 8..32 + 12].try_into().unwrap()), 1_000_000 / 60, "the header says 60 a second");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_mux_adds_the_take_as_audio_and_keeps_the_video() {
+        let a = mux_args(Path::new("/x/movie.mov"), Path::new("/x/.movie.audio.wav"), Path::new("/x/movie.muxing.mov"));
+        let at = |flag: &str| a.iter().position(|s| s == flag).unwrap();
+        assert_eq!(a[at("-i") + 1], "/x/movie.mov", "the movie is the first input");
+        assert_eq!(a[a.iter().rposition(|s| s == "-i").unwrap() + 1], "/x/.movie.audio.wav", "the take is the second");
+        assert_eq!(a[at("-map") + 1], "0:v:0");
+        assert_eq!(a[at("-c:v") + 1], "copy", "the video is not encoded again");
+        assert_eq!(a[at("-c:a") + 1], "aac");
+        assert_eq!(a.last().unwrap(), "/x/movie.muxing.mov");
     }
 }
