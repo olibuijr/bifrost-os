@@ -9,7 +9,7 @@
 
 use bifrost_core::disk_claims::Claims;
 use bifrost_core::disk_commands::{self, Command, MountOptions, Refusal};
-use bifrost_core::disk_events::{Approvals, Disk};
+use bifrost_core::disk_events::Approvals;
 use bifrost_core::disk_format::{PartitionSpec, Personality};
 use bifrost_core::disk_request::DiskRequest;
 use bifrost_core::disk_scan::Entry;
@@ -208,6 +208,7 @@ pub fn request_done_text(req: &DiskRequest) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bifrost_core::disk_events::Disk;
 
     fn args(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| s.to_string()).collect()

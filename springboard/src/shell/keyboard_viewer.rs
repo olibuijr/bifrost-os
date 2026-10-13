@@ -78,6 +78,7 @@ pub struct KeyboardViewer {
 }
 
 impl KeyboardViewer {
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
     pub fn new() -> Self {
         Self::default()
     }
@@ -172,6 +173,7 @@ impl KeyboardViewer {
 
 impl Shell {
     /// Input Sources > Show Keyboard Viewer.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
     pub(super) fn keyboard_viewer_open(&mut self) {
         self.keyboard_viewer = Some(KeyboardViewer::new());
         self.drawn = Drawn::Nothing;

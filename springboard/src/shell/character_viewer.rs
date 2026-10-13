@@ -60,6 +60,7 @@ pub struct CharacterViewer {
 }
 
 impl CharacterViewer {
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
     pub fn new() -> Self {
         Self::default()
     }
@@ -223,6 +224,7 @@ impl CharacterViewer {
 
 impl Shell {
     /// Edit > Emoji & Symbols: shows the viewer on its first tab.
+    #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
     pub(super) fn char_viewer_open(&mut self) {
         self.char_viewer = Some(CharacterViewer::new());
         self.drawn = Drawn::Nothing;

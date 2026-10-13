@@ -2388,13 +2388,6 @@ impl Settings {
                     }
                 }
             }
-            Action::Users(edit) => {
-                let view = self.loads.users.get().cloned().unwrap_or_else(super::users_page::View::load);
-                let r = super::users_page::apply(&edit, &view);
-                self.loads.users.start("users-read", super::users_page::View::load);
-                self.edit_result(ui, t, r);
-                vec![]
-            }
             Action::Sharing(edit) => {
                 // the view the page last showed; the services are read again on a worker below
                 let view = self.loads.sharing.get().cloned().unwrap_or_else(super::sharing_page::View::load);

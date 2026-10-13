@@ -200,7 +200,7 @@ impl Shell {
     }
 
     /// Saves the panel's change like the Settings page does: the pref, the open Settings copy, and the live hooks.
-    fn save_accessibility(&mut self, mut a: AccessibilitySettings) {
+    fn save_accessibility(&mut self, a: AccessibilitySettings) {
         a.save(&mut self.prefs);
         if let Some(st) = &mut self.settings {
             st.set_accessibility(a.clone());

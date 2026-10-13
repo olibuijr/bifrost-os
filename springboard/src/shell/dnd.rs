@@ -14,9 +14,11 @@
 use super::sharing::{text_url, INBOUND};
 use super::apps::apps;
 use super::AppId;
+#[cfg(feature = "desktop-wayland")]
 use crate::files::batch;
 use bifrost_proto::{dragop, DragItem, DragPhase, DragPreview, GrantId, Payload, ToApp, ToShell};
 use std::collections::HashMap;
+#[cfg(feature = "desktop-wayland")]
 use std::path::{Path, PathBuf};
 
 /// Where a drop that no app window takes goes: a Dock icon, or the desktop.

@@ -14,7 +14,7 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub const TOKEN_PATH: &str = "/var/lib/bifrost-mcp/token";
 pub const SOCKET: &str = "/run/bifrost-mcp.sock";
@@ -26,7 +26,7 @@ const HEADER_LIMIT: usize = 16 << 10;
 const MAX_HEADERS: usize = 100;
 /// Open HTTP connections; more are answered 503.
 const MAX_HTTP_SESSIONS: usize = 32;
-/// Read timeout until a connection has presented a valid token.
+/// Deadline for the whole request head of a connection that has not presented a token yet.
 const PRE_AUTH_TIMEOUT: Duration = Duration::from_secs(10);
 /// Read timeout for a connection that has authenticated (keep-alive agents).
 const SESSION_TIMEOUT: Duration = Duration::from_secs(300);
@@ -46,6 +46,25 @@ impl Slot {
             OPEN_HTTP.fetch_sub(1, Ordering::SeqCst);
             None
         }
+    }
+}
+
+/// A TCP stream whose reads share one deadline: each read waits only for the time left, so a slow peer cannot stretch a request.
+struct Timed {
+    s: TcpStream,
+    deadline: Option<Instant>,
+}
+
+impl Read for Timed {
+    fn read(&mut self, b: &mut [u8]) -> io::Result<usize> {
+        if let Some(d) = self.deadline {
+            let left = d.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return Err(io::Error::new(io::ErrorKind::TimedOut, "request deadline passed"));
+            }
+            self.s.set_read_timeout(Some(left))?;
+        }
+        self.s.read(b)
     }
 }
 
@@ -93,6 +112,8 @@ pub fn run(ctx: Ctx) {
             }
             None => {
                 let mut s = s;
+                // a peer that never reads must not stall the accept loop
+                let _ = s.set_write_timeout(Some(Duration::from_secs(1)));
                 let _ = respond(&mut s, 503, "text/plain", b"too many sessions", true);
             }
         }
@@ -106,6 +127,9 @@ fn token() -> String {
             let _ = std::fs::set_permissions(TOKEN_PATH, std::fs::Permissions::from_mode(0o600));
             return t.trim().to_string();
         }
+    }
+    if std::path::Path::new(TOKEN_PATH).exists() {
+        eprintln!("bifrost-mcp: {TOKEN_PATH} was unreadable or too short; making a new token");
     }
     let t = make_token(fill_random).unwrap_or_else(|e| fatal(&format!("no entropy for the token: {e}")));
     write_token(&t).unwrap_or_else(|e| fatal(&format!("{TOKEN_PATH}: {e}")));
@@ -167,7 +191,7 @@ fn parse_head<R: BufRead>(r: &mut R) -> io::Result<Option<Head>> {
     let method = parts.next().unwrap_or("").to_string();
     let path = parts.next().unwrap_or("").to_string();
     let (mut len, mut auth, mut close) = (0usize, String::new(), false);
-    let (mut total, mut count) = (0usize, 0usize);
+    let (mut total, mut count, mut seen_len) = (0usize, 0usize, false);
     loop {
         let raw = read_bounded_line(r, MAX_LINE)?;
         if raw.is_empty() {
@@ -187,7 +211,14 @@ fn parse_head<R: BufRead>(r: &mut R) -> io::Result<Option<Head>> {
         }
         let (k, v) = h.split_once(':').unwrap_or((h, ""));
         match k.trim().to_ascii_lowercase().as_str() {
-            "content-length" => len = v.trim().parse().unwrap_or(0),
+            "content-length" => {
+                // a bad or repeated length would leave body bytes to be read as the next request
+                if seen_len {
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, "two content-length headers"));
+                }
+                seen_len = true;
+                len = v.trim().parse::<usize>().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "bad content-length"))?;
+            }
             "authorization" => auth = v.trim().to_string(),
             "connection" => close = v.trim().eq_ignore_ascii_case("close"),
             _ => {}
@@ -231,11 +262,16 @@ fn http_session(s: TcpStream, ctx: Shared, token: &str) {
         Ok(w) => w,
         Err(_) => return,
     };
-    let mut r = BufReader::new(s);
+    let mut r = BufReader::new(Timed { s, deadline: None });
     let mut authed = false;
     loop {
-        // a connection that has not presented a token yet gets the short timeout
-        let _ = r.get_ref().set_read_timeout(Some(if authed { SESSION_TIMEOUT } else { PRE_AUTH_TIMEOUT }));
+        // a connection that has not presented a token yet gets one deadline for its request head
+        if authed {
+            r.get_mut().deadline = None;
+            let _ = r.get_ref().s.set_read_timeout(Some(SESSION_TIMEOUT));
+        } else {
+            r.get_mut().deadline = Some(Instant::now() + PRE_AUTH_TIMEOUT);
+        }
         let head = match parse_head(&mut r) {
             Ok(Some(h)) => h,
             Ok(None) => return,
@@ -380,6 +416,38 @@ mod tests {
         let t = make_token(fixed_entropy).unwrap();
         assert_eq!(t.len(), 48);
         assert!(t.bytes().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn content_length_must_be_a_number() {
+        let text = "POST /mcp HTTP/1.1\r\nContent-Length: abc\r\n\r\n";
+        let err = parse_head(&mut Cursor::new(text)).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn second_content_length_is_refused() {
+        let text = "POST /mcp HTTP/1.1\r\nContent-Length: 2\r\nContent-Length: 5\r\n\r\n";
+        let err = parse_head(&mut Cursor::new(text)).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn read_past_the_request_deadline_fails_without_blocking() {
+        let l = TcpListener::bind("127.0.0.1:0").unwrap();
+        let c = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+        let _peer = l.accept().unwrap();
+        let mut t = Timed { s: c, deadline: Some(Instant::now()) };
+        let mut b = [0u8; 4];
+        assert_eq!(t.read(&mut b).unwrap_err().kind(), io::ErrorKind::TimedOut);
+    }
+
+    #[test]
+    fn open_http_slots_are_capped_and_released() {
+        let mut held: Vec<Slot> = (0..MAX_HTTP_SESSIONS).map(|_| Slot::acquire().unwrap()).collect();
+        assert!(Slot::acquire().is_none());
+        held.pop();
+        assert!(Slot::acquire().is_some());
     }
 
     #[test]

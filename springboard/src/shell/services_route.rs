@@ -40,6 +40,7 @@ fn clipboard_text() -> Option<Selection> {
 }
 
 /// The App menu's Services rows: the index in `Service::ALL` and the title, for each service that takes the selection.
+#[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub fn menu_entries() -> Vec<(u8, &'static str)> {
     let Some(sel) = selection() else { return Vec::new() };
     Service::ALL.iter().enumerate().filter(|(_, s)| s.accepts(&sel)).map(|(i, s)| (i as u8, s.title())).collect()

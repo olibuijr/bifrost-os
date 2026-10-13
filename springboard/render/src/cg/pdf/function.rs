@@ -5,7 +5,7 @@ use super::doc::Doc;
 use super::obj::Obj;
 
 #[derive(Clone, Debug)]
-enum Op {
+pub enum Op {
     Num(f32),
     Name(String),
     If(Vec<Op>),
