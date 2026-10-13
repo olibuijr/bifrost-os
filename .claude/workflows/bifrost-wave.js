@@ -9,6 +9,8 @@ export const meta = {
   ],
 }
 
+const EXTRA = " GITHUB TEXT: commit messages, code comments, doc comments and docs must be professional, plain, human prose: short conventional commit subjects, bodies stating what changed and why, comments that explain intent; no AI-slop wording (no seamless/robust/comprehensive/leverage/delve, no 'not just X but Y', no emoji, no filler summaries); see ~/.claude/skills/avoid-ai-writing/SKILL.md."
+
 // args: { wave: number, focus?: string, maxTasks?: number, avoid?: string[] }
 const A = args || {}
 const WAVE = A.wave || 1
@@ -20,7 +22,7 @@ const RULES = `Repo ~/Projects/bifrost-os (pure Rust, springboard/ workspace). R
 Architecture follows Apple's: kits mirror Apple frameworks (developer.apple.com is the reference, macOS 27 values via
 REA/bifrost pc ref), HIG for UI (bifrost-hig skill). No platform or product names in code (tools/check-names.py).
 Pure Rust, no new C deps. TDD + clean code. Use the akurai_index MCP (symbol_lookup/code_search) before grep.
-Already done or in flight, skip: ${AVOID}. ${FOCUS} GITHUB TEXT: commit messages, code comments, doc comments and docs must be professional, plain, human prose: short conventional commit subjects, bodies stating what changed and why, comments that explain intent; no AI-slop wording (no 'seamless/robust/comprehensive/leverage/delve', no 'not just X but Y', no emoji, no filler summaries); see ~/.claude/skills/avoid-ai-writing/SKILL.md.`
+Already done or in flight, skip: ${AVOID}. ${FOCUS}`
 
 const TASKS = {
   type: 'object',
@@ -40,7 +42,7 @@ const LENSES = [
 
 phase('Scout')
 const scouted = await parallel(LENSES.map(([key, lens]) => () => agent(
-  `${RULES}\n\nWave ${WAVE}, lens "${key}". READ ONLY, do not edit. ${lens}\nReturn up to 3 tasks, each small enough for one focused commit (one crate, <~400 lines), with exact files and a step plan including the test to write first. Verify each defect exists in the code before listing it. impact = 1-10 for daily-driver value.`,
+  `${RULES}${EXTRA}\n\nWave ${WAVE}, lens "${key}". READ ONLY, do not edit. ${lens}\nReturn up to 3 tasks, each small enough for one focused commit (one crate, <~400 lines), with exact files and a step plan including the test to write first. Verify each defect exists in the code before listing it. impact = 1-10 for daily-driver value.`,
   { label: `scout:${key}`, phase: 'Scout', schema: TASKS })))
 
 const all = scouted.filter(Boolean).flatMap(r => r.tasks)
@@ -68,10 +70,10 @@ const VERDICT = {
 
 const results = await pipeline(picked,
   (t, _, i) => agent(
-    `${RULES}\n\nImplement this task. Owner rule: agents only code and commit; do NOT run tests, builds, publish or Midget commands (a hook blocks them). First link the gitignored assets if missing (never commit them): ln -s ~/Projects/bifrost-os/springboard/assets springboard/assets; ln -s ~/Projects/bifrost-os/bifrost-ref bifrost-ref. Create branch wave${WAVE}/${i}-<slug>, write the test first, then the fix, keep it minimal, update docs/parity-matrix/data rows if ${t.parityRows || 'parity is affected'}, and commit with a conventional message.\n\nTask: ${t.title}\nWhy: ${t.why}\nFiles: ${t.files.join(', ')}\nPlan: ${t.plan}`,
+    `${RULES}${EXTRA}\n\nImplement this task. Owner rule: agents only code and commit; do NOT run tests, builds, publish or Midget commands (a hook blocks them). First link the gitignored assets if missing (never commit them): ln -s ~/Projects/bifrost-os/springboard/assets springboard/assets; ln -s ~/Projects/bifrost-os/bifrost-ref bifrost-ref. Create branch wave${WAVE}/${i}-<slug>, write the test first, then the fix, keep it minimal, update docs/parity-matrix/data rows if ${t.parityRows || 'parity is affected'}, and commit with a conventional message.\n\nTask: ${t.title}\nWhy: ${t.why}\nFiles: ${t.files.join(', ')}\nPlan: ${t.plan}`,
     { label: `code:${t.title.slice(0, 40)}`, phase: 'Code', model: 'sonnet', isolation: 'worktree', schema: DONE }),
   (d, t) => d && agent(
-    `${RULES}\n\nAdversarially review branch ${d.branch} (git diff main...${d.branch}) for task "${t.title}". Try to find: logic errors, missing test, behaviour that diverges from the Apple API it mirrors, product names in code, unsafe without SAFETY, scope creep. Default merge=false if unsure. Read only.`,
+    `${RULES}${EXTRA}\n\nAdversarially review branch ${d.branch} (git diff main...${d.branch}) for task "${t.title}". Try to find: logic errors, missing test, behaviour that diverges from the Apple API it mirrors, product names in code, unsafe without SAFETY, scope creep. Default merge=false if unsure. Read only.`,
     { label: `review:${d.branch}`, phase: 'Review', schema: VERDICT }).then(v => ({ task: t.title, ...d, verdict: v })),
 )
 
