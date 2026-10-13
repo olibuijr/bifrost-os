@@ -202,9 +202,10 @@ impl Notify {
         }
     }
 
-    /// Whether a notification of `app` may show a banner or wake the screen.
+    /// Whether a notification of `app` may show a banner or wake the screen: not muted, and either Focus is off or
+    /// the app is allowed through Focus.
     pub fn delivers(&self, app: AppId) -> bool {
-        !self.dnd() && !self.store.is_muted(app)
+        !self.store.is_muted(app) && (!self.dnd() || self.store.is_focus_allowed(app))
     }
 
     /// The person answered the first-time alert for `app`: the answer is stored (the app is not asked again) and the
@@ -214,8 +215,11 @@ impl Notify {
         self.gen = self.gen.wrapping_add(1);
     }
 
-    /// Drops what Focus silences: the banner and a pending wake.
+    /// Drops what Focus silences: the banner and a pending wake. A banner of an app allowed through Focus stays.
     fn silence(&mut self) {
+        if self.banner_card.as_ref().is_some_and(|c| self.store.is_focus_allowed(c.app)) {
+            return;
+        }
         self.banner = None;
         self.banner_card = None;
         self.wake = false;
@@ -469,6 +473,12 @@ impl Shell {
 
     pub fn app_muted(&self, app: AppId) -> bool {
         self.notify.store.is_muted(app)
+    }
+
+    /// Lets `app` show its notifications while Focus is on, or holds it back (kept in the notification store).
+    pub fn set_focus_allowed(&mut self, app: AppId, allowed: bool) {
+        self.notify.store.set_focus_allowed(app, allowed);
+        self.dirty = true;
     }
 
     /// Replaces the Do Not Disturb schedule (kept in the notification store).
@@ -935,6 +945,19 @@ mod tests {
     use super::banner::{Phase, HOLD_MS, SLIDE_MS};
     use super::*;
     use crate::gfx::Surface;
+
+    #[test]
+    fn focus_lets_only_its_allowed_apps_deliver() {
+        let mut n = Notify::default();
+        assert!(n.delivers(AppId::Files));
+        n.set_dnd(true);
+        assert!(!n.delivers(AppId::Files), "Focus holds back an app that is not allowed");
+        n.store.set_focus_allowed(AppId::Files, true);
+        assert!(n.delivers(AppId::Files), "an allowed app still delivers during Focus");
+        assert!(!n.delivers(AppId::Terminal));
+        n.store.set_muted(AppId::Files, true);
+        assert!(!n.delivers(AppId::Files), "a mute beats the Focus allowance");
+    }
 
     #[test]
     fn delivery_model_keeps_muted_or_off_apps_stored_and_picks_banner_or_alert() {
