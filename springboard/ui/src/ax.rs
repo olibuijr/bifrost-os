@@ -619,9 +619,9 @@ pub fn index_in_parent(nodes: &[Node], links: &[AxLink], id: u64) -> Option<usiz
     children_of(nodes, links, parent_of(links, id)).iter().position(|c| *c == id)
 }
 
-// --- NSAccessibility vocabulary --------------------------------------------------------------------------------------------------
+// --- Accessibility vocabulary --------------------------------------------------------------------------------------------------
 
-/// `NSAccessibility.Role`: the role strings an element answers to `accessibilityRole`.
+/// `Accessibility.Role`: the role strings an element answers to `accessibilityRole`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AxRole {
     Button,
@@ -642,7 +642,7 @@ pub enum AxRole {
 }
 
 impl AxRole {
-    /// The constant's value (`NSAccessibilityButtonRole` is `AXButton`).
+    /// The constant's value (`AccessibilityButtonRole` is `AXButton`).
     pub fn raw(self) -> &'static str {
         match self {
             AxRole::Button => "AXButton",
@@ -682,7 +682,7 @@ impl From<Role> for AxRole {
     }
 }
 
-/// `NSAccessibility.Subrole`.
+/// `Accessibility.Subrole`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AxSubrole {
     SecureTextField,
@@ -720,30 +720,30 @@ impl AxSubrole {
     }
 }
 
-/// `NSAccessibility.Notification`: what [`post`] announces to assistive technology.
+/// `Accessibility.Notification`: what [`post`] announces to assistive technology.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AxNotification {
     FocusedUIElementChanged,
     ValueChanged,
     LayoutChanged,
     SelectedChildrenChanged,
-    UIElementDestroyed,
+    ElementDestroyed,
 }
 
 impl AxNotification {
-    /// The constant's value (`NSAccessibilityValueChangedNotification` is `AXValueChanged`).
+    /// The constant's value (`AccessibilityValueChangedNotification` is `AXValueChanged`).
     pub fn raw(self) -> &'static str {
         match self {
             AxNotification::FocusedUIElementChanged => "AXFocusedUIElementChanged",
             AxNotification::ValueChanged => "AXValueChanged",
             AxNotification::LayoutChanged => "AXLayoutChanged",
             AxNotification::SelectedChildrenChanged => "AXSelectedChildrenChanged",
-            AxNotification::UIElementDestroyed => "AXUIElementDestroyed",
+            AxNotification::ElementDestroyed => "AXElementDestroyed",
         }
     }
 }
 
-/// `NSAccessibility.post(element:notification:)`: queues the notification for `element` (a `Node::id`). The runtime drains the
+/// `Accessibility.post(element:notification:)`: queues the notification for `element` (a `Node::id`). The runtime drains the
 /// queue with [`take_notifications`] and forwards it (the AT-SPI bridge turns it into `StateChanged:focused`,
 /// `PropertyChange:accessible-value` and `ChildrenChanged`). The same notification for the same element twice in a row is
 /// queued once. The queue is bounded at 64.
@@ -765,7 +765,7 @@ pub fn take_notifications() -> Vec<(u64, AxNotification)> {
     NOTES.with(|n| std::mem::take(&mut *n.borrow_mut()))
 }
 
-/// `NSAccessibilityCustomContent`: a label and a value assistive technology reads on request ("Sender", "Ada").
+/// `AccessibilityCustomContent`: a label and a value assistive technology reads on request ("Sender", "Ada").
 /// `important` content is spoken without being asked for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AxCustomContent {
@@ -788,7 +788,7 @@ impl AxCustomContent {
     }
 }
 
-/// `NSAccessibilityProtocol`: what any element answers. The defaults are an inert, unfocused element.
+/// `AccessibilityProtocol`: what any element answers. The defaults are an inert, unfocused element.
 pub trait AccessibilityElement {
     fn accessibility_parent(&self) -> Option<u64> {
         None
@@ -829,7 +829,7 @@ pub trait AccessibilityElement {
     }
 }
 
-/// `NSAccessibilityElement`: a stand-in for something that is drawn but is not a view (a chart bar, a calendar cell). It holds
+/// `AccessibilityElement`: a stand-in for something that is drawn but is not a view (a chart bar, a calendar cell). It holds
 /// what it answers; the owner updates it as the thing changes.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AxElement {

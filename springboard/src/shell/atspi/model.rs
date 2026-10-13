@@ -281,10 +281,10 @@ pub fn key_path(k: Key) -> String {
 /// The slot of the pseudo-application that holds the shell's own chrome (menu bar, dock, Spotlight). Apps use slots below it.
 pub const CHROME_SLOT: u8 = 250;
 
-/// The shell chrome as an application snapshot, so a screen reader reads the menu bar, the dock and Spotlight like any app.
+/// The shell chrome as an application snapshot, so a screen reader reads the menu bar, the dock and the search field like any app.
 /// `menus` is (menu title, [(row title, enabled)]); `dock` is (app name, open). Ids are positional and stable while the lists
 /// keep their order: the menu bar is 1, a menu 100 + 100 * index, its rows follow it; the dock is 2, its apps 1000 + index;
-/// Spotlight is 3. Menus nest their rows (`parent`), the bar nests the menus.
+/// the search field is 3. Menus nest their rows (`parent`), the bar nests the menus.
 pub fn chrome_snap(menus: &[(String, Vec<(String, bool)>)], dock: &[(String, bool)]) -> AppSnap {
     let bounds = Rect { x: 0., y: 0., w: 0., h: 0. };
     let node = |id: u64, parent: Option<u64>, role: Role, name: &str, value: &str, enabled: bool| SNode {
@@ -302,7 +302,7 @@ pub fn chrome_snap(menus: &[(String, Vec<(String, bool)>)], dock: &[(String, boo
     for (i, (name, open)) in dock.iter().enumerate() {
         nodes.push(node(1000 + i as u64, Some(2), Role::Button, name, if *open { "open" } else { "" }, true));
     }
-    nodes.push(node(3, None, Role::TextField, "Spotlight", "", true));
+    nodes.push(node(3, None, Role::TextField, "Search", "", true));
     AppSnap { slot: CHROME_SLOT, app_id: "shell".into(), name: "BifrOSt Shell".into(), nodes }
 }
 
@@ -414,7 +414,7 @@ mod tests {
         let dock = vec![("Notes".to_string(), true), ("Files".to_string(), false)];
         let s = chrome_snap(&menus, &dock);
         assert_eq!((s.slot, s.name.as_str()), (CHROME_SLOT, "BifrOSt Shell"));
-        assert_eq!(children(&s.nodes, None), vec![1, 2, 3], "menu bar, dock and Spotlight sit under the application");
+        assert_eq!(children(&s.nodes, None), vec![1, 2, 3], "menu bar, dock and search sit under the application");
         assert_eq!(children(&s.nodes, Some(1)), vec![100, 200], "the bar holds its menus");
         assert_eq!(children(&s.nodes, Some(100)), vec![101, 102], "a menu holds its rows");
         let close = s.nodes.iter().find(|n| n.id == 102).unwrap();
