@@ -43,22 +43,33 @@ fn flatten(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// Splits a line on whitespace into lines of at most [`WRAP`] characters. A
-/// blank line stays one blank line; a word longer than the width is cut.
+/// Splits a line on spaces into lines of at most [`WRAP`] characters. Runs of
+/// spaces inside a line are kept (table cells rely on them), a line break
+/// drops them. A blank line stays one blank line; a word longer than the width
+/// is cut.
 fn wrap(line: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
-    for word in line.split_whitespace() {
+    // Spaces seen since the previous word.
+    let mut gap = 0;
+    for word in line.split(' ') {
+        if word.is_empty() {
+            gap += 1;
+            continue;
+        }
+        // Spaces between this word and the previous one; none at a line start.
+        let mut sep = if cur.is_empty() { 0 } else { gap + 1 };
+        gap = 0;
         let chars: Vec<char> = word.chars().collect();
         for piece in chars.chunks(WRAP) {
             let piece: String = piece.iter().collect();
-            if !cur.is_empty() && cur.chars().count() + 1 + piece.chars().count() > WRAP {
+            if !cur.is_empty() && cur.chars().count() + sep + piece.chars().count() > WRAP {
                 out.push(std::mem::take(&mut cur));
+                sep = 0;
             }
-            if !cur.is_empty() {
-                cur.push(' ');
-            }
+            cur.extend(std::iter::repeat(' ').take(sep));
             cur.push_str(&piece);
+            sep = 0;
         }
     }
     out.push(cur);
