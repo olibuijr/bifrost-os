@@ -1,8 +1,8 @@
 # Core Image parity: pure Rust pixel models
 
-Status after this pass: still `partial`. Three render-crate modules now cover part of the framework's
-colour, lookup and gradient features as pure std code. None of them is an SDK type yet, and Photos does
-not use them.
+Status after the second pass: still `partial`. The first pass added three render-crate models (colour,
+lookup and gradient). The second pass, on branch `parity/team-j-core-image`, added the models below and an
+SDK layer so apps can reach them. Photos does not use the new models, and nothing is verified on Midget yet.
 
 ## What was built
 
@@ -31,20 +31,49 @@ Each module has its own `#[cfg(test)] mod tests` (8, 3 and 6 tests respectively)
   Gradient, Generator and Blur).
 - REA evidence of the rendered overview page: `ev_42258aba046578ec62c49e46424c6ad6f5c661fa5c10d547269f74d10d6d7468`.
 
+## Second pass: effect models and SDK wrappers
+
+| Module | Mirrors (reference names) | What it does |
+|---|---|---|
+| `springboard/render/src/color_curve.rs` | vibrance, CIToneCurve | `vibrance` boosts the less saturated colours more. `ToneCurve` is a five-point piecewise linear curve, with `identity`, `new` (validated) and `apply`. |
+| `springboard/render/src/photo_effects.rs` | CIPhotoEffect* (chrome, fade, instant, mono, noir, process, tonal, transfer), CIFalseColor | `PhotoLook` names the looks, `apply` maps a colour through a short `colorfx` chain, `false_colour` mixes two colours by luma. |
+| `springboard/render/src/feature_detect.rs` | rectangle case of CIDetector | `bright_regions` finds 4-connected regions above a luma threshold with their bounding boxes; `filled_rectangles` keeps the ones that fill at least a given share of their box. |
+| `springboard/render/src/depth_blur.rs` | depth-of-field blur, disparity | `depth_to_disparity` and `disparity_to_depth`, `blur_weights` (distance from a focus depth as a mask), and `depth_blur`, which runs `blur_filters::masked_variable_blur` with that mask. |
+| `springboard/render/src/displacement_filters.rs` | CIDisplacementDistortion | Moves each pixel by the red and green values of a map, nearest sampling, clamped at the edge. |
+| `springboard/render/src/edge_tone_filters.rs` | CIEdges, CIHighlightShadowAdjust | `edges` (Sobel magnitude of the luma as grey), `highlight_shadow` (gain on bright and dark tones; defaults are the identity). |
+| `springboard/sdk/src/image_effects.rs` | app API | Wrappers: `vibrance`, `tone_curve`, `photo_look`, `false_colour`, `highlight_shadow`, `edges`, `displacement`, `depth_blur`, `rectangles`. |
+
+Each new render module has a `#[cfg(test)] mod tests` block, and the SDK module has its own tests.
+
+Existing modules the matrix now cites: `springboard/render/src/blur_filters.rs` has gaussian, box, motion, zoom,
+disc, bokeh and masked variable blur, and `springboard/sdk/src/image_blur.rs` and `image_filter.rs` already
+expose them to apps. The earlier matrix text called these missing; it was out of date.
+
+## Choices (second pass)
+
+- Approximations are named as such in the module docs. The photo looks and the highlight and shadow curves are
+  not the reference curves. The displacement scale maps map values 0 and 255 to `-scale / 2` and `+scale / 2`.
+- Rectangle detection is a bright-region model with a fill test. It is not a perspective quadrilateral detector.
+- Depth blur takes depth from the app. It does not estimate depth, and it reuses the existing masked blur.
+- The SDK wrappers copy nothing: they call the render functions on the same `Image` type.
+
 ## Remaining gaps
 
-- No filter object, no chaining by name, and no SDK type for a lazily rendered image.
-- Colour adjustment: vibrance, tone curve, gamma, and a white-point temperature conversion.
-- Blur: motion, zoom, disc and bokeh blur; no radius or sigma API for apps.
-- Photo effects: chrome, fade, instant, transfer and false colour; colour map, palettize and Lab conversion.
-- Gradient generators: checkerboard and stripes. Barcode and QR generation.
-- Feature detection on images (faces, rectangles, text, barcodes).
-- Custom kernels and a custom filter extension point.
+
+- No lazy image graph (CIImage or CIContext equivalent) and no render destination for apps.
+- No custom kernel or custom filter extension point for apps.
+- Colour: the temperature and tint model is a gain approximation; Photos uses brightness and contrast only.
+- Feature detection: axis-aligned rectangles only; no perspective quadrilaterals, faces, text or barcodes, and no
+  barcode or QR generation.
+- Depth: no depth estimation; the app supplies the depth map. No lens shape.
+- Missing filters: comic, spot light, depth of field, circle splash, torus lens, and the perspective, triangle and
+  parallelogram tiles.
+- Colour lookup: palettize is missing; the colour cube, colour map and Lab modules are models only.
 - Image input: JPEG and PNG only. No RAW, no HEIF, no colour-managed decoding for apps.
-- Filtered frame output to a render destination.
+- Built-in filter catalogue: 28 names, not the full reference catalogue.
 
 ## Verification
 
-Not built or tested in this pass, as the task required. Build and test them in the next stage with the
-focused crate tests (`springboard/render`). The owner name check (`python3 tools/check-names.py`) reports
-no hits for the new `.rs` files.
+Not built or tested in this pass: the second pass only wrote the code. The lead builds the render and SDK
+crates, runs the focused tests (`springboard/render`, `springboard/sdk`), and then tests on Midget before any
+row becomes `parity`.
