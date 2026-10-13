@@ -89,7 +89,7 @@
       "apple": "GKGameModelMaxScore, GKGameModelMinScore, GKBox, GKQuad, GKTriangle, GKMeshGraphTriangulationMode, GKRTreeSplitStrategy",
       "bifrost": "springboard/ui/src/gameplay_values.rs",
       "status": "partial",
-      "note": "built on parity/team-a-01; not yet verified on Midget. GKGameModelMaxScore and MinScore, GKBox (Box3), GKQuad (Quad), GKTriangle (Triangle), GKMeshGraphTriangulationMode (TriangulationMode) and GKRTreeSplitStrategy (SplitStrategy). The spatial, graph and strategist rows do not use them yet."
+      "note": "built on parity/team-a-01; not yet verified on Midget. GKGameModelMaxScore and MinScore (symmetric bounds; the SDK gives no numeric value), GKBox (Box3), GKQuad (Quad), GKTriangle (Triangle), GKMeshGraphTriangulationMode (TriangulationMode) and GKRTreeSplitStrategy (SplitStrategy). The spatial, graph and strategist rows do not use them yet."
     }
   ],
   "gaps": [
