@@ -1883,7 +1883,8 @@ mod tests {
         w.set_online(false);
         let ctx = ctx(1200, 780);
         assert!(w.maps.show_traffic && w.traffic.is_some());
-        // a cached traffic tile for the first tile on screen
+        // a cached traffic tile for the first tile on screen (once the map has its real size)
+        w.tick(&ctx, &ui, 500.0);
         let (id, _, _) = w.maps.view.tiles()[0];
         let source = crate::source::TileSource::new(template, "ua").unwrap();
         let tile = springboard::pngenc::encode_rgb(4, 4, &[0xff80_4020; 16]);
