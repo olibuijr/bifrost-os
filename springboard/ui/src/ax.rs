@@ -392,16 +392,31 @@ impl Default for Announcements {
 use std::cell::RefCell;
 thread_local! {
     static FRAME: RefCell<Vec<Node>> = const { RefCell::new(Vec::new()) };
+    /// (node id, parent id) for every node recorded inside a group, in recording order
+    static LINKS: RefCell<Vec<AxLink>> = const { RefCell::new(Vec::new()) };
+    /// the open groups, innermost last
+    static GROUPS: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+    static NOTES: RefCell<Vec<(u64, AxNotification)>> = const { RefCell::new(Vec::new()) };
+}
+
+/// `accessibilityParent` of one recorded node. A node with no link is a direct child of the window.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AxLink {
+    pub id: u64,
+    pub parent: u64,
 }
 
 /// Starts a frame: forgets what the last one recorded.
 pub fn begin_frame() {
     FRAME.with(|f| f.borrow_mut().clear());
+    LINKS.with(|l| l.borrow_mut().clear());
+    GROUPS.with(|g| g.borrow_mut().clear());
 }
 
 /// Publishes one drawn element. `bounds` are window-local points. The id is stable across frames: a hash of the role and label,
-/// plus how many identical ones were drawn before it in this frame.
-pub fn record(role: Role, label: &str, value: &str, bounds: Rect, enabled: bool) {
+/// plus how many identical ones were drawn before it in this frame. Inside a group ([`begin_group`]) the node is a child of it.
+/// Returns the id (0 when the frame is full).
+pub fn record(role: Role, label: &str, value: &str, bounds: Rect, enabled: bool) -> u64 {
     FRAME.with(|f| {
         let mut f = f.borrow_mut();
         let same = f.iter().filter(|n| n.role == role && n.label == label).count();
@@ -409,15 +424,427 @@ pub fn record(role: Role, label: &str, value: &str, bounds: Rect, enabled: bool)
         for b in (role as u32).to_le_bytes().iter().chain(label.as_bytes()).chain(&(same as u32).to_le_bytes()) {
             h = (h ^ *b as u64).wrapping_mul(0x0100_0000_01b3);
         }
-        if f.len() < 400 {
-            f.push(Node { id: h, role, label: label.into(), value: value.into(), bounds, enabled });
+        if f.len() >= 400 {
+            return 0;
         }
+        f.push(Node { id: h, role, label: label.into(), value: value.into(), bounds, enabled });
+        if let Some(parent) = GROUPS.with(|g| g.borrow().last().copied()) {
+            LINKS.with(|l| l.borrow_mut().push(AxLink { id: h, parent }));
+        }
+        h
+    })
+}
+
+/// Opens a container (`accessibilityChildren`): the node is recorded like any other and every node recorded before the matching
+/// [`end_group`] becomes its child. Groups nest. Returns the container's id.
+pub fn begin_group(role: Role, label: &str, bounds: Rect) -> u64 {
+    let id = record(role, label, "", bounds, true);
+    GROUPS.with(|g| g.borrow_mut().push(id));
+    id
+}
+
+/// Closes the innermost group. A stray call is ignored.
+pub fn end_group() {
+    GROUPS.with(|g| {
+        g.borrow_mut().pop();
     });
 }
 
 /// What the frame drew, in drawing order.
 pub fn take_frame() -> Vec<Node> {
+    GROUPS.with(|g| g.borrow_mut().clear());
     FRAME.with(|f| std::mem::take(&mut *f.borrow_mut()))
+}
+
+/// The parent links of the frame just recorded (take them with or before [`take_frame`]; `begin_frame` clears them).
+pub fn take_links() -> Vec<AxLink> {
+    LINKS.with(|l| std::mem::take(&mut *l.borrow_mut()))
+}
+
+/// The children of `parent` (`None` = the window) in `nodes` order, by `links`. `accessibilityChildren`.
+pub fn children_of(nodes: &[Node], links: &[AxLink], parent: Option<u64>) -> Vec<u64> {
+    nodes.iter().filter(|n| parent_of(links, n.id) == parent).map(|n| n.id).collect()
+}
+
+/// `accessibilityParent` of `id`; `None` is the window.
+pub fn parent_of(links: &[AxLink], id: u64) -> Option<u64> {
+    links.iter().find(|l| l.id == id).map(|l| l.parent)
+}
+
+/// Position of `id` among its siblings (AT-SPI `GetIndexInParent`), or `None` for an unknown id.
+pub fn index_in_parent(nodes: &[Node], links: &[AxLink], id: u64) -> Option<usize> {
+    if !nodes.iter().any(|n| n.id == id) {
+        return None;
+    }
+    children_of(nodes, links, parent_of(links, id)).iter().position(|c| *c == id)
+}
+
+// --- NSAccessibility vocabulary --------------------------------------------------------------------------------------------------
+
+/// `NSAccessibility.Role`: the role strings an element answers to `accessibilityRole`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AxRole {
+    Button,
+    CheckBox,
+    Slider,
+    TextField,
+    StaticText,
+    List,
+    Row,
+    MenuItem,
+    Menu,
+    MenuBar,
+    Group,
+    Window,
+    Application,
+    ProgressIndicator,
+    RadioGroup,
+}
+
+impl AxRole {
+    /// The constant's value (`NSAccessibilityButtonRole` is `AXButton`).
+    pub fn raw(self) -> &'static str {
+        match self {
+            AxRole::Button => "AXButton",
+            AxRole::CheckBox => "AXCheckBox",
+            AxRole::Slider => "AXSlider",
+            AxRole::TextField => "AXTextField",
+            AxRole::StaticText => "AXStaticText",
+            AxRole::List => "AXList",
+            AxRole::Row => "AXRow",
+            AxRole::MenuItem => "AXMenuItem",
+            AxRole::Menu => "AXMenu",
+            AxRole::MenuBar => "AXMenuBar",
+            AxRole::Group => "AXGroup",
+            AxRole::Window => "AXWindow",
+            AxRole::Application => "AXApplication",
+            AxRole::ProgressIndicator => "AXProgressIndicator",
+            AxRole::RadioGroup => "AXRadioGroup",
+        }
+    }
+}
+
+impl From<Role> for AxRole {
+    fn from(r: Role) -> AxRole {
+        match r {
+            Role::Button => AxRole::Button,
+            Role::TextField => AxRole::TextField,
+            Role::List => AxRole::List,
+            Role::Row => AxRole::Row,
+            Role::Toggle | Role::Checkbox => AxRole::CheckBox,
+            Role::Slider => AxRole::Slider,
+            Role::SegmentedControl => AxRole::RadioGroup,
+            Role::StaticText => AxRole::StaticText,
+            Role::MenuItem => AxRole::MenuItem,
+            Role::Window => AxRole::Window,
+            Role::ProgressIndicator => AxRole::ProgressIndicator,
+        }
+    }
+}
+
+/// `NSAccessibility.Subrole`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AxSubrole {
+    SecureTextField,
+    SearchField,
+    Toggle,
+    CloseButton,
+    MinimizeButton,
+    ZoomButton,
+    StandardWindow,
+    Dialog,
+    SortButton,
+}
+
+impl AxSubrole {
+    pub fn raw(self) -> &'static str {
+        match self {
+            AxSubrole::SecureTextField => "AXSecureTextField",
+            AxSubrole::SearchField => "AXSearchField",
+            AxSubrole::Toggle => "AXToggle",
+            AxSubrole::CloseButton => "AXCloseButton",
+            AxSubrole::MinimizeButton => "AXMinimizeButton",
+            AxSubrole::ZoomButton => "AXZoomButton",
+            AxSubrole::StandardWindow => "AXStandardWindow",
+            AxSubrole::Dialog => "AXDialog",
+            AxSubrole::SortButton => "AXSortButton",
+        }
+    }
+    /// The subrole a kit role implies: a toggle is `AXToggle` (a checkbox shown as a switch).
+    pub fn of(role: Role) -> Option<AxSubrole> {
+        match role {
+            Role::Toggle => Some(AxSubrole::Toggle),
+            Role::Window => Some(AxSubrole::StandardWindow),
+            _ => None,
+        }
+    }
+}
+
+/// `NSAccessibility.Notification`: what [`post`] announces to assistive technology.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AxNotification {
+    FocusedUIElementChanged,
+    ValueChanged,
+    LayoutChanged,
+    SelectedChildrenChanged,
+    UIElementDestroyed,
+}
+
+impl AxNotification {
+    /// The constant's value (`NSAccessibilityValueChangedNotification` is `AXValueChanged`).
+    pub fn raw(self) -> &'static str {
+        match self {
+            AxNotification::FocusedUIElementChanged => "AXFocusedUIElementChanged",
+            AxNotification::ValueChanged => "AXValueChanged",
+            AxNotification::LayoutChanged => "AXLayoutChanged",
+            AxNotification::SelectedChildrenChanged => "AXSelectedChildrenChanged",
+            AxNotification::UIElementDestroyed => "AXUIElementDestroyed",
+        }
+    }
+}
+
+/// `NSAccessibility.post(element:notification:)`: queues the notification for `element` (a `Node::id`). The runtime drains the
+/// queue with [`take_notifications`] and forwards it (the AT-SPI bridge turns it into `StateChanged:focused`,
+/// `PropertyChange:accessible-value` and `ChildrenChanged`). The same notification for the same element twice in a row is
+/// queued once. The queue is bounded at 64.
+pub fn post(element: u64, notification: AxNotification) {
+    NOTES.with(|n| {
+        let mut n = n.borrow_mut();
+        if n.last() == Some(&(element, notification)) {
+            return;
+        }
+        if n.len() >= 64 {
+            n.remove(0);
+        }
+        n.push((element, notification));
+    });
+}
+
+/// The notifications posted since the last call, in posting order.
+pub fn take_notifications() -> Vec<(u64, AxNotification)> {
+    NOTES.with(|n| std::mem::take(&mut *n.borrow_mut()))
+}
+
+/// `NSAccessibilityCustomContent`: a label and a value assistive technology reads on request ("Sender", "Ada").
+/// `important` content is spoken without being asked for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AxCustomContent {
+    pub label: String,
+    pub value: String,
+    pub important: bool,
+}
+
+impl AxCustomContent {
+    pub fn new(label: &str, value: &str) -> Self {
+        AxCustomContent { label: label.into(), value: value.into(), important: false }
+    }
+    pub fn important(mut self) -> Self {
+        self.important = true;
+        self
+    }
+    /// What is spoken: "Sender: Ada".
+    pub fn spoken(&self) -> String {
+        format!("{}: {}", self.label, self.value)
+    }
+}
+
+/// `NSAccessibilityProtocol`: what any element answers. The defaults are an inert, unfocused element.
+pub trait AccessibilityElement {
+    fn accessibility_parent(&self) -> Option<u64> {
+        None
+    }
+    fn accessibility_children(&self) -> Vec<u64> {
+        Vec::new()
+    }
+    fn accessibility_frame(&self) -> Rect;
+    fn accessibility_role(&self) -> AxRole;
+    fn accessibility_subrole(&self) -> Option<AxSubrole> {
+        None
+    }
+    fn accessibility_value(&self) -> String {
+        String::new()
+    }
+    /// `setAccessibilityValue`: true when the element took the value.
+    fn set_accessibility_value(&mut self, _value: &str) -> bool {
+        false
+    }
+    fn is_accessibility_focused(&self) -> bool {
+        false
+    }
+    /// `setAccessibilityFocused`: true when the element took (or gave up) focus.
+    fn set_accessibility_focused(&mut self, _focused: bool) -> bool {
+        false
+    }
+    fn accessibility_perform_press(&mut self) -> bool {
+        false
+    }
+    fn accessibility_perform_increment(&mut self) -> bool {
+        false
+    }
+    fn accessibility_perform_decrement(&mut self) -> bool {
+        false
+    }
+    fn accessibility_custom_content(&self) -> Vec<AxCustomContent> {
+        Vec::new()
+    }
+}
+
+/// `NSAccessibilityElement`: a stand-in for something that is drawn but is not a view (a chart bar, a calendar cell). It holds
+/// what it answers; the owner updates it as the thing changes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AxElement {
+    pub id: u64,
+    pub parent: Option<u64>,
+    pub children: Vec<u64>,
+    pub frame: Rect,
+    pub role: AxRole,
+    pub subrole: Option<AxSubrole>,
+    pub label: String,
+    pub value: String,
+    pub focused: bool,
+    pub custom_content: Vec<AxCustomContent>,
+}
+
+impl AxElement {
+    pub fn new(id: u64, role: AxRole, label: &str, frame: Rect) -> Self {
+        AxElement { id, parent: None, children: Vec::new(), frame, role, subrole: None, label: label.into(), value: String::new(), focused: false, custom_content: Vec::new() }
+    }
+}
+
+impl AccessibilityElement for AxElement {
+    fn accessibility_parent(&self) -> Option<u64> {
+        self.parent
+    }
+    fn accessibility_children(&self) -> Vec<u64> {
+        self.children.clone()
+    }
+    fn accessibility_frame(&self) -> Rect {
+        self.frame
+    }
+    fn accessibility_role(&self) -> AxRole {
+        self.role
+    }
+    fn accessibility_subrole(&self) -> Option<AxSubrole> {
+        self.subrole
+    }
+    fn accessibility_value(&self) -> String {
+        self.value.clone()
+    }
+    /// Writing a changed value posts `valueChanged`.
+    fn set_accessibility_value(&mut self, value: &str) -> bool {
+        if self.value != value {
+            self.value = value.into();
+            post(self.id, AxNotification::ValueChanged);
+        }
+        true
+    }
+    fn is_accessibility_focused(&self) -> bool {
+        self.focused
+    }
+    /// Gaining focus posts `focusedUIElementChanged`.
+    fn set_accessibility_focused(&mut self, focused: bool) -> bool {
+        if focused && !self.focused {
+            post(self.id, AxNotification::FocusedUIElementChanged);
+        }
+        self.focused = focused;
+        true
+    }
+    fn accessibility_custom_content(&self) -> Vec<AxCustomContent> {
+        self.custom_content.clone()
+    }
+}
+
+#[cfg(test)]
+mod tree_tests {
+    use super::*;
+
+    fn r() -> Rect {
+        Rect { x: 0., y: 0., w: 10., h: 10. }
+    }
+
+    #[test]
+    fn groups_make_a_parent_child_tree_with_stable_ids() {
+        let build = || {
+            begin_frame();
+            let list = begin_group(Role::List, "Inbox", r());
+            let row = begin_group(Role::Row, "Ada", r());
+            let star = record(Role::Button, "Star", "", r(), true);
+            end_group();
+            let row2 = record(Role::Row, "Bo", "", r(), true);
+            end_group();
+            let top = record(Role::Button, "Compose", "", r(), true);
+            let links = take_links();
+            (list, row, star, row2, top, links, take_frame())
+        };
+        let (list, row, star, row2, top, links, nodes) = build();
+        assert_eq!(parent_of(&links, star), Some(row));
+        assert_eq!(parent_of(&links, row), Some(list));
+        assert_eq!(parent_of(&links, top), None, "outside every group is a window child");
+        assert_eq!(children_of(&nodes, &links, Some(list)), vec![row, row2]);
+        assert_eq!(children_of(&nodes, &links, None), vec![list, top]);
+        assert_eq!(index_in_parent(&nodes, &links, row2), Some(1));
+        assert_eq!(index_in_parent(&nodes, &links, 12345), None);
+        let again = build();
+        assert_eq!((again.0, again.1, again.2), (list, row, star), "ids are stable across frames");
+    }
+
+    #[test]
+    fn a_stray_end_group_is_ignored_and_a_new_frame_closes_open_groups() {
+        begin_frame();
+        end_group();
+        begin_group(Role::List, "A", r());
+        begin_frame();
+        let lone = record(Role::Button, "B", "", r(), true);
+        assert!(take_links().is_empty());
+        assert_ne!(lone, 0);
+    }
+
+    #[test]
+    fn apple_role_strings_follow_the_kit_roles() {
+        assert_eq!(AxRole::from(Role::Button).raw(), "AXButton");
+        assert_eq!(AxRole::from(Role::Slider).raw(), "AXSlider");
+        assert_eq!(AxRole::from(Role::Toggle).raw(), "AXCheckBox");
+        assert_eq!(AxSubrole::of(Role::Toggle), Some(AxSubrole::Toggle));
+        assert_eq!(AxSubrole::of(Role::Button), None);
+        assert_eq!(AxSubrole::SecureTextField.raw(), "AXSecureTextField");
+        assert_eq!(AxRole::MenuBar.raw(), "AXMenuBar");
+    }
+
+    #[test]
+    fn element_setters_post_notifications_once() {
+        take_notifications();
+        let mut e = AxElement::new(5, AxRole::Slider, "Volume", r());
+        assert!(e.set_accessibility_value("40"));
+        assert!(e.set_accessibility_value("40"), "same value, no second notification");
+        assert!(e.set_accessibility_focused(true));
+        assert!(e.is_accessibility_focused());
+        assert_eq!(take_notifications(), vec![(5, AxNotification::ValueChanged), (5, AxNotification::FocusedUIElementChanged)]);
+        assert!(take_notifications().is_empty());
+        assert_eq!(AxNotification::LayoutChanged.raw(), "AXLayoutChanged");
+        assert_eq!(e.accessibility_value(), "40");
+        assert!(!e.accessibility_perform_increment(), "an inert element does not step");
+    }
+
+    #[test]
+    fn the_notification_queue_is_bounded_and_collapses_repeats() {
+        take_notifications();
+        for i in 0..100u64 {
+            post(i, AxNotification::LayoutChanged);
+        }
+        let n = take_notifications();
+        assert_eq!(n.len(), 64);
+        assert_eq!(n[63].0, 99, "the oldest are dropped");
+    }
+
+    #[test]
+    fn custom_content_speaks_label_and_value() {
+        let c = AxCustomContent::new("Sender", "Ada").important();
+        assert_eq!(c.spoken(), "Sender: Ada");
+        assert!(c.important);
+        let mut e = AxElement::new(1, AxRole::Row, "Mail", r());
+        e.custom_content.push(c);
+        assert_eq!(e.accessibility_custom_content().len(), 1);
+    }
 }
 
 #[cfg(test)]

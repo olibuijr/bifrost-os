@@ -24,9 +24,9 @@
     {
       "feature": "Element hierarchy (parent, focus, checked state)",
       "apple": "NSAccessibility accessibilityChildren and accessibilityParent",
-      "bifrost": "springboard/sdk/src/lib.rs:104 (controls_tree), springboard/sdk/src/view/app.rs:91 and :241, springboard/proto/src/lib.rs (NodeExt); wired: springboard/src/shell/accessibility/tree.rs; springboard/src/shell/axmap.rs (ax_state); springboard/src/bare/control.rs (ax list); wired: springboard/src/shell/accessibility/reader.rs (focus ring on the cursor row); springboard/src/shell/axmap.rs (item_role shared with the element map)",
+      "bifrost": "springboard/sdk/src/lib.rs:104 (controls_tree), springboard/sdk/src/view/app.rs:91 and :241, springboard/proto/src/lib.rs (NodeExt); wired: springboard/src/shell/accessibility/tree.rs; springboard/src/shell/axmap.rs (ax_state); springboard/src/bare/control.rs (ax list); wired: springboard/src/shell/accessibility/reader.rs (focus ring on the cursor row); springboard/src/shell/axmap.rs (item_role shared with the element map); springboard/ui/src/ax.rs (begin_group, end_group, take_links, AxElement, AccessibilityElement, AxRole, AxSubrole, AxNotification, post, AxCustomContent); springboard/sdk/src/runtime.rs (merge_tree); springboard/sdk/src/widgets.rs (source_list group); springboard/src/shell/atspi/model.rs (chrome_snap)",
       "status": "partial",
-      "note": "The SDK exposes controls_tree and View::controls_tree, but no app in springboard/apps overrides it yet, so every app reads as a flat list under its window. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Kit draw helpers now record parent links (ax::begin_group/end_group) and the runtime sends them as ControlsTree entries, so the sidebar list nests its rows without app changes; ViewApp already sent the view tree. The menu bar, its menus, the dock apps and Spotlight are published as a \"BifrOSt Shell\" application on the AT-SPI bus. Chrome is read-only (press is not routed yet) and Spotlight is a placeholder entry without live text. Only the sidebar draws groups so far; other immediate-mode helpers stay flat. Needs a Midget check with Orca for parity."
     },
     {
       "feature": "Labels, titles and help text",
@@ -59,9 +59,9 @@
     {
       "feature": "Custom actions and value setting",
       "apple": "accessibilityPerformPress, accessibilityIncrement, setAccessibilityValue",
-      "bifrost": "springboard/sdk/src/lib.rs (ax_set), springboard/proto/src/lib.rs (AxAction: Press, SetValue, Focus); wired: springboard/src/shell/accessibility/actions.rs; springboard/src/shell/axmap.rs (ax_actions, ax_action); springboard/src/bare/control.rs (ax actions, ax action)",
+      "bifrost": "springboard/sdk/src/lib.rs (ax_set), springboard/proto/src/lib.rs (AxAction: Press, SetValue, Focus); wired: springboard/src/shell/accessibility/actions.rs; springboard/src/shell/axmap.rs (ax_actions, ax_action); springboard/src/bare/control.rs (ax actions, ax action); AxAction::Increment/Decrement (proto tags 3 and 4), springboard/sdk/src/view/mod.rs (Window::ax_adjust), springboard/src/shell/atspi/bridge.rs (increment and decrement actions on numeric elements)",
       "status": "partial",
-      "note": "Default ax_set maps Press to a tap and ignores SetValue and Focus; only apps that override ax_set accept them. Shared kit sliders and text fields do not yet. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "ViewApp ax_set handles Press, SetValue, Focus, Increment and Decrement for the shared view kit (sliders step on the arrow keys). The default App::ax_set (non-view apps) still maps only Press. NSAccessibility.post is ax::post with FocusedUIElementChanged, ValueChanged and LayoutChanged queued for the runtime; forwarding the queue to AT-SPI signals is not wired yet. Needs a Midget check for parity."
     },
     {
       "feature": "System accessibility settings readable by apps",
@@ -121,13 +121,9 @@
     }
   ],
   "gaps": [
-    "No app emits controls_tree, so the parent and hierarchy API is unused and every app is a flat list to screen readers.",
-    "The AT-SPI bridge is untested on a live Orca; unit tests cover only wire round trips and mapping.",
-    "Shell chrome (menu bar, dock, Spotlight, Settings pages) is missing from the AT-SPI tree.",
-    "ax_set ignores SetValue and Focus unless an app overrides it; the shared kit's sliders and text fields do not.",
-    "No Accessibility Inspector for developers to see an app's accessibility tree.",
-    "No Switch Control, Voice Control, Braille, or audio graph support.",
-    "Display Zoom is a 1.15 geometry factor, not a system-wide zoom, and the Magnifier is a camera loupe, not a screen magnifier.",
-    "Doc drift: docs/bifrost-ui.md lines 211-223 still list announcements, caret and secure fields as missing in the parity gaps, while the Closed-in-the-text-round section and ax.rs describe them as implemented. Reconcile the doc."
+    "Only the sidebar list draws an accessibility group; the other immediate-mode kit helpers and non-view apps still publish flat lists.",
+    "Shell chrome is in the AT-SPI tree but read-only (press is not routed back) and Spotlight has no live text.",
+    "ax::post queues notifications but the runtime does not yet forward them as AT-SPI signals.",
+    "The AT-SPI bridge is untested on a live Orca; unit tests cover only wire round trips and mapping."
   ]
 }

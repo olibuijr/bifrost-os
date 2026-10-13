@@ -24,10 +24,15 @@ mod glue {
         static STATE: RefCell<(State, f64)> = const { RefCell::new((State::Idle, f64::NEG_INFINITY)) };
     }
 
+    /// True when the next [`sync`] will publish (the throttle has elapsed), so the shell builds its chrome snapshot only then.
+    pub fn due(t_ms: f64) -> bool {
+        STATE.with(|s| t_ms - s.borrow().1 >= 250.0)
+    }
+
     /// Publishes the running apps' semantic trees to the accessibility bus and forwards screen-reader requests to the
     /// apps as `ToApp::AxSet`. Throttled to four times a second; the bus connection is made on a helper thread so a slow
     /// `org.a11y.Bus` never stalls the shell, and a missing bus turns the bridge off for the session.
-    pub fn sync(ext: &mut [Option<AppHost>], t_ms: f64) {
+    pub fn sync(ext: &mut [Option<AppHost>], t_ms: f64, chrome: Option<AppSnap>) {
         STATE.with(|s| {
             let (state, last) = &mut *s.borrow_mut();
             if t_ms - *last < 250.0 {
@@ -49,7 +54,7 @@ mod glue {
                 },
                 State::Up(bridge) => {
                     let names = installed();
-                    let apps = ext
+                    let apps: Vec<AppSnap> = ext
                         .iter()
                         .enumerate()
                         .filter_map(|(slot, h)| {
@@ -57,6 +62,7 @@ mod glue {
                             let name = names.get(slot).map(|a| a.manifest.name.clone()).filter(|n| !n.is_empty()).unwrap_or_else(|| h.id.clone());
                             Some(AppSnap { slot: slot as u8, app_id: h.id.clone(), name, nodes: build_ax(&h.controls, &h.controls_tree, &h.ax_text, &h.ax_meta) })
                         })
+                        .chain(chrome)
                         .collect();
                     bridge.publish(apps);
                     for (slot, h) in ext.iter_mut().enumerate() {
@@ -78,4 +84,4 @@ mod glue {
 }
 
 #[cfg(feature = "atspi")]
-pub use glue::sync;
+pub use glue::{due, sync};

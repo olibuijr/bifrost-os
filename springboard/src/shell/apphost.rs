@@ -1597,7 +1597,10 @@ impl Shell {
         }
         self.ext_forward_composition();
         #[cfg(feature = "atspi")]
-        super::atspi::sync(&mut self.ext, t);
+        {
+            let chrome = super::atspi::due(t).then(|| self.ax_chrome_snap());
+            super::atspi::sync(&mut self.ext, t, chrome);
+        }
     }
 
     pub(super) fn ext_draw(&mut self, s: &mut Surface, slot: usize, t: f64) {

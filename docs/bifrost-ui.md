@@ -216,7 +216,7 @@ Screen readers (Orca) read BifrOSt apps through the AT-SPI2 bus. Three layers:
   bit0 has parent, bit1 focused, bit2 checkable, bit3 checked). An app that never sends it, or a node without an entry, is a
   direct child of the window, so old apps read as a flat list. The shell drops parents that are missing, self or cyclic
   (`atspi::model::build`). The other direction is `ToApp::AxSet { id, action }` (tag `18`) with `AxAction::{Press,
-  SetValue(String), Focus}`.
+  SetValue(String), Focus, Increment, Decrement}`.
 - **SDK** (`bifrost_app::App`). `controls_tree(&self, ctx)` (default empty, sent only on change) and
   `ax_set(&mut self, ctx, id, action)`. The default maps `Press` onto `Input::Activate(id)` (the same path as a tap on
   the control) and ignores `SetValue` and `Focus`; apps with editable nodes override it.
@@ -252,9 +252,22 @@ Closed in the text round (system 0.4.9x groundwork, AT-SPI side untested on a li
 
 Parity gaps against `NSAccessibility` (recorded, not hidden):
 
-- No app emits `controls_tree` yet, so every app is a flat list under its frame until its `controls()` code adds parents.
-- Shell chrome (menu bar, dock, Spotlight, Settings pages) is not in the AT-SPI tree; it exists only in the agent
-  element map (`bifrost_ui::ax::Map`).
+- Hierarchy from the kit: `ax::begin_group(role, label, bounds)` / `ax::end_group()` make every node recorded in between a
+  child of the group (`ax::take_links`, `parent_of`, `children_of`, `index_in_parent`); the SDK runtime merges the links into
+  `ControlsTree` (`runtime::merge_tree`, the app's own entries win), so apps get the tree without changes. `ViewApp` already
+  sent the view tree. Only `source_list` groups its rows so far (a `List` named "Sidebar"); the other immediate-mode helpers
+  still record flat nodes.
+- Shell chrome: `atspi::model::chrome_snap` publishes the menu bar (menus and rows nested), the dock apps (open ones marked) and a
+  Spotlight entry as the application "BifrOSt Shell" (slot 250). It is read-only: a press on a chrome node is not routed back
+  to the shell yet, and Spotlight carries no live text. Settings pages stay in the agent map only.
+- `NSAccessibility` vocabulary in `bifrost_ui::ax`: `AxRole` / `AxSubrole` (the `AX*` constants, `From<Role>`), `AccessibilityElement`
+  (`accessibilityParent`, `Children`, `Frame`, `Role`, `Value`, `setAccessibilityValue`, `isAccessibilityFocused`,
+  `setAccessibilityFocused`, `PerformPress`, `PerformIncrement`, `PerformDecrement`), `AxElement` (`NSAccessibilityElement`),
+  `AxCustomContent`, and `ax::post(element, AxNotification)` with `FocusedUIElementChanged`, `ValueChanged`, `LayoutChanged`.
+  Posted notifications are queued (`take_notifications`); forwarding them as AT-SPI signals is not wired yet, so the
+  bridge still derives its events from snapshot changes.
+- `AxAction` gained `Increment` and `Decrement` (wire tags 3 and 4): `ViewApp::ax_set` steps a slider with the arrow keys
+  (`Window::ax_adjust`), and the bridge lists `increment` and `decrement` actions on numeric elements.
 - Extents are window-local points for both coordinate types: the bridge is not told window positions or the scale.
 - No custom actions beyond press, no `AXRelations` (title-for, labelled-by), no rotor equivalent.
 - The text attributes cover single-line fields only: no multi-line `AXInsertionPointLineNumber`, no `AXStringForRange`
@@ -266,7 +279,8 @@ Parity gaps against `NSAccessibility` (recorded, not hidden):
 - `accessibilityTitle` and `accessibilityHelp` are set on the SDK `TextField` only (`with_ax_title`, `with_ax_help`); other
   controls report no title or help yet.
 - `Value` is parsed from the node's value text ("0.4", "40%"); a typed min/max/step needs a node field.
-- `SetValue` and `Focus` only reach apps that override `ax_set`; sliders and text fields in the shared kit do not yet.
+- `SetValue`, `Focus`, `Increment` and `Decrement` reach the shared view kit through `ViewApp::ax_set` (sliders, text fields,
+  checkboxes, pop-up buttons); a plain `App` that does not override `ax_set` still handles only `Press`.
 - Rows are not selectable (`Selection` interface) and lists are not `Table`s.
 - Untested on a live Orca: unit tests cover the wire round trips and role/state/path mapping only.
 
@@ -281,7 +295,7 @@ Priority order based on existing app needs and current implementation seams:
    semantic nodes automatically.
 3. Accessibility (`NSAccessibility`): parent/child relations (`ToShell::ControlsTree`), `ax set` (`ToApp::AxSet`) and
    the Linux AT-SPI2 bridge are in (feature `atspi`, see "Accessibility bridge (AT-SPI2)"). Text ranges, caret events and live announcements are in. Still open: window actions,
-   shell chrome in the tree and apps that emit the tree (none do yet).
+   routing presses on shell chrome nodes, and grouping in the immediate-mode helpers other than `source_list`.
 4. Add typed App Intents (`AppIntent`, `AppEntity`, `AppShortcut`) alongside app-control RPC methods.
 5. (5a-5c done, see "User notifications", "Share sheet" and "Typed drag and drop") Add the brokered share sheet (`NSSharingServicePicker`), actionable/reply notifications (`UNUserNotificationCenter`),
    and typed drag and drop (`NSDraggingDestination`/`NSDraggingSource`) using `uttype`.

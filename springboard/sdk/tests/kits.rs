@@ -38,6 +38,20 @@ fn drawing_a_kit_control_publishes_it_to_the_element_map() {
 }
 
 #[test]
+fn grouped_kit_controls_publish_a_parent_child_tree() {
+    use bifrost_app::controls::{ax, Rect, Role};
+    let r = Rect { x: 0., y: 0., w: 20., h: 20. };
+    ax::begin_frame();
+    let list = ax::begin_group(Role::List, "Sidebar", r);
+    let row = ax::record(Role::Row, "Inbox", "", r, true);
+    ax::end_group();
+    let links = ax::take_links();
+    let nodes = ax::take_frame();
+    assert_eq!(ax::parent_of(&links, row), Some(list));
+    assert_eq!(ax::children_of(&nodes, &links, None), vec![list]);
+}
+
+#[test]
 fn uttype_conformance_follows_the_hierarchy() {
     assert!(uttype::conforms("public.jpeg", "public.image"));
     assert!(uttype::conforms("public.jpeg", "public.jpeg"), "a type conforms to itself");

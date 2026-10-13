@@ -585,6 +585,10 @@ pub enum AxAction {
     Press,
     SetValue(String),
     Focus,
+    /// `accessibilityPerformIncrement`: one step up on a slider or stepper.
+    Increment,
+    /// `accessibilityPerformDecrement`: one step down.
+    Decrement,
 }
 
 /// App -> shell.
@@ -1057,6 +1061,8 @@ impl ToApp {
                 match action {
                     AxAction::Press => b.push(0),
                     AxAction::Focus => b.push(2),
+                    AxAction::Increment => b.push(3),
+                    AxAction::Decrement => b.push(4),
                     AxAction::SetValue(v) => {b.push(1);str_(&mut b, &short(v));}
                 }
             }
@@ -1188,6 +1194,8 @@ impl ToApp {
                     0 => AxAction::Press,
                     1 => AxAction::SetValue(r.str()?),
                     2 => AxAction::Focus,
+                    3 => AxAction::Increment,
+                    4 => AxAction::Decrement,
                     _ => return Err(DecodeError::BadValue),
                 };
                 ToApp::AxSet { id, action }
@@ -2219,7 +2227,7 @@ mod ax_tree_tests {
 
     #[test]
     fn ax_set_round_trips() {
-        for action in [AxAction::Press, AxAction::Focus, AxAction::SetValue("héllo".into())] {
+        for action in [AxAction::Press, AxAction::Focus, AxAction::Increment, AxAction::Decrement, AxAction::SetValue("héllo".into())] {
             let m = ToApp::AxSet { id: 0x1_0000_0002, action };
             assert_eq!(ToApp::decode(&m.encode()), Ok(m));
         }

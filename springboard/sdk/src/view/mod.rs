@@ -1046,6 +1046,14 @@ impl<S: Responder> Window<S> {
         }
         self.dispatch_at(&p, &ViewEvent::Key(KeyInput::Code(13)), state)
     }
+    /// `accessibilityPerformIncrement` / `accessibilityPerformDecrement`: the arrow key a slider or stepper steps on.
+    pub fn ax_adjust(&mut self, id: u64, up: bool, state: &mut S) -> bool {
+        let mut p = Vec::new();
+        if !path_to(self.root(), id, &mut p) || !at(self.root(), &p).base().enabled {
+            return false;
+        }
+        self.dispatch_at(&p, &ViewEvent::Key(KeyInput::Code(if up { 39 } else { 37 })), state)
+    }
     /// `AXValue` write; queued control actions are sent like a user change.
     pub fn ax_set_value(&mut self, id: u64, value: &str, state: &mut S) -> bool {
         let mut p = Vec::new();

@@ -102,6 +102,15 @@ impl Shell {
         (map, st)
     }
 
+    /// The shell chrome for the AT-SPI bridge: the menu bar and its menus, the dock's apps (open ones marked) and Spotlight.
+    pub(super) fn ax_chrome_snap(&self) -> super::atspi::model::AppSnap {
+        let menus: Vec<(String, Vec<(String, bool)>)> =
+            self.ax_menus().into_iter().map(|(_, name, rows)| (name.to_string(), rows.into_iter().map(|(_, text, enabled)| (text, enabled)).collect())).collect();
+        let open: Vec<AppId> = self.desk.as_ref().map(|d| d.wins.iter().map(|w| w.app).collect()).unwrap_or_default();
+        let dock: Vec<(String, bool)> = super::apps::apps().iter().map(|a| (a.name.to_string(), open.contains(&a.id))).collect();
+        super::atspi::model::chrome_snap(&menus, &dock)
+    }
+
     /// The open windows as elements under `os/windows`, each carrying the title-bar actions in `WINDOW_ACTIONS`.
     fn add_window_elements(&self, map: &mut Map) {
         let Some(desk) = self.desk.as_ref() else { return };
