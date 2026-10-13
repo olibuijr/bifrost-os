@@ -35,6 +35,7 @@ pub mod launch_services;
 pub mod display_services;
 pub mod window_services;
 pub mod event_services;
+pub mod thumbnails;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -80,7 +81,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(widgets_timeline::WidgetsTimeline),
         Box::new(power_service::PowerService::default()),
         Box::new(audio_devices::AudioDevices::new()),
-        Box::new(quick_look::PreviewService),
+        Box::new(quick_look::PreviewService::default()),
         Box::new(gamepad_service::GamepadService::default()),
         Box::new(bluetooth_service::BluetoothService::default()),
         Box::new(login_items_approval::LoginItemsApproval),
@@ -97,6 +98,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(display_services::DisplayServices::default()),
         Box::new(window_services::WindowServices),
         Box::new(event_services::EventServices),
+        Box::new(thumbnails::Thumbnails::default()),
     ]
 }
 

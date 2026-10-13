@@ -13,6 +13,7 @@ use bifrost_app::pasteboard_types::{self, Board, Item, FILE_URL, STRING, URL};
 use bifrost_app::proto::peek::PreviewItem;
 use bifrost_app::quick_look;
 use bifrost_app::quicksearch::{CSSearchableIndex, CSSearchableItem, CSSearchableItemAttributeSet};
+use bifrost_app::thumbnails::{self, ThumbKind};
 use bifrost_app::Ctx;
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
@@ -25,6 +26,8 @@ const MAX_BOARD_ITEMS: usize = 16;
 const MAX_WAITING: usize = 32;
 /// The smallest change of the Dock progress bar that is sent.
 const DOCK_STEP: f32 = 0.01;
+/// Thumbnail requests whose replies are awaited; past this they are forgotten (their picture then still comes as an event).
+const MAX_THUMB_IDS: usize = 4096;
 
 /// A service call the app asked for on an event, sent by `SystemState::flush`.
 #[derive(Clone, Debug, PartialEq)]
@@ -41,8 +44,10 @@ pub(crate) enum Effect {
     IndexDocument(PathBuf),
     /// The Dock tile's progress bar (None clears it).
     DockProgress(Option<f32>),
-    /// Open With: ask the launch service which apps open this file.
+    /// OpenWith: ask the launch service which apps open this file.
     OpenWithApps(PathBuf),
+    /// A picture of the file for a view: the thumbnails service, at `size` pt and `scale` pixels per point.
+    Thumbnail(PathBuf, u32, f32),
 }
 
 /// What a waiting reply is for.
@@ -61,6 +66,8 @@ pub(crate) struct SystemState {
     waiting: Vec<(u32, Waiting)>,
     /// The paths the shell's preview panel shows for this app, while it is open.
     pub(crate) preview: Option<Vec<PathBuf>>,
+    /// Thumbnail requests whose reply is still wanted (their answers are matched by request id).
+    thumb_ids: std::collections::HashSet<u32>,
     /// The last progress fraction sent to the Dock tile; None when no bar is up.
     dock: Option<f32>,
 }
@@ -94,8 +101,21 @@ impl SystemState {
                     let id = bifrost_app::launch_services::open_with(ctx, &file_name_of(&path));
                     self.wait(id, Waiting::OpenWith(path));
                 }
+                Effect::Thumbnail(path, size, scale) => {
+                    if let Some(p) = path.to_str() {
+                        if self.thumb_ids.len() >= MAX_THUMB_IDS {
+                            self.thumb_ids.clear();
+                        }
+                        self.thumb_ids.insert(thumbnails::request(ctx, p, size, scale, ThumbKind::Thumbnail));
+                    }
+                }
             }
         }
+    }
+
+    /// Takes the thumbnail request `request` when it is one of this app's; its reply is then a thumbnail answer.
+    pub(crate) fn take_thumb(&mut self, request: u32) -> bool {
+        self.thumb_ids.remove(&request)
     }
 
     fn wait(&mut self, request: u32, what: Waiting) {
@@ -269,8 +289,24 @@ impl Files {
         self.sys.flush(ctx);
     }
 
+    /// Sends the thumbnail asks the views made while painting (`ViewOpts::thumb`).
+    pub(crate) fn request_thumbnails(&mut self, ctx: &Ctx) {
+        let asks = self.vo.take_thumb_asks();
+        if asks.is_empty() {
+            return;
+        }
+        self.sys.effects.extend(asks.into_iter().map(|(path, size, scale)| Effect::Thumbnail(path, size, scale)));
+        self.flush_services(ctx);
+    }
+
     /// Handles a reply to a call this app made. Returns true when a frame is needed.
     pub(crate) fn service_answer(&mut self, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
+        if self.sys.take_thumb(request) {
+            return match result.as_ref().ok().and_then(thumbnails::reply) {
+                Some(reply) => self.thumb_answer(&reply),
+                None => false,
+            };
+        }
         let Some(what) = self.sys.answered(request) else {
             return false;
         };

@@ -1,3 +1,7 @@
+## 1.24.0 — 2026-10-13
+
+- Icon view, gallery and the preview column draw pictures from the system thumbnails service: any file the service can draw (pictures, text pages, fonts, Office documents, audio and video covers, contacts, calendar events) shows its picture, and the rest keep their type icon. Files no longer decodes pictures itself, so the view does not read files on the paint path.
+
 ## 1.23.0 — 2026-10-13
 
 - Opening an archive (double-click) expands it next to itself; Expand now handles zip, tar, tar.gz, tar.bz2, tar.xz, tar.zst and single .gz/.bz2/.xz/.zst files. The context menu adds Compress as TAR.GZ and Compress as TAR.XZ beside Compress (zip). The shared code is `springboard::files::archive`.

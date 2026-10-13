@@ -8,12 +8,37 @@
 //! - `step` `{delta}`: moves the index by `delta` (no wrapping). Answers the state.
 //!
 //! Events to the owning app: `closed` (the user closed the panel) and `index` `{index}` (the user stepped).
+//!
+//! The panel's pictures come from the `thumbnails` service: this service is its one client in the shell. It asks for the
+//! panel's current file when the body waits for it (see `Panel::take_wanted`), and feeds the answer back to the panel.
+use super::thumbnails::Thumbnails;
 use super::{Event, SystemService};
+use crate::gfx::Image;
 use crate::shell::Shell;
 use bifrost_core::json::Json;
 use bifrost_proto::peek::{PreviewItem, MAX_ITEMS, MAX_TITLE, MAX_URL};
+use bifrost_ui::thumb_service::{ThumbKind, ThumbRequest};
+use std::path::Path;
 
-pub struct PreviewService;
+/// The asker of the panel's thumbnail requests: the shell itself, so the answers come back to this service.
+const PANEL: &str = "shell.quick-look";
+/// The edge of the panel's picture in points. The panel fits the picture into its body.
+const PICTURE_PT: u32 = 512;
+
+#[derive(Default)]
+pub struct PreviewService {
+    thumbs: Thumbnails,
+}
+
+/// The picture a thumbnail answer names, when it is a ready picture the cache can read. None for an icon, a failure or
+/// a pending answer.
+fn picture_of(body: &Json) -> Option<Image> {
+    if body.str_field("state").as_deref() != Some("ready") || body.str_field("art").as_deref() != Some("pixels") {
+        return None;
+    }
+    let path = body.str_field("image")?;
+    Image::from_raw(&std::fs::read(Path::new(&path)).ok()?)
+}
 
 /// `s` cut to `max` bytes on a character boundary.
 fn cut(s: &str, max: usize) -> String {
@@ -42,6 +67,20 @@ pub fn parse_show(params: &Json) -> Result<(Vec<PreviewItem>, usize), String> {
     Ok((items, index))
 }
 
+impl PreviewService {
+    /// Asks the thumbnails service for the panel's file when its body waits for a picture. A ready answer is applied at
+    /// once; a pending one comes later as a `ready` or `failed` event (see `tick`).
+    fn ask(&mut self, shell: &mut Shell) {
+        let Some(file) = shell.quick_look_take_wanted() else { return };
+        let answer = ThumbRequest::new(&file, PICTURE_PT, 1.0, ThumbKind::Thumbnail).map_err(|e| e.to_string()).and_then(|req| self.thumbs.request(PANEL, req));
+        match answer {
+            Ok(body) if body.str_field("state").as_deref() == Some("pending") => {}
+            Ok(body) => shell.quick_look_thumbnail(&file, picture_of(&body)),
+            Err(_) => shell.quick_look_thumbnail(&file, None),
+        }
+    }
+}
+
 impl SystemService for PreviewService {
     fn name(&self) -> &'static str {
         "quick-look"
@@ -52,6 +91,7 @@ impl SystemService for PreviewService {
             "show" => {
                 let (items, index) = parse_show(params)?;
                 shell.quick_look_show(app_id, items, index);
+                self.ask(shell);
                 Ok(shell.quick_look_state())
             }
             "close" => {
@@ -69,6 +109,7 @@ impl SystemService for PreviewService {
                 };
                 if shell.quick_look_owner() == Some(app_id) {
                     shell.quick_look_step(delta);
+                    self.ask(shell);
                 }
                 Ok(shell.quick_look_state())
             }
@@ -77,6 +118,12 @@ impl SystemService for PreviewService {
     }
 
     fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
+        // the user's keys step the panel without a call: ask for what the body now waits for
+        self.ask(shell);
+        for done in self.thumbs.poll().into_iter().filter(|e| e.app.as_deref() == Some(PANEL)) {
+            let file = done.body.str_field("file").unwrap_or_default();
+            shell.quick_look_thumbnail(&file, picture_of(&done.body));
+        }
         let owner = shell.quick_look_owner().map(str::to_string);
         shell
             .quick_look_drain_events()
@@ -122,6 +169,6 @@ mod tests {
 
     #[test]
     fn the_service_is_registered_under_its_name() {
-        assert_eq!(PreviewService.name(), "quick-look");
+        assert_eq!(PreviewService::default().name(), "quick-look");
     }
 }

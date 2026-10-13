@@ -311,6 +311,9 @@ impl App for Files {
         self.service_answer(request, result)
     }
     fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &bifrost_core::json::Json) -> bool {
+        if let Some(reply) = bifrost_app::thumbnails::event(service, event, body) {
+            return self.thumb_answer(&reply);
+        }
         if !bifrost_app::quick_look::is_quick_look(service) {
             return false;
         }
@@ -320,6 +323,7 @@ impl App for Files {
         }
     }
     fn tick(&mut self, ctx: &Ctx, _: f64) -> bool {
+        self.request_thumbnails(ctx);
         let mut changed = self.poll_search();
         if self.poll_server() {
             changed = true;

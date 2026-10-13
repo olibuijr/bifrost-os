@@ -90,9 +90,9 @@ impl ThumbRequest {
         Ok(ThumbRequest { path: path.to_string(), size, scale, kind })
     }
 
-    /// The edge of the thumbnail in pixels: `size` times `scale`, rounded, between [`MIN_PX`] and [`MAX_PX`].
+    /// The edge of the thumbnail in pixels (see [`edge_px`]).
     pub fn px(&self) -> u32 {
-        ((self.size as f32 * self.scale).round() as u32).clamp(MIN_PX, MAX_PX)
+        edge_px(self.size, self.scale)
     }
 }
 
@@ -102,6 +102,12 @@ pub struct FileStamp {
     /// Modification time, Unix seconds.
     pub mtime: i64,
     pub size: u64,
+}
+
+/// The edge in pixels of a thumbnail of `size` points at `scale` pixels per point: rounded, between [`MIN_PX`] and
+/// [`MAX_PX`]. Apps use it to match a reply with the picture they asked for.
+pub fn edge_px(size: u32, scale: f32) -> u32 {
+    ((size as f32 * scale).round() as u32).clamp(MIN_PX, MAX_PX)
 }
 
 /// The cache key of a thumbnail: path, modification time and size of the file, the pixel edge and the kind. 16 hex
@@ -241,24 +247,6 @@ impl Registry {
     }
 }
 
-/// Which of `entries` (age stamp, size in bytes; a smaller stamp is older) to delete so at most `max_files` files and
-/// `max_bytes` bytes remain. Oldest go first; the newest entry is always kept. Returns indices.
-pub fn eviction_victims(entries: &[(u64, u64)], max_files: usize, max_bytes: u64) -> Vec<usize> {
-    let mut order: Vec<usize> = (0..entries.len()).collect();
-    order.sort_by_key(|&i| (entries[i].0, i));
-    let (mut count, mut bytes) = (entries.len(), entries.iter().map(|e| e.1).sum::<u64>());
-    let mut out = Vec::new();
-    for i in order {
-        if count <= 1 || (count <= max_files && bytes <= max_bytes) {
-            break;
-        }
-        count -= 1;
-        bytes -= entries[i].1;
-        out.push(i);
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -369,14 +357,5 @@ mod tests {
         r.register(Box::new(Fixed(&["public.image"], true)));
         assert!(matches!(r.render(&file("a.png"), 32, ThumbKind::Icon), ThumbArt::Icon { .. }));
         assert!(matches!(r.render(&file("a.png"), 32, ThumbKind::Thumbnail), ThumbArt::Pixels(_)));
-    }
-
-    #[test]
-    fn eviction_drops_the_oldest_and_keeps_the_newest() {
-        let e = [(3, 10), (1, 10), (2, 10)];
-        assert_eq!(eviction_victims(&e, 2, 1000), vec![1]);
-        assert_eq!(eviction_victims(&e, 10, 15), vec![1, 2]);
-        assert!(eviction_victims(&e, 3, 30).is_empty());
-        assert!(eviction_victims(&[(1, 99)], 0, 0).is_empty());
     }
 }
