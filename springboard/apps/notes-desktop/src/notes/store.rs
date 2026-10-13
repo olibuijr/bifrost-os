@@ -129,6 +129,22 @@ pub fn sort_ordered(notes: &mut [Note], key: SortKey, oldest_first: bool, pinned
     });
 }
 
+/// The Group by Date section a note's date falls in, counted in local calendar days before `now`: Today, Previous
+/// 7 Days, Previous 30 Days, then the month ("October", with the year when it is not the current one).
+pub fn date_group(unix: i64, now: i64, offset: i32) -> String {
+    let day = |t: i64| (t + offset as i64).div_euclid(86_400);
+    match day(now) - day(unix) {
+        i64::MIN..=0 => "Today".to_string(),
+        1..=7 => "Previous 7 Days".to_string(),
+        8..=30 => "Previous 30 Days".to_string(),
+        _ => {
+            let (then, today) = (civil(unix, offset), civil(now, offset));
+            let month = MONTHS[then.month as usize - 1];
+            if then.year == today.year { month.to_string() } else { format!("{month} {}", then.year) }
+        }
+    }
+}
+
 /// The tags written in `text`, lowercase, each once, in order of appearance. A tag is a `#` that starts a word,
 /// followed by letters, digits, `_` or `-` (not only digits): `#groceries`, not `# Heading`, `C#` or a link anchor.
 pub fn tags(text: &str) -> Vec<String> {
@@ -231,11 +247,13 @@ pub struct Prefs {
     pub math_results: bool,
     /// New Quick Note reopens the last quick note instead of starting another
     pub resume_quick: bool,
+    /// the list is cut into Today, Previous 7 Days, Previous 30 Days and month sections (date sorts only)
+    pub group_by_date: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { sort: SortKey::DateEdited, checked_to_bottom: false, oldest_first: false, math_results: false, resume_quick: false }
+        Prefs { sort: SortKey::DateEdited, checked_to_bottom: false, oldest_first: false, math_results: false, resume_quick: false, group_by_date: false }
     }
 }
 
@@ -250,6 +268,7 @@ pub fn load_prefs(dir: &Path) -> Prefs {
             Some(("oldest_first", v)) => p.oldest_first = v.trim() == "1",
             Some(("math_results", v)) => p.math_results = v.trim() == "1",
             Some(("resume_quick", v)) => p.resume_quick = v.trim() == "1",
+            Some(("group_by_date", v)) => p.group_by_date = v.trim() == "1",
             _ => {}
         }
     }
@@ -258,12 +277,13 @@ pub fn load_prefs(dir: &Path) -> Prefs {
 
 pub fn save_prefs(dir: &Path, p: Prefs) -> io::Result<()> {
     let text = format!(
-        "sort={}\nchecked_to_bottom={}\noldest_first={}\nmath_results={}\nresume_quick={}\n",
+        "sort={}\nchecked_to_bottom={}\noldest_first={}\nmath_results={}\nresume_quick={}\ngroup_by_date={}\n",
         p.sort.name(),
         p.checked_to_bottom as u8,
         p.oldest_first as u8,
         p.math_results as u8,
-        p.resume_quick as u8
+        p.resume_quick as u8,
+        p.group_by_date as u8
     );
     springboard::shell::fsutil::write_atomic(&dir.join(PREFS_FILE), text)
 }
@@ -658,7 +678,7 @@ mod tests {
     fn prefs_round_trip_and_tolerate_garbage() {
         let dir = scratch("prefs");
         assert_eq!(load_prefs(&dir), Prefs::default());
-        let set = Prefs { sort: SortKey::Title, checked_to_bottom: true, oldest_first: true, math_results: true, resume_quick: true };
+        let set = Prefs { sort: SortKey::Title, checked_to_bottom: true, oldest_first: true, math_results: true, resume_quick: true, group_by_date: true };
         save_prefs(&dir, set).unwrap();
         assert_eq!(load_prefs(&dir), set);
         std::fs::write(dir.join(".springboard-notes-prefs"), "sort=nonsense\nzzz\nchecked_to_bottom=0\n").unwrap();
@@ -707,6 +727,26 @@ mod tests {
         sort_ordered(&mut v, SortKey::DateEdited, true, &pins);
         assert_eq!(v[0].title(), "Banana", "pinned notes still come first");
         assert_eq!(v[1].title(), "apricot");
+    }
+
+    #[test]
+    fn dates_fall_into_today_week_month_and_older_sections() {
+        // 2026-10-13 15:00 UTC
+        let now = 1_791_903_600;
+        let day = 86_400;
+        assert_eq!(date_group(now, now, 0), "Today");
+        assert_eq!(date_group(now - 3_600 * 14, now, 0), "Today", "earlier the same day");
+        assert_eq!(date_group(now - 3_600 * 16, now, 0), "Previous 7 Days", "yesterday morning is the day before");
+        assert_eq!(date_group(now - 7 * day, now, 0), "Previous 7 Days");
+        assert_eq!(date_group(now - 8 * day, now, 0), "Previous 30 Days");
+        assert_eq!(date_group(now - 30 * day, now, 0), "Previous 30 Days");
+        assert_eq!(date_group(now - 31 * day, now, 0), "September");
+        assert_eq!(date_group(now - 120 * day, now, 0), "June");
+        assert_eq!(date_group(now - 400 * day, now, 0), "September 2025");
+        assert_eq!(date_group(now + day, now, 0), "Today", "a date in the future is today");
+        // the local day, not the UTC day, decides: 23:30 UTC is already tomorrow at +2h
+        assert_eq!(date_group(now - 3_600 * 15 - 1_800, now, 7_200), "Today");
+        assert_eq!(date_group(now - 3_600 * 15 - 1_800, now, 0), "Previous 7 Days");
     }
 
     #[test]

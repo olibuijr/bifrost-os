@@ -241,6 +241,8 @@ enum Act {
     ToggleMath,
     /// New Quick Note reopens the last quick note, or not
     ToggleResumeQuick,
+    /// the list sections by date on or off
+    ToggleGroupDate,
 }
 
 /// Find > Replace: the replacement text being typed in the replace card over the editor.
@@ -392,6 +394,8 @@ pub struct Notes {
     /// indices into `notes` shown by the list (the search result)
     shown: Vec<usize>,
     shown_pinned: usize,
+    /// the list's section headers as `(label, index into shown of its first row)`: Pinned, Notes, or the date groups
+    sections: Vec<(String, usize)>,
     screen: Screen,
     list_scroll: Scroller,
     scroll: Scroller,
@@ -494,6 +498,7 @@ impl Notes {
             tag_list: vec![],
             shown: vec![],
             shown_pinned: 0,
+            sections: vec![],
             screen: Screen::List,
             list_scroll: Scroller::new(),
             scroll: Scroller::new(),
@@ -531,6 +536,47 @@ impl Notes {
     /// Re-anchors wall-clock time (see `Shell::set_wall`).
     pub fn set_wall(&mut self, wall: Wall) {
         self.wall = wall;
+    }
+
+    /// The list's section headers for the rows shown: Pinned first, then either date groups (Group by Date, a date
+    /// sort, no search, not in the bin) or a plain Notes header when something is pinned.
+    fn compute_sections(&self, now: i64, searching: bool) -> Vec<(String, usize)> {
+        let (n, pins) = (self.shown.len(), self.shown_pinned);
+        let mut out = vec![];
+        if pins > 0 {
+            out.push(("Pinned".to_string(), 0));
+        }
+        let by_date = self.prefs.group_by_date && self.prefs.sort != store::SortKey::Title && !searching && self.view != View::Trash;
+        if by_date {
+            let mut last: Option<String> = None;
+            for k in pins..n {
+                let note = &self.notes[self.shown[k]];
+                let stamp = if self.prefs.sort == store::SortKey::DateCreated { store::created(note) } else { note.modified };
+                let group = store::date_group(stamp, now, self.wall.offset);
+                if last.as_ref() != Some(&group) {
+                    out.push((group.clone(), k));
+                    last = Some(group);
+                }
+            }
+        } else if pins > 0 && pins < n {
+            out.push(("Notes".to_string(), pins));
+        }
+        out
+    }
+
+    /// Height in points of the section header number `k` (the first has no gap above it).
+    fn header_pt(k: usize) -> f32 {
+        if k == 0 { SECTION_PT } else { SECTION_PT + SECTION_GAP_PT }
+    }
+
+    /// Points of section headers above shown row `i`.
+    fn section_offset(&self, i: usize) -> f32 {
+        self.sections.iter().enumerate().filter(|(_, (_, start))| *start <= i).map(|(k, _)| Self::header_pt(k)).sum()
+    }
+
+    /// Points of all section headers.
+    fn sections_total(&self) -> f32 {
+        (0..self.sections.len()).map(Self::header_pt).sum()
     }
 
     /// Rows `[shown index]` as `(note id, title)`, for tests and inspection.
@@ -709,6 +755,7 @@ impl Notes {
         self.shown = ranked.into_iter().filter(|&i| self.visible(i, searching, cutoff)).collect();
         self.shown_pinned = self.shown.iter().filter(|&&i| self.is_pinned(&self.notes[i].id)).count();
         let now = self.wall.now(t);
+        self.sections = self.compute_sections(now, searching);
         let text_w = self.list_px(ui).1 - 2.0 * ui.pt(SPACE_S + SPACE_L);
         self.appearance = LABEL.now();
         self.rows = self
@@ -782,11 +829,11 @@ impl Notes {
     fn row_rect(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
         let (lx, lw) = self.list_px(ui);
         let m = ui.pt(SPACE_S);
-        let pins = self.shown_pins();
-        let section = if pins > 0 { SECTION_PT + if i >= pins { SECTION_PT + SECTION_GAP_PT } else { 0.0 } } else { 0.0 };
+        let section = self.section_offset(i);
         (lx + m, ui.pt(list_top_pt() + section + ROW_PT * i as f32) - self.list_scroll.offset(), lw - 2.0 * m, ui.pt(ROW_PT))
     }
 
+    #[cfg(test)]
     fn shown_pins(&self) -> usize {
         self.shown_pinned
     }
@@ -925,8 +972,7 @@ impl Notes {
     /// Keeps the scroll range in step with the content.
     fn fit_scroll(&mut self, ui: &Ui) {
         let bottom = self.content_bottom(ui);
-        let pins = self.shown_pins();
-        let section = if pins > 0 { SECTION_PT + if pins < self.shown.len() { SECTION_PT + SECTION_GAP_PT } else { 0.0 } } else { 0.0 };
+        let section = self.sections_total();
         let (list_h, text_h) = (ui.pt(list_top_pt() + section) + ui.pt(ROW_PT) * self.shown.len() as f32 + ui.pt(SPACE_L), ui.pt(nav_bottom_pt() + TEXT_TOP_PT) + self.editor.height() + ui.pt(60.0));
         self.list_scroll.set_max(list_h - bottom);
         self.scroll.set_max(text_h - bottom);
@@ -1771,6 +1817,7 @@ impl Notes {
         for k in store::SortKey::ALL {
             items.push((format!("Sort by {}", k.label()), Act::Sort(k), self.prefs.sort == k));
         }
+        items.push(("Group by Date".to_string(), Act::ToggleGroupDate, self.prefs.group_by_date));
         items.push(("Newest First".to_string(), Act::SortOrder(false), !self.prefs.oldest_first));
         items.push(("Oldest First".to_string(), Act::SortOrder(true), self.prefs.oldest_first));
         items.push(("Move Checked to Bottom".to_string(), Act::ToggleCheckedBottom, self.prefs.checked_to_bottom));
@@ -2129,6 +2176,11 @@ impl Notes {
             Act::ToggleMath => {
                 self.prefs.math_results = !self.prefs.math_results;
                 self.save_prefs();
+            }
+            Act::ToggleGroupDate => {
+                self.prefs.group_by_date = !self.prefs.group_by_date;
+                self.save_prefs();
+                self.rebuild(ui, t);
             }
             Act::ToggleResumeQuick => {
                 self.prefs.resume_quick = !self.prefs.resume_quick;
@@ -2848,20 +2900,18 @@ impl Notes {
         let bottom = self.content_bottom(ui);
         let rh = ui.pt(ROW_PT);
         let n = self.shown.len();
-        let pins = self.shown_pins();
+        let sections = self.sections.clone();
         let open = self.editing().map(|note| note.id.clone());
         let selected = self.selected_index();
         let rects: Vec<_> = (0..n).map(|i| self.row_rect(ui, i)).collect();
         let places: Vec<String> = (0..n).map(|i| self.loc_of(&self.notes[self.shown[i]].id).to_string()).collect();
         let pinned: Vec<bool> = (0..n).map(|i| self.is_pinned(&self.notes[self.shown[i]].id)).collect();
         let mut content = s.rows(ui.pt(nav_bottom_pt()) as usize, bottom as usize);
-        if pins > 0 {
-            for (label, row) in [("Pinned", 0), ("Notes", pins)] {
-                if row < n {
-                    let (rx, ry, ..) = rects[row];
-                    let img = self.labels.get(ui, label, MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now());
-                    content.blit(img, (rx + ui.pt(SPACE_S)) as i32, (ry - ui.pt(SPACE_XXL)) as i32, 255, 255);
-                }
+        for (label, row) in &sections {
+            if *row < n {
+                let (rx, ry, ..) = rects[*row];
+                let img = self.labels.get(ui, label, MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now());
+                content.blit(img, (rx + ui.pt(SPACE_S)) as i32, (ry - ui.pt(SPACE_XXL)) as i32, 255, 255);
             }
         }
         for i in 0..n {
@@ -2924,7 +2974,7 @@ impl Notes {
                 }
             }
             let next_open = i + 1 < n && open.as_deref() == Some(self.notes[self.shown[i + 1]].id.as_str());
-            if i + 1 < n && i + 1 != pins && !is_open && !next_open {
+            if i + 1 < n && !sections.iter().any(|(_, start)| *start == i + 1) && !is_open && !next_open {
                 content.fill_rrect(rx + ui.pt(SPACE_L), ry + rh - 1.0, rw - ui.pt(SPACE_L), 1.0, 0.0, SEPARATOR_C.now());
             }
         }
@@ -4499,6 +4549,42 @@ mod tests {
         n.quick_note(&ui, false, 9.0);
         assert_eq!(n.notes.len(), before, "no new note while the last quick note exists");
         assert_eq!(n.editing().unwrap().id, second);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn group_by_date_cuts_the_list_into_sections_and_keeps_rows_clear_of_the_headers() {
+        let ui = ui();
+        let dir = scratch("group-date");
+        let mut n = seeded(&ui, &dir);
+        let now = wall().unix;
+        n.notes.push(Note { id: "3".into(), text: "Old plan".into(), modified: now - 86_400 * 20 });
+        n.notes.push(Note { id: "4".into(), text: "Ancient".into(), modified: now - 86_400 * 200 });
+        n.rebuild(&ui, 0.0);
+        assert!(n.sections.is_empty(), "no sections until Group by Date is on");
+        let flat = n.row_rect(&ui, 0).1;
+        n.run(&ui, Act::ToggleGroupDate, 1.0);
+        let labels: Vec<_> = n.sections.iter().map(|(l, _)| l.as_str()).collect();
+        assert_eq!(labels, ["Today", "Previous 7 Days", "Previous 30 Days", "March"], "{labels:?}");
+        assert_eq!(n.sections.iter().map(|(_, i)| *i).collect::<Vec<_>>(), [0, 1, 2, 3]);
+        assert_eq!(n.section_offset(0), SECTION_PT);
+        assert_eq!(n.section_offset(3), SECTION_PT + 3.0 * (SECTION_PT + SECTION_GAP_PT));
+        assert!(n.row_rect(&ui, 0).1 > flat, "the first row sits under its header");
+        let step = n.row_rect(&ui, 1).1 - n.row_rect(&ui, 0).1;
+        assert!((step - ui.pt(ROW_PT + SECTION_PT + SECTION_GAP_PT)).abs() < 0.01, "a row, then the next header");
+        draw(&mut n, &ui, 2.0);
+        // a pinned note gets its own section above the dates; a search or the title sort drops the date sections
+        assert!(n.set_pinned(&ui, "2", true, 3.0));
+        assert_eq!(n.sections.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>(), ["Pinned", "Today", "Previous 30 Days", "March"]);
+        n.search.set_text(&ui, "plan");
+        n.rebuild(&ui, 4.0);
+        assert!(n.sections.is_empty(), "a search ranks by relevance, not by date");
+        n.search.set_text(&ui, "");
+        n.run(&ui, Act::Sort(store::SortKey::Title), 5.0);
+        assert_eq!(n.sections.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>(), ["Pinned", "Notes"]);
+        assert!(app(&ui, &dir).prefs().group_by_date, "the setting persists");
+        n.run(&ui, Act::ToggleGroupDate, 6.0);
+        assert!(!n.prefs.group_by_date);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
