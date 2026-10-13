@@ -102,9 +102,10 @@ impl Calendar {
             if t - p.t < HOLD_MS || self.scroll.dragging() {
                 return false;
             }
-            // the scroll gesture that began with the press is given up
+            // the scroll gesture that began with the press is given up: it ends where it began, so it moves nothing
             if std::mem::take(&mut self.scrolling) {
-                self.scroll.up(y, t);
+                let began = self.start.map_or(y, |(_, sy)| sy);
+                self.scroll.up(began, t);
             }
             self.pressed = None;
             self.drag = Some(Drag { kind: p.kind, origin: p.day, day: p.day, span: span_for(p.kind, 0) });
