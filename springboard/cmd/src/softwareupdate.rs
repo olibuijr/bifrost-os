@@ -45,17 +45,15 @@ pub fn parse(args: &[String]) -> Result<Mode, String> {
             "-a" => all = true,
             "-i" => labels.push(it.next().ok_or("-i needs an update label")?.clone()),
             "--schedule" => {
-                schedule = Some(match it.peek().map(|s| s.as_str()) {
-                    Some("on") => {
-                        it.next();
-                        Some(true)
-                    }
-                    Some("off") => {
-                        it.next();
-                        Some(false)
-                    }
+                let value = match it.peek().map(|s| s.as_str()) {
+                    Some("on") => Some(true),
+                    Some("off") => Some(false),
                     _ => None,
-                })
+                };
+                if value.is_some() {
+                    it.next();
+                }
+                schedule = Some(value);
             }
             other => return Err(format!("option {other} is not supported yet")),
         }
