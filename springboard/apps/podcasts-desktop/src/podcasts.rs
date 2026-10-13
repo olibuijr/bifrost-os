@@ -16,7 +16,8 @@ use crate::search;
 use crate::transcript::{self, Cue};
 use crate::media::{self, Bar, Shown};
 use crate::transport;
-use bifrost_app::Ctx;
+use crate::wrap;
+use bifrost_app::{AppMenu, AppMenuItem, Ctx};
 use bifrost_app::dock_tile;
 use bifrost_app::now_playing::{self, Command};
 use bifrost_app::audio::{self, Track};
@@ -51,6 +52,7 @@ const SIDE_NEW: u32 = 2;
 const SIDE_UP_NEXT: u32 = 3;
 const SIDE_DOWNLOADED: u32 = 4;
 const SIDE_SEARCH: u32 = 5;
+const SIDE_SETTINGS: u32 = 6;
 const SIDE_SHOW: u32 = 100;
 const BAR_REFRESH: u32 = 7;
 const BAR_SHOW_SETTINGS: u32 = 8;
@@ -65,13 +67,52 @@ const CHAPTER_ROW_PT: f32 = 30.0;
 /// Transcripts kept in memory.
 const TRANSCRIPTS_KEPT: usize = 4;
 const TRANSCRIPT_LIMIT: usize = 4 << 20;
-const IMPORT_MAX: u64 = 4 << 20;
+const SEARCH_LIMIT: usize = 1 << 20;
+/// Two clicks on a row this close together play the episode, in milliseconds.
+const DOUBLE_CLICK_MS: f64 = 450.0;
+/// One line of notes or transcript text, and the top of the episode page's buttons, in points.
+const LINE_PT: f32 = 20.0;
+const DETAIL_BUTTONS_PT: f32 = 64.0;
 const BAR_TITLE: u32 = 1;
 const BAR_ADD: u32 = 2;
 const BAR_REMOVE: u32 = 3;
 const BAR_CANCEL: u32 = 4;
 const BAR_DONE: u32 = 5;
 const BAR_CLOSE: u32 = 6;
+/// Ids of the app's own menu items (`main_menu`); the shell sends them back to `menu_action`.
+const M_ADD: u32 = 1;
+const M_IMPORT: u32 = 2;
+const M_EXPORT: u32 = 3;
+const M_REFRESH: u32 = 10;
+const M_VIEW_NEW: u32 = 11;
+const M_VIEW_UP_NEXT: u32 = 12;
+const M_VIEW_DOWNLOADED: u32 = 13;
+const M_VIEW_SHOWS: u32 = 14;
+const M_VIEW_SEARCH: u32 = 15;
+const M_SETTINGS: u32 = 16;
+const M_SHOW_SETTINGS: u32 = 17;
+const M_PLAY_PAUSE: u32 = 20;
+const M_STOP: u32 = 21;
+const M_SKIP_BACK: u32 = 22;
+const M_SKIP_FWD: u32 = 23;
+const M_NEXT: u32 = 24;
+const M_SLOWER: u32 = 25;
+const M_FASTER: u32 = 26;
+/// the speed menu's items, one per rate of `transport::RATES`
+const M_RATE: u32 = 30;
+/// the sleep timer menu's items, one per entry of `SLEEPS`
+const M_SLEEP: u32 = 40;
+const M_EP_PLAY: u32 = 50;
+const M_EP_DOWNLOAD: u32 = 51;
+const M_EP_REMOVE_DOWNLOAD: u32 = 52;
+const M_EP_PLAY_NEXT: u32 = 53;
+const M_EP_PLAY_LAST: u32 = 54;
+const M_EP_UNQUEUE: u32 = 55;
+const M_EP_PLAYED: u32 = 56;
+const M_EP_DETAILS: u32 = 57;
+const M_EP_UP: u32 = 58;
+const M_EP_DOWN: u32 = 59;
+const M_CLEAR_QUEUE: u32 = 60;
 const POLL_MS: f64 = 250.0;
 const FEED_LIMIT: usize = 8 << 20;
 const EPISODE_LIMIT: usize = 160 << 20;
@@ -123,6 +164,30 @@ enum Target {
     Panel,
     /// the Follow button of a search result
     Follow(usize),
+    /// the search field above the results
+    SearchField,
+}
+
+/// What the file panels are for.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum FileJob {
+    Import,
+    Export,
+}
+
+/// A command on the selected episode (the Episode menu, its context menu, the detail buttons).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum EpAction {
+    Play,
+    Download,
+    RemoveDownload,
+    PlayNext,
+    PlayLast,
+    Unqueue,
+    TogglePlayed,
+    Details,
+    MoveUp,
+    MoveDown,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -169,6 +234,10 @@ enum Msg {
     /// the transcript cues of an episode (by URL)
     Transcript(String, Result<Vec<Cue>, String>),
 }
+
+/// The wrapped lines of the open detail or transcript: what they are for, the width (bits), and each line with the
+/// transcript cue it belongs to.
+type Wrapped = (String, u32, Vec<(String, Option<usize>)>);
 
 /// The results a worker produced, waiting for the app loop to apply them.
 type Inbox = Arc<Mutex<VecDeque<Msg>>>;
@@ -256,7 +325,6 @@ pub struct Podcasts {
     last_refresh: Option<f64>,
     /// the show search: its field, the last answer and whether a request is out
     search_field: Option<TextField>,
-    search_touch: bool,
     results: Vec<search::Hit>,
     searching: bool,
     /// a line of news in grey (imports, exports), cleared with the next view change
@@ -265,7 +333,7 @@ pub struct Podcasts {
     transcripts: Vec<(String, Vec<Cue>)>,
     transcript_loading: Option<String>,
     /// wrapped lines of the open detail or transcript, and the width they were wrapped for (bits), cached
-    wrapped: Option<(String, u32, Vec<String>)>,
+    wrapped: Option<Wrapped>,
     /// pixels from the list top to the end of the scrolling content of a panel
     body_h: f32,
     /// the open request for the subscriptions file to read, and the save in progress (request, bytes)
@@ -276,6 +344,16 @@ pub struct Podcasts {
     /// the sheet's panel scrolls apart from the list, and its content height in pixels
     panel_scroll: Scroller,
     panel_h: f32,
+    /// a file panel the app loop has to open (it needs the context)
+    want_file: Option<FileJob>,
+    /// the episode whose page is open (its place in the lists changes when a feed updates)
+    detail_url: String,
+    /// the selected row, by what it stands for (its place changes when the rows are rebuilt)
+    selected_key: Option<String>,
+    /// the row last clicked and when, to tell a second click
+    last_click: (usize, f64),
+    /// the transcript cue the panel last scrolled to
+    followed: Option<usize>,
 }
 
 impl Podcasts {
@@ -339,7 +417,6 @@ impl Podcasts {
             play_after: None,
             last_refresh: None,
             search_field: None,
-            search_touch: false,
             results: Vec::new(),
             searching: false,
             notice: String::new(),
@@ -353,6 +430,11 @@ impl Podcasts {
             cached_all: false,
             panel_scroll: Scroller::new(),
             panel_h: 0.0,
+            want_file: None,
+            detail_url: String::new(),
+            selected_key: None,
+            last_click: (usize::MAX, 0.0),
+            followed: None,
         }
         .with_rows()
     }
@@ -551,17 +633,18 @@ impl Podcasts {
         self.rebuild();
     }
 
-    /// After a feed arrived: a show with auto-download fetches its newest unplayed episodes and drops the downloads
-    /// beyond the number to keep.
+    /// After a feed arrived, or a show's options changed: the downloads beyond the number to keep are deleted, and a
+    /// show with auto-download fetches its newest unplayed episodes.
     fn after_refresh(&mut self, url: &str) {
         let options = self.prefs.show(url);
-        if !options.auto_download {
-            return;
-        }
         let Some(show) = self.shows.iter().find(|s| s.url == url) else { return };
         let store = &self.store;
-        let want: Vec<String> = library::auto_downloads(&show.episodes, &self.library, options.keep, |u| store.downloaded(u)).into_iter().map(str::to_string).collect();
         let drop: Vec<String> = library::prune(&show.episodes, options.keep, |u| store.downloaded(u), self.playing.as_deref()).into_iter().map(str::to_string).collect();
+        let want: Vec<String> = if options.auto_download {
+            library::auto_downloads(&show.episodes, &self.library, options.keep, |u| store.downloaded(u)).into_iter().map(str::to_string).collect()
+        } else {
+            Vec::new()
+        };
         self.store.forget_episodes(drop.iter().map(String::as_str));
         for episode in want {
             self.download(&episode, false);
@@ -575,7 +658,8 @@ impl Podcasts {
     fn pump(&mut self) {
         let mut any = false;
         while let Some(msg) = self.next_msg() {
-            any = true;
+            // download progress changes no list, so it does not rebuild the rows
+            any |= !matches!(msg, Msg::Progress(..));
             self.dirty = true;
             match msg {
                 Msg::Feed(url, r) => {
@@ -862,7 +946,7 @@ impl Podcasts {
         (self.side(ui) + m + ui.pt(SPACE_S), a.1 + a.3 + ui.pt(70.0), self.content_w(ui) - 2.0 * m - ui.pt(SPACE_L), ui.pt(44.0))
     }
 
-    /// 0 skip back, 1 play/pause, 2 skip forward, 3 speed, 4 sleep
+    /// 0 skip back, 1 play/pause, 2 skip forward; then speed, sleep, chapters and transcript (3 to 6) on a second row
     fn sheet_button(&self, ui: &Ui, n: usize) -> (f32, f32, f32, f32) {
         let sc = self.scrub_rect(ui);
         let m = self.margin(ui);
@@ -874,8 +958,8 @@ impl Podcasts {
             let w = (cw - 2.0 * gap) / 3.0;
             (x0 + (w + gap) * n as f32, sc.1 + sc.3 + ui.pt(SPACE_XXL), w, h)
         } else {
-            let w2 = (cw - gap) / 2.0;
-            (x0 + (w2 + gap) * (n - 3) as f32, sc.1 + sc.3 + ui.pt(SPACE_XXL) + h + gap, w2, h)
+            let w4 = (cw - 3.0 * gap) / 4.0;
+            (x0 + (w4 + gap) * (n - 3) as f32, sc.1 + sc.3 + ui.pt(SPACE_XXL) + h + gap, w4, h)
         }
     }
 
@@ -906,37 +990,104 @@ impl Podcasts {
         }
     }
 
-    // subscriptions -----------------------------------------------------
+    // navigation --------------------------------------------------------
+
+    /// Shows `view` from its top with nothing selected.
+    fn go(&mut self, view: View) {
+        self.view = view;
+        self.confirm_remove = false;
+        self.sheet = false;
+        self.speed_menu = false;
+        self.field = None;
+        self.scroll = Scroller::new();
+        self.selected = None;
+        self.selected_key = None;
+        self.error.clear();
+        self.notice.clear();
+        self.rebuild();
+        self.dirty = true;
+    }
+
+    /// Shows a panel (settings, episode detail) that Back leaves for the view it came from.
+    fn open_panel(&mut self, view: View) {
+        if !matches!(self.view, View::Settings | View::ShowSettings(_) | View::Detail(..)) {
+            self.back = self.view;
+        }
+        self.go(view);
+    }
 
     fn open_show(&mut self, i: usize) {
-        self.view = View::Episodes(i);
-        self.confirm_remove = false;
-        self.scroll = Scroller::new();
-        self.error.clear();
+        self.go(View::Episodes(i));
         let url = self.shows[i].url.clone();
         if self.shows[i].episodes.is_empty() {
             if let Some((_, eps)) = self.store.cached(&url) {
                 self.shows[i].episodes = eps;
+                self.rebuild();
             }
         }
         self.fetch_feed(&url);
     }
 
-    fn subscribe(&mut self, input: &str) {
-        let Some(url) = feed::normalize(input) else {
-            self.error = "Enter a feed URL".into();
-            return;
-        };
+    fn open_search(&mut self, ui: &Ui) {
+        self.go(View::Search);
+        if self.search_field.is_none() {
+            self.search_field = Some(TextField::new(ui, "Search shows", MAC_BODY_PT, false, 128));
+        }
+    }
+
+    /// The sidebar row `id` was chosen.
+    fn navigate(&mut self, ui: &Ui, id: u32) {
+        match id {
+            SIDE_SHOWS => self.go(View::Shows),
+            SIDE_NEW => self.go(View::New),
+            SIDE_UP_NEXT => self.go(View::UpNext),
+            SIDE_DOWNLOADED => self.go(View::Downloaded),
+            SIDE_SEARCH => self.open_search(ui),
+            SIDE_SETTINGS => self.open_panel(View::Settings),
+            _ => {
+                if let Some(i) = id.checked_sub(SIDE_SHOW).map(|i| i as usize).filter(|&i| i < self.shows.len()) {
+                    self.open_show(i);
+                }
+            }
+        }
+    }
+
+    /// The sidebar row that stands for the current view.
+    fn side_id(&self) -> u32 {
+        match self.view {
+            View::Shows => SIDE_SHOWS,
+            View::Episodes(i) | View::ShowSettings(i) => SIDE_SHOW + i as u32,
+            View::New => SIDE_NEW,
+            View::UpNext => SIDE_UP_NEXT,
+            View::Downloaded => SIDE_DOWNLOADED,
+            View::Search => SIDE_SEARCH,
+            View::Settings => SIDE_SETTINGS,
+            View::Detail(s, _) => SIDE_SHOW + s as u32,
+        }
+    }
+
+    // subscriptions -----------------------------------------------------
+
+    /// Follows the show at `url` (once) and returns its place in the list.
+    fn follow(&mut self, input: &str, title: Option<&str>) -> Option<usize> {
+        let url = feed::normalize(input)?;
         let i = match self.shows.iter().position(|s| s.url == url) {
             Some(i) => i,
             None => {
-                let title = url.trim_start_matches("https://").trim_start_matches("http://").to_string();
+                let title = title.filter(|t| !t.is_empty()).map_or_else(|| url.trim_start_matches("https://").trim_start_matches("http://").to_string(), str::to_string);
                 self.shows.push(Show { url, title, episodes: Vec::new() });
                 self.store.save(&self.shows);
                 self.shows.len() - 1
             }
         };
-        self.open_show(i);
+        Some(i)
+    }
+
+    fn subscribe(&mut self, input: &str) {
+        match self.follow(input, None) {
+            Some(i) => self.open_show(i),
+            None => self.error = "Enter a feed URL".into(),
+        }
     }
 
     fn remove(&mut self, i: usize) {
@@ -952,9 +1103,457 @@ impl Podcasts {
         self.store.forget_episodes(urls.iter().copied());
         self.resume.retain(|(u, _)| !urls.contains(&u.as_str()));
         self.store.save_positions(&self.resume);
+        self.library.forget(&urls);
+        self.library.save(&self.store.dir);
+        self.dl_queue.retain(|u| !urls.contains(&u.as_str()));
+        self.prefs.forget_show(&show.url);
+        self.prefs.save(&self.store.dir);
         self.store.save(&self.shows);
-        self.view = View::Shows;
-        self.scroll = Scroller::new();
+        self.go(View::Shows);
+    }
+
+    // lists -------------------------------------------------------------
+
+    /// Reads every show's cached episodes (New Episodes, Up Next and Downloaded look across shows).
+    fn ensure_all(&mut self) {
+        if self.cached_all {
+            return;
+        }
+        for show in &mut self.shows {
+            if show.episodes.is_empty() {
+                if let Some((_, eps)) = self.store.cached(&show.url) {
+                    show.episodes = eps;
+                }
+            }
+        }
+        self.cached_all = true;
+    }
+
+    fn find_episode(&self, url: &str) -> Option<(usize, usize)> {
+        self.shows.iter().enumerate().find_map(|(si, s)| s.episodes.iter().position(|e| e.url == url).map(|ei| (si, ei)))
+    }
+
+    fn episode_url(&self, (s, e): (usize, usize)) -> Option<String> {
+        self.shows.get(s)?.episodes.get(e).map(|e| e.url.clone())
+    }
+
+    /// What identifies a row across rebuilds: the show, episode or feed address.
+    fn row_key(&self, row: &Row) -> String {
+        let key = match *row {
+            Row::Show(i) => self.shows.get(i).map(|s| s.url.clone()),
+            Row::Ep(s, e) => self.episode_url((s, e)),
+            Row::Hit(i) => self.results.get(i).map(|h| h.feed.clone()),
+        };
+        key.unwrap_or_default()
+    }
+
+    /// Rebuilds the rows of the current view from what it lists.
+    fn rebuild(&mut self) {
+        if matches!(self.view, View::New | View::UpNext | View::Downloaded) {
+            self.ensure_all();
+        }
+        if let View::Detail(..) = self.view {
+            match self.find_episode(&self.detail_url) {
+                Some((s, e)) => self.view = View::Detail(s, e),
+                None => self.view = self.back,
+            }
+        }
+        let rows: Vec<Row> = match self.view {
+            View::Shows => (0..self.shows.len()).map(Row::Show).collect(),
+            View::Episodes(si) => self.shows.get(si).map_or_else(Vec::new, |s| {
+                let mut order = library::newest_first(&s.episodes);
+                if self.prefs.show(&s.url).oldest_first {
+                    order.reverse();
+                }
+                order.into_iter().map(|ei| Row::Ep(si, ei)).collect()
+            }),
+            View::New => library::latest(&self.shows, &self.library, NEW_LIMIT).into_iter().map(|(s, e)| Row::Ep(s, e)).collect(),
+            View::UpNext => self.library.queue().iter().filter_map(|u| self.find_episode(u)).map(|(s, e)| Row::Ep(s, e)).collect(),
+            View::Downloaded => {
+                let mut all: Vec<(i64, usize, usize)> = Vec::new();
+                for (si, show) in self.shows.iter().enumerate() {
+                    for (ei, e) in show.episodes.iter().enumerate() {
+                        if self.store.downloaded(&e.url) {
+                            all.push((e.ts, si, ei));
+                        }
+                    }
+                }
+                all.sort_by_key(|&(ts, si, ei)| (std::cmp::Reverse(ts), si, ei));
+                all.into_iter().map(|(_, s, e)| Row::Ep(s, e)).collect()
+            }
+            View::Search => (0..self.results.len()).map(Row::Hit).collect(),
+            View::Settings | View::ShowSettings(_) | View::Detail(..) => Vec::new(),
+        };
+        self.rows = rows;
+        self.selected = self.selected_key.clone().and_then(|k| self.rows.iter().position(|r| self.row_key(r) == k));
+        if self.selected.is_none() {
+            self.selected_key = None;
+        }
+        self.wrapped = None;
+        self.dirty = true;
+    }
+
+    fn select(&mut self, i: usize) {
+        self.selected = Some(i);
+        self.selected_key = self.rows.get(i).map(|r| self.row_key(r));
+    }
+
+    /// Moves the selection by `delta` rows and scrolls it into view.
+    fn move_selection(&mut self, ui: &Ui, delta: i32) {
+        let n = self.count();
+        if n == 0 || !matches!(self.view, View::Shows | View::Episodes(_) | View::New | View::UpNext | View::Downloaded | View::Search) {
+            return;
+        }
+        let next = match self.selected {
+            Some(i) => (i as i32 + delta).clamp(0, n as i32 - 1) as usize,
+            None => 0,
+        };
+        self.select(next);
+        let r = self.row_rect(ui, next);
+        let (top, bottom) = (self.row_top(ui), self.controls_top(ui));
+        if r.1 < top {
+            self.scroll.jump_to(self.scroll.offset() - (top - r.1));
+        } else if r.1 + r.3 > bottom {
+            self.scroll.jump_to(self.scroll.offset() + (r.1 + r.3 - bottom));
+        }
+    }
+
+    /// The episode a command acts on: the one open in the detail, or the selected row.
+    fn selected_episode(&self) -> Option<(usize, usize)> {
+        if let View::Detail(s, e) = self.view {
+            return Some((s, e));
+        }
+        match self.rows.get(self.selected?)? {
+            Row::Ep(s, e) => Some((*s, *e)),
+            _ => None,
+        }
+    }
+
+    fn save_library(&self) {
+        self.library.save(&self.store.dir);
+    }
+
+    fn episode_action(&mut self, action: EpAction) {
+        let Some(at) = self.selected_episode() else { return };
+        let Some(url) = self.episode_url(at) else { return };
+        match action {
+            EpAction::Play => {
+                self.error.clear();
+                self.download(&url, true);
+            }
+            EpAction::Download => {
+                if !self.store.downloaded(&url) {
+                    self.error.clear();
+                    self.download(&url, false);
+                }
+            }
+            EpAction::RemoveDownload => self.remove_download(&url),
+            EpAction::PlayNext => {
+                self.library.play_next(&url);
+                self.save_library();
+            }
+            EpAction::PlayLast => {
+                self.library.play_last(&url);
+                self.save_library();
+            }
+            EpAction::Unqueue => {
+                self.library.dequeue(&url);
+                self.save_library();
+            }
+            EpAction::TogglePlayed => {
+                let played = !self.library.is_played(&url);
+                self.library.set_played(&url, played);
+                self.save_library();
+            }
+            EpAction::Details => {
+                self.detail_url = url;
+                self.open_panel(View::Detail(at.0, at.1));
+            }
+            EpAction::MoveUp | EpAction::MoveDown => {
+                self.library.move_in_queue(&url, action == EpAction::MoveUp);
+                self.save_library();
+            }
+        }
+        self.rebuild();
+        self.dirty = true;
+    }
+
+    // search, transcripts, files ---------------------------------------
+
+    fn run_search(&mut self) {
+        let term = self.search_field.as_ref().map(|f| f.text().to_string()).unwrap_or_default();
+        let Some(url) = search::url(&term) else { return };
+        self.searching = true;
+        self.results.clear();
+        self.error.clear();
+        self.rebuild();
+        let (net, inbox) = (self.net.clone(), self.inbox.clone());
+        DispatchQueue::global(Qos::Utility).async_(move || {
+            let r = net.get(&url, SEARCH_LIMIT).map_err(|e| e.to_string()).map(|bytes| search::parse(&String::from_utf8_lossy(&bytes)));
+            deliver(&inbox, Msg::Search(r));
+        });
+    }
+
+    fn follow_hit(&mut self, i: usize) {
+        let Some(hit) = self.results.get(i).cloned() else { return };
+        if let Some(at) = self.follow(&hit.feed, Some(&hit.title)) {
+            let url = self.shows[at].url.clone();
+            self.fetch_feed(&url);
+            self.notice = format!("Following {}", hit.title);
+        }
+    }
+
+    /// The transcript of the playing episode: its address.
+    fn playing_episode(&self) -> Option<&feed::Episode> {
+        let url = self.playing.as_deref()?;
+        self.shows.iter().flat_map(|s| s.episodes.iter()).find(|e| e.url == url)
+    }
+
+    fn fetch_transcript(&mut self, url: &str) {
+        if self.transcripts.iter().any(|(u, _)| u == url) || self.transcript_loading.as_deref() == Some(url) {
+            return;
+        }
+        self.transcript_loading = Some(url.to_string());
+        let (net, inbox, url) = (self.net.clone(), self.inbox.clone(), url.to_string());
+        DispatchQueue::global(Qos::Utility).async_(move || {
+            let r = net.get(&url, TRANSCRIPT_LIMIT).map_err(|e| e.to_string()).map(|bytes| transcript::parse(&String::from_utf8_lossy(&bytes)));
+            deliver(&inbox, Msg::Transcript(url, r));
+        });
+    }
+
+    /// Opens or closes a panel of the Now Playing sheet.
+    fn toggle_panel(&mut self, panel: SheetPanel) {
+        self.sheet_panel = if self.sheet_panel == panel { SheetPanel::None } else { panel };
+        self.panel_scroll = Scroller::new();
+        self.followed = None;
+        self.wrapped = None;
+        if self.sheet_panel == SheetPanel::Transcript {
+            if let Some(url) = self.playing_episode().map(|e| e.transcript.clone()).filter(|u| !u.is_empty()) {
+                self.fetch_transcript(&url);
+            }
+        }
+    }
+
+    /// The followed shows as an OPML document.
+    fn opml_text(&self) -> String {
+        let feeds: Vec<(String, String)> = self.shows.iter().map(|s| (s.url.clone(), s.title.clone())).collect();
+        opml::write(&feeds)
+    }
+
+    /// The app loop has a file panel to open (it needs the runtime context).
+    pub fn take_file_job(&mut self) -> Option<FileJob> {
+        self.want_file.take()
+    }
+
+    pub fn begin_import(&mut self, request: u32) {
+        self.import = Some(request);
+    }
+
+    pub fn begin_export(&mut self, request: u32) {
+        self.export = Some((request, self.opml_text().into_bytes()));
+    }
+
+    pub fn is_import(&self, request: u32) -> bool {
+        self.import == Some(request)
+    }
+
+    /// The bytes waiting for the save panel's file `request`.
+    pub fn take_export(&mut self, request: u32) -> Option<Vec<u8>> {
+        match self.export.take() {
+            Some((r, bytes)) if r == request => Some(bytes),
+            other => {
+                self.export = other;
+                None
+            }
+        }
+    }
+
+    /// A file panel ended without a file (cancelled or refused).
+    pub fn file_failed(&mut self, request: u32) {
+        if self.import == Some(request) {
+            self.import = None;
+        }
+        if self.export.as_ref().is_some_and(|(r, _)| *r == request) {
+            self.export = None;
+        }
+    }
+
+    /// The export was written.
+    pub fn exported(&mut self) {
+        self.notice = format!("Exported {} subscriptions", self.shows.len());
+        self.dirty = true;
+    }
+
+    /// The subscriptions file arrived: follows the shows it lists that are new.
+    pub fn imported(&mut self, bytes: &[u8]) {
+        self.import = None;
+        let known: Vec<&str> = self.shows.iter().map(|s| s.url.as_str()).collect();
+        let fresh = opml::new_feeds(&opml::parse(&String::from_utf8_lossy(bytes)), &known);
+        for (url, title) in &fresh {
+            self.follow(url, Some(title));
+            self.fetch_feed(url);
+        }
+        self.notice = match fresh.len() {
+            0 => "No new subscriptions in the file".to_string(),
+            1 => "Imported 1 subscription".to_string(),
+            n => format!("Imported {n} subscriptions"),
+        };
+        self.rebuild();
+        self.dirty = true;
+    }
+
+    // menus -------------------------------------------------------------
+
+    /// The app's own menus: File, View, Controls and Episode, with their key equivalents.
+    pub fn main_menu(&self) -> Vec<AppMenu> {
+        let url = self.selected_episode().and_then(|at| self.episode_url(at));
+        let has_ep = url.is_some();
+        let (downloaded, played, queued) = url.as_deref().map_or((false, false, false), |u| (self.store.downloaded(u), self.library.is_played(u), self.library.in_queue(u)));
+        let playing = self.playing.is_some();
+        let has_queue = !self.library.queue().is_empty();
+        let st = self.prefs.settings;
+        let file = AppMenu {
+            title: "File".into(),
+            items: vec![
+                AppMenuItem::new(M_ADD, "Add Podcast...").key("cmd+n"),
+                AppMenuItem::separator(),
+                AppMenuItem::new(M_IMPORT, "Import Subscriptions...").key("cmd+shift+i"),
+                AppMenuItem::new(M_EXPORT, "Export Subscriptions...").key("cmd+shift+e").enabled(!self.shows.is_empty()),
+            ],
+        };
+        let view = AppMenu {
+            title: "View".into(),
+            items: vec![
+                AppMenuItem::new(M_REFRESH, "Refresh").key("cmd+r").enabled(!self.shows.is_empty()),
+                AppMenuItem::separator(),
+                AppMenuItem::new(M_VIEW_SEARCH, "Search Shows").key("cmd+f").checked(self.view == View::Search),
+                AppMenuItem::new(M_VIEW_NEW, "New Episodes").key("cmd+1").checked(self.view == View::New),
+                AppMenuItem::new(M_VIEW_UP_NEXT, "Up Next").key("cmd+2").checked(self.view == View::UpNext),
+                AppMenuItem::new(M_VIEW_DOWNLOADED, "Downloaded").key("cmd+3").checked(self.view == View::Downloaded),
+                AppMenuItem::new(M_VIEW_SHOWS, "Shows").key("cmd+4").checked(self.view == View::Shows),
+                AppMenuItem::separator(),
+                AppMenuItem::new(M_SHOW_SETTINGS, "Show Settings...").enabled(matches!(self.view, View::Episodes(_))),
+                AppMenuItem::new(M_SETTINGS, "Settings...").key("cmd+,"),
+            ],
+        };
+        let mut controls = vec![
+            AppMenuItem::new(M_PLAY_PAUSE, if self.paused { "Play" } else { "Pause" }).enabled(playing),
+            AppMenuItem::new(M_STOP, "Stop").key("cmd+.").enabled(playing),
+            AppMenuItem::separator(),
+            AppMenuItem::new(M_SKIP_BACK, &format!("Go Back {} Seconds", st.back_s)).key("cmd+left").enabled(playing),
+            AppMenuItem::new(M_SKIP_FWD, &format!("Go Forward {} Seconds", st.forward_s)).key("cmd+right").enabled(playing),
+            AppMenuItem::new(M_NEXT, "Next Episode").key("cmd+alt+right").enabled(has_queue),
+            AppMenuItem::separator(),
+            AppMenuItem::new(M_SLOWER, "Slower").key("cmd+[").enabled(playing),
+            AppMenuItem::new(M_FASTER, "Faster").key("cmd+]").enabled(playing),
+            AppMenuItem::submenu("Playback Speed"),
+        ];
+        for (i, rate) in transport::RATES.iter().enumerate() {
+            controls.push(AppMenuItem::new(M_RATE + i as u32, &format!("{rate}x")).checked(transport::rate_index(self.rate) == Some(i)).enabled(playing).depth(1));
+        }
+        controls.push(AppMenuItem::submenu("Sleep Timer"));
+        for (i, minutes) in SLEEPS.iter().enumerate() {
+            let title = if *minutes == 0 { "Off".to_string() } else { format!("{minutes} minutes") };
+            controls.push(AppMenuItem::new(M_SLEEP + i as u32, &title).checked(self.sleep == i).enabled(playing).depth(1));
+        }
+        let episode = AppMenu {
+            title: "Episode".into(),
+            items: vec![
+                AppMenuItem::new(M_EP_PLAY, "Play Episode").enabled(has_ep),
+                AppMenuItem::new(M_EP_DETAILS, "Show Episode Details").key("cmd+i").enabled(has_ep),
+                AppMenuItem::separator(),
+                AppMenuItem::new(M_EP_DOWNLOAD, "Download").key("cmd+d").enabled(has_ep && !downloaded),
+                AppMenuItem::new(M_EP_REMOVE_DOWNLOAD, "Remove Download").key("cmd+delete").enabled(downloaded),
+                AppMenuItem::separator(),
+                AppMenuItem::new(M_EP_PLAY_NEXT, "Play Next").key("cmd+alt+n").enabled(has_ep),
+                AppMenuItem::new(M_EP_PLAY_LAST, "Play Last").key("cmd+alt+l").enabled(has_ep),
+                AppMenuItem::new(M_EP_UNQUEUE, "Remove from Up Next").enabled(queued),
+                AppMenuItem::new(M_EP_UP, "Move Up in Up Next").key("cmd+alt+up").enabled(queued),
+                AppMenuItem::new(M_EP_DOWN, "Move Down in Up Next").key("cmd+alt+down").enabled(queued),
+                AppMenuItem::new(M_CLEAR_QUEUE, "Clear Up Next").enabled(has_queue),
+                AppMenuItem::separator(),
+                AppMenuItem::new(M_EP_PLAYED, if played { "Mark as Unplayed" } else { "Mark as Played" }).key("cmd+shift+u").enabled(has_ep),
+            ],
+        };
+        vec![file, view, AppMenu { title: "Controls".into(), items: controls }, episode]
+    }
+
+    /// The context menu for a right click at pixel (x, y): selects the episode row there. Empty over nothing.
+    pub fn context_items(&mut self, ui: &Ui, x: f32, y: f32) -> Vec<bifrost_app::proto::ContextItem> {
+        if self.field.is_some() || self.sheet || y < self.row_top(ui) || y >= self.controls_top(ui) {
+            return Vec::new();
+        }
+        let Some(i) = (0..self.count()).find(|&i| Self::inside(self.row_rect(ui, i), x, y)) else { return Vec::new() };
+        if !matches!(self.rows.get(i), Some(Row::Ep(..))) {
+            return Vec::new();
+        }
+        self.select(i);
+        self.dirty = true;
+        let url = self.selected_episode().and_then(|at| self.episode_url(at));
+        let (downloaded, played, queued) = url.as_deref().map_or((false, false, false), |u| (self.store.downloaded(u), self.library.is_played(u), self.library.in_queue(u)));
+        let item = |id: u32, label: &str, enabled: bool| bifrost_app::proto::ContextItem { id, label: label.into(), enabled };
+        vec![
+            item(M_EP_PLAY, "Play Episode", true),
+            item(M_EP_DETAILS, "Show Episode Details", true),
+            item(M_EP_PLAY_NEXT, "Play Next", true),
+            item(M_EP_PLAY_LAST, "Play Last", true),
+            item(M_EP_UNQUEUE, "Remove from Up Next", queued),
+            item(if downloaded { M_EP_REMOVE_DOWNLOAD } else { M_EP_DOWNLOAD }, if downloaded { "Remove Download" } else { "Download" }, true),
+            item(M_EP_PLAYED, if played { "Mark as Unplayed" } else { "Mark as Played" }, true),
+        ]
+    }
+
+    /// A menu item (or context menu item) was chosen.
+    pub fn menu_action(&mut self, ui: &Ui, id: u32) {
+        let t = self.now;
+        match id {
+            M_ADD => self.activate(ui, Target::Add, t),
+            M_IMPORT => self.want_file = Some(FileJob::Import),
+            M_EXPORT => self.want_file = Some(FileJob::Export),
+            M_REFRESH => self.activate(ui, Target::Refresh, t),
+            M_VIEW_NEW => self.navigate(ui, SIDE_NEW),
+            M_VIEW_UP_NEXT => self.navigate(ui, SIDE_UP_NEXT),
+            M_VIEW_DOWNLOADED => self.navigate(ui, SIDE_DOWNLOADED),
+            M_VIEW_SHOWS => self.navigate(ui, SIDE_SHOWS),
+            M_VIEW_SEARCH => self.navigate(ui, SIDE_SEARCH),
+            M_SETTINGS => self.navigate(ui, SIDE_SETTINGS),
+            M_SHOW_SETTINGS => self.activate(ui, Target::ShowSettings, t),
+            M_PLAY_PAUSE => self.activate(ui, Target::PlayPause, t),
+            M_STOP => self.activate(ui, Target::Stop, t),
+            M_SKIP_BACK => self.activate(ui, Target::SkipBack, t),
+            M_SKIP_FWD => self.activate(ui, Target::SkipFwd, t),
+            M_NEXT => self.next_episode(),
+            M_SLOWER | M_FASTER => {
+                if let Some(i) = transport::rate_index(self.rate) {
+                    let to = if id == M_SLOWER { i.saturating_sub(1) } else { (i + 1).min(transport::RATES.len() - 1) };
+                    self.rate = transport::RATES[to];
+                }
+            }
+            M_CLEAR_QUEUE => {
+                self.library.clear_queue();
+                self.save_library();
+                self.rebuild();
+            }
+            M_EP_PLAY => self.episode_action(EpAction::Play),
+            M_EP_DOWNLOAD => self.episode_action(EpAction::Download),
+            M_EP_REMOVE_DOWNLOAD => self.episode_action(EpAction::RemoveDownload),
+            M_EP_PLAY_NEXT => self.episode_action(EpAction::PlayNext),
+            M_EP_PLAY_LAST => self.episode_action(EpAction::PlayLast),
+            M_EP_UNQUEUE => self.episode_action(EpAction::Unqueue),
+            M_EP_PLAYED => self.episode_action(EpAction::TogglePlayed),
+            M_EP_DETAILS => self.episode_action(EpAction::Details),
+            M_EP_UP => self.episode_action(EpAction::MoveUp),
+            M_EP_DOWN => self.episode_action(EpAction::MoveDown),
+            _ => {
+                if let Some(i) = id.checked_sub(M_RATE).map(|i| i as usize).filter(|&i| i < transport::RATES.len()) {
+                    self.rate = transport::RATES[i];
+                } else if let Some(i) = id.checked_sub(M_SLEEP).map(|i| i as usize).filter(|&i| i < SLEEPS.len()) {
+                    self.sleep = i;
+                    self.sleep_at = (SLEEPS[i] > 0).then(|| t + SLEEPS[i] as f64 * 60_000.0);
+                }
+            }
+        }
+        self.dirty = true;
     }
 
     // layout ------------------------------------------------------------
@@ -968,16 +1567,48 @@ impl Podcasts {
         ui.pt(SPACE_XL)
     }
 
-    fn rows(&self) -> usize {
+    /// How many rows the scrolling list has.
+    fn count(&self) -> usize {
         match self.view {
-            View::Shows => self.shows.len(),
-            View::Episodes(i) => self.shows.get(i).map_or(0, |s| s.episodes.len()),
+            View::Settings | View::ShowSettings(_) => self.option_rows().len(),
+            View::Detail(..) => 0,
+            _ => self.rows.len(),
+        }
+    }
+
+    fn row_h(&self, ui: &Ui) -> f32 {
+        ui.pt(if matches!(self.view, View::Settings | View::ShowSettings(_)) { OPT_ROW_PT } else { ROW })
+    }
+
+    /// Where the rows start: under the search field in Search.
+    fn row_top(&self, ui: &Ui) -> f32 {
+        self.list_top(ui) + if self.view == View::Search { ui.pt(SEARCH_BAR_PT) } else { 0.0 }
+    }
+
+    /// Where the scrolling content ends, unscrolled.
+    fn content_end(&self, ui: &Ui) -> f32 {
+        match self.view {
+            View::Detail(..) => self.list_top(ui) + self.body_h,
+            _ => self.row_top(ui) + self.row_h(ui) * self.count() as f32,
         }
     }
 
     fn row_rect(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
         let m = self.margin(ui);
-        (self.side(ui) + m, self.list_top(ui) + ui.pt(ROW) * i as f32 - self.scroll.offset(), self.content_w(ui) - 2.0 * m, ui.pt(ROW))
+        (self.side(ui) + m, self.row_top(ui) + self.row_h(ui) * i as f32 - self.scroll.offset(), self.content_w(ui) - 2.0 * m, self.row_h(ui))
+    }
+
+    /// The Follow button of a search result row.
+    fn follow_rect(&self, ui: &Ui, i: usize) -> (f32, f32, f32, f32) {
+        let r = self.row_rect(ui, i);
+        let (w, h) = (ui.pt(88.0), ui.pt(28.0));
+        (r.0 + r.2 - w - ui.pt(SPACE_S), r.1 + (r.3 - h) / 2.0, w, h)
+    }
+
+    /// The search field's frame (the capsule is drawn a little wider).
+    fn search_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let m = self.margin(ui);
+        (self.side(ui) + m + ui.pt(SPACE_L), self.list_top(ui) + ui.pt(SPACE_S), self.content_w(ui) - 2.0 * m - ui.pt(2.0 * SPACE_L), ui.pt(32.0))
     }
 
     /// The floating mini player capsule (Golden Gate Podcasts and Music).
@@ -1008,6 +1639,78 @@ impl Podcasts {
         px >= x && px < x + w && py >= y && py < y + h
     }
 
+    // episode detail geometry (pixels from the top of the scrolling content)
+
+    /// The buttons of the episode detail: 0 play, 1 download, 2 up next, 3 played.
+    fn detail_button(&self, ui: &Ui, n: usize) -> (f32, f32, f32, f32) {
+        let m = self.margin(ui);
+        let gap = ui.pt(SPACE_S);
+        let w = (self.content_w(ui) - 2.0 * m - 3.0 * gap) / 4.0;
+        (self.side(ui) + m + (w + gap) * n as f32, self.list_top(ui) - self.scroll.offset() + ui.pt(DETAIL_BUTTONS_PT), w, ui.pt(widgets::CAPSULE_PT))
+    }
+
+    /// Offsets from the content top of the chapter list, the notes, and the end of the content.
+    fn detail_layout(&self, ui: &Ui, chapters: usize, lines: usize) -> (f32, f32, f32) {
+        let chap_y = ui.pt(DETAIL_BUTTONS_PT + widgets::CAPSULE_PT + SPACE_XL);
+        let notes_y = if chapters > 0 { chap_y + ui.pt(24.0 + CHAPTER_ROW_PT * chapters as f32 + SPACE_L) } else { chap_y };
+        (chap_y, notes_y, notes_y + ui.pt(24.0 + LINE_PT * lines.max(1) as f32 + 2.0 * SPACE_XL))
+    }
+
+    fn detail_episode(&self) -> Option<(&Show, &feed::Episode)> {
+        let View::Detail(s, e) = self.view else { return None };
+        let show = self.shows.get(s)?;
+        Some((show, show.episodes.get(e)?))
+    }
+
+    // Now Playing sheet panel geometry
+
+    fn panel_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let a = self.art_rect(ui);
+        let m = self.margin(ui);
+        (self.side(ui) + m, a.1, self.content_w(ui) - 2.0 * m, a.3)
+    }
+
+    /// The text width inside the panel's card.
+    fn panel_text_w(&self, ui: &Ui) -> f32 {
+        self.panel_rect(ui).2 - 2.0 * ui.pt(SPACE_L)
+    }
+
+    /// Wraps the notes of the open detail, or the transcript of the open panel, for the width they draw at, and
+    /// measures the content that scrolls.
+    fn ensure_wrapped(&mut self, ui: &Ui) {
+        let measure = |t: &str| ui.measure(t, MAC_BODY_PT, Weight::Regular);
+        if self.sheet && self.sheet_panel == SheetPanel::Transcript && self.playing.is_some() {
+            let Some(link) = self.playing_episode().map(|e| e.transcript.clone()) else { return };
+            let width = self.panel_text_w(ui);
+            let key = format!("t:{link}");
+            if self.wrapped.as_ref().is_some_and(|w| w.0 == key && w.1 == width.to_bits()) {
+                return;
+            }
+            let mut lines = Vec::new();
+            if let Some((_, cues)) = self.transcripts.iter().find(|(u, _)| *u == link) {
+                for (i, cue) in cues.iter().enumerate() {
+                    for line in wrap::wrap(&cue.text, width, &measure) {
+                        lines.push((line, Some(i)));
+                    }
+                }
+            }
+            self.panel_h = ui.pt(LINE_PT) * lines.len() as f32 + 2.0 * ui.pt(SPACE_L);
+            self.wrapped = Some((key, width.to_bits(), lines));
+        } else if let Some((_, ep)) = self.detail_episode().filter(|_| !self.sheet) {
+            let width = self.content_w(ui) - 2.0 * self.margin(ui);
+            let key = format!("d:{}", ep.url);
+            if self.wrapped.as_ref().is_some_and(|w| w.0 == key && w.1 == width.to_bits()) {
+                return;
+            }
+            let (notes, chapters) = (ep.notes.clone(), ep.chapters.len());
+            let lines: Vec<(String, Option<usize>)> = wrap::wrap(&notes, width, &measure).into_iter().map(|l| (l, None)).collect();
+            self.body_h = self.detail_layout(ui, chapters, lines.len()).2;
+            self.wrapped = Some((key, width.to_bits(), lines));
+        }
+    }
+
+    // hit testing and input ---------------------------------------------
+
     fn title(&self) -> String {
         if self.field.is_some() {
             "New Podcast".into()
@@ -1017,6 +1720,13 @@ impl Podcasts {
             match self.view {
                 View::Shows => "Podcasts".into(),
                 View::Episodes(i) => self.shows.get(i).map_or(String::new(), |s| s.title.clone()),
+                View::New => "New Episodes".into(),
+                View::UpNext => "Up Next".into(),
+                View::Downloaded => "Downloaded".into(),
+                View::Search => "Search".into(),
+                View::Settings => "Settings".into(),
+                View::ShowSettings(i) => self.shows.get(i).map_or("Settings".into(), |s| format!("{} Settings", s.title)),
+                View::Detail(..) => self.detail_episode().map_or(String::new(), |(_, e)| e.title.clone()),
             }
         }
     }
@@ -1025,17 +1735,25 @@ impl Podcasts {
     fn bar(&self, ui: &Ui) -> Toolbar {
         let room = (self.w as f32 / ui.s - SIDEBAR_W - 220.0).max(40.0);
         let title_w = (ui.measure(&self.title(), MAC_TITLE3_PT, Weight::Bold) / ui.s + 4.0).min(room);
-        let mut items = vec![ToolbarItem::custom(BAR_TITLE, "Title", title_w), ToolbarItem::flexible_space()];
+        let panel = matches!(self.view, View::Settings | View::ShowSettings(_) | View::Detail(..));
+        let mut items = Vec::new();
+        if panel && self.field.is_none() && !(self.sheet && self.playing.is_some()) {
+            items.push(ToolbarItem::icon(BAR_BACK, "Back", "chevron.left"));
+        }
+        items.push(ToolbarItem::custom(BAR_TITLE, "Title", title_w));
+        items.push(ToolbarItem::flexible_space());
         if self.field.is_some() {
             items.push(ToolbarItem::button(BAR_CANCEL, "Cancel"));
             items.push(ToolbarItem::button(BAR_DONE, "Subscribe"));
         } else if self.sheet && self.playing.is_some() {
             items.push(ToolbarItem::button(BAR_CLOSE, "Done"));
-        } else {
+        } else if !panel {
             if let View::Episodes(_) = self.view {
                 let label = if self.confirm_remove { "Confirm Remove" } else { "Remove Show" };
+                items.push(ToolbarItem::icon(BAR_SHOW_SETTINGS, "Show Settings", "ellipsis.circle"));
                 items.push(ToolbarItem::icon(BAR_REMOVE, label, "trash").selected(self.confirm_remove));
             }
+            items.push(ToolbarItem::icon(BAR_REFRESH, "Refresh", "arrow.clockwise").enabled(!self.shows.is_empty()));
             items.push(ToolbarItem::icon(BAR_ADD, "Add Podcast", "plus"));
         }
         Toolbar::new(items)
@@ -1058,7 +1776,16 @@ impl Podcasts {
 
     /// The source list: the library, then one row per subscription.
     fn sidebar(&self) -> SourceList {
-        let mut items = vec![SidebarItem::header("Library"), SidebarItem::row(SIDE_SHOWS, "Shows").with_symbol("list.bullet").with_count(self.shows.len() as u32)];
+        let queued = self.library.queue().len() as u32;
+        let mut items = vec![
+            SidebarItem::header("Library"),
+            SidebarItem::row(SIDE_SEARCH, "Search").with_symbol("magnifyingglass"),
+            SidebarItem::row(SIDE_NEW, "New Episodes").with_symbol("star"),
+            SidebarItem::row(SIDE_UP_NEXT, "Up Next").with_symbol("music.note.list").with_count(queued),
+            SidebarItem::row(SIDE_DOWNLOADED, "Downloaded").with_symbol("arrow.down.circle"),
+            SidebarItem::row(SIDE_SHOWS, "Shows").with_symbol("list.bullet").with_count(self.shows.len() as u32),
+            SidebarItem::row(SIDE_SETTINGS, "Settings").with_symbol("ellipsis.circle"),
+        ];
         if !self.shows.is_empty() {
             items.push(SidebarItem::header("Subscriptions"));
             for (i, sh) in self.shows.iter().enumerate() {
@@ -1066,10 +1793,7 @@ impl Podcasts {
             }
         }
         let mut list = SourceList::new(items, 32.0, 30.0);
-        list.set_selected(Some(match self.view {
-            View::Shows => SIDE_SHOWS,
-            View::Episodes(i) => SIDE_SHOW + i as u32,
-        }));
+        list.set_selected(Some(self.side_id()));
         list
     }
 
@@ -1101,6 +1825,9 @@ impl Podcasts {
                 BAR_CANCEL => Some(Target::Cancel),
                 BAR_DONE => Some(Target::Done),
                 BAR_CLOSE => Some(Target::CloseSheet),
+                BAR_REFRESH => Some(Target::Refresh),
+                BAR_SHOW_SETTINGS => Some(Target::ShowSettings),
+                BAR_BACK => Some(Target::Back),
                 _ => None,
             };
         }
@@ -1117,8 +1844,22 @@ impl Podcasts {
             if Self::inside((sc.0 - ui.pt(SPACE_M), sc.1, sc.2 + ui.pt(SPACE_XL), sc.3), x, y) {
                 return Some(Target::Scrub);
             }
-            let targets = [Target::SkipBack, Target::PlayPause, Target::SkipFwd, Target::Speed, Target::Sleep];
-            return targets.into_iter().enumerate().find(|&(n, _)| Self::inside(self.sheet_button(ui, n), x, y)).map(|(_, t)| t);
+            let targets = [Target::SkipBack, Target::PlayPause, Target::SkipFwd, Target::Speed, Target::Sleep, Target::Chapters, Target::Transcript];
+            if let Some(t) = targets.into_iter().enumerate().find(|&(n, _)| Self::inside(self.sheet_button(ui, n), x, y)).map(|(_, t)| t) {
+                return Some(t);
+            }
+            if self.sheet_panel != SheetPanel::None && Self::inside(self.panel_rect(ui), x, y) {
+                if self.sheet_panel == SheetPanel::Chapters {
+                    let p = self.panel_rect(ui);
+                    let count = self.playing_episode().map_or(0, |e| e.chapters.len());
+                    let row = ((y - p.1 - ui.pt(SPACE_S) + self.panel_scroll.offset()) / ui.pt(CHAPTER_ROW_PT)).floor();
+                    if row >= 0.0 && (row as usize) < count {
+                        return Some(Target::Chapter(row as usize));
+                    }
+                }
+                return Some(Target::Panel);
+            }
+            return None;
         }
         if self.playing.is_some() && Self::inside(self.player_capsule(ui), x, y) {
             for (n, target) in [Target::SkipBack, Target::Stop, Target::SkipFwd].into_iter().enumerate() {
@@ -1129,14 +1870,82 @@ impl Podcasts {
             return Some(Target::Sheet);
         }
         if y >= self.list_top(ui) && y < self.controls_top(ui) {
-            for i in 0..self.rows() {
-                if Self::inside(self.row_rect(ui, i), x, y) {
-                    return Some(Target::Row(i));
+            if self.view == View::Search && y < self.row_top(ui) {
+                return Some(Target::SearchField);
+            }
+            if let View::Detail(..) = self.view {
+                if let Some(n) = (0..4).find(|&n| Self::inside(self.detail_button(ui, n), x, y)) {
+                    return Some(Target::Detail(n));
+                }
+                return Some(Target::List);
+            }
+            if y >= self.row_top(ui) {
+                for i in 0..self.count() {
+                    if Self::inside(self.row_rect(ui, i), x, y) {
+                        if self.view == View::Search && Self::inside(self.follow_rect(ui, i), x, y) {
+                            return Some(Target::Follow(i));
+                        }
+                        return Some(if matches!(self.view, View::Settings | View::ShowSettings(_)) { Target::Opt(i) } else { Target::Row(i) });
+                    }
                 }
             }
             return Some(Target::List);
         }
         None
+    }
+
+    /// The rows of the settings list: (label, value).
+    fn option_rows(&self) -> Vec<(String, String)> {
+        match self.view {
+            View::Settings => {
+                let st = self.prefs.settings;
+                vec![
+                    ("Skip Back".into(), format!("{} seconds", st.back_s)),
+                    ("Skip Forward".into(), format!("{} seconds", st.forward_s)),
+                    ("Refresh Feeds".into(), st.refresh_label()),
+                ]
+            }
+            View::ShowSettings(i) => {
+                let p = self.shows.get(i).map_or_else(Default::default, |s| self.prefs.show(&s.url));
+                vec![
+                    ("Download New Episodes".into(), if p.auto_download { "On" } else { "Off" }.into()),
+                    ("Keep Downloads".into(), p.keep_label()),
+                    ("Episode Order".into(), p.order_label().into()),
+                ]
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// A settings row was chosen: its value moves to the next choice.
+    fn change_option(&mut self, i: usize) {
+        match self.view {
+            View::Settings => {
+                match i {
+                    0 => self.prefs.settings.cycle_back(),
+                    1 => self.prefs.settings.cycle_forward(),
+                    _ => {
+                        self.prefs.settings.cycle_refresh();
+                        self.last_refresh = Some(self.now);
+                    }
+                }
+                self.prefs.save(&self.store.dir);
+            }
+            View::ShowSettings(s) => {
+                let Some(url) = self.shows.get(s).map(|s| s.url.clone()) else { return };
+                let mut p = self.prefs.show(&url);
+                match i {
+                    0 => p.auto_download = !p.auto_download,
+                    1 => p.cycle_keep(),
+                    _ => p.oldest_first = !p.oldest_first,
+                }
+                self.prefs.set_show(&url, p);
+                self.prefs.save(&self.store.dir);
+                self.after_refresh(&url);
+                self.rebuild();
+            }
+            _ => {}
+        }
     }
 
     fn activate(&mut self, ui: &Ui, target: Target, t: f64) {
@@ -1156,16 +1965,7 @@ impl Podcasts {
                 self.field = None;
             }
             Target::Done => self.finish_add(),
-            Target::Side(id) => {
-                self.field = None;
-                self.sheet = false;
-                if id == SIDE_SHOWS {
-                    self.view = View::Shows;
-                    self.scroll = Scroller::new();
-                } else if let Some(i) = id.checked_sub(SIDE_SHOW).map(|i| i as usize).filter(|&i| i < self.shows.len()) {
-                    self.open_show(i);
-                }
-            }
+            Target::Side(id) => self.navigate(ui, id),
             Target::Remove => {
                 if let View::Episodes(i) = self.view {
                     if self.confirm_remove {
@@ -1175,17 +1975,51 @@ impl Podcasts {
                     }
                 }
             }
-            Target::Row(i) => match self.view {
-                View::Shows => self.open_show(i),
-                View::Episodes(s) => {
-                    if let Some(url) = self.shows[s].episodes.get(i).map(|e| e.url.clone()) {
-                        self.error.clear();
-                        self.download(&url);
+            Target::Refresh => {
+                if !self.shows.is_empty() {
+                    self.error.clear();
+                    self.refresh_all();
+                }
+            }
+            Target::ShowSettings => {
+                if let View::Episodes(i) = self.view {
+                    self.open_panel(View::ShowSettings(i));
+                }
+            }
+            Target::Back => {
+                self.back_out();
+            }
+            Target::Opt(i) => self.change_option(i),
+            Target::Detail(n) => match n {
+                0 => self.episode_action(EpAction::Play),
+                1 => {
+                    let downloaded = self.selected_episode().and_then(|at| self.episode_url(at)).is_some_and(|u| self.store.downloaded(&u));
+                    self.episode_action(if downloaded { EpAction::RemoveDownload } else { EpAction::Download });
+                }
+                2 => {
+                    let queued = self.selected_episode().and_then(|at| self.episode_url(at)).is_some_and(|u| self.library.in_queue(&u));
+                    self.episode_action(if queued { EpAction::Unqueue } else { EpAction::PlayNext });
+                }
+                _ => self.episode_action(EpAction::TogglePlayed),
+            },
+            Target::Follow(i) => self.follow_hit(i),
+            Target::SearchField => {}
+            Target::Row(i) => match self.rows.get(i).copied() {
+                Some(Row::Show(si)) => self.open_show(si),
+                Some(Row::Ep(..)) => {
+                    // a click selects the episode; a second click on it plays
+                    let again = self.selected == Some(i) && self.last_click.0 == i && t - self.last_click.1 < DOUBLE_CLICK_MS;
+                    self.select(i);
+                    self.last_click = (i, t);
+                    if again {
+                        self.episode_action(EpAction::Play);
                     }
                 }
+                Some(Row::Hit(_)) => self.select(i),
+                None => {}
             },
             Target::Stop => self.stop_playback(),
-            Target::SkipBack => self.skip(true, transport::BACK_SKIP_S),
+            Target::SkipBack => self.skip(true, self.prefs.settings.back_s as f64),
             Target::Sheet => self.sheet = true,
             Target::CloseSheet => self.sheet = false,
             Target::Scrub => {}
@@ -1204,10 +2038,23 @@ impl Podcasts {
                 self.sleep = (self.sleep + 1) % SLEEPS.len();
                 self.sleep_at = (SLEEPS[self.sleep] > 0).then(|| t + SLEEPS[self.sleep] as f64 * 60_000.0);
             }
-            Target::SkipFwd => self.skip(false, transport::FORWARD_SKIP_S),
+            Target::Chapters => self.toggle_panel(SheetPanel::Chapters),
+            Target::Transcript => self.toggle_panel(SheetPanel::Transcript),
+            Target::Chapter(i) => {
+                if let Some(ms) = self.playing_episode().and_then(|e| e.chapters.get(i)).map(|c| c.start_ms) {
+                    self.seek_to(ms as f64);
+                }
+            }
+            Target::Panel => {}
+            Target::SkipFwd => self.skip(false, self.prefs.settings.forward_s as f64),
             Target::List => {}
         }
         self.dirty = true;
+    }
+
+    fn back_out(&mut self) {
+        let to = self.back;
+        self.go(to);
     }
 
     fn finish_add(&mut self) {
@@ -1217,6 +2064,7 @@ impl Podcasts {
     }
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
+        let searching = self.field.is_none() && self.view == View::Search && self.search_field.is_some() && !(self.sheet && self.playing.is_some());
         if self.field.is_some() {
             if matches!(out, Out::Hide) {
                 self.activate(ui, Target::Cancel, t);
@@ -1225,16 +2073,68 @@ impl Podcasts {
             } else if let Some(f) = &mut self.field {
                 f.edit(ui, &out, t);
             }
+        } else if searching {
+            match out {
+                Out::Enter => self.run_search(),
+                Out::Named("Down") if !self.rows.is_empty() => self.move_selection(ui, 1),
+                Out::Named("Up") if !self.rows.is_empty() => self.move_selection(ui, -1),
+                _ => {
+                    if let Some(f) = &mut self.search_field {
+                        f.edit(ui, &out, t);
+                    }
+                }
+            }
         } else {
             // transport keys, the in-app stand-in for the system's remote commands: space plays or pauses, arrows skip
             match &out {
                 Out::Text(s) if s == " " => self.activate(ui, Target::PlayPause, t),
-                Out::Named("Left") => self.skip(true, transport::BACK_SKIP_S),
-                Out::Named("Right") => self.skip(false, transport::FORWARD_SKIP_S),
+                Out::Named("Left") => self.skip(true, self.prefs.settings.back_s as f64),
+                Out::Named("Right") => self.skip(false, self.prefs.settings.forward_s as f64),
+                Out::Named("Down") if !self.sheet => self.move_selection(ui, 1),
+                Out::Named("Up") if !self.sheet => self.move_selection(ui, -1),
+                Out::Enter if !self.sheet => match self.selected.and_then(|i| self.rows.get(i)).copied() {
+                    Some(Row::Show(si)) => self.open_show(si),
+                    Some(Row::Ep(..)) => self.episode_action(EpAction::Play),
+                    Some(Row::Hit(i)) => self.follow_hit(i),
+                    None => {}
+                },
+                Out::Hide => {
+                    if self.sheet && self.sheet_panel != SheetPanel::None {
+                        self.sheet_panel = SheetPanel::None;
+                    } else if self.sheet {
+                        self.sheet = false;
+                    } else if matches!(self.view, View::Settings | View::ShowSettings(_) | View::Detail(..)) {
+                        self.back_out();
+                    }
+                }
                 _ => {}
             }
         }
         self.dirty = true;
+    }
+
+    /// Which text field takes touches now: the add sheet's (false) or the search field (true).
+    fn field_kind(&self) -> Option<bool> {
+        if self.field.is_some() {
+            Some(false)
+        } else if self.view == View::Search && self.search_field.is_some() && !(self.sheet && self.playing.is_some()) {
+            Some(true)
+        } else {
+            None
+        }
+    }
+
+    fn field_frame(&self, ui: &Ui, search: bool) -> (f32, f32, f32, f32) {
+        if search { self.search_rect(ui) } else { self.field_rect(ui) }
+    }
+
+    fn field_mut(&mut self, search: bool) -> Option<&mut TextField> {
+        if search { self.search_field.as_mut() } else { self.field.as_mut() }
+    }
+
+    /// The scroller a drag in the current screen moves.
+    fn drag_scroller(&mut self) -> &mut Scroller {
+        if self.sheet && self.playing.is_some() { &mut self.panel_scroll } else { &mut self.scroll }
     }
 
     pub fn touch(&mut self, ui: &Ui, event: Event, t: f64) {
@@ -1242,15 +2142,20 @@ impl Podcasts {
             Event::Down(x, y) | Event::Move(x, y) | Event::Up(x, y) => (x, y),
             _ => return,
         };
+        let w = self.w as f32;
         match event {
             Event::Down(..) => {
                 self.dirty = true;
-                if self.field.is_some() {
-                    let (frame, w) = (self.field_rect(ui), self.w as f32);
-                    if let Some(f) = &mut self.field {
-                        if f.touch(ui, event, frame, w, t) {
-                            self.field_touch = true;
-                            return;
+                if let Some(search) = self.field_kind() {
+                    let frame = self.field_frame(ui, search);
+                    // the search field only owns the band above its results
+                    let band = (self.side(ui), self.list_top(ui), self.content_w(ui), self.row_top(ui) - self.list_top(ui));
+                    if !search || Self::inside(band, x, y) {
+                        if let Some(f) = self.field_mut(search) {
+                            if f.touch(ui, event, frame, w, t) {
+                                self.field_touch = true;
+                                return;
+                            }
                         }
                     }
                 }
@@ -1259,24 +2164,28 @@ impl Podcasts {
                     self.scrubbing = Some(self.scrub_ms(ui, x));
                     return;
                 }
-                if matches!(self.pressed, Some(Target::Row(_) | Target::List)) {
+                if matches!(self.pressed, Some(Target::Row(_) | Target::List | Target::Panel | Target::Chapter(_) | Target::Opt(_) | Target::Detail(_) | Target::Follow(_))) {
                     self.scrolling = true;
-                    self.scroll.down(y, t);
+                    self.drag_scroller().down(y, t);
                 }
             }
             Event::Move(..) => {
                 if self.field_touch {
-                    let (frame, w) = (self.field_rect(ui), self.w as f32);
-                    if let Some(f) = &mut self.field {
-                        f.touch(ui, event, frame, w, t);
+                    if let Some(search) = self.field_kind() {
+                        let frame = self.field_frame(ui, search);
+                        if let Some(f) = self.field_mut(search) {
+                            f.touch(ui, event, frame, w, t);
+                        }
                     }
                     self.dirty = true;
                 } else if self.scrubbing.is_some() {
                     self.scrubbing = Some(self.scrub_ms(ui, x));
                     self.dirty = true;
                 } else if self.scrolling {
-                    self.scroll.moved(y, t);
-                    if self.scroll.dragging() {
+                    let sc = self.drag_scroller();
+                    sc.moved(y, t);
+                    let dragging = sc.dragging();
+                    if dragging {
                         self.pressed = None;
                     }
                     self.dirty = true;
@@ -1288,9 +2197,11 @@ impl Podcasts {
             Event::Up(..) => {
                 self.dirty = true;
                 if std::mem::take(&mut self.field_touch) {
-                    let (frame, w) = (self.field_rect(ui), self.w as f32);
-                    if let Some(f) = &mut self.field {
-                        f.touch(ui, event, frame, w, t);
+                    if let Some(search) = self.field_kind() {
+                        let frame = self.field_frame(ui, search);
+                        if let Some(f) = self.field_mut(search) {
+                            f.touch(ui, event, frame, w, t);
+                        }
                     }
                     return;
                 }
@@ -1300,7 +2211,7 @@ impl Podcasts {
                     self.seek_to(ms);
                     return;
                 }
-                let tap = if std::mem::take(&mut self.scrolling) { self.scroll.up(y, t) } else { true };
+                let tap = if std::mem::take(&mut self.scrolling) { self.drag_scroller().up(y, t) } else { true };
                 let pressed = self.pressed.take();
                 if tap {
                     if let Some(target) = pressed.filter(|&p| self.hit(ui, x, y) == Some(p)) {
@@ -1318,12 +2229,33 @@ impl Podcasts {
         if self.refresh.pump() {
             self.dirty = true;
         }
-        self.scroll.set_max((self.list_top(ui) + ui.pt(ROW * self.rows() as f32) - self.controls_top(ui)).max(0.0));
+        match (self.prefs.settings.refresh_ms(), self.last_refresh) {
+            (_, None) => {
+                if self.shows.is_empty() || self.prefs.settings.refresh_ms().is_none() {
+                    self.last_refresh = Some(t);
+                } else {
+                    self.refresh_all();
+                }
+            }
+            (Some(ms), Some(at)) if t - at >= ms => self.refresh_all(),
+            _ => {}
+        }
+        self.ensure_wrapped(ui);
+        self.scroll.set_max((self.content_end(ui) - self.controls_top(ui)).max(0.0));
         self.dirty |= self.scroll.tick(t);
+        self.tick_panel(ui, t);
         if let Some(f) = &mut self.field {
             self.dirty |= f.tick(ui, t);
             if f.focused {
                 self.dirty = true;
+            }
+        }
+        if self.field.is_none() && self.view == View::Search {
+            if let Some(f) = &mut self.search_field {
+                self.dirty |= f.tick(ui, t);
+                if f.focused {
+                    self.dirty = true;
+                }
             }
         }
         self.sync_audio(t);
@@ -1343,13 +2275,43 @@ impl Podcasts {
         self.dirty
     }
 
+    /// Sizes the Now Playing panel's scroll range, and keeps the spoken line of a transcript in view.
+    fn tick_panel(&mut self, ui: &Ui, t: f64) {
+        if !(self.sheet && self.playing.is_some()) || self.sheet_panel == SheetPanel::None {
+            return;
+        }
+        let view_h = self.panel_rect(ui).3;
+        let content = match self.sheet_panel {
+            SheetPanel::Chapters => ui.pt(CHAPTER_ROW_PT) * self.playing_episode().map_or(0, |e| e.chapters.len()) as f32 + 2.0 * ui.pt(SPACE_S),
+            _ => self.panel_h,
+        };
+        self.panel_scroll.set_max((content - view_h).max(0.0));
+        self.dirty |= self.panel_scroll.tick(t);
+        if self.sheet_panel == SheetPanel::Transcript && !self.panel_scroll.dragging() {
+            let active = self.playing_episode().map(|e| e.transcript.clone()).and_then(|link| {
+                let cues = &self.transcripts.iter().find(|(u, _)| *u == link)?.1;
+                transcript::active(cues, self.position_ms as u64)
+            });
+            if active != self.followed {
+                self.followed = active;
+                let first = active.and_then(|c| self.wrapped.as_ref()?.2.iter().position(|(_, cue)| *cue == Some(c)));
+                if let Some(line) = first {
+                    let target = ui.pt(LINE_PT) * line as f32 - view_h / 3.0;
+                    self.panel_scroll.jump_to(target.max(0.0));
+                }
+            }
+        }
+    }
+
     pub fn next_wake(&self, t: f64) -> Option<f64> {
         // a playback clock only: downloads and feeds arrive through `deliver` (a main-queue wake), not by polling
         let mut due = self.playing.is_some().then_some(t + POLL_MS);
         // the service socket is only read between frames: once a second while idle, to notice an episode playing
         let listening = if self.audio.connected() { Some(t + 1000.0) } else { self.audio.next_wake(t) };
         due = [due, listening].into_iter().flatten().reduce(f64::min);
-        for wake in [self.field.as_ref().and_then(|f| f.next_wake(t)), self.scroll.animating().then_some(t)] {
+        let refresh = self.last_refresh.zip(self.prefs.settings.refresh_ms()).map(|(at, ms)| at + ms);
+        let search = if self.view == View::Search { self.search_field.as_ref().and_then(|f| f.next_wake(t)) } else { None };
+        for wake in [self.field.as_ref().and_then(|f| f.next_wake(t)), search, refresh, self.scroll.animating().then_some(t), self.panel_scroll.animating().then_some(t)] {
             if let Some(w) = wake {
                 due = Some(due.map_or(w, |d| d.min(w)));
             }
@@ -1361,6 +2323,7 @@ impl Podcasts {
         if (self.w, self.h) != (w, h) {
             self.w = w;
             self.h = h;
+            self.wrapped = None;
             self.dirty = true;
         }
     }
@@ -1377,11 +2340,87 @@ impl Podcasts {
         s.blit(image, (x + (w - image.w as f32) / 2.0) as i32, (y + (h - image.h as f32) / 2.0) as i32, 255, 255);
     }
 
-    /// A push button: a capsule plate with tinted text (`NativeButton`, rounded bezel).
+    /// A push button: a capsule plate with tinted text (`NativeButton`, rounded bezel). The label is shortened to fit.
     fn button(&mut self, s: &mut Surface, ui: &Ui, target: Target, label: &str, color: u32, r: (f32, f32, f32, f32)) {
         let fill = if self.pressed == Some(target) { ROW_PRESSED.now() } else { FIELD_BG.now() };
         s.fill_rrect(r.0, r.1, r.2, r.3, r.3 / 2.0, fill);
-        self.centred(s, ui, label, MAC_BODY_PT, color, r);
+        let label = ui.fit(label, MAC_BODY_PT, (r.2 - ui.pt(SPACE_M)).max(0.0));
+        self.centred(s, ui, &label, MAC_BODY_PT, color, r);
+    }
+
+    /// A button that stays lit while its panel is open.
+    fn toggle_button(&mut self, s: &mut Surface, ui: &Ui, target: Target, label: &str, on: bool, r: (f32, f32, f32, f32)) {
+        if on {
+            s.fill_rrect(r.0, r.1, r.2, r.3, r.3 / 2.0, SELECTION.now());
+            let label = ui.fit(label, MAC_BODY_PT, (r.2 - ui.pt(SPACE_M)).max(0.0));
+            self.centred(s, ui, &label, MAC_BODY_PT, WHITE, r);
+        } else {
+            self.button(s, ui, target, label, LINK, r);
+        }
+    }
+
+    /// The chapters of the playing episode or its transcript, on a card where the artwork would be.
+    fn draw_panel(&mut self, s: &mut Surface, ui: &Ui) {
+        let p = self.panel_rect(ui);
+        s.fill_rrect(p.0, p.1, p.2, p.3, ui.pt(SPACE_L), CARD_BG.now());
+        let (pad, off) = (ui.pt(SPACE_L), self.panel_scroll.offset());
+        let inner_top = p.1 + ui.pt(SPACE_S);
+        let (lo, hi) = (p.1, p.1 + p.3);
+        match self.sheet_panel {
+            SheetPanel::Chapters => {
+                let chapters = self.playing_episode().map(|e| e.chapters.clone()).unwrap_or_default();
+                if chapters.is_empty() {
+                    self.centred(s, ui, "No chapters for this episode", MAC_BODY_PT, LABEL_2.now(), p);
+                    return;
+                }
+                let current = feed::current_chapter(&chapters, self.position_ms as u64);
+                let row_h = ui.pt(CHAPTER_ROW_PT);
+                for (i, chapter) in chapters.iter().enumerate() {
+                    let y = inner_top + row_h * i as f32 - off;
+                    if y < lo || y + row_h > hi {
+                        continue;
+                    }
+                    let on = current == Some(i);
+                    if on {
+                        s.fill_rrect(p.0 + ui.pt(SPACE_XS), y, p.2 - ui.pt(SPACE_S), row_h, ui.pt(m::SELECTION_RADIUS), SELECTION.now());
+                    }
+                    let (ink, dim) = if on { (WHITE, WHITE) } else { (LABEL.now(), LABEL_2.now()) };
+                    let clock = springboard::shell::music::nowplaying::clock(chapter.start_ms as f64);
+                    let ty = y + (row_h - ui.pt(MAC_BODY_PT)) / 2.0 - ui.pt(2.0);
+                    self.text(s, ui, &clock, MAC_BODY_PT, Weight::Regular, dim, p.0 + pad, ty);
+                    let room = p.2 - 2.0 * pad - ui.pt(64.0);
+                    let title = ui.fit(&chapter.title, MAC_BODY_PT, room);
+                    self.text(s, ui, &title, MAC_BODY_PT, Weight::Regular, ink, p.0 + pad + ui.pt(64.0), ty);
+                }
+            }
+            _ => {
+                let link = self.playing_episode().map(|e| e.transcript.clone()).unwrap_or_default();
+                if link.is_empty() {
+                    self.centred(s, ui, "No transcript for this episode", MAC_BODY_PT, LABEL_2.now(), p);
+                    return;
+                }
+                let lines = match &self.wrapped {
+                    Some((key, _, lines)) if *key == format!("t:{link}") => lines.clone(),
+                    _ => Vec::new(),
+                };
+                if lines.is_empty() {
+                    let msg = if self.transcript_loading.as_deref() == Some(link.as_str()) { "Loading transcript..." } else { "The transcript is not available" };
+                    self.centred(s, ui, msg, MAC_BODY_PT, LABEL_2.now(), p);
+                    return;
+                }
+                let active = self.transcripts.iter().find(|(u, _)| *u == link).and_then(|(_, cues)| transcript::active(cues, self.position_ms as u64));
+                let line_h = ui.pt(LINE_PT);
+                for (j, (line, cue)) in lines.iter().enumerate() {
+                    let y = p.1 + pad + line_h * j as f32 - off;
+                    if y < lo || y + line_h > hi {
+                        continue;
+                    }
+                    let on = active.is_some() && *cue == active;
+                    let (ink, weight) = if on { (LINK, Weight::Semibold) } else { (LABEL.now(), Weight::Regular) };
+                    self.text(s, ui, line, MAC_BODY_PT, weight, ink, p.0 + pad, y);
+                }
+            }
+        }
     }
 
     fn draw_sheet(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
@@ -1392,12 +2431,16 @@ impl Podcasts {
         let (show, title, released, feed_length) = found.unwrap_or_default();
         let (x0, cw) = (self.side(ui), self.content_w(ui));
         let m = self.margin(ui);
-        // artwork: the Podcasts mark on a rounded plate
         let a = self.art_rect(ui);
-        let side = a.2 as usize;
-        let art = crate::icon::icon(side);
-        s.fill_rrect(a.0, a.1, a.2, a.3, ui.pt(SPACE_L), CARD_BG.now());
-        s.blit(&art, a.0 as i32, a.1 as i32, 255, 255);
+        if self.sheet_panel == SheetPanel::None {
+            // artwork: the Podcasts mark on a rounded plate
+            let side = a.2 as usize;
+            let art = crate::icon::icon(side);
+            s.fill_rrect(a.0, a.1, a.2, a.3, ui.pt(SPACE_L), CARD_BG.now());
+            s.blit(&art, a.0 as i32, a.1 as i32, 255, 255);
+        } else {
+            self.draw_panel(s, ui);
+        }
         let title = ui.fit(&title, MAC_TITLE3_PT, cw - 2.0 * m);
         self.centred(s, ui, &title, MAC_TITLE3_PT, LABEL.now(), (x0, a.1 + a.3 + ui.pt(SPACE_S), cw, ui.pt(30.0)));
         let show = ui.fit(&show, MAC_SUBHEAD_PT, cw - 2.0 * m);
@@ -1420,74 +2463,230 @@ impl Podcasts {
         self.text(s, ui, &left, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), sc.0, ty + ui.pt(SPACE_L));
         let rw = ui.measure(&right, MAC_FOOTNOTE_PT, Weight::Regular);
         self.text(s, ui, &right, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), sc.0 + sc.2 - rw, ty + ui.pt(SPACE_L));
-        self.button(s, ui, Target::SkipBack, "Back 15", LINK, self.sheet_button(ui, 0));
+        let (back, fwd) = (self.prefs.settings.back_s, self.prefs.settings.forward_s);
+        self.button(s, ui, Target::SkipBack, &format!("Back {back}"), LINK, self.sheet_button(ui, 0));
         self.button(s, ui, Target::PlayPause, if self.paused { "Play" } else { "Pause" }, LINK, self.sheet_button(ui, 1));
-        self.button(s, ui, Target::SkipFwd, "Fwd 30", LINK, self.sheet_button(ui, 2));
+        self.button(s, ui, Target::SkipFwd, &format!("Fwd {fwd}"), LINK, self.sheet_button(ui, 2));
         self.button(s, ui, Target::Speed, &transport::speed_label(self.rate), LINK, self.sheet_button(ui, 3));
         let label = self.sleep_label(t);
         self.button(s, ui, Target::Sleep, &label, LINK, self.sheet_button(ui, 4));
+        let panel = self.sheet_panel;
+        self.toggle_button(s, ui, Target::Chapters, "Chapters", panel == SheetPanel::Chapters, self.sheet_button(ui, 5));
+        self.toggle_button(s, ui, Target::Transcript, "Transcript", panel == SheetPanel::Transcript, self.sheet_button(ui, 6));
         if self.speed_menu {
             self.draw_speed_menu(s, ui);
         }
     }
 
+    /// The label under the row's title: date, length and the state of its download.
+    fn episode_line(&self, si: usize, ei: usize) -> String {
+        let (show, e) = (&self.shows[si], &self.shows[si].episodes[ei]);
+        let mut sub = if matches!(self.view, View::Episodes(_)) { String::new() } else { format!("{}  ", show.title) };
+        sub.push_str(&e.date);
+        if !e.duration.is_empty() {
+            sub = format!("{sub}  {}", e.duration);
+        }
+        if self.downloading.as_deref() == Some(e.url.as_str()) {
+            sub = match self.progress {
+                Some((at, Some(total))) if total > 0 => format!("{sub}  Downloading {}%", at * 100 / total),
+                Some((at, _)) => format!("{sub}  Downloading {} MB", at >> 20),
+                None => format!("{sub}  Downloading..."),
+            };
+        } else if self.dl_queue.contains(&e.url) {
+            sub = format!("{sub}  Waiting to download");
+        } else if self.store.downloaded(&e.url) {
+            sub = format!("{sub}  Downloaded");
+        }
+        if self.view != View::UpNext && self.library.in_queue(&e.url) {
+            sub = format!("{sub}  Up Next");
+        }
+        sub
+    }
+
     fn draw_rows(&mut self, s: &mut Surface, ui: &Ui) {
+        if matches!(self.view, View::Settings | View::ShowSettings(_)) {
+            self.draw_options(s, ui);
+            return;
+        }
         let x0 = self.side(ui);
         let cw = self.content_w(ui);
         let bottom = self.controls_top(ui);
-        let empty = match self.view {
-            View::Shows => Some("No Podcasts. Click Add and paste a feed URL."),
-            View::Episodes(_) => Some("No Episodes"),
-        }
-        .filter(|_| self.rows() == 0);
-        if let Some(msg) = empty {
+        let top = self.row_top(ui);
+        let n = self.count();
+        if n == 0 {
             let status = self.refresh.text();
-            let msg = if self.loading.is_empty() { msg } else { status.as_deref().unwrap_or("Loading...") };
-            self.centred(s, ui, msg, MAC_TITLE3_PT, LABEL_2.now(), (x0, self.list_top(ui), cw, (bottom - self.list_top(ui)).max(0.0)));
+            let busy = !self.loading.is_empty();
+            let msg = match self.view {
+                View::Shows if busy => status.unwrap_or_else(|| "Loading...".into()),
+                View::Shows => "No Podcasts. Click Add and paste a feed URL.".into(),
+                View::Episodes(_) if busy => status.unwrap_or_else(|| "Loading...".into()),
+                View::Episodes(_) => "No Episodes".into(),
+                View::New => "No new episodes".into(),
+                View::UpNext => "Up Next is empty. Choose Play Next or Play Last on an episode.".into(),
+                View::Downloaded => "No downloaded episodes".into(),
+                View::Search if self.searching => "Searching...".into(),
+                View::Search if self.search_field.as_ref().is_some_and(|f| !f.is_empty()) => "No shows found".into(),
+                View::Search => "Search for shows by name and press Return.".into(),
+                _ => String::new(),
+            };
+            let msg = ui.fit(&msg, MAC_TITLE3_PT, cw - 2.0 * self.margin(ui));
+            self.centred(s, ui, &msg, MAC_TITLE3_PT, LABEL_2.now(), (x0, top, cw, (bottom - top).max(0.0)));
         }
-        for i in 0..self.rows() {
+        for i in 0..n {
             let r = self.row_rect(ui, i);
-            if r.1 + r.3 < self.list_top(ui) || r.1 >= bottom {
+            if r.1 + r.3 < top || r.1 >= bottom {
                 continue;
             }
-            let (title, sub, active) = match self.view {
-                View::Shows => {
-                    let sh = &self.shows[i];
-                    (sh.title.clone(), format!("{} episodes", sh.episodes.len()), false)
+            let row = self.rows[i];
+            let (title, sub, active, unplayed) = match row {
+                Row::Show(si) => {
+                    let sh = &self.shows[si];
+                    (sh.title.clone(), format!("{} episodes", sh.episodes.len()), false, false)
                 }
-                View::Episodes(si) => {
-                    let e = &self.shows[si].episodes[i];
-                    let mut sub = e.date.clone();
-                    if !e.duration.is_empty() {
-                        sub = format!("{sub}  {}", e.duration);
-                    }
-                    if self.downloading.as_deref() == Some(e.url.as_str()) {
-                        sub = match self.progress {
-                            Some((at, Some(total))) if total > 0 => format!("{sub}  Downloading {}%", at * 100 / total),
-                            Some((at, _)) => format!("{sub}  Downloading {} MB", at >> 20),
-                            None => format!("{sub}  Downloading..."),
-                        };
-                    } else if self.store.downloaded(&e.url) {
-                        sub = format!("{sub}  Downloaded");
-                    }
-                    (e.title.clone(), sub, self.playing.as_deref() == Some(e.url.as_str()))
+                Row::Ep(si, ei) => {
+                    let e = &self.shows[si].episodes[ei];
+                    (e.title.clone(), self.episode_line(si, ei), self.playing.as_deref() == Some(e.url.as_str()), !self.library.is_played(&e.url))
+                }
+                Row::Hit(hi) => {
+                    let hit = &self.results[hi];
+                    (hit.title.clone(), hit.author.clone(), false, false)
                 }
             };
             // the playing episode sits on the accent selection, as in Golden Gate Podcasts
-            let ink = if active { WHITE } else { LABEL.now() };
+            let ink = if active { WHITE } else if matches!(row, Row::Ep(..)) && !unplayed { LABEL_2.now() } else { LABEL.now() };
             if active {
                 s.fill_rrect(r.0, r.1.max(0.0), r.2, r.3, ui.pt(m::SELECTION_RADIUS), SELECTION.now());
-            } else if self.pressed == Some(Target::Row(i)) {
+            } else if self.pressed == Some(Target::Row(i)) || self.selected == Some(i) {
                 s.fill_rrect(r.0, r.1.max(0.0), r.2, r.3, ui.pt(m::SELECTION_RADIUS), ROW_PRESSED.now());
-            } else if i + 1 < self.rows() {
+            } else if i + 1 < n {
                 // hairline inset to the text start, none under the last row
                 s.fill_rect((r.0 + ui.pt(SPACE_L)) as usize, (r.1 + r.3 - 1.0).max(0.0) as usize, (r.2 - ui.pt(SPACE_L)) as usize, 1, SEPARATOR_C.now());
             }
-            let title = ui.fit(&title, MAC_BODY_PT, r.2 - ui.pt(SPACE_XXXL));
+            if unplayed && !active {
+                // an unplayed episode carries the accent dot
+                s.fill_rrect(r.0 + ui.pt(SPACE_XS), r.1 + ui.pt(SPACE_M + 5.0), ui.pt(8.0), ui.pt(8.0), ui.pt(4.0), LINK);
+            }
+            let room = if matches!(row, Row::Hit(_)) { r.2 - ui.pt(SPACE_XXXL) - ui.pt(96.0) } else { r.2 - ui.pt(SPACE_XXXL) };
+            let title = ui.fit(&title, MAC_BODY_PT, room);
             self.text(s, ui, &title, MAC_BODY_PT, Weight::Semibold, ink, r.0 + ui.pt(SPACE_L), r.1 + ui.pt(SPACE_M));
-            let sub = ui.fit(&sub, MAC_SUBHEAD_PT, r.2 - ui.pt(SPACE_XXXL));
+            let sub = ui.fit(&sub, MAC_SUBHEAD_PT, room);
             let sub_ink = if active { WHITE } else { LABEL_2.now() };
             self.text(s, ui, &sub, MAC_SUBHEAD_PT, Weight::Regular, sub_ink, r.0 + ui.pt(SPACE_L), r.1 + ui.pt(38.0));
+            if let Row::Hit(hi) = row {
+                let followed = self.shows.iter().any(|sh| sh.url == self.results[hi].feed);
+                let f = self.follow_rect(ui, i);
+                if followed {
+                    self.centred(s, ui, "Following", MAC_SUBHEAD_PT, LABEL_2.now(), f);
+                } else {
+                    self.button(s, ui, Target::Follow(i), "Follow", LINK, f);
+                }
+            }
+        }
+        if self.view == View::Search {
+            self.draw_search_bar(s, ui);
+        }
+    }
+
+    /// The search field over its band (rows scroll under the band, not over the field).
+    fn draw_search_bar(&mut self, s: &mut Surface, ui: &Ui) {
+        let (x0, cw) = (self.side(ui), self.content_w(ui));
+        s.fill_rect(x0 as usize, self.list_top(ui) as usize, cw as usize, (self.row_top(ui) - self.list_top(ui)) as usize, CONTENT_BG.now());
+        let f = self.search_rect(ui);
+        let pad = ui.pt(SPACE_S);
+        // search fields are capsules (CLAUDE.md, Radii)
+        s.fill_rrect(f.0 - pad, f.1, f.2 + 2.0 * pad, f.3, f.3 / 2.0, FIELD_BG.now());
+        let t = self.now;
+        if let Some(field) = &self.search_field {
+            field.draw(s, ui, f, t);
+        }
+    }
+
+    /// A grouped list of settings: the label, then the current choice in the tint; a row cycles through its choices.
+    fn draw_options(&mut self, s: &mut Surface, ui: &Ui) {
+        let rows = self.option_rows();
+        let (top, bottom) = (self.row_top(ui), self.controls_top(ui));
+        for (i, (label, value)) in rows.iter().enumerate() {
+            let r = self.row_rect(ui, i);
+            if r.1 + r.3 < top || r.1 >= bottom {
+                continue;
+            }
+            if self.pressed == Some(Target::Opt(i)) {
+                s.fill_rrect(r.0, r.1.max(0.0), r.2, r.3, ui.pt(m::SELECTION_RADIUS), ROW_PRESSED.now());
+            } else if i + 1 < rows.len() {
+                s.fill_rect((r.0 + ui.pt(SPACE_L)) as usize, (r.1 + r.3 - 1.0).max(0.0) as usize, (r.2 - ui.pt(SPACE_L)) as usize, 1, SEPARATOR_C.now());
+            }
+            let ty = r.1 + (r.3 - ui.pt(MAC_BODY_PT)) / 2.0 - ui.pt(2.0);
+            self.text(s, ui, label, MAC_BODY_PT, Weight::Regular, LABEL.now(), r.0 + ui.pt(SPACE_L), ty);
+            let value = ui.fit(value, MAC_BODY_PT, r.2 / 2.0);
+            let vw = ui.measure(&value, MAC_BODY_PT, Weight::Regular);
+            self.text(s, ui, &value, MAC_BODY_PT, Weight::Regular, LINK, r.0 + r.2 - vw - ui.pt(SPACE_L), ty);
+        }
+        let hint = match self.view {
+            View::Settings => "Skip intervals apply to the buttons, the arrow keys and the Control Center tile.",
+            _ => "Downloads beyond the number to keep are deleted when the feed updates.",
+        };
+        let y = self.row_top(ui) + self.row_h(ui) * rows.len() as f32 - self.scroll.offset() + ui.pt(SPACE_M);
+        let hint = ui.fit(hint, MAC_FOOTNOTE_PT, self.content_w(ui) - 2.0 * self.margin(ui));
+        self.text(s, ui, &hint, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), self.side(ui) + self.margin(ui) + ui.pt(SPACE_L), y);
+    }
+
+    /// An episode's page: title, the action buttons, chapters and notes.
+    fn draw_detail(&mut self, s: &mut Surface, ui: &Ui) {
+        let Some((show, ep)) = self.detail_episode() else { return };
+        let (show_title, title, date, duration, url) = (show.title.clone(), ep.title.clone(), ep.date.clone(), ep.duration.clone(), ep.url.clone());
+        let chapters = ep.chapters.clone();
+        let (top, bottom) = (self.list_top(ui), self.controls_top(ui));
+        let x = self.side(ui) + self.margin(ui);
+        let width = self.content_w(ui) - 2.0 * self.margin(ui);
+        let origin = top - self.scroll.offset();
+        let title = ui.fit(&title, MAC_TITLE3_PT, width);
+        self.text(s, ui, &title, MAC_TITLE3_PT, Weight::Bold, LABEL.now(), x, origin + ui.pt(SPACE_S));
+        let mut sub = show_title;
+        for part in [&date, &duration] {
+            if !part.is_empty() {
+                sub = format!("{sub}  {part}");
+            }
+        }
+        let sub = ui.fit(&sub, MAC_SUBHEAD_PT, width);
+        self.text(s, ui, &sub, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), x, origin + ui.pt(34.0));
+        let downloaded = self.store.downloaded(&url);
+        let labels = [
+            "Play".to_string(),
+            if downloaded { "Remove Download" } else { "Download" }.to_string(),
+            if self.library.in_queue(&url) { "Remove from Up Next" } else { "Play Next" }.to_string(),
+            if self.library.is_played(&url) { "Mark Unplayed" } else { "Mark Played" }.to_string(),
+        ];
+        for (n, label) in labels.iter().enumerate() {
+            self.button(s, ui, Target::Detail(n), label, LINK, self.detail_button(ui, n));
+        }
+        let lines = self.wrapped.as_ref().map(|w| w.2.clone()).unwrap_or_default();
+        let (chap_y, notes_y, _) = self.detail_layout(ui, chapters.len(), lines.len());
+        if !chapters.is_empty() {
+            self.text(s, ui, "Chapters", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), x, origin + chap_y);
+            let current = if self.playing.as_deref() == Some(url.as_str()) { feed::current_chapter(&chapters, self.position_ms as u64) } else { None };
+            for (i, chapter) in chapters.iter().enumerate() {
+                let y = origin + chap_y + ui.pt(24.0 + CHAPTER_ROW_PT * i as f32);
+                if y + ui.pt(CHAPTER_ROW_PT) < top || y >= bottom {
+                    continue;
+                }
+                let clock = springboard::shell::music::nowplaying::clock(chapter.start_ms as f64);
+                let ink = if current == Some(i) { LINK } else { LABEL.now() };
+                self.text(s, ui, &clock, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x, y);
+                let name = ui.fit(&chapter.title, MAC_BODY_PT, width - ui.pt(64.0));
+                self.text(s, ui, &name, MAC_BODY_PT, Weight::Regular, ink, x + ui.pt(64.0), y);
+            }
+        }
+        self.text(s, ui, "Notes", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), x, origin + notes_y);
+        let line_h = ui.pt(LINE_PT);
+        if lines.iter().all(|(l, _)| l.is_empty()) {
+            self.text(s, ui, "No notes", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x, origin + notes_y + ui.pt(24.0));
+        }
+        for (j, (line, _)) in lines.iter().enumerate() {
+            let y = origin + notes_y + ui.pt(24.0) + line_h * j as f32;
+            if line.is_empty() || y + line_h < top || y >= bottom {
+                continue;
+            }
+            self.text(s, ui, line, MAC_BODY_PT, Weight::Regular, LABEL.now(), x, y);
         }
     }
 
@@ -1503,21 +2702,25 @@ impl Podcasts {
         let x = c.0 + ui.pt(SPACE_L) + ui.pt(SPACE_XS);
         self.text(s, ui, &title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), x, c.1 + ui.pt(SPACE_S + SPACE_XXS));
         self.text(s, ui, &now, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), x, c.1 + ui.pt(SPACE_S + SPACE_XXS + 18.0));
-        self.button(s, ui, Target::SkipBack, "-15s", LINK, self.player_rect(ui, 0));
+        let (back, fwd) = (self.prefs.settings.back_s, self.prefs.settings.forward_s);
+        self.button(s, ui, Target::SkipBack, &format!("-{back}s"), LINK, self.player_rect(ui, 0));
         self.button(s, ui, Target::Stop, "Stop", DESTRUCTIVE, self.player_rect(ui, 1));
-        self.button(s, ui, Target::SkipFwd, "+30s", LINK, self.player_rect(ui, 2));
+        self.button(s, ui, Target::SkipFwd, &format!("+{fwd}s"), LINK, self.player_rect(ui, 2));
     }
 
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
         self.dirty = false;
+        self.now = t;
         let style = (ui.s.to_bits(), ui.text_scale.to_bits(), ui.bold);
         if style != self.cache_style {
             self.cache.clear();
             self.cache_style = style;
+            self.wrapped = None;
         }
         if self.cache.len() > 256 {
             self.cache.clear();
         }
+        self.ensure_wrapped(ui);
         s.fill_rect(0, 0, self.w as usize, self.h as usize, CONTENT_BG.now());
         let x0 = self.side(ui);
         let cw = self.content_w(ui);
@@ -1534,12 +2737,17 @@ impl Podcasts {
         } else if self.sheet && self.playing.is_some() {
             self.draw_sheet(s, ui, t);
         } else {
-            self.draw_rows(s, ui);
+            if let View::Detail(..) = self.view {
+                self.draw_detail(s, ui);
+            } else {
+                self.draw_rows(s, ui);
+            }
             self.draw_player(s, ui);
         }
-        if !self.error.is_empty() {
-            let msg = ui.fit(&self.error, MAC_FOOTNOTE_PT, cw - 2.0 * m);
-            self.centred(s, ui, &msg, MAC_FOOTNOTE_PT, DESTRUCTIVE, (x0, ui.pt(UNIFIED_BAR_PT), cw, ui.pt(LIST_TOP - UNIFIED_BAR_PT)));
+        if !self.error.is_empty() || !self.notice.is_empty() {
+            let (text, ink) = if self.error.is_empty() { (self.notice.clone(), LABEL_2.now()) } else { (self.error.clone(), DESTRUCTIVE) };
+            let msg = ui.fit(&text, MAC_FOOTNOTE_PT, cw - 2.0 * m);
+            self.centred(s, ui, &msg, MAC_FOOTNOTE_PT, ink, (x0, ui.pt(UNIFIED_BAR_PT), cw, ui.pt(LIST_TOP - UNIFIED_BAR_PT)));
         }
         // the band and sidebar repaint over any row that scrolled under them
         let pressed_side = match self.pressed {
@@ -1557,6 +2765,9 @@ impl Podcasts {
             Some(Target::Cancel) => Some(BAR_CANCEL),
             Some(Target::Done) => Some(BAR_DONE),
             Some(Target::CloseSheet) => Some(BAR_CLOSE),
+            Some(Target::Refresh) => Some(BAR_REFRESH),
+            Some(Target::ShowSettings) => Some(BAR_SHOW_SETTINGS),
+            Some(Target::Back) => Some(BAR_BACK),
             _ => None,
         };
         let placed = widgets::toolbar(s, ui, self.bar_bounds(ui), &self.bar(ui), pressed_bar);

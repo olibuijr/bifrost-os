@@ -27,6 +27,11 @@ pub struct Chapter {
     pub title: String,
 }
 
+/// The chapter playing at `position_ms`: the last one that has started. None before the first.
+pub fn current_chapter(chapters: &[Chapter], position_ms: u64) -> Option<usize> {
+    chapters.iter().rposition(|c| c.start_ms <= position_ms)
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Show {
     pub url: String,
@@ -413,6 +418,18 @@ mod tests {
         assert_eq!(eps[0].notes, "First & second\nThird\nline");
         assert_eq!(eps[0].transcript, "https://x.test/t.vtt");
         assert_eq!(eps[0].chapters, [Chapter { start_ms: 0, title: "Intro".into() }, Chapter { start_ms: 60_000, title: "Later".into() }]);
+    }
+
+    #[test]
+    fn the_current_chapter_is_the_last_one_started() {
+        let ch = |ms| Chapter { start_ms: ms, title: String::new() };
+        let list = [ch(0), ch(60_000), ch(120_000)];
+        assert_eq!(current_chapter(&list, 0), Some(0));
+        assert_eq!(current_chapter(&list, 59_999), Some(0));
+        assert_eq!(current_chapter(&list, 60_000), Some(1));
+        assert_eq!(current_chapter(&list, 10_000_000), Some(2));
+        assert_eq!(current_chapter(&[ch(5_000)], 1_000), None);
+        assert_eq!(current_chapter(&[], 1_000), None);
     }
 
     #[test]

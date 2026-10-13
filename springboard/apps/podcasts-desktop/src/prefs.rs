@@ -30,7 +30,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Settings { back_s: 15, forward_s: 30, refresh_min: 60 }
+        Settings { back_s: crate::transport::BACK_SKIP_S as u32, forward_s: crate::transport::FORWARD_SKIP_S as u32, refresh_min: 60 }
     }
 }
 

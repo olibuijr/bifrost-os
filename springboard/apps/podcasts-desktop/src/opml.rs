@@ -21,6 +21,21 @@ pub fn parse(text: &str) -> Vec<(String, String)> {
     out
 }
 
+/// The feeds of an imported list that are not followed yet: addresses normalised (a bare host gets a scheme), titles
+/// kept, repeats and entries that are not addresses dropped.
+pub fn new_feeds(parsed: &[(String, String)], known: &[&str]) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for (url, title) in parsed {
+        let Some(url) = crate::feed::normalize(url) else { continue };
+        if known.contains(&url.as_str()) || out.iter().any(|(u, _)| *u == url) {
+            continue;
+        }
+        let title = if title.is_empty() { url.clone() } else { title.clone() };
+        out.push((url, title));
+    }
+    out
+}
+
 fn escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
@@ -45,6 +60,19 @@ mod tests {
         let text = write(&feeds);
         assert!(text.contains("&amp;y=2"));
         assert_eq!(parse(&text), feeds);
+    }
+
+    #[test]
+    fn only_new_feeds_are_imported() {
+        let parsed = vec![
+            ("https://a.test/rss".to_string(), "A".to_string()),
+            ("b.test/rss".to_string(), String::new()),
+            ("https://b.test/rss".to_string(), "B again".to_string()),
+            ("not a feed".to_string(), "Bad".to_string()),
+            ("https://c.test/rss".to_string(), "C".to_string()),
+        ];
+        let got = new_feeds(&parsed, &["https://c.test/rss"]);
+        assert_eq!(got, [("https://a.test/rss".to_string(), "A".to_string()), ("https://b.test/rss".to_string(), "https://b.test/rss".to_string())]);
     }
 
     #[test]
