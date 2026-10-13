@@ -53,6 +53,7 @@ pub mod kb_clicks;
 pub mod hwkeys;
 pub mod backup;
 pub mod backup_page;
+pub mod timemachine;
 pub mod md;
 pub mod sha256;
 pub mod share;
