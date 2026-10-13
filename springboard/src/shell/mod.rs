@@ -33,6 +33,7 @@ pub mod contactstore;
 pub mod books;
 pub mod cache;
 pub mod clipboard;
+mod services_route;
 pub mod chord;
 pub mod clock;
 pub mod control_center;
