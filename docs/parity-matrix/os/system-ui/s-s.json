@@ -18,11 +18,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/apps/assistant-desktop",
+   "status": "partial",
+   "note": "assistant app",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Screen Time.app",
@@ -39,11 +38,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/screentime/mod.rs",
+   "status": "partial",
+   "note": "Screen Time",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/ScreenSaverEngine.app",
@@ -60,11 +58,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/screensaver.rs",
+   "status": "partial",
+   "note": "screen saver",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Script Menu.app",
@@ -83,9 +80,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no script menu",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/ScriptMonitor.app",
@@ -104,9 +100,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/SettingsPlaceholder.app",
@@ -125,9 +120,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Setup Assistant.app",
@@ -146,9 +140,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no first-run setup assistant yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/ShortcutDroplet.app",
@@ -167,9 +160,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Shortcuts Events.app",
@@ -186,11 +178,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/apps/shortcuts-desktop",
+   "status": "partial",
+   "note": "Shortcuts app",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/ShortcutsActions.app",
@@ -207,11 +198,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/apps/shortcuts-desktop",
+   "status": "partial",
+   "note": "Shortcuts app",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Siri.app",
@@ -228,11 +218,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/apps/assistant-desktop",
+   "status": "partial",
+   "note": "assistant app",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Software Update.app",
@@ -249,11 +238,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/update.rs",
+   "status": "partial",
+   "note": "Software Update",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/SpacesTouchBarAgent.app",
@@ -271,10 +259,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Touch Bar",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Spotlight.app",
@@ -291,11 +278,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "status": "partial",
+   "note": "quick search",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/StageManagerOnboarding.app",
@@ -314,9 +300,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no stage manager",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/System Events.app",
@@ -335,9 +320,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/SystemIntents.app",
@@ -356,9 +340,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/SystemUIServer.app",
@@ -375,11 +358,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/desktop_bar.rs",
+   "status": "partial",
+   "note": "menu bar",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/screencaptureui.app",
@@ -396,11 +378,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/screenshot.rs",
+   "status": "partial",
+   "note": "screenshot UI",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SAMaintenance.appex",
@@ -418,10 +399,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Safari maintenance",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SafariBrowsingAssistantWorker.appex",
@@ -439,10 +419,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SafariSearchUploadWorker.appex",
@@ -460,10 +439,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SafariUsageRetentionExtension.appex",
@@ -481,10 +459,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Safari telemetry",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SearchPartnerInferenceProvider.appex",
@@ -502,10 +479,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SearchToolDiagnosticExtension.appex",
@@ -523,10 +499,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple search diagnostics",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SearchToolExtension.appex",
@@ -545,9 +520,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SearchUploadWorker.appex",
@@ -565,10 +539,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Shell.appex",
@@ -587,9 +560,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "internal shell extension",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SpeakerIdSamplingExtension.appex",
@@ -607,10 +579,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple speaker identification sampling",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/StartupDisk.appex",
@@ -628,10 +599,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple boot picker, PC uses the firmware boot menu",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/StartupDiskWidgetExtension.appex",
@@ -649,10 +619,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple boot picker, PC uses the firmware boot menu",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/StopwatchIntentsExtension.appex",
@@ -671,9 +640,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/SuggestedActionsRemoteUI.appex",
@@ -692,9 +660,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "suggested actions UI, no counterpart yet",
+   "rea": []
   }
  ]
 }

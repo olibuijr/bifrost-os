@@ -18,11 +18,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/passwords_page.rs",
+   "status": "partial",
+   "note": "passwords page, no separate passwords app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Phone.app",
@@ -40,10 +39,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple telephony",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Photo Booth.app",
@@ -60,11 +58,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/camera/mod.rs",
+   "status": "partial",
+   "note": "Camera (bifrost.camera), capture app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Photos.app",
@@ -81,11 +78,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/photos/mod.rs",
+   "status": "partial",
+   "note": "Photos (bifrost.photos) in the shell",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Podcasts.app",
@@ -104,9 +100,8 @@
    "doc": "",
    "bifrost": "springboard/apps/podcasts-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Podcasts app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Preview.app",
@@ -123,11 +118,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/apps/pdfcraft-desktop",
+   "status": "partial",
+   "note": "PDF viewing and editing; no image preview",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/QuickTime Player.app",
@@ -144,11 +138,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/video.rs",
+   "status": "partial",
+   "note": "video playback in the shell",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Reminders.app",
@@ -167,9 +160,8 @@
    "doc": "",
    "bifrost": "springboard/apps/reminders-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Reminders app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Print Center.app",
@@ -188,9 +180,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no print queue app; print_sheet.rs only",
+   "rea": []
   }
  ]
 }

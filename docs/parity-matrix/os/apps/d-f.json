@@ -20,9 +20,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "the Dictionary settings page exists, no dictionary app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/FaceTime.app",
@@ -40,10 +39,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple calling service",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/FindMy.app",
@@ -61,10 +59,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple device-location network",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Font Book.app",
@@ -81,11 +78,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Fonts settings page, no font manager app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Freeform.app",
@@ -104,9 +100,8 @@
    "doc": "",
    "bifrost": "springboard/apps/freeform-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Freeform app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Digital Color Meter.app",
@@ -125,9 +120,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no colour picker utility",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Disk Utility.app",
@@ -146,9 +140,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no disk utility app",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/DVD Player.app",
@@ -167,9 +160,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no optical media player",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Desk View.app",
@@ -187,10 +179,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple hardware camera view",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Directory Utility.app",
@@ -208,10 +199,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple directory service administration",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Expansion Slot Utility.app",
@@ -229,10 +219,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple hardware slot diagnostics",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Feedback Assistant.app",
@@ -250,10 +239,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple feedback service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Folder Actions Setup.app",
@@ -272,9 +260,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no folder action hooks",
+   "rea": []
   }
  ]
 }

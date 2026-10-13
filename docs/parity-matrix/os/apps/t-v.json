@@ -20,9 +20,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no TV app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/TextEdit.app",
@@ -41,9 +40,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no plain text editor app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Time Machine.app",
@@ -60,11 +58,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/backup_page.rs",
+   "status": "partial",
+   "note": "Backup page, the backup settings",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Tips.app",
@@ -83,9 +80,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no tips app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Terminal.app",
@@ -102,11 +98,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/terminal/mod.rs",
+   "status": "partial",
+   "note": "Term (is.olibuijr.term) terminal",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/VoiceOver Utility.app",
@@ -123,11 +118,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/accessibility/mod.rs",
+   "status": "partial",
+   "note": "accessibility tree and reader; no VoiceOver utility",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/VoiceMemos.app",
@@ -146,9 +140,8 @@
    "doc": "",
    "bifrost": "springboard/apps/voicememos-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Voice Memos app",
+   "rea": []
   }
  ]
 }

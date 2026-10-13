@@ -20,9 +20,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no mail app; defaultapps.rs names a mail handler only",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Maps.app",
@@ -41,9 +40,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no maps app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Messages.app",
@@ -62,9 +60,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no messages app; catalog id bifrost.messages only",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Mission Control.app",
@@ -81,11 +78,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/overview.rs",
+   "status": "partial",
+   "note": "Overview, the shell's window overview",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Music.app",
@@ -104,9 +100,8 @@
    "doc": "",
    "bifrost": "springboard/apps/music-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Music app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/News.app",
@@ -125,9 +120,8 @@
    "doc": "",
    "bifrost": "springboard/apps/news-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "News app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Notes.app",
@@ -146,9 +140,8 @@
    "doc": "",
    "bifrost": "springboard/apps/notes-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Notes app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Magnifier.app",
@@ -165,11 +158,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/magnifier.rs",
+   "status": "partial",
+   "note": "Magnifier (bifrost.magnifier) in the shell",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Migration Assistant.app",
@@ -188,9 +180,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no migration assistant",
+   "rea": []
   }
  ]
 }

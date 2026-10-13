@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Java runtime launcher, not shipped",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/KeyboardAccessAgent.app",
@@ -39,11 +38,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/keyboard.rs",
+   "status": "partial",
+   "note": "keyboard access",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/KeyboardSetupAssistant.app",
@@ -60,11 +58,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/kb_layouts.rs",
+   "status": "partial",
+   "note": "keyboard layouts",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Keychain Circle Notification.app",
@@ -82,10 +79,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple iCloud Keychain service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Language Chooser.app",
@@ -104,9 +100,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "installer language step only",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/liquiddetectiond.app",
@@ -124,10 +119,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple liquid detection hardware service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/loginwindow.app",
@@ -144,11 +138,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/login.rs",
+   "status": "partial",
+   "note": "login and lock",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LegacyPluginEnablement.appex",
@@ -167,9 +160,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no legacy plugin support",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Localization.appex",
@@ -186,11 +178,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Language & Region page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LockScreen.appex",
@@ -207,11 +198,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/login.rs",
+   "status": "partial",
+   "note": "lock screen",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/LockScreenIntentsExtension.appex",
@@ -230,9 +220,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   }
  ]
 }

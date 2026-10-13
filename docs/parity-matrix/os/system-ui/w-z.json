@@ -18,11 +18,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/wallpaper_page.rs",
+   "status": "partial",
+   "note": "wallpaper",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/WatchFaceAlert.app",
@@ -40,10 +39,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Watch service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/WiFiAgent.app",
@@ -60,11 +58,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/desktop_network.rs",
+   "status": "partial",
+   "note": "network status",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/WidgetKit Simulator.app",
@@ -82,10 +79,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple developer simulator",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/WidgetRenderer_Activities.app",
@@ -103,10 +99,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Activities widget",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/WindowManager.app",
@@ -123,11 +118,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/desk.rs",
+   "status": "partial",
+   "note": "window management on the desktop",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/WorkoutAlert-Mac.app",
@@ -145,10 +139,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Watch service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WebThumbnailExtension.appex",
@@ -167,9 +160,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Wi-Fi.appex",
@@ -186,11 +178,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/wifi_page.rs",
+   "status": "partial",
+   "note": "Wi-Fi page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Word of the Day.appex",
@@ -208,10 +199,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple Dictionary feature",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WorldClockIntentsExtension.appex",
@@ -230,9 +220,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WritingToolsAppIntentsExtension.appex",
@@ -251,9 +240,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ZeoliteEvalExtension.appex",
@@ -271,10 +259,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
   }
  ]
 }

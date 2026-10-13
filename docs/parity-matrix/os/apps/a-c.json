@@ -18,11 +18,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/store/mod.rs",
+   "status": "partial",
+   "note": "App Store (bifrost.appstore) in the shell",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Apps.app",
@@ -39,11 +38,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/appgrid.rs",
+   "status": "partial",
+   "note": "app grid, the launch surface for installed apps",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Automator.app",
@@ -62,9 +60,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no workflow builder",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Books.app",
@@ -83,9 +80,8 @@
    "doc": "",
    "bifrost": "springboard/apps/books-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Books app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Calculator.app",
@@ -104,9 +100,8 @@
    "doc": "",
    "bifrost": "springboard/apps/calculator-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Calculator app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Calendar.app",
@@ -125,9 +120,8 @@
    "doc": "",
    "bifrost": "springboard/apps/calendar-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Calendar app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Chess.app",
@@ -146,9 +140,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no chess app; games-desktop has other games",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Clock.app",
@@ -167,9 +160,8 @@
    "doc": "",
    "bifrost": "springboard/apps/clock-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Clock app, shell/clock holds alarms and timers",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Contacts.app",
@@ -188,9 +180,8 @@
    "doc": "",
    "bifrost": "springboard/apps/contacts-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Contacts app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Activity Monitor.app",
@@ -209,9 +200,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no process monitor app yet",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/AirPort Utility.app",
@@ -229,10 +219,9 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "status": "n/a",
+   "note": "Apple AirPort router administration",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Audio MIDI Setup.app",
@@ -249,11 +238,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/apps/audio-setup-desktop",
+   "status": "partial",
+   "note": "audio device setup app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Bluetooth File Exchange.app",
@@ -272,9 +260,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no Bluetooth file transfer app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/ColorSync Utility.app",
@@ -293,9 +280,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no colour profile utility",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Console.app",
@@ -314,9 +300,8 @@
    "doc": "",
    "bifrost": "springboard/apps/console-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Console app, unified log viewer",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/About This Mac.app",
@@ -333,11 +318,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "About page in the settings specs",
+   "rea": []
   },
   {
    "id": "path:/System/Library/CoreServices/Applications/Archive Utility.app",
@@ -356,9 +340,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "archives are handled by the files app only",
+   "rea": []
   }
  ]
 }

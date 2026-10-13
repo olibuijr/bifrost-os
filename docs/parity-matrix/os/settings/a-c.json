@@ -19,10 +19,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "About page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AboutSettingsIntents.appex",
@@ -39,11 +38,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AccessibilitySettingsExtension.appex",
@@ -61,10 +59,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "Accessibility page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AccessibilitySettingsSearchExtension.appex",
@@ -81,11 +78,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/settings_search.rs",
+   "status": "partial",
+   "note": "settings search index",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AccessibilitySettingsWidgetExtension.appex",
@@ -102,11 +98,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "accessibility widget, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AccountsUISettingsAppIntents.appex",
@@ -123,11 +118,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Appearance.appex",
@@ -146,9 +140,8 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Appearance page (Light, Dark, Auto)",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AppearanceIntentsExtension.appex",
@@ -165,11 +158,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AppleAccountIntents_macOS.appex",
@@ -186,11 +178,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Apple account intents, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/AppleIDSettings.appex",
@@ -207,11 +198,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/account.rs",
+   "status": "partial",
+   "note": "BifrOSt Account page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/BatterySettingsIntentsExtension.appex",
@@ -228,11 +218,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/BiometricsAndPasswordSettingsAppIntentsExtension.appex",
@@ -249,11 +238,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Bluetooth.appex",
@@ -272,9 +260,8 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Bluetooth page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/BluetoothSettingsAppIntentsWidgetExtension.appex",
@@ -291,11 +278,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/CDs & DVDs Settings Extension.appex",
@@ -312,11 +298,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no optical disc settings",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/CDsAndDvDsSettingsIntents.appex",
@@ -333,11 +318,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no optical disc settings",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ClassKitSettings.appex",
@@ -354,11 +338,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple classroom service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ClassroomSettings.appex",
@@ -375,11 +358,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple classroom service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ControlCenterSettings.appex",
@@ -397,10 +379,9 @@
    "role": "",
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "status": "partial",
+   "note": "Control Centre page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/ControlCenterSettingsIntents.appex",
@@ -417,11 +398,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "",
    "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/CoverageSettings.appex",
@@ -438,11 +418,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple AppleCare coverage",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Accounts.prefPane",
@@ -459,11 +438,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/account.rs",
+   "status": "partial",
+   "note": "BifrOSt Account sign-in and profile",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Appearance.prefPane",
@@ -482,9 +460,8 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Appearance page (Light, Dark, Auto)",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/AppleIDPrefPane.prefPane",
@@ -501,11 +478,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/account.rs",
+   "status": "partial",
+   "note": "BifrOSt Account page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Battery.prefPane",
@@ -524,9 +500,8 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Battery page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/Bluetooth.prefPane",
@@ -545,9 +520,8 @@
    "doc": "",
    "bifrost": "springboard/src/shell/pages.rs",
    "status": "partial",
-   "note": "heuristic: pane name appears in the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Bluetooth page",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/ClassKitPreferencePane.prefPane",
@@ -564,11 +538,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple classroom service",
+   "rea": []
   },
   {
    "id": "path:/System/Library/PreferencePanes/ClassroomSettings.prefPane",
@@ -585,11 +558,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
-   "status": "gap",
-   "note": "heuristic: candidate home is the settings specs",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple classroom service",
+   "rea": []
   }
  ]
 }

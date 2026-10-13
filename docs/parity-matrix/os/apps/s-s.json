@@ -20,9 +20,8 @@
    "doc": "",
    "bifrost": "springboard/apps/shortcuts-desktop",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Shortcuts app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Siri AI.app",
@@ -39,11 +38,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/apps/assistant-desktop",
+   "status": "partial",
+   "note": "assistant app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Stickies.app",
@@ -62,9 +60,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no sticky notes app yet",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Stocks.app",
@@ -83,9 +80,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no stocks app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/System Settings.app",
@@ -104,9 +100,8 @@
    "doc": "",
    "bifrost": "springboard/src/shell/settings.rs",
    "status": "partial",
-   "note": "heuristic: app with a matching name",
-   "rea": [],
-   "method": "heuristic"
+   "note": "Settings app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Screen Sharing.app",
@@ -123,11 +118,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/apps/remote",
+   "status": "partial",
+   "note": "remote desktop app",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Screenshot.app",
@@ -144,11 +138,10 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "bifrost": "springboard/src/shell/screenshot.rs",
+   "status": "partial",
+   "note": "screenshot tool in the shell",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/Script Editor.app",
@@ -167,9 +160,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no script editor",
+   "rea": []
   },
   {
    "id": "path:/System/Applications/Utilities/System Information.app",
@@ -188,9 +180,8 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "no counterpart yet",
-   "rea": [],
-   "method": "heuristic"
+   "note": "no system information app yet",
+   "rea": []
   }
  ]
 }
