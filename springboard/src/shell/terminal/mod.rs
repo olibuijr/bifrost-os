@@ -27,6 +27,7 @@ use std::{fs, path::PathBuf};
 
 pub mod layout;
 mod command;
+mod split;
 mod control;
 mod find;
 mod groups;

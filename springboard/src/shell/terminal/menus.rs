@@ -67,9 +67,8 @@ impl Shell {
         self.terminal_ui.pending_signal = None;
         self.terminal_ui.down = None;
         self.set_keyboard(self.terminal_ui.restore_keyboard, t);
-        let area = self.term_area();
+        self.resize_terminals();
         for term in self.term.iter_mut() {
-            term.resize(area);
             term.clear_find();
         }
         self.dirty = true;
@@ -140,10 +139,7 @@ impl Shell {
             }
             _ => {}
         }
-        let area = self.term_area();
-        for term in self.term.iter_mut() {
-            term.resize(area);
-        }
+        self.resize_terminals();
         self.dirty = true;
     }
     pub(super) fn terminal_menu_action(&mut self, i: usize, t: f64) {
@@ -226,6 +222,8 @@ impl Shell {
             }
             18 => self.terminal_toggle_secure(),
             19 => self.terminal_open_command(t),
+            20 => self.terminal_split(t),
+            21 => self.terminal_close_split(t),
             22 => self.terminal_save_group(),
             23 => self.terminal_open_group(t),
             // The first web link in the selection opens in the browser.

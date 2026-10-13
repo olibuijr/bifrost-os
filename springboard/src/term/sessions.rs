@@ -4,9 +4,26 @@ use super::Terminal;
 pub struct Sessions {
     items: Vec<Terminal>,
     active: usize,
+    /// two sessions split side by side (left, right); see `pair`
+    split: Option<(usize, usize)>,
     pub closed: termcore::tabs::ClosedTabs,
 }
 impl Sessions {
+    /// The split pair, whether or not it is on screen (its sessions are indexes into `iter`).
+    pub fn split(&self) -> Option<(usize, usize)> {
+        self.split
+    }
+
+    /// The split pair while the active session is one of its two: the pair is shown side by side.
+    pub fn pair(&self) -> Option<(usize, usize)> {
+        self.split.filter(|&(left, right)| self.active == left || self.active == right)
+    }
+
+    /// Sets or clears the split pair.
+    pub fn set_split(&mut self, pair: Option<(usize, usize)>) {
+        self.split = pair;
+    }
+
     pub fn as_ref(&self) -> Option<&Terminal> {
         self.items.get(self.active)
     }
@@ -58,6 +75,14 @@ impl Sessions {
         if let Some(dir) = self.items[i].cwd() {
             self.closed.push(dir);
         }
+        // a closed pane ends the pair; the other pane goes on alone, and later indexes move down by one
+        self.split = self.split.and_then(|(left, right)| {
+            if i == left || i == right {
+                None
+            } else {
+                Some((if left > i { left - 1 } else { left }, if right > i { right - 1 } else { right }))
+            }
+        });
         self.items.remove(i);
         if i <= self.active {
             self.active = self.active.saturating_sub(1);
@@ -67,6 +92,7 @@ impl Sessions {
     pub fn clear(&mut self) {
         self.items.clear();
         self.active = 0;
+        self.split = None;
     }
     /// Returns output/exit changes and how many shells exited.
     pub fn pump(&mut self) -> (bool, usize) {

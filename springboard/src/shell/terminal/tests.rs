@@ -393,6 +393,29 @@ fn window_group_saves_tab_folders_and_opens_them_as_tabs() {
 }
 
 #[test]
+fn split_pane_sits_beside_the_active_tab_and_a_tap_picks_the_pane() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(20, 2000.0);
+    assert_eq!(sh.term.len(), 2);
+    assert_eq!(sh.term.pair(), Some((0, 1)));
+    let left = sh.term.get(0).unwrap().area();
+    let right = sh.term.get(1).unwrap().area();
+    assert_eq!(left.1, right.1, "both panes start on the same row");
+    assert!(left.2 < sh.w && right.2 < sh.w && left.0 + left.2 < right.0, "side by side, with a gap");
+    sh.select_pane_at(10.0);
+    assert_eq!(sh.term.active_index(), 0);
+    sh.select_pane_at((sh.w - 10) as f32);
+    assert_eq!(sh.term.active_index(), 1, "a tap on the right half selects the right pane");
+    sh.terminal_menu_action(20, 2100.0);
+    assert_eq!(sh.term.len(), 2, "a second split is refused while one is open");
+    assert!(sh.terminal_ui.message.starts_with("Close the split pane first"));
+    sh.terminal_menu_action(21, 2200.0);
+    assert_eq!(sh.term.len(), 1, "closing the active pane leaves the other one");
+    assert_eq!(sh.term.split(), None);
+    assert_eq!(sh.term.get(0).unwrap().area(), sh.term_area(), "the last pane takes the whole area");
+}
+
+#[test]
 fn cursor_style_and_blink_persist_and_reload() {
     let mut sh = terminal(&["/bin/sh"]);
     assert_eq!(MENU[16], "Cursor style");

@@ -3835,8 +3835,7 @@ impl Shell {
             return;
         }
         self.keyboard.set_shown(shown, t);
-        let area = self.term_area();
-        for term in self.term.iter_mut() { term.resize(area); }
+        self.resize_terminals();
     }
 
     fn terminal_touch(&mut self, ev: Event, t: f64) {
@@ -3848,6 +3847,7 @@ impl Shell {
                 self.keyboard.down(x, y - top, t);
             }
             Event::Down(x, y) => {
+                self.select_pane_at(x);
                 if let Some(term) = self.term.as_mut() {
                     self.term_touch.down(&self.ui, term, x, y, t);
                 }
@@ -3916,12 +3916,11 @@ impl Shell {
         let bg = term::theme_background(self.terminal_ui.settings.theme);
         let (w, top, bottom) = (w as usize, top as usize, (top + h) as usize);
         s.fill_rect(0, 0, w, top, bg);
-        match self.term.as_mut() {
-            Some(term) => {
-                term.draw(s);
-                self.term_touch.draw(s, &self.ui);
-            }
-            None => s.fill_rect(0, top, w, bottom - top, bg),
+        if self.term.is_some() {
+            self.draw_panes(s);
+            self.term_touch.draw(s, &self.ui);
+        } else {
+            s.fill_rect(0, top, w, bottom - top, bg);
         }
         s.fill_rect(0, bottom, w, self.h as usize, bg);
         self.draw_terminal_chrome(s, t);
