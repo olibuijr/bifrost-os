@@ -1,8 +1,8 @@
 # Shell decomposition: updates without a shell restart (plan, 2026-10-11)
 
 Goal (owner): move as much as possible out of the `springboard` shell binary, so each component updates and reloads on its own
-without restarting the shell. Today the shell is about 113k lines in `src/shell` plus about 75k in `src/` (bare, media, files,
-deildu, gpu, net, term). A shell update restarts the whole session.
+without restarting the shell. Measured 2026-10-13 (shell 0.7.25): about 149k lines in `src/shell` plus about 74k elsewhere in `src/` (bare, media, files,
+deildu, gpu, net, term). It was 113k and 75k when this plan was written. A shell update restarts the whole session.
 
 ## What a restart costs today
 
@@ -21,14 +21,14 @@ deildu, gpu, net, term). A shell update restarts the whole session.
 
 ## Ownership
 
-- `bifrost-wm` (Sol's lane): `springboard/wm/**`, `bare/wayland.rs`, `gpu/wl.rs`, `packaging/arch/wayland/session`.
+- `bifrost-wm` (Sol's lane): `springboard/wm/**`, `bare/wayland.rs`, `gpu/wl.rs`, `packaging/arch/wayland/session` and `session-policy`.
   `wm/src/boot.rs` includes `src/bootsplash.rs` by path; do not move it without telling the wm owner.
 - This plan: everything else in `springboard/src`, `apps/`, `proto`, `sdk`.
 
 ## Phases
 
 0. **Survive a shell restart.**
-   - wm side: the bifrost-wm session supervisor restarts only the shell, and the compositor keeps outputs, lock and windows.
+   - wm side: the bifrost-wm session supervisor restarts only the shell, and the compositor keeps outputs, lock and windows. Today `session` restarts `bifrost-wm` itself (safe mode after three quick exits) but a shell exit still ends the session.
    - Shell side:
      - apps lose `--die-with-parent` and get a reaper or cgroup owner (`bifrost-apps` cgroup).
      - SDK apps reconnect to a named socket (the contract comes with the session).
@@ -49,8 +49,10 @@ deildu, gpu, net, term). A shell update restarts the whole session.
    system daemon under `bifrostd`. It covers prefs, `Info`, the `Effect` set, the dock model, appearance, default apps
    and login items. Then Settings (`docs/settings-system-app.md`), the App Store UI (installs stay privileged, through
    `updated`) and Terminal (its PTY sessions must leave the shell) move out.
-4. **Chrome as layer-shell clients**, after bifrost-wm ships `ext-background-effect-v1` (glass for any client),
-   foreign-toplevel and screencopy. Order: volume HUD, banners, screenshot and Markup, Search, Notification Center,
+4. **Chrome as layer-shell clients.** The prerequisites have shipped: `bifrost-wm` serves `ext-background-effect-v1`
+   and `bifrost_material_v1` (glass for any client), foreign-toplevel and screencopy. The `springboard/chrome` crate
+   (`menubar`, `dock`, `panels` clients, link `bifrost-chrome.sock`, shell side `src/shell/chrome_host/`) exists and starts
+   with `BIFROST_CHROME=1`; it is not the default yet (see `docs/desktop-chrome.md`). Order: volume HUD, banners, screenshot and Markup, Search, Notification Center,
    Today and widgets, Control Center, then dock, switcher and Overview, then the menu bar.
 5. **Stays in the shell:** the lock screen and passcode, and the open and save panel with the doc broker. These are
    security boundaries.
