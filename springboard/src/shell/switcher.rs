@@ -358,8 +358,20 @@ impl Shell {
         }
     }
 
+    /// The system ended the home swipe in progress without a release (the recognizer was cancelled): the app springs
+    /// back, nothing else happens. A touch that was never a swipe has no gesture to cancel.
+    pub fn cancel_home_gesture(&mut self, t: f64) {
+        if let Some(g) = self.home_gesture.take() {
+            self.finish_home_gesture_as(g, HomeOutcome::Cancel, t);
+        }
+    }
+
     fn finish_home_gesture(&mut self, g: HomeGesture, t: f64) {
         let outcome = g.release(t, self.ui.pt(MIN_LIFT_PT));
+        self.finish_home_gesture_as(g, outcome, t);
+    }
+
+    fn finish_home_gesture_as(&mut self, g: HomeGesture, outcome: HomeOutcome, t: f64) {
         let rect = self.gesture_rect(&g);
         match (self.screen, outcome) {
             (Screen::App(app), HomeOutcome::Home) => {
