@@ -122,7 +122,7 @@ pub mod share;
 pub use bifrost_ui::print;
 pub use bifrost_ui::{cups, ipp};
 pub mod print_panel;
-pub mod appkit_drawing;
+pub mod drawing_model;
 pub mod usb_printer;
 pub mod pasteboard;
 pub mod pasteboard_item;

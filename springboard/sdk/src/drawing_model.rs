@@ -1,4 +1,4 @@
-//! AppKit drawing and printing models: `NSBezierPath`, `NSGradient`, `NSShadow` and print pagination math.
+//! Drawing and printing models: `BezierPath`, `Gradient`, `Shadow` and print pagination math.
 //!
 //! Pure models over [`Path`](crate::graphics_context::Path) and [`PrintInfo`](crate::print::PrintInfo); colours are
 //! packed `u32` and interpolated per byte, so any channel order works. Nothing here touches the system.
@@ -26,7 +26,7 @@ pub enum WindingRule {
     EvenOdd,
 }
 
-/// `NSBezierPath`.
+/// `BezierPath`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BezierPath {
     path: Path,
@@ -131,7 +131,7 @@ impl BezierPath {
         self.close();
     }
     /// `appendArc(withCenter:radius:startAngle:endAngle:clockwise:)`, angles in degrees. Joins the current point with a
-    /// line, as AppKit does.
+    /// line, as the reference does.
     pub fn append_arc(&mut self, center: (f32, f32), radius: f32, start_deg: f32, end_deg: f32, clockwise: bool) {
         let (mut a0, mut a1) = (start_deg.to_radians(), end_deg.to_radians());
         let tau = std::f32::consts::TAU;
@@ -288,7 +288,7 @@ fn mix(a: u32, b: u32, t: f32) -> u32 {
     out
 }
 
-/// `NSGradient(colors:atLocations:)`. Locations are clamped to 0...1 and kept in order.
+/// `Gradient(colors:atLocations:)`. Locations are clamped to 0...1 and kept in order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Gradient {
     stops: Vec<(f32, u32)>,
@@ -365,7 +365,7 @@ impl Gradient {
     }
 }
 
-/// `NSShadow`.
+/// `Shadow`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShadowStyle {
     pub offset: (f32, f32),
@@ -384,7 +384,7 @@ impl ShadowStyle {
     }
 }
 
-/// Pagination math for `NSPrintInfo` with a scaling factor.
+/// Pagination math for `PrintInfo` with a scaling factor.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PageLayout {
     pub scaling: f32,

@@ -164,7 +164,7 @@ received, search filtered, and Edit Select All/Copy/Cut/Paste completed.
 Core/protocol/Files/shell focused tests passed. Captures live in
 `~/Pictures/tab/bifrost-ui-final.png` and `bifrost-ui-menu-verified.png`.
 
-## AppKit drawing and print layout (`bifrost_app::appkit_drawing`)
+## AppKit drawing and print layout (`bifrost_app::drawing_model`)
 
 `BezierPath` (NSBezierPath: move/line/curve, close, appendRect/Oval/RoundedRect/Arc, `bounds`, `contains` under
 `WindingRule` NonZero or EvenOdd, `set_line_dash`, `line_width`, cap and join styles, `fill`/`stroke`/`add_clip` on a
@@ -1803,7 +1803,7 @@ Apple's CoreSpotlight lets an app index its own content so system search finds i
 Tests: `bifrost_proto::spotlight` (wire round trip, packet bound), `bifrost_app::spotlight` (`Ctx::testing` + `take_sent`),
 `springboard::shell::spotindex` (ranking, replace, delete, bounds, disk round trip).
 
-Query side (`bifrost_ui::spotlight_query`, pure model, host-tested, not yet wired to the shell or `bifrost_app`):
+Query side (`bifrost_ui::quicksearch_query`, pure model, host-tested, not yet wired to the shell or `bifrost_app`):
 `SearchQuery::new(query_string, QueryContext{fetch_attributes, filter_queries, source_options})` with `start(items, now,
 found_items, completion)` (batches of 8, `cancel()` / `CancelHandle`, `found_item_count`); language `attr == "text"`
 (`!=`, `<` `>` `<=` `>=` for numbers and times), `*` wildcard, modifiers `c` `d` `w`, `&&` over `||`, parentheses,
