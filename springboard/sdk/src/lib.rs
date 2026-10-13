@@ -41,7 +41,6 @@ pub mod kit {
 }
 
 pub mod widgets;
-pub mod view_style;
 pub mod widgets_timeline;
 pub mod glyphs;
 pub mod dock_tile;

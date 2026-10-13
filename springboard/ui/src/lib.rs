@@ -788,6 +788,7 @@ pub mod layer_style;
 pub mod layer_tree;
 pub mod layer_layout;
 pub mod layer_render;
+pub mod layer_bridge;
 pub mod assetpack;
 pub mod assetmock;
 pub mod downloadqueue;
