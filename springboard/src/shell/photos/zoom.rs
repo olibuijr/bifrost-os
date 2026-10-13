@@ -67,13 +67,18 @@ pub fn zoom_to(target: f32, zoom: f32, pan: (f32, f32), focal: (f32, f32), view:
     clamp_pan((px, py), fit, target, view)
 }
 
-/// One animation step of an offset towards zero: exponential, snapping at
-/// under half a pixel.
-pub fn decay(v: f32, k: f32) -> f32 {
+/// The frame rate the snap-back was tuned at: a quarter of the stretch is given back each 1/60 s frame.
+const REFERENCE_FPS: f32 = 60.0;
+/// The share of a stretch given back per reference frame.
+const SNAP_PER_FRAME: f32 = 0.25;
+
+/// The snap-back of an offset towards zero over `dt_s` seconds: exponential in elapsed time, so it runs at the
+/// same speed at any frame rate and a late frame just advances it further. Snaps to zero under half a pixel.
+pub fn decay(v: f32, dt_s: f32) -> f32 {
     if v.abs() < 0.5 {
         0.0
     } else {
-        v * (1.0 - k.clamp(0.0, 1.0))
+        v * (1.0 - SNAP_PER_FRAME).powf(REFERENCE_FPS * dt_s.max(0.0))
     }
 }
 
@@ -143,15 +148,25 @@ mod tests {
 
     #[test]
     fn decay_snaps_to_zero() {
-        assert_eq!(decay(100.0, 0.5), 50.0);
-        assert_eq!(decay(0.4, 0.5), 0.0);
-        assert_eq!(decay(-100.0, 0.25), -75.0);
+        let frame = 1.0 / 60.0;
+        assert_eq!(decay(0.4, frame), 0.0);
+        assert!((decay(300.0, frame) - 225.0).abs() < 1e-3, "a quarter per reference frame");
+        assert!((decay(-300.0, frame) + 225.0).abs() < 1e-3);
+        assert_eq!(decay(300.0, 0.0), 300.0, "no time, no movement");
         let mut v = 300.0;
         let mut steps = 0;
         while v != 0.0 {
-            v = decay(v, 0.3);
+            v = decay(v, frame);
             steps += 1;
             assert!(steps < 100);
         }
+    }
+
+    #[test]
+    fn decay_is_independent_of_the_frame_rate() {
+        // two half-frames land where one full frame does
+        let full = decay(200.0, 1.0 / 60.0);
+        let halves = decay(decay(200.0, 1.0 / 120.0), 1.0 / 120.0);
+        assert!((full - halves).abs() < 1e-3);
     }
 }

@@ -34,6 +34,8 @@ pub mod kit {
     pub use bifrost_render::pixel_layout;
     pub use springboard::shell::list;
     pub use bifrost_render::appearance;
+    /// The shared motion contract: durations per kind of animation (0 under Reduce Motion) and the curves.
+    pub use bifrost_render::motion;
     pub use bifrost_render::ui::{self, Ui, Weight};
     /// the native toolkit-named semantic colours (`NativeColor.labelColor` etc.) as dynamic `Pair`s.
     pub use bifrost_render::ui::system as colors;

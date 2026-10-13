@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.2 — 2026-10-13
+
+- The Now Playing sheet slides on the shared `PanelReveal` motion from the SDK kit (`bifrost_app::kit::motion`), so it follows
+  the system durations and snaps under Reduce Motion.
+
 ## 1.6.1 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

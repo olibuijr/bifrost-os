@@ -35,6 +35,7 @@ use playlists::Playlists;
 use springboard::deildu::art::{self, Cache};
 use bifrost_app::controls::prefs_layout::m;
 use bifrost_app::dispatch::Qos;
+use bifrost_app::kit::motion;
 use jobs::Jobs;
 use springboard::deildu::scroll::Scroller;
 use springboard::gfx::{pack, rrect_mask, scale, Image, Surface};
@@ -93,9 +94,14 @@ const GRID_LABEL_PT: f32 = 44.0;
 const ALBUM_HEADER_PT: f32 = 236.0;
 const ALBUM_COVER_PT: f32 = 180.0;
 const BUTTON_H_PT: f32 = 44.0;
-const SHEET_MS: f64 = 350.0;
 /// text images kept before the cache is emptied
 const TEXT_CACHE_MAX: usize = 800;
+
+/// The Now Playing sheet's slide from its open or close time (ms on the app clock): `PanelReveal`, which snaps
+/// under Reduce Motion.
+fn sheet_slide(start_ms: f64) -> motion::Anim {
+    motion::Anim::new(0.0, 1.0, start_ms / 1000.0, motion::Kind::PanelReveal)
+}
 /// artwork kinds: list thumbnail, grid cell, the Now Playing picture
 pub const THUMB: u8 = 0;
 pub const CELL_ART: u8 = 1;
@@ -1086,10 +1092,10 @@ impl Music {
         self.dirty = true;
     }
 
-    /// 0 = sheet away, 1 = sheet shown.
+    /// 0 = sheet away, 1 = sheet shown. The slide runs on the shared `PanelReveal` motion (instant under Reduce Motion).
     fn sheet_progress(&self, t: f64) -> f32 {
         match self.np_anim {
-            Some((from, to, start)) => from + (to - from) * springboard::shell::gestures::ease_out_quartic(springboard::shell::gestures::progress(start, t, SHEET_MS)),
+            Some((from, to, start)) => from + (to - from) * sheet_slide(start).value(t / 1000.0),
             None => self.np as u8 as f32,
         }
     }
@@ -1536,7 +1542,7 @@ impl Music {
         }
         if let Some((_, to, start)) = self.np_anim {
             moving = true;
-            if springboard::shell::gestures::progress(start, t, SHEET_MS) >= 1.0 {
+            if sheet_slide(start).done(t / 1000.0) {
                 self.np_anim = None;
                 self.np = to >= 1.0;
             }

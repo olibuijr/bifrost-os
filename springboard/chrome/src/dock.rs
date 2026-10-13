@@ -700,7 +700,8 @@ pub fn run() -> Result<(), String> {
         let target = if state.pointer.is_some() { 1.0 } else { 0.0 };
         let dt = now - last;
         last = now;
-        let next = approach(state.amount, target, dt);
+        // Reduce Motion (a zero DockMagnify duration) snaps to the target instead of easing
+        let next = if motion::duration(Kind::DockMagnify) <= 0.0 { target } else { approach(state.amount, target, dt) };
         if (next - state.amount).abs() > 1e-4 {
             state.amount = next;
             dirty = true;
