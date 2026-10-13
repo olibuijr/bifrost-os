@@ -70,7 +70,8 @@ impl Calendar {
             _ => self.range_label(),
         };
         let days = range_days(self.view, self.selected, self.week_start());
-        let text = agenda_text(&title, &days, &self.events);
+        let shown: Vec<CalendarEvent> = self.shown_events().cloned().collect();
+        let text = agenda_text(&title, &days, &shown);
         (format!("Calendar {title}"), text)
     }
 }

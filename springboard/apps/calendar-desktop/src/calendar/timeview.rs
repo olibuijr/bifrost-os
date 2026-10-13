@@ -14,7 +14,6 @@ use springboard::shell::clock::tz;
 use springboard::shell::ui::{Ui, Weight, WHITE};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, SEPARATOR_C};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CALLOUT_PT, MAC_TITLE3_PT};
-use super::chrome::cal_colour;
 
 pub(super) const GRID0: f32 = 192.0;
 /// Week view: the weekday names, the day badge and the day number (points below the top).
@@ -135,11 +134,8 @@ impl Calendar {
         let mut out = vec![];
         for (i, d) in self.view_days().iter().enumerate() {
             let x0 = gut + col_w * i as f32;
-            let (all, timed): (Vec<&CalendarEvent>, Vec<&CalendarEvent>) = self
-                .events
-                .iter()
-                .filter(|e| e.occurs_on(*d))
-                .partition(|e| e.all_day);
+            let (all, timed): (Vec<&CalendarEvent>, Vec<&CalendarEvent>) =
+                self.shown_events().filter(|e| e.occurs_on(*d)).partition(|e| e.all_day);
             let spans: Vec<(u32, u32)> = all.iter().map(|_| (0, 1)).collect();
             for (e, slot) in all.iter().zip(layout::layout(&spans, 1)) {
                 let (x, w) = layout::slot_x(slot, x0, col_w, ui.pt(SPACE_XXS));
@@ -266,8 +262,7 @@ impl Calendar {
                 }
             }
             let by_id: Vec<(u64, String, u16, bool)> = self
-                .events
-                .iter()
+                .shown_events()
                 .map(|e| (e.id, e.title.clone(), e.minute, e.all_day))
                 .collect();
             // the event being moved is drawn at the pointer instead
@@ -283,7 +278,7 @@ impl Calendar {
                     continue;
                 };
                 g.fill_rrect(x, y, rw, rh, ui.pt(SPACE_XS), FIELD_BG.now());
-                g.fill_rrect(x, y, ui.pt(SPACE_XS), rh, ui.pt(SPACE_XS) / 2.0, cal_colour());
+                g.fill_rrect(x, y, ui.pt(SPACE_XS), rh, ui.pt(SPACE_XS) / 2.0, self.event_colour(id));
                 let text_w = rw - ui.pt(SPACE_M);
                 if text_w > ui.pt(SPACE_L) && rh >= ui.pt(SPACE_L) {
                     let fit = ui.fit(title, MAC_CAPTION1_PT, text_w);

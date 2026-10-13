@@ -1424,3 +1424,179 @@ fn print_sends_the_agenda_of_what_the_window_shows() {
     c.activate(&ui, Target::Add, 0.0);
     assert!(!c.enabled(Command::Print), "not while the event form is open");
 }
+
+/// Window points inside the calendar list's row `id`.
+fn layer_point(c: &Calendar, ui: &Ui, id: u32) -> (f32, f32) {
+    for y in 0..800 {
+        if c.layer_at(ui, ui.pt(50.0), ui.pt(y as f32)) == Some(id) {
+            return (50.0, y as f32);
+        }
+    }
+    panic!("no row {id} in the calendar list");
+}
+
+fn team_calendar_text() -> String {
+    let standup = ics::IcsEvent::new("standup@team", "Team standup", ics::Local::new(date(2026, 10, 6), 540), ics::Local::new(date(2026, 10, 6), 570));
+    ics::write(&ics::IcsCalendar { name: "Team".into(), events: vec![standup], timezones: vec![] }, "20261004T000000Z")
+}
+
+#[test]
+fn the_holidays_are_a_read_only_calendar_the_list_switches_on_and_off() {
+    use overlay::{LAYER_HOLIDAYS, LAYER_LOCAL};
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    assert!(!c.prefs.show_holidays);
+    assert_eq!(c.shown_events().count(), 1, "only the saved event");
+
+    let (x, y) = layer_point(&c, &ui, LAYER_HOLIDAYS);
+    tap(&mut c, &ui, x, y, 0.0);
+    assert!(c.prefs.show_holidays);
+    assert_eq!(c.shown_events().count(), 1 + 3 * holidays::iceland(2026).len(), "three years of holidays");
+    // Good Friday 2026 is in its day cell, and the saved events were not touched
+    c.selected = date(2026, 4, 1);
+    c.sync_overlay();
+    let (cell, _) = c.cell_events(&ui, date(2026, 4, 3));
+    let good_friday = cell.iter().find(|e| e.title == "Good Friday").expect("Good Friday in its cell");
+    assert!(overlay::is_overlay(good_friday.id) && good_friday.all_day);
+    let id = good_friday.id;
+    assert_eq!(c.events.len(), 1);
+    // a tap on it says what it is, and does not open the editor
+    c.activate(&ui, Target::Row(id), 1.0);
+    assert!(c.editor.is_none());
+    assert_eq!(c.notice.as_deref(), Some("Good Friday (Holidays)"));
+    assert_ne!(c.event_colour(id), c.event_colour(1), "its own colour");
+    // the setting is kept
+    assert!(new(&ui, temp.file()).prefs.show_holidays);
+
+    // the Calendar row hides the saved events without deleting them
+    let (x, y) = layer_point(&c, &ui, LAYER_LOCAL);
+    c.selected = date(2026, 10, 4);
+    tap(&mut c, &ui, x, y, 10.0);
+    assert!(!c.prefs.show_local);
+    assert!(c.shown_events().all(|e| overlay::is_overlay(e.id)));
+    assert_eq!(c.events.len(), 1);
+    tap(&mut c, &ui, x, y, 20.0);
+    assert!(c.shown_events().any(|e| e.id == 1));
+    // and the Holidays row turns the holidays off again
+    let (x, y) = layer_point(&c, &ui, LAYER_HOLIDAYS);
+    tap(&mut c, &ui, x, y, 30.0);
+    assert_eq!(c.shown_events().count(), 1);
+}
+
+#[test]
+fn read_only_events_show_in_the_week_and_cannot_be_dragged() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = week_calendar(&ui, temp.file());
+    c.toggle_layer(overlay::LAYER_HOLIDAYS);
+    c.selected = date(2026, 4, 1);
+    c.sync_overlay();
+    let rects = c.time_rects(&ui);
+    assert!(rects.iter().any(|r| overlay::is_overlay(r.0)), "an Easter day is in that week");
+    // pressing on its band in the all-day row starts no drag, and a tap says what it is
+    c.scroll.jump_top();
+    let (_, x, y, w, h) = *c.time_rects(&ui).iter().find(|r| overlay::is_overlay(r.0)).unwrap();
+    let (px, py) = (c.x0 + x + w / 2.0, y + h / 2.0);
+    c.touch(&ui, Event::Down(px, py), 0.0);
+    assert!(c.press.is_none() && c.drag.is_none());
+    c.touch(&ui, Event::Up(px, py), 10.0);
+    assert!(c.editor.is_none());
+    assert!(c.notice.as_deref().is_some_and(|n| n.ends_with("(Holidays)")), "{:?}", c.notice);
+}
+
+#[test]
+fn subscribing_adds_a_calendar_that_is_read_on_a_schedule() {
+    use overlay::LAYER_SUBS;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.subscribe("hello").is_err());
+    assert_eq!(c.subscribe("webcal://cal.example.is/team.ics"), Ok("cal.example.is".to_string()));
+    assert!(c.subscribe("https://cal.example.is/team.ics").is_err(), "the same calendar twice");
+    assert_eq!(c.subscription_names(), vec!["cal.example.is".to_string()]);
+    let url = "https://cal.example.is/team.ics".to_string();
+    // it is due at once, then again an hour later
+    assert_eq!(c.next_fetch(10.0), Some(url.clone()));
+    assert_eq!(c.next_fetch(20.0), None);
+    assert_eq!(c.fetch_wake(), Some(10.0 + subscribe::EVERY_MS));
+    assert_eq!(c.next_fetch(10.0 + subscribe::EVERY_MS), Some(url.clone()));
+
+    // the calendar answers: it names itself and its events appear, read-only
+    c.fetch_finished(&url, Ok(team_calendar_text()));
+    assert_eq!(c.subscription_names(), vec!["Team".to_string()]);
+    c.selected = date(2026, 10, 6);
+    c.sync_overlay();
+    let events: Vec<(String, u16)> = c.shown_events().map(|e| (e.title.clone(), e.minute)).collect();
+    assert_eq!(events, vec![("Team standup".to_string(), 540)]);
+    let id = c.shown_events().next().unwrap().id;
+    assert_eq!(overlay::slot_of(id), 1);
+    c.activate(&ui, Target::Row(id), 0.0);
+    assert_eq!(c.notice.as_deref(), Some("Team standup (Team)"));
+    assert!(c.editor.is_none());
+
+    // kept after a restart, from the cached answer
+    let mut again = new(&ui, temp.file());
+    assert_eq!(again.subscription_names(), vec!["Team".to_string()]);
+    again.selected = date(2026, 10, 6);
+    again.sync_overlay();
+    assert_eq!(again.shown_events().count(), 1);
+
+    // a failed or foreign answer is reported and the calendar stays as it was
+    c.fetch_finished(&url, Err("the server answered 500".into()));
+    assert_eq!(c.error.as_deref(), Some("Could not update Team: the server answered 500"));
+    c.fetch_finished(&url, Ok("<html>Not found</html>".into()));
+    assert_eq!(c.error.as_deref(), Some("Could not update Team: it is not a calendar"));
+    c.sync_overlay();
+    assert_eq!(c.shown_events().count(), 1);
+    c.fetch_finished("https://other.example.is/x.ics", Ok(team_calendar_text()));
+    assert_eq!(c.subscription_names().len(), 1, "an answer for a calendar that is not subscribed to is ignored");
+
+    // the list hides it, and unsubscribing removes it and its cached answer
+    let (x, y) = layer_point(&c, &ui, LAYER_SUBS);
+    tap(&mut c, &ui, x, y, 100.0);
+    assert_eq!(c.shown_events().count(), 0);
+    tap(&mut c, &ui, x, y, 200.0);
+    assert_eq!(c.shown_events().count(), 1);
+    assert!(!c.unsubscribe(5));
+    assert!(c.unsubscribe(0));
+    assert!(c.subscription_names().is_empty());
+    assert_eq!(c.shown_events().count(), 0);
+    assert!(!subscribe::cache_path(&temp.file(), &url).exists());
+    assert!(new(&ui, temp.file()).subscription_names().is_empty(), "the list is saved");
+}
+
+#[test]
+fn the_fetcher_wakes_for_the_next_read() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    let fetcher = subscribe::Fetcher::default();
+    assert_eq!(fetcher.wake(&c, 5.0), None, "nothing to read");
+    c.subscribe("https://cal.example.is/team.ics").unwrap();
+    assert_eq!(fetcher.wake(&c, 5.0), Some(0.0), "never read, so due now");
+}
+
+#[test]
+fn holidays_and_subscribed_events_draw_in_every_view() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    c.toggle_layer(overlay::LAYER_HOLIDAYS);
+    c.subscribe("https://cal.example.is/team.ics").unwrap();
+    let url = "https://cal.example.is/team.ics";
+    c.fetch_finished(url, Ok(team_calendar_text()));
+    c.selected = date(2026, 4, 3);
+    for view in [View::Month, View::Week, View::Day, View::Year] {
+        c.activate(&ui, Target::View(view), 0.0);
+        draw_once(&mut c, &ui);
+    }
+    c.selected = date(2026, 10, 6);
+    for view in [View::Month, View::Week, View::Day] {
+        c.activate(&ui, Target::View(view), 0.0);
+        draw_once(&mut c, &ui);
+    }
+    // the printed agenda lists them too
+    assert!(c.print_job().1.contains("Team standup"));
+}

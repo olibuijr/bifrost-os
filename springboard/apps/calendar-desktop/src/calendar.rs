@@ -9,17 +9,20 @@ mod drag;
 pub mod exchange;
 mod lookup;
 mod goto;
+pub mod holidays;
 pub mod ics;
 pub mod intents;
 pub mod invitees;
 pub mod layout;
 pub mod notes;
+pub mod overlay;
 pub mod prefs;
 pub mod printing;
 pub mod quick;
 pub mod recur;
 pub mod search;
 pub use springboard::shell::calendar::{store, Date};
+pub mod subscribe;
 pub mod timeview;
 
 use bifrost_app::layout::top_inset;
@@ -146,6 +149,8 @@ enum Target {
     SearchField,
     SearchClear,
     SearchHit(usize),
+    /// A row of the calendar list: shows or hides that calendar (`overlay.rs`).
+    Layer(u32),
 }
 
 /// Which of the Starts / Ends rows has its picker expanded.
@@ -192,6 +197,12 @@ pub struct Calendar {
     search_hits: Vec<search::Hit>,
     /// The event last opened or saved: what Copy and Cut act on while it is on the shown day (`clip.rs`).
     picked: Option<u64>,
+    /// Read-only events of the holidays and the subscribed calendars for the years around the shown one
+    /// (`overlay.rs`), the year and `overlay_version` they were worked out for, and the subscriptions themselves.
+    overlay: Vec<CalendarEvent>,
+    overlay_for: Option<(i64, u64)>,
+    overlay_version: u64,
+    subs: Vec<subscribe::Subscription>,
     /// Title, Location, Notes.
     fields: [TextField; 3],
     labels: TextCache,
@@ -259,6 +270,7 @@ impl Calendar {
                 f
             });
         let prefs = prefs::Prefs::load(&path);
+        let subs = subscribe::load(&path);
         let mut c = Self {
             w,
             x0: 0.0,
@@ -289,6 +301,10 @@ impl Calendar {
             search_focused: false,
             search_hits: vec![],
             picked: None,
+            overlay: vec![],
+            overlay_for: None,
+            overlay_version: 0,
+            subs,
             fields,
             labels: TextCache::default(),
             scroll: Scroller::new(),
@@ -344,10 +360,7 @@ impl Calendar {
     }
 
     fn agenda(&self) -> Vec<&CalendarEvent> {
-        self.events
-            .iter()
-            .filter(|e| e.occurs_on(self.selected))
-            .collect()
+        self.shown_events().filter(|e| e.occurs_on(self.selected)).collect()
     }
     fn bottom(&self, ui: &Ui) -> f32 {
         self.h as f32 - home_zone(ui)
@@ -465,7 +478,7 @@ impl Calendar {
     fn cell_events(&self, ui: &Ui, date: Date) -> (Vec<&CalendarEvent>, usize) {
         let (.., rh) = self.grid_geom(ui);
         let room = ((rh - ui.pt(CELL_HEAD)) / ui.pt(CELL_LINE)).floor().max(0.0) as usize;
-        let all: Vec<&CalendarEvent> = self.events.iter().filter(|e| e.occurs_on(date)).collect();
+        let all: Vec<&CalendarEvent> = self.shown_events().filter(|e| e.occurs_on(date)).collect();
         if all.len() <= room {
             return (all, 0);
         }
@@ -484,6 +497,10 @@ impl Calendar {
         }
         if let Some(t) = self.bar_target(ui, x + self.x0, y) {
             return Some(t);
+        }
+        // the calendar list is left of the content column
+        if x < 0.0 {
+            return self.layer_at(ui, x + self.x0, y).map(Target::Layer);
         }
         if self.editor.is_none() && self.undo.is_some() && within(x, y, self.undo_rect(ui)) {
             return Some(Target::UndoDelete);
@@ -874,7 +891,9 @@ impl Calendar {
                 self.scroll.jump_top();
             }
             Target::Add => self.open(ui, None),
+            Target::Row(id) if overlay::is_overlay(id) => self.explain_overlay(id),
             Target::Row(id) => self.open(ui, Some(id)),
+            Target::Layer(id) => self.toggle_layer(id),
             Target::Cancel => {
                 self.goto = None;
                 self.close();
@@ -955,10 +974,12 @@ impl Calendar {
                 self.layout_columns(ui);
             }
         }
+        self.sync_overlay();
         self.fit_scroll(ui);
     }
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
+        self.sync_overlay();
         if self.goto.is_some() {
             // Return accepts the date; the arrow keys step it by a day (Left, Right) or a week (Up, Down)
             let step = match out {
@@ -1170,6 +1191,7 @@ impl Calendar {
             self.text_style = (ui.text_scale, ui.bold);
         }
         self.layout_columns(ui);
+        self.sync_overlay();
         self.background(s);
         {
             let mut c = self.column(s);
@@ -1231,11 +1253,11 @@ impl Calendar {
                     self.right(s, ui, &number, if in_month { LABEL.now() } else { LABEL_3.now() }, nx, ny);
                 }
                 let (events, more) = self.cell_events(ui, date);
-                let lines: Vec<String> = events.iter().map(|e| e.title.clone()).collect();
-                for (k, title) in lines.iter().enumerate() {
+                let lines: Vec<(String, u32)> = events.iter().map(|e| (e.title.clone(), self.event_colour(e.id))).collect();
+                for (k, (title, colour)) in lines.iter().enumerate() {
                     let ly = y + ui.pt(CELL_HEAD + CELL_LINE * (k as f32 + 0.5));
                     let d = ui.pt(SPACE_S - 2.0);
-                    s.fill_rrect(x + ui.pt(SPACE_S), ly - d / 2.0, d, d, d / 2.0, chrome::cal_colour());
+                    s.fill_rrect(x + ui.pt(SPACE_S), ly - d / 2.0, d, d, d / 2.0, *colour);
                     let fit = ui.fit(title, MAC_SUBHEAD_PT, cell - ui.pt(SPACE_XL + SPACE_XS));
                     self.text(s, ui, &fit, MAC_SUBHEAD_PT, if in_month { LABEL.now() } else { LABEL_2.now() }, x + ui.pt(SPACE_L), ly);
                 }
@@ -1442,10 +1464,12 @@ pub enum Command {
     Search,
     /// File > Print...: the app sends `Calendar::print_job` to the printing service.
     Print,
+    /// File > Subscribe to Calendar from Clipboard: the address on the pasteboard becomes a read-only calendar.
+    Subscribe,
 }
 
 impl Command {
-    pub const ALL: [Command; 24] = [
+    pub const ALL: [Command; 25] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1470,6 +1494,7 @@ impl Command {
         Command::ImportArchive,
         Command::Search,
         Command::Print,
+        Command::Subscribe,
     ];
 
     pub fn id(self) -> u32 {
@@ -1506,6 +1531,7 @@ impl Command {
             Command::ImportArchive => "Import Archive...",
             Command::Search => "Search Events",
             Command::Print => "Print...",
+            Command::Subscribe => "Subscribe to Calendar from Clipboard",
         }
     }
 
@@ -1600,7 +1626,7 @@ impl Calendar {
             Command::GoToDate => Target::GoOpen,
             Command::Search => Target::SearchField,
             // the app shows the panels and passes the file's text to `import_file` / reads `archive_text`
-            Command::ZoomIn | Command::ZoomOut | Command::Import | Command::ExportArchive | Command::ImportArchive | Command::Print => return false,
+            Command::ZoomIn | Command::ZoomOut | Command::Import | Command::ExportArchive | Command::ImportArchive | Command::Print | Command::Subscribe => return false,
         };
         self.activate(ui, target, t);
         true

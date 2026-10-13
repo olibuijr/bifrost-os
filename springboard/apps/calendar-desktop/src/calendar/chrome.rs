@@ -304,11 +304,29 @@ impl Calendar {
     }
 
 
-    /// The calendar list: the one local calendar with its colour (`NativeOutlineView` source list).
+    /// The calendar list (`NativeOutlineView` source list): the saved events, then the holidays and the subscribed
+    /// calendars. A row's dot is its colour while the calendar is shown and grey while it is hidden; a click flips it.
     fn sidebar(&self) -> SourceList {
-        let mut list = SourceList::new(vec![SidebarItem::header("On My Computer"), SidebarItem::row(1, "Calendar").with_symbol("calendar")], 32.0, 30.0);
-        list.set_selected(Some(1));
-        list
+        let dot = |shown: bool, colour: u32| if shown { colour } else { LABEL_3.now() };
+        let mut items = vec![
+            SidebarItem::header("On My Computer"),
+            SidebarItem::row(overlay::LAYER_LOCAL, "Calendar").with_dot(dot(self.prefs.show_local, cal_colour())),
+            SidebarItem::header("Other"),
+            SidebarItem::row(overlay::LAYER_HOLIDAYS, "Holidays").with_dot(dot(self.prefs.show_holidays, overlay::colour(0))),
+        ];
+        for (i, s) in self.subs.iter().enumerate() {
+            items.push(SidebarItem::row(overlay::LAYER_SUBS + i as u32, &s.name).with_dot(dot(s.shown, overlay::colour(i + 1))));
+        }
+        SourceList::new(items, 32.0, 30.0)
+    }
+
+    /// The row of the calendar list under window pixel `(x, y)`.
+    pub(super) fn layer_at(&self, ui: &Ui, x: f32, y: f32) -> Option<u32> {
+        if self.x0 <= 0.0 {
+            return None;
+        }
+        let k = Self::k(ui);
+        self.sidebar().hit(Rect { x: 0.0, y: 0.0, w: self.x0 / k, h: self.h as f32 / k }, SIDE_SCROLL, x / k, y / k)
     }
 
     /// The large title on the header row: the month in bold and the year (Golden Gate Calendar), or the shown range.

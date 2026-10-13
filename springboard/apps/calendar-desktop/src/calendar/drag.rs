@@ -191,7 +191,11 @@ impl Calendar {
         let y = layout::minute_y(d.span.start as f32, hours_top, hh);
         let h = ((d.span.end - d.span.start) as f32 / 60.0 * hh - ui.pt(1.0)).max(ui.pt(SPACE_L));
         g.fill_rrect(x, y, w, h, ui.pt(SPACE_XS), FIELD_BG.now());
-        g.fill_rrect(x, y, ui.pt(SPACE_XS), h, ui.pt(SPACE_XS) / 2.0, chrome::cal_colour());
+        let accent = match d.kind {
+            Kind::Move { id, .. } => self.event_colour(id),
+            Kind::Create { .. } => chrome::cal_colour(),
+        };
+        g.fill_rrect(x, y, ui.pt(SPACE_XS), h, ui.pt(SPACE_XS) / 2.0, accent);
         let title = match d.kind {
             Kind::Move { id, .. } => self.events.iter().find(|e| e.id == id).map(|e| e.title.clone()),
             Kind::Create { .. } => None,

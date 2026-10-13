@@ -28,11 +28,15 @@ pub struct Prefs {
     /// `CalendarEvent::alert` given to a new timed event, and to a new all-day event.
     pub alert: u8,
     pub alert_all_day: u8,
+    /// The saved events are shown (the Calendar row of the calendar list).
+    pub show_local: bool,
+    /// The bundled holidays are shown (the Holidays row).
+    pub show_holidays: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { week_numbers: false, hour_h: HOUR_H_DEFAULT, monday_first: false, duration: 60, day_start: 8, alert: 0, alert_all_day: 0 }
+        Prefs { week_numbers: false, hour_h: HOUR_H_DEFAULT, monday_first: false, duration: 60, day_start: 8, alert: 0, alert_all_day: 0, show_local: true, show_holidays: false }
     }
 }
 
@@ -123,6 +127,8 @@ impl Prefs {
             match key {
                 "week_numbers" => p.week_numbers = value == "1",
                 "monday_first" => p.monday_first = value == "1",
+                "show_local" => p.show_local = value != "0",
+                "show_holidays" => p.show_holidays = value == "1",
                 "hour_h" => {
                     if let Ok(v) = value.parse::<f32>() {
                         if v.is_finite() {
@@ -162,14 +168,16 @@ impl Prefs {
 
     pub fn to_text(&self) -> String {
         format!(
-            "week_numbers={}\nmonday_first={}\nhour_h={}\nduration={}\nday_start={}\nalert={}\nalert_all_day={}\n",
+            "week_numbers={}\nmonday_first={}\nhour_h={}\nduration={}\nday_start={}\nalert={}\nalert_all_day={}\nshow_local={}\nshow_holidays={}\n",
             u8::from(self.week_numbers),
             u8::from(self.monday_first),
             self.hour_h,
             self.duration,
             self.day_start,
             self.alert,
-            self.alert_all_day
+            self.alert_all_day,
+            u8::from(self.show_local),
+            u8::from(self.show_holidays)
         )
     }
 
@@ -228,8 +236,11 @@ mod tests {
 
     #[test]
     fn settings_round_trip() {
-        let p = Prefs { week_numbers: true, hour_h: 72.0, monday_first: true, duration: 90, day_start: 7, alert: 3, alert_all_day: 6 };
+        let p = Prefs { week_numbers: true, hour_h: 72.0, monday_first: true, duration: 90, day_start: 7, alert: 3, alert_all_day: 6, show_local: false, show_holidays: true };
         assert_eq!(Prefs::parse(&p.to_text()), p);
+        // the saved events are shown unless the file says otherwise; the holidays only when it says so
+        let fresh = Prefs::parse("");
+        assert!(fresh.show_local && !fresh.show_holidays);
     }
 
     #[test]

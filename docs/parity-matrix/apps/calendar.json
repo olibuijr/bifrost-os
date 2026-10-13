@@ -148,10 +148,10 @@
    "feature": "Multiple calendars with colours: new, rename, delete, show/hide",
    "area": "menu",
    "apple": "File > New Calendar, New Calendar Group; LocalCalendarInspector.nib; Get Info",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Sidebar shows one fixed 'Calendar' row (calendar/chrome.rs:270)",
-   "wire": "Add a calendar id + colour to events (rich sidecar or store column), list calendars in the SourceList with show/hide checkboxes, File > New Calendar, a Get Info inspector for name/colour, and a calendar popup in the editor; tint events by calendar in draw_month/draw_time."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/overlay.rs:137",
+   "note": "The calendar list shows the saved events, the holidays and each subscription with a colour dot and a click shows or hides it; no new, rename or delete of local calendars; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Give saved events a calendar id and colour (store column or sidecar), add File > New Calendar, rename and delete, a Get Info inspector and a calendar popup in the editor."
   },
   {
    "feature": "Show / hide calendar list",
@@ -202,19 +202,19 @@
    "feature": "Subscribe to calendar (webcal URL)",
    "area": "integration",
    "apple": "Subscribe.nib; File > New Calendar Subscription; Info.plist webcal scheme",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a New Calendar Subscription sheet taking a URL, fetch the ICS on a refresh interval into a read-only calendar, and register the webcal URL scheme for the app."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/subscribe.rs:133",
+   "note": "webcal:// and https:// calendars (pasted address or an opened webcal link, manifest schemes) are read in the background every hour into read-only calendars with their own colour, cached for offline start, shown or hidden from the calendar list, and removed with File > Unsubscribe from; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Replace File > Subscribe to Calendar from Clipboard with a New Calendar Subscription sheet (an address field), add a per-calendar refresh interval, and check a real webcal feed on Midget."
   },
   {
    "feature": "Holidays and Birthdays calendars",
    "area": "integration",
    "apple": "AddHoliday.nib; BirthdayCalendarInspector.nib; settings show Birthdays/Holidays",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a read-only Birthdays calendar fed from the contacts store and a bundled holiday set, each with a Settings toggle."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/holidays.rs:28",
+   "note": "Holidays row in the calendar list shows Iceland's public holidays and observances (Easter computed) as read-only all-day events; no Birthdays calendar yet; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Add the Birthdays calendar from the Contacts service (needs an async contacts query from the app), a region choice for the holidays, and a Settings toggle for each."
   },
   {
    "feature": "Settings: general (week start, day start/end, days per week, default duration, default calendar)",

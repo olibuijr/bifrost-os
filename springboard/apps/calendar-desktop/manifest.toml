@@ -11,6 +11,7 @@ permissions = ["storage", "documents", "notifications", "keychain"]
 keychain_groups = ["is.bifrost.passwords"]
 window = "full-size"
 handles = ["public.calendar-event:default"]
+schemes = ["webcal", "webcals"]
 
 [[intent]]
 id = "show-date"

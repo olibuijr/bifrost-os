@@ -10,6 +10,7 @@ use bifrost_app::print::{PrintError, PrintOperation};
 use bifrost_app::proto::{DocErrorCode, DocMode};
 use bifrost_app::{App, AppMenu, AppMenuItem, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use bifrost_calendar::calendar::archive;
+use bifrost_calendar::calendar::subscribe::{self, Fetcher};
 use std::collections::HashMap;
 use std::io::Write;
 use bifrost_calendar::calendar::connect::{self, Connect, Snap};
@@ -28,7 +29,12 @@ struct CalendarApp {
     dav: bifrost_app::dav_sync::Sync,
     /// Open and save panels waiting for the user's answer, by request.
     jobs: HashMap<u32, Job>,
+    /// Reads the subscribed calendars in the background.
+    fetcher: Fetcher,
 }
+
+/// Menu ids of File > Unsubscribe from, one per subscription, clear of the commands and the settings.
+const UNSUBSCRIBE_BASE: u32 = 300;
 
 /// What an open or save panel is for.
 enum Job {
@@ -43,6 +49,17 @@ fn share_copy(c: &mut calendar::Calendar, ctx: &Ctx) {
     if let Some(text) = c.take_copied() {
         ctx.set_pasteboard_string(&text);
     }
+}
+
+/// File > Subscribe to Calendar from Clipboard, and a submenu to unsubscribe from each calendar that is subscribed to.
+fn subscription_items(c: &calendar::Calendar, entry: &AppMenuItem) -> Vec<AppMenuItem> {
+    let mut items = vec![AppMenuItem::separator(), entry.clone()];
+    let names = c.subscription_names();
+    if !names.is_empty() {
+        items.push(AppMenuItem::submenu("Unsubscribe from"));
+        items.extend(names.iter().enumerate().map(|(i, name)| AppMenuItem::new(UNSUBSCRIBE_BASE + i as u32, name).enabled(c.settings_enabled()).depth(1)));
+    }
+    items
 }
 
 /// The Settings menu: the week start, then a submenu of radio choices for each default.
@@ -110,7 +127,10 @@ impl App for CalendarApp {
                     item(Command::ExportArchive),
                     AppMenuItem::separator(),
                     item(Command::Print),
-                ],
+                ]
+                .into_iter()
+                .chain(subscription_items(c, &item(Command::Subscribe)))
+                .collect(),
             },
             AppMenu {
                 title: "Event".into(),
@@ -161,9 +181,21 @@ impl App for CalendarApp {
         if let Some(setting) = Setting::from_id(id) {
             return self.cal.as_mut().is_some_and(|c| c.change_setting(&ctx.ui, setting));
         }
+        if let Some(i) = id.checked_sub(UNSUBSCRIBE_BASE).filter(|i| (*i as usize) < subscribe::MAX_SUBSCRIPTIONS) {
+            return self.cal.as_mut().is_some_and(|c| c.unsubscribe(i as usize));
+        }
         let Some(cmd) = Command::from_id(id) else { return false };
         let t = bifrost_app::proto::sys::now_ms();
         match &mut self.cal {
+            // the address is the pasteboard's text, read when the command runs
+            Some(c) if cmd == Command::Subscribe => {
+                let text = ctx.pasteboard_string().unwrap_or_default();
+                match c.subscribe(&text) {
+                    Ok(name) => c.show_notice(&format!("Subscribed to {name}")),
+                    Err(e) => c.show_error(&e),
+                }
+                true
+            }
             Some(c) if matches!(cmd, Command::Import | Command::ImportArchive) => {
                 if !c.enabled(cmd) {
                     return false;
@@ -211,6 +243,15 @@ impl App for CalendarApp {
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
         // a calendar file opened from Files, or dropped on the app: its events are imported
         if let Input::Open(url) = &ev {
+            // a webcal link subscribes to the calendar it names
+            if subscribe::is_calendar_link(url) {
+                let Some(c) = &mut self.cal else { return false };
+                match c.subscribe(url) {
+                    Ok(name) => c.show_notice(&format!("Subscribed to {name}")),
+                    Err(e) => c.show_error(&e),
+                }
+                return true;
+            }
             let (Some(c), Some(path)) = (&mut self.cal, archive::path_from_open(url)) else { return false };
             match std::fs::File::open(&path).map_err(|e| e.to_string()).and_then(archive::read_text) {
                 Ok(text) => {
@@ -307,6 +348,7 @@ impl App for CalendarApp {
                 }
             }
         }
+        self.fetcher.poll(c, t);
         share_copy(c, ctx);
         c.tick(&ctx.ui, t)
     }
@@ -408,7 +450,11 @@ impl App for CalendarApp {
     }
 
     fn next_wake(&self, t: f64) -> Option<f64> {
-        self.cal.as_ref().and_then(|c| c.next_wake(t))
+        let c = self.cal.as_ref()?;
+        match (c.next_wake(t), self.fetcher.wake(c, t)) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
@@ -422,5 +468,5 @@ impl App for CalendarApp {
 }
 
 fn main() {
-    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default(), dav: bifrost_app::dav_sync::Sync::new(Service::Calendars), jobs: HashMap::new() });
+    bifrost_app::run(CalendarApp { cal: None, last_wall: 0.0, connect: Connect::default(), dav: bifrost_app::dav_sync::Sync::new(Service::Calendars), jobs: HashMap::new(), fetcher: Fetcher::default() });
 }
