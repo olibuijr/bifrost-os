@@ -47,6 +47,7 @@ mod controls;
 mod forms;
 mod layer_backed;
 mod style_props;
+mod layer_views;
 mod scroll;
 pub use animation::{mix_color, Prop, Timing, Transaction, DEFAULT_DURATION, REDUCED_DURATION};
 pub use app::{action_for, ControllerHost, MenuEntry, ViewApp, ViewController};
@@ -55,6 +56,7 @@ pub use autolayout::{anchors, solve as solve_constraints, Anchor, Anchors, Attr,
 pub use bifrost_ui::constraint::Rel;
 pub use bifrost_ui::stack::Distribution;
 pub use scroll::ScrollView;
+pub use layer_views::{EmitterView, GradientView, ReplicaSource, ReplicatorView, ScrollLayerView, ShapeView, TextLayerView, TiledView};
 pub use controls::{Align, Button, Label, Segmented, Slider, Stack, Switch};
 
 /// What a text-editing view tells the shell about itself while it is first responder (`NativeTextInputClient`,
@@ -201,6 +203,10 @@ pub trait View: 'static {
     }
     /// True when children are clipped to this view's frame (rows only, see `ScrollView`).
     fn clips_children(&self) -> bool {
+        false
+    }
+    /// With `clips_children`: also confine the children to the frame's columns (a view that scrolls sideways).
+    fn clips_horizontally(&self) -> bool {
         false
     }
     /// Pointer or key event; true when handled (bubbling stops). Pointer events arrive at the deepest view first.
@@ -527,7 +533,8 @@ fn draw_subtree(v: &mut dyn View, c: &mut dyn Canvas, ui: &Ui) {
             // children are confined vertically to the rows of the frame; widths are the view's own (see ScrollView)
             let f = px_rf(ui, v.frame());
             let full = c.size().0 as f32;
-            c.push_clip(RectF::new(0.0, f.y, full, f.h), 0.0);
+            let (cx, cw) = if v.clips_horizontally() { (f.x, f.w) } else { (0.0, full) };
+            c.push_clip(RectF::new(cx, f.y, cw, f.h), 0.0);
             v.children_mut().iter_mut().for_each(|ch| draw_subtree(ch.as_mut(), c, ui));
             c.pop_clip();
         } else {
@@ -1044,6 +1051,8 @@ fn collect_checked(v: &dyn View, out: &mut Vec<(u64, Option<bool>)>) {
 mod tests;
 #[cfg(test)]
 mod tests_app;
+#[cfg(test)]
+mod tests_layer_views;
 
 #[cfg(test)]
 mod tests_controls;

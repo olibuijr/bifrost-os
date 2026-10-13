@@ -995,31 +995,6 @@ fn media_target(tile: Tile) -> Option<Media> {
     }
 }
 
-/// Fills a polygon, 4x4 supersampled, even-odd rule.
-fn fill_poly(s: &mut Surface, pts: &[(f32, f32)], color: u32) {
-    let inside = |px: f32, py: f32| {
-        let mut odd = false;
-        for i in 0..pts.len() {
-            let ((ax, ay), (bx, by)) = (pts[i], pts[(i + 1) % pts.len()]);
-            if (ay > py) != (by > py) && px < ax + (py - ay) * (bx - ax) / (by - ay) {
-                odd = !odd;
-            }
-        }
-        odd
-    };
-    let (x0, x1) = pts.iter().fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p.0), b.max(p.0)));
-    let (y0, y1) = pts.iter().fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p.1), b.max(p.1)));
-    for py in (y0.max(0.0) as usize).max(s.y0)..(y1.ceil().max(0.0) as usize).min(s.h) {
-        for px in (x0.max(0.0) as usize)..(x1.ceil().max(0.0) as usize).min(s.w) {
-            let hits = (0..16).filter(|i| inside(px as f32 + (i % 4) as f32 / 4.0 + 0.125, py as f32 + (i / 4) as f32 / 4.0 + 0.125)).count();
-            if hits > 0 {
-                let d = s.at(px, py);
-                *d = over(*d, scale(color, (hits * 255 / 16) as u32));
-            }
-        }
-    }
-}
-
 /// An airplane pointing up-right, `size` px across its wings.
 fn draw_airplane(s: &mut Surface, cx: f32, cy: f32, size: f32, color: u32) {
     const P: [(f32, f32); 18] = [
@@ -1050,7 +1025,7 @@ fn draw_airplane(s: &mut Surface, cx: f32, cy: f32, size: f32, color: u32) {
             (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos)
         })
         .collect();
-    fill_poly(s, &pts, color);
+    icons::fill_poly(s, &pts, color);
 }
 
 /// Rotation Lock: a small padlock inside a three-quarter circular arrow.
@@ -1075,7 +1050,7 @@ fn draw_rotation_lock(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
         }
     }
     let (ax, ay) = (cx - radius, cy);
-    fill_poly(s, &[(ax - 4.0 * pt, ay + 0.5 * pt), (ax + 4.0 * pt, ay + 0.5 * pt), (ax, ay - 5.5 * pt)], color);
+    icons::fill_poly(s, &[(ax - 4.0 * pt, ay + 0.5 * pt), (ax + 4.0 * pt, ay + 0.5 * pt), (ax, ay - 5.5 * pt)], color);
 }
 
 fn draw_nearby(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
@@ -1092,7 +1067,7 @@ fn draw_bluetooth(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
         let (dx, dy) = (x1 - x0, y1 - y0);
         let l = (dx * dx + dy * dy).sqrt();
         let (nx, ny) = (-dy / l * hw, dx / l * hw);
-        fill_poly(s, &[(x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny), (x0 - nx, y0 - ny)], color);
+        icons::fill_poly(s, &[(x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x1 - nx, y1 - ny), (x0 - nx, y0 - ny)], color);
     };
     let w = 6.5 * pt;
     line(s, cx, cy - h, cx, cy + h);
@@ -1112,14 +1087,14 @@ fn draw_bell(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32, slashed: bo
     s.fill_rrect(cx - 11.0 * pt, cy + 2.0 * pt, 22.0 * pt, 6.0 * pt, 2.0 * pt, color);
     s.fill_rrect(cx - 3.0 * pt, cy + 9.0 * pt, 6.0 * pt, 4.0 * pt, 2.0 * pt, color);
     if slashed {
-        fill_poly(s, &[(cx - 13.0 * pt, cy - 12.0 * pt), (cx - 10.5 * pt, cy - 14.0 * pt), (cx + 13.0 * pt, cy + 14.0 * pt), (cx + 10.5 * pt, cy + 16.0 * pt)], color);
+        icons::fill_poly(s, &[(cx - 13.0 * pt, cy - 12.0 * pt), (cx - 10.5 * pt, cy - 14.0 * pt), (cx + 13.0 * pt, cy + 14.0 * pt), (cx + 10.5 * pt, cy + 16.0 * pt)], color);
     }
 }
 
 fn draw_timer(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
     let r = 14.0 * pt;
     s.stroke_rrect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, 2.5 * pt, color);
-    fill_poly(s, &[(cx - 1.2 * pt, cy), (cx + 1.2 * pt, cy), (cx - 5.0 * pt, cy - 9.0 * pt), (cx - 7.0 * pt, cy - 8.0 * pt)], color);
+    icons::fill_poly(s, &[(cx - 1.2 * pt, cy), (cx + 1.2 * pt, cy), (cx - 5.0 * pt, cy - 9.0 * pt), (cx - 7.0 * pt, cy - 8.0 * pt)], color);
 }
 
 fn draw_camera(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
@@ -1143,7 +1118,7 @@ fn draw_sun(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
             (cx + cos * r1 + sin * hw, cy + sin * r1 - cos * hw),
             (cx + cos * r0 + sin * hw, cy + sin * r0 - cos * hw),
         ];
-        fill_poly(s, &pts, color);
+        icons::fill_poly(s, &pts, color);
     }
 }
 
@@ -1156,7 +1131,7 @@ fn draw_speaker(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32) {
 pub(super) fn draw_speaker_waves(s: &mut Surface, cx: f32, cy: f32, pt: f32, color: u32, waves: usize) {
     let (x, y) = (cx - 12.0 * pt, cy - 10.0 * pt);
     let body = [(x, y + 6.5 * pt), (x + 5.0 * pt, y + 6.5 * pt), (x + 11.0 * pt, y + 1.0 * pt), (x + 11.0 * pt, y + 19.0 * pt), (x + 5.0 * pt, y + 13.5 * pt), (x, y + 13.5 * pt)];
-    fill_poly(s, &body, color);
+    icons::fill_poly(s, &body, color);
     let (ax, ay) = (x + 11.0 * pt, cy);
     for radius in [5.5 * pt, 10.0 * pt, 14.5 * pt].into_iter().take(waves.min(3)) {
         let thick = 1.8 * pt;

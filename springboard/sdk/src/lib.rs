@@ -187,6 +187,7 @@ pub mod image_blur;
 pub mod image_filter;
 pub use restoration::RestorableState;
 pub mod attributed;
+pub mod layer_kinds;
 pub mod spellcheck;
 pub mod translation;
 pub mod wlan;
