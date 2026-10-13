@@ -59,3 +59,10 @@ the published database page gets an OS tab.
 - From public documentation, before the dig: Core Image (10 filter-family rows), SwiftUI (shader effects, Liquid
   Glass, materials), AppKit (the visual effect material catalogue, glass effect views) and Core Animation (layer
   filters) rows were added to `data/`. Their per-shader detail comes from the `shaders` category.
+
+## Framework rows from the SDK matrix
+
+`python3 tools/parity/os_frameworks.py [--write]` reassesses the `frameworks` category: public framework rows take their
+status from the SDK matrix files that assess them (`bifrost` lists the files, method `assessed`), and private
+framework rows inherit from their owning public framework through `tools/parity/os_private_owner_map.json` (never
+better than partial; parity needs a Midget check). Rows with no plausible owner stay `os`. Rerun after SDK rows change.
