@@ -10,7 +10,9 @@ use crate::plist::Plist;
 
 const MAGIC: &[u8] = b"bplist00";
 const TRAILER: usize = 32;
-const MAX_DEPTH: usize = 512;
+// 128 levels: deeper than any real document, and small enough that a self-referencing graph is refused well inside a
+// 2 MiB thread stack in debug builds (512 overflowed one)
+const MAX_DEPTH: usize = 128;
 /// Seconds from the Unix epoch to 2001-01-01T00:00:00Z, the binary date origin.
 const DATE_EPOCH_OFFSET: f64 = 978_307_200.0;
 
