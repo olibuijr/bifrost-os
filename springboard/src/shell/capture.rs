@@ -64,6 +64,11 @@ fn px(x: f32, y: f32) -> (i32, i32) {
 }
 
 impl Drag {
+    /// Whether a press is held (a drag is under way).
+    pub fn active(&self) -> bool {
+        self.start.is_some()
+    }
+
     pub fn begin(&mut self, x: f32, y: f32) {
         let p = px(x, y);
         self.start = Some(p);
