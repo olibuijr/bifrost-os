@@ -2,8 +2,8 @@
 //! caret and selection, and the word count. Positions are in points derived from the window size; the canvas is
 //! reached in device pixels through `Ui::pt`. Colours and type come from the shared tokens only.
 
-use crate::layout::{Layout, Line};
-use crate::text::{Align, Cell, Style, FAMILIES};
+use crate::layout::{self, Layout, Line, Marker};
+use crate::text::{Align, Cell, ListKind, Style, COLORS, FAMILIES, SPACINGS};
 use bifrost_app::controls::Rect;
 use bifrost_app::document::item;
 use bifrost_app::kit::canvas::{Canvas, ImageRef, RectF};
@@ -11,9 +11,14 @@ use bifrost_app::kit::ui::{
     Ui, Weight, CONTENT_BG, DETAIL_BG, FIELD_BG, LABEL, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, SELECTION,
     SEGMENT_ON, SEPARATOR_C,
 };
-use bifrost_app::kit::Image;
+use bifrost_app::kit::{pack, Image};
 use bifrost_app::layout::{traffic_lights_trailing, MARGIN_PT, READABLE_MAX_PT, UNIFIED_BAR_PT};
 
+/// Height of the format bar under the toolbar, and of the tab ruler under it.
+pub const FORMAT_H: f32 = 36.0;
+pub const RULER_H: f32 = 22.0;
+/// Size of a colour swatch button.
+const SWATCH: f32 = 18.0;
 /// Height of the find bar, when it is open.
 pub const FIND_H: f32 = 36.0;
 /// Height of the word count row at the bottom.
@@ -53,6 +58,20 @@ pub enum Action {
     Smaller,
     Font(u8),
     Align(Align),
+    Color(u8),
+    Spacing(u8),
+    List(ListKind),
+    Print,
+    /// Page setup: a paper size (index into `PAPERS`), and the orientation
+    Paper(u8),
+    Landscape(bool),
+    MakePlain,
+    MakeRich,
+    SpellToggle,
+    SpellNext,
+    SpellLearn,
+    SpellIgnore,
+    SpellCorrect,
 }
 
 /// The first menu id of Text Editor's own items. Ids are stable: they are the values a menu sends back.
@@ -84,6 +103,21 @@ impl Action {
             Action::FocusReplace => MENU_BASE + 19,
             Action::Font(i) => MENU_BASE + 0x20 + i as u32,
             Action::Align(a) => MENU_BASE + 0x30 + align_index(a),
+            Action::Color(i) => MENU_BASE + 0x40 + i as u32,
+            Action::Spacing(i) => MENU_BASE + 0x50 + i as u32,
+            Action::List(ListKind::Bullet) => MENU_BASE + 0x58,
+            Action::List(_) => MENU_BASE + 0x59,
+            Action::Print => MENU_BASE + 0x60,
+            Action::Paper(i) => MENU_BASE + 0x61 + i as u32,
+            Action::Landscape(true) => MENU_BASE + 0x66,
+            Action::Landscape(false) => MENU_BASE + 0x67,
+            Action::MakePlain => MENU_BASE + 0x68,
+            Action::MakeRich => MENU_BASE + 0x69,
+            Action::SpellToggle => MENU_BASE + 0x6a,
+            Action::SpellNext => MENU_BASE + 0x6b,
+            Action::SpellLearn => MENU_BASE + 0x6c,
+            Action::SpellIgnore => MENU_BASE + 0x6d,
+            Action::SpellCorrect => MENU_BASE + 0x6e,
         })
     }
 
@@ -112,6 +146,21 @@ impl Action {
             19 => Action::FocusReplace,
             0x20..=0x27 => Action::Font((offset - 0x20) as u8),
             0x30..=0x33 => Action::Align(align_of_index(offset - 0x30)),
+            0x40..=0x47 => Action::Color((offset - 0x40) as u8),
+            0x50..=0x54 => Action::Spacing((offset - 0x50) as u8),
+            0x58 => Action::List(ListKind::Bullet),
+            0x59 => Action::List(ListKind::Numbered),
+            0x60 => Action::Print,
+            0x61..=0x65 => Action::Paper((offset - 0x61) as u8),
+            0x66 => Action::Landscape(true),
+            0x67 => Action::Landscape(false),
+            0x68 => Action::MakePlain,
+            0x69 => Action::MakeRich,
+            0x6a => Action::SpellToggle,
+            0x6b => Action::SpellNext,
+            0x6c => Action::SpellLearn,
+            0x6d => Action::SpellIgnore,
+            0x6e => Action::SpellCorrect,
             _ => return None,
         })
     }
@@ -145,6 +194,8 @@ pub struct Button {
     pub active: bool,
     pub enabled: bool,
     pub weight: Weight,
+    /// A colour swatch instead of a label: the colour it fills with.
+    pub swatch: Option<u32>,
 }
 
 /// Which text field has the keyboard.
@@ -159,6 +210,7 @@ pub enum Focus {
 pub struct Status {
     pub style: Style,
     pub align: Align,
+    pub rich: bool,
     pub can_undo: bool,
     pub can_redo: bool,
     pub find_open: bool,
@@ -172,6 +224,11 @@ pub struct Geometry {
     /// Where the body (the page) starts and ends; the find bar sits above it when it is open.
     pub body_top: f32,
     pub body_bottom: f32,
+    /// The format bar, the ruler (zero height when the document is plain text) and the find bar's top edge.
+    pub format_top: f32,
+    pub ruler_top: f32,
+    pub ruler_h: f32,
+    pub find_top: f32,
     /// The column of text: its left edge and width, centred and never wider than the readable width.
     pub text_x: f32,
     pub text_w: f32,
@@ -180,19 +237,27 @@ pub struct Geometry {
     pub replace_field: Rect,
 }
 
-pub fn geometry(width: f32, height: f32, find_open: bool) -> Geometry {
+pub fn geometry(width: f32, height: f32, find_open: bool, ruler: bool) -> Geometry {
     let bar = UNIFIED_BAR_PT;
-    let body_top = bar + if find_open { FIND_H } else { 0.0 };
+    let format_top = bar;
+    let ruler_top = format_top + FORMAT_H;
+    let ruler_h = if ruler { RULER_H } else { 0.0 };
+    let find_top = ruler_top + ruler_h;
+    let body_top = find_top + if find_open { FIND_H } else { 0.0 };
     let body_bottom = (height - STATUS_H).max(body_top);
     let text_w = (width - 2.0 * MARGIN_PT).min(READABLE_MAX_PT).max(0.0);
     let text_x = ((width - text_w) / 2.0).max(0.0);
     let x0 = traffic_lights_trailing();
-    let row_y = bar + (FIND_H - BUTTON_H) / 2.0;
+    let row_y = find_top + (FIND_H - BUTTON_H) / 2.0;
     Geometry {
         width,
         height,
         body_top,
         body_bottom,
+        format_top,
+        ruler_top,
+        ruler_h,
+        find_top,
         text_x,
         text_w,
         find_field: Rect { x: x0, y: row_y, w: FIELD_W, h: BUTTON_H },
@@ -222,7 +287,29 @@ pub fn family_name(font: u8) -> &'static str {
 
 fn label_button(ui: &Ui, label: &str, action: Option<Action>, weight: Weight) -> Button {
     let width = ui.measure(label, MAC_BODY_PT, weight) / ui.s + 2.0 * BUTTON_PAD;
-    Button { rect: Rect { x: 0.0, y: 0.0, w: width, h: BUTTON_H }, label: label.to_string(), action, active: false, enabled: true, weight }
+    Button { rect: Rect { x: 0.0, y: 0.0, w: width, h: BUTTON_H }, label: label.to_string(), action, active: false, enabled: true, weight, swatch: None }
+}
+
+fn swatch_button(color: u32, action: Action) -> Button {
+    Button {
+        rect: Rect { x: 0.0, y: 0.0, w: SWATCH + 6.0, h: BUTTON_H },
+        label: String::new(),
+        action: Some(action),
+        active: false,
+        enabled: true,
+        weight: Weight::Regular,
+        swatch: Some(color),
+    }
+}
+
+/// The fill of a text colour: the window's label colour for the default, the palette colour otherwise.
+pub fn text_color(index: u8) -> u32 {
+    if index == 0 {
+        LABEL.now()
+    } else {
+        let [r, g, b] = COLORS[(index as usize).min(COLORS.len() - 1)].1;
+        pack(r, g, b, 255)
+    }
 }
 
 /// Places a row of buttons from `x`, groups separated by `GROUP_GAP`, and returns the x after the row.
@@ -255,34 +342,75 @@ pub fn toolbar(ui: &Ui, status: &Status) -> Vec<Button> {
         label_button(ui, "Save", Some(Action::Document(item::SAVE)), weight),
         label_button(ui, "Undo", Some(Action::Undo), weight),
         label_button(ui, "Redo", Some(Action::Redo), weight),
+        label_button(ui, "Find", Some(Action::Find), weight),
+        label_button(ui, "Print", Some(Action::Print), weight),
+    ];
+    buttons[3].enabled = status.can_undo;
+    buttons[4].enabled = status.can_redo;
+    buttons[5].active = status.find_open;
+    let groups: [usize; 4] = [3, 2, 1, 1];
+    place_row(&mut buttons, &groups, traffic_lights_trailing() + BAR_GAP, (UNIFIED_BAR_PT - BUTTON_H) / 2.0);
+    buttons
+}
+
+/// The format bar's buttons: character style, size, colour, alignment, line spacing, lists and the text mode. A plain
+/// text document has only the mode switch enabled.
+pub fn format_bar(ui: &Ui, status: &Status, geom: &Geometry) -> Vec<Button> {
+    let weight = Weight::Regular;
+    let spacing_next = (status.style.spacing + 1) % SPACINGS.len() as u8;
+    let mut buttons = vec![
         label_button(ui, "B", Some(Action::Bold), Weight::Bold),
-        label_button(ui, "I", Some(Action::Italic), Weight::Regular),
-        label_button(ui, "U", Some(Action::Underline), Weight::Regular),
+        label_button(ui, "I", Some(Action::Italic), weight),
+        label_button(ui, "U", Some(Action::Underline), weight),
         label_button(ui, "A-", Some(Action::Smaller), weight),
         label_button(ui, &format!("{:.0} pt", status.style.size), None, weight),
         label_button(ui, "A+", Some(Action::Bigger), weight),
+    ];
+    let swatches = COLORS.len();
+    for i in 0..swatches {
+        let mut b = swatch_button(text_color(i as u8), Action::Color(i as u8));
+        b.active = status.style.color as usize == i;
+        buttons.push(b);
+    }
+    buttons.extend([
         label_button(ui, "Left", Some(Action::Align(Align::Left)), weight),
         label_button(ui, "Center", Some(Action::Align(Align::Center)), weight),
         label_button(ui, "Right", Some(Action::Align(Align::Right)), weight),
         label_button(ui, "Justify", Some(Action::Align(Align::Justified)), weight),
-        label_button(ui, "Find", Some(Action::Find), weight),
-    ];
-    buttons[3].enabled = status.can_undo;
-    buttons[4].enabled = status.can_redo;
-    buttons[5].active = status.style.bold;
-    buttons[6].active = status.style.italic;
-    buttons[7].active = status.style.underline;
-    for b in &mut buttons[11..15] {
-        let align = match b.action {
-            Some(Action::Align(a)) => a,
-            _ => Align::Left,
-        };
-        b.active = align == status.align;
+        label_button(ui, &format!("Spacing {}", spacing_label(status.style.spacing)), Some(Action::Spacing(spacing_next)), weight),
+        label_button(ui, "Bullets", Some(Action::List(ListKind::Bullet)), weight),
+        label_button(ui, "Numbers", Some(Action::List(ListKind::Numbered)), weight),
+        label_button(ui, if status.rich { "Rich Text" } else { "Plain Text" }, Some(if status.rich { Action::MakePlain } else { Action::MakeRich }), weight),
+    ]);
+    let n = buttons.len();
+    for b in &mut buttons[..n - 1] {
+        b.enabled = status.rich;
     }
-    buttons[15].active = status.find_open;
-    let groups: [usize; 6] = [3, 2, 3, 3, 4, 1];
-    place_row(&mut buttons, &groups, traffic_lights_trailing() + BAR_GAP, (UNIFIED_BAR_PT - BUTTON_H) / 2.0);
+    buttons[0].active = status.style.bold;
+    buttons[1].active = status.style.italic;
+    buttons[2].active = status.style.underline;
+    let a = 6 + swatches;
+    for b in &mut buttons[a..a + 4] {
+        if let Some(Action::Align(al)) = b.action {
+            b.active = al == status.align;
+        }
+    }
+    buttons[a + 5].active = status.style.list == ListKind::Bullet;
+    buttons[a + 6].active = status.style.list == ListKind::Numbered;
+    let groups = [3, 3, swatches, 4, 1, 2, 1];
+    let y = geom.format_top + (FORMAT_H - BUTTON_H) / 2.0;
+    place_row(&mut buttons, &groups, BAR_GAP + 4.0, y);
     buttons
+}
+
+/// The label of a line spacing multiple: "1.0", "1.15"...
+pub fn spacing_label(index: u8) -> String {
+    let m = SPACINGS.get(index as usize).copied().unwrap_or(1.0);
+    if (m * 10.0).fract() == 0.0 {
+        format!("{m:.1}")
+    } else {
+        format!("{m}")
+    }
 }
 
 /// The find bar's buttons, to the right of the two fields.
@@ -364,6 +492,12 @@ pub fn draw_button(c: &mut dyn Canvas, ui: &Ui, b: &Button) {
     if b.active {
         c.fill_rrect(r, ui.pt(CONTROL_RADIUS), SEGMENT_ON.now());
     }
+    if let Some(fill) = b.swatch {
+        let side = ui.pt(SWATCH);
+        let sw = RectF::new(r.x + (r.w - side) / 2.0, r.y + (r.h - side) / 2.0, side, side);
+        c.fill_rrect(sw, side / 2.0, if b.enabled { fill } else { LABEL_3.now() });
+        return;
+    }
     let color = if b.enabled { LABEL.now() } else { LABEL_3.now() };
     let img = ui.text(&b.label, MAC_BODY_PT, b.weight, color);
     let x = r.x + (r.w - img.w as f32) / 2.0;
@@ -373,7 +507,7 @@ pub fn draw_button(c: &mut dyn Canvas, ui: &Ui, b: &Button) {
 
 /// Draws the find bar: its two fields, their text, and its buttons.
 pub fn draw_find(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, buttons: &[Button], find: &str, replace: &str, focus: Focus) {
-    let top = UNIFIED_BAR_PT;
+    let top = geom.find_top;
     c.fill_rect(RectF::new(0.0, ui.pt(top), ui.pt(geom.width).ceil(), ui.pt(FIND_H).ceil()), DETAIL_BG.now());
     c.fill_rect(RectF::new(0.0, ui.pt(top + FIND_H).floor() - 1.0, ui.pt(geom.width).ceil(), 1.0), SEPARATOR_C.now());
     for (rect, text, placeholder, which) in [
@@ -405,7 +539,8 @@ pub fn page_clip(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry) -> RectF {
 }
 
 /// Draws the selection, the text and the caret at `head`. `scroll` is how far the body is scrolled, in points.
-pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, cells: &[Cell], sel: std::ops::Range<usize>, head: usize, scroll: f32, caret: bool) {
+#[allow(clippy::too_many_arguments)]
+pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, cells: &[Cell], sel: std::ops::Range<usize>, head: usize, scroll: f32, caret: bool, misspelled: &[std::ops::Range<usize>]) {
     let origin_x = geom.text_x;
     let origin_y = geom.body_top - scroll;
     let measure = |ch: char, style: &Style| char_width(ui, ch, style);
@@ -430,6 +565,11 @@ pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, c
     // text: runs of one style per line
     for line in &lines.lines {
         draw_line(c, ui, lines, line, cells, origin_x, origin_y);
+        for word in misspelled.iter().filter(|w| w.start < line.end && w.end > line.start) {
+            let x0 = lines.x_in_line(cells, line, word.start.max(line.start), &measure);
+            let x1 = lines.x_in_line(cells, line, word.end.min(line.end), &measure);
+            squiggle(c, ui, origin_x + x0, origin_x + x1, origin_y + line.top + line.height - 2.0);
+        }
     }
     if caret {
         let (x, top, height) = lines.caret(cells, head, &measure);
@@ -438,32 +578,64 @@ pub fn draw_text(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, lines: &Layout, c
     }
 }
 
+/// A wavy rule from `x0` to `x1` (points) at `y`: short segments alternating up and down, in the destructive colour.
+fn squiggle(c: &mut dyn Canvas, ui: &Ui, x0: f32, x1: f32, y: f32) {
+    let mut x = x0;
+    let mut up = false;
+    while x < x1 {
+        let w = 2.0f32.min(x1 - x);
+        let rect = Rect { x, y: if up { y } else { y + 1.0 }, w, h: 1.0 };
+        c.fill_rect(to_px(ui, rect), pack(255, 69, 58, 255));
+        x += w;
+        up = !up;
+    }
+}
+
 fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[Cell], origin_x: f32, origin_y: f32) {
-    let mut x = origin_x + lines.x_offset(line);
+    let measure = |ch: char, style: &Style| char_width(ui, ch, style);
     let y = origin_y + line.top;
+    // the list marker hangs left of the text
+    let marker = match line.marker {
+        Marker::None => None,
+        Marker::Bullet => Some("\u{2022}".to_string()),
+        Marker::Number(n) => Some(format!("{n}.")),
+    };
+    if let Some(m) = marker {
+        let size = cells.get(line.start).or(cells.last()).map_or(crate::text::DEFAULT_SIZE, |c| c.style.size);
+        let w = ui.measure(&m, size, Weight::Regular) / ui.s;
+        text_at(c, ui, &m, size, Weight::Regular, LABEL.now(), origin_x + line.indent - 6.0 - w, y);
+    }
+    let base = origin_x + lines.x_offset(line);
+    let mut rel = 0.0;
     let mut run = String::new();
     let mut run_style: Option<Style> = None;
-    let mut run_x = x;
+    let mut run_x = 0.0;
     for cell in &cells[line.start..line.end] {
-        let same = run_style.is_some_and(|s| same_run(&s, &cell.style));
-        if !same {
-            if let Some(s) = run_style {
-                x = flush_run(c, ui, &run, &s, run_x, y, line.height);
+        let step = layout::advance(rel, cell, lines.tab, &measure);
+        let breaks = cell.ch == '\t' || run_style.is_some_and(|s| !same_run(&s, &cell.style));
+        if breaks {
+            if let Some(s) = run_style.take() {
+                flush_run(c, ui, &run, &s, base + run_x, y, line.height);
             }
             run.clear();
-            run_style = Some(cell.style);
-            run_x = x;
         }
-        run.push(cell.ch);
+        if cell.ch != '\t' {
+            if run_style.is_none() {
+                run_style = Some(cell.style);
+                run_x = rel;
+            }
+            run.push(cell.ch);
+        }
+        rel += step;
     }
     if let Some(s) = run_style {
-        flush_run(c, ui, &run, &s, run_x, y, line.height);
+        flush_run(c, ui, &run, &s, base + run_x, y, line.height);
     }
 }
 
 /// Two characters share a run when they draw alike.
 fn same_run(a: &Style, b: &Style) -> bool {
-    a.bold == b.bold && a.underline == b.underline && a.size == b.size && a.font == b.font
+    a.bold == b.bold && a.italic == b.italic && a.underline == b.underline && a.size == b.size && a.font == b.font && a.color == b.color
 }
 
 /// Draws one run and returns the x after it. Underlines are a rule under the run.
@@ -475,12 +647,52 @@ fn flush_run(c: &mut dyn Canvas, ui: &Ui, text: &str, style: &Style, x: f32, y: 
     if shown.is_empty() {
         return x;
     }
-    let width = text_at(c, ui, &shown, style.size, weight_of(style), LABEL.now(), x, y);
+    let color = text_color(style.color);
+    let width = text_at(c, ui, &shown, style.size, weight_of(style), color, x, y);
     if style.underline {
-        let rule = Rect { x, y: y + line_height - 2.0, w: width, h: 1.0 };
-        c.fill_rect(to_px(ui, rule), LABEL.now());
+        let rule = Rect { x, y: y + line_height.min(style.size * 1.25) - 2.0, w: width, h: 1.0 };
+        c.fill_rect(to_px(ui, rule), color);
     }
     x + width
+}
+
+/// The tab ruler above the page: a tick every 12 points, a number at every 72, and a marker at each tab stop. A click
+/// on it moves the stops (see `ruler_tab`).
+pub fn draw_ruler(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, tab: f32) {
+    if geom.ruler_h <= 0.0 {
+        return;
+    }
+    let top = geom.ruler_top;
+    c.fill_rect(RectF::new(0.0, ui.pt(top), ui.pt(geom.width).ceil(), ui.pt(geom.ruler_h).ceil()), DETAIL_BG.now());
+    c.fill_rect(RectF::new(0.0, ui.pt(top + geom.ruler_h).floor() - 1.0, ui.pt(geom.width).ceil(), 1.0), SEPARATOR_C.now());
+    let mut mark = 0.0;
+    while mark <= geom.text_w {
+        let major = (mark / 72.0).fract() == 0.0;
+        let h = if major { 8.0 } else { 4.0 };
+        let rect = Rect { x: geom.text_x + mark, y: top + geom.ruler_h - 2.0 - h, w: 1.0, h };
+        c.fill_rect(to_px(ui, rect), LABEL_3.now());
+        if major && mark > 0.0 {
+            let n = format!("{}", (mark / 72.0) as u32);
+            text_at(c, ui, &n, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_3.now(), geom.text_x + mark + 2.0, top + 1.0);
+        }
+        mark += 12.0;
+    }
+    if tab > 0.0 {
+        let mut stop = tab;
+        while stop <= geom.text_w {
+            let rect = Rect { x: geom.text_x + stop - 2.0, y: top + geom.ruler_h - 8.0, w: 5.0, h: 6.0 };
+            c.fill_rect(to_px(ui, rect), LINK);
+            stop += tab;
+        }
+    }
+}
+
+/// The tab stop distance a click at `x`, `y` (points) on the ruler asks for, snapped to 6 points; `None` off the ruler.
+pub fn ruler_tab(geom: &Geometry, x: f32, y: f32) -> Option<f32> {
+    if geom.ruler_h <= 0.0 || y < geom.ruler_top || y >= geom.ruler_top + geom.ruler_h || x < geom.text_x || x > geom.text_x + geom.text_w {
+        return None;
+    }
+    Some(((x - geom.text_x) / 6.0).round() * 6.0)
 }
 
 /// The word count at the bottom of the window, centred.
@@ -525,6 +737,21 @@ mod tests {
             Action::FocusReplace,
             Action::Font(2),
             Action::Align(Align::Justified),
+            Action::Color(7),
+            Action::Spacing(4),
+            Action::List(ListKind::Bullet),
+            Action::List(ListKind::Numbered),
+            Action::Print,
+            Action::Paper(4),
+            Action::Landscape(true),
+            Action::Landscape(false),
+            Action::MakePlain,
+            Action::MakeRich,
+            Action::SpellToggle,
+            Action::SpellNext,
+            Action::SpellLearn,
+            Action::SpellIgnore,
+            Action::SpellCorrect,
         ];
         for a in all {
             let id = a.id().expect("own action has an id");
@@ -536,17 +763,33 @@ mod tests {
 
     #[test]
     fn the_geometry_follows_the_window_width() {
-        let wide = geometry(1200.0, 780.0, false);
+        let wide = geometry(1200.0, 780.0, false, true);
         assert!(wide.text_w <= READABLE_MAX_PT);
         assert!((wide.text_x * 2.0 + wide.text_w - 1200.0).abs() < 0.01, "the column is centred");
-        let narrow = geometry(300.0, 400.0, true);
+        let narrow = geometry(300.0, 400.0, true, false);
         assert_eq!(narrow.text_w, 300.0 - 2.0 * MARGIN_PT);
-        assert_eq!(narrow.body_top, UNIFIED_BAR_PT + FIND_H);
+        assert_eq!(narrow.body_top, UNIFIED_BAR_PT + FORMAT_H + FIND_H);
         assert!(narrow.body_bottom <= 400.0 - STATUS_H);
     }
 
     #[test]
     fn a_closed_find_bar_takes_no_room() {
-        assert_eq!(geometry(800.0, 600.0, false).body_top, UNIFIED_BAR_PT);
+        assert_eq!(geometry(800.0, 600.0, false, false).body_top, UNIFIED_BAR_PT + FORMAT_H);
+        assert_eq!(geometry(800.0, 600.0, false, true).body_top, UNIFIED_BAR_PT + FORMAT_H + RULER_H);
+    }
+
+    #[test]
+    fn the_ruler_snaps_a_click_to_six_points() {
+        let g = geometry(800.0, 600.0, false, true);
+        assert_eq!(ruler_tab(&g, g.text_x + 38.0, g.ruler_top + 2.0), Some(36.0));
+        assert_eq!(ruler_tab(&g, g.text_x + 38.0, g.body_top + 2.0), None, "the page is not the ruler");
+        assert_eq!(ruler_tab(&geometry(800.0, 600.0, false, false), 100.0, 60.0), None);
+    }
+
+    #[test]
+    fn spacing_labels_read_as_multiples() {
+        assert_eq!(spacing_label(0), "1.0");
+        assert_eq!(spacing_label(1), "1.15");
+        assert_eq!(spacing_label(4), "2.5");
     }
 }

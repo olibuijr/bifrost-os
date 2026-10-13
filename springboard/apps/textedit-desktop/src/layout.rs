@@ -1,14 +1,25 @@
-//! Line layout of a document in points: word wrap at the text width, paragraph alignment, and the mapping between a
-//! text position and a point (the caret, a click). Pure: the widths come from a `Measure` the caller supplies, so the
-//! rules are tested with fixed widths and the window draws with the real font.
+//! Line layout of a document in points: word wrap at the text width, paragraph alignment, line spacing, list indents,
+//! tab stops, and the mapping between a text position and a point (the caret, a click). Pure: the widths come from a
+//! `Measure` the caller supplies, so the rules are tested with fixed widths and the window draws with the real font.
 
-use crate::text::{Align, Cell, Style, DEFAULT_SIZE};
+use crate::text::{Align, Cell, ListKind, Style, DEFAULT_SIZE, DEFAULT_TAB, SPACINGS};
 
 /// Line height as a multiple of the largest size on the line.
 pub const LINE_FACTOR: f32 = 1.25;
+/// How far a list paragraph is indented, where its marker hangs.
+pub const LIST_INDENT: f32 = 24.0;
 
 /// The width of one character in a style, in points.
 pub type Measure<'a> = dyn Fn(char, &Style) -> f32 + 'a;
+
+/// The marker drawn in front of a paragraph's first line.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Marker {
+    None,
+    Bullet,
+    /// The paragraph's number in its run of numbered paragraphs, from 1.
+    Number(u32),
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Line {
@@ -19,9 +30,12 @@ pub struct Line {
     /// Top edge and height, in points, from the top of the text.
     pub top: f32,
     pub height: f32,
-    /// The width of the cells of the line, in points.
+    /// The width of the cells of the line, in points (tabs included).
     pub width: f32,
     pub align: Align,
+    /// How far the line's text is indented (a list), and the marker hanging in that indent.
+    pub indent: f32,
+    pub marker: Marker,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -31,57 +45,98 @@ pub struct Layout {
     pub width: f32,
     /// The height of all the lines.
     pub height: f32,
+    /// The distance between tab stops.
+    pub tab: f32,
+}
+
+/// What a paragraph asks of its lines.
+#[derive(Clone, Copy)]
+struct Para {
+    align: Align,
+    indent: f32,
+    marker: Marker,
+    spacing: f32,
+}
+
+/// How far a tab or character at `x` (from the start of the line's text) advances.
+pub fn advance(x: f32, cell: &Cell, tab: f32, measure: &Measure) -> f32 {
+    if cell.ch == '\t' && tab > 0.0 {
+        ((x / tab).floor() + 1.0) * tab - x
+    } else {
+        measure(cell.ch, &cell.style)
+    }
+}
+
+/// The width of the cells `a..b` of a line that starts at `a`.
+fn span(cells: &[Cell], a: usize, b: usize, tab: f32, measure: &Measure) -> f32 {
+    let mut x = 0.0;
+    for cell in &cells[a..b] {
+        x += advance(x, cell, tab, measure);
+    }
+    x
+}
+
+/// Wraps `cells` to `width` points with the default tab stops.
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn layout(cells: &[Cell], width: f32, measure: &Measure) -> Layout {
+    layout_tabs(cells, width, measure, DEFAULT_TAB)
 }
 
 /// Wraps `cells` to `width` points. Every paragraph has at least one line, so an empty document has one.
-pub fn layout(cells: &[Cell], width: f32, measure: &Measure) -> Layout {
+pub fn layout_tabs(cells: &[Cell], width: f32, measure: &Measure, tab: f32) -> Layout {
     let mut lines = Vec::new();
     let mut top = 0.0;
     let mut start = 0;
+    let mut number = 0;
     loop {
         let end = cells[start..].iter().position(|c| c.ch == '\n').map_or(cells.len(), |i| start + i);
-        let align = cells.get(start).or(cells.last()).map_or(Align::Left, |c| c.style.align);
-        wrap(cells, start, end, width, measure, align, &mut top, &mut lines);
+        let style = cells.get(start).or(cells.last()).map(|c| c.style).unwrap_or_default();
+        number = if style.list == ListKind::Numbered { number + 1 } else { 0 };
+        let para = Para {
+            align: style.align,
+            indent: if style.list == ListKind::None { 0.0 } else { LIST_INDENT },
+            marker: match style.list {
+                ListKind::None => Marker::None,
+                ListKind::Bullet => Marker::Bullet,
+                ListKind::Numbered => Marker::Number(number),
+            },
+            spacing: SPACINGS.get(style.spacing as usize).copied().unwrap_or(1.0),
+        };
+        wrap(cells, start, end, width, measure, tab, para, &mut top, &mut lines);
         if end >= cells.len() {
             break;
         }
         start = end + 1;
     }
-    Layout { lines, width, height: top }
+    Layout { lines, width, height: top, tab }
 }
 
 /// Breaks one paragraph (the cells `start..end`, not its newline) into lines. A break comes after the last space that
 /// fits; a word longer than the width is broken where it does not fit.
 #[allow(clippy::too_many_arguments)]
-fn wrap(
-    cells: &[Cell],
-    start: usize,
-    end: usize,
-    width: f32,
-    measure: &Measure,
-    align: Align,
-    top: &mut f32,
-    out: &mut Vec<Line>,
-) {
+fn wrap(cells: &[Cell], start: usize, end: usize, width: f32, measure: &Measure, tab: f32, para: Para, top: &mut f32, out: &mut Vec<Line>) {
+    let avail = (width - para.indent).max(1.0);
     if start == end {
-        push_line(out, cells, start, end, 0.0, align, top);
+        push_line(out, cells, start, end, 0.0, para, para.marker, top);
         return;
     }
     let mut line_start = start;
     let mut used = 0.0;
+    let mut marker = para.marker;
     // the cell after the last space on this line, and the width up to it
     let mut space: Option<(usize, f32)> = None;
     let mut i = start;
     while i < end {
-        let w = measure(cells[i].ch, &cells[i].style);
-        if used + w > width && i > line_start {
+        let w = advance(used, &cells[i], tab, measure);
+        if used + w > avail && i > line_start {
             let (at, at_width) = match space {
                 Some((after, w)) if after > line_start => (after, w),
                 _ => (i, used),
             };
-            push_line(out, cells, line_start, at, at_width, align, top);
+            push_line(out, cells, line_start, at, at_width, para, marker, top);
+            marker = Marker::None;
             line_start = at;
-            used = (line_start..i).map(|k| measure(cells[k].ch, &cells[k].style)).sum();
+            used = span(cells, line_start, i, tab, measure);
             space = None;
             continue;
         }
@@ -91,12 +146,13 @@ fn wrap(
         }
         i += 1;
     }
-    push_line(out, cells, line_start, end, used, align, top);
+    push_line(out, cells, line_start, end, used, para, marker, top);
 }
 
-fn push_line(out: &mut Vec<Line>, cells: &[Cell], start: usize, end: usize, width: f32, align: Align, top: &mut f32) {
-    let height = line_height(cells, start, end);
-    out.push(Line { start, end, top: *top, height, width, align });
+#[allow(clippy::too_many_arguments)]
+fn push_line(out: &mut Vec<Line>, cells: &[Cell], start: usize, end: usize, width: f32, para: Para, marker: Marker, top: &mut f32) {
+    let height = line_height(cells, start, end) * para.spacing;
+    out.push(Line { start, end, top: *top, height, width, align: para.align, indent: para.indent, marker });
     *top += height;
 }
 
@@ -116,14 +172,15 @@ impl Layout {
         self.lines.iter().rposition(|l| l.start <= index).unwrap_or(0)
     }
 
-    /// Where a line's text starts across the width, for its alignment.
+    /// Where a line's text starts across the width: its indent and, for its alignment, the free space.
     pub fn x_offset(&self, line: &Line) -> f32 {
-        let free = (self.width - line.width).max(0.0);
-        match line.align {
-            Align::Center => free / 2.0,
-            Align::Right => free,
-            Align::Left | Align::Justified => 0.0,
-        }
+        let free = (self.width - line.indent - line.width).max(0.0);
+        line.indent
+            + match line.align {
+                Align::Center => free / 2.0,
+                Align::Right => free,
+                Align::Left | Align::Justified => 0.0,
+            }
     }
 
     /// The caret for the text position `index`: x, top and height in points.
@@ -136,11 +193,7 @@ impl Layout {
 
     /// The x, in points from the left of the text column, of position `index` on `line`.
     pub fn x_in_line(&self, cells: &[Cell], line: &Line, index: usize, measure: &Measure) -> f32 {
-        let mut x = self.x_offset(line);
-        for k in line.start..index.min(line.end) {
-            x += measure(cells[k].ch, &cells[k].style);
-        }
-        x
+        self.x_offset(line) + span(cells, line.start, index.clamp(line.start, line.end), self.tab, measure)
     }
 
     /// The text position nearest to the point (`x`, `y`) in points: a click places the caret.
@@ -154,13 +207,14 @@ impl Layout {
     /// The text position in line `line` nearest to `x`. The caret moves to the nearer side of each character.
     fn index_in_line(&self, cells: &[Cell], line: usize, x: f32, measure: &Measure) -> usize {
         let Some(line) = self.lines.get(line) else { return 0 };
-        let mut px = self.x_offset(line);
+        let mut rel = 0.0;
+        let origin = self.x_offset(line);
         for k in line.start..line.end {
-            let w = measure(cells[k].ch, &cells[k].style);
-            if x < px + w / 2.0 {
+            let w = advance(rel, &cells[k], self.tab, measure);
+            if x < origin + rel + w / 2.0 {
                 return k;
             }
-            px += w;
+            rel += w;
         }
         line.end
     }
@@ -257,5 +311,44 @@ mod tests {
         assert_eq!(l.x_offset(&l.lines[0]), 4.0);
         let (x, _, _) = l.caret(&c, 0, &one);
         assert_eq!(x, 4.0);
+    }
+
+    #[test]
+    fn a_tab_advances_to_the_next_stop() {
+        let c = cells("a\tb");
+        let l = layout_tabs(&c, 100.0, &one, 10.0);
+        assert_eq!(l.lines[0].width, 11.0, "a, then a tab to the stop at 10, then b");
+        let (x, _, _) = l.caret(&c, 2, &one);
+        assert_eq!(x, 10.0);
+        assert_eq!(l.index_at(&c, 10.2, 1.0, &one), 2);
+    }
+
+    #[test]
+    fn list_paragraphs_are_indented_numbered_and_spaced() {
+        let mut c = cells("ab\ncd\nef");
+        for cell in &mut c[..5] {
+            cell.style.list = ListKind::Numbered;
+        }
+        for cell in &mut c[6..] {
+            cell.style.spacing = 3;
+        }
+        let l = layout(&c, 100.0, &one);
+        assert_eq!(l.lines[0].marker, Marker::Number(1));
+        assert_eq!(l.lines[1].marker, Marker::Number(2));
+        assert_eq!(l.lines[2].marker, Marker::None);
+        assert_eq!(l.x_offset(&l.lines[0]), LIST_INDENT);
+        assert_eq!(l.lines[2].height, DEFAULT_SIZE * LINE_FACTOR * 2.0);
+    }
+
+    #[test]
+    fn a_wrapped_list_paragraph_marks_only_its_first_line() {
+        let mut c = cells("aaa bbb");
+        for cell in &mut c {
+            cell.style.list = ListKind::Bullet;
+        }
+        let l = layout(&c, LIST_INDENT + 4.0, &one);
+        assert_eq!(l.lines.len(), 2);
+        assert_eq!(l.lines[0].marker, Marker::Bullet);
+        assert_eq!(l.lines[1].marker, Marker::None);
     }
 }

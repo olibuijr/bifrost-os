@@ -15,6 +15,24 @@ pub const SIZES: [f32; 9] = [9.0, 10.0, 11.0, 12.0, 14.0, 18.0, 24.0, 36.0, 48.0
 /// The smallest and largest size a document may hold.
 pub const MIN_SIZE: f32 = 4.0;
 pub const MAX_SIZE: f32 = 144.0;
+/// The text colours a document can use: a name and red, green, blue. Index 0 is the default text colour (drawn with
+/// the window's label colour), so its rgb is only what a file that needs a literal colour gets.
+pub const COLORS: [(&str, [u8; 3]); 8] = [
+    ("Default", [0, 0, 0]),
+    ("Red", [255, 59, 48]),
+    ("Orange", [255, 149, 0]),
+    ("Yellow", [255, 204, 0]),
+    ("Green", [40, 205, 65]),
+    ("Blue", [0, 122, 255]),
+    ("Purple", [175, 82, 222]),
+    ("Gray", [142, 142, 147]),
+];
+/// The line spacings a paragraph can have, as multiples of the natural line height. Index 0 is single spacing.
+pub const SPACINGS: [f32; 5] = [1.0, 1.15, 1.5, 2.0, 2.5];
+/// The distance between default tab stops, in points, and the smallest and largest a document may set.
+pub const DEFAULT_TAB: f32 = 36.0;
+pub const MIN_TAB: f32 = 12.0;
+pub const MAX_TAB: f32 = 144.0;
 /// How many edits Undo remembers.
 pub const UNDO_LIMIT: usize = 200;
 
@@ -27,6 +45,15 @@ pub enum Align {
     Justified,
 }
 
+/// A paragraph's list marker.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ListKind {
+    #[default]
+    None,
+    Bullet,
+    Numbered,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Style {
     pub bold: bool,
@@ -36,11 +63,26 @@ pub struct Style {
     /// Index into `FAMILIES`.
     pub font: u8,
     pub align: Align,
+    /// Index into `COLORS`.
+    pub color: u8,
+    /// Paragraph properties, stored on every cell of the paragraph like `align`: index into `SPACINGS`, and the list.
+    pub spacing: u8,
+    pub list: ListKind,
 }
 
 impl Default for Style {
     fn default() -> Self {
-        Style { bold: false, italic: false, underline: false, size: DEFAULT_SIZE, font: 0, align: Align::Left }
+        Style {
+            bold: false,
+            italic: false,
+            underline: false,
+            size: DEFAULT_SIZE,
+            font: 0,
+            align: Align::Left,
+            color: 0,
+            spacing: 0,
+            list: ListKind::None,
+        }
     }
 }
 
@@ -106,6 +148,8 @@ pub struct Text {
     redo: Vec<Snapshot>,
     last_kind: Option<Kind>,
     epoch: u32,
+    /// The distance between tab stops, in points. A document property, kept in the file.
+    tab: f32,
 }
 
 impl Default for Text {
@@ -116,7 +160,7 @@ impl Default for Text {
 
 impl Text {
     pub fn new() -> Self {
-        Text { cells: Vec::new(), anchor: 0, head: 0, typing: Style::default(), undo: Vec::new(), redo: Vec::new(), last_kind: None, epoch: 0 }
+        Text { cells: Vec::new(), anchor: 0, head: 0, typing: Style::default(), undo: Vec::new(), redo: Vec::new(), last_kind: None, epoch: 0, tab: DEFAULT_TAB }
     }
 
     /// Replaces the content (a file was read). Undo, redo and the selection start over.
@@ -129,6 +173,7 @@ impl Text {
         self.redo.clear();
         self.last_kind = None;
         self.epoch = 0;
+        self.tab = DEFAULT_TAB;
         self.sync_typing();
     }
 
@@ -218,7 +263,26 @@ impl Text {
             self.cells.first().map(|c| c.style)
         };
         self.typing = style.unwrap_or_default();
-        self.typing.align = self.align_at(at);
+        let para = self.paragraph_style_at(at);
+        self.typing.align = para.align;
+        self.typing.spacing = para.spacing;
+        self.typing.list = para.list;
+    }
+
+    /// The paragraph properties (alignment, spacing, list) of the paragraph that holds `pos`, in a style.
+    pub fn paragraph_style_at(&self, pos: usize) -> Style {
+        let para = self.paragraph(pos);
+        let cell = self.cells.get(para.start).or_else(|| if para.start > 0 { self.cells.get(para.start - 1) } else { None });
+        cell.map(|c| c.style).unwrap_or_default()
+    }
+
+    /// The distance between tab stops in points.
+    pub fn tab_width(&self) -> f32 {
+        self.tab
+    }
+
+    pub fn set_tab_width(&mut self, width: f32) {
+        self.tab = width.clamp(MIN_TAB, MAX_TAB);
     }
 
     fn record(&mut self, kind: Kind) {
@@ -364,6 +428,44 @@ impl Text {
     pub fn set_font(&mut self, font: u8) {
         let font = (font as usize).min(FAMILIES.len() - 1) as u8;
         self.restyle(|s| s.font = font);
+    }
+
+    /// Text colour: an index into `COLORS`.
+    pub fn set_color(&mut self, color: u8) {
+        let color = color.min(COLORS.len() as u8 - 1);
+        self.restyle(|s| s.color = color);
+    }
+
+    /// Sets the line spacing (an index into `SPACINGS`) of every paragraph the selection touches.
+    pub fn set_spacing(&mut self, spacing: u8) {
+        let spacing = spacing.min(SPACINGS.len() as u8 - 1);
+        self.restyle_paragraphs(|s| s.spacing = spacing);
+    }
+
+    /// Sets the list of every paragraph the selection touches; the same list again takes it off.
+    pub fn toggle_list(&mut self, list: ListKind) {
+        let now = self.paragraph_style_at(self.selection().start).list;
+        let list = if now == list { ListKind::None } else { list };
+        self.restyle_paragraphs(|s| s.list = list);
+    }
+
+    /// Applies a change to every cell of the paragraphs the selection touches, and to the typing style.
+    fn restyle_paragraphs(&mut self, f: impl Fn(&mut Style)) {
+        self.record(Kind::Formatting);
+        let range = self.paragraphs_of_selection();
+        for c in &mut self.cells[range] {
+            f(&mut c.style);
+        }
+        f(&mut self.typing);
+    }
+
+    /// Makes the document plain text: every character and paragraph loses its formatting. One undo entry.
+    pub fn make_plain(&mut self) {
+        self.record(Kind::Formatting);
+        for c in &mut self.cells {
+            c.style = Style::default();
+        }
+        self.typing = Style::default();
     }
 
     /// Sets the alignment of every paragraph the selection touches.
@@ -548,6 +650,39 @@ mod tests {
         t.load(s.chars().map(|ch| Cell { ch, style: Style::default() }).collect());
         t.select(s.chars().count(), s.chars().count());
         t
+    }
+
+    #[test]
+    fn colour_spacing_and_lists_apply_to_the_right_things() {
+        let mut t = plain("ab\ncd");
+        t.select(0, 2);
+        t.set_color(1);
+        assert_eq!(t.cells()[0].style.color, 1);
+        assert_eq!(t.cells()[3].style.color, 0);
+        t.select(4, 4);
+        t.set_spacing(2);
+        assert_eq!(t.cells()[3].style.spacing, 2);
+        assert_eq!(t.cells()[0].style.spacing, 0);
+        t.toggle_list(ListKind::Bullet);
+        assert_eq!(t.paragraph_style_at(4).list, ListKind::Bullet);
+        assert_eq!(t.paragraph_style_at(0).list, ListKind::None);
+        t.toggle_list(ListKind::Bullet);
+        assert_eq!(t.paragraph_style_at(4).list, ListKind::None);
+    }
+
+    #[test]
+    fn plain_text_drops_formatting_in_one_undo_and_tabs_are_bounded() {
+        let mut t = plain("ab");
+        t.select_all();
+        t.toggle_bold();
+        t.make_plain();
+        assert!(!t.cells()[0].style.bold);
+        assert!(t.undo());
+        assert!(t.cells()[0].style.bold);
+        t.set_tab_width(1.0);
+        assert_eq!(t.tab_width(), MIN_TAB);
+        t.set_tab_width(1000.0);
+        assert_eq!(t.tab_width(), MAX_TAB);
     }
 
     #[test]
