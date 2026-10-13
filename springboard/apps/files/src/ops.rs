@@ -381,7 +381,7 @@ impl Files {
         let dest = self.path.clone();
         self.start_job("Moving to the Trash", JobKind::Trash, paths, dest);
     }
-    /// Empty Trash (Finder's ⇧⌘⌫): deletes every item in Recently Deleted for good, as a job. Undo does not bring them back.
+    /// Empty Trash (⇧⌘⌫): deletes every item in Recently Deleted for good, as a job. Undo does not bring them back.
     pub(crate) fn empty_trash(&mut self) {
         let bin = self.bin();
         let items: Vec<PathBuf> = std::fs::read_dir(&bin)
