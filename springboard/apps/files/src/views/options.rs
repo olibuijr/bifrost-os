@@ -152,7 +152,13 @@ pub(crate) struct ViewOpts {
     pub(crate) thumbs: RefCell<HashMap<(PathBuf, u32), ThumbSlot>>,
     /// The thumbnails the views asked for while painting: (path, size in pt, scale). `Files::request_thumbnails` sends them.
     pub(crate) thumb_asks: RefCell<Vec<(PathBuf, u32, f32)>>,
+    /// The children of expanded folders as read, with the folder's modification time they were read at; see
+    /// [`ViewOpts::kids_of`].
+    pub(crate) kids: RefCell<HashMap<PathBuf, (std::time::SystemTime, Vec<Entry>)>>,
 }
+
+/// Most expanded folders whose children are kept at once.
+const MAX_KID_FOLDERS: usize = 64;
 
 impl Default for ViewOpts {
     fn default() -> Self {
@@ -169,7 +175,31 @@ impl Default for ViewOpts {
             depth: vec![],
             thumbs: RefCell::new(HashMap::new()),
             thumb_asks: RefCell::new(Vec::new()),
+            kids: RefCell::new(HashMap::new()),
         }
+    }
+}
+
+impl ViewOpts {
+    /// The children of an expanded folder. Every refresh of the rows splices them in, so they are read again only when
+    /// the folder's modification time changed (an entry was added, removed or renamed); a folder that cannot be read
+    /// gives None.
+    pub(crate) fn kids_of(&self, dir: &std::path::Path) -> Option<Vec<Entry>> {
+        let stamp = std::fs::metadata(dir).and_then(|m| m.modified()).ok();
+        if let Some((seen, kids)) = self.kids.borrow().get(dir) {
+            if stamp.is_some() && Some(*seen) == stamp {
+                return Some(kids.clone());
+            }
+        }
+        let kids = fs::list_batched(dir, |_| {}).ok()?;
+        if let Some(stamp) = stamp {
+            let mut map = self.kids.borrow_mut();
+            if map.len() >= MAX_KID_FOLDERS && !map.contains_key(dir) {
+                map.clear();
+            }
+            map.insert(dir.to_path_buf(), (stamp, kids.clone()));
+        }
+        Some(kids)
     }
 }
 
@@ -275,7 +305,7 @@ impl Files {
             out.push(e);
             depth.push(d);
             if open {
-                if let Ok(mut kids) = fs::list(&path) {
+                if let Some(mut kids) = self.kids_of(&path) {
                     self.order(&mut kids);
                     self.splice(kids, d + 1, out, depth);
                 }

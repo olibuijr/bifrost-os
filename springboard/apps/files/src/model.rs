@@ -25,11 +25,15 @@ pub(crate) fn tagged_entries(index: &TagIndex, only: Option<Tag>) -> Vec<Entry> 
         .collect()
 }
 
+/// What the listing worker sends for a folder: batches of rows as the folder is read (`partial`), then the whole
+/// sorted folder with the folders above it (`partial` false), which replaces the batches.
 pub(crate) struct Listing {
     pub(crate) path: PathBuf,
     pub(crate) result: Result<Vec<Entry>, String>,
-    /// The folders above `path`, nearest last, for the columns view.
+    /// The folders above `path`, nearest last, for the columns view. Empty in a partial batch.
     pub(crate) ancestors: Vec<(PathBuf, Vec<Entry>)>,
+    /// True for a batch of rows that the final listing will replace.
+    pub(crate) partial: bool,
 }
 
 /// The nearest `ANCESTORS` folders above `path`, outermost first.

@@ -1,3 +1,7 @@
+## 1.26.1 — 2026-10-13
+
+- Speed: a large folder shows its first rows at once. The folder is read in batches (64 rows, then 512 at a time) and the sorted list replaces them when the read ends. Subfolder item counts are no longer read with every listing; the control API counts a folder only when it is asked for. An expanded folder in the list view is read again only when its modification time changes, instead of on every refresh.
+
 ## 1.26.0 — 2026-10-13
 
 - Tab strip: with two or more tabs a strip runs under the toolbar. Each tab shows its folder's name, the open tab is raised, a click selects a tab, and its close box closes it (the open tab closes the same way as ⌘W). The strip is hidden while there is one tab, and the content moves below it.

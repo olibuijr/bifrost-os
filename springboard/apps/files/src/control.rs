@@ -331,7 +331,8 @@ impl Files {
             ("kind", text(fs::kind_description(&e.name, e.is_dir, e.kind))),
             ("size", num(e.size as f64)),
             ("mtime", num(e.mtime as f64)),
-            ("items", e.items.map_or(Json::Null, |n| num(n as f64))),
+            // listings carry no item counts; a folder's count is read here, for the one row being answered
+            ("items", e.items.or_else(|| e.is_dir.then(|| fs::count_items(&e.path)).flatten()).map_or(Json::Null, |n| num(n as f64))),
             ("tags", Json::Arr(self.tag_index.tags(&e.path).into_iter().map(|t| text(t.label())).collect())),
         ])
     }
