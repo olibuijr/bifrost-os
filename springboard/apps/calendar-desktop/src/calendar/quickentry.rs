@@ -117,7 +117,7 @@ impl Calendar {
                 s.fill_rrect(ui.pt(36.0), ui.pt(top + ROW * i as f32), w - ui.pt(56.0), ui.pt(0.5).max(1.0), 0.0, SEPARATOR_C.now());
             }
             self.text(s, ui, name, MAC_BODY_PT, LABEL.now(), ui.pt(36.0), mid);
-            let fit = ui.fit(value, MAC_BODY_PT, w - ui.pt(150.0));
+            let fit = ui.fit(value, MAC_BODY_PT, w * 0.6);
             self.right(s, ui, &fit, LABEL_2.now(), w - ui.pt(36.0), mid);
         }
         let y = top + ROW * rows.len() as f32 + 28.0;

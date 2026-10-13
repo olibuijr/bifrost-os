@@ -117,7 +117,7 @@ impl Calendar {
         (i < self.search_hits.len()).then_some(Target::SearchHit(i))
     }
 
-    /// The results: the header, then one row per match (title, then when and where), or "No results".
+    /// The results: the header, then one row per match (title, then when and where), or a line saying none match.
     pub(super) fn draw_results(&mut self, s: &mut Surface, ui: &Ui) {
         let w = self.w as f32;
         let top = ui.pt(GRID_TOP) - self.scroll.offset();
@@ -125,7 +125,7 @@ impl Calendar {
         {
             let mut g = s.rows(ui.pt(GRID_TOP) as usize, self.bottom(ui) as usize);
             if hits.is_empty() {
-                self.centre(&mut g, ui, "No results", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), w / 2.0, ui.pt(GRID_TOP + 40.0));
+                self.centre(&mut g, ui, "No event matches", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), w / 2.0, ui.pt(GRID_TOP + 40.0));
             }
             for (i, h) in hits.iter().enumerate() {
                 let y = top + ui.pt(ROW_PT) * i as f32;
@@ -137,12 +137,8 @@ impl Calendar {
                 g.fill_rrect(ui.pt(SPACE_XL), y + ui.pt(ROW_PT) - ui.pt(0.5).max(1.0), w - ui.pt(SPACE_HUGE), ui.pt(0.5).max(1.0), 0.0, SEPARATOR_C.now());
             }
         }
-        // the large title: "Search" and what was found
-        let cy = ui.pt(chrome::HEADER_MID_PT);
-        let a = self.labels.get(ui, "Search", MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now()).clone();
-        s.blit(&a, ui.pt(SPACE_XL) as i32, (cy - a.h as f32 / 2.0) as i32, 255, 255);
-        let count = format!(" {}", count_label(hits.len()));
-        self.text(s, ui, &count, MAC_LARGE_TITLE_PT, LABEL_2.now(), ui.pt(SPACE_XL) + a.w as f32, cy);
+        // the large title ("Search" and how many were found) and any message
+        self.draw_header(s, ui);
     }
 
     /// The results as accessible buttons, one per row that is on screen, and the field itself.

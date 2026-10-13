@@ -452,7 +452,7 @@ impl App for CalendarApp {
 
     fn next_wake(&self, t: f64) -> Option<f64> {
         let c = self.cal.as_ref()?;
-        match (c.next_wake(t), self.fetcher.wake(c, t)) {
+        match (c.next_wake(t), self.fetcher.wake(c)) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
         }

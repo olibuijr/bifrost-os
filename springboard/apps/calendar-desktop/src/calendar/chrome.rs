@@ -351,10 +351,14 @@ impl Calendar {
     pub(super) fn draw_header(&mut self, s: &mut Surface, ui: &Ui) {
         let cy = ui.pt(HEADER_MID_PT);
         let x = ui.pt(SPACE_XL);
-        let (bold, rest) = match self.view {
-            View::Month => (MONTHS[(self.selected.month - 1) as usize].to_string(), format!(" {}", self.selected.year)),
-            View::Year => (self.selected.year.to_string(), String::new()),
-            _ => (self.range_label(), String::new()),
+        let (bold, rest) = if self.searching() {
+            ("Search".to_string(), format!(" {}", lookup::count_label(self.search_hits.len())))
+        } else {
+            match self.view {
+                View::Month => (MONTHS[(self.selected.month - 1) as usize].to_string(), format!(" {}", self.selected.year)),
+                View::Year => (self.selected.year.to_string(), String::new()),
+                _ => (self.range_label(), String::new()),
+            }
         };
         // The header is a two-run title (bold month, regular year) on the content column's leading edge;
         // widgets::large_title centres one run on the readable column, so it cannot draw this header.

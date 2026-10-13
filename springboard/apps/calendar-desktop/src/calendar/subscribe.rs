@@ -5,8 +5,9 @@ use super::ics;
 use super::Calendar;
 use bifrost_app::dav_client::session_send;
 use bifrost_app::url::URLRequest;
+use bifrost_app::dispatch::{DispatchQueue, Qos};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use std::sync::{Arc, Mutex};
 
 /// How often a subscription is read while the app runs (milliseconds of the app clock).
 pub const EVERY_MS: f64 = 60.0 * 60.0 * 1000.0;
@@ -201,46 +202,54 @@ impl Calendar {
     }
 }
 
-/// Reads subscriptions on a background thread, one at a time, and hands each answer to the calendar.
+/// Reads subscriptions on the background queue, one at a time, and hands each answer to the calendar. A worker puts its
+/// answer in the shared list and wakes the app loop through the main queue, so `tick` takes it without polling.
 #[derive(Default)]
 pub struct Fetcher {
-    running: Option<(String, Receiver<Result<String, String>>)>,
+    answers: Arc<Mutex<Vec<(String, Result<String, String>)>>>,
+    /// The address being read.
+    running: Option<String>,
 }
 
 impl Fetcher {
-    /// Call from `tick` with the app clock: finishes the read that ended, and starts the next one that is due.
-    pub fn poll(&mut self, c: &mut Calendar, t: f64) {
-        if let Some((url, rx)) = &self.running {
-            match rx.try_recv() {
-                Ok(result) => {
-                    let url = url.clone();
-                    self.running = None;
-                    c.fetch_finished(&url, result);
-                }
-                Err(TryRecvError::Empty) => return,
-                Err(TryRecvError::Disconnected) => {
-                    let url = url.clone();
-                    self.running = None;
-                    c.fetch_finished(&url, Err("the read stopped".into()));
-                }
+    /// Puts an answer in the list `poll` takes from: what a worker does when its read ends.
+    pub fn post(&self, url: &str, result: Result<String, String>) {
+        self.answers.lock().unwrap_or_else(|e| e.into_inner()).push((url.to_string(), result));
+    }
+
+    /// Hands the calendar the answers that have come in.
+    pub fn deliver(&mut self, c: &mut Calendar) {
+        let answers = std::mem::take(&mut *self.answers.lock().unwrap_or_else(|e| e.into_inner()));
+        for (url, result) in answers {
+            if self.running.as_deref() == Some(url.as_str()) {
+                self.running = None;
             }
-        }
-        if self.running.is_none() {
-            if let Some(url) = c.next_fetch(t) {
-                let (tx, rx) = channel();
-                let target = url.clone();
-                std::thread::spawn(move || {
-                    let _ = tx.send(read(&target));
-                });
-                self.running = Some((url, rx));
-            }
+            c.fetch_finished(&url, result);
         }
     }
 
-    /// When `tick` next has work for subscriptions: soon while a read is going on, else when one falls due.
-    pub fn wake(&self, c: &Calendar, t: f64) -> Option<f64> {
+    /// Call from `tick` with the app clock: takes the answers that came in, then starts the next read that is due.
+    pub fn poll(&mut self, c: &mut Calendar, t: f64) {
+        self.deliver(c);
         if self.running.is_some() {
-            return Some(t + 500.0);
+            return;
+        }
+        let Some(url) = c.next_fetch(t) else { return };
+        let answers = Arc::clone(&self.answers);
+        let target = url.clone();
+        DispatchQueue::global(Qos::Utility).async_(move || {
+            let result = read(&target);
+            answers.lock().unwrap_or_else(|e| e.into_inner()).push((target, result));
+            // an empty main-queue job wakes the app loop, which then runs `tick`
+            DispatchQueue::main().async_(|| {});
+        });
+        self.running = Some(url);
+    }
+
+    /// When `tick` next has work for subscriptions: when the next one falls due. A read going on wakes the loop itself.
+    pub fn wake(&self, c: &Calendar) -> Option<f64> {
+        if self.running.is_some() {
+            return None;
         }
         c.fetch_wake()
     }

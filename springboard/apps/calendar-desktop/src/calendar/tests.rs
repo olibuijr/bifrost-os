@@ -1573,9 +1573,26 @@ fn the_fetcher_wakes_for_the_next_read() {
     let ui = crate::test_ui();
     let mut c = new(&ui, temp.file());
     let fetcher = subscribe::Fetcher::default();
-    assert_eq!(fetcher.wake(&c, 5.0), None, "nothing to read");
+    assert_eq!(fetcher.wake(&c), None, "nothing to read");
     c.subscribe("https://cal.example.is/team.ics").unwrap();
-    assert_eq!(fetcher.wake(&c, 5.0), Some(0.0), "never read, so due now");
+    assert_eq!(fetcher.wake(&c), Some(0.0), "never read, so due now");
+}
+
+#[test]
+fn answers_a_worker_posted_reach_the_calendar_on_the_next_tick() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.subscribe("https://cal.example.is/team.ics").unwrap();
+    let mut fetcher = subscribe::Fetcher::default();
+    fetcher.post("https://cal.example.is/team.ics", Ok(team_calendar_text()));
+    fetcher.deliver(&mut c);
+    assert_eq!(c.subscription_names(), vec!["Team".to_string()]);
+    fetcher.post("https://cal.example.is/team.ics", Err("no route".into()));
+    fetcher.deliver(&mut c);
+    assert_eq!(c.error.as_deref(), Some("Could not update Team: no route"));
+    fetcher.deliver(&mut c);
+    assert_eq!(c.subscription_names(), vec!["Team".to_string()], "nothing more to take");
 }
 
 #[test]
