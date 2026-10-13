@@ -1,7 +1,7 @@
 //! The System Information tree and its rows: which categories exist, what each one lists, and how the numbers read.
 //! Pure functions over `bifrost_core::sysinfo::Report`, so the rows are tested on the host without a window.
 
-use bifrost_core::sysinfo::{Disk, Display, InstalledApp, NetInterface, PciDevice, PowerSource, Report, Summary, UsbDevice};
+use bifrost_core::sysinfo::{clock_label, size_label, usb_speed, Disk, Display, InstalledApp, NetInterface, PciDevice, PowerSource, Report, Summary, UsbDevice};
 
 /// One key and value line of the detail card.
 pub type Row = (String, String);
@@ -249,42 +249,6 @@ fn driver_label(driver: &str) -> &str {
     }
 }
 
-/// The name of a USB link speed in Mb/s, as the kernel reports it.
-pub fn usb_speed(mbps: u32) -> &'static str {
-    match mbps {
-        1 => "Low speed",
-        12 => "Full speed",
-        480 => "High speed",
-        5000 => "SuperSpeed",
-        10000 => "SuperSpeed+",
-        20000 => "SuperSpeed+ 20 Gb/s",
-        _ => "Speed unknown",
-    }
-}
-
-/// A size in gigabytes: whole numbers from 10 up, one decimal below. `base` is 2^30 for memory, 10^9 for disks.
-pub fn size_label(bytes: u64, base: u64, unit: &str) -> String {
-    if bytes == 0 {
-        return "—".to_string();
-    }
-    let g = bytes as f64 / base as f64;
-    if g >= 10.0 {
-        format!("{:.0} {unit}", g.round())
-    } else {
-        format!("{g:.1} {unit}")
-    }
-}
-
-pub fn clock_label(mhz: f32) -> String {
-    if mhz <= 0.0 {
-        "—".to_string()
-    } else if mhz >= 1000.0 {
-        format!("{:.2} GHz", mhz / 1000.0)
-    } else {
-        format!("{:.0} MHz", mhz)
-    }
-}
-
 pub fn or_dash(text: &str) -> String {
     if text.trim().is_empty() {
         "—".to_string()
@@ -304,33 +268,6 @@ fn capitalize(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn memory_rounds_to_whole_gigabytes_from_ten_up() {
-        assert_eq!(size_label(16_384_000 * 1024, 1 << 30, "GB"), "16 GB");
-        assert_eq!(size_label(4 << 30, 1 << 30, "GB"), "4.0 GB");
-        assert_eq!(size_label(0, 1 << 30, "GB"), "—");
-    }
-
-    #[test]
-    fn disks_use_decimal_gigabytes() {
-        assert_eq!(size_label(500_000_000_000, 1_000_000_000, "GB"), "500 GB");
-        assert_eq!(size_label(8_000_000_000, 1_000_000_000, "GB"), "8.0 GB");
-    }
-
-    #[test]
-    fn clock_switches_to_gigahertz() {
-        assert_eq!(clock_label(1800.0), "1.80 GHz");
-        assert_eq!(clock_label(800.0), "800 MHz");
-        assert_eq!(clock_label(0.0), "—");
-    }
-
-    #[test]
-    fn usb_speeds_have_names() {
-        assert_eq!(usb_speed(480), "High speed");
-        assert_eq!(usb_speed(1), "Low speed");
-        assert_eq!(usb_speed(0), "Speed unknown");
-    }
 
     #[test]
     fn every_category_has_a_row_even_when_empty() {
