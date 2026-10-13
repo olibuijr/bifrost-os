@@ -8,7 +8,7 @@ export const meta = {
   ],
 }
 
-const EXTRA = " GITHUB TEXT: commit messages, code comments, doc comments and docs must be professional, plain, human prose: short conventional commit subjects, bodies stating what changed and why, comments that explain intent; no AI-slop wording (no seamless/robust/comprehensive/leverage/delve, no 'not just X but Y', no emoji, no filler summaries); see ~/.claude/skills/avoid-ai-writing/SKILL.md."
+const EXTRA = " GITHUB TEXT: commit messages, code comments, doc comments and docs must be professional, plain, human prose: short conventional commit subjects, bodies stating what changed and why, comments that explain intent; no AI-slop wording (no seamless/robust/comprehensive/leverage/delve, no 'not just X but Y', no emoji, no filler summaries); see ~/.claude/skills/avoid-ai-writing/SKILL.md. SCOPE: do NOT shrink your scope because you cannot compile. The lead compiles every branch after merging and fixes the build errors, so a few type slips are expected and fine. A small slice is a failed task. Implement the whole task, carefully."
 
 // args: { sprint: number, tasks?: number, avoid?: string[], context?: string, taskList?: Task[] (skips triage) }
 const A = args || {}
