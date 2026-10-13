@@ -463,7 +463,10 @@ impl TextField {
     }
     fn handle_key(&mut self, k: &KeyInput) -> bool {
         if let Some((key, mods)) = k.as_chord() {
-            let Some((cmd, ext)) = chord_combo(key, mods).and_then(binding) else { return false };
+            let Some((cmd, ext)) = chord_combo(key, mods).and_then(binding) else {
+                self.editor.end_composition();
+                return false;
+            };
             return match cmd {
                 EditCommand::Undo => self.perform("undo"),
                 EditCommand::Redo => self.perform("redo"),
@@ -475,7 +478,7 @@ impl TextField {
                 let before = self.text().to_string();
                 let t = Self::single_line(t);
                 if !t.is_empty() {
-                    self.editor.insert_text(&t);
+                    self.editor.type_text(&t);
                 }
                 self.edited(&before);
                 true
@@ -486,7 +489,10 @@ impl TextField {
             KeyInput::Code(39) => self.run(EditCommand::MoveRight, false),
             KeyInput::Code(36) => self.run(EditCommand::MoveLineStart, false),
             KeyInput::Code(35) => self.run(EditCommand::MoveLineEnd, false),
-            _ => false,
+            _ => {
+                self.editor.end_composition();
+                false
+            }
         }
     }
 }
@@ -576,6 +582,9 @@ impl View for TextField {
         }
         self.start = start;
         self.marks = marks;
+        if focused {
+            widgets::candidate_list(s, ui, self.base.frame, self.editor.candidates());
+        }
     }
     fn handle(&mut self, ev: &ViewEvent) -> bool {
         if !self.base.enabled {
@@ -584,6 +593,7 @@ impl View for TextField {
         match ev {
             ViewEvent::Pointer(Event::Down(px, _)) => {
                 let before = self.text().to_string();
+                self.editor.end_composition();
                 if self.editor.buf.has_marked_text() {
                     self.editor.unmark_text(true);
                 }

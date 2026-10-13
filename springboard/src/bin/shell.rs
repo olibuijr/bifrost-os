@@ -354,6 +354,8 @@ fn run() -> std::io::Result<()> {
     hw_keys.set_layout(springboard::installer::keymaps::configured_layout());
     // the input source the hardware layout last followed; the configured layout holds until it changes
     let mut seen_source = springboard::shell::kb_layouts::active();
+    // text inputs in this process compose kana while the Japanese source is on (`compose_method::type_text`)
+    bifrost_ui::compose_method::set_japanese_source(seen_source == springboard::shell::kb_layouts::Layout::Japanese);
     let mut key_repeat = springboard::shell::hwkeys::KeyRepeat::default();
     // the word typed since the last break, for Settings > Keyboard > Text Replacements
     let mut words = springboard::shell::kb_input::WordBuffer::default();
@@ -724,6 +726,7 @@ fn run() -> std::io::Result<()> {
                     let source = springboard::shell::kb_layouts::active();
                     if source != seen_source {
                         seen_source = source;
+                        bifrost_ui::compose_method::set_japanese_source(source == springboard::shell::kb_layouts::Layout::Japanese);
                         hw_keys.set_layout(springboard::installer::keymaps::layout_index(source.keymap()).unwrap_or(0));
                     }
                     let typed = if down { hw_keys.typed(code) } else { None };
