@@ -221,6 +221,14 @@ impl<'a> Cff<'a> {
         (0..self.num_glyphs()).find(|&g| self.glyph_name(g).as_deref() == Some(name)).map(|g| g as u16)
     }
 
+    /// The glyph's box in font units as (x_min, y_min, x_max, y_max); a glyph with no outline gives zeros.
+    /// None when the glyph does not exist.
+    pub fn glyph_bounds(&self, gid: u16) -> Option<[f32; 4]> {
+        let mut b = Bounds { min: (f32::MAX, f32::MAX), max: (f32::MIN, f32::MIN), cur: (0.0, 0.0), any: false };
+        self.outline(gid, &mut b)?;
+        Some(if b.any { [b.min.0, b.min.1, b.max.0, b.max.1] } else { [0.0; 4] })
+    }
+
     /// Runs the glyph's charstring into `sink`; returns the advance width.
     pub fn outline(&self, gid: u16, sink: &mut impl Sink) -> Option<f32> {
         let cs = self.char_strings.get(self.data, gid as usize)?;
@@ -231,6 +239,44 @@ impl<'a> Cff<'a> {
         }
         Some(t2.width.unwrap_or(self.default_width))
     }
+}
+
+/// Collects the extent of an outline; curves are sampled, so the box is exact to a small fraction of a unit.
+struct Bounds {
+    min: (f32, f32),
+    max: (f32, f32),
+    cur: (f32, f32),
+    any: bool,
+}
+
+impl Bounds {
+    fn add(&mut self, x: f32, y: f32) {
+        self.min = (self.min.0.min(x), self.min.1.min(y));
+        self.max = (self.max.0.max(x), self.max.1.max(y));
+        self.any = true;
+    }
+}
+
+impl Sink for Bounds {
+    fn move_to(&mut self, x: f32, y: f32) {
+        self.cur = (x, y);
+        self.add(x, y);
+    }
+    fn line_to(&mut self, x: f32, y: f32) {
+        self.cur = (x, y);
+        self.add(x, y);
+    }
+    fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
+        let (x0, y0) = self.cur;
+        for i in 1..=16 {
+            let t = i as f32 / 16.0;
+            let u = 1.0 - t;
+            let (a, b, c, d) = (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
+            self.add(a * x0 + b * x1 + c * x2 + d * x, a * y0 + b * y1 + c * y2 + d * y);
+        }
+        self.cur = (x, y);
+    }
+    fn close(&mut self) {}
 }
 
 struct Type2<'s, 'a, S: Sink> {
@@ -793,5 +839,20 @@ mod tests {
             assert!(rec.0.iter().any(|c| matches!(c, Cmd::C(..))), "glyph {g} has curves");
             assert_eq!(rec.0.last(), Some(&Cmd::Z));
         }
+    }
+
+    #[test]
+    fn glyph_bounds_cover_lines_and_curves() {
+        let main = cs(&[&num(10), &num(20), &[21], &num(50), &[6], &num(30), &[7], &[14]]);
+        let data = font(&[&[14], &main], &[], &[]);
+        let f = Cff::parse(&data).unwrap();
+        assert_eq!(f.glyph_bounds(1), Some([10.0, 20.0, 60.0, 50.0]));
+        assert_eq!(f.glyph_bounds(0), Some([0.0; 4]), "an empty glyph has no box");
+        assert_eq!(f.glyph_bounds(9), None);
+        // a curve that bulges past its end points is measured by sampling
+        let mut b = Bounds { min: (f32::MAX, f32::MAX), max: (f32::MIN, f32::MIN), cur: (0.0, 0.0), any: false };
+        b.move_to(0.0, 0.0);
+        b.curve_to(0.0, 100.0, 100.0, 100.0, 100.0, 0.0);
+        assert!(b.max.1 > 70.0 && b.max.1 <= 75.0 + 1e-3, "{:?}", b.max);
     }
 }
