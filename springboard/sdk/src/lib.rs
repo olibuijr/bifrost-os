@@ -240,6 +240,7 @@ pub mod disk_arbitration;
 pub mod audio_aggregate;
 /// Process objects and process taps (`CATapDescription`), as pure models with their wire shapes.
 pub mod audio_process;
+pub mod speech_recognizer;
 /// Stream formats (`StreamFormat`), the voice-take format (`pcm16`) and buffer durations (`audio_format::duration_ms`).
 pub mod audio_format;
 pub mod focus_filter;

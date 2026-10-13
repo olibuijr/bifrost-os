@@ -2414,3 +2414,14 @@ Apple reference: `AudioHardwareCreateAggregateDevice` and the `kAudioAggregateDe
 Gaps, stated honestly: audiod has no command for any of this yet, so nothing creates an aggregate device, reports
 processes or captures audio; drift compensation is a flag only; driver plug-ins and boxes stay gap. Rows in
 `core-audio.json` are partial until a Midget check.
+
+## Speech recognizer (`bifrost_app::speech_recognizer`)
+
+`SFSpeechRecognizer` mirrors Apple's legacy recognizer: `request_authorization` records the person's answer once
+(`NotDetermined`, `Denied`, `Restricted`, `Authorized`), `is_available` asks the backend, and `recognition_task` /
+`recognition_task_url` start a task only when authorized and available. Audio requests take `AnalyzerInput` buffers
+through `append` and `end_audio`; the caller drives the task with `pump`, which delivers partial results (when
+`should_report_partial_results`) and one final `SFSpeechRecognitionResult` with `best_transcription` and timed
+`SFTranscriptionSegment`s. `cancel` reports `Canceled` once. Gaps: no recognition engine ships, so a `RecognitionBackend`
+must be supplied; no alternatives beyond the best transcription; no dictation entry point on the keyboard. Rows stay
+partial until a Midget check.
