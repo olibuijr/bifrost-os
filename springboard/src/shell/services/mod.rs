@@ -5,6 +5,38 @@
 //! below and one line to [`all`]. Nothing in the wire protocol changes. A service gets the whole [`Shell`] on every
 //! call and tick, so it can read and change any shell state; it must answer at once (no blocking work on the shell
 //! thread: hand slow work to a thread and report it later as an event).
+//!
+//! # Reference launch agents and the shell module that fills each role
+//!
+//! The reference system runs these roles as separate launchd agents; BifrOSt runs them inside the one shell process
+//! (the compositor is labwc, started by `packaging/arch/springboard.service`). Rows are tracked in
+//! `docs/parity-matrix/os/daemons/` and guarded by `springboard/tests/daemon_map.rs`.
+//!
+//! | Reference agent | BifrOSt module (under `springboard/src/shell/`) |
+//! |---|---|
+//! | Dock | `desktop_dock.rs`, `dock_stack.rs` |
+//! | Finder (desktop) | `desk.rs` |
+//! | MenuBarAgent | `desktop_bar.rs` |
+//! | controlcenter | `control_center.rs` |
+//! | notificationcenterui | `notify/center.rs`, `notify/banner.rs`, `notify/lockwidgets.rs` |
+//! | usernotificationsd, UserNotificationCenter | `usernotif.rs`, `notify/store.rs`, `notify/schedule.rs`, `notify/permission.rs` |
+//! | WindowManager, WindowServer | `workspace.rs`, `window_fx.rs`, labwc |
+//! | Spotlight | `quicksearch.rs` |
+//! | corespotlightd, mdworker.shared | `spotindex.rs` |
+//! | screencaptureui | `screenshot.rs`, `screenrec.rs` |
+//! | wallpaper | `wallpaper_page.rs` |
+//! | loginwindow | `login.rs` |
+//! | TextInputSwitcher, TextInputMenuAgent | `input_source_hud.rs`, `kb_layouts.rs`, `fcitx_bridge.rs` |
+//! | menuextra.battery.helper | `battery.rs`, `low_battery.rs` |
+//! | xpc.loginitemregisterd | `login_items_page.rs` |
+//! | coreservices.sharedfilelistd | `recent_items.rs` |
+//! | screensharing | `sharing_page.rs` (toggle only) |
+//! | SoftwareUpdateNotificationManager | `ota.rs` |
+//! | ScreenReaderUIServer | `accessibility/reader.rs` |
+//! | gamecontrolleragentd | `game_controllers_page.rs` |
+//!
+//! Siri, family controls, iCloud, search-party, Screen Time and the memory/expansion slot agents have no counterpart
+//! and stay gap rows.
 use super::Shell;
 use bifrost_core::json::Json;
 

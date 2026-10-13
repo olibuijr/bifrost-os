@@ -2066,3 +2066,13 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## Launch agents and daemons (OS daemons, role map)
+
+No new API. The shell performs the roles of the reference launchd agents (Dock, Finder desktop, controlcenter,
+notificationcenterui, usernotificationsd, WindowManager, WindowServer, Spotlight, corespotlightd, screencaptureui,
+wallpaper, loginwindow, TextInputSwitcher, battery menu extra, login item registration, shared file list) inside one
+process, so these rows in `docs/parity-matrix/os/daemons/` are `partial` with the filling module in `bifrost` and the
+missing parts in the note. The table is in the `services/mod.rs` doc comment; `springboard/tests/daemon_map.rs`
+checks that every partial row cites an existing path and has a note. Siri, family controls, iCloud, search-party,
+Screen Time and slot-notification agents have no counterpart and stay `gap`. Parity needs a Midget check.
