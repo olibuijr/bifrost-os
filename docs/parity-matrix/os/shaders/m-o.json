@@ -16,13 +16,13 @@
     "size": 42565
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Metal.framework/Versions/A/Resources/MTLBVHBuilder.metallib",
@@ -37,13 +37,13 @@
     "size": 6039280
    },
    "description": "",
-   "role": "",
+   "role": "Metal runtime helper shaders (blit, clear, resolve, indirect command support)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/shaders",
+   "status": "partial",
+   "note": "BifrOSt's Vulkan layer ships its own GLSL pipelines (compose, shape, shadow, kawase blur) and a shader library model (springboard/ui/src/shader_library.rs); no general blit/resolve helper set. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Metal.framework/Versions/A/Resources/MTLECBE.metallib",
@@ -58,13 +58,13 @@
     "size": 7692
    },
    "description": "",
-   "role": "",
+   "role": "Metal runtime helper shaders (blit, clear, resolve, indirect command support)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/shaders",
+   "status": "partial",
+   "note": "BifrOSt's Vulkan layer ships its own GLSL pipelines (compose, shape, shadow, kawase blur) and a shader library model (springboard/ui/src/shader_library.rs); no general blit/resolve helper set. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Metal.framework/Versions/A/Resources/MTLMeshShaderEmulator.metallib",
@@ -79,13 +79,13 @@
     "size": 28524
    },
    "description": "",
-   "role": "",
+   "role": "Metal runtime helper shaders (blit, clear, resolve, indirect command support)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/shaders",
+   "status": "partial",
+   "note": "BifrOSt's Vulkan layer ships its own GLSL pipelines (compose, shape, shadow, kawase blur) and a shader library model (springboard/ui/src/shader_library.rs); no general blit/resolve helper set. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/mlx.metallib",
@@ -100,13 +100,13 @@
     "size": 2854220
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/mvf.metallib",
@@ -121,13 +121,13 @@
     "size": 200456
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/mxi-binaryarchive.metallib",
@@ -142,13 +142,13 @@
     "size": 141496464
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/mxi.metallib",
@@ -163,13 +163,13 @@
     "size": 840032
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DeepVideoProcessingCore.framework/opticalFlowMetalLib.metallib",
@@ -184,13 +184,13 @@
     "size": 808576
    },
    "description": "",
-   "role": "",
+   "role": "Video frame rate conversion and optical flow",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/render/src/frame_interp.rs; springboard/render/src/block_motion.rs",
+   "status": "partial",
+   "note": "BifrOSt has a CPU frame interpolator with a motion field and block motion estimation; no dense optical flow or GPU path. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GESS.framework/Versions/A/Resources/mlx.metallib",
@@ -205,13 +205,13 @@
     "size": 102072920
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MXI.framework/Versions/A/Resources/mxi_archive.metallib",
@@ -226,13 +226,13 @@
     "size": 45161184
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLDebugShaders.metallib",
@@ -247,13 +247,13 @@
     "size": 14576
    },
    "description": "",
-   "role": "",
+   "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLGPUDebugAccelerationStructureSupport.metallib",
@@ -268,13 +268,13 @@
     "size": 15948
    },
    "description": "",
-   "role": "",
+   "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLGPUDebugDeepResidencyCheck.metallib",
@@ -289,13 +289,13 @@
     "size": 35440
    },
    "description": "",
-   "role": "",
+   "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLGPUDebugICBSupport.metallib",
@@ -310,13 +310,13 @@
     "size": 137292
    },
    "description": "",
-   "role": "",
+   "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLLegacySVAccelerationStructureSupport.metallib",
@@ -331,13 +331,13 @@
     "size": 15948
    },
    "description": "",
-   "role": "",
+   "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLLegacySVICBSupport.metallib",
@@ -352,13 +352,13 @@
     "size": 103896
    },
    "description": "",
-   "role": "",
+   "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/SubFrameworks/ShaderGraph.framework/Versions/A/Resources/MaterialX-1.38-apple.metallib",
@@ -373,13 +373,13 @@
     "size": 5897308
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/SubFrameworks/ShaderGraph.framework/Versions/A/Resources/MaterialX-1.39.4-apple.metallib",
@@ -394,13 +394,13 @@
     "size": 5644540
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/SubFrameworks/ShaderGraph.framework/Versions/A/Resources/MaterialX-Common.metallib",
@@ -415,13 +415,13 @@
     "size": 8871424
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }

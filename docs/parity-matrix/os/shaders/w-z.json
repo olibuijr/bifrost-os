@@ -16,13 +16,13 @@
     "size": 81420
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/WeatherMaps.framework/Versions/A/Resources/WeatherMapsMetalLib.metallib",
@@ -37,13 +37,13 @@
     "size": 65432
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of WeatherMaps (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "WeatherMaps UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }

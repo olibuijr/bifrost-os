@@ -16,13 +16,13 @@
     "size": 954320
    },
    "description": "",
-   "role": "",
+   "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
+   "status": "partial",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/RawCamera.bundle/Contents/Resources/RawCamera.metallib",
@@ -37,13 +37,13 @@
     "size": 2685936
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/raytracing_runtime_emulation.metallib",
@@ -58,13 +58,13 @@
     "size": 38404
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/runtime.gen10.metallib",
@@ -79,13 +79,13 @@
     "size": 1290322
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/runtime.gen12.metallib",
@@ -100,13 +100,13 @@
     "size": 46514
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG15G_B0.bundle/Contents/Resources/raytracing_runtime_ria1.metallib",
@@ -121,13 +121,13 @@
     "size": 1347993
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG15G_B0.bundle/Contents/Resources/runtime.gen15.metallib",
@@ -142,13 +142,13 @@
     "size": 1517454
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG16G_A0.bundle/Contents/Resources/raytracing_runtime_ria2.metallib",
@@ -163,13 +163,13 @@
     "size": 1349881
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG17G.bundle/Contents/Resources/raytracing_runtime_ria3.metallib",
@@ -184,13 +184,13 @@
     "size": 1225537
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG18G.bundle/Contents/Resources/raytracing_runtime_ria4.metallib",
@@ -205,13 +205,13 @@
     "size": 1144001
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG18G.bundle/Contents/Resources/runtime.gen18.metallib",
@@ -226,13 +226,13 @@
     "size": 1511502
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AppleMetalOpenGLRenderer.bundle/Contents/Resources/PixelConverter.metallib",
@@ -247,13 +247,13 @@
     "size": 36312
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_GaussianSplatting_Kernels.metallib",
@@ -268,13 +268,13 @@
     "size": 766726
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_MVS_Kernels.metallib",
@@ -289,13 +289,13 @@
     "size": 71502
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_Matching_Kernels.metallib",
@@ -310,13 +310,13 @@
     "size": 27194
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_Meshing_Kernels.metallib",
@@ -331,13 +331,13 @@
     "size": 123024
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/Photogrammetry_Texturing_Kernels.metallib",
@@ -352,13 +352,13 @@
     "size": 315372
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VideoProcessing.framework/Versions/A/PlugIns/Codecs/VCPRealtimeEncoder.bundle/Contents/Resources/ProcessAccelerate.metallib",
@@ -373,13 +373,13 @@
     "size": 179152
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }
