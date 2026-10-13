@@ -17,9 +17,9 @@
     {
       "feature": "Hotspot helper",
       "apple": "Hotspot helper collection group",
-      "bifrost": "none found (no hotspot or tethering code under springboard/src or springboard/sdk/src)",
-      "status": "gap",
-      "note": "No hotspot subsystem and no API for apps to hook into one."
+      "bifrost": "springboard/sdk/src/hotspot_helper.rs (helper registration and command queue), springboard/sdk/src/hotspot_configuration.rs",
+      "status": "partial",
+      "note": "built on parity/team-a-05; not yet verified on Midget. Pure model: a helper registers for Evaluate, Authenticate, Maintain and Logoff, takes commands in order and answers them with a checked response. The system does not send commands yet, so no captive login runs through it."
     },
     {
       "feature": "Configuring a Wi-Fi accessory to join a network",
