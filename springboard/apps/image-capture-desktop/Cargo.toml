@@ -1,0 +1,9 @@
+[package]
+name = "bifrost-image-capture"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bifrost-app = { path = "../../sdk" }
+bifrost-ui = { path = "../../ui" }
+springboard = { path = "../.." }
