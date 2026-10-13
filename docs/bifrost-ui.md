@@ -3139,8 +3139,10 @@ plus `INDEX.tsv`; both skip cleanly when the folder is absent. `INDEX.tsv` holds
 ## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
 
 One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
-`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`, default `Desktop` (`FormFactor::resolve` is the pure form of
-the lookup). The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
+`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`. With neither set, `FormFactor::current` detects it once: a
+tablet or convertible SMBIOS chassis (codes 30 to 32) is a tablet, and without SMBIOS a known tablet device-tree board
+(`samsung,gta8wifi`) or a direct-touch input device (`B: PROP` bit 1 in `/proc/bus/input/devices`) is a tablet. Anything
+else is `Desktop`. `FormFactor::resolve` is the pure form of the lookup, with the machine facts passed in as `Facts`. The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
 app runs on a touch tablet.
 
 Keyboard policy (`FormFactor::allows_onscreen_keyboard`): a desktop never raises the on-screen keyboard on the windowed
@@ -3182,8 +3184,10 @@ recognizers is a separate step.
 ## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
 
 One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
-`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`, default `Desktop` (`FormFactor::resolve` is the pure form of
-the lookup). The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
+`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`. With neither set, `FormFactor::current` detects it once: a
+tablet or convertible SMBIOS chassis (codes 30 to 32) is a tablet, and without SMBIOS a known tablet device-tree board
+(`samsung,gta8wifi`) or a direct-touch input device (`B: PROP` bit 1 in `/proc/bus/input/devices`) is a tablet. Anything
+else is `Desktop`. `FormFactor::resolve` is the pure form of the lookup, with the machine facts passed in as `Facts`. The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
 app runs on a touch tablet.
 
 Keyboard policy (`FormFactor::allows_onscreen_keyboard`): a desktop never raises the on-screen keyboard on the windowed
