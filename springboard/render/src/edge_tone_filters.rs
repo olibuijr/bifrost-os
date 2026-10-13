@@ -1,5 +1,5 @@
 //! Edge detection and highlight and shadow adjustment, with the parameters of the reference
-//! filters `CIEdges` and `CIHighlightShadowAdjust`. Pixels are packed `u32` values, red in the low
+//! filters named Edges and Highlight and Shadow Adjust. Pixels are packed `u32` values, red in the low
 //! byte, as in `gfx::Image`.
 //!
 //! Edges: the Sobel gradient magnitude of the luma, scaled and written as grey. Highlight and
