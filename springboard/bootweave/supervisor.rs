@@ -386,7 +386,7 @@ pub fn readback_meta(width: u32, height: u32, stride_px: usize, order: PixelOrde
 /// The pixel order from fbdev's channel offsets (bits): red at 0 and blue at 16 is `RedGreenBlueReserved`; anything
 /// else is treated as the usual blue-green-red.
 pub fn order_from(red_offset: u32, blue_offset: u32) -> PixelOrder {
-    if red_offset == 0 && blue_offset == 16 { PixelOrder::Rgbx } else { PixelOrder::Bgrx }
+    PixelOrder::from_channel_offsets(red_offset, blue_offset)
 }
 
 /// The loader's hand-off from the efivarfs file image: 4 attribute bytes, then the 32-byte record.

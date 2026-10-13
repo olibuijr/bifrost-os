@@ -20,6 +20,14 @@ pub enum PixelOrder {
     Rgbx,
 }
 
+impl PixelOrder {
+    /// The order from a Linux framebuffer's channel offsets in bits (`fb_var_screeninfo.red.offset` and
+    /// `.blue.offset`): red at 0 and blue at 16 is `Rgbx`; anything else is treated as the usual `Bgrx`.
+    pub fn from_channel_offsets(red_offset: u32, blue_offset: u32) -> PixelOrder {
+        if red_offset == 0 && blue_offset == 16 { PixelOrder::Rgbx } else { PixelOrder::Bgrx }
+    }
+}
+
 /// An sRGB colour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rgb(pub u8, pub u8, pub u8);
@@ -394,6 +402,13 @@ mod tests {
         let mut px = vec![0u32; (w * h) as usize];
         render(&Frame { width: w, height: h, appearance, progress, screen }, &mut px, w as usize, PixelOrder::Bgrx);
         px
+    }
+
+    #[test]
+    fn pixel_order_follows_framebuffer_channel_offsets() {
+        assert_eq!(PixelOrder::from_channel_offsets(16, 0), PixelOrder::Bgrx);
+        assert_eq!(PixelOrder::from_channel_offsets(0, 16), PixelOrder::Rgbx);
+        assert_eq!(PixelOrder::from_channel_offsets(0, 0), PixelOrder::Bgrx, "unknown stays the usual order");
     }
 
     #[test]
