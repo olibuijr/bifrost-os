@@ -312,7 +312,15 @@ fn run() -> std::io::Result<()> {
     let mut shell = Shell::new(w as i32, h as i32, font, mono, wallpaper, icon, gather(level, &current_wallpaper, &history));
     shell.set_volume(vol.level());
     shell.set_route(router.route(), vol.level(), false, 0.0);
-    shell.set_wallpapers(wallpapers(&dir));
+    // the wallpaper catalogue reads the packed thumbnails and may crop Pictures stills on first use: a worker builds
+    // it and the loop hands it to the shell on its next turn (Settings > Wallpaper is the only reader)
+    let (wallpapers_tx, wallpapers_rx) = std::sync::mpsc::channel::<Vec<springboard::shell::wallpaper_page::Wallpaper>>();
+    {
+        let dir = dir.clone();
+        let _ = sys::spawn_named("wallpapers", move || {
+            let _ = wallpapers_tx.send(wallpapers(&dir));
+        });
+    }
     shell.set_wallpaper_dim(prefs.get("wallpaper_dim") != Some("0"));
     let mut lock_mapped: Option<&'static [u8]> = None;
     set_lock_wallpaper(&mut shell, &dir, prefs.get("wallpaper_lock").unwrap_or(""), &mut lock_mapped);
@@ -419,6 +427,10 @@ fn run() -> std::io::Result<()> {
     // what drawing and copying a frame costs, to start it as late as the vblank allows
     let mut frame_cost = kms::FrameCost::new(period);
     loop {
+        // the wallpaper catalogue from its worker, once it is ready (see the spawn above)
+        if let Ok(list) = wallpapers_rx.try_recv() {
+            shell.set_wallpapers(list);
+        }
         let present_at_start = last_present;
         #[cfg(feature = "desktop-wayland")]
         if wayland && disp.wayland_lock(shell.is_locked())? { shell.force_full_redraw(); }

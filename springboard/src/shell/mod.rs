@@ -723,13 +723,18 @@ impl Shell {
         let ui = Ui::new(font, layout.s);
         let size = layout.icon as usize;
         let mask = squircle_mask(size);
-        let tile = |a: &AppDef| {
-            let mut img = apphost::icon_image(a.icon, size).or_else(|| icon(a.icon, size)).or_else(|| a.icon_image.map(|f| f(size))).unwrap_or_else(|| scene::placeholder_icon(size));
+        // installed apps' icons are PNGs: they decode in parallel, one thread per app, before any tile is built
+        let all = apps();
+        let decoded: Vec<Option<Image>> = apps::decode_icons(all, size);
+        let tile = |a: &AppDef, decoded: Option<Image>| {
+            let mut img = decoded.or_else(|| icon(a.icon, size)).or_else(|| a.icon_image.map(|f| f(size))).unwrap_or_else(|| scene::placeholder_icon(size));
             img.apply_mask(&mask);
             Tile { icon: img, label: ui.styled(&ui.fit(a.name, 12.0, layout.label_w as f32), 12.0, Weight::Regular, WHITE, true) }
         };
-        let dock: Vec<Tile> = apps()[..IN_DOCK].iter().map(tile).collect();
-        let grid: Vec<Tile> = apps()[IN_DOCK..].iter().map(tile).collect();
+        let mut decoded = decoded.into_iter();
+        let mut tiles: Vec<Tile> = all.iter().map(|a| tile(a, decoded.next().flatten())).collect();
+        let grid: Vec<Tile> = tiles.split_off(IN_DOCK);
+        let dock: Vec<Tile> = tiles;
         let base_icons: Vec<Image> = dock.iter().chain(&grid).map(|t| t.icon.clone()).collect();
         let library = AppLibrary::new(&ui, &layout, &base_icons);
         let pager = Pager::new(Layout::pages(grid.len()) + 1, w as f32);

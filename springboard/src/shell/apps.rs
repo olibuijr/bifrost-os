@@ -91,3 +91,33 @@ fn intern(s: &str) -> &'static str {
     leaked
 }
 
+
+/// The icon of every app in `list` decoded at `size` px (`apphost::icon_image`, None when the app has no
+/// installed icon), in the same order. Each app decodes on its own thread, so the home screen's PNG icons
+/// are ready together before the first frame instead of one after another.
+pub fn decode_icons(list: &[AppDef], size: usize) -> Vec<Option<Image>> {
+    std::thread::scope(|s| {
+        let jobs: Vec<_> = list.iter().map(|a| s.spawn(move || apphost::icon_image(a.icon, size))).collect();
+        jobs.into_iter().map(|j| j.join().ok().flatten()).collect()
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decode_icons_keeps_order_and_length() {
+        // no app is registered in a unit test, so every entry decodes to None, one per app, in order
+        let icons = decode_icons(APPS, 64);
+        assert_eq!(icons.len(), APPS.len());
+        assert!(icons.iter().all(Option::is_none));
+        assert!(decode_icons(&[], 64).is_empty());
+    }
+
+    #[test]
+    fn app_defs_are_sync_for_the_decode_threads() {
+        fn assert_sync<T: Sync>() {}
+        assert_sync::<AppDef>();
+    }
+}
