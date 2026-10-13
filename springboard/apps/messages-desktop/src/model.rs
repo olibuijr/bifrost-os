@@ -19,6 +19,8 @@ pub struct Message {
     pub reply_to: Option<String>,
     /// True once the sender replaced the words.
     pub edited: bool,
+    /// The words this message had before each edit, oldest first.
+    pub history: Vec<Body>,
     /// The reactions to this message, one entry per emoji in the order they first appeared.
     pub reactions: Vec<Reaction>,
 }
@@ -405,6 +407,27 @@ impl Prompt {
     }
 }
 
+/// What a message-info panel lists.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InfoKind {
+    /// The words of the message before each edit.
+    Edits,
+    /// Who reacted with which emoji.
+    Reactions,
+}
+
+impl InfoKind {
+    pub fn title(self) -> &'static str {
+        match self {
+            InfoKind::Edits => "Edit History",
+            InfoKind::Reactions => "Reactions",
+        }
+    }
+}
+
+/// The most lines a message-info panel lists; older entries are left out.
+pub const INFO_ROWS_MAX: usize = 10;
+
 /// A panel over the window. The sign-in sheet is separate because it blocks everything.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Overlay {
@@ -419,6 +442,8 @@ pub enum Overlay {
     Confirm(String),
     /// The emoji picker. With a message id, a choice reacts to that message; without, it goes into the composer.
     Emoji(Option<String>),
+    /// The edits or the reactions of the message with this id, in the room on screen.
+    Info(InfoKind, String),
 }
 
 /// The app's state.
@@ -556,6 +581,41 @@ impl Messages {
         let recent: Vec<&str> =
             self.prefs.recent_emoji.iter().map(String::as_str).filter(|e| found.iter().any(|f| *f == *e)).collect();
         recent.iter().copied().chain(found.iter().copied().filter(|e| !recent.iter().any(|r| r == e))).map(str::to_string).collect()
+    }
+
+    /// The lines of a message-info panel for the message `id` of the room on screen: its versions, oldest first (the
+    /// current one marked), or each emoji with the people who gave it. At most [`INFO_ROWS_MAX`] lines.
+    pub fn info_lines(&self, kind: InfoKind, id: &str) -> Vec<String> {
+        let Some(message) = self.selected_room().and_then(|r| r.timeline.iter().find(|m| m.id == id)) else { return Vec::new() };
+        let mut lines: Vec<String> = match kind {
+            InfoKind::Edits => {
+                let total = message.history.len() + 1;
+                message
+                    .history
+                    .iter()
+                    .map(preview)
+                    .chain(std::iter::once(preview(&message.body)))
+                    .enumerate()
+                    .map(|(i, text)| if i + 1 == total { format!("{}. {text} (current)", i + 1) } else { format!("{}. {text}", i + 1) })
+                    .collect()
+            }
+            InfoKind::Reactions => message
+                .reactions
+                .iter()
+                .map(|r| {
+                    let who: Vec<String> = r
+                        .users
+                        .iter()
+                        .map(|(user, _)| if *user == self.user_id { "You".to_string() } else { protocol::display_name(user).to_string() })
+                        .collect();
+                    format!("{}  {}", r.key, who.join(", "))
+                })
+                .collect(),
+        };
+        if lines.len() > INFO_ROWS_MAX {
+            lines.drain(..lines.len() - INFO_ROWS_MAX);
+        }
+        lines
     }
 
     /// Opens the picker with an empty search, for a message (a reaction) or for the composer.
@@ -754,6 +814,7 @@ fn apply_room(room: &mut Room, update: &RoomUpdate, me: &str, primed: bool, view
             body: event.body.clone(),
             reply_to: event.reply_to.clone(),
             edited: false,
+            history: Vec::new(),
             reactions: Vec::new(),
         });
     }
@@ -774,7 +835,10 @@ fn apply_changes(room: &mut Room, update: &RoomUpdate) {
     for edit in &update.edits {
         if let Some(m) = room.timeline.iter_mut().find(|m| m.id == edit.target && m.sender == edit.sender) {
             if m.body != Body::Redacted {
-                m.body = edit.body.clone();
+                if m.body != edit.body {
+                    let before = std::mem::replace(&mut m.body, edit.body.clone());
+                    m.history.push(before);
+                }
                 m.edited = true;
             }
         }
@@ -788,6 +852,7 @@ fn apply_changes(room: &mut Room, update: &RoomUpdate) {
         if let Some(m) = room.timeline.iter_mut().find(|m| m.id == *removed) {
             m.body = Body::Redacted;
             m.reactions.clear();
+            m.history.clear();
             m.edited = false;
         } else {
             for m in &mut room.timeline {
@@ -1301,6 +1366,57 @@ mod tests {
         let message = &m.rooms.iter().find(|r| r.id == "!a:x").unwrap().timeline[0];
         assert_eq!(message.body, Body::Text("dinner plans".into()));
         assert!(message.edited);
+    }
+
+    #[test]
+    fn an_edit_keeps_the_words_it_replaced() {
+        let mut m = two_rooms();
+        let edit = |text: &str| protocol::Edit { target: "$1".into(), sender: "@bob:x".into(), body: Body::Text(text.into()) };
+        let mut u = update("!a:x", vec![], 0);
+        u.edits = vec![edit("dinner plans"), edit("dinner plans"), edit("brunch plans")];
+        m.apply_sync(&sync(vec![u]));
+        let message = &m.rooms.iter().find(|r| r.id == "!a:x").unwrap().timeline[0];
+        assert_eq!(message.history, vec![Body::Text("lunch plans".into()), Body::Text("dinner plans".into())]);
+        assert_eq!(message.body, Body::Text("brunch plans".into()));
+        m.select("!a:x");
+        assert_eq!(
+            m.info_lines(InfoKind::Edits, "$1"),
+            ["1. lunch plans", "2. dinner plans", "3. brunch plans (current)"].map(String::from).to_vec()
+        );
+        let mut gone = update("!a:x", vec![], 0);
+        gone.redactions = vec!["$1".into()];
+        m.apply_sync(&sync(vec![gone]));
+        let message = &m.rooms.iter().find(|r| r.id == "!a:x").unwrap().timeline[0];
+        assert!(message.history.is_empty(), "removing a message forgets its earlier words");
+    }
+
+    #[test]
+    fn the_reactions_panel_names_who_gave_each_emoji() {
+        let mut m = two_rooms();
+        let react = |id: &str, who: &str, key: &str| protocol::Annotation { id: id.into(), target: "$1".into(), key: key.into(), sender: who.into() };
+        let mut u = update("!a:x", vec![], 0);
+        u.reactions = vec![react("$r1", "@me:x", "+1"), react("$r2", "@bob:x", "+1"), react("$r3", "@ann:x", "ok")];
+        m.apply_sync(&sync(vec![u]));
+        assert!(m.info_lines(InfoKind::Reactions, "$1").is_empty(), "nothing is listed until the room is on screen");
+        m.select("!a:x");
+        assert_eq!(m.info_lines(InfoKind::Reactions, "$1"), vec!["+1  You, bob".to_string(), "ok  ann".to_string()]);
+        assert!(m.info_lines(InfoKind::Reactions, "$none").is_empty());
+        assert_eq!((InfoKind::Edits.title(), InfoKind::Reactions.title()), ("Edit History", "Reactions"));
+    }
+
+    #[test]
+    fn a_long_history_lists_only_the_newest_versions_with_true_numbers() {
+        let mut m = two_rooms();
+        let mut u = update("!a:x", vec![], 0);
+        u.edits = (0..INFO_ROWS_MAX + 4)
+            .map(|i| protocol::Edit { target: "$1".into(), sender: "@bob:x".into(), body: Body::Text(format!("v{i}")) })
+            .collect();
+        m.apply_sync(&sync(vec![u]));
+        m.select("!a:x");
+        let lines = m.info_lines(InfoKind::Edits, "$1");
+        assert_eq!(lines.len(), INFO_ROWS_MAX);
+        assert!(lines[0].starts_with("6. "), "{lines:?}");
+        assert!(lines[INFO_ROWS_MAX - 1].ends_with("(current)"));
     }
 
     #[test]

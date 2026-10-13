@@ -2,7 +2,7 @@
 //! sidebar; the timeline and the composer are the main pane; the sign-in form is a sheet over both. [`Layout`] holds the
 //! geometry for the painter and the hit test alike, so a tap lands on what is drawn.
 
-use crate::model::{day_label, day_of, preview, starts_day, typing_text, Overlay, EMOJI_CATALOG, EMOJI_COLUMNS, FIELD_LABELS, PASSWORD_FIELD};
+use crate::model::{day_label, day_of, preview, starts_day, typing_text, Overlay, EMOJI_CATALOG, INFO_ROWS_MAX, EMOJI_COLUMNS, FIELD_LABELS, PASSWORD_FIELD};
 use crate::protocol::Body;
 use crate::window::MessagesWindow;
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, WHITE};
@@ -456,6 +456,18 @@ impl MessagesWindow {
                     ],
                 })
             }
+            Overlay::Info(kind, id) => {
+                let rows = self.model.info_lines(*kind, id).len().clamp(1, INFO_ROWS_MAX);
+                let ph = head + lay.pad + rows as f32 * lay.line + ui.pt(SHEET_FOOT_PT);
+                let r = place(ph, pw);
+                let done = [r[0] + pw - lay.pad - bw, r[1] + ph - lay.pad - lay.button_h, bw, lay.button_h];
+                Some(Panel {
+                    panel: r,
+                    field: None,
+                    content_y: r[1] + head + lay.pad,
+                    buttons: vec![button(done, "Done", OverlayAction::Ok, true, false)],
+                })
+            }
             Overlay::Emoji(_) => {
                 let cell = ui.pt(CELL_PT);
                 // The panel keeps the height of the whole catalogue, so a search does not make it jump.
@@ -779,6 +791,7 @@ impl MessagesWindow {
             Overlay::Details => "Conversation Details",
             Overlay::Settings => "Settings",
             Overlay::Emoji(_) => "Emoji",
+            Overlay::Info(kind, _) => kind.title(),
             Overlay::None => "",
         };
         put_centred(s, &mut self.labels, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), px_ + pw / 2.0, py + ui.pt(SHEET_HEAD_PT) / 2.0);
@@ -832,6 +845,16 @@ impl MessagesWindow {
                     let shown = fit(ui, value, MAC_BODY_PT, Weight::Regular, text_w * 0.65);
                     let vw = ui.measure(&shown, MAC_BODY_PT, Weight::Regular);
                     put(s, &mut self.labels, ui, &shown, MAC_BODY_PT, Weight::Regular, LABEL.now(), text_x + text_w - vw, y);
+                }
+            }
+            Overlay::Info(kind, id) => {
+                let lines = self.model.info_lines(kind, &id);
+                if lines.is_empty() {
+                    put(s, &mut self.labels, ui, "Nothing to show", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), text_x, panel.content_y);
+                }
+                for (i, line) in lines.iter().enumerate() {
+                    let shown = fit(ui, line, MAC_BODY_PT, Weight::Regular, text_w);
+                    put(s, &mut self.labels, ui, &shown, MAC_BODY_PT, Weight::Regular, LABEL.now(), text_x, panel.content_y + i as f32 * lay.line);
                 }
             }
             Overlay::Emoji(_) => {

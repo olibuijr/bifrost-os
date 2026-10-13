@@ -5,7 +5,7 @@
 use crate::accounts::{self, Account};
 use crate::api::{Api, UPLOAD_LIMIT};
 use crate::draw::{inside, ChipHit, Hit, OverlayAction, Rect};
-use crate::model::{Messages, Outgoing, Overlay, Prompt, PromptKind, SignIn, REACTIONS};
+use crate::model::{InfoKind, Messages, Outgoing, Overlay, Prompt, PromptKind, SignIn, REACTIONS};
 use crate::protocol;
 use crate::sync::{self, Event};
 use bifrost_app::kit::{Scroller, TextCache, Ui};
@@ -55,6 +55,8 @@ pub const CTX_REPLY: u32 = 20;
 pub const CTX_EDIT: u32 = 21;
 pub const CTX_UNSEND: u32 = 22;
 pub const CTX_COPY: u32 = 23;
+pub const CTX_REACTIONS: u32 = 24;
+pub const CTX_HISTORY: u32 = 25;
 /// The first of the tapback ids: `CTX_REACT + i` reacts with `REACTIONS[i]`.
 pub const CTX_REACT: u32 = 30;
 
@@ -681,9 +683,20 @@ impl MessagesWindow {
                 .and_then(|r| r.timeline.iter().find(|m| m.id == id))
                 .is_some_and(|m| m.sender == self.model.user_id);
             let text = self.message_text(&id).is_some();
+            let (reacted, edited) = self
+                .model
+                .selected_room()
+                .and_then(|r| r.timeline.iter().find(|m| m.id == id))
+                .map_or((false, false), |m| (!m.reactions.is_empty(), m.edited));
             let mut items = vec![item(CTX_REPLY, "Reply", true)];
             for (i, (label, _)) in REACTIONS.iter().enumerate() {
                 items.push(item(CTX_REACT + i as u32, label, true));
+            }
+            if reacted {
+                items.push(item(CTX_REACTIONS, "Show Reactions...", true));
+            }
+            if edited {
+                items.push(item(CTX_HISTORY, "Edit History...", true));
             }
             items.push(item(CTX_COPY, "Copy", text));
             if own {
@@ -719,6 +732,8 @@ impl MessagesWindow {
                 self.model.begin_edit(&m);
             }
             (CTX_UNSEND, Some(CtxTarget::Message(m))) => self.unsend(&m),
+            (CTX_REACTIONS, Some(CtxTarget::Message(m))) => self.model.overlay = Overlay::Info(InfoKind::Reactions, m),
+            (CTX_HISTORY, Some(CtxTarget::Message(m))) => self.model.overlay = Overlay::Info(InfoKind::Edits, m),
             (CTX_COPY, Some(CtxTarget::Message(m))) => {
                 if let Some(text) = self.message_text(&m) {
                     bifrost_app::kit::clipboard::set_text(&text);
