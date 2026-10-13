@@ -25,6 +25,7 @@ use bifrost_app::controls::{pdfannot, pdfselect};
 use bifrost_app::controls::pdfview::DisplayMode;
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_TITLE3_PT};
 use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
+use bifrost_app::proto::ContextItem;
 use bifrost_app::widgets;
 use bifrost_app::kit::ui::{SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XXL, SPACE_XXXL};
 use springboard::shell::cache::TextCache;
@@ -39,7 +40,7 @@ use layout::{Layout, Metrics};
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use store::{Pos, Span, Store, Theme, SIZES};
+use store::{Pos, SortBy, Span, Status, Store, Theme, ViewMode, SIZES};
 
 #[cfg(test)]
 mod highlight_tests;
@@ -47,6 +48,8 @@ mod highlight_tests;
 mod connect_tests;
 #[cfg(test)]
 mod narrate_tests;
+#[cfg(test)]
+mod library_tests;
 
 
 /// The unified toolbar band of the full-size window (Golden Gate: no title row).
@@ -68,8 +71,16 @@ pub(super) const BAR_LIBRARY_SEARCH: u32 = 15;
 const LIBRARY_SEARCH_PT: f32 = 220.0;
 /// Sidebar row ids.
 const ROW_BASE: u32 = 100;
+/// Item ids of the library's context menu; the collections start at `CTX_COLLECTION_BASE`.
+const CTX_OPEN: u32 = 1;
+const CTX_WANT: u32 = 2;
+const CTX_FINISHED: u32 = 3;
+const CTX_COLLECTION_BASE: u32 = 100;
+/// A context menu holds at most 32 items (the wire limit); the collections share it with three fixed items.
+const MAX_COLLECTION_ITEMS: usize = 20;
+/// A row of the library as a list.
+const LIST_ROW_PT: f32 = 68.0;
 const MARGIN_PT: f32 = 24.0;
-const PAGE_MARGIN_PT: f32 = 44.0;
 /// The gap between the two pages of a spread (View > Two Pages).
 const PAGE_GUTTER_PT: f32 = 40.0;
 fn page_top_pt() -> f32 { UNIFIED_BAR_PT + 14.0 }
@@ -88,6 +99,11 @@ const SECTION_PT: f32 = 40.0;
 const COVER_MIN_PT: f32 = 170.0;
 /// The theme swatch row below the text-size buttons (its top and height).
 const THEME_ROW_PT: f32 = 130.0;
+/// The rows below the themes in the Display panel (tops, from the size buttons) and the height of a choice button.
+const SPACING_ROW_PT: f32 = 252.0;
+const MARGIN_ROW_PT: f32 = 330.0;
+const JUSTIFY_ROW_PT: f32 = 408.0;
+const CHOICE_PT: f32 = 44.0;
 
 /// A named colour at `a` opacity, premultiplied the way `gfx::rgba` does it. Derives tints from tokens.
 pub(super) const fn fade(c: u32, a: u8) -> u32 {
@@ -150,6 +166,18 @@ pub(super) fn page_text(page: &layout::Page) -> String {
     page.lines.iter().filter(|l| !matches!(l.kind, layout::Kind::Image { .. })).map(|l| l.text.as_str()).collect::<Vec<&str>>().join("\n")
 }
 
+/// The extra width each space of a body line takes when the text is justified (View > Justify Text, the Display panel):
+/// the slack of the line shared between its spaces, see `layout::justify_extra`. Zero when justification is off, for a
+/// heading, and for the last line of a paragraph, which stays ragged. `block_text` is the text of the line's block, `pt`
+/// the point size the line is set in and `width` the column width in px.
+pub(super) fn line_extra(ui: &Ui, justify: bool, block_text: &str, line: &layout::Line, pt: f32, width: f32) -> f32 {
+    if !justify || !matches!(line.kind, layout::Kind::Body) || layout::ends_paragraph(block_text, line.offset, &line.text) {
+        return 0.0;
+    }
+    let weight = springboard::shell::ui::Weight::Regular;
+    layout::justify_extra(ui.measure(&line.text, pt, weight), width, line.text.matches(' ').count(), ui.measure(" ", pt, weight))
+}
+
 /// The page texts of a whole layout, in page order, as the document model of pdfselect.
 fn document_text(layout: &Layout) -> Vec<String> {
     layout.pages.iter().map(page_text).collect()
@@ -193,6 +221,10 @@ pub enum Target {
     SizeDown,
     SizeUp,
     ThemeButton(usize),
+    /// Display panel: line spacing (index into `store::SPACINGS`), side margin (into `store::MARGINS`), justification
+    Spacing(usize),
+    Margin(usize),
+    Justify,
     PanelBody,
 }
 
@@ -247,16 +279,26 @@ pub enum Filter {
     Reading,
     Books,
     Pdfs,
+    WantToRead,
+    Finished,
+    /// a collection the reader made, by its place in `Store::collections`
+    Collection(usize),
 }
 
 impl Filter {
-    pub const ALL: [Filter; 4] = [Filter::Reading, Filter::All, Filter::Books, Filter::Pdfs];
+    /// The fixed rows of the sidebar, in order: Library (4), then Collections (2). The reader's own collections follow.
+    pub const ALL: [Filter; 6] = [Filter::Reading, Filter::All, Filter::Books, Filter::Pdfs, Filter::WantToRead, Filter::Finished];
+    /// Where the Collections section starts in `ALL`.
+    const COLLECTIONS_AT: usize = 4;
     pub fn name(self) -> &'static str {
         match self {
             Filter::All => "All",
             Filter::Reading => "Reading Now",
             Filter::Books => "Books",
             Filter::Pdfs => "PDFs",
+            Filter::WantToRead => "Want to Read",
+            Filter::Finished => "Finished",
+            Filter::Collection(_) => "Collection",
         }
     }
     fn symbol(self) -> &'static str {
@@ -265,6 +307,9 @@ impl Filter {
             Filter::Reading => "clock",
             Filter::Books => "doc",
             Filter::Pdfs => "doc",
+            Filter::WantToRead => "star",
+            Filter::Finished => "checkmark.circle",
+            Filter::Collection(_) => "folder",
         }
     }
 }
@@ -306,12 +351,20 @@ pub struct Books {
     pub(super) notice: Option<String>,
     /// View menu: one page, or two pages side by side (the pdfview display modes). Kept for the session.
     pub(super) display: DisplayMode,
+    /// where Add to Library and shared files are copied to
+    import_dir: PathBuf,
+    /// the book a context menu in the library was opened on
+    context_book: Option<PathBuf>,
+    /// counts the time a book is open towards the reading goal
+    clock: store::ReadingClock,
 }
 
 impl Books {
     /// Hosts may supply their platform's document folders while keeping state private. their platform's document folders while keeping state private.
     pub fn with_library_dirs(ui: &Ui, w: i32, h: i32, dir: PathBuf, additional: Vec<PathBuf>) -> Self {
         let store = Store::load(dir.join("state.tsv"));
+        // the first folder the host names is the Books folder; without one, books go in the private data folder
+        let import_dir = additional.first().cloned().unwrap_or_else(|| dir.clone());
         let mut dirs: Vec<PathBuf> = vec![dir.clone()];
         for folder in additional {
             if !dirs.contains(&folder) { dirs.push(folder); }
@@ -346,6 +399,9 @@ impl Books {
             whole_words: false,
             notice: None,
             display: DisplayMode::SinglePage,
+            import_dir,
+            context_book: None,
+            clock: store::ReadingClock::default(),
         };
         b.rescan();
         b
@@ -415,7 +471,7 @@ impl Books {
         self.shelf.iter().map(|c| c.title.as_str()).collect()
     }
 
-    #[cfg(test)]
+    /// The reading settings: text size, theme, line spacing, margins and justification.
     pub fn settings(&self) -> store::Settings {
         self.store.settings
     }
@@ -477,13 +533,19 @@ impl Books {
     fn metrics(&self, ui: &Ui) -> Metrics {
         let size = SIZES[self.store.settings.size.min(SIZES.len() - 1)];
         // a two-page spread gives each page half the text width, less the gutter between the pages
-        let column = self.w as f32 - 2.0 * ui.pt(PAGE_MARGIN_PT);
+        let column = self.w as f32 - 2.0 * self.page_margin(ui);
         let width = if self.two_pages() { (column - ui.pt(PAGE_GUTTER_PT)) / 2.0 } else { column };
         Metrics {
             width,
             height: self.h as f32 - ui.pt(page_top_pt()) - ui.pt(FOOTER_PT),
             body: ui.pt(size) * ui.text_scale,
+            line_height: self.store.settings.line_height(),
         }
+    }
+
+    /// The side margin of the reading column in pixels (the Display panel's Margins).
+    pub(super) fn page_margin(&self, ui: &Ui) -> f32 {
+        ui.pt(self.store.settings.margin_pt())
     }
 
     /// Point size to hand `Ui::text`/`measure` for a size in px, so layout
@@ -549,10 +611,18 @@ impl Books {
     pub(super) fn goto_page(&mut self, p: usize, t: f64) {
         let Some(r) = &mut self.reader else { return };
         let p = p.min(r.layout.pages.len().saturating_sub(1));
+        let mut finished = None;
         if p != r.page {
             r.page = p;
             r.highlight = None;
             r.selection = None;
+            // the page, or the spread it opens, reaches the last page of a book that has more than one
+            if r.layout.pages.len() > 1 && p + self.display.pages_per_row() >= r.layout.pages.len() {
+                finished = Some(r.path.clone());
+            }
+        }
+        if let Some(path) = finished {
+            self.store.set_status(&path, Status::Finished);
         }
         self.remember(t);
         self.dirty = true;
@@ -642,17 +712,30 @@ impl Books {
     }
 
     /// For a PDF book, the saved highlights of page `page_no` as highlight annotations (`pdfannot`): one per highlighted
-    /// run of a line, with its bounds in points from the text column's left edge and the line's top, and the highlight's
+    /// run of a line, with its bounds in px from the text column's left edge and the line's top, and the highlight's
     /// note as its contents. None for other formats, which keep drawing their highlights as text spans.
+    #[cfg(test)]
     pub(super) fn pdf_highlights(&self, ui: &Ui, page_no: usize) -> Option<pdfannot::PageAnnotations> {
+        let marks = self.pdf_highlight_marks(ui, page_no)?;
+        let mut all = pdfannot::PageAnnotations::new();
+        for (mark, _) in marks {
+            all.add(mark);
+        }
+        Some(all)
+    }
+
+    /// The annotations of `pdf_highlights`, each with the style of its highlight (an index into
+    /// `store::HIGHLIGHT_STYLES`), in the order the page draws them.
+    pub(super) fn pdf_highlight_marks(&self, ui: &Ui, page_no: usize) -> Option<Vec<(pdfannot::Annotation, u8)>> {
         let r = self.reader.as_ref()?;
         if !r.path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) {
             return None;
         }
         let page = r.layout.pages.get(page_no)?;
         let spans: Vec<Span> = self.store.entry(&r.path).map_or_else(Vec::new, |e| e.highlights.clone());
-        let body_pt = Self::pt_of(ui, self.metrics(ui).body);
-        let mut marks = pdfannot::PageAnnotations::new();
+        let m = self.metrics(ui);
+        let body_pt = Self::pt_of(ui, m.body);
+        let mut marks = Vec::new();
         for line in &page.lines {
             let (pt, weight) = match line.kind {
                 layout::Kind::Heading(level) => (body_pt * layout::heading_scale(level), springboard::shell::ui::Weight::Bold),
@@ -660,7 +743,8 @@ impl Books {
                 layout::Kind::Body => (body_pt, springboard::shell::ui::Weight::Regular),
             };
             let text = r.book.blocks.get(line.block).and_then(|b| b.text()).unwrap_or("");
-            let lh = ui.pt(pt) * ui.text_scale * layout::LINE_HEIGHT;
+            let lh = ui.pt(pt) * ui.text_scale * m.line_height;
+            let extra = line_extra(ui, self.store.settings.justify, text, line, pt, m.width);
             for span in spans.iter().filter(|sp| sp.block == line.block) {
                 let (a, b) = layout::line_cols(text, line.offset, &line.text, span.offset, span.offset + span.len);
                 if a >= b {
@@ -668,11 +752,12 @@ impl Books {
                 }
                 let prefix: String = line.text.chars().take(a).collect();
                 let word: String = line.text.chars().skip(a).take(b - a).collect();
-                let bounds = Rect { x: ui.measure(&prefix, pt, weight), y: line.y, w: ui.measure(&word, pt, weight), h: lh };
-                if let Ok(mut mark) = pdfannot::Annotation::new(pdfannot::Subtype::Highlight, bounds) {
+                let x = ui.measure(&prefix, pt, weight) + extra * prefix.matches(' ').count() as f32;
+                let w = ui.measure(&word, pt, weight) + extra * word.matches(' ').count() as f32;
+                if let Ok(mut mark) = pdfannot::Annotation::new(pdfannot::Subtype::Highlight, Rect { x, y: line.y, w, h: lh }) {
                     mark.set_highlighted(true);
                     mark.set_contents(&self.store.note_of(&r.path, *span).unwrap_or_default());
-                    marks.add(mark);
+                    marks.push((mark, self.store.highlight_style(&r.path, *span)));
                 }
             }
         }
@@ -702,6 +787,7 @@ impl Books {
 
     fn close_reader(&mut self, t: f64) {
         self.notice = None;
+        self.credit_reading(t);
         self.remember(t);
         self.save_now();
         self.reader = None;
@@ -712,16 +798,41 @@ impl Books {
     }
 
     fn change_settings(&mut self, ui: &Ui, size: usize, theme: Theme) {
+        self.apply_settings(ui, store::Settings { size, theme, ..self.store.settings });
+    }
+
+    /// Takes new reading settings: the pages are laid out again when the size, the line spacing or the margins changed,
+    /// and the reader keeps its place.
+    fn apply_settings(&mut self, ui: &Ui, settings: store::Settings) {
         let keep = self.reader.as_ref().map(|r| r.layout.pos_of(r.page)).unwrap_or_default();
-        let size_changed = size != self.store.settings.size;
-        self.store.settings = store::Settings { size, theme };
+        let old = self.store.settings;
+        let relayout = (settings.size, settings.spacing, settings.margin) != (old.size, old.spacing, old.margin);
+        self.store.settings = settings;
         self.save_now();
-        if size_changed {
+        if relayout {
             self.repaginate(ui, keep);
         } else {
             self.labels.clear();
         }
         self.dirty = true;
+    }
+
+    /// Display panel: the line spacing, an index into `store::SPACINGS`.
+    pub fn set_line_spacing(&mut self, ui: &Ui, spacing: usize) {
+        let settings = self.store.settings;
+        self.apply_settings(ui, store::Settings { spacing: spacing.min(store::SPACINGS.len() - 1), ..settings });
+    }
+
+    /// Display panel: the side margins, an index into `store::MARGINS`.
+    pub fn set_margins(&mut self, ui: &Ui, margin: usize) {
+        let settings = self.store.settings;
+        self.apply_settings(ui, store::Settings { margin: margin.min(store::MARGINS.len() - 1), ..settings });
+    }
+
+    /// Display panel: whether body text is set flush on both sides.
+    pub fn set_justified(&mut self, ui: &Ui, on: bool) {
+        let settings = self.store.settings;
+        self.apply_settings(ui, store::Settings { justify: on, ..settings });
     }
 
     // --- search ---
@@ -948,6 +1059,255 @@ impl Books {
         }
     }
 
+    // --- reading status, collections, sorting, goals, importing ---
+
+    /// Counts the time since the last call towards today's reading goal while a book is open.
+    fn credit_reading(&mut self, t: f64) {
+        let reading = self.screen == Screen::Reader && self.reader.is_some();
+        let secs = self.clock.advance(t, reading);
+        if secs > 0 {
+            self.store.add_reading(store::today(), secs);
+            self.save_at.get_or_insert(t + SAVE_DELAY_MS);
+        }
+    }
+
+    /// The reading goal in minutes a day; 0 = none.
+    pub fn reading_goal(&self) -> u32 {
+        self.store.library.goal
+    }
+
+    /// Library menu: sets the daily reading goal in minutes (0 = no goal).
+    pub fn set_reading_goal(&mut self, minutes: u32) {
+        self.store.library.goal = minutes;
+        self.save_now();
+        self.dirty = true;
+    }
+
+    /// The goal line of the Reading Now section: today's minutes against the goal, and the days in a row the goal
+    /// was met. None without a goal.
+    pub(super) fn goal_text(&self) -> Option<String> {
+        let today = store::today();
+        let label = store::goal_label(self.store.seconds_on(today), self.store.library.goal)?;
+        Some(match self.store.goal_streak(today) {
+            n if n >= 2 => format!("{label}, {n} days in a row"),
+            _ => label,
+        })
+    }
+
+    /// The standing of the open book (Library menu: Want to Read, Finished).
+    pub fn open_status(&self) -> Status {
+        self.reading().map_or(Status::None, |p| self.store.status_of(p))
+    }
+
+    /// Library menu: marks the open book Want to Read or Finished; choosing the same again takes it back.
+    pub fn toggle_open_status(&mut self, status: Status) {
+        let Some(path) = self.reading().map(Path::to_path_buf) else { return };
+        self.toggle_status_of(&path, status);
+    }
+
+    fn toggle_status_of(&mut self, path: &Path, status: Status) {
+        self.store.toggle_status(path, status);
+        self.save_now();
+        self.dirty = true;
+    }
+
+    /// The collections as the Add to Collection menu lists them: each name, and whether the open book is in it.
+    pub fn collection_menu(&self) -> Vec<(String, bool)> {
+        let open = self.reading();
+        self.store.collections.iter().enumerate().map(|(i, c)| (c.name.clone(), open.is_some_and(|p| self.store.in_collection(i, p)))).collect()
+    }
+
+    /// Library menu: puts the open book in collection `i`, or takes it out.
+    pub fn toggle_open_in_collection(&mut self, i: usize) {
+        let Some(path) = self.reading().map(Path::to_path_buf) else { return };
+        self.toggle_in_collection(i, &path);
+    }
+
+    fn toggle_in_collection(&mut self, i: usize, path: &Path) {
+        self.store.toggle_in_collection(i, path);
+        self.save_now();
+        self.dirty = true;
+    }
+
+    /// The collection the sidebar shows, if it shows one.
+    pub fn current_collection(&self) -> Option<usize> {
+        match self.filter {
+            Filter::Collection(i) if i < self.store.collections.len() => Some(i),
+            _ => None,
+        }
+    }
+
+    /// Whether the library search field has text (Rename Collection takes its name from it).
+    pub fn has_search_text(&self) -> bool {
+        !self.library_search.text().trim().is_empty()
+    }
+
+    /// Library menu: adds an empty collection and shows it. It is named after the library search text when there is
+    /// some, otherwise "New Collection"; a name that is taken gets a number.
+    pub fn new_collection(&mut self, ui: &Ui) {
+        let name = self.store.unique_collection_name(self.library_search.text());
+        if let Some(i) = self.store.create_collection(&name) {
+            self.filter = Filter::Collection(i);
+            self.library_search.set_text(ui, "");
+            self.shelf_scroll.jump_top();
+            self.save_now();
+            self.dirty = true;
+        }
+    }
+
+    /// Library menu: renames the shown collection to the library search text. False when nothing was renamed (no
+    /// collection is shown, the text is empty, or another collection has the name).
+    pub fn rename_collection(&mut self, ui: &Ui) -> bool {
+        let Some(i) = self.current_collection() else { return false };
+        let name = self.library_search.text().trim().to_string();
+        if !self.store.rename_collection(i, &name) {
+            return false;
+        }
+        self.library_search.set_text(ui, "");
+        self.save_now();
+        self.dirty = true;
+        true
+    }
+
+    /// Library menu: deletes the shown collection. Its books stay in the library.
+    pub fn delete_collection(&mut self) {
+        let Some(i) = self.current_collection() else { return };
+        self.store.delete_collection(i);
+        self.filter = Filter::All;
+        self.shelf_scroll.jump_top();
+        self.save_now();
+        self.dirty = true;
+    }
+
+    /// The name of a sidebar row: the fixed names, or the reader's own name for a collection.
+    pub(super) fn filter_name(&self, f: Filter) -> String {
+        match f {
+            Filter::Collection(i) => self.store.collections.get(i).map_or_else(|| f.name().to_string(), |c| c.name.clone()),
+            other => other.name().to_string(),
+        }
+    }
+
+    /// What the shelf says when the shown collection has no books.
+    pub(super) fn empty_title(&self) -> String {
+        match self.filter {
+            Filter::Collection(_) => "Empty Collection".to_string(),
+            Filter::WantToRead => "No Books to Read".to_string(),
+            Filter::Finished => "No Finished Books".to_string(),
+            f => format!("No {}", f.name()),
+        }
+    }
+
+    /// The sidebar rows in order: the fixed ones, then the reader's collections.
+    fn sidebar_filters(&self) -> Vec<Filter> {
+        let mut rows = Filter::ALL.to_vec();
+        rows.extend((0..self.store.collections.len()).map(Filter::Collection));
+        rows
+    }
+
+    pub fn sort_by(&self) -> SortBy {
+        self.store.library.sort
+    }
+
+    /// View menu: Sort By.
+    pub fn set_sort(&mut self, sort: SortBy) {
+        if self.store.library.sort == sort {
+            return;
+        }
+        self.store.library.sort = sort;
+        self.shelf_scroll.jump_top();
+        self.save_now();
+        self.dirty = true;
+    }
+
+    pub fn view_mode(&self) -> ViewMode {
+        self.store.library.view
+    }
+
+    /// View menu: the library as a grid of covers or as a list.
+    pub fn set_view_mode(&mut self, view: ViewMode) {
+        if self.store.library.view == view {
+            return;
+        }
+        self.store.library.view = view;
+        // the scaled covers were made for the old tile size
+        for c in &mut self.shelf {
+            c.tile = None;
+        }
+        self.shelf_scroll.jump_top();
+        self.save_now();
+        self.dirty = true;
+    }
+
+    /// Find menu: the style of the highlight on the text the last find went to (an index into
+    /// `store::HIGHLIGHT_STYLES`), or None when that text is not highlighted.
+    pub fn match_style(&self) -> Option<u8> {
+        let (span, saved) = self.match_span()?;
+        let r = self.reader.as_ref()?;
+        saved.then(|| self.store.highlight_style(&r.path, span))
+    }
+
+    /// Find menu: highlights the text the last find went to in a colour, or underlines it. False without a match.
+    pub fn set_match_style(&mut self, style: u8) -> bool {
+        let Some((span, _)) = self.match_span() else { return false };
+        let Some(path) = self.reader.as_ref().map(|r| r.path.clone()) else { return false };
+        self.store.set_highlight_style(&path, span, style);
+        self.save_now();
+        self.dirty = true;
+        true
+    }
+
+    /// Copies a book that arrived as a stream (File > Add to Library, a shared PDF) into the Books folder and puts it
+    /// on the shelf. The path of the copy.
+    pub fn import_book(&mut self, name: &str, source: &mut dyn std::io::Read) -> Result<PathBuf, String> {
+        let dest = store::import_into(&self.import_dir, name, source)?;
+        self.rescan();
+        Ok(dest)
+    }
+
+    /// Shows an error banner in the library.
+    pub fn show_error(&mut self, message: String) {
+        self.error = Some(message);
+        self.dirty = true;
+    }
+
+    /// The menu of a right click on a cover in the library: Open, Want to Read, Finished and the collections. The book
+    /// it was opened on is kept for `context_action`. Empty when the click is not on a cover.
+    pub fn context_items(&mut self, ui: &Ui, x: f32, y: f32) -> Vec<ContextItem> {
+        self.context_book = None;
+        if self.screen != Screen::Library {
+            return Vec::new();
+        }
+        let Some(Target::Cover(i)) = self.hit(ui, x, y) else { return Vec::new() };
+        let Some(path) = self.shelf.get(i).map(|c| c.path.clone()) else { return Vec::new() };
+        let status = self.store.status_of(&path);
+        let item = |id: u32, label: String| ContextItem { id, label, enabled: true };
+        let mut items = vec![
+            item(CTX_OPEN, "Open".to_string()),
+            item(CTX_WANT, if status == Status::WantToRead { "Remove from Want to Read" } else { "Add to Want to Read" }.to_string()),
+            item(CTX_FINISHED, if status == Status::Finished { "Mark as Unfinished" } else { "Mark as Finished" }.to_string()),
+        ];
+        for (k, c) in self.store.collections.iter().enumerate().take(MAX_COLLECTION_ITEMS) {
+            let verb = if self.store.in_collection(k, &path) { "Remove from" } else { "Add to" };
+            items.push(item(CTX_COLLECTION_BASE + k as u32, format!("{verb} {}", c.name)));
+        }
+        self.context_book = Some(path);
+        items
+    }
+
+    /// The user chose item `id` of the menu `context_items` made. True when a frame is needed.
+    pub fn context_action(&mut self, id: u32) -> bool {
+        let Some(path) = self.context_book.take() else { return false };
+        match id {
+            CTX_OPEN => self.open_path(&path),
+            CTX_WANT => self.toggle_status_of(&path, Status::WantToRead),
+            CTX_FINISHED => self.toggle_status_of(&path, Status::Finished),
+            k if k >= CTX_COLLECTION_BASE => self.toggle_in_collection((k - CTX_COLLECTION_BASE) as usize, &path),
+            _ => return false,
+        }
+        self.dirty = true;
+        true
+    }
+
     // --- geometry ---
 
     fn nav_bottom(&self, ui: &Ui) -> f32 {
@@ -984,12 +1344,19 @@ impl Books {
     }
 
     pub(super) fn sidebar(&self) -> SourceList {
+        let filters = self.sidebar_filters();
         let mut items = vec![SidebarItem::header("Library")];
-        for (i, f) in Filter::ALL.iter().enumerate() {
-            items.push(SidebarItem::row(ROW_BASE + i as u32, f.name()).with_symbol(f.symbol()).with_count(self.visible_of(*f).len() as u32));
+        for (i, f) in filters.iter().enumerate() {
+            if i == Filter::COLLECTIONS_AT {
+                items.push(SidebarItem::header("Collections"));
+            }
+            if i == Filter::ALL.len() {
+                items.push(SidebarItem::header("My Collections"));
+            }
+            items.push(SidebarItem::row(ROW_BASE + i as u32, &self.filter_name(*f)).with_symbol(f.symbol()).with_count(self.matching(*f).len() as u32));
         }
         let mut list = SourceList::new(items, 32.0, 30.0);
-        list.set_selected(Filter::ALL.iter().position(|&f| f == self.filter).map(|i| ROW_BASE + i as u32));
+        list.set_selected(filters.iter().position(|&f| f == self.filter).map(|i| ROW_BASE + i as u32));
         list
     }
 
@@ -997,7 +1364,7 @@ impl Books {
     pub(super) fn title(&self) -> String {
         match (&self.screen, &self.reader) {
             (Screen::Reader, Some(r)) => r.book.title.clone(),
-            _ => self.filter.name().to_string(),
+            _ => self.filter_name(self.filter),
         }
     }
 
@@ -1097,6 +1464,17 @@ impl Books {
     }
 
     fn visible_of(&self, f: Filter) -> Vec<usize> {
+        let mut shown = self.matching(f);
+        let sort = self.store.library.sort;
+        // the shelf is already in the order of last opening; the other orders sort the books shown
+        if sort != SortBy::Recent {
+            shown.sort_by_cached_key(|&i| store::sort_key(sort, &self.shelf[i].title, &self.shelf[i].author));
+        }
+        shown
+    }
+
+    /// Shelf indices of the books `f` holds that match the library search, in shelf order.
+    fn matching(&self, f: Filter) -> Vec<usize> {
         let pdf = |c: &Cover| c.path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
         let query = self.library_search.text().trim().to_lowercase();
         let matches = |c: &Cover| query.is_empty() || c.title.to_lowercase().contains(&query) || c.author.to_lowercase().contains(&query);
@@ -1111,9 +1489,29 @@ impl Books {
                     Filter::Reading => self.store.entry(&c.path).is_some_and(|e| e.opened > 0),
                     Filter::Books => !pdf(c),
                     Filter::Pdfs => pdf(c),
+                    Filter::WantToRead => self.store.status_of(&c.path) == Status::WantToRead,
+                    Filter::Finished => self.store.status_of(&c.path) == Status::Finished,
+                    Filter::Collection(k) => self.store.in_collection(k, &c.path),
                 }
             })
             .collect()
+    }
+
+    /// Whether the library is a list of rows rather than a grid of covers.
+    pub(super) fn list_view(&self) -> bool {
+        self.store.library.view == ViewMode::List
+    }
+
+    /// Screen rect of the `k`th book the selected collection shows when the library is a list.
+    pub(super) fn list_row_rect(&self, ui: &Ui, k: usize) -> (f32, f32, f32, f32) {
+        let m = ui.pt(MARGIN_PT);
+        let x = self.side(ui) + m;
+        (x, self.grid_top(ui) - self.shelf_scroll.offset() + k as f32 * ui.pt(LIST_ROW_PT), self.w as f32 - x - m, ui.pt(LIST_ROW_PT))
+    }
+
+    /// Screen rect of the `k`th book shown, in whichever view the library has.
+    pub(super) fn item_rect(&self, ui: &Ui, k: usize) -> (f32, f32, f32, f32) {
+        if self.list_view() { self.list_row_rect(ui, k) } else { self.cover_rect(ui, k) }
     }
 
     /// Library grid geometry: (columns, tile width, cover height, cell height, gap).
@@ -1144,7 +1542,8 @@ impl Books {
 
     /// Books in the Reading Now row of All: the most recently opened, at most one row.
     pub(super) fn reading_count(&self, ui: &Ui) -> usize {
-        if self.filter != Filter::All {
+        // the row is the books last opened: it is shown in the grid of All, in the order of last opening, without a search
+        if self.filter != Filter::All || self.list_view() || self.store.library.sort != SortBy::Recent || !self.library_search.is_empty() {
             return 0;
         }
         let (cols, _, _, _, _) = self.grid(ui);
@@ -1159,8 +1558,13 @@ impl Books {
 
     fn fit_shelf_scroll(&mut self, ui: &Ui) {
         let (cols, _, _, cell, _) = self.grid(ui);
-        let rows = (self.visible().len() - self.reading_count(ui)).div_ceil(cols);
-        let content = self.grid_top(ui) + self.library_offset(ui) + rows as f32 * cell + ui.pt(SPACE_XXL);
+        let shown = self.visible().len();
+        let content = if self.list_view() {
+            self.grid_top(ui) + shown as f32 * ui.pt(LIST_ROW_PT) + ui.pt(SPACE_XXL)
+        } else {
+            let rows = shown.saturating_sub(self.reading_count(ui)).div_ceil(cols);
+            self.grid_top(ui) + self.library_offset(ui) + rows as f32 * cell + ui.pt(SPACE_XXL)
+        };
         self.shelf_scroll.set_max(content - (self.h as f32 - home_zone(ui)));
     }
 
@@ -1235,6 +1639,16 @@ impl Books {
         for i in 0..3 {
             out.push((Target::ThemeButton(i), (m + i as f32 * (tw + ui.pt(SPACE_M)), y + ui.pt(THEME_ROW_PT), tw, ui.pt(90.0))));
         }
+        // line spacing and margins: a row of choices each; justification: one wide switch
+        let choice = |n: usize| (pw - 2.0 * m - (n - 1) as f32 * ui.pt(SPACE_M)) / n as f32;
+        let (sw, mw) = (choice(store::SPACINGS.len()), choice(store::MARGINS.len()));
+        for i in 0..store::SPACINGS.len() {
+            out.push((Target::Spacing(i), (m + i as f32 * (sw + ui.pt(SPACE_M)), y + ui.pt(SPACING_ROW_PT), sw, ui.pt(CHOICE_PT))));
+        }
+        for i in 0..store::MARGINS.len() {
+            out.push((Target::Margin(i), (m + i as f32 * (mw + ui.pt(SPACE_M)), y + ui.pt(MARGIN_ROW_PT), mw, ui.pt(CHOICE_PT))));
+        }
+        out.push((Target::Justify, (m, y + ui.pt(JUSTIFY_ROW_PT), pw - 2.0 * m, ui.pt(CHOICE_PT))));
         out
     }
 
@@ -1257,10 +1671,11 @@ impl Books {
                 }
                 if x < self.side(ui) {
                     let row = self.sidebar().hit(self.sidebar_bounds(ui), SIDEBAR_SCROLL, px, py);
-                    return Some(row.and_then(|id| Filter::ALL.get(id.checked_sub(ROW_BASE)? as usize).copied()).map_or(Target::PanelBody, Target::Sidebar));
+                    let filters = self.sidebar_filters();
+                    return Some(row.and_then(|id| filters.get(id.checked_sub(ROW_BASE)? as usize).copied()).map_or(Target::PanelBody, Target::Sidebar));
                 }
                 let vis = self.visible();
-                (0..vis.len()).find(|&k| within(x, y, self.cover_rect(ui, k))).map(|k| Target::Cover(vis[k])).or(Some(Target::Shelf))
+                (0..vis.len()).find(|&k| within(x, y, self.item_rect(ui, k))).map(|k| Target::Cover(vis[k])).or(Some(Target::Shelf))
             }
             Screen::Reader => {
                 let r = self.reader.as_ref()?;
@@ -1511,6 +1926,12 @@ impl Books {
                 let s = self.store.settings;
                 self.change_settings(ui, s.size, Theme::ALL[i.min(2)]);
             }
+            Target::Spacing(i) => self.set_line_spacing(ui, i),
+            Target::Margin(i) => self.set_margins(ui, i),
+            Target::Justify => {
+                let on = !self.store.settings.justify;
+                self.set_justified(ui, on);
+            }
             Target::Shelf => self.error = None,
             Target::Sidebar(f) => {
                 self.filter = f;
@@ -1647,6 +2068,7 @@ impl Books {
             }
             got = true;
         }
+        self.credit_reading(t);
         if self.save_at.is_some_and(|at| t >= at) {
             self.save_now();
         }

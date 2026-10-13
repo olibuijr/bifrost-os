@@ -6,14 +6,14 @@ use bifrost_app::kit::ui::{MAC_CALLOUT_PT, MAC_HEADLINE_PT};
 use bifrost_app::widgets;
 use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_L, SPACE_M, SPACE_S, SPACE_XL, SPACE_XS, SPACE_XXL, SPACE_XXS, SPACE_XXXL};
 use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_CAPTION1_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TITLE1_PT, MAC_TITLE3_PT};
-use super::layout::{Kind, LINE_HEIGHT};
+use super::layout::Kind;
 use super::store::{Theme, SIZES};
 use super::*;
 use springboard::gfx::pack;
 use bifrost_app::controls::prefs_layout::m;
 use springboard::shell::cache::TextCache;
 use springboard::shell::ui::{centred, Weight, CARD_BG, CONTENT_BG, DETAIL_BG, FIELD_BG, LABEL, LABEL_2, SEPARATOR_C, TRACK_C, WHITE};
-use bifrost_app::kit::ui::{AVATAR_FG, BLACK, DESTRUCTIVE, SYSTEM_ORANGE, SYSTEM_YELLOW, TINT};
+use bifrost_app::kit::ui::{AVATAR_FG, BLACK, DESTRUCTIVE, SYSTEM_BLUE, SYSTEM_GREEN, SYSTEM_ORANGE, SYSTEM_PINK, SYSTEM_PURPLE, SYSTEM_YELLOW, TINT};
 use bifrost_app::kit::ui::{READER_DARK_BG, READER_DARK_DIM, READER_DARK_INK, READER_DARK_SEP, READER_SEPIA_ACCENT, READER_SEPIA_BG, READER_SEPIA_DIM, READER_SEPIA_INK, READER_SEPIA_RAISED, READER_SEPIA_SEP, READER_WHITE_ACCENT, READER_WHITE_DIM, READER_WHITE_INK, READER_WHITE_RAISED, READER_WHITE_SEP};
 
 const BLUE: u32 = TINT;
@@ -72,6 +72,34 @@ fn spine_shade() -> u32 {
     fade(BLACK, 56)
 }
 
+/// Pixels from the left edge of a line to its character column `col`, with `extra` px added at each space before it.
+fn col_x(ui: &Ui, text: &str, col: usize, pt: f32, weight: Weight, extra: f32) -> f32 {
+    let prefix: String = text.chars().take(col).collect();
+    ui.measure(&prefix, pt, weight) + extra * prefix.matches(' ').count() as f32
+}
+
+/// The colour of a highlight style (an index into `store::HIGHLIGHT_STYLES`); the underline has its own.
+fn highlight_colour(style: u8) -> u32 {
+    match style {
+        1 => SYSTEM_GREEN,
+        2 => SYSTEM_BLUE,
+        3 => SYSTEM_PINK,
+        4 => SYSTEM_PURPLE,
+        _ => SYSTEM_YELLOW,
+    }
+}
+
+/// Marks one run of text: a tint behind it, or a line under it for the underline style. `y` is the top of the line and
+/// `lh` its height.
+fn paint_highlight(s: &mut Surface, ui: &Ui, style: u8, x0: f32, x1: f32, y: f32, lh: f32) {
+    if style == super::store::UNDERLINE {
+        let thick = ui.pt(2.0).max(1.0);
+        s.fill_rrect(x0, y + lh - thick, x1 - x0, thick, 0.0, RED);
+    } else {
+        s.fill_rrect(x0, y, x1 - x0, lh, 0.0, fade(highlight_colour(style), 110));
+    }
+}
+
 /// A muted cover colour derived from the title.
 fn cover_colour(title: &str) -> u32 {
     let mut h: u32 = 2166136261;
@@ -101,32 +129,52 @@ impl Books {
             put_mid(&mut self.labels, s, ui, "No Books", MAC_TITLE1_PT, Weight::Bold, LABEL_2.now(), mid, empty_y);
             put_mid(&mut self.labels, s, ui, "Put .epub or .pdf files in Files or Downloads.", MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), mid, empty_y + ui.pt(SPACE_HUGE));
         } else if self.visible().is_empty() {
-            let title = if self.library_search.is_empty() { format!("No {}", self.filter.name()) } else { "No Results".to_string() };
-            put_mid(&mut self.labels, s, ui, &title, MAC_TITLE1_PT, Weight::Bold, LABEL_2.now(), mid, top + (bottom - top) * 0.2);
+            let title = if self.library_search.is_empty() { self.empty_title() } else { "No Results".to_string() };
+            let empty_y = top + (bottom - top) * 0.2;
+            put_mid(&mut self.labels, s, ui, &title, MAC_TITLE1_PT, Weight::Bold, LABEL_2.now(), mid, empty_y);
+            let hint = match self.filter {
+                Filter::Collection(_) if self.library_search.is_empty() => "Right-click a book and choose Add to this collection.",
+                Filter::WantToRead if self.library_search.is_empty() => "Right-click a book and choose Add to Want to Read.",
+                _ => "",
+            };
+            put_mid(&mut self.labels, s, ui, hint, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), mid, empty_y + ui.pt(SPACE_HUGE));
         }
         let mut content = s.rows(top as usize, bottom as usize);
         let n = self.reading_count(ui);
         if n > 0 {
-            let base = -self.shelf_scroll.offset();
+            let base = top - self.shelf_scroll.offset();
             put(&mut self.labels, &mut content, ui, "Reading Now", MAC_TITLE3_PT, Weight::Bold, LABEL.now(), m, base + ui.pt(SPACE_XS));
+            // the daily reading goal sits on the same line, at the trailing edge
+            if let Some(goal) = self.goal_text() {
+                put_right(&mut self.labels, &mut content, ui, &goal, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), self.w as f32 - ui.pt(MARGIN_PT), base + ui.pt(SPACE_XS) + ui.pt(SPACE_XL));
+            }
             let lib = base + self.library_offset(ui) - ui.pt(SPACE_HUGE);
             put(&mut self.labels, &mut content, ui, "Library", MAC_TITLE3_PT, Weight::Bold, LABEL.now(), m, lib + ui.pt(SPACE_XS));
         }
+        let list = self.list_view();
         for (k, i) in self.visible().into_iter().enumerate() {
+            if list {
+                let row = self.list_row_rect(ui, k);
+                if row.1 + row.3 < top || row.1 > bottom {
+                    continue;
+                }
+                self.draw_list_row(&mut content, ui, i, row);
+                continue;
+            }
             let (cx, cy, _, _) = self.cover_rect(ui, k);
             if cy + ch + ui.pt(64.0) < top || cy > bottom {
                 continue;
             }
             self.draw_cover(&mut content, ui, i, (cx, cy, tw, ch));
             let path = self.shelf[i].path.clone();
-            let progress = self.store.entry(&path).map_or(0, |e| e.progress);
+            let (progress, status) = self.store.entry(&path).map_or((0, Status::None), |e| (e.progress, e.status));
             let title = self.shelf[i].title.clone();
             let lines = ui.wrap(&title, MAC_FOOTNOTE_PT, Weight::Medium, tw);
             for (k, line) in lines.iter().take(2).enumerate() {
                 let line = ui.fit(line, MAC_FOOTNOTE_PT, tw);
                 put(&mut self.labels, &mut content, ui, &line, MAC_FOOTNOTE_PT, Weight::Medium, LABEL.now(), cx, cy + ch + ui.pt(8.0 + 17.0 * k as f32));
             }
-            let sub = if progress == 0 { "New".to_string() } else { format!("{}%", progress / 10) };
+            let sub = store::caption(status, progress);
             put(&mut self.labels, &mut content, ui, &sub, MAC_CAPTION1_PT, Weight::Regular, LABEL_2.now(), cx, cy + ch + ui.pt(44.0));
         }
         let _ = cols;
@@ -156,7 +204,7 @@ impl Books {
 
     fn draw_cover(&mut self, s: &mut Surface, ui: &Ui, i: usize, (x, y, w, h): (f32, f32, f32, f32)) {
         let (wi, hi) = (w.round() as usize, h.round() as usize);
-        if self.shelf[i].tile.is_none() {
+        if self.shelf[i].tile.as_ref().is_none_or(|t| t.w != wi || t.h != hi) {
             if let Some(img) = &self.shelf[i].image {
                 if img.w > 0 && img.h > 0 {
                     let f = (wi as f32 / img.w as f32).max(hi as f32 / img.h as f32);
@@ -184,6 +232,34 @@ impl Books {
             let a = ui.fit(&author, MAC_CAPTION1_PT, w - pad * 2.0 - ui.pt(SPACE_S));
             put(&mut self.labels, s, ui, &a, MAC_CAPTION1_PT, Weight::Regular, fade(WHITE, 200), x + pad + ui.pt(SPACE_S), y + h - pad - ui.pt(SPACE_L));
         }
+    }
+
+    /// One book of the library as a list: a small cover, the title and author, and where the book stands.
+    fn draw_list_row(&mut self, s: &mut Surface, ui: &Ui, i: usize, (x, y, w, h): (f32, f32, f32, f32)) {
+        let pad = ui.pt(SPACE_S);
+        let (cw, ch) = ((h - 2.0 * pad) * 2.0 / 3.0, h - 2.0 * pad);
+        if self.shelf[i].image.is_some() {
+            self.draw_cover(s, ui, i, (x, y + pad, cw, ch));
+        } else {
+            let colour = cover_colour(&self.shelf[i].title);
+            s.fill_rrect(x, y + pad, cw, ch, ui.pt(SPACE_XXS), colour);
+            s.fill_rrect(x, y + pad, ui.pt(SPACE_XXS), ch, 0.0, spine_shade());
+        }
+        let path = self.shelf[i].path.clone();
+        let (progress, status) = self.store.entry(&path).map_or((0, Status::None), |e| (e.progress, e.status));
+        let caption = store::caption(status, progress);
+        let caption_w = ui.measure(&caption, MAC_CALLOUT_PT, Weight::Regular);
+        let text_x = x + cw + ui.pt(SPACE_L);
+        let room = (x + w - caption_w - ui.pt(SPACE_XL) - text_x).max(ui.pt(40.0));
+        let title = ui.fit(&self.shelf[i].title, MAC_BODY_PT, room);
+        put(&mut self.labels, s, ui, &title, MAC_BODY_PT, Weight::Medium, LABEL.now(), text_x, y + h / 2.0 - ui.pt(SPACE_XL));
+        let author = self.shelf[i].author.clone();
+        let kind = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf")) { "PDF" } else { "Book" };
+        let sub = if author.is_empty() { kind.to_string() } else { author };
+        let sub = ui.fit(&sub, MAC_SUBHEAD_PT, room);
+        put(&mut self.labels, s, ui, &sub, MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), text_x, y + h / 2.0 + ui.pt(SPACE_XXS));
+        put_right(&mut self.labels, s, ui, &caption, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x + w, y + h / 2.0);
+        s.fill_rect(text_x as usize, (y + h - 1.0) as usize, (x + w - text_x).max(0.0) as usize, 1, SEPARATOR_C.now());
     }
 
     // --- reader ---
@@ -245,22 +321,25 @@ impl Books {
     fn draw_page(&mut self, s: &mut Surface, ui: &Ui, pal: &Palette, page_no: usize, dx: f32) {
         let m = self.metrics(ui);
         let marked = self.reader.as_ref().is_some_and(|_r| !self.page_marks(page_no).is_empty());
+        let justify = self.store.settings.justify;
         // a PDF book's saved highlights are highlight annotations, drawn under the text; other books draw them as spans
-        let marks = self.pdf_highlights(ui, page_no);
-        // the saved highlights of this book, drawn under the text like the find match
-        let spans: Vec<super::store::Span> = if marks.is_some() {
+        let marks = self.pdf_highlight_marks(ui, page_no);
+        // the saved highlights of this book with their colours, drawn under the text like the find match
+        let spans: Vec<(super::store::Span, u8)> = if marks.is_some() {
             Vec::new()
         } else {
-            self.reader.as_ref().and_then(|r| self.store.entry(&r.path)).map_or_else(Vec::new, |e| e.highlights.clone())
+            self.reader.as_ref().and_then(|r| self.store.entry(&r.path)).map_or_else(Vec::new, |e| {
+                e.highlights.iter().map(|sp| (*sp, e.styles.iter().find(|(x, _)| x == sp).map_or(0, |(_, style)| *style))).collect()
+            })
         };
         let Some(r) = self.reader.as_mut() else { return };
-        let (left, top) = (ui.pt(PAGE_MARGIN_PT) + dx, ui.pt(page_top_pt()));
+        let (left, top) = (ui.pt(self.store.settings.margin_pt()) + dx, ui.pt(page_top_pt()));
         let body_pt = Self::pt_of(ui, m.body);
         let Some(page) = r.layout.pages.get(page_no) else { return };
         if let Some(marks) = &marks {
-            for mark in marks.annotations().iter().filter(|a| a.should_display()) {
+            for (mark, style) in marks.iter().filter(|(a, _)| a.should_display()) {
                 let b = mark.bounds();
-                s.fill_rrect(left + b.x, top + b.y, b.w, b.h, 0.0, fade(SYSTEM_YELLOW, 110));
+                paint_highlight(s, ui, *style, left + b.x, left + b.x + b.w, top + b.y, b.h);
             }
         }
         // the text picked by Select Page on this page: character ranges of the page text (see `page_text`)
@@ -290,29 +369,27 @@ impl Books {
                         Kind::Heading(l) => (body_pt * layout::heading_scale(l), Weight::Bold),
                         _ => (body_pt, Weight::Regular),
                     };
-                    let lh = ui.pt(pt) * ui.text_scale * LINE_HEIGHT;
+                    let lh = ui.pt(pt) * ui.text_scale * m.line_height;
+                    let block_text = r.book.blocks.get(line.block).and_then(|b| b.text()).unwrap_or("");
+                    // a justified line gives each of its spaces a little more width; every tint below follows it
+                    let extra = super::line_extra(ui, justify, block_text, line, pt, m.width);
                     // the Select Page tint, over the characters of this line that the selection covers
                     let line_start = starts[li];
                     let line_end = line_start + line.text.chars().count();
                     for range in &selected {
                         let (a, b) = (range.start.max(line_start), range.end.min(line_end));
                         if a < b {
-                            let prefix: String = line.text.chars().take(a - line_start).collect();
-                            let word: String = line.text.chars().skip(a - line_start).take(b - a).collect();
-                            let x0 = left + ui.measure(&prefix, pt, weight);
-                            let x1 = x0 + ui.measure(&word, pt, weight);
+                            let x0 = left + col_x(ui, &line.text, a - line_start, pt, weight, extra);
+                            let x1 = left + col_x(ui, &line.text, b - line_start, pt, weight, extra);
                             s.fill_rrect(x0, top + line.y, x1 - x0, lh, 0.0, fade(TINT, 90));
                         }
                     }
                     if let Some((block, off, len)) = r.highlight {
                         if block == line.block {
-                            let text = r.book.blocks.get(block).and_then(|b| b.text()).unwrap_or("");
-                            let (a, b) = layout::line_cols(text, line.offset, &line.text, off, off + len);
+                            let (a, b) = layout::line_cols(block_text, line.offset, &line.text, off, off + len);
                             if a < b {
-                                let prefix: String = line.text.chars().take(a).collect();
-                                let word: String = line.text.chars().skip(a).take(b - a).collect();
-                                let x0 = left + ui.measure(&prefix, pt, weight);
-                                let x1 = x0 + ui.measure(&word, pt, weight);
+                                let x0 = left + col_x(ui, &line.text, a, pt, weight, extra);
+                                let x1 = left + col_x(ui, &line.text, b, pt, weight, extra);
                                 s.fill_rrect(x0, top + line.y, x1 - x0, lh, 0.0, fade(SYSTEM_YELLOW, 110));
                             }
                         }
@@ -320,31 +397,39 @@ impl Books {
                     // the sentence being read aloud: the one tint, lighter than the yellow of a highlight
                     if let Some(span) = r.narration.as_ref().and_then(|n| n.current()) {
                         if span.block == line.block {
-                            let text = r.book.blocks.get(span.block).and_then(|b| b.text()).unwrap_or("");
-                            let (a, b) = layout::line_cols(text, line.offset, &line.text, span.offset, span.offset + span.len);
+                            let (a, b) = layout::line_cols(block_text, line.offset, &line.text, span.offset, span.offset + span.len);
                             if a < b {
-                                let prefix: String = line.text.chars().take(a).collect();
-                                let word: String = line.text.chars().skip(a).take(b - a).collect();
-                                let x0 = left + ui.measure(&prefix, pt, weight);
-                                let x1 = x0 + ui.measure(&word, pt, weight);
+                                let x0 = left + col_x(ui, &line.text, a, pt, weight, extra);
+                                let x1 = left + col_x(ui, &line.text, b, pt, weight, extra);
                                 s.fill_rrect(x0, top + line.y, x1 - x0, lh, 0.0, fade(TINT, 70));
                             }
                         }
                     }
-                    for sp in spans.iter().filter(|sp| sp.block == line.block) {
-                        let text = r.book.blocks.get(sp.block).and_then(|b| b.text()).unwrap_or("");
-                        let (a, b) = layout::line_cols(text, line.offset, &line.text, sp.offset, sp.offset + sp.len);
+                    for (sp, style) in spans.iter().filter(|(sp, _)| sp.block == line.block) {
+                        let (a, b) = layout::line_cols(block_text, line.offset, &line.text, sp.offset, sp.offset + sp.len);
                         if a < b {
-                            let prefix: String = line.text.chars().take(a).collect();
-                            let word: String = line.text.chars().skip(a).take(b - a).collect();
-                            let x0 = left + ui.measure(&prefix, pt, weight);
-                            let x1 = x0 + ui.measure(&word, pt, weight);
-                            s.fill_rrect(x0, top + line.y, x1 - x0, lh, 0.0, fade(SYSTEM_YELLOW, 110));
+                            let x0 = left + col_x(ui, &line.text, a, pt, weight, extra);
+                            let x1 = left + col_x(ui, &line.text, b, pt, weight, extra);
+                            paint_highlight(s, ui, *style, x0, x1, top + line.y, lh);
                         }
                     }
-                    let img = self.labels.get(ui, &line.text, pt, weight, pal.fg);
-                    let y = top + line.y + (lh - img.h as f32) / 2.0;
-                    s.blit(img, left as i32, y as i32, 255, 255);
+                    if extra > 0.0 {
+                        // set word by word, each at its place in the stretched line
+                        let mut col = 0usize;
+                        for word in line.text.split(' ') {
+                            if !word.is_empty() {
+                                let x = left + col_x(ui, &line.text, col, pt, weight, extra);
+                                let img = self.labels.get(ui, word, pt, weight, pal.fg);
+                                let y = top + line.y + (lh - img.h as f32) / 2.0;
+                                s.blit(img, x as i32, y as i32, 255, 255);
+                            }
+                            col += word.chars().count() + 1;
+                        }
+                    } else {
+                        let img = self.labels.get(ui, &line.text, pt, weight, pal.fg);
+                        let y = top + line.y + (lh - img.h as f32) / 2.0;
+                        s.blit(img, left as i32, y as i32, 255, 255);
+                    }
                 }
             }
         }
@@ -501,6 +586,13 @@ impl Books {
         }
     }
 
+    /// A choice button of the Display panel: the chosen one has the accent outline.
+    fn draw_choice(&mut self, s: &mut Surface, ui: &Ui, pal: &Palette, (x, y, w, h): (f32, f32, f32, f32), name: &str, on: bool) {
+        s.fill_rrect(x, y, w, h, ui.pt(RADIUS_PT), if on { pal.accent } else { pal.sep });
+        s.fill_rrect(x + 2.0, y + 2.0, w - 4.0, h - 4.0, ui.pt(RADIUS_PT), pal.raised);
+        put_mid(&mut self.labels, s, ui, name, MAC_BODY_PT, if on { Weight::Semibold } else { Weight::Regular }, if on { pal.fg } else { pal.dim }, x + w / 2.0, y + h / 2.0);
+    }
+
     fn draw_display(&mut self, s: &mut Surface, ui: &Ui, pal: &Palette) {
         let settings = self.store.settings;
         let (_, py, pw, _) = self.panel_rect(ui);
@@ -522,8 +614,17 @@ impl Books {
                     put_mid(&mut self.labels, s, ui, "Aa", MAC_TITLE1_PT, Weight::Medium, p.fg, x + w / 2.0, y + h / 2.0 - ui.pt(SPACE_M));
                     put_mid(&mut self.labels, s, ui, theme.name(), MAC_FOOTNOTE_PT, Weight::Regular, p.dim, x + w / 2.0, y + h - ui.pt(SPACE_XL));
                 }
+                Target::Spacing(i) => self.draw_choice(s, ui, pal, (x, y, w, h), store::SPACINGS[i].0, i == settings.spacing),
+                Target::Margin(i) => self.draw_choice(s, ui, pal, (x, y, w, h), store::MARGINS[i].0, i == settings.margin),
+                Target::Justify => self.draw_choice(s, ui, pal, (x, y, w, h), "Justify Text", settings.justify),
                 _ => {}
             }
+        }
+        // names above the rows of choices
+        let m = ui.pt(MARGIN_PT);
+        let y0 = py + ui.pt(SPACE_XXL);
+        for (name, top) in [("Line Spacing", SPACING_ROW_PT), ("Margins", MARGIN_ROW_PT)] {
+            put(&mut self.labels, s, ui, name, MAC_CAPTION1_PT, Weight::Regular, pal.dim, m, y0 + ui.pt(top) - ui.pt(SPACE_XL));
         }
         let size = format!("Text size {}", SIZES[settings.size.min(SIZES.len() - 1)] as i32);
         // midway between the size buttons and the swatch row

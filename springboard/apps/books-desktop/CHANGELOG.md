@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.7.0 — 2026-10-13
+
+- Library: Want to Read and Finished are collections in the sidebar, and a book carries the label under its cover. The
+  Library menu marks the open book Want to Read or Finished; a second choice takes the mark back. Reaching the last
+  page of a book marks it Finished.
+- Library: your own collections. Library > New Collection adds one, named after the text in the search field (or
+  "New Collection"); Rename Collection to Search Text and Delete Collection work on the collection on show. Add to
+  Collection in the same menu, or a right click on a cover, puts a book in a collection or takes it out. Collections
+  are listed in the sidebar under My Collections and kept across restarts.
+- View > as Grid / as List shows the library as covers or as rows with title, author and where the book stands.
+  View > Sort By orders the library by recent use, title or author. Both choices are kept.
+- File > Add to Library copies the .epub and .pdf files you choose into the Books folder. Books is now a share target
+  for PDF files: a PDF shared to Books is copied into the Books folder and opens.
+- Find > Highlight Color gives the highlight on the last find yellow, green, blue, pink or purple, or underlines it.
+  The colour is kept with the highlight, in PDF books too.
+- Display panel and View menu: line spacing (tight, normal, loose), margins (narrow, normal, wide) and Justify Text.
+  Pages are laid out again when the spacing or margins change and the reader keeps its place. Justified text is set
+  flush on both sides; the last line of a paragraph stays ragged.
+- Reading goal: Library > Reading Goal sets minutes a day. The time a book is open counts (at most two minutes
+  between page turns), and Reading Now shows the minutes read today against the goal and the days in a row it was met.
+- The Reading Now and Library headings of the grid were drawn above the visible area; they are in place now.
+- A cover is scaled again when the tile it is drawn in changes size.
+- Needs the `documents` permission for the open panel.
+
 ## 1.6.4 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
