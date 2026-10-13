@@ -1,6 +1,6 @@
 id = "is.olibuijr.contacts.desktop"
 name = "Contacts"
-version = "1.8.1"
+version = "1.9.0"
 exec = "bifrost-contacts"
 icon = "icon.png"
 min_shell = "0.4.84"
@@ -10,3 +10,24 @@ architecture = "x86_64-linux"
 permissions = ["storage", "keychain"]
 keychain_groups = ["is.bifrost.passwords"]
 window = "full-size"
+
+[[intent]]
+id = "view-card"
+title = "View Card"
+description = "Opens the card of a contact, given its name or identifier."
+shortcut = false
+params = ["contact:string"]
+
+[[intent]]
+id = "create-contact"
+title = "Create Contact"
+description = "Adds a contact and opens its card."
+shortcut = false
+params = ["name:string", "phone:string?", "email:string?", "company:string?"]
+
+[[intent]]
+id = "search-contacts"
+title = "Search Contacts"
+description = "Shows the contacts that match the text and lists them."
+shortcut = false
+params = ["query:string"]

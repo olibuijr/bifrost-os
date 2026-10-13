@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.9.0 — 2026-10-13
+
+- Card fields: Card > Add Field adds a nickname, job title, department, URL, birthday, pronouns, phonetic name, related
+  name or profile to a card. The fields show on the card (a press copies the value), are found by the search, and are
+  read from and written to vCards (`NICKNAME`, `TITLE`, the second part of `ORG`, `URL`, `BDAY`, `RELATED` and so on).
+  They are saved in `details.txt` beside the contacts file.
+- Mark as a Company (Card menu, or the switch in the edit form): the card shows its company as the name, with a building
+  in place of the initials.
+- My Card: Card > Make This My Card and Go to My Card. The card carries a "Me" mark in the list and a caption on the card.
+- Go to Next Card and Go to Previous Card (Cmd+] and Cmd+[) move along the list and scroll it to the card.
+- Look for Duplicates opens the Possible Duplicates list. On that list, Merge Duplicates folds the open card's twins into
+  the first card (missing fields are filled in, different phones, emails and addresses become extra values, notes are
+  joined, card fields are kept, groups and My Card follow) and Merge All does every group at once.
+- Import reads comma, semicolon and tab separated tables (`.csv`, `.tsv`, `.txt`) and LDIF files (`.ldif`, `.ldf`) from the
+  Import folder as well as vCards. The first row of a table names the columns; the status line says how many columns were
+  mapped and which were ignored.
+- Contacts archive: File > Export Contacts Archive writes every data file of the Contacts folder as one
+  `contacts.bcarchive`. File > Restore from Archive replaces the address book with the newest archive in the Import folder
+  after a second confirmation, and puts the old data back if the archive does not read.
+- Print and Export as PDF (File menu): the open card or the contact list as it is shown, and address labels. Export as PDF
+  saves a PDF in the Export folder.
+- Last Import in the sidebar lists the contacts the most recent file import added; it is kept between runs.
+- Settings: Prefer Nicknames, Include Notes in vCards (exports can leave the notes out) and the card template, the fields a
+  new card's form shows. The Settings screen scrolls.
+- File > Refresh Accounts starts the CardDAV sync at once.
+- Intents for the shell and the control socket: `view-card`, `create-contact` and `search-contacts`.
+
 ## 1.8.1
 
 - Code cleanup: the unused `needs_frame` and `show_contact` helpers are removed. No behaviour change.
