@@ -16,6 +16,7 @@ pub mod library;
 pub mod models;
 pub mod recipe;
 pub mod slideshow;
+pub mod stars;
 pub mod thumbs;
 pub mod viewer;
 pub mod zoom;
@@ -66,7 +67,9 @@ const EMPTY_BUTTON_H_PT: f32 = 28.5;
 const SHEET_ROW_PT: f32 = 56.0;
 const SHEET_W_PT: f32 = 260.0;
 /// Columns the zoom buttons step through (fewer = bigger).
-const ZOOMS: [usize; 2] = [5, 3];
+const ZOOMS: [usize; 4] = [8, 5, 3, 2];
+/// The level the grid starts at (index into `ZOOMS`).
+const ZOOM_DEFAULT: usize = 1;
 const WORKERS: usize = 2;
 /// Screen-fitted pictures kept decoded: the current one and its neighbours,
 /// never more than `FULL_MAX` whatever their size (keeps memory use bounded).
@@ -109,6 +112,8 @@ pub enum Target {
     SortOrder,
     ZoomIn,
     ZoomOut,
+    /// Select All / Deselect All while selecting
+    SelectAll,
     Back,
     /// the picture in the viewer
     Photo,
@@ -140,6 +145,10 @@ pub enum Target {
     SelShare,
     SelDelete,
     Info,
+    /// a star of the Info sheet's rating row
+    Rate(u8),
+    /// the share sheet's Duplicate row
+    SheetDuplicate,
     /// the Info sheet's Revert to Original row
     InfoRevert,
     Edit,
@@ -463,9 +472,9 @@ impl Photos {
             album_menu: false,
             newest_first: false,
             sections: vec![],
-            grid: Grid::build(&[], ZOOMS[0], w as f32, GAP_PX, ui.pt(HEADER_PT)),
+            grid: Grid::build(&[], ZOOMS[ZOOM_DEFAULT], w as f32, GAP_PX, ui.pt(HEADER_PT)),
             scroll: Scroller::new(),
-            cols: ZOOMS[0],
+            cols: ZOOMS[ZOOM_DEFAULT],
             offset,
             disk: DiskCache::new(data.join(THUMB_DIR), thumbs::MAX_FILES),
             thumbs: MemCache::new(thumbs::MEM_BUDGET),
@@ -497,6 +506,9 @@ impl Photos {
             data,
         };
         p.newest_first = p.prefs.get("sort") == Some("newest");
+        if let Some(c) = p.prefs.get_parsed::<usize>("cols").filter(|c| ZOOMS.contains(c)) {
+            p.cols = c;
+        }
         p.rescan();
         Ok(p)
     }
@@ -1085,7 +1097,7 @@ impl Photos {
                 return Some(Target::Select);
             }
             if (x - self.w as f32 / 2.0).abs() <= ui.pt(100.0) {
-                return Some(Target::Filter);
+                return Some(if self.selection.active { Target::SelectAll } else { Target::Filter });
             }
         }
         None
@@ -1181,10 +1193,17 @@ impl Photos {
         };
         if let Some(sheet) = self.sheet {
             if sheet == Sheet::Info {
+                let rated = usize::from(self.info_has_rating());
+                if self.info_has_rating() {
+                    let (rect, (x0, x1)) = self.info_rating_row(ui);
+                    if within(x, y, rect) {
+                        return Some(stars::star_at(x, x0, x1).map_or(Target::SheetCancel, Target::Rate));
+                    }
+                }
                 if self.info_revert {
                     let (sx, sy, sw, _) = self.sheet_rect(ui, Sheet::Info);
                     let row = ui.pt(INFO_ROW_PT);
-                    if within(x, y, (sx, sy + row * (self.info.len() + 1) as f32, sw, row)) {
+                    if within(x, y, (sx, sy + row * (self.info.len() + 1 + rated) as f32, sw, row)) {
                         return Some(Target::InfoRevert);
                     }
                 }
@@ -1201,7 +1220,8 @@ impl Photos {
                 (Sheet::Share, 1) => Target::SheetCopy,
                 (Sheet::Share, 2) => Target::SheetFiles,
                 (Sheet::Share, 3) => Target::SheetNearby,
-                (Sheet::Share, 4) | (Sheet::Delete, 0) => Target::SheetAction,
+                (Sheet::Share, 4) => Target::SheetDuplicate,
+                (Sheet::Share, 5) | (Sheet::Delete, 0) => Target::SheetAction,
                 _ => Target::SheetCancel,
             });
         }
@@ -1292,6 +1312,11 @@ impl Photos {
             }
             Target::OpenCamera => self.camera_req = true,
             Target::Filter => self.cycle_filter(ui),
+            Target::SelectAll => {
+                let all = self.view.clone();
+                self.selection.toggle_all(&all);
+                self.confirm_purge = false;
+            }
             Target::Select => {
                 if self.selection.active {
                     self.selection.end();
@@ -1327,6 +1352,16 @@ impl Photos {
                     self.info_revert = self.album != Album::Trash && self.recipe(&p).is_some();
                     self.sheet = Some(Sheet::Info);
                 }
+            }
+            Target::Rate(n) => {
+                if let Some(p) = self.viewing().cloned() {
+                    let next = stars::after_tap(self.rating(&p), n);
+                    self.set_rating(&p, next);
+                }
+            }
+            Target::SheetDuplicate => {
+                self.sheet = None;
+                self.duplicate_current();
             }
             Target::InfoRevert => {
                 self.info_revert = false;
@@ -1430,11 +1465,12 @@ impl Photos {
                 }
             }
             Target::ZoomIn | Target::ZoomOut => {
-                let i = ZOOMS.iter().position(|&c| c == self.cols).unwrap_or(0);
+                let i = ZOOMS.iter().position(|&c| c == self.cols).unwrap_or(ZOOM_DEFAULT);
                 let next = if target == Target::ZoomIn { (i + 1).min(ZOOMS.len() - 1) } else { i.saturating_sub(1) };
                 if ZOOMS[next] != self.cols {
                     let k = if self.grid.height > 0.0 { self.scroll.offset() / self.grid.height } else { 0.0 };
                     self.cols = ZOOMS[next];
+                    let _ = self.pref_set("cols", &self.cols.to_string());
                     self.rebuild(ui);
                     self.scroll.jump_to(k * self.grid.height);
                 }
@@ -1704,7 +1740,30 @@ impl Photos {
 
     fn info_size(&self, ui: &Ui) -> (f32, f32) {
         let revert = usize::from(self.info_revert);
-        (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * (self.info.len() + 1 + revert) as f32)
+        (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * (self.info.len() + 1 + usize::from(self.info_has_rating()) + revert) as f32)
+    }
+
+    /// The Info sheet has a rating row for every photo that is not in Recently Deleted.
+    fn info_has_rating(&self) -> bool {
+        self.album != Album::Trash
+    }
+
+    /// The Info sheet's rating row (x, y, w, h) and the span (x0, x1) its five stars share.
+    fn info_rating_row(&self, ui: &Ui) -> ((f32, f32, f32, f32), (f32, f32)) {
+        let (sx, sy, sw, _) = self.sheet_rect(ui, Sheet::Info);
+        let row = ui.pt(INFO_ROW_PT);
+        let rect = (sx, sy + row * (self.info.len() + 1) as f32, sw, row);
+        (rect, (sx + sw - ui.pt(16.0) - ui.pt(32.0) * stars::MAX_STARS as f32, sx + sw - ui.pt(16.0)))
+    }
+
+    /// The star rating of `p` (0 = none).
+    pub fn rating(&self, p: &Photo) -> u8 {
+        self.prefs.get(&format!("rate:{}", p.path.display())).map_or(0, stars::parse)
+    }
+
+    fn set_rating(&mut self, p: &Photo, rating: u8) {
+        let value = if rating == 0 { String::new() } else { rating.to_string() };
+        let _ = self.pref_set(&format!("rate:{}", p.path.display()), &value);
     }
 
     /// The saved edit of `p`, when it has one (an unedited photo has none).
@@ -1866,7 +1925,8 @@ impl Photos {
         } else {
             self.filter.as_ref().map_or_else(|| if blank { "Library".to_string() } else { self.album_title(self.album) }, |f| f.0.clone())
         };
-        self.label(s, ui, &title, 17.0, Weight::Semibold, if self.filter.is_some() && !self.selection.active { BLUE } else { WHITE }, self.w as f32 / 2.0, mid);
+        let title_color = if self.selection.active { dim_blue(self.pressed, Target::SelectAll) } else if self.filter.is_some() { BLUE } else { WHITE };
+        self.label(s, ui, &title, 17.0, Weight::Semibold, title_color, self.w as f32 / 2.0, mid);
         if blank {
             let tint = if pressed == Some(Target::Album) { rgba(10, 132, 255, 140) } else { BLUE };
             let (x, t) = (ui.pt(22.5), ui.pt(2.2));
@@ -2083,8 +2143,27 @@ impl Photos {
             let tx = (x + w - ui.pt(16.0)) as i32 - tw;
             s.blit(text, tx.max((x + ui.pt(100.0)) as i32), cy as i32 - th / 2, 255, 255);
         }
-        if self.info_revert {
+        let rated = usize::from(self.info_has_rating());
+        if rated == 1 {
             let cy = y + row * (rows.len() + 1) as f32 + row / 2.0;
+            s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
+            self.label_left(s, ui, "Rating", 14.0, Weight::Regular, SECONDARY, x + ui.pt(16.0), cy);
+            let have = self.viewing().map_or(0, |p| self.rating(p));
+            let (_, (x0, x1)) = self.info_rating_row(ui);
+            let slot = (x1 - x0) / stars::MAX_STARS as f32;
+            let r = ui.pt(11.0);
+            for i in 0..stars::MAX_STARS {
+                let (scx, on) = (x0 + slot * (i as f32 + 0.5), i < have);
+                let (inner, t) = (0.5, ui.pt(1.4));
+                let pad = r + 2.0;
+                glyphs::paint(s, (scx - pad, cy - pad, 2.0 * pad, 2.0 * pad), if on { BLUE } else { SECONDARY }, move |px, py| {
+                    let d = stars::star_distance(px - scx, py - cy, r, inner);
+                    if on { d } else { d.abs() - t / 2.0 }
+                });
+            }
+        }
+        if self.info_revert {
+            let cy = y + row * (rows.len() + 1 + rated) as f32 + row / 2.0;
             s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
             let color = if self.pressed == Some(Target::InfoRevert) { crate::gfx::scale(BLUE, 140) } else { BLUE };
             self.label(s, ui, "Revert to Original", 15.0, Weight::Regular, color, x + w / 2.0, cy);
@@ -2188,6 +2267,24 @@ impl Photos {
     }
 
     /// Share › Save to Files: a copy of the picture in the Files folder.
+    /// Duplicate: copies the open photo next to the original under a numbered name (its edit and rating come
+    /// along) and rescans so the copy shows.
+    fn duplicate_current(&mut self) {
+        let Some(p) = self.viewing().cloned() else { return };
+        match library::duplicate(&p.path) {
+            Ok(copy) => {
+                let (from, to) = (p.path.display().to_string(), copy.display().to_string());
+                for key in ["edit", "rate"] {
+                    if let Some(v) = self.prefs.get(&format!("{key}:{from}")).map(str::to_string).filter(|v| !v.is_empty()) {
+                        let _ = self.pref_set(&format!("{key}:{to}"), &v);
+                    }
+                }
+                self.rescan();
+            }
+            Err(e) => eprintln!("photos: could not duplicate {}: {e}", p.name()),
+        }
+    }
+
     fn save_to_files(&mut self) {
         let Some(p) = self.viewing().cloned() else { return };
         let dir = self.data.join("Files");
@@ -2269,7 +2366,7 @@ impl Photos {
         let row = h / rows as f32;
         let mut at = y + row / 2.0;
         if sheet == Sheet::Share {
-            for (text, t) in [("Slideshow", Target::SheetSlideshow), ("Copy", Target::SheetCopy), ("Save to Files", Target::SheetFiles), ("Send Nearby", Target::SheetNearby)] {
+            for (text, t) in [("Slideshow", Target::SheetSlideshow), ("Copy", Target::SheetCopy), ("Save to Files", Target::SheetFiles), ("Send Nearby", Target::SheetNearby), ("Duplicate", Target::SheetDuplicate)] {
                 self.label(s, ui, text, 20.0, Weight::Regular, dim(BLUE, t), cx, at);
                 at += row;
             }
@@ -2277,6 +2374,11 @@ impl Photos {
         self.label(s, ui, action, 20.0, Weight::Regular, dim(color, Target::SheetAction), cx, at);
         self.label(s, ui, "Cancel", 20.0, Weight::Semibold, dim(BLUE, Target::SheetCancel), cx, at + row);
     }
+}
+
+/// Blue, dimmed while `target` is the pressed one.
+fn dim_blue(pressed: Option<Target>, target: Target) -> u32 {
+    if pressed == Some(target) { rgba(10, 132, 255, 140) } else { BLUE }
 }
 
 /// The histogram squeezed into `columns` bars with heights 0..=1 (the tallest bar is 1). `columns` of 0 gives none.
@@ -2290,10 +2392,10 @@ pub fn histogram_columns(bins: &[u32; edit::HISTOGRAM_BINS], columns: usize) -> 
 }
 
 /// Rows in a sheet: the share sheet lists Slideshow, Copy, Save to Files,
-/// Send Nearby, Set as Wallpaper and Cancel.
+/// Send Nearby, Duplicate, Set as Wallpaper and Cancel.
 fn sheet_rows(sheet: Sheet) -> usize {
     if sheet == Sheet::Share {
-        6
+        7
     } else {
         2
     }
@@ -2522,9 +2624,16 @@ mod tests {
         assert_eq!(p.cols(), 3);
         assert!((p.scroll.offset() / p.grid.height - k).abs() < 0.05);
         tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 22.0), nav_mid(&ui), 200.0);
-        assert_eq!(p.cols(), 3, "no further zoom level");
+        assert_eq!(p.cols(), 2);
+        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 22.0), nav_mid(&ui), 250.0);
+        assert_eq!(p.cols(), 2, "no further zoom level");
+        assert_eq!(p.prefs.get("cols"), Some("2"), "the level is remembered");
         tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 74.0), nav_mid(&ui), 300.0);
+        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 74.0), nav_mid(&ui), 350.0);
         assert_eq!(p.cols(), 5);
+        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 74.0), nav_mid(&ui), 400.0);
+        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 74.0), nav_mid(&ui), 450.0);
+        assert_eq!(p.cols(), 8, "more, smaller thumbnails");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -2627,7 +2736,7 @@ mod tests {
         assert_eq!(p.sheet, Some(Sheet::Share));
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 4.5 / 6.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 5.5 / 7.0, 1100.0);
         pump_until(&mut p, &ui, |p| !p.effects.is_empty());
         assert_eq!(p.take_effects(), vec![Effect::Wallpaper("custom-1".into())]);
         let raw = std::fs::read(dir.join("wallpapers/custom-1.raw")).unwrap();
@@ -2641,6 +2750,51 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_copies_the_photo_with_its_edit_and_rating() {
+        let (mut p, dir, ui) = photos("duplicate", 1);
+        p.open_viewer(0);
+        let photo = p.photos()[0].clone();
+        p.set_recipe(&photo, Edit { turns: 1, ..Edit::default() });
+        p.set_rating(&photo, 4);
+        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
+        tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
+        frame(&mut p, &ui);
+        let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 4.5 / 7.0, 1100.0);
+        assert_eq!(p.sheet, None);
+        pump_until(&mut p, &ui, |p| !p.scanning && p.all.len() == 2);
+        let copy = dir.join("Pictures/IMG_0000 2.png");
+        assert!(copy.exists() && dir.join("Pictures/IMG_0000.png").exists());
+        let dup = p.all.iter().find(|q| q.path == copy).cloned().expect("the copy is in the library");
+        assert_eq!(p.rating(&dup), 4);
+        assert_eq!(p.recipe(&dup).map(|e| e.turns), Some(1));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_info_sheet_rates_with_stars() {
+        let (mut p, dir, ui) = photos("rating", 1);
+        p.open_viewer(0);
+        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
+        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
+        frame(&mut p, &ui);
+        let photo = p.photos()[0].clone();
+        assert_eq!(p.rating(&photo), 0);
+        let ((rx, ry, _, rh), (x0, x1)) = p.info_rating_row(&ui);
+        let star = |n: f32| x0 + (x1 - x0) * (n - 0.5) / 5.0;
+        tap(&mut p, &ui, star(4.0), ry + rh / 2.0, 1100.0);
+        assert_eq!(p.sheet, Some(Sheet::Info), "the sheet stays open");
+        assert_eq!(p.rating(&photo), 4);
+        frame(&mut p, &ui);
+        tap(&mut p, &ui, star(4.0), ry + rh / 2.0, 1200.0);
+        assert_eq!(p.rating(&photo), 0, "the same star clears it");
+        tap(&mut p, &ui, star(1.0), ry + rh / 2.0, 1300.0);
+        assert_eq!(p.rating(&photo), 1);
+        assert!(rx < x0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn send_nearby_hands_the_photo_path_to_the_shell() {
         let (mut p, dir, ui) = photos("nearby", 1);
         p.open_viewer(0);
@@ -2648,7 +2802,7 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 3.5 / 6.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 3.5 / 7.0, 1100.0);
         assert_eq!(p.sheet, None);
         assert_eq!(p.take_share(), p.photos().first().map(|q| q.path.clone()));
         assert_eq!(p.take_share(), None);
@@ -2663,7 +2817,7 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh / 12.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh / 14.0, 1100.0);
         assert!(p.slideshow.is_some());
         p.activate(&ui, Target::ShowPlay, 1200.0);
         assert!(p.slideshow.as_ref().unwrap().paused);
@@ -2783,6 +2937,17 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.15, bar_y, 5300.0);
         pump_until(&mut p, &ui, |p| !p.scanning && p.all.len() == 3);
         assert!(p.trash.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tapping_the_selection_title_selects_and_deselects_everything() {
+        let (mut p, dir, ui) = photos("selectall", 4);
+        tap(&mut p, &ui, select_button(&ui), nav_mid(&ui), 1000.0);
+        tap(&mut p, &ui, 600.0, nav_mid(&ui), 1100.0);
+        assert_eq!(p.selection.len(), 4);
+        tap(&mut p, &ui, 600.0, nav_mid(&ui), 1200.0);
+        assert!(p.selection.is_empty() && p.selection.active, "Deselect All keeps selecting");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
