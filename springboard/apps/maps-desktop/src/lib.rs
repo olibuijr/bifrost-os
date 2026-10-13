@@ -5,9 +5,12 @@
 //! - `cache`: the on-disk tile cache under the app data directory.
 //! - `geocode`: a Nominatim-style search request builder and reply parser.
 //! - `view`: the map view (centre, fractional zoom, pan, anchored zoom for pinch) and pins.
+//! - `route`: directions from an OSRM-compatible server when one is configured, a labelled straight-line estimate
+//!   otherwise, and offline place search over a local list.
 
 pub mod cache;
 pub mod geocode;
+pub mod route;
 pub mod source;
 pub mod tiles;
 pub mod view;
