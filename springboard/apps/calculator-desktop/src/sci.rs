@@ -67,6 +67,9 @@ fn next_random() -> f64 {
     })
 }
 
+/// The infix keys of the second layer as they are typed into the expression.
+const INFIX_WORDS: [&str; 2] = [" logy ", " rootx "];
+
 fn is_op(c: char) -> bool {
     matches!(c, '+' | '-' | '*' | '/' | '×' | '÷' | '−')
 }
@@ -243,7 +246,7 @@ impl Sci {
             }
             SciKey::Postfix(text) => {
                 self.begin(true);
-                if !self.expr.is_empty() && !self.expr.ends_with(|c: char| is_op(c) || c == '(') {
+                if !self.expr.is_empty() && !self.expr.ends_with(|c: char| is_op(c) || c == '(' || c == ' ') {
                     self.expr.push_str(text);
                 }
             }
@@ -293,6 +296,13 @@ impl Sci {
                     // Keep editing the expression that produced the result.
                     self.expr = self.last_expr.clone();
                     return None;
+                }
+                // the infix words of the second layer go as one unit, like a function name
+                for word in INFIX_WORDS {
+                    if self.expr.ends_with(word) {
+                        self.expr.truncate(self.expr.len() - word.len());
+                        return None;
+                    }
                 }
                 if let Some(popped) = self.expr.pop() {
                     if popped == '(' {
@@ -397,6 +407,27 @@ mod tests {
         s.press(SciKey::Digit(9));
         s.press(SciKey::Close);
         assert_eq!(s.press(SciKey::Equals).unwrap().result, "3");
+    }
+
+    #[test]
+    fn the_infix_keys_evaluate_and_backspace_removes_them_whole() {
+        let mut s = Sci::default();
+        keys(&mut s, "8");
+        s.press(SciKey::Postfix(" logy "));
+        s.press(SciKey::Postfix(" logy "));
+        assert_eq!(s.expr, "8 logy ");
+        keys(&mut s, "2=");
+        assert_eq!(s.display(), "3");
+        s.press(SciKey::Clear);
+        keys(&mut s, "27");
+        s.press(SciKey::Postfix(" rootx "));
+        keys(&mut s, "3");
+        s.press(SciKey::Backspace);
+        s.press(SciKey::Backspace);
+        assert_eq!(s.expr, "27");
+        let mut s = Sci::default();
+        s.press(SciKey::Postfix(" logy "));
+        assert_eq!(s.expr, "", "an infix key needs a left operand");
     }
 
     #[test]

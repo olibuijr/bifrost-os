@@ -18,9 +18,11 @@ use crate::convert::{Category, Converter};
 use crate::copy_service::CopyRequest;
 use crate::engine::{Engine, Key, Operator};
 use crate::eval::Angle;
-use crate::format::{format_number, localize};
+use crate::format::{format_number, format_styled, localize_with};
 use crate::history::{self, Entry, History, Settings};
 use crate::paste;
+use crate::programmer::{Base, BinOp, PKey, Programmer};
+use crate::rpn::{RKey, Rpn};
 use crate::sci::{Sci, SciKey};
 use crate::tape;
 use std::path::PathBuf;
@@ -40,6 +42,7 @@ const BAR_BASIC: u32 = 2;
 const BAR_SCIENTIFIC: u32 = 3;
 const BAR_DECIMAL: u32 = 4;
 const BAR_CONVERT: u32 = 5;
+const BAR_PROGRAMMER: u32 = 6;
 
 /// How long a touch on the display must stay down to open Copy/Paste.
 const HOLD_MS: f64 = 500.0;
@@ -55,17 +58,35 @@ const ID_CLEAR_HISTORY: u32 = 202;
 const ID_COPY_TAPE: u32 = 203;
 const ID_COPY: u32 = 210;
 const ID_PASTE: u32 = 211;
-const ID_CATEGORY: u32 = 300;
+const ID_CATEGORY: u32 = 320;
 const ID_FROM: u32 = 310;
 const ID_SWAP: u32 = 311;
 const ID_TO: u32 = 312;
+/// The clickable bits of Programmer mode: 400 + bit.
+const ID_BIT: u32 = 400;
 const ID_HISTORY: u32 = 1000;
+
+/// Height of the binary row above the Programmer keypad, in points.
+const PROG_STRIP_PT: f32 = 64.0;
+
+/// The label of Clear History after one tap: a second tap clears.
+const CLEAR_CONFIRM_LABEL: &str = "Tap to Confirm";
 
 /// Convert's two rows (categories, then units), in points, between the toolbar and the entry line.
 const CATEGORY_TOP_PT: f32 = 60.0;
 const CATEGORY_H_PT: f32 = 26.0;
-const UNITS_TOP_PT: f32 = 94.0;
+/// Category segments per row; the thirteen categories take two rows.
+const CATEGORY_COLS: usize = 7;
 const UNITS_H_PT: f32 = 26.0;
+
+fn category_rows() -> usize {
+    (Category::ALL.len() + CATEGORY_COLS - 1) / CATEGORY_COLS
+}
+
+/// Top of the unit row: under the category rows, with a gap.
+fn units_top_pt() -> f32 {
+    CATEGORY_TOP_PT + category_rows() as f32 * CATEGORY_H_PT + 8.0
+}
 
 /// Corner radius of a key or capsule: half its shorter side, so it stays a capsule at any size.
 fn capsule(w: f32, h: f32) -> f32 {
@@ -136,13 +157,13 @@ const SCI_KEYS: [SciDef; SCI_COLS * SCI_ROWS] = [
     one("x²", SciKey::Postfix("^2")),
     one("x³", SciKey::Postfix("^3")),
     one("xʸ", SciKey::Postfix("^")),
-    two("eˣ", SciKey::Func("exp"), "2ˣ", SciKey::Text("2^")),
-    one("10ˣ", SciKey::Func("exp10")),
+    two("eˣ", SciKey::Func("exp"), "yˣ", SciKey::Postfix("^")),
+    two("10ˣ", SciKey::Func("exp10"), "2ˣ", SciKey::Text("2^")),
     one("1/x", SciKey::Postfix("^-1")),
     one("√x", SciKey::Func("√")),
     one("∛x", SciKey::Func("∛")),
-    one("ʸ√x", SciKey::Postfix("^(1/")),
-    one("ln", SciKey::Func("ln")),
+    two("ʸ√x", SciKey::Postfix("^(1/"), "ˣ√y", SciKey::Postfix(" rootx ")),
+    two("ln", SciKey::Func("ln"), "logy", SciKey::Postfix(" logy ")),
     two("log10", SciKey::Func("log"), "log2", SciKey::Func("log2")),
     one("x!", SciKey::Postfix("!")),
     two("sin", SciKey::Func("sin"), "asin", SciKey::Func("asin")),
@@ -158,8 +179,52 @@ const SCI_KEYS: [SciDef; SCI_COLS * SCI_ROWS] = [
     one("EE", SciKey::Exp),
 ];
 
+/// The Programmer keypad (left of the basic keys): label and action, six keys a row.
+const PROG_KEYS: [(&str, PKey); SCI_COLS * SCI_ROWS] = [
+    ("A", PKey::Digit(10)),
+    ("B", PKey::Digit(11)),
+    ("C", PKey::Digit(12)),
+    ("D", PKey::Digit(13)),
+    ("E", PKey::Digit(14)),
+    ("F", PKey::Digit(15)),
+    ("AND", PKey::Op(BinOp::And)),
+    ("OR", PKey::Op(BinOp::Or)),
+    ("XOR", PKey::Op(BinOp::Xor)),
+    ("NOR", PKey::Op(BinOp::Nor)),
+    ("NOT", PKey::Not),
+    ("2's", PKey::Negate),
+    ("<<", PKey::Shl1),
+    (">>", PKey::Shr1),
+    ("X<<Y", PKey::Op(BinOp::Shl)),
+    ("X>>Y", PKey::Op(BinOp::Shr)),
+    ("RoL", PKey::Rol),
+    ("RoR", PKey::Ror),
+    ("FlipB", PKey::FlipBytes),
+    ("FlipW", PKey::FlipWords),
+    ("BIN", PKey::SetBase(Base::Bin)),
+    ("OCT", PKey::SetBase(Base::Oct)),
+    ("DEC", PKey::SetBase(Base::Dec)),
+    ("HEX", PKey::SetBase(Base::Hex)),
+    ("00", PKey::Pair(0)),
+    ("FF", PKey::Pair(15)),
+    ("8 bit", PKey::SetBits(8)),
+    ("16 bit", PKey::SetBits(16)),
+    ("32 bit", PKey::SetBits(32)),
+    ("64 bit", PKey::SetBits(64)),
+];
+
+/// The three keypads the Basic, Scientific and Programmer segments choose between.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Mode {
+    Basic,
+    Scientific,
+    Programmer,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Target {
+    Bit(u8),
+    Mode(Mode),
     Key(usize),
     Display,
     Backspace,
@@ -217,6 +282,16 @@ pub struct Calculator {
     convert: Option<Converter>,
     /// The last Copy, waiting for the app to send it to the shell's pasteboard (taken with `take_copy`).
     copy_request: Option<CopyRequest>,
+    /// Programmer mode while set (the keypad enters integers in a base on a fixed-size word).
+    programmer: Option<Programmer>,
+    /// The RPN stack, used while `Settings::rpn` is on.
+    rpn: Rpn,
+    /// Clear History was tapped once and waits for a second tap.
+    clear_confirm: bool,
+    /// The history row a touch went down on, for the swipe that deletes it.
+    swipe_row: Option<usize>,
+    /// The history row the context menu is open for.
+    ctx_row: Option<usize>,
 }
 
 /// Typographic operators for the scientific expression line.
@@ -270,6 +345,11 @@ impl Calculator {
             cache_style: (ui.s.to_bits(), ui.text_scale.to_bits(), ui.bold),
             convert: None,
             copy_request: None,
+            programmer: None,
+            rpn: Rpn::default(),
+            clear_confirm: false,
+            swipe_row: None,
+            ctx_row: None,
         }
     }
 
@@ -289,7 +369,36 @@ impl Calculator {
     }
 
     fn sci_active(&self, ui: &Ui) -> bool {
-        self.convert.is_none() && self.w as f32 >= ui.pt(520.0) && (self.settings.scientific || self.w > self.h)
+        self.convert.is_none()
+            && self.programmer.is_none()
+            && !self.settings.rpn
+            && self.w as f32 >= ui.pt(520.0)
+            && (self.settings.scientific || self.w > self.h)
+    }
+
+    /// Whether the Programmer keypad is showing (it needs the wide layout, like the scientific one).
+    fn programmer_active(&self, ui: &Ui) -> bool {
+        self.convert.is_none() && self.programmer.is_some() && self.w as f32 >= ui.pt(520.0)
+    }
+
+    /// Whether the basic keypad drives the RPN stack.
+    fn rpn_active(&self) -> bool {
+        self.convert.is_none() && self.programmer.is_none() && self.settings.rpn
+    }
+
+    /// The wide layout: the basic keys on the right and a 6 x 5 keypad (scientific or Programmer) on the left.
+    fn wide(&self, ui: &Ui) -> bool {
+        self.sci_active(ui) || self.programmer_active(ui)
+    }
+
+    /// Height of the binary row above the keys (Programmer mode only).
+    fn strip_h(&self, ui: &Ui) -> f32 {
+        if self.programmer_active(ui) { ui.pt(PROG_STRIP_PT) } else { 0.0 }
+    }
+
+    /// Where the display block ends: the top of the keys, or of the binary row above them.
+    fn deck_top(&self, ui: &Ui) -> f32 {
+        self.layout(ui).y - self.strip_h(ui)
     }
 
     fn save_settings(&self) {
@@ -300,8 +409,9 @@ impl Calculator {
 
     fn layout(&self, ui: &Ui) -> Layout {
         let bottom = self.h as f32 - home_zone(ui) - ui.pt(SPACE_XXL);
-        let available = bottom - ui.pt(230.0);
-        if self.sci_active(ui) {
+        let extra = self.strip_h(ui) + if self.convert.is_some() { ui.pt((category_rows() - 1) as f32 * CATEGORY_H_PT) } else { 0.0 };
+        let available = bottom - ui.pt(230.0) - extra;
+        if self.wide(ui) {
             let gap = ui.pt(SPACE_S);
             let cw = ((self.w as f32 - ui.pt(48.0) - gap * 9.0) / 10.0).max(ui.pt(SPACE_XXL));
             let ch = ui
@@ -338,7 +448,7 @@ impl Calculator {
     }
 
     fn key_count(&self, ui: &Ui) -> usize {
-        KEYS.len() + if self.sci_active(ui) { SCI_KEYS.len() } else { 0 }
+        KEYS.len() + if self.wide(ui) { SCI_KEYS.len() } else { 0 }
     }
 
     fn key_rect(&self, ui: &Ui, index: usize) -> (f32, f32, f32, f32) {
@@ -393,8 +503,9 @@ impl Calculator {
         Toolbar::new(vec![
             ToolbarItem::icon(BAR_HISTORY, "History", "sidebar.left").selected(self.history_open),
             ToolbarItem::flexible_space(),
-            ToolbarItem::button(BAR_BASIC, "Basic").in_group(1).selected(!sci && self.convert.is_none()),
+            ToolbarItem::button(BAR_BASIC, "Basic").in_group(1).selected(!sci && self.convert.is_none() && self.programmer.is_none()),
             ToolbarItem::button(BAR_SCIENTIFIC, "Scientific").in_group(1).selected(sci),
+            ToolbarItem::button(BAR_PROGRAMMER, "Programmer").in_group(1).selected(self.programmer.is_some() && self.convert.is_none()),
             ToolbarItem::button(BAR_CONVERT, "Convert").in_group(1).selected(self.convert.is_some()),
             ToolbarItem::button(BAR_DECIMAL, sample),
         ])
@@ -438,8 +549,24 @@ impl Calculator {
         self.bar_rect(ui, BAR_DECIMAL)
     }
 
+    /// The label of the Clear key: AC when there is nothing to clear, else C.
+    fn clear_label(&self, ui: &Ui) -> &'static str {
+        if let Some(p) = self.programmer.as_ref().filter(|_| self.programmer_active(ui)) {
+            p.clear_label()
+        } else if self.rpn_active() {
+            self.rpn.clear_label()
+        } else if self.sci_active(ui) {
+            self.sci.clear_label()
+        } else {
+            self.engine.clear_label()
+        }
+    }
+
     /// The name a control reader gives keypad key `index` (its label in the current second and angle state).
-    fn key_name(&self, index: usize) -> String {
+    fn key_name(&self, ui: &Ui, index: usize) -> String {
+        if index >= KEYS.len() && self.programmer_active(ui) {
+            return PROG_KEYS[index - KEYS.len()].0.into();
+        }
         if index >= KEYS.len() {
             let k = index - KEYS.len();
             return match self.sci_action(k) {
@@ -455,8 +582,9 @@ impl Calculator {
             Key::Operator(Operator::Subtract) => "Subtract".into(),
             Key::Operator(Operator::Multiply) => "Multiply".into(),
             Key::Operator(Operator::Divide) => "Divide".into(),
+            Key::Equals if self.rpn_active() => "Enter".into(),
             Key::Equals => "Equals".into(),
-            Key::Clear => (if self.engine.clear_label() == "AC" { "All Clear" } else { "Clear" }).into(),
+            Key::Clear => (if self.clear_label(ui) == "AC" { "All Clear" } else { "Clear" }).into(),
             Key::Sign => "Change Sign".into(),
             Key::Percent => "Percent".into(),
             Key::Backspace => "Delete".into(),
@@ -497,7 +625,8 @@ impl Calculator {
             let row_y = py + ph - ui.pt(64.0);
             let half = pw / 2.0;
             nodes.push(node(ID_COPY_TAPE, Role::Button, "Copy Tape".into(), String::new(), (px, row_y, half, ui.pt(64.0)), !self.store.is_empty()));
-            nodes.push(node(ID_CLEAR_HISTORY, Role::Button, "Clear History".into(), String::new(), (px + half, row_y, pw - half, ui.pt(64.0)), true));
+            let clear = if self.clear_confirm { "Confirm Clear History" } else { "Clear History" };
+            nodes.push(node(ID_CLEAR_HISTORY, Role::Button, clear.into(), String::new(), (px + half, row_y, pw - half, ui.pt(64.0)), true));
             return nodes;
         }
         if let Some(conv) = &self.convert {
@@ -511,7 +640,13 @@ impl Calculator {
             nodes.push(node(ID_TO, Role::Button, format!("To: {}", conv.to_unit().name), String::new(), to, true));
         }
         for index in 0..self.key_count(ui) {
-            nodes.push(node(ID_KEY + index as u32, Role::Button, self.key_name(index), String::new(), self.key_rect(ui, index), true));
+            nodes.push(node(ID_KEY + index as u32, Role::Button, self.key_name(ui, index), String::new(), self.key_rect(ui, index), true));
+        }
+        if let Some(p) = self.programmer.as_ref().filter(|_| self.programmer_active(ui)) {
+            for bit in 0..p.bits() {
+                let value = if p.bit(bit) { "1" } else { "0" };
+                nodes.push(node(ID_BIT + u32::from(bit), Role::Button, format!("Bit {bit}"), value.into(), self.bit_rect(ui, bit), true));
+            }
         }
         nodes.push(node(ID_DELETE, Role::Button, "Delete".into(), String::new(), self.backspace_button(ui), true));
         nodes.push(node(ID_DISPLAY, Role::StaticText, "Display".into(), self.display_text(ui), self.display_rect(ui), true));
@@ -522,10 +657,28 @@ impl Calculator {
         let l = self.layout(ui);
         (
             l.x + l.width - ui.pt(105.0),
-            l.y - ui.pt(55.0),
+            self.deck_top(ui) - ui.pt(55.0),
             ui.pt(105.0),
             ui.pt(44.0),
         )
+    }
+
+    /// The `bit`-th cell of the binary row (bit 0 is the rightmost of the lower row; 63 the leftmost of the upper).
+    fn bit_rect(&self, ui: &Ui, bit: u8) -> (f32, f32, f32, f32) {
+        let l = self.layout(ui);
+        let strip = ui.pt(PROG_STRIP_PT);
+        let gap = ui.pt(SPACE_XS);
+        let row_h = (strip - gap) / 2.0;
+        let cw = l.width / 32.0;
+        let col = 31 - usize::from(bit % 32);
+        let row = if bit >= 32 { 0.0 } else { 1.0 };
+        (l.x + col as f32 * cw, l.y - strip + row * (row_h + gap), cw, row_h)
+    }
+
+    /// The bit of the word under (`x`, `y`), if the binary row is showing.
+    fn bit_at(&self, ui: &Ui, x: f32, y: f32) -> Option<u8> {
+        let p = self.programmer.as_ref().filter(|_| self.programmer_active(ui))?;
+        (0..p.bits()).find(|bit| Self::contains(self.bit_rect(ui, *bit), x, y))
     }
 
     fn display_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
@@ -534,7 +687,7 @@ impl Calculator {
             l.x,
             ui.pt(90.0),
             l.width,
-            (l.y - ui.pt(145.0)).max(ui.pt(SPACE_HUGE)),
+            (self.deck_top(ui) - ui.pt(145.0)).max(ui.pt(SPACE_HUGE)),
         )
     }
 
@@ -598,7 +751,10 @@ impl Calculator {
             return match self.bar_layout(ui).hit(x / p, y / p)? {
                 BAR_HISTORY => Some(if self.history_open { Target::Done } else { Target::History }),
                 BAR_CONVERT => Some(if self.convert.is_some() { Target::LeaveConvert } else { Target::ShowConvert }),
-                BAR_BASIC | BAR_SCIENTIFIC if self.convert.is_some() => Some(Target::LeaveConvert),
+                BAR_BASIC | BAR_SCIENTIFIC | BAR_PROGRAMMER if self.convert.is_some() => Some(Target::LeaveConvert),
+                BAR_PROGRAMMER if self.programmer.is_none() => Some(Target::Mode(Mode::Programmer)),
+                BAR_BASIC if self.programmer.is_some() => Some(Target::Mode(Mode::Basic)),
+                BAR_SCIENTIFIC if self.programmer.is_some() => Some(Target::Mode(Mode::Scientific)),
                 BAR_BASIC if self.sci_active(ui) => Some(Target::Scientific),
                 BAR_SCIENTIFIC if !self.sci_active(ui) => Some(Target::Scientific),
                 BAR_DECIMAL => Some(Target::Decimal),
@@ -628,6 +784,9 @@ impl Calculator {
         if Self::contains(self.backspace_button(ui), x, y) {
             return Some(Target::Backspace);
         }
+        if let Some(bit) = self.bit_at(ui, x, y) {
+            return Some(Target::Bit(bit));
+        }
         for i in 0..self.key_count(ui) {
             if Self::contains(self.key_rect(ui, i), x, y) {
                 return Some(Target::Key(i));
@@ -636,11 +795,12 @@ impl Calculator {
         Self::contains(self.display_rect(ui), x, y).then_some(Target::Display)
     }
 
-    /// The five category segments of Convert, across the keypad's width.
+    /// The category segments of Convert: rows of `CATEGORY_COLS` across the keypad's width.
     fn category_rect(&self, ui: &Ui, index: usize) -> (f32, f32, f32, f32) {
         let l = self.layout(ui);
-        let n = Category::ALL.len() as f32;
-        (l.x + l.width * index as f32 / n, ui.pt(CATEGORY_TOP_PT), l.width / n, ui.pt(CATEGORY_H_PT))
+        let (col, row) = ((index % CATEGORY_COLS) as f32, (index / CATEGORY_COLS) as f32);
+        let w = l.width / CATEGORY_COLS as f32;
+        (l.x + w * col, ui.pt(CATEGORY_TOP_PT) + row * ui.pt(CATEGORY_H_PT), w, ui.pt(CATEGORY_H_PT))
     }
 
     /// The From unit, the Swap control and the To unit, left to right, across the keypad's width.
@@ -649,7 +809,7 @@ impl Calculator {
         let gap = ui.pt(SPACE_M);
         let swap = ui.pt(96.0);
         let chip = (l.width - swap - 2.0 * gap) / 2.0;
-        let (y, h) = (ui.pt(UNITS_TOP_PT), ui.pt(UNITS_H_PT));
+        let (y, h) = (ui.pt(units_top_pt()), ui.pt(UNITS_H_PT));
         [(l.x, y, chip, h), (l.x + chip + gap, y, swap, h), (l.x + l.width - chip, y, chip, h)]
     }
 
@@ -675,8 +835,11 @@ impl Calculator {
     fn draw_convert(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let Some(conv) = self.convert.clone() else { return };
         let l = self.layout(ui);
-        let (rx, ry, rw, rh) = (l.x, ui.pt(CATEGORY_TOP_PT), l.width, ui.pt(CATEGORY_H_PT));
-        s.fill_rrect(RectF::new(rx, ry, rw, rh), capsule(rw, rh), utility());
+        for row in 0..category_rows() {
+            let in_row = (Category::ALL.len() - row * CATEGORY_COLS).min(CATEGORY_COLS);
+            let (rw, rh) = (l.width * in_row as f32 / CATEGORY_COLS as f32, ui.pt(CATEGORY_H_PT));
+            s.fill_rrect(RectF::new(l.x, ui.pt(CATEGORY_TOP_PT) + row as f32 * rh, rw, rh), capsule(rw, rh), utility());
+        }
         for (index, category) in Category::ALL.iter().enumerate() {
             let rect = self.category_rect(ui, index);
             let (x, y, w, h) = rect;
@@ -684,7 +847,8 @@ impl Calculator {
                 let inset = ui.pt(SPACE_XXS);
                 s.fill_rrect(RectF::new(x + inset, y + inset, w - 2.0 * inset, h - 2.0 * inset), capsule(w, h), scientific());
             }
-            self.label(s, ui, category.title(), MAC_CALLOUT_PT, LABEL.now(), rect);
+            let title = ui.fit(category.title(), MAC_CALLOUT_PT, w - ui.pt(SPACE_S));
+            self.label(s, ui, &title, MAC_CALLOUT_PT, LABEL.now(), rect);
         }
         let [from, swap, to] = self.unit_rects(ui);
         let from_text = ui.fit(&format!("From: {}", conv.from_unit().name), MAC_BODY_PT, from.2 - ui.pt(SPACE_L));
@@ -743,6 +907,40 @@ impl Calculator {
             }
             return;
         }
+        if self.programmer_active(ui) {
+            let pkey = match key {
+                Key::Digit(d) => PKey::Digit(d),
+                Key::Operator(Operator::Add) => PKey::Op(BinOp::Add),
+                Key::Operator(Operator::Subtract) => PKey::Op(BinOp::Sub),
+                Key::Operator(Operator::Multiply) => PKey::Op(BinOp::Mul),
+                Key::Operator(Operator::Divide) => PKey::Op(BinOp::Div),
+                Key::Equals => PKey::Equals,
+                Key::Clear => PKey::Clear,
+                Key::Sign => PKey::Negate,
+                Key::Backspace => PKey::Backspace,
+                // whole numbers only: no decimal point, no percent
+                Key::Decimal | Key::Percent => return,
+            };
+            self.programmer_press(pkey);
+            return;
+        }
+        if self.rpn_active() {
+            let rkey = match key {
+                Key::Digit(d) => RKey::Digit(d),
+                Key::Decimal => RKey::Decimal,
+                Key::Operator(Operator::Add) => RKey::Add,
+                Key::Operator(Operator::Subtract) => RKey::Sub,
+                Key::Operator(Operator::Multiply) => RKey::Mul,
+                Key::Operator(Operator::Divide) => RKey::Div,
+                Key::Equals => RKey::Enter,
+                Key::Clear => RKey::Clear,
+                Key::Sign => RKey::Sign,
+                Key::Percent => RKey::Percent,
+                Key::Backspace => RKey::Backspace,
+            };
+            self.rpn_press(rkey);
+            return;
+        }
         if !self.sci_active(ui) {
             self.engine.press(key);
             self.mirror_engine_history();
@@ -764,9 +962,53 @@ impl Calculator {
         self.sci_press(mapped);
     }
 
+    /// A Programmer key; a finished calculation goes to the history.
+    fn programmer_press(&mut self, key: PKey) {
+        let Some(p) = &mut self.programmer else { return };
+        if let Some((expression, result, value)) = p.press(key) {
+            self.store.push(Entry { expression, result, value });
+        }
+    }
+
+    /// An RPN key; a finished operation goes to the history.
+    fn rpn_press(&mut self, key: RKey) {
+        if let Some((expression, result, value)) = self.rpn.press(key) {
+            self.store.push(Entry { expression, result, value });
+        }
+    }
+
+    /// Switches the keypad (the Basic, Scientific and Programmer segments and the View menu). RPN rides on the
+    /// basic keypad, so it ends when another keypad is chosen.
+    fn set_mode(&mut self, mode: Mode) {
+        self.convert = None;
+        match mode {
+            Mode::Basic => {
+                self.programmer = None;
+                self.settings.scientific = false;
+            }
+            Mode::Scientific => {
+                self.programmer = None;
+                self.settings.scientific = true;
+                self.settings.rpn = false;
+            }
+            Mode::Programmer => {
+                self.settings.rpn = false;
+                if self.programmer.is_none() {
+                    self.programmer = Some(Programmer::default());
+                }
+            }
+        }
+        self.save_settings();
+        self.dirty = true;
+    }
+
     fn press_index(&mut self, ui: &Ui, index: usize) {
         if index < KEYS.len() {
             self.press_basic(ui, KEYS[index]);
+            return;
+        }
+        if self.programmer_active(ui) {
+            self.programmer_press(PROG_KEYS[index - KEYS.len()].1);
             return;
         }
         match self.sci_action(index - KEYS.len()) {
@@ -785,6 +1027,12 @@ impl Calculator {
         if let Some(conv) = &self.convert {
             return conv.result().map(format_number);
         }
+        if let Some(p) = self.programmer.as_ref().filter(|_| self.programmer_active(ui)) {
+            return (!p.is_error()).then(|| p.text());
+        }
+        if self.rpn_active() {
+            return self.rpn.x().map(format_number);
+        }
         if self.sci_active(ui) {
             return self.sci.current_value().map(format_number);
         }
@@ -801,7 +1049,18 @@ impl Calculator {
             conv.set_value(value);
             return true;
         }
-        if self.sci_active(ui) {
+        self.load_value(ui, value)
+    }
+
+    /// Makes `value` the number on the active keypad (Paste, a recalled history result); false when the keypad
+    /// cannot hold it (Programmer takes whole numbers only).
+    fn load_value(&mut self, ui: &Ui, value: f64) -> bool {
+        if self.programmer_active(ui) {
+            return self.programmer.as_mut().is_some_and(|p| p.set_value(value));
+        }
+        if self.rpn_active() {
+            self.rpn.set_value(value);
+        } else if self.sci_active(ui) {
             self.sci.set_value(value);
         } else {
             self.engine.paste_value(value);
@@ -813,7 +1072,7 @@ impl Calculator {
     /// (`take_copy`), which sends it to the shell's pasteboard.
     pub fn copy(&mut self, ui: &Ui) {
         if let Some(number) = self.copy_text(ui) {
-            let shown = localize(&number, self.settings.locale);
+            let shown = localize_with(&number, self.settings.locale, self.settings.thousands);
             self.copy_request = Some(CopyRequest { number, shown });
         }
     }
@@ -845,8 +1104,8 @@ impl Calculator {
             conv.set_value(value);
             return;
         }
-        if self.sci_active(ui) {
-            self.sci.set_value(value);
+        if self.programmer_active(ui) || self.rpn_active() || self.sci_active(ui) {
+            self.load_value(ui, value);
         } else {
             self.engine.recall_value(value);
         }
@@ -870,7 +1129,11 @@ impl Calculator {
         if let Some(conv) = &self.convert {
             return conv.result().map_or_else(|| "Error".into(), format_number);
         }
-        if self.sci_active(ui) {
+        if let Some(p) = self.programmer.as_ref().filter(|_| self.programmer_active(ui)) {
+            p.text()
+        } else if self.rpn_active() {
+            self.rpn.display()
+        } else if self.sci_active(ui) {
             pretty(&self.sci.display())
         } else {
             self.engine.display().to_string()
@@ -881,15 +1144,67 @@ impl Calculator {
         if let Some(conv) = &self.convert {
             return format!("{} {}", conv.entry_text(), conv.from_unit().symbol);
         }
-        if self.sci_active(ui) {
+        if let Some(p) = self.programmer.as_ref().filter(|_| self.programmer_active(ui)) {
+            p.expression.clone()
+        } else if self.rpn_active() {
+            self.rpn.below().iter().map(|v| format_number(*v)).collect::<Vec<_>>().join("   ")
+        } else if self.sci_active(ui) {
             pretty(self.sci.expression_line())
         } else {
             self.engine.expression.clone()
         }
     }
 
+    /// The value of the number on the display when it is a result (not an entry being typed): the View settings
+    /// for decimal places and scientific notation rewrite it from this value.
+    fn result_value(&self, ui: &Ui) -> Option<f64> {
+        if self.convert.is_some() || self.programmer.is_some() {
+            return None;
+        }
+        if self.rpn_active() {
+            self.rpn.result()
+        } else if self.sci_active(ui) {
+            if self.sci.error { None } else { self.sci.result }
+        } else {
+            self.engine.result_value()
+        }
+    }
+
+    /// The text of the number on the display for the screen: Programmer shows its base as is, everything else is
+    /// rewritten for the View settings and given the locale's separators.
+    fn display_shown(&self, ui: &Ui) -> String {
+        if self.programmer_active(ui) {
+            return self.display_text(ui);
+        }
+        let style = self.settings.style();
+        let text = match self.result_value(ui) {
+            Some(value) if style.rewrites() => format_styled(value, style),
+            _ => self.display_text(ui),
+        };
+        localize_with(&text, self.settings.locale, style.thousands)
+    }
+
+    /// Deletes history entry `index` (a swipe on its row, or the context menu).
+    fn delete_entry(&mut self, ui: &Ui, index: usize) {
+        if self.store.remove(index) {
+            let max = self.store.len().saturating_sub(self.rows_visible(ui));
+            self.hist_offset = self.hist_offset.min(max);
+            self.dirty = true;
+        }
+    }
+
     fn activate(&mut self, ui: &Ui, target: Target) {
+        // Clear History asks twice: any other tap withdraws the question
+        if target != Target::ClearHistory {
+            self.clear_confirm = false;
+        }
         match target {
+            Target::Bit(bit) => {
+                if let Some(p) = &mut self.programmer {
+                    p.toggle_bit(bit);
+                }
+            }
+            Target::Mode(mode) => self.set_mode(mode),
             Target::Key(i) => self.press_index(ui, i),
             Target::Backspace => self.press_basic(ui, Key::Backspace),
             Target::ShowConvert => self.convert = Some(Converter::default()),
@@ -919,7 +1234,14 @@ impl Calculator {
                 self.hist_offset = 0;
             }
             Target::Done => self.history_open = false,
-            Target::ClearHistory => self.clear_history(),
+            Target::ClearHistory => {
+                if self.clear_confirm {
+                    self.clear_confirm = false;
+                    self.clear_history();
+                } else if !self.store.is_empty() {
+                    self.clear_confirm = true;
+                }
+            }
             Target::CopyTape => self.copy_tape(),
             Target::Result(i) => {
                 self.recall(ui, i);
@@ -927,6 +1249,10 @@ impl Calculator {
             }
             Target::Scientific => {
                 self.settings.scientific = !self.settings.scientific;
+                if self.settings.scientific {
+                    self.settings.rpn = false;
+                    self.programmer = None;
+                }
                 self.save_settings();
             }
             Target::Decimal => {
@@ -953,6 +1279,10 @@ impl Calculator {
                 self.down = (x, y);
                 self.moved = false;
                 self.hold = (self.pressed == Some(Target::Display)).then_some(t);
+                self.swipe_row = match self.pressed {
+                    Some(Target::Result(i)) => Some(i),
+                    _ => None,
+                };
                 self.hist_start = self.hist_offset;
                 self.dirty = true;
             }
@@ -977,9 +1307,13 @@ impl Calculator {
             Event::Up(x, y) => {
                 self.hold = None;
                 let pressed = self.pressed.take();
+                let swiped = self.swipe_row.take();
                 let dx = (x - self.down.0).abs();
                 let dy = (y - self.down.1).abs();
-                if pressed == Some(Target::Display) && dx > ui.pt(SPACE_HUGE) && dx > dy * 1.5 {
+                if let Some(row) = swiped.filter(|_| self.history_open && x < self.down.0 && dx > ui.pt(SPACE_HUGE) && dx > dy * 1.5) {
+                    // a swipe to the left across a history row deletes it
+                    self.delete_entry(ui, row);
+                } else if pressed == Some(Target::Display) && dx > ui.pt(SPACE_HUGE) && dx > dy * 1.5 {
                     self.activate(ui, Target::Backspace);
                 } else if !self.moved && pressed.is_some() && self.hit(ui, x, y) == pressed {
                     self.activate(ui, pressed.unwrap());
@@ -1036,6 +1370,8 @@ impl Calculator {
             "xʸ" => Some(("x", "y", false)),
             "eˣ" => Some(("e", "x", false)),
             "2ˣ" => Some(("2", "x", false)),
+            "yˣ" => Some(("y", "x", false)),
+            "ˣ√y" => Some(("√y", "x", true)),
             "10ˣ" => Some(("10", "x", false)),
             "ʸ√x" => Some(("√x", "y", true)),
             _ => None,
@@ -1061,7 +1397,11 @@ impl Calculator {
     fn draw_key(&mut self, s: &mut dyn Canvas, ui: &Ui, index: usize) {
         let rect = self.key_rect(ui, index);
         let (x, y, w, h) = rect;
-        let sci_layout = self.sci_active(ui);
+        let sci_layout = self.wide(ui);
+        if index >= KEYS.len() && self.programmer_active(ui) {
+            self.draw_programmer_key(s, ui, index);
+            return;
+        }
         if index >= KEYS.len() {
             let k = index - KEYS.len();
             let def = SCI_KEYS[k];
@@ -1087,7 +1427,7 @@ impl Calculator {
             return;
         }
         let key = KEYS[index];
-        let selected = !sci_layout && self.convert.is_none()
+        let selected = !sci_layout && self.convert.is_none() && !self.rpn_active()
             && matches!(key, Key::Operator(op) if self.engine.selected_operator() == Some(op));
         let pressed = self.pressed == Some(Target::Key(index));
         let is_utility = index < 3;
@@ -1118,23 +1458,21 @@ impl Calculator {
             LABEL.now()
         };
         s.fill_rrect(RectF::new(x, y, w, h), capsule(w, h), fill);
-        let clear = if sci_layout {
-            self.sci.clear_label()
-        } else {
-            self.engine.clear_label()
-        };
+        let clear = self.clear_label(ui);
         let decimal = self.settings.locale.decimal().to_string();
         let label = match key {
             Key::Digit(digit) => digit.to_string(),
             Key::Decimal => decimal,
             Key::Operator(op) => op.label().into(),
+            Key::Equals if self.rpn_active() => "Enter".into(),
             Key::Equals => "=".into(),
             Key::Clear => clear.into(),
             Key::Sign => "+/−".into(),
             Key::Percent => "%".into(),
             Key::Backspace => unreachable!(),
         };
-        let pt = (h / ui.s * if is_utility { UTILITY_LABEL_EM } else { KEY_LABEL_EM }).min(DISPLAY_MEDIUM_PT);
+        let em = if is_utility || label.chars().count() > 2 { UTILITY_LABEL_EM } else { KEY_LABEL_EM };
+        let pt = (h / ui.s * em).min(DISPLAY_MEDIUM_PT);
         let rect = if key == Key::Digit(0) {
             (x, y, self.layout(ui).cw, h)
         } else {
@@ -1143,9 +1481,59 @@ impl Calculator {
         self.label(s, ui, &label, pt, color, rect);
     }
 
+    /// A key of the Programmer keypad; the current base and word size are drawn selected.
+    fn draw_programmer_key(&mut self, s: &mut dyn Canvas, ui: &Ui, index: usize) {
+        let rect = self.key_rect(ui, index);
+        let (x, y, w, h) = rect;
+        let (label, key) = PROG_KEYS[index - KEYS.len()];
+        let on = self.programmer.as_ref().is_some_and(|p| match key {
+            PKey::SetBase(base) => p.base == base,
+            PKey::SetBits(bits) => p.bits() == bits,
+            _ => false,
+        });
+        let pressed = self.pressed == Some(Target::Key(index));
+        let fill = if on {
+            LABEL.now()
+        } else if pressed {
+            key_down()
+        } else {
+            scientific()
+        };
+        let color = if on { CARD_BG.now() } else { LABEL.now() };
+        // a hex digit that the base cannot type is dimmed
+        let usable = match key {
+            PKey::Digit(d) | PKey::Pair(d) => self.programmer.as_ref().map_or(true, |p| u32::from(d) < p.base.radix()),
+            _ => true,
+        };
+        let color = if usable { color } else { LABEL_3.now() };
+        s.fill_rrect(RectF::new(x, y, w, h), capsule(w, h), fill);
+        let pt = (h / ui.s * SCI_LABEL_EM).min(MAC_LARGE_TITLE_PT);
+        self.label(s, ui, label, pt, color, rect);
+    }
+
+    /// The binary row: one cell per bit of the word, set bits filled, bits outside the word dimmed.
+    fn draw_bits(&mut self, s: &mut dyn Canvas, ui: &Ui) {
+        let Some(p) = self.programmer.clone() else { return };
+        let inset = ui.pt(SPACE_XXS);
+        for bit in (0..64u8).rev() {
+            let rect = self.bit_rect(ui, bit);
+            let (x, y, w, h) = rect;
+            let inside = bit < p.bits();
+            let set = inside && p.bit(bit);
+            if inside {
+                let fill = if set { scientific() } else { FIELD_BG.now() };
+                s.fill_rrect(RectF::new(x + inset, y, w - 2.0 * inset, h), ui.pt(m::SELECTION_RADIUS), fill);
+            }
+            let color = if !inside { LABEL_3.now() } else if set { LABEL.now() } else { LABEL_2.now() };
+            self.label(s, ui, if set { "1" } else { "0" }, MAC_CALLOUT_PT, color, rect);
+        }
+    }
+
     fn draw_history(&mut self, s: &mut dyn Canvas, ui: &Ui) {
         let (x, y, w, h) = self.panel(ui);
         let locale = self.settings.locale;
+        let thousands = self.settings.thousands;
+        let now = history::now_secs();
         s.fill_rect(chrome::whole(x, y, w, h), SIDEBAR_BG.now());
         s.fill_rect(chrome::whole(x + w, y, 1.0, h), SEPARATOR_C.now());
         if self.store.is_empty() {
@@ -1163,8 +1551,8 @@ impl Calculator {
             let Some(entry) = self.store.get(index) else {
                 break;
             };
-            let expression_text = localize(&pretty(&entry.expression), locale);
-            let result = localize(&entry.result, locale);
+            let expression_text = localize_with(&pretty(&entry.expression), locale, thousands);
+            let result = localize_with(&entry.result, locale, thousands);
             let (rx, ry, rw, rh) = self.result_rect(ui, visual);
             if self.pressed == Some(Target::Result(index)) {
                 s.fill_rrect(RectF::new(rx, ry, rw, rh), ui.pt(m::SELECTION_RADIUS), ROW_PRESSED.now());
@@ -1176,13 +1564,22 @@ impl Calculator {
             chrome::blit(s, image, (rx + rw - ui.pt(SPACE_M) - image.w as f32) as i32, (ry + ui.pt(SPACE_XS)) as i32);
             let image = self.cache.get(ui, &result, MAC_LARGE_TITLE_PT, Weight::Regular, LABEL.now());
             chrome::blit(s, image, (rx + rw - ui.pt(SPACE_M) - image.w as f32) as i32, (ry + rh - ui.pt(SPACE_XS) - image.h as f32) as i32);
+            // the first entry of each day carries the day's caption at the left of its row
+            if history::starts_day(|k| self.store.time(k), index) {
+                let caption = history::day_caption(self.store.time(index), now);
+                if !caption.is_empty() {
+                    let image = self.cache.get(ui, &caption, MAC_CALLOUT_PT, Weight::Regular, LABEL_3.now());
+                    chrome::blit(s, image, (rx + ui.pt(SPACE_M)) as i32, (ry + ui.pt(SPACE_XS)) as i32);
+                }
+            }
             s.fill_rrect(RectF::new(rx, ry + rh - 1.0, rw, 1.0), 0.0, SEPARATOR_C.now());
         }
         // Copy Tape takes the left half of the bottom row, Clear History the right half.
         let (row_y, half) = (y + h - ui.pt(64.0), w / 2.0);
         let tape_color = if self.store.is_empty() { LABEL_3.now() } else { LINK };
         self.label(s, ui, "Copy Tape", MAC_BODY_PT, tape_color, (x, row_y, half, ui.pt(64.0)));
-        self.label(s, ui, "Clear History", MAC_BODY_PT, DESTRUCTIVE, (x + half, row_y, w - half, ui.pt(64.0)));
+        let clear = if self.clear_confirm { CLEAR_CONFIRM_LABEL } else { "Clear History" };
+        self.label(s, ui, clear, MAC_BODY_PT, DESTRUCTIVE, (x + half, row_y, w - half, ui.pt(64.0)));
     }
 
     fn draw_menu(&mut self, s: &mut dyn Canvas, ui: &Ui) {
@@ -1213,10 +1610,12 @@ impl Calculator {
         s.fill_rect(chrome::whole(0.0, 0.0, self.w as f32, self.h as f32), CARD_BG.now());
         let sci_on = self.sci_active(ui);
         let l = self.layout(ui);
+        let top = self.deck_top(ui);
         let locale = self.settings.locale;
+        let style = self.settings.style();
         let display = match &self.convert {
             Some(conv) => conv.result_text(locale),
-            None => localize(&self.display_text(ui), locale),
+            None => self.display_shown(ui),
         };
         let mut pt = DISPLAY_LARGE_PT;
         let room = l.width - ui.pt(SPACE_XL);
@@ -1225,9 +1624,13 @@ impl Calculator {
         }
         let display = fit_tail(ui, &display, pt, room);
         let image = self.cache.get(ui, &display, pt, Weight::Regular, LABEL.now());
-        let display_y = l.y - ui.pt(62.0) - image.h as f32;
+        let display_y = top - ui.pt(62.0) - image.h as f32;
         chrome::blit(s, image, (l.x + l.width - ui.pt(SPACE_S) - image.w as f32) as i32, display_y as i32);
-        let expression = localize(&self.expression_text(ui), locale);
+        let expression = if self.programmer_active(ui) {
+            self.expression_text(ui)
+        } else {
+            localize_with(&self.expression_text(ui), locale, style.thousands)
+        };
         let expression = ui.fit(&expression, MAC_TITLE1_PT, l.width - ui.pt(SPACE_L));
         let image = self
             .cache
@@ -1236,6 +1639,14 @@ impl Calculator {
         if sci_on && self.sci.memory != 0.0 {
             let image = self.cache.get(ui, "M", MAC_TITLE1_PT, Weight::Regular, LABEL_2.now());
             chrome::blit(s, image, (l.x + ui.pt(SPACE_S)) as i32, display_y as i32);
+        }
+        if self.programmer_active(ui) {
+            let readout = self.programmer.as_ref().map(Programmer::readout).unwrap_or_default();
+            if !readout.is_empty() {
+                let image = self.cache.get(ui, &readout, MAC_TITLE1_PT, Weight::Regular, LABEL_2.now());
+                chrome::blit(s, image, (l.x + ui.pt(SPACE_S)) as i32, display_y as i32);
+            }
+            self.draw_bits(s, ui);
         }
         self.label(s, ui, "Delete", MAC_CALLOUT_PT, LABEL_2.now(), self.backspace_button(ui));
         for i in 0..self.key_count(ui) {
@@ -1263,19 +1674,27 @@ impl Calculator {
             Some(Target::Decimal) => Some(BAR_DECIMAL),
             Some(Target::ShowConvert) | Some(Target::LeaveConvert) => Some(BAR_CONVERT),
             Some(Target::Scientific) => Some(if self.sci_active(ui) { BAR_BASIC } else { BAR_SCIENTIFIC }),
+            Some(Target::Mode(Mode::Basic)) => Some(BAR_BASIC),
+            Some(Target::Mode(Mode::Scientific)) => Some(BAR_SCIENTIFIC),
+            Some(Target::Mode(Mode::Programmer)) => Some(BAR_PROGRAMMER),
             _ => None,
         };
         chrome::toolbar(s, ui, self.bar_bounds(ui), &self.bar(ui), pressed);
     }
 }
 
+mod menu;
+
 #[cfg(test)]
 mod convert_tests;
+#[cfg(test)]
+mod mode_tests;
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::format;
+    use crate::format::localize;
     use crate::icon::icon;
     use bifrost_app::kit::Surface;
 
@@ -1457,8 +1876,12 @@ mod tests {
         let (x, y) = centre(app.history_button(&ui));
         tap(&mut app, &ui, x, y);
         let (px, py, pw, ph) = app.panel(&ui);
-        tap(&mut app, &ui, px + pw / 2.0, py + ph - ui.pt(30.0));
-        assert!(app.store.is_empty());
+        tap(&mut app, &ui, px + pw * 0.75, py + ph - ui.pt(30.0));
+        assert!(app.clear_confirm, "the first tap asks");
+        assert_eq!(app.store.len(), 1);
+        tap(&mut app, &ui, px + pw * 0.75, py + ph - ui.pt(30.0));
+        assert!(app.store.is_empty(), "the second tap clears");
+        assert!(!app.clear_confirm);
         let app = Calculator::new(&ui, 1200, 1920).with_storage(dir.clone());
         assert!(app.store.is_empty());
         let _ = std::fs::remove_dir_all(&dir);

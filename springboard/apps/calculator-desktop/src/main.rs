@@ -11,16 +11,18 @@ mod format;
 mod history;
 mod icon;
 mod paste;
+mod programmer;
+mod rpn;
 mod sci;
 mod tape;
 
 use bifrost_app::kit::canvas::Canvas;
 use bifrost_app::kit::{clipboard, Damage, Event, Surface};
-use bifrost_app::{App, Command, Commands, Ctx, Input, TouchKind, KeyInput};
+use bifrost_app::{App, AppMenu, Command, Commands, Ctx, Input, TouchKind, KeyInput};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_core::json::Json;
-use engine::{Key, Operator};
+use engine::Key;
 use std::path::Path;
 
 struct CalculatorApp {
@@ -72,20 +74,31 @@ impl App for CalculatorApp {
                 _ => false,
             };
         }
+        // a right click on a history row opens its menu; the answer comes back as a ContextAction
+        if let Input::Context { x, y } = &ev {
+            let Some(calc) = &mut self.calc else { return false };
+            if let Some(items) = calc.history_context(&ctx.ui, *x, *y) {
+                ctx.context_menu(*x, *y, items);
+            }
+            return false;
+        }
+        if let Input::ContextAction(id) = &ev {
+            let Some(calc) = &mut self.calc else { return false };
+            let changed = calc.context_action(&ctx.ui, *id);
+            self.send_copy(ctx);
+            return changed;
+        }
         if let Input::Key(input) = &ev {
             let Some(calc) = &mut self.calc else { return false };
             let keys = match input {
-                KeyInput::Text(text) => text.chars().filter_map(|ch| match ch {
-                    '0'..='9' => Some(Key::Digit(ch as u8 - b'0')),
-                    '.' | ',' => Some(Key::Decimal),
-                    '+' => Some(Key::Operator(Operator::Add)),
-                    '-' => Some(Key::Operator(Operator::Subtract)),
-                    '*' => Some(Key::Operator(Operator::Multiply)),
-                    '/' => Some(Key::Operator(Operator::Divide)),
-                    '=' => Some(Key::Equals),
-                    '%' => Some(Key::Percent),
-                    _ => None,
-                }).collect::<Vec<_>>(),
+                // typed characters: the calculator maps them for the keypad that is showing
+                KeyInput::Text(text) => {
+                    let mut changed = false;
+                    for ch in text.chars() {
+                        changed |= calc.typed(&ctx.ui, ch);
+                    }
+                    return changed;
+                }
                 KeyInput::Code(8) => vec![Key::Backspace],
                 KeyInput::Code(13) => vec![Key::Equals],
                 KeyInput::Code(27) => vec![Key::Clear],
@@ -115,6 +128,18 @@ impl App for CalculatorApp {
             clipboard::set_text(&number);
         }
         false
+    }
+
+    /// The Edit (Copy Expression, Copy Last Result), View and Stack menus.
+    fn main_menu(&self, ctx: &Ctx) -> Vec<AppMenu> {
+        self.calc.as_ref().map(|c| c.menus(&ctx.ui)).unwrap_or_default()
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        let Some(calc) = &mut self.calc else { return false };
+        let changed = calc.menu_action(&ctx.ui, id);
+        self.send_copy(ctx);
+        changed
     }
 
     /// Copy and Paste are enabled in the shell's Edit menu only when they have something to act on.
