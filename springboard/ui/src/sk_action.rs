@@ -52,6 +52,9 @@ impl Action {
     }
 }
 
+/// The most passes an endless repeat makes in one step.
+const MAX_FOREVER_PASSES_PER_STEP: u32 = 10_000;
+
 /// The running state of one action.
 #[derive(Clone, Debug)]
 enum Running {
@@ -193,6 +196,7 @@ impl Running {
             }
             Running::Forever { body, current } => {
                 let mut dt = dt;
+                let mut passes = 0u32;
                 loop {
                     match current.advance(dt, events) {
                         None => return None,
@@ -202,6 +206,12 @@ impl Running {
                             }
                             *current = Box::new(start(body));
                             dt = leftover;
+                            // A huge step against a tiny body would otherwise spin for a very long time. The rest
+                            // of the step is dropped and the action keeps running.
+                            passes += 1;
+                            if passes >= MAX_FOREVER_PASSES_PER_STEP {
+                                return None;
+                            }
                         }
                     }
                 }
@@ -447,5 +457,77 @@ mod tests {
         assert!(Keyframes::new(Interpolation::Linear, vec![]).is_none());
         assert!(Keyframes::new(Interpolation::Linear, vec![(1.0, 0.0), (1.0, 2.0)]).is_none());
         assert!(Keyframes::new(Interpolation::Hold, vec![(0.0, f64::NAN)]).is_none());
+    }
+
+    #[test]
+    fn group_leftover_carries_into_the_next_sequence_step() {
+        let mut runner = Runner::new();
+        runner.run(&Action::Sequence(vec![
+            Action::Group(vec![wait(0.2), wait(0.5)]),
+            wait(0.3),
+            Action::Report(7),
+        ]));
+        // 0.5 ends the group, the 0.4 left over finishes the 0.3 wait and fires the report.
+        assert_eq!(runner.advance(0.9), vec![7]);
+        assert_eq!(runner.active_count(), 0);
+    }
+
+    #[test]
+    fn repeat_carries_leftover_between_passes_and_reports_each() {
+        let mut runner = Runner::new();
+        runner.run(&Action::Repeat(
+            Box::new(Action::Sequence(vec![wait(0.1), Action::Report(3)])),
+            3,
+        ));
+        assert_eq!(runner.advance(0.25), vec![3, 3]);
+        assert_eq!(runner.active_count(), 1);
+        assert_eq!(runner.advance(0.1), vec![3]);
+        assert_eq!(runner.active_count(), 0);
+    }
+
+    #[test]
+    fn zero_count_repeat_finishes_inside_a_sequence() {
+        let mut runner = Runner::new();
+        runner.run(&Action::Sequence(vec![
+            Action::Repeat(Box::new(Action::Report(1)), 0),
+            Action::Report(2),
+        ]));
+        assert_eq!(runner.advance(0.0), vec![2]);
+        assert_eq!(runner.active_count(), 0);
+    }
+
+    #[test]
+    fn handles_are_distinct_and_remove_reports_unknown() {
+        let mut runner = Runner::new();
+        let a = runner.run(&wait(1.0));
+        let b = runner.run(&wait(1.0));
+        assert_ne!(a, b);
+        assert!(runner.remove(a));
+        assert!(!runner.remove(a));
+        assert!(runner.is_active(b));
+    }
+
+    #[test]
+    fn huge_step_on_endless_repeat_returns_and_keeps_running() {
+        let mut runner = Runner::new();
+        let h = runner.run(&Action::RepeatForever(Box::new(wait(1e-6))));
+        assert!(runner.advance(1.0e6).is_empty());
+        assert!(runner.is_active(h));
+    }
+
+    #[test]
+    fn keyframes_linear_three_keys_and_exact_key_times() {
+        let k = Keyframes::new(
+            Interpolation::Linear,
+            vec![(0.0, 0.0), (1.0, 10.0), (3.0, 30.0)],
+        )
+        .unwrap();
+        assert!(near(k.value_at(1.0), 10.0));
+        assert!(near(k.value_at(2.0), 20.0));
+        assert!(near(k.value_at(0.25), 2.5));
+        assert!(near(k.value_at(3.0), 30.0));
+        let single = Keyframes::new(Interpolation::Linear, vec![(2.0, 4.0)]).unwrap();
+        assert!(near(single.value_at(-5.0), 4.0));
+        assert!(near(single.value_at(9.0), 4.0));
     }
 }
