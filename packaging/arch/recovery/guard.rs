@@ -20,9 +20,6 @@ const FILES: &[&str] = &[
     "usr/bin/bifrost-apps",
     "usr/lib/springboard/seed-data",
     "usr/lib/systemd/system/springboard.service",
-    "usr/share/bifrost/wayland/environment",
-    "usr/share/bifrost/wayland/autostart",
-    "usr/share/bifrost/wayland/rc.xml",
 ];
 unsafe extern "C" {
     fn geteuid() -> u32;

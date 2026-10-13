@@ -9,7 +9,6 @@ alsa-lib
 mesa
 pacman-contrib
 fakeroot
-labwc
 xorg-xwayland
 seatd
 fuzzel

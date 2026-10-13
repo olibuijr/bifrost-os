@@ -19,7 +19,7 @@ SRC = ROOT / "packaging/archiso"
 DROP = {"libva-mesa-driver", "mesa-vdpau", "firefox", "libreoffice-fresh", "vlc", "gimp", "yad", "zenity", "openbox", "gtk3", "xorg-server", "xorg-xinit", "xorg-xsetroot",
         "xorg-xrandr", "gparted", "file-roller", "evince", "eog", "gnome-disk-utility", "limine", "grub", "syslinux", "memtest86+", "memtest86+-efi", "edk2-shell", "base-devel", "nodejs", "rust", "noto-fonts"}
 # what the live installer and its video background need
-NEED = ["btrfs-progs", "wayvnc", "python-aiohttp", "bubblewrap", "adwaita-cursors", "labwc", "seatd", "xorg-xwayland", "fuzzel", "grim", "wlr-randr", "python", "qt6-wayland", "ffmpeg", "mesa", "libglvnd", "libva-utils", "intel-media-driver", "vulkan-icd-loader", "vulkan-intel", "vulkan-radeon", "pciutils", "alsa-lib", "networkmanager", "python", "efibootmgr", "parted", "dosfstools", "e2fsprogs", "arch-install-scripts", "openssh"]
+NEED = ["btrfs-progs", "wayvnc", "python-aiohttp", "bubblewrap", "adwaita-cursors", "seatd", "xorg-xwayland", "fuzzel", "grim", "wlr-randr", "python", "qt6-wayland", "ffmpeg", "mesa", "libglvnd", "libva-utils", "intel-media-driver", "vulkan-icd-loader", "vulkan-intel", "vulkan-radeon", "pciutils", "alsa-lib", "networkmanager", "python", "efibootmgr", "parted", "dosfstools", "e2fsprogs", "arch-install-scripts", "openssh"]
 # files and units from earlier installer generations (bash+yad, web UI, Limine, OpenCore)
 # Keep the legacy spelling assembled so the source tree itself has one canonical brand.
 OLD = "andr" + "oios"

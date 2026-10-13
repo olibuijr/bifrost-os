@@ -3,8 +3,12 @@
 import json, os, subprocess
 from pathlib import Path
 runtime = Path(os.environ['XDG_RUNTIME_DIR'])
+DEFAULTS = {'XDG_CURRENT_DESKTOP': 'BifrOSt', 'XDG_SESSION_TYPE': 'wayland', 'MOZ_ENABLE_WAYLAND': '1',
+            'QT_QPA_PLATFORM': 'wayland;xcb', 'GDK_BACKEND': 'wayland,x11', 'XCURSOR_THEME': 'Adwaita', 'XCURSOR_SIZE': '32'}
+for k, v in DEFAULTS.items():
+    os.environ.setdefault(k, v)
 keys = ('XDG_RUNTIME_DIR','WAYLAND_DISPLAY','DISPLAY','XAUTHORITY','DBUS_SESSION_BUS_ADDRESS','XDG_CURRENT_DESKTOP','XDG_SESSION_TYPE','MOZ_ENABLE_WAYLAND','QT_QPA_PLATFORM','GDK_BACKEND','XCURSOR_THEME','XCURSOR_SIZE')
-# The output mode is display-refresh's (run just before this in autostart): fastest refresh at native size by
+# The output mode is display-refresh's (run just before this by the session script): fastest refresh at native size by
 # default, or the Settings > Displays > Refresh Rate choice.
 
 tmp = runtime / 'session.json.tmp'

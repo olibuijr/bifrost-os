@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 """Put every enabled output in its fastest refresh at its native size as soon as the window server is up, before the
-shell connects (labwc autostart), so the desktop never starts at the firmware's 60 Hz on a faster panel.
+shell connects (the session script), so the desktop never starts at the firmware's 60 Hz on a faster panel.
 
 The choice is Settings > Displays > Refresh Rate, kept in /var/lib/springboard/display-refresh:
 `max` (the default, also when the file is missing), `native` (the panel's preferred mode as the firmware set it), or a

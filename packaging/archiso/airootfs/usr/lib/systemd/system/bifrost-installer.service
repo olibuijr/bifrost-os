@@ -15,7 +15,7 @@ Environment=BIFROST_ASSETS=/usr/share/springboard/assets
 ExecStartPre=-/bin/sh -c '[ -e /etc/bifrost/lab.token ] && touch /run/bifrost-shot-on || true'
 # The EFI frame remains in simpledrm until the native installer opens KMS.
 # The installer owns DRM/KMS directly. The installed desktop uses the Wayland
-# session, but starting the installer through labwc makes the compositor hold
+# session, but starting the installer through the compositor makes it hold
 # the card and leaves the installer with no display.
 ExecStart=/usr/bin/bifrost-installer
 Restart=on-failure

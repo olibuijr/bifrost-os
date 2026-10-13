@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """Learn the monitor's fastest native-resolution mode and keep it in the ESP kernel command line as video=OUT:WxH@R.
 
-With video= the kernel, simpledrm and (reuseOutputMode in rc.xml) labwc all start in that one mode, so the display is
+With video= the kernel, simpledrm and the window server all start in that one mode, so the display is
 modeset once and never again. Also adds systemd.tty.rows.console= (PID 1 skips a 333 ms console size query) to
 command lines written before the installer set it. Atomic write, backup kept, only those tokens are touched."""
 import json, os, subprocess, sys

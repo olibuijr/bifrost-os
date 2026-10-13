@@ -33,22 +33,18 @@ package_bifrost_files() {
   done
   install -Dm755 "$PC_MCP" "$pkgdir/usr/bin/bifrost-mcp"
   # the window server (docs/window-server.md) and its chrome clients. /etc/bifrost/compositor = bifrost-wm selects them;
-  # the session falls back to labwc when bifrost-wm is absent, so a package without PC_WM is allowed (explicit, below).
-  # A package WITH bifrost-wm must carry the chrome it launches, or the session would start a bare window server.
-  if [[ -n ${PC_WM:-} ]]; then
-    for need in PC_WM PC_MENUBAR PC_DOCK PC_PANELS; do
-      if [[ -z ${!need:-} || ! -x ${!need} ]]; then
-        echo "package-files.sh: PC_WM is set but $need is not an executable (${!need:-unset})" >&2
-        return 1 2>/dev/null || exit 1
-      fi
-    done
-    install -Dm755 "$PC_WM" "$pkgdir/usr/bin/bifrost-wm"
-    install -Dm755 "$PC_MENUBAR" "$pkgdir/usr/bin/bifrost-menubar"
-    install -Dm755 "$PC_DOCK" "$pkgdir/usr/bin/bifrost-dock"
-    install -Dm755 "$PC_PANELS" "$pkgdir/usr/bin/bifrost-panels"
-  else
-    echo "package-files.sh: no PC_WM: shipping without bifrost-wm, sessions run labwc" >&2
-  fi
+  # bifrost-wm is the only window server, so PC_WM is mandatory.
+  # The package must carry the chrome it launches, or the session would start a bare window server.
+  for need in PC_WM PC_MENUBAR PC_DOCK PC_PANELS; do
+    if [[ -z ${!need:-} || ! -x ${!need} ]]; then
+      echo "package-files.sh: $need is not an executable (${!need:-unset}); build it first (tools/pc-publish.py does)" >&2
+      return 1 2>/dev/null || exit 1
+    fi
+  done
+  install -Dm755 "$PC_WM" "$pkgdir/usr/bin/bifrost-wm"
+  install -Dm755 "$PC_MENUBAR" "$pkgdir/usr/bin/bifrost-menubar"
+  install -Dm755 "$PC_DOCK" "$pkgdir/usr/bin/bifrost-dock"
+  install -Dm755 "$PC_PANELS" "$pkgdir/usr/bin/bifrost-panels"
   if [[ -n ${PC_LOG:-} && -x ${PC_LOG} ]]; then
     install -Dm755 "$PC_LOG" "$pkgdir/usr/bin/bifrost-log"
   fi
@@ -109,16 +105,4 @@ package_bifrost_files() {
     ln -sfn /dev/null "$pkgdir/etc/systemd/system/$unit"
   done
   install -Dm755 "$here/wayland/apps" "$pkgdir/usr/bin/bifrost-apps"
-  for file in environment autostart rc.xml; do
-    install -Dm644 "$here/wayland/$file" "$pkgdir/usr/share/bifrost/wayland/$file"
-  done
-  # labwc title-bar theme: both variants for the shell, Light as the system default.
-  for variant in light dark; do
-    for f in "$here/wayland/themes/$variant/labwc/"*; do
-      install -Dm644 "$f" "$pkgdir/usr/share/bifrost/wayland/themes/$variant/labwc/${f##*/}"
-    done
-  done
-  for f in "$here/wayland/themes/light/labwc/"*; do
-    install -Dm644 "$f" "$pkgdir/usr/share/themes/BifrOSt/labwc/${f##*/}"
-  done
 }
