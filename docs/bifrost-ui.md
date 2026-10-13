@@ -2066,3 +2066,12 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## QuickLookThumbnailing: per-type providers
+
+The `thumbnails` service (`shell/services/thumbnails.rs`) draws by content type with the providers in `springboard/src/thumbs/`: text, rich text, web (title and text), image, font, office (embedded picture), contact, calendar, clippings, audio/video and archives. Unknown types answer with their icon.
+
+- **Audio and video** (`thumbs::media`): the embedded cover, else a waveform card (`thumb_providers::waveform_card`, bars derived from the file name, plus the name). No duration badge and no video poster frame yet (no demuxer or decoder runs in the thumbnail worker).
+- **Archives** (`thumbs::cards::PackageProvider`): zip and plain tar get a card with the format badge and the entry count (`thumb_providers::archive_entries`); other formats keep the icon with a badge.
+- **Representation types**: `thumb_providers::RepresentationType` (`icon`, `lowQualityThumbnail`, `thumbnail`, Apple's `QLThumbnailRepresentation.RepresentationType`) and `tiers(types, px)` decide which tiers a request produces. Not yet carried by the service request; `QLThumbnailProvider.provideThumbnail(for:_:)` and `QLFileThumbnailRequest` are not built (no third-party provider extension point).
+- Parity rows stay `partial` until checked on Midget; Office stays as the embedded-picture case only.

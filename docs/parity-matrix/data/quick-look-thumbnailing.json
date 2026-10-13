@@ -10,9 +10,9 @@
     {
       "feature": "Thumbnail generation for common file types",
       "apple": "QLThumbnailGenerator: images, Live Photos, text files, PDFs, audio and video files, USDZ (iOS and iPadOS only)",
-      "bifrost": "springboard/render/src/imgdec.rs:12 (decode), springboard/render/src/imgdec.rs:91 (cover), springboard/src/shell/photos/thumbs.rs (Photos' own thumbnails)",
+      "bifrost": "springboard/src/thumbs/ (providers), springboard/src/shell/services/thumbnails.rs, thumb_providers.rs",
       "status": "partial",
-      "note": "Image decoding and cover scaling exist, but only inside the Photos app. No generator entry point for PDF, text, audio or video; apps render their own thumbnails."
+      "note": "The thumbnails service draws text, image, audio/video (cover or waveform card), font, contact, calendar, web, archive (entry count) and clipping files; unknown types get the icon. No PDF, video poster frame or duration badge, no extension point for third-party providers. Needs a Midget check."
     },
     {
       "feature": "Thumbnail request by size and scale (generateBestRepresentation)",
@@ -24,9 +24,9 @@
     {
       "feature": "Thumbnail representation types (icon, low quality, thumbnail)",
       "apple": "QLThumbnailRepresentation, QLThumbnailRepresentationType",
-      "bifrost": "springboard/ui/src/preview.rs (Representation), springboard/ui/src/thumbnail.rs (Progressive)",
+      "bifrost": "springboard/ui/src/preview.rs (Representation), springboard/ui/src/thumbnail.rs (Progressive), springboard/src/shell/services/thumb_providers.rs (RepresentationType, tiers)",
       "status": "partial",
-      "note": "Wave 2 (theme-35, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only one PNG per url, size and scale. No representation type or quality tier."
+      "note": "RepresentationType (icon, lowQualityThumbnail, thumbnail) and tiers() limit what a request produces; not yet read from the service request or drawn per tier. Needs a Midget check."
     },
     {
       "feature": "Progressive or updated thumbnails",

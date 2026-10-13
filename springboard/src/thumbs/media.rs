@@ -203,8 +203,10 @@ impl ThumbProvider for AudiovisualProvider {
         &["public.audiovisual-content"]
     }
     fn render(&self, file: &SourceFile, px: u32) -> Option<ThumbArt> {
-        let cover = cover_of(&file.path)?;
-        decode_fitted(&cover, px).map(ThumbArt::Pixels)
+        if let Some(p) = cover_of(&file.path).and_then(|c| decode_fitted(&c, px)) {
+            return Some(ThumbArt::Pixels(p));
+        }
+        crate::shell::services::thumb_providers::waveform_card(&file.name(), px)
     }
 }
 

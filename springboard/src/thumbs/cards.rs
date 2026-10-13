@@ -7,6 +7,7 @@ use bifrost_render::gfx::pack;
 use bifrost_render::ui::{Weight, WHITE};
 use bifrost_ui::thumb_service::{badge_for, SourceFile, ThumbArt, ThumbProvider};
 use bifrost_ui::vcard;
+use crate::shell::services::thumb_providers::{archive_card, archive_entries};
 
 const CARD_W: f32 = 200.0;
 const CARD_H: f32 = 260.0;
@@ -197,8 +198,14 @@ impl ThumbProvider for PackageProvider {
     fn types(&self) -> &'static [&'static str] {
         &["public.archive"]
     }
-    fn render(&self, file: &SourceFile, _px: u32) -> Option<ThumbArt> {
-        Some(ThumbArt::Icon { type_id: file.type_id.clone(), badge: package_badge(&file.name()) })
+    fn render(&self, file: &SourceFile, px: u32) -> Option<ThumbArt> {
+        let badge = package_badge(&file.name());
+        if let (Some(b), Some(n)) = (&badge, archive_entries(&file.path)) {
+            if let Some(card) = archive_card(b, n, px) {
+                return Some(card);
+            }
+        }
+        Some(ThumbArt::Icon { type_id: file.type_id.clone(), badge })
     }
 }
 

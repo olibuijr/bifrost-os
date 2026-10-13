@@ -378,9 +378,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/src/thumbs/ (thumbnails service)",
+   "status": "partial",
+   "note": "Draws: archive card with format badge and entry count for zip and tar, else type icon with badge (thumbs::cards, shell/services/thumb_providers.rs). Needs a Midget check for parity.",
    "rea": []
   },
   {
