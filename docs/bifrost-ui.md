@@ -2066,3 +2066,14 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## AVFoundation playback model (`bifrost_ui::av_player`, `av_queue_player`, `av_asset`)
+
+Pure-Rust, caller-clock playback model (microseconds); types drop the framework prefix.
+
+- `Asset` (`from_wav_bytes`, `load_status`, `duration_us`, `tracks`), `Pcm` (WAV in/out, `slice`, `sine`).
+- `Player`/`PlayerItem`: `status`, `play`, `pause`, `set_rate`, `default_rate`, `time_control_status`, `seek(to, before, after)`, periodic and boundary time observers, `DidPlayToEndTime`, `action_at_item_end`, `volume`, `is_muted`, timed metadata groups. Nothing plays until `play()`; `advance(dt)` drives the clock.
+- `QueuePlayer`: `insert`, `remove`, `advance_to_next_item`, `QueuePlayer::looper(asset)`.
+- `MutableComposition` and `insert_time_range`, `MutableAudioMixInputParameters` volume ramps, `export_wav` (trimmed WAV via `ExportSession`).
+
+Gap: not connected to the audio engine or apps; video tracks and real metadata output are not modelled. Needs a Midget check.

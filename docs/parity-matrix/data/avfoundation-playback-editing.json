@@ -17,16 +17,16 @@
     {
       "feature": "Media assets (AVAsset, tracks, metadata)",
       "apple": "AVAsset, AVURLAsset, AVAssetTrack, AVMetadataItem",
-      "bifrost": "springboard/src/media/demux/mod.rs, springboard/src/media/id3.rs, springboard/src/media/ilst.rs; wired: springboard/apps/podcasts-desktop/src/info.rs (episode length and codec info for the sheet; still partial, no asset object, chapters or artwork)",
+      "bifrost": "springboard/src/media/demux/mod.rs, springboard/src/media/id3.rs, springboard/src/media/ilst.rs; wired: springboard/apps/podcasts-desktop/src/info.rs (episode length and codec info for the sheet; still partial, no asset object, chapters or artwork); springboard/ui/src/av_asset.rs (asset load of duration and tracks from WAV)",
       "status": "partial",
-      "note": "Demux and tag reading exist (MP4, WebM, ID3, ilst) but are shell-internal; no asset or track object for apps Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Demux and tag reading exist (MP4, WebM, ID3, ilst) but are shell-internal; no asset or track object for apps Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Round sprint10/6: asset object with duration and tracks (WAV) in bifrost_ui::av_asset; partial, needs a Midget check."
     },
     {
       "feature": "Media reading and writing",
       "apple": "AVAssetReader, AVAssetWriter, AVAssetExportSession, AVAssetImageGenerator",
-      "bifrost": "springboard/ui/src/export_session.rs, springboard/ui/src/frame_grab.rs",
+      "bifrost": "springboard/ui/src/export_session.rs, springboard/ui/src/frame_grab.rs, springboard/ui/src/av_asset.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Reading samples is internal to the player; no writer, no export, no frame-grab API"
+      "note": "Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Reading samples is internal to the player; no writer, no export, no frame-grab API Round sprint10/6: trimmed WAV export with audio mix, composition insert_time_range; partial, needs a Midget check."
     },
     {
       "feature": "Media types and utilities",
@@ -125,6 +125,13 @@
       "bifrost": "springboard/ui/src/composition.rs",
       "status": "partial",
       "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A system mixer exists; no per-track volume ramps over an asset"
+    },
+    {
+      "feature": "Playback (player, player item, queue player, looper, time observers)",
+      "apple": "AVPlayer, AVPlayerItem, AVQueuePlayer, AVPlayerLooper, addPeriodicTimeObserver, addBoundaryTimeObserver, AVPlayerItemMetadataOutput",
+      "bifrost": "springboard/ui/src/av_player.rs, springboard/ui/src/av_queue_player.rs, springboard/ui/tests/av_playback.rs",
+      "status": "partial",
+      "note": "Sprint10/6: host-tested model on a caller clock (status, rate, time control status, seek with tolerance, observers, did-play-to-end, action at item end, queue, looper, timed metadata, audio mix ramps). Not wired to the audio engine or apps; parity needs a Midget check."
     }
   ],
   "gaps": [
