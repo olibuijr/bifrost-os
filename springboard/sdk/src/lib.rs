@@ -112,6 +112,7 @@ pub use bifrost_ui::{cups, ipp};
 pub mod print_panel;
 pub mod usb_printer;
 pub mod pasteboard;
+pub mod pasteboard_item;
 pub mod pasteboard_types;
 pub mod dnd;
 pub mod review;
