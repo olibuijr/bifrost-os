@@ -3,7 +3,7 @@
 //!
 //! The pieces:
 //! - [`map_touch`] and [`to_logical`] are pure: they turn a device position in 0..1 into a point in the output's
-//!   logical space. [`output_transform`] is the seam for an output transform (rotation): the normalized device
+//!   logical space. [`output_transform`] is the output's rotation (`crate::transform`): the normalized device
 //!   position goes through it before it is scaled to the output.
 //! - [`Contacts`] is a pure book of the fingers that are down and of the one that drives the emulated pointer.
 //! - [`WmState`] methods deliver the events: touch down, motion, up, cancel and frame go to the surface under the
@@ -21,7 +21,7 @@ use smithay::{
     },
     output::Output,
     reexports::wayland_server::{protocol::wl_surface::WlSurface, Resource},
-    utils::{Logical, Point, SERIAL_COUNTER},
+    utils::{Logical, Point, Transform, SERIAL_COUNTER},
 };
 
 use crate::state::WmState;
@@ -39,20 +39,10 @@ const CANCEL_OFFSET: f64 = 100_000.0;
 /// A device position with both axes in 0..1, in the panel's own orientation.
 pub type Norm = (f64, f64);
 
-/// Maps a normalized position from the panel's orientation to the output's (rotation).
-pub type NormTransform = fn(Norm) -> Norm;
-
-/// No transform: the panel and the output have the same orientation.
-pub fn identity(p: Norm) -> Norm {
-    p
-}
-
-/// The transform from the panel's orientation to `output`'s current orientation.
-///
-/// Identity today. The output rotation work replaces the body (it reads the output's transform and returns the
-/// matching [`NormTransform`]); every touch position already passes through here.
-pub fn output_transform(_output: &Output) -> NormTransform {
-    identity
+/// The transform from the panel's orientation to `output`'s current orientation (its rotation, see
+/// `crate::transform`); every touch position passes through it.
+pub fn output_transform(output: &Output) -> Transform {
+    output.current_transform()
 }
 
 /// A normalized position scaled to the output rectangle at `origin` with `size`, kept inside it (the last pixel
@@ -66,9 +56,10 @@ pub fn to_logical(norm: Norm, origin: (i32, i32), size: (i32, i32)) -> (f64, f64
     (axis(norm.0, origin.0, size.0), axis(norm.1, origin.1, size.1))
 }
 
-/// A normalized device position on the output at `origin` with `size`, after the output transform.
-pub fn map_touch(norm: Norm, transform: NormTransform, origin: (i32, i32), size: (i32, i32)) -> (f64, f64) {
-    to_logical(transform(norm), origin, size)
+/// A normalized device position on the output at `origin` with `size`, after the output transform: the panel
+/// fraction becomes a desktop fraction first, then it is scaled to the output's logical rectangle.
+pub fn map_touch(norm: Norm, transform: Transform, origin: (i32, i32), size: (i32, i32)) -> (f64, f64) {
+    to_logical(crate::transform::normalized_to_desktop_fraction(norm, transform), origin, size)
 }
 
 /// The position of an absolute-position event in 0..1 of the device's range.
@@ -337,12 +328,17 @@ mod tests {
 
     #[test]
     fn the_output_transform_applies_before_scaling() {
-        fn quarter_turn(p: Norm) -> Norm {
-            (1.0 - p.1, p.0)
+        use smithay::utils::Transform;
+        assert_eq!(map_touch((0.25, 0.0), Transform::Normal, (0, 0), (100, 200)), (25.0, 0.0));
+        for t in [Transform::_90, Transform::_180, Transform::_270] {
+            let frac = crate::transform::normalized_to_desktop_fraction((0.25, 0.0), t);
+            assert_eq!(map_touch((0.25, 0.0), t, (0, 0), (100, 200)), to_logical(frac, (0, 0), (100, 200)));
         }
-        assert_eq!(map_touch((0.25, 0.0), identity, (0, 0), (100, 200)), (25.0, 0.0));
-        let (x, y) = map_touch((0.25, 0.0), quarter_turn, (0, 0), (100, 200));
-        assert_eq!((x, y), (99.0, 50.0));
+        // a panel corner stays a desktop corner under every quarter turn
+        for t in [Transform::_90, Transform::_180, Transform::_270] {
+            let (x, y) = map_touch((0.0, 0.0), t, (0, 0), (100, 200));
+            assert!((x == 0.0 || x == 99.0) && (y == 0.0 || y == 199.0), "{t:?} -> ({x}, {y})");
+        }
     }
 
     #[test]

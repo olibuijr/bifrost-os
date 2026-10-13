@@ -41,16 +41,10 @@ pub const LIFT_MS: f64 = 250.0;
 /// Where the account group sits, as a fraction of the screen height (the avatar's top edge).
 const GROUP_TOP: f32 = 0.62;
 
-/// Whether the shell runs in the touch (tablet) form, where the login window raises the on-screen keyboard. This is the
-/// single place the login window reads the form from. It reads what the shared form type reads (`BIFROST_FORM`, then the
-/// file `/etc/bifrost/form`, default desktop) and is replaced by `FormFactor::current().is_tablet()` once that type is
-/// merged.
+/// Whether the shell runs in the touch (tablet) form, where the login window raises the on-screen keyboard. The form
+/// comes from the shared form-factor model (`BIFROST_FORM`, then `/etc/bifrost/form`, default desktop).
 pub fn tablet_form() -> bool {
-    let word = |s: &str| s.trim().eq_ignore_ascii_case("tablet");
-    match std::env::var("BIFROST_FORM") {
-        Ok(v) if matches!(v.trim().to_ascii_lowercase().as_str(), "tablet" | "desktop") => word(&v),
-        _ => std::fs::read_to_string("/etc/bifrost/form").is_ok_and(|v| word(&v)),
-    }
+    bifrost_ui::form_factor::FormFactor::current().is_tablet()
 }
 
 /// How far the status icons move left while the login window shows its power button.
