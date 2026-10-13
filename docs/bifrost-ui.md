@@ -1332,8 +1332,42 @@ tree, impls for integers, floats, bool, `String`, `Date`, `Option`, `Vec`, `Hash
 use `codable!(Name { field: Type, .. })` (macro_rules, no proc-macro). serde is in the lockfile only through other
 crates, so it is not used: the SDK stays lean and offline-buildable. `Option` fields are omitted when `None` and
 decode as `None` when missing. The Assistant's `model.rs` uses it. Gaps: no `CodingKeys` renaming (hand-write the impl,
-see `Message` in the Assistant), no binary plist, no key/date/data strategies beyond those above, `Data` unsupported.
+see `Message` in the Assistant), no key/date/data strategies beyond those above, `Data` unsupported. Binary plists:
+`PropertyListEncoder::encode_binary` and `PropertyListDecoder::decode_binary` (see "Files and data persistence").
 Tests: `sdk/tests/foundation.rs`.
+
+## Files and data persistence (Foundation parity)
+
+All host-tested only (`sdk/tests/files_persistence.rs`); rows in `docs/parity-matrix/data/foundation-files-persistence.json`
+stay `partial` until a Midget check.
+
+- `binary_plist`: `BValue` (null, bool, int, real, date as seconds since 2001, data, string, `Uid`, array, dict), `read`,
+  `write`. Smallest widths, ASCII or UTF-16 strings, a bounded reader (depth limit, checked offsets and lengths).
+  `from_value`/`to_value` bridge to the Codable `Value`.
+- `keyed_archive`: `Archive::to_binary` / `from_binary` write the keyed-archive layout (`$archiver`, `$version` 100000, `$top`,
+  `$objects` with `$null` first, `$class` uids and `$classname`/`$classes` descriptions). Plain value slots written by other
+  writers are read as values. Secure coding: `KeyedUnarchiver::new` requires it; `decode_object_of(archive, owner, classes, key)`
+  is `decodeObject(of:forKey:)`; `without_secure_coding()` is `requiresSecureCoding = false`. The archiver name is our own.
+- `file_wrapper`: `FileWrapper` regular file, directory, symbolic link. `read_from`, `add_file_wrapper` (unique names
+  "name 2.ext"), `add_regular_file`, `remove_file_wrapper`, `matches_contents_of`, `write_to(path, WritingOptions { atomic,
+  with_name_updating }, original_contents)`. Atomic writes stage next to the target and swap in with `replace_item_at`;
+  unchanged members of `original_contents` are hard linked.
+- `bookmark`: `bookmark_data(path, options, keys, relative_to)`, `resolve_bookmark(data, options, relative_to)` with a stale flag
+  (inode first in its directory, then ancestors on the same volume), `resource_values_from_bookmark`, security scope
+  (`SecurityScope::start_accessing`/`stop_accessing`, read-only scopes) enforced by `ResolvedBookmark::read`/`write`.
+- `file_manager`: `replace_item_at(original, with, backup_name, ReplaceOptions)` keeps the original's permissions and xattrs and
+  can keep a backup; `enumerator(dir, keys, EnumerationOptions)` with `skip_descendants` and prefetched `ResourceValues`;
+  `ResourceKey` includes `FileResourceIdentifier`, `IsExcludedFromBackup`, `VolumeAvailableCapacityForImportantUsage` (equal to
+  free space: nothing is purgeable yet).
+- `file_metadata`: extended attributes (`xattr`, `set_xattr`, `remove_xattr`, `list_xattrs`, `copy_xattrs`) and backup exclusion:
+  `set_excluded_from_backup` stores the `user.bifrost.exclude-from-backup` attribute; `backup_items(root)` skips excluded items
+  with their contents.
+- `metadata_query`: `MetadataQuery` with `predicate`, `search_scopes`, `start_query`, `poll(now)` delivering `DidStartGathering`,
+  `GatheringProgress`, `DidFinishGathering`, then `DidUpdate { added, changed, removed }` from the watch stream;
+  `MetadataItem::value(MetadataAttribute)`. Separate from the Core Spotlight index (`quicksearch`) and from `ui/src/metaquery.rs`.
+
+Gaps: no iCloud or ubiquity containers, no file versions, no on-disk purgeable data, no metadata query sort descriptors, grouping or
+predicate text parser, no network volumes in bookmarks.
 
 ## NotificationCenter (Foundation parity)
 
