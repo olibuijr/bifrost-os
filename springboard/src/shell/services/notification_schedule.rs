@@ -12,7 +12,7 @@
 //! Pending calendar requests are not kept across a shell restart (the interval ones are not either).
 //!
 //! Methods (JSON params; the app is the caller):
-//! - `add`: `{ "id", "title", "subtitle"?, "body"?, "thread"?, "category"?, "badge"?, "trigger" }`. Answers `{"added": id}`.
+//! - `add`: `{ "id", "title", "subtitle"?, "body"?, "thread"?, "category"?, "badge"?, "sound"?, "userInfo"?, "interruptionLevel"?, "relevanceScore"?, "trigger" }`. Answers `{"added": id}`.
 //! - `remove`: `{ "ids": [..] }`; no ids (or an empty list) removes all pending. Answers `{"removed": n}`.
 //! - `pending`: answers `{"pending": [ids]}`, the pending identifiers of both kinds.
 use super::{Event, Shell, SystemService};
@@ -20,7 +20,7 @@ use crate::shell::clock::alarm::Alarm;
 use crate::shell::clock::offset_fn;
 use crate::shell::usernotif::{self, Added, MAX_PENDING};
 use bifrost_core::json::Json;
-use bifrost_proto::rich::{MAX_NOTIF_ID, MAX_NOTIF_TEXT};
+use bifrost_proto::rich::{MAX_NOTIF_ID, MAX_NOTIF_TEXT, MAX_NOTIF_USER_INFO, MAX_NOTIF_USER_INFO_VALUE};
 use bifrost_proto::{NotifRequest, NotifStatus};
 
 /// The longest interval one request may name (about 49 days, the millisecond delay of the wire message is a `u32`).
@@ -157,7 +157,14 @@ fn refusal(status: NotifStatus) -> String {
 
 /// The content of an `add` request, checked against the wire limits.
 fn request(params: &Json) -> Result<NotifRequest, String> {
+    let (sound_kind, sound_name, sound_volume) = sound(params.get("sound"))?;
     let req = NotifRequest {
+        sound_kind,
+        sound_name,
+        sound_volume,
+        user_info: user_info(params.get("userInfo"))?,
+        interruption_level: interruption_level(params.get("interruptionLevel"))?,
+        relevance_milli: relevance(params.get("relevanceScore"))?,
         id: text(params, "id", MAX_NOTIF_ID)?,
         title: text(params, "title", MAX_NOTIF_TEXT)?,
         subtitle: text(params, "subtitle", MAX_NOTIF_TEXT)?,
@@ -171,6 +178,69 @@ fn request(params: &Json) -> Result<NotifRequest, String> {
         ..Default::default()
     };
     Ok(req)
+}
+
+/// `content.sound`: `"default"`, `"critical"`, `{"critical":0.5}` or `{"named":"file.wav"}`.
+fn sound(v: Option<&Json>) -> Result<(u8, String, u8), String> {
+    match v {
+        None | Some(Json::Null) => Ok((0, String::new(), 0)),
+        Some(Json::Str(s)) if s == "default" => Ok((1, String::new(), 0)),
+        Some(Json::Str(s)) if s == "critical" => Ok((3, String::new(), 0)),
+        Some(o @ Json::Obj(_)) => {
+            if let Some(name) = o.get("named").and_then(Json::as_str) {
+                let bare = !name.is_empty() && name.len() <= 255 && !name.contains('/') && !name.contains("..");
+                return if bare { Ok((2, name.to_string(), 0)) } else { Err("a sound name is a bare file name of 1 to 255 bytes".into()) };
+            }
+            match o.get("critical").and_then(Json::number) {
+                Some(vol) if (0.0..=1.0).contains(&vol) => Ok((4, String::new(), (vol * 100.0).round() as u8)),
+                Some(_) => Err("the critical sound volume is from 0 to 1".into()),
+                None => Err("sound must name a file or a critical volume".into()),
+            }
+        }
+        Some(_) => Err("sound must be \"default\", \"critical\" or an object".into()),
+    }
+}
+
+/// `content.userInfo`: an object of text values, bounded like the wire.
+fn user_info(v: Option<&Json>) -> Result<Vec<(String, String)>, String> {
+    match v {
+        None | Some(Json::Null) => Ok(Vec::new()),
+        Some(Json::Obj(entries)) if entries.len() <= MAX_NOTIF_USER_INFO => entries
+            .iter()
+            .map(|(k, val)| match val {
+                Json::Str(s) if !k.is_empty() && k.len() <= MAX_NOTIF_ID && s.len() <= MAX_NOTIF_USER_INFO_VALUE => Ok((k.clone(), s.clone())),
+                _ => Err("a userInfo value must be text of at most 512 bytes under a key of 1 to 128".to_string()),
+            })
+            .collect(),
+        Some(Json::Obj(_)) => Err(format!("userInfo takes at most {MAX_NOTIF_USER_INFO} entries")),
+        Some(_) => Err("userInfo must be an object".into()),
+    }
+}
+
+/// `content.interruptionLevel`: passive, active (the default), timeSensitive or critical.
+fn interruption_level(v: Option<&Json>) -> Result<u8, String> {
+    Ok(match v {
+        None | Some(Json::Null) => 1,
+        Some(Json::Str(s)) => match s.as_str() {
+            "passive" => 0,
+            "active" => 1,
+            "timeSensitive" => 2,
+            "critical" => 3,
+            other => return Err(format!("unknown interruptionLevel {other}")),
+        },
+        Some(_) => return Err("interruptionLevel must be text".into()),
+    })
+}
+
+/// `content.relevanceScore` from 0 to 1, in thousandths.
+fn relevance(v: Option<&Json>) -> Result<u16, String> {
+    match v {
+        None | Some(Json::Null) => Ok(0),
+        Some(j) => match j.number() {
+            Some(n) if (0.0..=1.0).contains(&n) => Ok((n * 1000.0).round() as u16),
+            _ => Err("relevanceScore must be a number from 0 to 1".into()),
+        },
+    }
 }
 
 /// The trigger of an `add` request.
@@ -245,6 +315,21 @@ mod tests {
 
     fn json(text: &str) -> Json {
         bifrost_core::json::parse(text).unwrap()
+    }
+
+    #[test]
+    fn request_content_carries_sound_user_info_level_and_score() {
+        let r = request(&json(r#"{"id":"a","title":"T","sound":{"named":"chime.wav"},"userInfo":{"room":"7"},"interruptionLevel":"timeSensitive","relevanceScore":0.5}"#)).unwrap();
+        assert_eq!((r.sound_kind, r.sound_name.as_str()), (2, "chime.wav"));
+        assert_eq!(r.user_info, vec![("room".to_string(), "7".to_string())]);
+        assert_eq!((r.interruption_level, r.relevance_milli), (2, 500));
+        let d = request(&json(r#"{"id":"a","title":"T"}"#)).unwrap();
+        assert_eq!((d.sound_kind, d.interruption_level, d.relevance_milli), (0, 1, 0));
+        assert_eq!(request(&json(r#"{"id":"a","sound":{"critical":0.25}}"#)).unwrap().sound_volume, 25);
+        assert!(request(&json(r#"{"id":"a","sound":{"named":"../x.wav"}}"#)).is_err());
+        assert!(request(&json(r#"{"id":"a","userInfo":{"k":5}}"#)).is_err());
+        assert!(request(&json(r#"{"id":"a","interruptionLevel":"loud"}"#)).is_err());
+        assert!(request(&json(r#"{"id":"a","relevanceScore":1.5}"#)).is_err());
     }
 
     #[test]

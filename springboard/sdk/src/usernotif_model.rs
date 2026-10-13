@@ -237,6 +237,30 @@ impl Sound {
     }
 }
 
+/// `UNNotificationInterruptionLevel`, ordered from least to most intrusive.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum InterruptionLevel {
+    Passive,
+    Active,
+    TimeSensitive,
+    Critical,
+}
+
+impl InterruptionLevel {
+    pub fn code(self) -> u8 {
+        self as u8
+    }
+    pub fn from_code(c: u8) -> Option<Self> {
+        Some(match c {
+            0 => Self::Passive,
+            1 => Self::Active,
+            2 => Self::TimeSensitive,
+            3 => Self::Critical,
+            _ => return None,
+        })
+    }
+}
+
 /// `UNNotificationAttachment`: validated by type and size.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Attachment {

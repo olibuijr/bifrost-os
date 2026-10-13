@@ -11,7 +11,7 @@ use crate::proto::ToShell;
 use crate::Ctx;
 
 pub use crate::usernotif_model::{
-    Attachment, AuthorizationOptions, AuthorizationStatus, AuthorizationStore, CalendarTrigger, DateComponents, Decision, IntervalTrigger, PresentationOptions, Setting, Settings, Sound,
+    Attachment, AuthorizationOptions, InterruptionLevel, AuthorizationStatus, AuthorizationStore, CalendarTrigger, DateComponents, Decision, IntervalTrigger, PresentationOptions, Setting, Settings, Sound,
 };
 
 /// The play and pause button of a media notification card: its frame, tint and visibility, and the play or pause glyph.
@@ -90,6 +90,43 @@ impl Request {
     }
 }
 
+impl Request {
+    /// `content.sound`. A critical sound is only played when the app holds the critical-alert grant.
+    pub fn sound(mut self, sound: &Sound) -> Self {
+        let (kind, name, volume) = match sound {
+            Sound::Default => (1, String::new(), 0),
+            Sound::Named(n) => (2, n.clone(), 0),
+            Sound::DefaultCritical => (3, String::new(), 0),
+            Sound::DefaultCriticalVolume(v) => (4, String::new(), (v * 100.0).round() as u8),
+        };
+        self.0.sound_kind = kind;
+        self.0.sound_name = name;
+        self.0.sound_volume = volume;
+        self
+    }
+    /// `content.userInfo`: at most 16 entries, each value at most 512 characters; extra entries are an error.
+    pub fn user_info(mut self, info: &[(&str, &str)]) -> Result<Self, String> {
+        if info.len() > crate::proto::rich::MAX_NOTIF_USER_INFO {
+            return Err("userInfo takes at most 16 entries".into());
+        }
+        if info.iter().any(|(k, v)| k.is_empty() || k.chars().count() > crate::proto::rich::MAX_NOTIF_ID || v.chars().count() > crate::proto::rich::MAX_NOTIF_USER_INFO_VALUE) {
+            return Err("a userInfo key is 1 to 128 characters and a value at most 512".into());
+        }
+        self.0.user_info = info.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        Ok(self)
+    }
+    /// `content.interruptionLevel`.
+    pub fn interruption_level(mut self, level: InterruptionLevel) -> Self {
+        self.0.interruption_level = level.code();
+        self
+    }
+    /// `content.relevanceScore`, clamped to 0...1.
+    pub fn relevance_score(mut self, score: f32) -> Self {
+        self.0.relevance_milli = (score.clamp(0.0, 1.0) * 1000.0).round() as u16;
+        self
+    }
+}
+
 impl Event {
     pub(crate) fn response(id: String, action: String, text: String, thread: String, category: String) -> Event {
         Event::Response(Response { id, action, text, thread, category })
@@ -148,7 +185,39 @@ mod tests {
     #[test]
     fn request_builder_fills_every_field() {
         let r = Request::new("id", "T").subtitle("S").body("B").thread("th").category("C").after_ms(250).badge(4).repeats(true);
-        assert_eq!(r.0, NotifRequest { id: "id".into(), title: "T".into(), subtitle: "S".into(), body: "B".into(), thread: "th".into(), category: "C".into(), delay_ms: 250, badge: Some(4), repeats: true });
+        assert_eq!(r.0, NotifRequest { id: "id".into(), title: "T".into(), subtitle: "S".into(), body: "B".into(), thread: "th".into(), category: "C".into(), delay_ms: 250, badge: Some(4), repeats: true, ..Default::default() });
+    }
+
+    #[test]
+    fn sound_selection_maps_to_the_wire_kind() {
+        let r = Request::new("a", "T").sound(&Sound::Default);
+        assert_eq!(r.0.sound_kind, 1);
+        let r = r.sound(&Sound::named("chime.wav").unwrap());
+        assert_eq!((r.0.sound_kind, r.0.sound_name.as_str()), (2, "chime.wav"));
+        let r = r.sound(&Sound::critical_with_volume(0.5).unwrap());
+        assert_eq!((r.0.sound_kind, r.0.sound_volume, r.0.sound_name.as_str()), (4, 50, ""));
+        assert_eq!(r.sound(&Sound::DefaultCritical).0.sound_kind, 3);
+    }
+
+    #[test]
+    fn user_info_is_bounded() {
+        let r = Request::new("a", "T").user_info(&[("room", "7")]).unwrap();
+        assert_eq!(r.0.user_info, vec![("room".to_string(), "7".to_string())]);
+        let many: Vec<(&str, &str)> = (0..17).map(|_| ("k", "v")).collect();
+        assert!(Request::new("a", "T").user_info(&many).is_err());
+        assert!(Request::new("a", "T").user_info(&[("", "v")]).is_err());
+        assert!(Request::new("a", "T").user_info(&[("k", &"x".repeat(513))]).is_err());
+    }
+
+    #[test]
+    fn interruption_levels_order_and_relevance_clamps() {
+        assert!(InterruptionLevel::Passive < InterruptionLevel::Active);
+        assert!(InterruptionLevel::Active < InterruptionLevel::TimeSensitive);
+        assert!(InterruptionLevel::TimeSensitive < InterruptionLevel::Critical);
+        assert_eq!(Request::new("a", "T").interruption_level(InterruptionLevel::TimeSensitive).0.interruption_level, 2);
+        assert_eq!(Request::new("a", "T").relevance_score(2.0).0.relevance_milli, 1000);
+        assert_eq!(Request::new("a", "T").relevance_score(-1.0).0.relevance_milli, 0);
+        assert_eq!(Request::new("a", "T").relevance_score(0.25).0.relevance_milli, 250);
     }
 
     #[test]
