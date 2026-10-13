@@ -485,8 +485,19 @@ impl Shell {
         }
     }
 
+    /// The module list the user saved (`MODULES_PREF`), read as the cluster shows it.
+    fn cc_slots(&self) -> Vec<ModuleSlot> {
+        parse_slots(self.prefs.get(MODULES_PREF).unwrap_or(""))
+    }
+
+    /// The tile under (x, y) that the cluster is showing: a module the user hid does not answer a finger.
+    fn cc_tile_at(&self, x: f32, y: f32) -> Option<Tile> {
+        let slots = self.cc_slots();
+        hit(&self.ui, self.w, x, y).filter(|&t| tile_visible(&slots, t))
+    }
+
     fn cc_down(&mut self, x: f32, y: f32, t: f64, range: f32) -> Vec<Effect> {
-        let tile = hit(&self.ui, self.w, x, y);
+        let tile = self.cc_tile_at(x, y);
         self.cc.press = tile.filter(|&k| Expanded::of(k).is_some()).map(|k| (k, t, x, y));
         match tile {
             Some(tile @ (Tile::Brightness | Tile::Volume)) => {
@@ -524,7 +535,7 @@ impl Shell {
     fn cc_up(&mut self, x: f32, y: f32, t: f64) -> Vec<Effect> {
         self.cc.press = None;
         match self.cc.touch.take() {
-            Some(Touch::Tile(tile)) if hit(&self.ui, self.w, x, y) == Some(tile) => self.activate_tile(tile, t),
+            Some(Touch::Tile(tile)) if self.cc_tile_at(x, y) == Some(tile) => self.activate_tile(tile, t),
             Some(Touch::Outside(mut d)) => {
                 d.moved(y, t);
                 let tap = d.travel().abs() < self.ui.pt(TAP_PT);
@@ -741,6 +752,7 @@ impl Shell {
         if self.cc.labels.as_ref().is_none_or(|l| l.key != Labels::key(&self.info, self.cc.airplane)) {
             self.cc.labels = Some(Labels::new(&self.ui, &self.info, self.cc.airplane));
         }
+        let slots = self.cc_slots();
         let ui = &self.ui;
         let alpha = (p * 2.0).clamp(0.0, 1.0);
         self.draw_bar(s, (alpha * 255.0) as u32);
@@ -761,6 +773,9 @@ impl Shell {
         s.fill_rrect(nx, ny + slide, nw, nh, r, tile_bg);
         let bt_on = self.info.bt.on();
         for tile in [Tile::Airplane, Tile::Nearby, Tile::Wifi, Tile::Bluetooth] {
+            if !tile_visible(&slots, tile) {
+                continue;
+            }
             let (x, y, w, h) = tile_rect(ui, self.w, tile);
             let on = match tile {
                 Tile::Airplane => self.cc.airplane,
@@ -788,6 +803,7 @@ impl Shell {
         self.draw_media_tile(s, (kx, ky + slide, kw, kh), (alpha * 255.0) as u32, pressed.and_then(media_target));
 
         // rotation lock: a white tile with a red glyph while held, as on the bifrost
+        if tile_visible(&slots, Tile::RotationLock) {
         let (rx, ry, rw, rh) = tile_rect(ui, self.w, Tile::RotationLock);
         let locked = self.rotation_locked();
         let mut bg = if locked { a(rgba(255, 255, 255, 240)) } else { tile_bg };
@@ -796,14 +812,18 @@ impl Shell {
         }
         s.fill_rrect(rx, ry + slide, rw, rh, r, bg);
         draw_rotation_lock(s, rx + rw / 2.0, ry + slide + rh / 2.0, ui.s, a(if locked { LOCK_RED } else { WHITE }));
+        }
 
         // screen mirroring
+        if tile_visible(&slots, Tile::Mirror) {
         let (lx, ly, lw, lh) = tile_rect(ui, self.w, Tile::Mirror);
         let bg = if pressed == Some(Tile::Mirror) { over(tile_bg, a(rgba(255, 255, 255, 50))) } else { tile_bg };
         s.fill_rrect(lx, ly + slide, lw, lh, r, bg);
         draw_mirror(s, lx + lw / 2.0, ly + slide + lh / 2.0, ui.s, a(WHITE));
+        }
 
         // Focus: the moon beside its caption in a wide capsule
+        if tile_visible(&slots, Tile::Focus) {
         let (fx, fy, fw, fh) = tile_rect(ui, self.w, Tile::Focus);
         let mut bg = if self.dnd() { a(rgba(94, 92, 230, 230)) } else { tile_bg };
         if pressed == Some(Tile::Focus) {
@@ -817,9 +837,13 @@ impl Shell {
         super::glyphs::paint(s, (cx - radius, cy - radius, 2.0 * radius, 2.0 * radius), a(rgba(88, 86, 214, 255)), |x, y| moon(x, y).max(-cut(x, y)));
         let text = if self.dnd() { &labels.focus_on } else { &labels.focus_off };
         s.blit(text, (fx + ui.pt(70.0)) as i32, (fy + slide + (fh - text.h as f32) / 2.0) as i32, 255, (alpha * 255.0) as u32);
+        }
 
         // bottom row: silent mode, timer, camera
         for tile in [Tile::Silent, Tile::Timer, Tile::Camera] {
+            if !tile_visible(&slots, tile) {
+                continue;
+            }
             let (x, y, w, h) = tile_rect(ui, self.w, tile);
             let silent = tile == Tile::Silent && self.music_muted;
             let mut bg = if silent { a(rgba(255, 255, 255, 240)) } else { tile_bg };
@@ -837,6 +861,9 @@ impl Shell {
 
         // brightness and volume sliders
         for (tile, v) in [(Tile::Brightness, self.info.brightness), (Tile::Volume, self.cc.volume)] {
+            if !tile_visible(&slots, tile) {
+                continue;
+            }
             let (x, y, w, h) = tile_rect(ui, self.w, tile);
             let y = y + slide;
             s.fill_rrect(x, y, w, h, r, tile_bg);
@@ -1916,6 +1943,18 @@ pub fn shown_tiles(slots: &[ModuleSlot]) -> Vec<Tile> {
     slots.iter().filter(|s| s.shown).map(|s| s.tile).collect()
 }
 
+/// The prefs key that holds the module list (`format_slots` text).
+pub const MODULES_PREF: &str = "control_center_modules";
+
+/// Whether the cluster draws and answers `tile` under the list `slots`. The media transport buttons belong to the
+/// Now Playing tile and always show; a module the list hides does not.
+pub fn tile_visible(slots: &[ModuleSlot], tile: Tile) -> bool {
+    match module_key(tile) {
+        None => true,
+        Some(_) => slots.iter().find(|s| s.tile == tile).is_none_or(|s| s.shown),
+    }
+}
+
 /// Moves the module at `from` to `to` (both indices into the list). Out-of-range indices change nothing.
 pub fn move_slot(slots: &mut Vec<ModuleSlot>, from: usize, to: usize) {
     if from >= slots.len() || to >= slots.len() {
@@ -1971,6 +2010,15 @@ mod module_list_tests {
         assert_eq!(module_key(Tile::MediaPlay), None);
         assert!(!DEFAULT_MODULES.iter().any(|t| matches!(t, Tile::MediaPrev | Tile::MediaPlay | Tile::MediaNext)));
         assert!(!format_slots(&default_slots()).contains("media"));
+    }
+
+    #[test]
+    fn hidden_modules_do_not_show_and_media_always_does() {
+        let slots = parse_slots("-wifi");
+        assert!(!tile_visible(&slots, Tile::Wifi));
+        assert!(tile_visible(&slots, Tile::Airplane));
+        assert!(tile_visible(&slots, Tile::MediaPlay));
+        assert!(tile_visible(&[], Tile::Wifi), "no list means every module shows");
     }
 
     #[test]

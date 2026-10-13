@@ -342,6 +342,15 @@ impl BadgeView<'_> {
     }
 }
 
+/// How a notification of an app with the page settings `app` is presented, from the shared delivery model.
+/// `delivers` is `Notify::delivers` (Focus and mute already folded in): when it is false the notification is only stored.
+/// Posts are ordinary interruptions (`Level::Active`), so the app's own banner or alert style decides the rest.
+fn presentation_of(app: &AppNotif, delivers: bool) -> bifrost_ui::notifdelivery::Decision {
+    use bifrost_ui::notifdelivery::{decide, AppPolicy, Context, Level};
+    let policy = AppPolicy { banners: delivers && app.banners, alerts: app.persistent, sounds: app.sounds, time_sensitive: false };
+    decide(Level::Active, policy, Context { focus_on: false, focus_allows_app: false })
+}
+
 impl Shell {
     /// Posts a notification: it is always stored, persisted and badged.
     /// Unless Do Not Disturb is enabled, it shows a banner when unlocked
@@ -357,8 +366,9 @@ impl Shell {
         self.screentime.note_notification(app);
         self.store_changed();
         self.notify.refresh_schedule();
-        // the Alert Style None of the app's page: stored, badged and listed, but no banner and no wake
-        if !self.notify.delivers(app) || !self.app_notif(app).banners {
+        // the delivery model decides: Stored (Alert Style None, muted, or Focus) is listed and badged only
+        let decision = presentation_of(&self.app_notif(app), self.notify.delivers(app));
+        if decision.presentation == bifrost_ui::notifdelivery::Presentation::Stored {
             return id;
         }
         if !self.screen_on {
@@ -925,6 +935,19 @@ mod tests {
     use super::banner::{Phase, HOLD_MS, SLIDE_MS};
     use super::*;
     use crate::gfx::Surface;
+
+    #[test]
+    fn delivery_model_keeps_muted_or_off_apps_stored_and_picks_banner_or_alert() {
+        use bifrost_ui::notifdelivery::Presentation;
+        let banner = AppNotif { banners: true, ..AppNotif::default() };
+        assert_eq!(presentation_of(&banner, true).presentation, Presentation::Banner);
+        assert_eq!(presentation_of(&banner, false).presentation, Presentation::Stored, "muted or Focus: stored only");
+        let alert = AppNotif { banners: true, persistent: true, ..AppNotif::default() };
+        assert_eq!(presentation_of(&alert, true).presentation, Presentation::Alert);
+        let off = AppNotif { banners: false, ..AppNotif::default() };
+        assert_eq!(presentation_of(&off, true).presentation, Presentation::Stored);
+        assert!(presentation_of(&banner, true).wakes_screen);
+    }
 
     fn tap(sh: &mut Shell, x: f32, y: f32, t: f64) -> Vec<Effect> {
         let mut fx = sh.event(Event::Down(x, y), t);
