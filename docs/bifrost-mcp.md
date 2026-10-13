@@ -21,7 +21,9 @@ Claude Code over HTTP (no ssh):
 {"mcpServers":{"bifrost":{"type":"http","url":"http://10.99.0.200:7420/mcp","headers":{"Authorization":"Bearer ${BIFROST_MCP_TOKEN}"}}}}
 ```
 
-See also: [the `browser` tool](bifrost-mcp-browser.md) for web debugging (console with file:line, network, DOM, page screenshots with `scale`, `inspect` by point).
+The server is `springboard/mcp` (crate `bifrost-mcp`, 0.5.x). See also: [the `browser` tool](bifrost-mcp-browser.md) for web debugging (console with file:line, network, DOM, storage, styles, page screenshots with `scale`, `inspect` by point), the `files`, `term` and `lifecycle` tools below, and [agent-api.md](agent-api.md) for the element map behind `ui`.
+
+CLI shortcuts from Titan: `bifrost pc mcp call TOOL [JSON]`, `bench`, `eval`, `push`, `deploy-app APP` and `token`.
 
 ## Use it from Claude Code (stdio over ssh)
 
@@ -41,7 +43,7 @@ in `/usr/local/bin`. In a session in this repo the tools appear as `mcp__bifrost
 | Compositor (`bifrost-wm`) | one persistent Wayland connection: `wlr-screencopy` (screen, regions), `ext-image-copy-capture` + `ext-foreign-toplevel-image-capture-source` (one window, even covered), `wlr-foreign-toplevel` (window list, activate, close, minimize, maximize, fullscreen), `wlr-virtual-pointer` (exact compositor pixels), `zwp-virtual-keyboard` (text, with a keymap generated per call, so any Unicode is typed whatever the layout) | `observe`, `screenshot`, `click`, `pointer`, `scroll`, `type`, `window` |
 | Kernel | one persistent uinput keyboard, created on first use (400 ms once) | `key`: the shell's evdev shortcuts and every client see it like a real keyboard |
 | Shell | control port `127.0.0.1:7777` (`src/bare/control.rs`) | `observe` (state), `ui` (accessibility map, `ax list/press`), `open`, `wait`, `shell` |
-| Apps | each app's JSON-RPC control socket (`/var/lib/springboard/appdata/<id>/control.sock`), connected as the account's uid (SO_PEERCRED) | `app` (methods, `intent.*`, app state) |
+| Apps | each app's JSON-RPC control socket (`$XDG_RUNTIME_DIR/bifrost/apps/<id>.sock`, older apps `appdata/<id>/control.sock`; `sys::app_sockets` lists both), connected as the account's uid (SO_PEERCRED) | `app` (methods, `intent.*`, app state) |
 | System | `/proc`, files, `bash`, `journalctl` | `system`, `file`, `exec` |
 
 The connection reconnects by itself after a shell or compositor restart.
@@ -49,7 +51,8 @@ The connection reconnects by itself after a shell or compositor restart.
 ## Tools
 
 `observe`, `screenshot`, `click`, `pointer` (hover, drag), `scroll`, `key`, `type`, `window`, `open`, `ui`, `app`, `wait`,
-`exec`, `file`, `system`, `shell`, `batch`, and the dev loop tools below (0.4.0). Section markers `BROWSER HOOK` in `tools.rs` dispatch and `list()` are where the `browser` tool plugs in. Descriptions in `springboard/mcp/src/tools.rs` (`list()`) are written for the
+`exec`, `file`, `system`, `shell`, `batch`, `lifecycle`, the dev loop tools (`logs`, `crash`, `dev`, `perf`) and the per-app tools `browser`,
+`term` and `files` (their schemas are appended in `tools.rs` `list()`). Section markers `BROWSER HOOK` in `tools.rs` dispatch and `list()` are where the `browser` tool plugs in. Descriptions in `springboard/mcp/src/tools.rs` (`list()`) are written for the
 model; the evals below decide changes to them.
 
 ### `files` (Files app)
@@ -84,13 +87,13 @@ Coordinates are screen pixels. A downscaled screenshot (default longest side 128
 the window's own pixels in a screen capture (exact match of textured 16x16 blocks; cached offset and centred placement
 tried first). A covered window can be captured but not located; activate it first.
 
-### Dev loop tools (0.4.0)
+### Dev loop tools
 
 | Tool | What it does |
 |---|---|
 | `logs` | Journal lines new since the previous call with the same filters (cursor per session and filter set, `--after-cursor`). Filters: `unit`, `priority` (`err`, `0..3`), `filter` text, `app=<id>`, `subsystem` and `category` (exact Unified Logging fields, any unit; 0.4.1); `follow_ms` waits for new lines; `reset` restarts at the tail. SDK apps are spawned by the shell (through bwrap, `apphost.rs`) and inherit its stderr, so their output is in the `springboard` unit with no id tag: `app` is that unit filtered on the id appearing in the line. |
 | `crash` | `list`: `coredumpctl` since boot (or `since`) plus the tail of the shell's `crash.log`; `info` (pid or exe): identity header and a trimmed backtrace; `panic`: `<data dir>/crash.log` (panic hook in `src/bare/crashlog.rs`, rotated at 256 KB) and `last_exit`. |
-| `dev` | `upload` (base64, `append` for chunks, `mode`, returns size and sha256 of the whole file), `install_package` (`springboard --install-package`), `install_store_app`, `restart` `shell` / `compositor` (`systemctl restart springboard`, as `tools/midget-push-shell.sh`; labwc comes back with the session; waits for the control port and reports the version) / `app:<id>` (SIGTERM, `open-app`, waits for the control socket) / `mcp` (delayed `systemctl restart bifrost-mcp`). A restarted shell is locked: `key enter`. |
+| `dev` | `upload` (base64, `append` for chunks, `mode`, returns size and sha256 of the whole file), `install_package` (`springboard --install-package`), `install_store_app`, `restart` `shell` / `compositor` (`systemctl restart springboard`, as `tools/midget-push-shell.sh`; the window server `bifrost-wm` comes back with the session; waits for the control port and reports the version) / `app:<id>` (SIGTERM, `open-app`, waits for the control socket) / `mcp` (delayed `systemctl restart bifrost-mcp`). A restarted shell is locked: `key enter`. |
 | `perf` | Shell `perf` line, machine CPU, and CPU% per process over `ms` from `/proc/<pid>/stat` deltas. |
 | `wait` `screen_changed` / `screen_stable` | Hashes cheap captures (screen, `region`, or `window`) every 40 ms; stable means unchanged for `stable_ms`. |
 | `screenshot` `diff=true` | Adds the bounding box that changed since the previous capture of the same target. |
@@ -103,7 +106,7 @@ Host side: `bifrost pc mcp deploy-app APP` (`tools/mcp-deploy-app.py`, wrapper `
 (`tools/pc-app.py pack`), uploads it over the HTTP endpoint in 3 MB chunks with a sha256 check, installs it, then restarts
 (if running) or opens it.
 
-### App control and debugging (this round, unreleased)
+### App control and debugging
 
 | Tool | What it does |
 |---|---|
@@ -113,9 +116,9 @@ Host side: `bifrost pc mcp deploy-app APP` (`tools/mcp-deploy-app.py`, wrapper `
 | `crash app=<id>` | Process family and control socket state, coredumps naming the app (or its short name, so engine and content children that carry it are included), `crash.log` lines mentioning it, the shell's `last_exit` and recent warnings from the journal. |
 | `perf app=<id>` | Only the app's process family (every process whose command line mentions the id, plus all descendants by parent pid) with summed RSS and PSS (`smaps_rollup`). |
 | `observe` | Adds one line per app control socket: pids, RSS, PSS, and `cgroup_mem` when the app has a private cgroup (`cgroup=shared` when it sits in a `.service` cgroup). The focused window is the `*` row. |
-| `window` | `action=list` (optional `window` or `app` filter), `app` as an alias for `window`. `resize` and `move` answer `E_UNSUPPORTED`: labwc exposes neither through wlr-foreign-toplevel. |
+| `window` | `action=list` (optional `window` or `app` filter), `app` as an alias for `window`. `resize` and `move` answer `E_UNSUPPORTED`: wlr-foreign-toplevel has neither request and `bifrost-wm` only answers activate, close and the maximize, minimize and fullscreen states. |
 
-#### `wait` conditions on apps and the system (this round, unreleased)
+#### `wait` conditions on apps and the system
 
 | Parameter | Waits until |
 |---|---|
@@ -147,7 +150,7 @@ Apps answer JSON-RPC 2.0 on `appdata/<id>/control.sock` (SDK `sdk/src/control.rs
 - Errors use the JSON-RPC codes above; engine-backed methods put the cause in `error.data.reason`.
 - Long-running methods should be answered asynchronously by the app; the MCP waits up to `timeout_s`.
 
-### Term tool (`term`, this round, unreleased)
+### Term tool (`term`)
 
 Drives and debugs Term (the terminal built into the shell, `src/shell/terminal/`). The MCP sends one line on the
 shell control port, `term <verb> key=value ...` (values percent-encoded; `bare/control.rs` `Request::Term`), and the
@@ -211,7 +214,7 @@ Round history (see `docs/mcp-evals.jsonl`):
 | r0 (0.1.0) | 7/10 | 6.6 | 14.2 s | 10 | `open` takes app names; `key "+"` types; longer click; `system` says memory; `open` waits for any new window; window locate hints; checker ignores digit grouping |
 | r1 (0.2.0) | 9/10 | 6.8 | 12.9 s | 6 | only failure is the shell's Spotlight; calculator still 29 calls of clicking (next: a key-entry hint or app control methods) |
 
-Known OS failures the evals expose (not MCP bugs): Cmd+Space does not open Spotlight on the desktop (shell, 0.4.99).
+Known OS failure the evals exposed (not an MCP bug): in r0 and r1 (2026-10-10) Cmd+Space did not open the search panel. The compositor has since taken the global chords (Super+Space sends `quicksearch` to the shell, `springboard/wm/src/keybindings.rs`); only r0 and r1 are recorded, so re-run the `spotlight-clock` task before relying on it.
 
 ## Safety
 

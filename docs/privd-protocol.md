@@ -42,17 +42,23 @@ UNAUTH = allowed on the lock screen. AUTH = needs Unlocked and the session token
 | Method | Auth | Params | Result |
 |---|---|---|---|
 | `system.ping` | no | - | `{version, proto:1}` |
-| `login.account` | no | - | `{username, full_name, uid, has_password, locked_out_secs}` |
+| `login.account` | no | - | `{username, full_name, uid, has_password, locked_out_secs, password_hint}` (the hint comes from `password_hint=` in the account file, empty when unset, control characters dropped) |
 | `login.authenticate` | no | `{password}` | `{ok:true, token}` (128-bit random; marks Unlocked), or error `wrong_password` {fails, retry_secs} / `locked_out` {retry_secs} / `no_password` |
 | `power.shutdown` `power.restart` `power.sleep` | no | - | `{}` |
 | `session.lock` / `session.logout` | token | `t` | clears Unlocked, invalidates token |
 | `account.set_password` | token, except a first password | `{old,new,t}` | runs `chpasswd` as root. A usable hash needs the token and re-verifies `old` (a wrong `old` counts toward the lockout). An EMPTY hash may be given its first password without a token, only by the console shell (peer exe `/usr/bin/springboard`, installed uid). A locked hash (`!`, `*`, `passwd -l`) is never changed here. `new` is at least 8 bytes, no `:`, newline or NUL |
 | `update.check` `update.apply {kind:"os"\|"shell"}` `update.status` | yes | | apply writes the same recovery state, then the shell exits 3 |
 | `store.install {id}` `store.uninstall {id}` | yes | | `store.install` takes only the app id: privd fetches the catalogue and the package itself and checks the catalogue hash. No user-staged path or client hash is ever opened by root |
+| `update.rollback` | yes | - | restores the previous shell package generation locally (`pacman_update::rollback_local`) |
 | `time.set_timezone {name}` `time.set_ntp {on}` | yes | | |
+| `locale.set {lang,region}` | yes | | `localectl set-locale`: `lang` for LANG, `region` for the formats (time, numbers, money, paper, measures) |
 | `net.*` | yes | | only what NetworkManager D-Bus + polkit cannot do |
 | `system.boot_attempt {event:"begin"\|"stable"}` | `begin` no, `stable` token | | privd owns persistent `boot_attempts`; only a logged-in session clears the latch. The shell retries `stable` until it has a token |
-| `backup.restore_apply` | yes | | |
+| `backup.restore_apply` | yes | | applies the staged backup restore; replies `{files}` |
+| `disk.loop_attach {path,read_only}` `disk.loop_detach {device}` | yes | | loop devices for mounting disk images (`privd/loopdev.rs`) |
+| `user.add {name,full_name,admin}` `user.delete` `user.set_admin` `user.set_password` `group.add` `group.delete` `group.member` | yes | | Settings > Users & Groups (`privd/accounts.rs`). Names are plain lowercase identifiers, the installed account and system accounts (uid below 1000) are never touched, and the last administrator cannot be demoted or removed. Administrators are members of the sudo group |
+| `system.set_names {computer, local}` | yes | | computer name (any text, 64 characters at most) and local host name label |
+| `service.set {id,on}` | yes | | the sharing switches only: `remote_login` (`sshd.service`), `file_sharing` (`smb.service`), `screen_sharing` (`wayvnc.service`); nothing else can be enabled |
 | `disk.erase_disk {device,fs,label}` `disk.erase_volume {device,fs,label}` `disk.partition_disk {device,partitions:[{size_mib,fs,label}]}` `disk.verify_volume {device}` `disk.repair_volume {device}` | yes | | Erase, partition and first-aid requests from `bifrost_core::disk_request`. Each is planned against a fresh snapshot of `/sys/block` and `/proc/mounts` (refused when mounted, or a partition where a disk is needed, or a disk where a partition is); the file system type of a checked volume comes from `blkid`. Result `{device, steps:[tool,...]}`; refusals are `bad_params` with the reason as the message. Runs as root with fixed argv |
 
 Rules: validate all params; ids and paths canonicalised against allow-listed roots; fixed argv, no shell strings; every

@@ -1,6 +1,10 @@
 # Term compatibility
 
-Status by reading code paths (emulator: `../iOSTerm/src/term.rs`, read only; BifrOSt wrapper: `springboard/src/term/mod.rs`). Nothing here was run; "Midget" marks items that need a check on the device.
+Status by reading code paths (emulator: the `iosterm` crate, imported as `termcore` from `../iOSTerm`, read only; BifrOSt wrapper: `springboard/src/term/mod.rs`; Terminal UI: `springboard/src/shell/terminal/`). Nothing here was run; "Midget" marks items that need a check on the device. Re-read 2026-10-13: the escape-sequence, selection and program rows below still match the code (`report_mouse` still has no caller from the desktop pointer path).
+
+## Terminal features around the emulator
+
+Not compatibility items, but they exist and are easy to miss: tabs and split panes (`split.rs`), saved window groups (`groups.rs`), colour profiles (`profiles.rs`, `profile_table.rs`), the Find bar (`find.rs`), SSH connections from a config file with import (`ssh.rs`), prompt marks (OSC 133 `A`, used by Cmd+Up and Cmd+Down to jump between prompts), opening the first web link in a selection from the More menu (`links.rs`; this is not OSC 8), and the `term` tool in the MCP server that reads and drives tabs ([bifrost-mcp.md](bifrost-mcp.md), "Term tool").
 
 ## Escape sequences
 

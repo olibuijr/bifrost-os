@@ -4,6 +4,22 @@ An Arch Linux x86_64 guest under QEMU/KVM that runs the SpringBoard shell as the
 desktop profile, through the real KMS path on a virtio-gpu (no `SPRINGBOARD_VIRTUAL`). Packaging for the
 same unit lives in `packaging/arch/`.
 
+## Status (2026-10-13): read this first
+
+This is the old direct-kernel dev VM and it has not kept up with the session. Since the harness was written,
+`packaging/arch/springboard.service` starts `/usr/bin/bifrost-bootweave run`, which brings up the window server (`bifrost-wm`),
+the chrome clients and the shell, and the shell needs the `desktop-wayland` build. `deploy` below still copies only the shell
+binary as `/usr/bin/springboard`, the unit and `seed-data`, so on a `create` image the unit points at a binary that is not there
+(read from `tools/arch-vm.sh`, not run). The default `SPRINGBOARD_BIN` is also the plain release build. Use the current loops instead:
+
+- Look at an app or the shell on the host: `bifrost pc smoke APP [--light]` ([bifrost-pc-workflow.md](bifrost-pc-workflow.md)).
+- Try a shell build on hardware: `tools/midget-push-shell.sh` (owner rule 2026-10-12: skip the VM, always use Midget).
+- Reinstall in a VM from the installer ISO and boot the installed disk: `bifrost pc cycle` / `python3 tools/vm-cycle.py --headless`
+  (`tools/arch-vm-iso.sh`, `tools/arch-vm-installed.sh`, `tools/vm-install.sh`; images under `out/arch-vm/`, not `~/.local/share/arch-vm/`).
+
+Everything below describes `tools/arch-vm.sh` as written; the `start`, `stop`, `shot`, `key`, `tap`, `swipe` and `ssh` commands, the
+ports and the knobs are unchanged and still useful for a plain Arch guest.
+
 ## Run
 
 ```
@@ -28,7 +44,7 @@ first service start (marker `.seeded`); delete `/var/lib/springboard/.seeded` in
   `initramfs.img` (direct kernel boot, no bootloader or UEFI needed), `id_ed25519` (root key), `qmp.sock`,
   `qemu.log`, `serial.log` (guest console, ttyS0), `tmp/` (TMPDIR; nothing goes to /tmp).
 - Network: user-mode only; guest ssh is `127.0.0.1:2250` (`ARCH_VM_SSH_PORT`), root with the key above.
-- Display: `virtio-vga` 1200x1920 (`ARCH_VM_W`/`ARCH_VM_H`), 4 CPUs, 1 GiB (`ARCH_VM_CPUS`, `ARCH_VM_MEM`).
+- Display: `virtio-vga` 1200x1920 (`ARCH_VM_W`/`ARCH_VM_H`; `ARCH_VM_DISK`, default 6G, sets the image size), 4 CPUs, 1 GiB (`ARCH_VM_CPUS`, `ARCH_VM_MEM`).
 - A virtio balloon with free-page reporting returns unused guest pages to the host without reducing guest-visible RAM. No balloon target is imposed. Use `ARCH_VM_MEM=3072` for heavier workloads; the 1 GiB default is for shell development.
   `tap`/`swipe` take guest pixels for those dimensions and go through a virtio absolute pointer (absolute 0..32767).
 - Input devices in the guest are named `QEMU Virtio Keyboard` and `QEMU Virtio Tablet`. No audio devices.

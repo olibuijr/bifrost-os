@@ -1,6 +1,13 @@
 # On-screen keyboard as a System App (built 2026-10-09, shell 0.4.77, keyboard 1.1.0)
 
-Status: done in code and tests; the package is not yet published to the store (see "Shipping"). The plan below is kept for the decisions.
+Status: done in code and tests; the plan below is kept for the decisions. Check 2026-10-13: the package (`springboard/system/keyboard`) is
+still 1.1.0 with `min_shell = "0.4.77"` and its CHANGELOG stops at 1.1.0, while the crate `springboard/apps/keyboard` is 1.1.1 in
+`Cargo.toml`; the manifest and the crate version should move together on the next keyboard release. Whether 1.1.0 is published
+to the store is not recorded in the repo: check `bifrost pc app info keyboard` before relying on "Shipping".
+
+Related, built separately: the composing input methods in `springboard/src/shell/input_methods/` (Hangul 2-set, Telex and VNI) with
+an `InputController` shaped like the reference input-method kit, and the keyboard viewer (`shell/keyboard_viewer.rs`). The
+controller is not wired into `kb_input.rs` yet, so the keyboard does not route keys to it.
 
 Goal: the keyboard runs as its own package (`is.olibuijr.keyboard`, `kind = "system"`) instead of living in
 `springboard/src/shell/keyboard.rs` (2,078 lines) and the `kb_*` modules. Apps keep requesting it

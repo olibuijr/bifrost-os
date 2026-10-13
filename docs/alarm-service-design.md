@@ -1,7 +1,23 @@
 # Alarm and reminder service design (S7)
 
-Status: design only. No code changes. Effort M-L; this doc fixes the scope and
-the first step.
+Status (2026-10-13): the `alarmd` service is still design only; there is no `alarmd` binary, registry, socket or `alarms`
+permission in the repo. Since this was written the shell-owned path changed (see "Changes since 2026-10-08" below). Line
+numbers in section 1 are from 2026-10-08 and have drifted; search by name. Effort M-L; this doc fixes the scope and the
+first step.
+
+## Changes since 2026-10-08
+
+- Gap 1 (sound) is closed: `Effect::Alarm` in `springboard/src/bin/shell.rs` sends `AudioJob::Sound(Sound::Alert(index))` for
+  the alert tone (`Shell::alert_tone`), or logs `alarm (muted)` when the tone is off. The alert's `vibrate` and `ramp` fields
+  are still unused.
+- Fired alarms file their notification under the Clock manifest id `is.olibuijr.clock.desktop` (`clock::MANIFEST_ID`), found
+  whether or not the app runs. Before (Clock 1.5.0) the lookup used the data id `is.olibuijr.clock`, which matches no
+  installed app, and the banners were dropped.
+- The shell re-reads `clock.ini` and `clock-timers.ini` once a second only while the Clock app runs (it is their only
+  writer) and every 60 s otherwise (`POLL_MS`, `IDLE_POLL_MS` in `clock/mod.rs`, shell 0.7.9): the one-second poll was the
+  shell's main idle wake-up. A scheduler service would replace the poll, not add one.
+- Gaps 2 to 6 are unchanged: RTC wake (`rtc_wake`, `/sys/class/rtc/rtc0/wakealarm`) is unverified on Midget, the mechanism is
+  Clock-only, Reminders and Calendar alerts have no scheduler, and the only app-to-shell channel is `ToShell::Notify`.
 
 ## 1. What exists today (verified 2026-10-08 against the code)
 
@@ -27,11 +43,8 @@ is only partly right. Re-reading the code:
 
 So the real gaps are narrower than "not implemented":
 
-1. **No sound on a background alarm.** `clock/mod.rs:75-99` says the shell
-   "plays it on `Effect::Alarm`", but `bin/shell.rs:777` only logs
-   `springboard: alarm`. The alert's `sound`, `vibrate` and `ramp` fields are
-   carried and never used. (Sound is also gated by the board rule: no sound
-   without the user asking at that moment; see AGENTS.md and bifrost-audio.)
+1. **(Closed, see above.) No sound on a background alarm.** On 2026-10-08 `bin/shell.rs:777` only logged
+   `springboard: alarm`; the alert's `sound`, `vibrate` and `ramp` fields were carried and never used.
 2. **Wake from suspend depends on RTC.** `Effect::WakeAt` goes to `rtc_wake`
    (`bin/shell.rs:1298`), which writes `/sys/class/rtc/rtc0/wakealarm`. On the
    PC (Midget) this path is unverified; failures are only logged
@@ -60,8 +73,7 @@ Goals:
 Non-goals (this design):
 - Calendar recurrence, time zones, invitations. Calendar stays a UI over its
   own file until a later step.
-- Playing sound. Sound stays gated by the audio rule; the service only exposes
-  the sound name.
+- Playing sound. The shell plays the alert tone; the service only exposes the sound name.
 - Waking a suspended PC. RTC wake is a separate work item.
 
 ## 3. Proposed service: `alarmd`
@@ -160,7 +172,7 @@ Single owner at any time. The handoff has three states:
    editor, the Stopwatch and Timer tabs.
 
 The shell's `Effect::Alarm` path (`bin/shell.rs:777`) becomes the sound hook
-for `ring` events. The sound is still a no-op until the audio rule is lifted.
+for `ring` events. The sound already plays for the alert tone.
 
 If the service dies, the shell restarts it. If the service is down at
 suspend, the shell refuses to hand off a timer past the next wake; it keeps
@@ -232,7 +244,7 @@ restarted; list goes into the Friday diary entry.
 - "Alarms are tied to the shell": true for the logic, but it works with the
   Clock app closed. The real gap is the missing sound, the RTC/PC wake path,
   and the lack of a service for other packages.
-- `clock/mod.rs:75-99` says the shell "plays" the sound on `Effect::Alarm`; it
-  does not (`bin/shell.rs:777` only logs).
+- `clock/mod.rs:75-99` said the shell "plays" the sound on `Effect::Alarm`; on 2026-10-08 it did
+  not (`bin/shell.rs:777` only logged). It does now.
 - `clock/mod.rs:6` says the service reloads the app's files. It does: on a
   stamp change, once a second (`clock/mod.rs:316-327`).

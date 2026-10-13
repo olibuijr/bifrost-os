@@ -1,6 +1,6 @@
 # Desktop app resource manager
 
-Shell 0.4.24 gives installed SDK and native packages a common kernel resource
+Since shell 0.4.24, installed SDK and native packages share a common kernel resource
 boundary. `bare/app_manager.rs` creates cgroup v2 groups under
 `/sys/fs/cgroup/bifrost-apps/<app-id>`. The launcher attaches itself before exec,
 so nested bubblewrap, Servo renderers and workers inherit the same group.
@@ -24,7 +24,8 @@ its UI cgroup, so closing the UI does not stop sharing.
 A worker samples per-group memory, CPU, process count and memory events every
 five seconds into `/run/bifrost/app-resources.json`, written by atomic rename.
 Use `bifrost pc midget apps` (or `python3 tools/midget.py apps`) to read the snapshot.
-Inspect `memory_events` for high/max/oom/oom_kill before reporting results.
+Inspect `memory_events` for high/max/oom/oom_kill before reporting results. Resource budgets for the whole device
+(idle CPU, wakeups, PSS per process) are separate and live in `docs/budgets.toml` ([snow-leopard.md](snow-leopard.md)).
 No resource polling or sleep is added to the render loop.
 
 Desktop native app ids with open windows are saved to `open-native-windows.json`
