@@ -33,7 +33,7 @@ use crate::gfx::{Image, Surface};
 use crate::layout::{Layout, PER_PAGE};
 use banner::Banner;
 use center::Center;
-use list::{badge_image, badge_pos, Card, Hit, ListView, Mode, Opts, Slide, CARD_H_PT, CARD_W_PT, ICON_PT};
+use list::{badge_image, badge_pos, listed_in, Card, Hit, ListView, Mode, Opts, Slide, CARD_H_PT, CARD_W_PT, ICON_PT};
 use lockwidgets::Strip;
 pub use schedule::Schedule;
 pub use store::{Notification, Store};
@@ -537,9 +537,14 @@ impl Shell {
         self.screen == Screen::Lock && super::passcode::Lock::required(&self.passcode_path())
     }
 
+    /// The groups a list of `mode` shows: the apps whose page lets them into it.
+    pub(super) fn visible_groups(&self, mode: Mode) -> Vec<store::Group> {
+        self.notify.store.groups().into_iter().filter(|g| listed_in(&self.app_notif(g.app), mode)).collect()
+    }
+
     fn render_list(&mut self, mode: Mode) -> ListView {
         let private = mode == Mode::Lock && self.lock_private();
-        let groups = self.notify.store.groups();
+        let groups = self.visible_groups(mode);
         for g in &groups {
             self.notification_icon(g.app);
         }
@@ -569,9 +574,11 @@ impl Shell {
         self.notify.gen += 1;
         self.notify.revealed = None;
         self.dirty = true;
+        // an app whose page turns Badges off gets none
+        let badged: Vec<AppId> = apps().iter().map(|a| a.id).filter(|&a| self.app_notif(a).badges).collect();
         let store = &self.notify.store;
         self.notify.expanded.retain(|&a| store.count(a) > 1);
-        let counts: Vec<(AppId, usize)> = apps().iter().map(|a| (a.id, self.notify.store.count(a.id) + self.notify.extra.iter().filter(|e| e.0 == a.id).map(|e| e.1).sum::<usize>())).filter(|&(_, n)| n > 0).collect();
+        let counts: Vec<(AppId, usize)> = apps().iter().map(|a| (a.id, self.notify.store.count(a.id) + self.notify.extra.iter().filter(|e| e.0 == a.id).map(|e| e.1).sum::<usize>())).filter(|&(_, n)| n > 0).filter(|(a, _)| badged.contains(a)).collect();
         let same = self.notify.badges.len() == counts.len() && self.notify.badges.iter().zip(&counts).all(|((a, n, _), (b, m))| a == b && n == m);
         if !same {
             self.notify.badges = counts.into_iter().map(|(app, n)| (app, n, badge_image(&self.ui, n))).collect();
@@ -945,6 +952,15 @@ mod tests {
     use super::banner::{Phase, HOLD_MS, SLIDE_MS};
     use super::*;
     use crate::gfx::Surface;
+
+    #[test]
+    fn a_page_switch_leaves_the_app_out_of_that_list_only() {
+        let lock_off = AppNotif { lock_screen: false, ..AppNotif::default() };
+        assert!(!listed_in(&lock_off, Mode::Lock) && listed_in(&lock_off, Mode::Center));
+        let center_off = AppNotif { center: false, ..AppNotif::default() };
+        assert!(listed_in(&center_off, Mode::Lock) && !listed_in(&center_off, Mode::Center));
+        assert!(listed_in(&AppNotif::default(), Mode::Lock) && listed_in(&AppNotif::default(), Mode::Center));
+    }
 
     #[test]
     fn focus_lets_only_its_allowed_apps_deliver() {

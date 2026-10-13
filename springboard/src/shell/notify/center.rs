@@ -501,7 +501,7 @@ impl Shell {
             y = r.1 + r.3 + ui.pt(NC_GAP_PT);
         }
         let mut cards = vec![];
-        for (i, g) in self.notify.store().groups().iter().enumerate() {
+        for (i, g) in self.visible_groups(Mode::Center).iter().enumerate() {
             let h = ui.pt(NC_CARD_PT);
             let stack = if g.items.len() > 1 { ui.pt(NC_STACK_PT) } else { 0.0 };
             if y + h + stack > self.h as f32 - ui.pt(NC_BOTTOM_PT) {
@@ -640,7 +640,7 @@ impl Shell {
         if within(clear, x, y) {
             return Some(DeskHit::ClearAll);
         }
-        let groups = self.notify.store().groups();
+        let groups = self.visible_groups(Mode::Center);
         cards.iter().find(|c| within(c.1, x, y)).map(|&(i, _, close)| if within(close, x, y) { DeskHit::Close(groups[i].app) } else { DeskHit::Card(groups[i].app) })
     }
 
@@ -794,7 +794,7 @@ impl Shell {
         let ui = &self.ui;
         let slide = (1.0 - p) * ui.pt(24.0);
         let (title, clear, cards) = self.center_desk_layout();
-        let groups = self.notify.store().groups();
+        let groups = self.visible_groups(Mode::Center);
         let now = self.notify.now();
         let (label, secondary) = (LABEL.now(), LABEL_2.now());
         let disc = |s: &mut Surface, (x, y, w, h): R4, fill: u32, ink: u32| {

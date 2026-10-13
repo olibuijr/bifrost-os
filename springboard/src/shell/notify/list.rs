@@ -6,6 +6,7 @@
 //! bifrost points: 420 pt cards, 80 pt tall, 13 pt corners, a header row with a 20 pt icon, app name and time.
 
 use super::super::ui::{Ui, Weight, GRAY_DIM, SYSTEM_BLUE, SYSTEM_RED, WHITE};
+use super::super::notify_page::AppNotif;
 use super::super::AppId;
 use super::store::{age_text, Group, Notification};
 use crate::gfx::{pack, scale, Image, Surface};
@@ -162,6 +163,15 @@ impl GroupView {
     /// Whether the card shows the newest of several, collapsed: a tap expands it.
     pub fn stacked(&self) -> bool {
         !self.expanded && self.count > 1
+    }
+}
+
+/// Whether an app's page lets its notifications into a list of `mode`: Lock Screen for the lock screen, Notification
+/// Centre for the sheet and its desktop column.
+pub fn listed_in(n: &AppNotif, mode: Mode) -> bool {
+    match mode {
+        Mode::Lock => n.lock_screen,
+        Mode::Center => n.center,
     }
 }
 

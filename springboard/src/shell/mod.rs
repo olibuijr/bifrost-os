@@ -2520,6 +2520,7 @@ impl Shell {
                         notify_page::NotifyChange::FocusAllowed(a, on) => self.set_focus_allowed(a, on),
                         notify_page::NotifyChange::App(a, n) => {
                             let _ = self.prefs.set(&notify_page::pref_key(a), &n.encode());
+                            self.store_changed();
                         }
                     }
                 }
