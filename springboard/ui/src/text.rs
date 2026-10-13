@@ -10,6 +10,7 @@
 //! * `TextBuffer`: text, selection, marked range. Every edit returns an `Edit` that can be reverted and reapplied.
 //! * `TextEditor`: a buffer plus an `UndoManager`, typing coalesced into one undo step, a kill buffer, and `perform`
 //!   for `EditCommand`s. `binding` maps a key combo to a command (Golden Gate defaults plus the emacs bindings ctrl-A/E/K).
+use crate::compose_method::{self, Composer};
 use crate::keys::{Key, KeyCombo};
 use crate::undo::UndoManager;
 use std::ops::Range;
@@ -799,14 +800,62 @@ pub struct TextEditor {
     pub buf: TextBuffer,
     undo: UndoManager<TextBuffer>,
     typing: bool,
+    /// The compose method's state (`compose_method`): the armed apostrophe and an open accent list.
+    compose: Composer,
+}
+
+/// The editor as the compose method's target: its marked text, commits and plain typing are the editor's own edits.
+struct Editing<'a>(&'a mut TextEditor);
+
+impl compose_method::ComposeTarget for Editing<'_> {
+    fn set_marked(&mut self, text: &str) {
+        self.0.set_marked_text(text, text.len(), 0, None);
+    }
+    fn commit_marked(&mut self) {
+        self.0.unmark_text(true);
+    }
+    fn insert(&mut self, text: &str) {
+        self.0.insert_text(text);
+    }
 }
 
 impl TextEditor {
     pub fn new(limit: usize) -> Self {
-        TextEditor { buf: TextBuffer::new(), undo: UndoManager::new(limit), typing: false }
+        TextEditor { buf: TextBuffer::new(), undo: UndoManager::new(limit), typing: false, compose: Composer::default() }
     }
     pub fn with_text(text: &str, limit: usize) -> Self {
-        TextEditor { buf: TextBuffer::from_text(text), undo: UndoManager::new(limit), typing: false }
+        TextEditor { buf: TextBuffer::from_text(text), undo: UndoManager::new(limit), typing: false, compose: Composer::default() }
+    }
+
+    /// Types `text` the way a typed key is typed: through the compose method, so an apostrophe and a letter with
+    /// alternates open the candidate list (`candidates`) and a digit picks from it. True when the text changed.
+    pub fn type_text(&mut self, text: &str) -> bool {
+        let before = self.buf.text().to_string();
+        let mut composer = std::mem::take(&mut self.compose);
+        compose_method::type_text(&mut composer, &mut Editing(&mut *self), text);
+        self.compose = composer;
+        self.buf.text() != before
+    }
+
+    /// The candidate list of an open composition (empty when none is open), for the field or view to draw.
+    pub fn candidates(&self) -> &[String] {
+        self.compose.candidates()
+    }
+
+    /// Ends an open composition the way a control key does: the list closes keeping its letter, and a held apostrophe
+    /// is typed. Called before every editing command, so no command runs over a half-finished composition.
+    pub fn end_composition(&mut self) {
+        if !self.compose.is_open() && !self.compose.is_armed() {
+            return;
+        }
+        let mut composer = std::mem::take(&mut self.compose);
+        compose_method::end_for_control(&mut composer, &mut Editing(&mut *self));
+        self.compose = composer;
+    }
+
+    /// Forgets the compose state without typing anything: an input method or an edit from outside took over the text.
+    fn drop_composition(&mut self) {
+        self.compose = Composer::default();
     }
     pub fn undo_manager(&self) -> &UndoManager<TextBuffer> {
         &self.undo
@@ -840,6 +889,7 @@ impl TextEditor {
 
     /// `insertText:`. True when the text changed.
     pub fn insert_text(&mut self, text: &str) -> bool {
+        self.end_composition();
         let committing = self.buf.has_marked_text();
         let e = self.buf.insert_text(text);
         if committing {
@@ -849,16 +899,19 @@ impl TextEditor {
     }
     /// `setMarkedText:selectedRange:replacementRange:`.
     pub fn set_marked_text(&mut self, text: &str, sel_start: usize, sel_len: usize, replacement: Option<Range<usize>>) {
+        self.drop_composition();
         self.end_typing();
         self.buf.set_marked_text(text, sel_start, sel_len, replacement);
     }
     /// `unmarkText`. True when committed text changed the buffer.
     pub fn unmark_text(&mut self, commit: bool) -> bool {
+        self.drop_composition();
         let e = self.buf.unmark_text(commit);
         self.record(e, "Typing", Kind::Other)
     }
     /// `delete_surrounding_text`: one undo step.
     pub fn delete_surrounding(&mut self, before: usize, after: usize) -> bool {
+        self.drop_composition();
         let edits = self.buf.delete_surrounding(before, after);
         if edits.is_empty() {
             return false;
@@ -876,6 +929,7 @@ impl TextEditor {
     /// Runs `cmd`; `extend` extends the selection for movements. True when the text or selection changed.
     pub fn perform(&mut self, cmd: EditCommand, extend: bool) -> bool {
         use EditCommand::*;
+        self.end_composition();
         let before = (self.buf.anchor(), self.buf.caret(), self.buf.len());
         let name = match cmd {
             KillLine => "Cut",
@@ -938,10 +992,12 @@ impl TextEditor {
         self.undo.can_redo()
     }
     pub fn undo(&mut self) -> bool {
+        self.end_composition();
         self.typing = false;
         self.undo.undo(&mut self.buf).is_some()
     }
     pub fn redo(&mut self) -> bool {
+        self.end_composition();
         self.typing = false;
         self.undo.redo(&mut self.buf).is_some()
     }
@@ -1543,5 +1599,57 @@ mod tests {
         ed.undo();
         assert_eq!(ed.buf.text(), "abcd");
         assert!(!ed.can_undo());
+    }
+}
+
+#[cfg(test)]
+mod compose_tests {
+    use super::*;
+
+    #[test]
+    fn an_apostrophe_and_a_letter_open_the_list_and_a_digit_types_the_pick() {
+        let mut e = TextEditor::new(10);
+        e.type_text("'");
+        assert!(e.type_text("e"));
+        assert_eq!(e.buf.text(), "e");
+        assert_eq!(e.buf.marked_range(), Some(0..1));
+        assert_eq!(e.candidates().len(), 4);
+        e.type_text("2");
+        assert_eq!(e.buf.text(), "è");
+        assert_eq!(e.buf.marked_range(), None);
+        assert!(e.candidates().is_empty());
+    }
+
+    #[test]
+    fn a_command_ends_the_list_and_keeps_the_letter() {
+        let mut e = TextEditor::new(10);
+        e.type_text("'");
+        e.type_text("o");
+        assert!(!e.candidates().is_empty());
+        e.perform(EditCommand::MoveLeft, false);
+        assert!(e.candidates().is_empty());
+        assert_eq!(e.buf.text(), "o");
+        assert_eq!(e.buf.marked_range(), None);
+    }
+
+    #[test]
+    fn a_held_apostrophe_is_typed_before_a_command() {
+        let mut e = TextEditor::new(10);
+        e.type_text("'");
+        e.perform(EditCommand::DeleteBackward, false);
+        assert_eq!(e.buf.text(), "", "the held apostrophe was typed and then deleted");
+        e.type_text("'");
+        e.perform(EditCommand::MoveLeft, false);
+        assert_eq!(e.buf.text(), "'", "the apostrophe was typed before the caret moved");
+    }
+
+    #[test]
+    fn an_input_method_takes_over_and_drops_an_open_list() {
+        let mut e = TextEditor::new(10);
+        e.type_text("'");
+        e.type_text("a");
+        e.set_marked_text("ka", 2, 0, None);
+        assert!(e.candidates().is_empty());
+        assert_eq!(e.buf.text(), "ka");
     }
 }

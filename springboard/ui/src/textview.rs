@@ -228,12 +228,18 @@ impl TextView {
         self.scroll_to_caret(measure);
     }
 
-    /// Types `s` over the selection. True when the text changed.
+    /// Types `s` over the selection, through the compose method (an apostrophe and a letter open the accent list).
+    /// True when the text changed.
     pub fn insert(&mut self, s: &str, measure: &dyn Fn(&str) -> f32) -> bool {
         self.goal_x = None;
-        let changed = self.editor.insert_text(s);
+        let changed = self.editor.type_text(s);
         self.scroll_to_caret(measure);
         changed
+    }
+
+    /// The accent candidates of an open composition (empty when none is open), for the caller to draw at the caret.
+    pub fn candidates(&self) -> &[String] {
+        self.editor.candidates()
     }
 
     /// Deletes the selection, or the character before the caret. True when the text changed.
