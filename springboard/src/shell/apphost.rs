@@ -1377,6 +1377,14 @@ impl Shell {
         if comp.is_empty() {
             return;
         }
+        // a Wayland client's field has focus: the composition goes through the window server's input method
+        if self.im.active {
+            for c in &comp {
+                let requests = super::textinput::composition(&mut self.im, c);
+                self.im_out.extend(requests);
+            }
+            return;
+        }
         let Some(Some(h)) = self.ext_fg.and_then(|n| self.ext.get_mut(n as usize)) else { return };
         for c in comp {
             h.send(&super::textinput::to_app(c));

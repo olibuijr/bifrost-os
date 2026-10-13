@@ -548,6 +548,7 @@ fn run() -> std::io::Result<()> {
         #[cfg(feature = "desktop-wayland")]
         {
             disp.wayland_inputs(&mut events);
+            for batch in disp.wayland_input_method_batches() { shell.input_method_batch(batch, t); }
             if let Some(windows)=disp.wayland_foreign_windows() { shell.wayland_foreign_windows(windows); }
             for ev in disp.wayland_window_events() { shell.wayland_window_event(ev); }
         }
@@ -885,6 +886,16 @@ fn run() -> std::io::Result<()> {
         effects.extend(shell.tick(vt));
         #[cfg(feature = "desktop-wayland")]
         effects.extend(shell.take_native_activations().into_iter().map(Effect::ActivateForeign));
+        // the keyboard's output for a focused Wayland client's field goes through the window server's input method
+        #[cfg(feature = "desktop-wayland")]
+        {
+            let requests = shell.take_input_method_out();
+            if !requests.is_empty() {
+                if let Err(e) = disp.wayland_input_method_commit(&requests) {
+                    eprintln!("springboard: input method: {e}");
+                }
+            }
+        }
         for fx in effects {
             match fx {
                 Effect::Brightness(f) => {
