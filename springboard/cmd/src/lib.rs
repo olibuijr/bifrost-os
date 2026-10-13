@@ -1,6 +1,7 @@
 //! Shared helpers for the BifrOSt command-line tools. Each tool is its own binary in `src/bin/<tool>.rs` and keeps
 //! its logic in a module here (`pub mod <tool>;`) so it can be unit tested.
 
+pub mod hdiutil;
 pub mod open;
 pub mod pasteboard;
 
