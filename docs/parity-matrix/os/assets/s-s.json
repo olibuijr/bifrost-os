@@ -1927,11 +1927,11 @@
     "size": 35366
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/ui/src/cursor_art.rs",
+   "status": "partial",
+   "note": "code-drawn layered art (Kind::ScreenshotWindow), not the original PDF; parity needs a Midget check",
    "rea": [],
    "method": "heuristic"
   },
@@ -1948,11 +1948,11 @@
     "size": 42111
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/ui/src/cursor_art.rs",
+   "status": "partial",
+   "note": "code-drawn layered art (Kind::ScreenshotWindow), not the original PDF; parity needs a Midget check",
    "rea": [],
    "method": "heuristic"
   },

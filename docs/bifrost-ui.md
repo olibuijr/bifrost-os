@@ -2066,3 +2066,17 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## Cursors (`NSCursor`, `ui::cursor`, `ui::cursor_art`)
+
+`Kind` now covers the AppKit set: `ResizeNorthEastSouthWest`, `ResizeNorthWestSouthEast`, `ColumnResize`, `RowResize`,
+`Move`, `Rotate`, `ScreenshotWindow` next to the existing shapes (service names `resize_north_east_south_west`, `move`, ...).
+Constructors mirror AppKit: `Kind::frame_resize(FrameResizePosition, FrameResizeDirections)` (`NSCursor.frameResize(position:directions:)`;
+one-way edges give the one-sided arrow, corners the diagonal shape), `Kind::column_resize(ColumnResizeDirections)` and
+`Kind::row_resize(RowResizeDirections)`. `ZoomIn`, `ZoomOut`, `DisappearingItem` and `OperationNotAllowed` already existed.
+
+`cursor_art::art(kind, scale)` draws each shape from vector paths into two non-overlapping alpha masks (`fill`, `outline`) at 1x or 2x,
+with the hotspot in pixels. `CursorArt::compose(outline_rgba, fill_rgba)` recolours the layers separately, which the pointer colour
+setting (Accessibility > Display > Pointer) needs; `PointerColors::default()` is a white outline over a black fill.
+Not matched yet: the original PDF art (ours is code-drawn), per-corner rotate variants, vertical I-beam, and wiring the art into the compositor.
+Parity rows stay `partial` until checked on Midget.
