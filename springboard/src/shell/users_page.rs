@@ -34,6 +34,9 @@ pub struct View {
     pub me: String,
 }
 
+/// The view before the first load lands: no accounts and no groups.
+pub static NO_USERS: View = View { users: Vec::new(), groups: Vec::new(), me: String::new() };
+
 impl View {
     pub fn load() -> View {
         let read = |p: &str| std::fs::read_to_string(p).unwrap_or_default();

@@ -11,6 +11,9 @@ use crate::privd::accounts;
 /// The sharing services the page switches, as (privd id, row label), in the order they are listed.
 pub const SERVICES: [(&str, &str); 3] = [("remote_login", "Remote Login"), ("file_sharing", "File Sharing"), ("screen_sharing", "Screen Sharing")];
 
+/// The view before the first load lands: no name, every service off.
+pub static NO_SHARING: View = View { computer: String::new(), services: Vec::new() };
+
 /// What a row on the Sharing page does.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Edit {
@@ -21,7 +24,7 @@ pub enum Edit {
 }
 
 /// The computer name and the service states as the system has them now.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct View {
     pub computer: String,
     pub services: Vec<(&'static str, bool)>,
@@ -57,6 +60,15 @@ impl View {
 
     pub fn is_on(&self, id: &str) -> bool {
         self.services.iter().any(|&(s, on)| s == id && on)
+    }
+
+    /// Records a service the system has just started or stopped, so the page shows it before the next load lands.
+    pub fn set_service(&mut self, id: &str, on: bool) {
+        for (s, state) in self.services.iter_mut() {
+            if *s == id {
+                *state = on;
+            }
+        }
     }
 }
 
@@ -133,6 +145,16 @@ mod tests {
         assert_eq!(g[1].items.len(), 3);
         assert_eq!(g[1].items[0].action, Action::Sharing(Edit::Service { id: "remote_login", on: false }));
         assert_eq!(g[1].items[1].action, Action::Sharing(Edit::Service { id: "file_sharing", on: true }));
+    }
+
+    #[test]
+    fn a_toggle_is_shown_before_the_next_load() {
+        let mut v = View::from_text("", "", off);
+        v.set_service("screen_sharing", true);
+        assert!(v.is_on("screen_sharing"));
+        assert!(!v.is_on("remote_login"));
+        v.set_service("screen_sharing", false);
+        assert!(!v.is_on("screen_sharing"));
     }
 
     #[test]

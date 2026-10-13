@@ -116,6 +116,7 @@ pub mod settings;
 pub mod settings_search;
 pub mod screensaver;
 pub mod storage;
+pub mod view_cache;
 pub mod storage_page;
 pub mod gpu_page;
 pub mod quicksearch;
@@ -2953,6 +2954,10 @@ impl Shell {
         if self.screen == Screen::App(AppId::Settings) {
             if let Some(st) = &mut self.settings {
                 self.dirty |= st.tick(&self.ui, t);
+                // Install Now: the update's backup is in, so the restart goes ahead
+                if st.take_install_ready() {
+                    effects.push(Effect::Restart);
+                }
             }
         }
         self.clock.set_muted(self.cc.volume <= 0.0);
