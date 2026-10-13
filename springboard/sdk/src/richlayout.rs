@@ -12,6 +12,7 @@ use crate::attributed::{Attribute, AttributeKey, AttributedString, Attrs};
 use bifrost_render::gfx::Surface;
 use bifrost_render::ui::{self, system, Ui, Weight};
 use bifrost_ui::paragraph::ParagraphStyle;
+use bifrost_ui::textlist::List as TextList;
 use bifrost_ui::textmetrics::{FontMetrics, FontSpec, GlyphSource};
 use bifrost_ui::typeset::{Frame, FramePath, Framesetter, RunStyle, TextPainter, Typesetter, TypesetterOptions, UnderlineStyle};
 use bifrost_ui::Rect;
@@ -65,7 +66,7 @@ pub fn run_style(a: &Attrs) -> RunStyle {
     }
 }
 
-fn is_separator(c: char) -> bool {
+pub(crate) fn is_separator(c: char) -> bool {
     matches!(c, '\n' | '\r' | '\u{2029}' | '\u{85}')
 }
 
@@ -144,6 +145,22 @@ impl AttributedString {
 
     /// Sets the paragraph style of every paragraph that `range` (UTF-16) touches. `None` clears it.
     pub fn set_paragraph_style(&mut self, range: Range<usize>, style: Option<ParagraphStyle>) {
+        let span = self.paragraph_span(range);
+        if span.start < span.end {
+            self.add_attribute(Attribute::Paragraph(style), span);
+        }
+    }
+
+    /// Makes every paragraph a UTF-16 range touches an item of `list` (`None` ends the list).
+    pub fn set_text_list_utf16(&mut self, range: Range<usize>, list: Option<TextList>) {
+        let span = self.paragraph_span(range);
+        if span.start < span.end {
+            self.add_attribute(Attribute::TextList(list), span);
+        }
+    }
+
+    /// The character range of the whole paragraphs a UTF-16 range touches.
+    fn paragraph_span(&self, range: Range<usize>) -> Range<usize> {
         let text: Vec<char> = self.string().chars().collect();
         let r = self.char_range(range);
         let mut s = r.start.min(text.len());
@@ -160,9 +177,7 @@ impl AttributedString {
                 e += 1;
             }
         }
-        if s < e {
-            self.add_attribute(Attribute::Paragraph(style), s..e);
-        }
+        s..e
     }
 
     /// The paragraph style at a UTF-16 index.
@@ -176,8 +191,18 @@ impl AttributedString {
         let mut paragraphs = Vec::new();
         for r in self.ax_runs() {
             let range = r.utf16_start..r.utf16_start + r.utf16_len;
-            if let Some(p) = &r.attrs.paragraph {
-                paragraphs.push((range.clone(), p.clone()));
+            // A list item is indented by the marker gutter; the marker itself is drawn in that gutter.
+            let para = match (&r.attrs.paragraph, r.attrs.text_list) {
+                (p, Some(_)) => {
+                    let mut p = p.clone().unwrap_or_default();
+                    p.first_line_head_indent += LIST_INDENT_PT;
+                    p.head_indent += LIST_INDENT_PT;
+                    Some(p)
+                }
+                (p, None) => p.clone(),
+            };
+            if let Some(p) = para {
+                paragraphs.push((range.clone(), p));
             }
             spans.push((range, run_style(&r.attrs)));
         }
@@ -285,6 +310,8 @@ pub struct TextLayout {
     u16_at: Vec<usize>,
     /// Height of an empty string's one line, in points.
     empty_height: f32,
+    /// The list markers: character index of the item, marker text, and the style of the item's first character.
+    markers: Vec<(usize, String, RunStyle)>,
 }
 
 impl TextLayout {
@@ -309,7 +336,15 @@ impl TextLayout {
         }
         u16_at.push(u);
         let m = source.metrics(&run_style(&content.attributes_at(0)).effective_font());
-        TextLayout { framesetter, frame, scale, u16_at, empty_height: m.ascent + m.descent + m.leading }
+        let markers = content
+            .list_markers()
+            .into_iter()
+            .map(|(ch, text)| {
+                let style = run_style(&content.attributes_at(ch));
+                (ch, text, style)
+            })
+            .collect();
+        TextLayout { framesetter, frame, scale, u16_at, empty_height: m.ascent + m.descent + m.leading, markers }
     }
 
     pub fn frame(&self) -> &Frame {
@@ -373,6 +408,10 @@ impl TextLayout {
 
 /// The pad a rendered text image has around its glyphs, in px (see the font renderer).
 const IMAGE_PAD_PX: f32 = 2.0;
+
+/// The indent a list item gets for its marker, in points, and the space between the marker and the item.
+const LIST_INDENT_PT: f32 = 18.0;
+const LIST_MARKER_GAP_PT: f32 = 6.0;
 
 /// Draws text objects on a surface. Layout points become pixels through `scale`; (`ox`, `oy`) is the pixel origin.
 pub struct SurfacePainter<'a, 's> {
@@ -452,6 +491,16 @@ impl TextLayout {
         }
         let mut p = SurfacePainter { ui, surface: s, scale: self.scale, ox: x as f32, oy: y as f32 };
         self.frame.draw(&mut p, 0.0, 0.0);
+        for (ch, marker, style) in &self.markers {
+            let r = self.caret_px(*ch);
+            let font = style.effective_font();
+            let img = ui.text(marker, font.size, weight_of(font.weight), ui::WHITE);
+            let color = style.foreground.unwrap_or_else(|| system::LABEL.now());
+            let gap = LIST_MARKER_GAP_PT * self.scale;
+            let ix = (x as f32 + r.x - gap - img.w as f32 - IMAGE_PAD_PX).round() as i32;
+            let iy = (y as f32 + r.y - IMAGE_PAD_PX).round() as i32;
+            p.surface.blit_colored(&img, ix, iy, color, 255);
+        }
         if let Some(c) = caret {
             let r = self.caret_px(c);
             let w = ui.pt(1.0).round().max(1.0);
@@ -605,5 +654,32 @@ mod tests {
         s.set_paragraph_style(0..2, Some(ParagraphStyle { alignment: Alignment::Right, ..Default::default() }));
         let l = layout(&s, 100.0);
         assert_eq!(l.frame().line_origins()[0].0, 80.0);
+    }
+}
+
+#[cfg(test)]
+mod list_layout_tests {
+    use super::*;
+    use bifrost_ui::textlist::{Format, List as TextList};
+
+    #[test]
+    fn list_items_are_indented_for_their_markers() {
+        let mut s = AttributedString::plain("alpha\nbeta");
+        s.set_text_list_utf16(0..5, Some(TextList::new(Format::Disc)));
+        let input = s.layout_input();
+        let first = input.paragraphs.iter().find(|(r, _)| r.start == 0).expect("the list item has a paragraph entry");
+        assert_eq!(first.1.first_line_head_indent, LIST_INDENT_PT);
+        assert_eq!(first.1.head_indent, LIST_INDENT_PT);
+        assert!(input.paragraphs.iter().all(|(r, _)| r.start < 6), "the plain paragraph is not indented");
+    }
+
+    #[test]
+    fn list_item_indent_adds_to_an_existing_paragraph_style() {
+        let mut s = AttributedString::plain("alpha");
+        s.set_paragraph_style(0..5, Some(ParagraphStyle { head_indent: 4.0, ..Default::default() }));
+        s.set_text_list_utf16(0..5, Some(TextList::new(Format::Disc)));
+        let input = s.layout_input();
+        let (_, p) = input.paragraphs.last().expect("paragraph entry");
+        assert_eq!(p.head_indent, 4.0 + LIST_INDENT_PT);
     }
 }
