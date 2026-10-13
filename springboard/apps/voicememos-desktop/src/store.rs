@@ -18,7 +18,18 @@ pub struct Memo {
     /// sample rate in Hz and channel count from the WAV header (0 when the header is not 16-bit PCM)
     pub rate: u32,
     pub channels: u16,
+    /// the folder the recording sits in; empty at the top level
+    pub folder: String,
+    /// marked as a favourite (a hidden sidecar next to it)
+    pub favorite: bool,
+    /// in Recently Deleted
+    pub deleted: bool,
 }
+
+/// The hidden folder holding Recently Deleted recordings.
+pub const DELETED_DIR: &str = ".deleted";
+/// How long Recently Deleted keeps a recording before it is removed for good (30 days).
+pub const KEEP_DELETED_SECS: i64 = 30 * 24 * 3600;
 
 /// Sample rate and channel count of a 16-bit PCM WAV header; `None` for any other layout.
 fn pcm16_format(head: &[u8]) -> Option<(u32, u16)> {
@@ -30,7 +41,7 @@ fn pcm16_format(head: &[u8]) -> Option<(u32, u16)> {
     (tag == 1 && bits == 16 && channels > 0 && rate > 0).then_some((rate, channels))
 }
 
-fn read_memo(path: PathBuf) -> Option<Memo> {
+fn read_memo(path: PathBuf, folder: &str, deleted: bool) -> Option<Memo> {
     let md = std::fs::metadata(&path).ok()?;
     let mut head = [0u8; 44];
     std::fs::File::open(&path).ok()?.read_exact(&mut head).ok()?;
@@ -38,11 +49,12 @@ fn read_memo(path: PathBuf) -> Option<Memo> {
     let mtime = md.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs() as i64);
     let title = path.file_stem()?.to_string_lossy().into_owned();
     let (rate, channels) = pcm16_format(&head).unwrap_or((0, 0));
-    Some(Memo { path, title, duration_ms, mtime, rate, channels })
+    let favorite = is_favorite(&path);
+    Some(Memo { path, title, duration_ms, mtime, rate, channels, folder: folder.to_string(), favorite, deleted })
 }
 
-/// The memos in `dir`, newest first (hidden files and non-WAVs skipped).
-pub fn scan(dir: &Path) -> Vec<Memo> {
+/// The memos directly in `dir`, newest first (hidden files and non-WAVs skipped).
+fn scan_dir(dir: &Path, folder: &str, deleted: bool) -> Vec<Memo> {
     let mut out: Vec<Memo> = std::fs::read_dir(dir)
         .map(|d| {
             d.flatten()
@@ -50,12 +62,96 @@ pub fn scan(dir: &Path) -> Vec<Memo> {
                     let n = e.file_name().to_string_lossy().to_ascii_lowercase();
                     !n.starts_with('.') && n.ends_with(".wav")
                 })
-                .filter_map(|e| read_memo(e.path()))
+                .filter_map(|e| read_memo(e.path(), folder, deleted))
                 .collect()
         })
         .unwrap_or_default();
-    out.sort_by(|a, b| b.mtime.cmp(&a.mtime).then_with(|| b.title.cmp(&a.title)));
+    sort_newest(&mut out);
     out
+}
+
+fn sort_newest(memos: &mut [Memo]) {
+    memos.sort_by(|a, b| b.mtime.cmp(&a.mtime).then_with(|| b.title.cmp(&a.title)));
+}
+
+/// The recordings in `dir` and in its folders, newest first. Recently Deleted is not included (see `scan_deleted`).
+pub fn scan(dir: &Path) -> Vec<Memo> {
+    let mut out = scan_dir(dir, "", false);
+    for folder in folders(dir) {
+        out.extend(scan_dir(&dir.join(&folder), &folder, false));
+    }
+    sort_newest(&mut out);
+    out
+}
+
+/// The recordings in Recently Deleted, newest first.
+pub fn scan_deleted(dir: &Path) -> Vec<Memo> {
+    scan_dir(&dir.join(DELETED_DIR), "", true)
+}
+
+/// The folders in `dir`, sorted without regard to case. Hidden directories (Recently Deleted among them) are not folders.
+pub fn folders(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .map(|d| {
+            d.flatten()
+                .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .filter(|n| !n.starts_with('.'))
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort_by_key(|n| n.to_lowercase());
+    names
+}
+
+/// Creates a folder named `name` (sanitised) in `dir` and returns its name. An empty name, or one taken (without
+/// regard to case), is refused.
+pub fn create_folder(dir: &Path, name: &str) -> std::io::Result<String> {
+    let name = sanitize(name);
+    if name.is_empty() {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "empty folder name"));
+    }
+    if folders(dir).iter().any(|f| f.to_lowercase() == name.to_lowercase()) {
+        return Err(std::io::Error::new(std::io::ErrorKind::AlreadyExists, "a folder with that name exists"));
+    }
+    std::fs::create_dir_all(dir.join(&name))?;
+    Ok(name)
+}
+
+/// Deletes the folder `name`. Its recordings move up to `dir` first, so nothing is lost.
+pub fn delete_folder(dir: &Path, name: &str) -> std::io::Result<()> {
+    if !folders(dir).iter().any(|f| f == name) {
+        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "no such folder"));
+    }
+    let inside = dir.join(name);
+    for memo in scan_dir(&inside, name, false) {
+        move_to_folder(dir, &memo, "")?;
+    }
+    // what is left is hidden leftovers (sidecars of files that are gone)
+    std::fs::remove_dir_all(&inside)
+}
+
+/// Moves a recording into `folder` of `dir` (the top level when empty), with its sidecars. Returns the new path; a
+/// recording already there stays where it is.
+pub fn move_to_folder(dir: &Path, memo: &Memo, folder: &str) -> std::io::Result<PathBuf> {
+    let target = if folder.is_empty() { dir.to_path_buf() } else { dir.join(folder) };
+    if !target.is_dir() {
+        return Err(std::io::Error::new(std::io::ErrorKind::NotFound, "no such folder"));
+    }
+    if memo.path.parent() == Some(target.as_path()) {
+        return Ok(memo.path.clone());
+    }
+    let to = free_path(&target, &memo.title, None);
+    std::fs::rename(&memo.path, &to)?;
+    move_sidecars(&memo.path, &to)?;
+    Ok(to)
+}
+
+/// Whether `query` matches a recording: every word of it must appear, without regard to case, in one of its `fields`
+/// (the title, the notes). An empty query matches everything.
+pub fn matches(query: &str, fields: &[&str]) -> bool {
+    let haystack: Vec<String> = fields.iter().map(|f| f.to_lowercase()).collect();
+    query.to_lowercase().split_whitespace().all(|word| haystack.iter().any(|f| f.contains(word)))
 }
 
 /// A title safe as a file stem: no path separators or control characters, trimmed, capped.
@@ -85,19 +181,107 @@ pub fn rename(memo: &Memo, title: &str) -> std::io::Result<PathBuf> {
     let to = free_path(dir, &stem, Some(&memo.path));
     if to != memo.path {
         std::fs::rename(&memo.path, &to)?;
-        // the notes follow the recording (a missing notes file is not an error)
-        let (from_notes, to_notes) = (notes_path(&memo.path), notes_path(&to));
-        if from_notes.exists() {
-            std::fs::rename(&from_notes, &to_notes)?;
-        }
+        // the notes and the favourite mark follow the recording (a missing sidecar is not an error)
+        move_sidecars(&memo.path, &to)?;
     }
     Ok(to)
 }
 
-/// The notes sidecar of a recording: a hidden `.<stem>.notes.txt` next to it (the folder scan skips hidden files).
-pub fn notes_path(recording: &Path) -> PathBuf {
+/// The hidden files kept next to a recording, by the suffix after `.<stem>.`: its notes, the favourite mark and (in
+/// Recently Deleted) the deletion record.
+const SIDECARS: [&str; 3] = ["notes.txt", "favorite", "trashed"];
+
+/// A hidden file next to a recording: `.<stem>.<kind>` (the folder scan skips hidden files).
+pub fn sidecar_path(recording: &Path, kind: &str) -> PathBuf {
     let stem = recording.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    recording.with_file_name(format!(".{stem}.notes.txt"))
+    recording.with_file_name(format!(".{stem}.{kind}"))
+}
+
+/// Moves the sidecars of a recording that moved from `from` to `to`.
+fn move_sidecars(from: &Path, to: &Path) -> std::io::Result<()> {
+    for kind in SIDECARS {
+        let source = sidecar_path(from, kind);
+        if source.exists() {
+            std::fs::rename(&source, sidecar_path(to, kind))?;
+        }
+    }
+    Ok(())
+}
+
+/// The notes sidecar of a recording: a hidden `.<stem>.notes.txt` next to it.
+pub fn notes_path(recording: &Path) -> PathBuf {
+    sidecar_path(recording, "notes.txt")
+}
+
+/// Whether a recording is marked as a favourite.
+pub fn is_favorite(recording: &Path) -> bool {
+    sidecar_path(recording, "favorite").exists()
+}
+
+/// Marks or unmarks a recording as a favourite.
+pub fn set_favorite(recording: &Path, on: bool) -> std::io::Result<()> {
+    let path = sidecar_path(recording, "favorite");
+    if on {
+        return springboard::shell::fsutil::write_atomic(&path, b"1");
+    }
+    match std::fs::remove_file(&path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
+}
+
+/// Moves a recording to Recently Deleted, with its sidecars, and notes when and from which folder so a recover can put
+/// it back. Returns the new path.
+pub fn trash(dir: &Path, memo: &Memo, now_unix: i64) -> std::io::Result<PathBuf> {
+    let bin = dir.join(DELETED_DIR);
+    std::fs::create_dir_all(&bin)?;
+    let to = free_path(&bin, &memo.title, None);
+    std::fs::rename(&memo.path, &to)?;
+    move_sidecars(&memo.path, &to)?;
+    springboard::shell::fsutil::write_atomic(&sidecar_path(&to, "trashed"), format!("{now_unix}\n{}", memo.folder).as_bytes())?;
+    Ok(to)
+}
+
+/// The deletion record of a recording in Recently Deleted: when (Unix seconds) and from which folder.
+fn trashed_record(recording: &Path) -> Option<(i64, String)> {
+    let text = std::fs::read_to_string(sidecar_path(recording, "trashed")).ok()?;
+    let mut lines = text.lines();
+    let at = lines.next()?.trim().parse().ok()?;
+    Some((at, lines.next().unwrap_or("").to_string()))
+}
+
+/// Takes a recording out of Recently Deleted, back into the folder it came from (the top level when that folder is
+/// gone). Returns the new path.
+pub fn recover(dir: &Path, memo: &Memo) -> std::io::Result<PathBuf> {
+    let from = trashed_record(&memo.path).map(|(_, folder)| folder).unwrap_or_default();
+    let target = if !from.is_empty() && folders(dir).contains(&from) { dir.join(&from) } else { dir.to_path_buf() };
+    let _ = std::fs::remove_file(sidecar_path(&memo.path, "trashed"));
+    let to = free_path(&target, &memo.title, None);
+    std::fs::rename(&memo.path, &to)?;
+    move_sidecars(&memo.path, &to)?;
+    Ok(to)
+}
+
+/// Removes a recording and its sidecars for good.
+pub fn delete_forever(memo: &Memo) -> std::io::Result<()> {
+    std::fs::remove_file(&memo.path)?;
+    for kind in SIDECARS {
+        let _ = std::fs::remove_file(sidecar_path(&memo.path, kind));
+    }
+    Ok(())
+}
+
+/// Removes the recordings that have been in Recently Deleted longer than `KEEP_DELETED_SECS`; returns how many went.
+/// Does nothing when `now_unix` is not a real time (0 or less), and keeps a recording that has no deletion record.
+pub fn purge_expired(dir: &Path, now_unix: i64) -> usize {
+    if now_unix <= 0 {
+        return 0;
+    }
+    scan_deleted(dir)
+        .iter()
+        .filter(|m| trashed_record(&m.path).is_some_and(|(at, _)| now_unix - at > KEEP_DELETED_SECS))
+        .filter(|m| delete_forever(m).is_ok())
+        .count()
 }
 
 /// The notes of a recording; empty when it has none or the file cannot be read.
@@ -115,14 +299,6 @@ pub fn write_notes(recording: &Path, text: &str) -> std::io::Result<()> {
         };
     }
     springboard::shell::fsutil::write_atomic(&path, text.as_bytes())
-}
-
-/// Copies a recording into `dir` as `<title>.wav` (numbered when taken). The original stays where it is.
-pub fn export_copy(memo: &Memo, dir: &Path) -> std::io::Result<PathBuf> {
-    std::fs::create_dir_all(dir)?;
-    let path = free_path(dir, &memo.title, None);
-    std::fs::copy(&memo.path, &path)?;
-    Ok(path)
 }
 
 #[cfg(test)]
@@ -156,6 +332,79 @@ pub fn format_title(rate: u32, channels: u16) -> String {
         n => format!("{n} channels"),
     };
     format!("{khz} {layout}")
+}
+
+fn invalid(message: &str) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, message.to_string())
+}
+
+/// A 16-bit PCM WAV as its sample rate, channel count and interleaved samples; `None` for any other file.
+fn read_pcm16(path: &Path) -> Option<(u32, u16, Vec<i16>)> {
+    let bytes = std::fs::read(path).ok()?;
+    let (rate, channels) = pcm16_format(&bytes)?;
+    let samples = bytes.get(44..)?.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
+    Some((rate, channels, samples))
+}
+
+/// Where part `n` of the take that ends up as `target` is written while it is recorded: a hidden file next to it, so
+/// the folder scan does not list it. A take that is paused and resumed is recorded in parts.
+pub fn part_path(target: &Path, n: usize) -> PathBuf {
+    sidecar_path(target, &format!("part{n}.wav"))
+}
+
+/// Joins the parts of a take, in order, into the WAV `out`, then removes the parts. One part is moved as it is. The
+/// parts must be 16-bit PCM of one format; nothing is removed when they are not.
+pub fn join_parts(parts: &[PathBuf], out: &Path) -> std::io::Result<()> {
+    if let [only] = parts {
+        return std::fs::rename(only, out);
+    }
+    let mut format: Option<(u32, u16)> = None;
+    let mut samples: Vec<i16> = Vec::new();
+    for part in parts {
+        let (rate, channels, data) = read_pcm16(part).ok_or_else(|| invalid("a part is not a 16-bit WAV"))?;
+        match format {
+            None => format = Some((rate, channels)),
+            Some(f) if f != (rate, channels) => return Err(invalid("the parts differ in format")),
+            Some(_) => {}
+        }
+        samples.extend(data);
+    }
+    let (rate, channels) = format.ok_or_else(|| invalid("nothing was recorded"))?;
+    springboard::shell::fsutil::write_atomic(out, &wav_bytes(&pcm16(rate, channels as u32), &samples))?;
+    for part in parts {
+        let _ = std::fs::remove_file(part);
+    }
+    Ok(())
+}
+
+/// `samples` (interleaved, `channels` wide) with the span from `start` to `end` seconds replaced by `insert`.
+/// A span past the end is cut to the end, and an end before the start replaces nothing (it inserts at the start).
+pub fn splice_samples(samples: &[i16], rate: u32, channels: u16, start: f64, end: f64, insert: &[i16]) -> Vec<i16> {
+    let width = channels.max(1) as usize;
+    let frames = samples.len() / width;
+    let at = |seconds: f64| ((seconds * rate as f64).round().max(0.0) as usize).min(frames) * width;
+    let first = at(start);
+    let last = at(end).max(first);
+    let mut out = Vec::with_capacity(first + insert.len() + frames * width - last);
+    out.extend_from_slice(&samples[..first]);
+    out.extend_from_slice(insert);
+    out.extend_from_slice(&samples[last..frames * width]);
+    out
+}
+
+/// Writes `memo` with the span from `start` to `end` seconds replaced by the recording `take`, as a new memo named
+/// `<title> replaced` (numbered when taken). The original stays. The two must be one format.
+pub fn save_replaced(memo: &Memo, start: f64, end: f64, take: &Path) -> std::io::Result<PathBuf> {
+    let (rate, channels, original) = read_pcm16(&memo.path).ok_or_else(|| invalid("not a 16-bit WAV"))?;
+    let (take_rate, take_channels, new) = read_pcm16(take).ok_or_else(|| invalid("the new take is not a 16-bit WAV"))?;
+    if (rate, channels) != (take_rate, take_channels) {
+        return Err(invalid("the new take differs in format from the recording"));
+    }
+    let joined = splice_samples(&original, rate, channels, start, end, &new);
+    let dir = memo.path.parent().unwrap_or(Path::new("."));
+    let path = free_path(dir, &format!("{} replaced", memo.title), None);
+    springboard::shell::fsutil::write_atomic(&path, &wav_bytes(&pcm16(rate, channels as u32), &joined))?;
+    Ok(path)
 }
 
 /// The kept part of a 16-bit PCM WAV as a new WAV (`trim` in seconds). `None` when the file is not 16-bit PCM.
@@ -321,19 +570,231 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    fn tone(dir: &Path, stamp: &str, samples: usize, unix: i64) -> PathBuf {
+        save(dir, stamp, &wav_bytes(&pcm16(8000, 1), &vec![100; samples]), unix).unwrap()
+    }
+
     #[test]
-    fn export_copies_the_recording_and_keeps_the_original() {
-        let dir = temp("export");
-        let out = dir.join("Downloads");
-        let wav = wav_bytes(&pcm16(8000, 1), &vec![0; 800]);
-        let a = save(&dir, "20261012-090500", &wav, 1_000).unwrap();
+    fn a_favourite_mark_is_hidden_follows_the_rename_and_clears() {
+        let dir = temp("fav");
+        let path = tone(&dir, "20261013-080000", 800, 1_000);
+        assert!(!scan(&dir)[0].favorite);
+        set_favorite(&path, true).unwrap();
+        assert!(is_favorite(&path));
+        assert_eq!(scan(&dir).len(), 1, "the mark is not listed as a recording");
+        assert!(scan(&dir)[0].favorite);
+        let moved = rename(&scan(&dir)[0], "Idea").unwrap();
+        assert!(is_favorite(&moved) && !is_favorite(&path), "the mark follows the recording");
+        set_favorite(&moved, false).unwrap();
+        assert!(!scan(&dir)[0].favorite);
+        assert!(set_favorite(&moved, false).is_ok(), "clearing a missing mark is not an error");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn folders_hold_recordings_and_a_move_takes_the_sidecars_along() {
+        let dir = temp("folders");
+        let path = tone(&dir, "20261013-080000", 800, 1_000);
+        write_notes(&path, "agenda").unwrap();
+        set_favorite(&path, true).unwrap();
+        assert_eq!(create_folder(&dir, "  Work ").unwrap(), "Work");
+        assert!(create_folder(&dir, "work").is_err(), "a name taken, in any case, is refused");
+        assert!(create_folder(&dir, " / ").is_err(), "an empty name is refused");
+        assert_eq!(create_folder(&dir, "archive").unwrap(), "archive");
+        assert_eq!(folders(&dir), vec!["archive".to_string(), "Work".to_string()], "sorted without regard to case");
+
         let memo = scan(&dir).remove(0);
-        let first = export_copy(&memo, &out).unwrap();
-        assert_eq!(first.file_name().unwrap(), "Voice Memo 20261012-090500.wav");
-        assert_eq!(std::fs::read(&first).unwrap(), wav, "the copy holds the same bytes");
-        let second = export_copy(&memo, &out).unwrap();
-        assert_eq!(second.file_name().unwrap(), "Voice Memo 20261012-090500 2.wav", "a second export is numbered");
-        assert!(a.exists(), "the original stays");
+        assert_eq!(memo.folder, "");
+        let moved = move_to_folder(&dir, &memo, "Work").unwrap();
+        assert_eq!(moved.parent().unwrap(), dir.join("Work"));
+        assert!(!path.exists() && moved.exists());
+        assert_eq!(read_notes(&moved), "agenda");
+        assert!(is_favorite(&moved));
+        let listed = scan(&dir);
+        assert_eq!(listed.len(), 1, "the scan finds recordings inside folders");
+        assert_eq!(listed[0].folder, "Work");
+        assert_eq!(move_to_folder(&dir, &listed[0], "Work").unwrap(), moved, "already there: nothing moves");
+        assert!(move_to_folder(&dir, &listed[0], "Nope").is_err());
+
+        let back = move_to_folder(&dir, &listed[0], "").unwrap();
+        assert_eq!(back, path, "an empty folder name is the top level");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn deleting_a_folder_moves_its_recordings_up() {
+        let dir = temp("folder-delete");
+        create_folder(&dir, "Trips").unwrap();
+        let path = tone(&dir, "20261013-080000", 800, 1_000);
+        let moved = move_to_folder(&dir, &scan(&dir)[0], "Trips").unwrap();
+        write_notes(&moved, "packing list").unwrap();
+        delete_folder(&dir, "Trips").unwrap();
+        assert!(folders(&dir).is_empty() && !dir.join("Trips").exists());
+        let listed = scan(&dir);
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].path, path);
+        assert_eq!(read_notes(&path), "packing list");
+        assert!(delete_folder(&dir, "Trips").is_err(), "a folder that is gone cannot be deleted again");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_deleted_recording_waits_in_recently_deleted_and_can_be_recovered() {
+        let dir = temp("trash");
+        create_folder(&dir, "Work").unwrap();
+        tone(&dir, "20261013-080000", 800, 1_000);
+        let memo = move_to_folder(&dir, &scan(&dir)[0], "Work").unwrap();
+        write_notes(&memo, "keep me").unwrap();
+        let listed = scan(&dir).remove(0);
+
+        let bin = trash(&dir, &listed, 5_000).unwrap();
+        assert!(scan(&dir).is_empty(), "a deleted recording leaves the list");
+        let deleted = scan_deleted(&dir);
+        assert_eq!(deleted.len(), 1);
+        assert!(deleted[0].deleted && deleted[0].path == bin);
+        assert!(!folders(&dir).contains(&".deleted".to_string()), "Recently Deleted is not a folder");
+        assert_eq!(read_notes(&bin), "keep me", "the notes go with it");
+
+        let back = recover(&dir, &deleted[0]).unwrap();
+        assert_eq!(back.parent().unwrap(), dir.join("Work"), "it returns to its folder");
+        assert!(scan_deleted(&dir).is_empty());
+        assert_eq!(read_notes(&back), "keep me");
+        assert!(!sidecar_path(&back, "trashed").exists(), "the deletion record is gone");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_recovered_recording_goes_to_the_top_level_when_its_folder_is_gone() {
+        let dir = temp("trash-gone");
+        create_folder(&dir, "Work").unwrap();
+        tone(&dir, "20261013-080000", 800, 1_000);
+        move_to_folder(&dir, &scan(&dir)[0], "Work").unwrap();
+        trash(&dir, &scan(&dir)[0], 5_000).unwrap();
+        delete_folder(&dir, "Work").unwrap();
+        let back = recover(&dir, &scan_deleted(&dir)[0]).unwrap();
+        assert_eq!(back.parent().unwrap(), dir);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn delete_forever_removes_the_recording_and_its_sidecars() {
+        let dir = temp("forever");
+        let path = tone(&dir, "20261013-080000", 800, 1_000);
+        write_notes(&path, "x").unwrap();
+        let bin = trash(&dir, &scan(&dir)[0], 5_000).unwrap();
+        delete_forever(&scan_deleted(&dir)[0]).unwrap();
+        assert!(!bin.exists() && !notes_path(&bin).exists() && !sidecar_path(&bin, "trashed").exists());
+        assert!(scan_deleted(&dir).is_empty());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn recently_deleted_is_purged_after_thirty_days() {
+        let dir = temp("purge");
+        let now = 100 * 24 * 3600;
+        tone(&dir, "20261013-080000", 800, 1_000);
+        tone(&dir, "20261013-090000", 800, 2_000);
+        let (old, recent) = {
+            let list = scan(&dir);
+            (list[1].clone(), list[0].clone())
+        };
+        trash(&dir, &old, now - KEEP_DELETED_SECS - 1).unwrap();
+        trash(&dir, &recent, now - KEEP_DELETED_SECS + 60).unwrap();
+        assert_eq!(purge_expired(&dir, 0), 0, "with no real clock nothing is removed");
+        assert_eq!(purge_expired(&dir, now), 1);
+        let left = scan_deleted(&dir);
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].title, recent.title, "the newer deletion stays");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn search_needs_every_word_in_the_title_or_the_notes() {
+        assert!(matches("", &["anything"]));
+        assert!(matches("standup", &["Team Standup", ""]));
+        assert!(matches("STANDUP  team", &["Team Standup", ""]), "any case, any spacing");
+        assert!(matches("milk", &["Voice Memo", "Buy milk and eggs"]), "the notes are searched");
+        assert!(matches("voice milk", &["Voice Memo", "Buy milk and eggs"]), "the words may come from different fields");
+        assert!(!matches("bread", &["Voice Memo", "Buy milk and eggs"]));
+        assert!(!matches("milk bread", &["Voice Memo", "Buy milk and eggs"]), "every word must be found");
+    }
+
+    #[test]
+    fn parts_of_a_paused_take_join_in_order_and_one_part_is_just_renamed() {
+        let dir = temp("join");
+        let target = dir.join("Voice Memo X.wav");
+        let (p0, p1) = (part_path(&target, 0), part_path(&target, 1));
+        assert_eq!(p1.file_name().unwrap(), ".Voice Memo X.part1.wav");
+        std::fs::write(&p0, wav_bytes(&pcm16(8000, 1), &vec![1i16; 4000])).unwrap();
+        std::fs::write(&p1, wav_bytes(&pcm16(8000, 1), &vec![2i16; 2000])).unwrap();
+        assert!(scan(&dir).is_empty(), "the parts are hidden");
+        join_parts(&[p0.clone(), p1.clone()], &target).unwrap();
+        assert!(!p0.exists() && !p1.exists(), "the parts are removed once joined");
+        let memo = scan(&dir).remove(0);
+        assert_eq!(memo.duration_ms, 750);
+        let (_, _, samples) = read_pcm16(&target).unwrap();
+        assert_eq!((samples[0], samples[3999], samples[4000], samples[5999]), (1, 1, 2, 2));
+
+        let single = part_path(&dir.join("Other.wav"), 0);
+        let bytes = wav_bytes(&pcm16(8000, 1), &vec![3i16; 800]);
+        std::fs::write(&single, &bytes).unwrap();
+        join_parts(&[single.clone()], &dir.join("Other.wav")).unwrap();
+        assert_eq!(std::fs::read(dir.join("Other.wav")).unwrap(), bytes, "one part moves unchanged");
+        assert!(!single.exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn parts_in_different_formats_or_none_are_refused_and_kept() {
+        let dir = temp("join-bad");
+        let target = dir.join("T.wav");
+        let (p0, p1) = (part_path(&target, 0), part_path(&target, 1));
+        std::fs::write(&p0, wav_bytes(&pcm16(8000, 1), &vec![1i16; 800])).unwrap();
+        std::fs::write(&p1, wav_bytes(&pcm16(16000, 1), &vec![1i16; 800])).unwrap();
+        assert!(join_parts(&[p0.clone(), p1.clone()], &target).is_err());
+        assert!(p0.exists() && p1.exists() && !target.exists(), "nothing is lost when the join fails");
+        assert!(join_parts(&[], &target).is_err(), "no parts, no recording");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn splicing_replaces_the_span_and_the_length_follows_the_new_take() {
+        let original: Vec<i16> = (0..8000).collect();
+        let insert = vec![-1i16; 2000];
+        // replace 0.25 s to 0.5 s (samples 2000..4000) with 0.25 s of -1
+        let out = splice_samples(&original, 8000, 1, 0.25, 0.5, &insert);
+        assert_eq!(out.len(), 8000);
+        assert_eq!((out[1999], out[2000], out[3999], out[4000]), (1999, -1, -1, 4000));
+        // a longer take makes the recording longer
+        let longer = splice_samples(&original, 8000, 1, 0.25, 0.5, &vec![0i16; 4000]);
+        assert_eq!(longer.len(), 10_000);
+        // a span past the end is cut to the end, an end before the start inserts
+        assert_eq!(splice_samples(&original, 8000, 1, 0.9, 5.0, &insert).len(), 7200 + 2000);
+        assert_eq!(splice_samples(&original, 8000, 1, 0.5, 0.25, &insert).len(), 10_000);
+        // stereo keeps frames whole
+        let stereo: Vec<i16> = (0..16_000).collect();
+        let out = splice_samples(&stereo, 8000, 2, 0.5, 1.0, &[7, 7]);
+        assert_eq!(out.len(), 8000 + 2 + 0);
+        assert_eq!(&out[8000..], &[7, 7]);
+    }
+
+    #[test]
+    fn a_replaced_copy_keeps_the_original_and_refuses_another_format() {
+        let dir = temp("replace");
+        let samples: Vec<i16> = (0..8000).map(|i| i as i16).collect();
+        let src = save(&dir, "20261013-100000", &wav_bytes(&pcm16(8000, 1), &samples), 100).unwrap();
+        let take = dir.join(".take.wav");
+        std::fs::write(&take, wav_bytes(&pcm16(8000, 1), &vec![0i16; 2000])).unwrap();
+        let memo = scan(&dir).remove(0);
+        let copy = save_replaced(&memo, 0.25, 0.5, &take).unwrap();
+        assert_eq!(copy.file_name().unwrap(), "Voice Memo 20261013-100000 replaced.wav");
+        assert!(src.exists(), "the original stays");
+        let (_, _, back) = read_pcm16(&copy).unwrap();
+        assert_eq!((back.len(), back[1999], back[2000], back[4000]), (8000, 1999, 0, 4000));
+
+        let other = dir.join(".other.wav");
+        std::fs::write(&other, wav_bytes(&pcm16(16000, 1), &vec![0i16; 100])).unwrap();
+        assert!(save_replaced(&memo, 0.25, 0.5, &other).is_err());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

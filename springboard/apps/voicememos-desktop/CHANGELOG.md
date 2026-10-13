@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.8.0 — 2026-10-13
+
+- Search: a search field under the sidebar title narrows the list by title and notes (every word must match).
+- Favourites: a star button in the toolbar and Library > Favourite mark a recording; the Favourites row lists them.
+- Folders: Library > New Folder, Move to Folder and Delete Folder (its recordings move up). Folders are directories of
+  the memo folder and appear as rows in the sidebar; a recording made while a folder is shown is filed in it.
+- Recently Deleted: Delete moves a recording to a hidden folder instead of removing it. The Recently Deleted row has
+  Recover (back to its folder) and Delete Forever; recordings go for good after 30 days.
+- Pause and resume recording: a Pause button beside Record and Recording > Pause Recording. A take is written in parts
+  (the audio service has no pause), one per pause, and joined when the take ends.
+- Replace: Recording > Replace picks a span with the trim handles, records over it and saves a new copy
+  "<title> replaced" with the span swapped for the new take. The original is kept.
+- Export asks where to save through the save panel instead of copying to Downloads.
+- Recording > Input lists the input devices and sets the default one.
+- Playback speed and Transcription are not in this version: the audio service takes no rate, and the system has no
+  speech recogniser yet.
+
 ## 1.7.0 — 2026-10-13
 
 - Enhance Recording (Recording menu): saves a noise-gated copy of the selected take as "<title> enhanced". Quiet

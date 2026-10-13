@@ -11,7 +11,9 @@ use bifrost_app::kit::ui::{home_zone, CARD_BG, CONTROL_PRESSED, CONTENT_BG, FIEL
 use bifrost_app::controls::values::Slider;
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::layout::{Layout, SIDEBAR_FRACTION, SIDEBAR_MAX_PT, SIDEBAR_MIN_PT};
-use bifrost_app::kit::ui::{DISPLAY_SMALL_PT, MAC_CALLOUT_PT, MAC_TITLE3_PT};
+use bifrost_app::kit::ui::{DISPLAY_SMALL_PT, MAC_CALLOUT_PT, MAC_LARGE_TITLE_PT, MAC_TITLE3_PT};
+use bifrost_app::controls::search;
+use bifrost_app::controls::TextField as QueryField;
 use bifrost_app::kit::{Event, Surface, TextCache, Ui, Weight};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::prefs_layout::m as gg;
@@ -71,6 +73,10 @@ const BAR_RENAME: u32 = 1;
 const BAR_DELETE: u32 = 2;
 const BAR_TRIM: u32 = 3;
 const BAR_NOTES: u32 = 4;
+/// Recently Deleted: put the recording back.
+const BAR_RECOVER: u32 = 5;
+/// Mark or unmark the recording as a favourite.
+const BAR_FAVORITE: u32 = 6;
 /// Menu item ids of the "Recording" app menu (`main.rs` builds it, `VoiceMemos::menu` runs it).
 pub const MENU_TRIM: u32 = 1;
 pub const MENU_NOTES: u32 = 2;
@@ -80,14 +86,38 @@ pub const MENU_SPLIT: u32 = 5;
 pub const MENU_SKIP: u32 = 6;
 /// Enhance Recording: saves a noise-gated copy of the selected take.
 pub const MENU_ENHANCE: u32 = 7;
+/// Mark or unmark the selected recording as a favourite.
+pub const MENU_FAVORITE: u32 = 8;
+/// Pause the recording, or resume a paused one.
+pub const MENU_PAUSE: u32 = 9;
+/// Replace a span of the selected recording with a new take.
+pub const MENU_REPLACE: u32 = 10;
+/// Ask for a name and create a folder.
+pub const MENU_NEW_FOLDER: u32 = 11;
+/// Delete the folder being shown; its recordings move up to All Recordings.
+pub const MENU_DELETE_FOLDER: u32 = 12;
+/// Move to Folder: this id is "no folder", and `MENU_MOVE + 1 + n` is folder `n` of the list.
+pub const MENU_MOVE: u32 = 100;
+/// The input device submenu: `MENU_INPUT + n` is input `n` of the list.
+pub const MENU_INPUT: u32 = 300;
 /// Line height of the notes text (points), about 1.3 times the body size.
 const NOTES_LINE_PT: f32 = 17.0;
 /// Corner radius of the rename field card (prefs layout card radius, points).
 const RADIUS: f32 = gg::CARD_RADIUS;
 /// Height of one recording row in the sidebar source list (points, two lines: title and date).
 const ROW: f32 = 72.0;
-/// Top of the recordings list, below the large title (points).
+/// Top of the search field, below the large title (points), and its height.
 const LIST_TOP: f32 = 100.0;
+const SEARCH_H: f32 = 28.0;
+/// Top of the sidebar list, below the search field (points).
+const LIST_ROWS_TOP: f32 = LIST_TOP + SEARCH_H + SPACE_S;
+/// Height of a place row (All Recordings, Favourites, a folder, Recently Deleted) and of the "Recordings" header (points).
+const PLACE_ROW: f32 = 32.0;
+const PLACE_HEADER: f32 = 28.0;
+/// Sidebar ids from here up are places; below are recordings (indexes into the memo list).
+const PLACE_BASE: u32 = 1_000_000;
+/// The longest search text.
+const MAX_QUERY: usize = 80;
 /// Rename and transport button sizes (points).
 const BUTTON_W: f32 = 100.0;
 const BUTTON_H: f32 = 44.0;
@@ -109,6 +139,8 @@ const CTL_FORWARD: u64 = 13;
 const CTL_CANCEL: u64 = 14;
 const CTL_DONE: u64 = 15;
 const CTL_VOLUME: u64 = 17;
+const CTL_SEARCH: u64 = 18;
+const CTL_PAUSE: u64 = 19;
 /// The input meter's scale in dB: silence at the floor, full scale at 0 dB.
 const METER_FLOOR_DB: f32 = -60.0;
 /// The input meter's bar height and the gap from the timer to the bar (points).
@@ -129,7 +161,15 @@ const START_TIMEOUT_MS: f64 = 4_000.0;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Target {
     Row(usize),
+    /// a place in the sidebar, by its position in `places()`
+    Place(usize),
+    Search,
+    SearchClear,
     Record,
+    /// pause the recording, or resume a paused one
+    Pause,
+    Recover,
+    Favorite,
     Play,
     Back,
     Forward,
@@ -153,9 +193,55 @@ struct NotesEdit {
     view: TextView,
 }
 
+/// What the text field in the editor names.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum EditKind {
+    Rename,
+    NewFolder,
+}
+
 struct Editor {
     memo: usize,
     field: TextField,
+    kind: EditKind,
+}
+
+/// Which recordings the sidebar lists.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Scope {
+    All,
+    Favorites,
+    Folder(String),
+    Deleted,
+}
+
+/// A span of a recording being replaced by the take in progress (seconds).
+#[derive(Clone, Debug, PartialEq)]
+struct Replacement {
+    memo: PathBuf,
+    start: f64,
+    end: f64,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum StopFor {
+    Pause,
+    Finish,
+}
+
+/// A take in progress. It is recorded in parts so it can be paused and resumed: each pause closes the part being
+/// written and each resume opens the next, and the parts are joined when the take ends.
+struct Take {
+    /// where the recording ends up (for a replacement take, only the name the parts are filed under)
+    target: PathBuf,
+    /// the parts the service has finished, in order
+    parts: Vec<PathBuf>,
+    /// the part being written, or the one just written while paused
+    current: PathBuf,
+    /// the service was asked to close the part, for a pause or for the end
+    stop_for: Option<StopFor>,
+    paused: bool,
+    replace: Option<Replacement>,
 }
 
 /// A trim in progress on the selected memo: the kept range in seconds, and which handle a drag moves
@@ -164,6 +250,8 @@ struct TrimEdit {
     memo: usize,
     range: Trim,
     drag: Option<bool>,
+    /// the span is replaced by a new take (Replace) instead of cut out (Trim)
+    replace: bool,
 }
 
 /// The media session: the commands this app supports. Next and previous are left unsupported.
@@ -186,14 +274,27 @@ pub struct VoiceMemos {
     w: i32,
     h: i32,
     dir: PathBuf,
+    /// every recording, folders and Recently Deleted included
     memos: Vec<Memo>,
+    /// the folders of the library, sorted
+    folders: Vec<String>,
+    /// the recordings the sidebar lists: indexes into `memos`, for the scope and the search
+    visible: Vec<usize>,
+    scope: Scope,
+    /// the search text, and whether it has the keyboard
+    query: QueryField,
+    search_focused: bool,
     selected: Option<usize>,
     confirm_delete: bool,
     audio: audio::Client,
     /// a recording was started (`RecordStart` sent) and has not finished yet
     recording: bool,
-    /// where the service writes it; the memo appears when it reports `RecordDone`
+    /// where the service writes the part being recorded; the memo appears when the take ends
     recording_path: Option<PathBuf>,
+    /// the take in progress (also while paused)
+    take: Option<Take>,
+    /// how much of the take the finished parts hold
+    rec_base_ms: u64,
     /// the service reported the recording active
     rec_seen: bool,
     rec_elapsed_ms: u64,
@@ -228,6 +329,8 @@ pub struct VoiceMemos {
     /// the default input device, from the audio-devices service
     input_id: Option<String>,
     input_name: Option<String>,
+    /// the input devices, as (id, name)
+    inputs: Vec<(String, String)>,
     /// the input device when the current recording started
     record_input: Option<String>,
     /// a line about the input that replaces the microphone caption (an input change during a recording)
@@ -253,17 +356,25 @@ pub struct VoiceMemos {
 impl VoiceMemos {
     /// Lists the folder; opens no device.
     pub fn new(ui: &Ui, w: i32, h: i32, dir: PathBuf, wall: Wall, shell_dir: &Path) -> Self {
-        let memos = store::scan(&dir);
-        Self {
+        // a recording that has been in Recently Deleted for 30 days goes for good
+        let _ = store::purge_expired(&dir, wall.now(0.0));
+        let mut app = Self {
             w,
             h,
             dir,
-            memos,
+            memos: Vec::new(),
+            folders: Vec::new(),
+            visible: Vec::new(),
+            scope: Scope::All,
+            query: QueryField::new(),
+            search_focused: false,
             selected: None,
             confirm_delete: false,
             audio: audio::Client::for_root(shell_dir),
             recording: false,
             recording_path: None,
+            take: None,
+            rec_base_ms: 0,
             rec_seen: false,
             rec_elapsed_ms: 0,
             playing: None,
@@ -292,6 +403,7 @@ impl VoiceMemos {
             mic: None,
             input_id: None,
             input_name: None,
+            inputs: Vec::new(),
             record_input: None,
             notice: String::new(),
             wants: vec![Want::MicStatus, Want::ListDevices],
@@ -302,7 +414,9 @@ impl VoiceMemos {
             skip_silence: false,
             spans: Vec::new(),
             skip_guard: 0.0,
-        }
+        };
+        app.reload();
+        app
     }
 
     /// The service calls queued since the last call. The app sends them with its `services::Bus`.
@@ -326,6 +440,7 @@ impl VoiceMemos {
                 _ => {
                     self.input_id = None;
                     self.input_name = None;
+                    self.inputs.clear();
                 }
             },
         }
@@ -345,6 +460,19 @@ impl VoiceMemos {
         }
         self.input_id = id;
         self.input_name = name;
+        self.inputs = listing.devices.iter().filter(|d| d.input).map(|d| (d.id.clone(), d.name.clone())).collect();
+    }
+
+    /// Chooses the input device for recording (the Recording menu's Input submenu). The shell reports the change and
+    /// the app asks for the list again.
+    fn choose_input(&mut self, n: usize) {
+        let Some((id, name)) = self.inputs.get(n).cloned() else { return };
+        if self.recording {
+            self.error = "Stop the recording before changing the input".into();
+            return;
+        }
+        self.wants.push(Want::SetInput(id));
+        self.notice = format!("Input changed to {name}");
     }
 
     /// A transport command from the shell (the media tile, a keyboard media key). Only the commands declared on the
@@ -398,12 +526,132 @@ impl VoiceMemos {
         self.audio.pump();
     }
 
+    /// Reads the library again: the recordings, the folders and Recently Deleted.
     fn reload(&mut self) {
-        self.memos = store::scan(&self.dir);
+        self.folders = store::folders(&self.dir);
+        let mut all = store::scan(&self.dir);
+        all.extend(store::scan_deleted(&self.dir));
+        self.memos = all;
         self.selected = self.selected.filter(|&i| i < self.memos.len());
+        // the folder being shown went away
+        let gone = matches!(&self.scope, Scope::Folder(name) if !self.folders.contains(name));
+        if gone {
+            self.scope = Scope::All;
+        }
+        self.refilter();
+    }
+
+    /// Whether `memo` belongs in the place the sidebar shows now.
+    fn in_scope(&self, memo: &Memo) -> bool {
+        Self::in_place(&self.scope, memo)
+    }
+
+    fn in_place(scope: &Scope, memo: &Memo) -> bool {
+        match scope {
+            Scope::Deleted => memo.deleted,
+            _ if memo.deleted => false,
+            Scope::All => true,
+            Scope::Favorites => memo.favorite,
+            Scope::Folder(name) => &memo.folder == name,
+        }
+    }
+
+    /// Recomputes which recordings the sidebar lists: those in the scope that match the search text (title or notes).
+    fn refilter(&mut self) {
+        let query = self.query.to_string();
+        let visible: Vec<usize> = (0..self.memos.len())
+            .filter(|&i| {
+                let memo = &self.memos[i];
+                if !self.in_scope(memo) {
+                    return false;
+                }
+                if query.trim().is_empty() {
+                    return true;
+                }
+                let notes = store::read_notes(&memo.path);
+                store::matches(&query, &[memo.title.as_str(), notes.as_str()])
+            })
+            .collect();
+        self.visible = visible;
+        self.dirty = true;
+    }
+
+    /// Clears the selection when the search or the scope hides the selected recording.
+    fn drop_hidden_selection(&mut self) {
+        if self.selected.is_some_and(|i| !self.visible.contains(&i)) {
+            self.end_playback();
+            self.selected = None;
+            self.confirm_delete = false;
+        }
+    }
+
+    /// Selects the recording at `path`. When the scope or the search hides it, the library is shown whole (or
+    /// Recently Deleted, for a deleted one) so the selection is visible.
+    fn select_path(&mut self, path: &Path) {
+        self.selected = self.memos.iter().position(|m| m.path == path);
+        let Some(i) = self.selected else { return };
+        if !self.visible.contains(&i) {
+            self.scope = if self.memos[i].deleted { Scope::Deleted } else { Scope::All };
+            self.query.clear();
+            self.refilter();
+        }
+    }
+
+    /// The places of the sidebar, in order: All Recordings, Favourites, the folders, Recently Deleted.
+    fn places(&self) -> Vec<Scope> {
+        let mut places = vec![Scope::All, Scope::Favorites];
+        places.extend(self.folders.iter().cloned().map(Scope::Folder));
+        places.push(Scope::Deleted);
+        places
+    }
+
+    /// The name of a place, as the sidebar and the large title show it.
+    fn place_title(scope: &Scope) -> String {
+        match scope {
+            Scope::All => "All Recordings".into(),
+            Scope::Favorites => "Favourites".into(),
+            Scope::Folder(name) => name.clone(),
+            Scope::Deleted => "Recently Deleted".into(),
+        }
+    }
+
+    /// How many recordings a place holds (the search text is not applied).
+    fn place_count(&self, scope: &Scope) -> usize {
+        self.memos.iter().filter(|m| Self::in_place(scope, m)).count()
+    }
+
+    /// Shows another place. Playback stops and nothing is selected.
+    fn set_scope(&mut self, scope: Scope) {
+        if self.scope == scope {
+            return;
+        }
+        self.end_playback();
+        self.scope = scope;
+        self.selected = None;
+        self.confirm_delete = false;
+        self.refilter();
+        self.scroll.jump_top();
+    }
+
+    fn selected_memo(&self) -> Option<&Memo> {
+        self.selected.and_then(|i| self.memos.get(i))
+    }
+
+    /// The folder new recordings are filed in: the folder being shown, otherwise the top level.
+    fn record_dir(&self) -> PathBuf {
+        match &self.scope {
+            Scope::Folder(name) => self.dir.join(name),
+            _ => self.dir.clone(),
+        }
     }
 
     fn start_recording(&mut self) {
+        self.begin_take(None);
+    }
+
+    /// Starts a take. It is written in parts (see `Take`), the first to a hidden file next to where the recording
+    /// will be. A take with a `replace` span ends as a new copy of that recording with the span replaced.
+    fn begin_take(&mut self, replace: Option<Replacement>) {
         self.end_playback();
         self.error.clear();
         self.notice.clear();
@@ -417,22 +665,178 @@ impl VoiceMemos {
         self.live.clear();
         let unix = self.wall.now(self.now);
         let stamp = library::stamp(&library::civil(unix, self.wall.offset));
-        let path = store::free_path(&self.dir, &format!("Voice Memo {stamp}"), None);
-        if self.audio.record_start(&path.to_string_lossy()) {
+        let target = store::free_path(&self.record_dir(), &format!("Voice Memo {stamp}"), None);
+        let part = store::part_path(&target, 0);
+        if self.audio.record_start(&part.to_string_lossy()) {
             self.recording = true;
-            self.recording_path = Some(path);
+            self.recording_path = Some(part.clone());
+            self.take = Some(Take { target, parts: Vec::new(), current: part, stop_for: None, paused: false, replace });
             self.record_input = self.input_id.clone();
             self.rec_seen = false;
             self.rec_elapsed_ms = 0;
+            self.rec_base_ms = 0;
             self.started_at = self.now;
         } else {
             self.error = "Cannot record: the audio service is not running".into();
         }
     }
 
-    /// Asks the service to stop; the memo is listed when it reports `RecordDone`.
-    fn finish_recording(&mut self) {
+    /// Whether the take in progress is paused.
+    pub fn is_paused(&self) -> bool {
+        self.take.as_ref().is_some_and(|t| t.paused)
+    }
+
+    /// Whether a take is in progress (also while paused).
+    pub fn is_recording(&self) -> bool {
+        self.recording
+    }
+
+    /// Pauses the take: the service is asked to close the part being written. The take stays open until it is resumed
+    /// or stopped.
+    fn pause_recording(&mut self) {
+        let Some(take) = self.take.as_mut() else { return };
+        if take.paused || take.stop_for.is_some() {
+            return;
+        }
+        take.stop_for = Some(StopFor::Pause);
         self.audio.record_stop();
+        self.input_level = 0.0;
+        self.notice = "Recording paused".into();
+    }
+
+    /// Resumes a paused take in a new part.
+    fn resume_recording(&mut self) {
+        let Some(take) = self.take.as_mut() else { return };
+        if !take.paused {
+            return;
+        }
+        let part = store::part_path(&take.target, take.parts.len());
+        if self.audio.record_start(&part.to_string_lossy()) {
+            take.current = part.clone();
+            take.paused = false;
+            take.stop_for = None;
+            self.recording_path = Some(part);
+            self.rec_seen = false;
+            self.rec_elapsed_ms = 0;
+            self.started_at = self.now;
+            self.input_level = 0.0;
+            self.notice.clear();
+        } else {
+            self.error = "Cannot resume: the audio service is not running".into();
+        }
+    }
+
+    /// The Pause button and menu item: pauses a recording, resumes a paused one.
+    fn toggle_pause(&mut self) {
+        if self.is_paused() {
+            self.resume_recording();
+        } else {
+            self.pause_recording();
+        }
+        self.dirty = true;
+    }
+
+    /// Ends the take. While recording, the service is asked to stop and the take is finished when it reports the part
+    /// done; while paused there is nothing to wait for.
+    fn finish_recording(&mut self) {
+        let Some(take) = self.take.as_mut() else {
+            self.audio.record_stop();
+            return;
+        };
+        if take.paused {
+            self.complete_take();
+        } else {
+            take.stop_for = Some(StopFor::Finish);
+            self.audio.record_stop();
+        }
+    }
+
+    /// The service closed the part being written, after `ms` of audio: a pause keeps the take open, anything else ends it.
+    fn part_done(&mut self, ms: u64) {
+        let Some(take) = self.take.as_mut() else {
+            self.recording = false;
+            return;
+        };
+        take.parts.push(take.current.clone());
+        self.rec_base_ms += ms;
+        self.rec_elapsed_ms = 0;
+        self.recording_path = None;
+        if take.stop_for == Some(StopFor::Pause) {
+            take.stop_for = None;
+            take.paused = true;
+            self.dirty = true;
+        } else {
+            self.complete_take();
+        }
+    }
+
+    /// Joins the parts of the take into the recording (or the replacement copy), lists it and selects it. A take with
+    /// nothing in it is dropped.
+    fn complete_take(&mut self) {
+        let Some(take) = self.take.take() else { return };
+        self.recording = false;
+        self.recording_path = None;
+        self.rec_base_ms = 0;
+        self.rec_elapsed_ms = 0;
+        self.notice.clear();
+        self.dirty = true;
+        if take.parts.is_empty() {
+            return;
+        }
+        let dir = take.target.parent().map(Path::to_path_buf).unwrap_or_else(|| self.dir.clone());
+        let stem = take.target.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let saved = match &take.replace {
+            None => {
+                let target = store::free_path(&dir, &stem, None);
+                store::join_parts(&take.parts, &target).map(|()| target)
+            }
+            Some(job) => self.save_replacement(&take, job),
+        };
+        match saved {
+            Ok(path) => {
+                self.reload();
+                self.select_path(&path);
+            }
+            Err(e) => {
+                self.reload();
+                self.error = format!("Cannot save the recording: {e}");
+            }
+        }
+    }
+
+    /// Joins the parts of a replacement take and splices them into a copy of the recording.
+    fn save_replacement(&self, take: &Take, job: &Replacement) -> std::io::Result<PathBuf> {
+        let memo = self
+            .memos
+            .iter()
+            .find(|m| m.path == job.memo)
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "the recording is gone"))?;
+        let joined = store::part_path(&take.target, 99);
+        store::join_parts(&take.parts, &joined)?;
+        let saved = store::save_replaced(memo, job.start, job.end, &joined);
+        let _ = std::fs::remove_file(&joined);
+        saved
+    }
+
+    /// The take failed or was cut off: keep what the finished parts hold, if anything, and drop the rest.
+    fn abort_take(&mut self) {
+        if let Some(take) = &self.take {
+            // the part that failed is not kept (a finished part is: it is one of `parts`)
+            if !take.parts.contains(&take.current) {
+                let _ = std::fs::remove_file(&take.current);
+            }
+        }
+        if self.take.as_ref().is_some_and(|t| !t.parts.is_empty()) {
+            self.complete_take();
+            return;
+        }
+        if let Some(take) = self.take.take() {
+            let _ = std::fs::remove_file(&take.current);
+        }
+        self.recording = false;
+        self.recording_path = None;
+        self.rec_base_ms = 0;
+        self.dirty = true;
     }
 
     fn play(&mut self) {
@@ -528,16 +932,12 @@ impl VoiceMemos {
                 self.dirty = true;
             }
         }
-        for (path, _ms) in self.audio.take_recordings() {
+        for (path, ms) in self.audio.take_recordings() {
             if self.recording_path.as_deref().is_some_and(|p| p.to_string_lossy() == path) {
-                self.recording = false;
-                self.recording_path = None;
-                self.reload();
-                self.selected = self.memos.iter().position(|m| m.path.to_string_lossy() == path);
-                self.dirty = true;
+                self.part_done(ms);
             }
         }
-        if self.recording {
+        if self.recording && !self.is_paused() {
             match self.audio.recording().cloned() {
                 Some(r) if r.active => {
                     self.rec_seen = true;
@@ -556,21 +956,18 @@ impl VoiceMemos {
                     // inactive without a RecordDone: the microphone could not be opened, or the take failed
                     if let Some(e) = r.error {
                         self.error = format!("Cannot record: {e}");
-                        self.recording = false;
-                        self.recording_path = None;
+                        self.abort_take();
                     }
                 }
                 None if self.rec_seen => {
                     self.error = "Recording interrupted: the audio service restarted".into();
-                    self.recording = false;
-                    self.recording_path = None;
+                    self.abort_take();
                 }
                 None => {}
             }
             if self.recording && !self.rec_seen && t - self.started_at >= START_TIMEOUT_MS {
                 self.error = "Cannot record: the audio service did not respond".into();
-                self.recording = false;
-                self.recording_path = None;
+                self.abort_take();
             }
             self.dirty = true;
         }
@@ -601,27 +998,60 @@ impl VoiceMemos {
         let mut field = TextField::new(ui, "Title", MAC_TITLE3_PT, false, store::MAX_TITLE);
         field.set_text(ui, &self.memos[i].title);
         self.end_playback();
-        self.editor = Some(Editor { memo: i, field });
+        self.editor = Some(Editor { memo: i, field, kind: EditKind::Rename });
     }
 
+    /// Asks for the name of a new folder (File > New Folder).
+    fn begin_new_folder(&mut self, ui: &Ui) {
+        if self.recording || self.editor.is_some() || self.trim.is_some() || self.notes.is_some() {
+            return;
+        }
+        let field = TextField::new(ui, "Folder Name", MAC_TITLE3_PT, false, store::MAX_TITLE);
+        self.end_playback();
+        self.search_focused = false;
+        self.editor = Some(Editor { memo: 0, field, kind: EditKind::NewFolder });
+    }
+
+    /// Closes the name field. Done renames the recording, or creates the folder and shows it.
     fn end_rename(&mut self, commit: bool) {
         let Some(ed) = self.editor.take() else { return };
         if !commit {
             return;
         }
-        if let Some(memo) = self.memos.get(ed.memo).cloned() {
-            match store::rename(&memo, ed.field.text()) {
-                Ok(path) => {
-                    self.reload();
-                    self.selected = self.memos.iter().position(|m| m.path == path);
+        match ed.kind {
+            EditKind::Rename => {
+                if let Some(memo) = self.memos.get(ed.memo).cloned() {
+                    match store::rename(&memo, ed.field.text()) {
+                        Ok(path) => {
+                            self.reload();
+                            self.select_path(&path);
+                        }
+                        Err(e) => self.error = format!("Cannot rename: {e}"),
+                    }
                 }
-                Err(e) => self.error = format!("Cannot rename: {e}"),
             }
+            EditKind::NewFolder => match store::create_folder(&self.dir, ed.field.text()) {
+                Ok(name) => {
+                    self.error.clear();
+                    self.reload();
+                    self.set_scope(Scope::Folder(name));
+                }
+                Err(e) => self.error = format!("Cannot create the folder: {e}"),
+            },
         }
     }
 
     /// Opens the trim of the selected memo, starting with the whole recording. Playback stops first.
     fn begin_trim(&mut self) {
+        self.begin_span(false);
+    }
+
+    /// Opens the span picker of Replace: the span to record over, starting with the whole recording.
+    fn begin_replace(&mut self) {
+        self.begin_span(true);
+    }
+
+    fn begin_span(&mut self, replace: bool) {
         if self.notes.is_some() {
             return;
         }
@@ -631,15 +1061,22 @@ impl VoiceMemos {
             Some(range) => {
                 self.end_playback();
                 self.error.clear();
-                self.trim = Some(TrimEdit { memo: i, range, drag: None });
+                self.trim = Some(TrimEdit { memo: i, range, drag: None, replace });
             }
-            None => self.error = "This recording is too short to trim".into(),
+            None => self.error = format!("This recording is too short to {}", if replace { "replace a part of" } else { "trim" }),
         }
     }
 
-    /// Closes the trim. Done writes the kept part as a new memo (`<title> trimmed`); the original stays.
+    /// Closes the trim. Done writes the kept part as a new memo (`<title> trimmed`); the original stays. For Replace,
+    /// Done starts a take that is spliced over the span when it ends.
     fn end_trim(&mut self, commit: bool) {
         let Some(edit) = self.trim.take() else { return };
+        if edit.replace {
+            if commit {
+                self.replace_span(&edit);
+            }
+            return;
+        }
         let whole = edit.range.start() <= 0.0 && edit.range.end() >= edit.range.length();
         if !commit || whole {
             return;
@@ -648,11 +1085,18 @@ impl VoiceMemos {
         match store::save_trim(&memo, edit.range) {
             Ok(path) => {
                 self.reload();
-                self.selected = self.memos.iter().position(|m| m.path == path);
+                self.select_path(&path);
                 self.position_ms = 0.0;
             }
             Err(e) => self.error = format!("Cannot save the trimmed recording: {e}"),
         }
+    }
+
+    /// Starts recording over the span of a recording. The result is saved as `<title> replaced` when the take ends.
+    fn replace_span(&mut self, edit: &TrimEdit) {
+        let Some(memo) = self.memos.get(edit.memo) else { return };
+        let job = Replacement { memo: memo.path.clone(), start: edit.range.start(), end: edit.range.end() };
+        self.begin_take(Some(job));
     }
 
     /// Seconds at pixel x on the trim waveform.
@@ -690,12 +1134,17 @@ impl VoiceMemos {
         self.dirty = true;
     }
 
+    /// Deletes the selected recording: into Recently Deleted, or for good when it is already there.
     fn delete_selected(&mut self) {
-        let Some(memo) = self.selected.and_then(|i| self.memos.get(i)).cloned() else { return };
+        let Some(memo) = self.selected_memo().cloned() else { return };
         self.end_playback();
-        match std::fs::remove_file(&memo.path) {
+        let result = if memo.deleted {
+            store::delete_forever(&memo)
+        } else {
+            store::trash(&self.dir, &memo, self.wall.now(self.now)).map(|_| ())
+        };
+        match result {
             Ok(()) => {
-                let _ = std::fs::remove_file(store::notes_path(&memo.path));
                 self.selected = None;
                 self.reload();
             }
@@ -703,9 +1152,73 @@ impl VoiceMemos {
         }
     }
 
+    /// Puts the selected recording of Recently Deleted back where it came from.
+    fn recover_selected(&mut self) {
+        let Some(memo) = self.selected_memo().filter(|m| m.deleted).cloned() else { return };
+        self.end_playback();
+        match store::recover(&self.dir, &memo) {
+            Ok(_) => {
+                self.error.clear();
+                self.selected = None;
+                self.reload();
+                self.notice = format!("Recovered {}", memo.title);
+            }
+            Err(e) => self.error = format!("Cannot recover: {e}"),
+        }
+    }
+
+    /// Marks the selected recording as a favourite, or unmarks it.
+    fn toggle_favorite(&mut self) {
+        let Some(memo) = self.selected_memo().filter(|m| !m.deleted).cloned() else { return };
+        match store::set_favorite(&memo.path, !memo.favorite) {
+            Ok(()) => {
+                self.error.clear();
+                self.reload();
+                self.selected = self.memos.iter().position(|m| m.path == memo.path);
+                self.drop_hidden_selection();
+            }
+            Err(e) => self.error = format!("Cannot change the favourite: {e}"),
+        }
+    }
+
+    /// Moves the selected recording into `folder` (the top level when empty).
+    fn move_selected(&mut self, folder: &str) {
+        let Some(memo) = self.selected_memo().filter(|m| !m.deleted).cloned() else { return };
+        if memo.folder == folder {
+            return;
+        }
+        self.end_playback();
+        match store::move_to_folder(&self.dir, &memo, folder) {
+            Ok(path) => {
+                self.error.clear();
+                self.reload();
+                self.selected = self.memos.iter().position(|m| m.path == path);
+                self.drop_hidden_selection();
+                self.notice = format!("Moved to {}", if folder.is_empty() { "All Recordings" } else { folder });
+            }
+            Err(e) => self.error = format!("Cannot move: {e}"),
+        }
+    }
+
+    /// Deletes the folder being shown. Its recordings move up to All Recordings.
+    fn delete_current_folder(&mut self) {
+        let Scope::Folder(name) = self.scope.clone() else { return };
+        self.end_playback();
+        match store::delete_folder(&self.dir, &name) {
+            Ok(()) => {
+                self.error.clear();
+                self.selected = None;
+                self.scope = Scope::All;
+                self.reload();
+                self.notice = format!("Folder {name} deleted; its recordings are in All Recordings");
+            }
+            Err(e) => self.error = format!("Cannot delete the folder: {e}"),
+        }
+    }
+
     /// True when the menu's recording commands apply: a recording is selected and nothing is being recorded or edited.
     pub fn has_selection(&self) -> bool {
-        self.selected.is_some() && !self.recording && self.editor.is_none() && self.trim.is_none() && self.notes.is_none()
+        self.selected_memo().is_some_and(|m| !m.deleted) && !self.recording && self.editor.is_none() && self.trim.is_none() && self.notes.is_none()
     }
 
     /// Whether the selected recording is the one playing, so a split can be made at the playhead.
@@ -719,22 +1232,87 @@ impl VoiceMemos {
         self.skip_silence
     }
 
-    /// Runs a "Recording" menu item. False for an id this app does not declare.
-    pub fn menu(&mut self, ui: &Ui, id: u32) -> bool {
-        if !matches!(id, MENU_TRIM | MENU_NOTES | MENU_RENAME | MENU_EXPORT | MENU_SPLIT | MENU_SKIP | MENU_ENHANCE) {
-            return false;
+    /// Whether the selected recording is a favourite (the menu's check mark).
+    pub fn selected_favorite(&self) -> bool {
+        self.selected_memo().is_some_and(|m| m.favorite)
+    }
+
+    /// The folders, for the Move to Folder submenu, and the folder the selected recording is in ("" at the top level).
+    pub fn folders(&self) -> &[String] {
+        &self.folders
+    }
+
+    pub fn selected_folder(&self) -> &str {
+        self.selected_memo().map_or("", |m| m.folder.as_str())
+    }
+
+    /// Whether a folder is the place shown (Delete Folder applies).
+    pub fn in_folder(&self) -> bool {
+        matches!(self.scope, Scope::Folder(_))
+    }
+
+    /// The input devices as (name, is the default), for the Input submenu.
+    pub fn input_choices(&self) -> Vec<(String, bool)> {
+        self.inputs.iter().map(|(id, name)| (name.clone(), self.input_id.as_deref() == Some(id.as_str()))).collect()
+    }
+
+    /// The recording the Export command saves: the file name to suggest and where the recording is.
+    pub fn export_source(&self) -> Option<(String, PathBuf)> {
+        if !self.has_selection() {
+            return None;
         }
-        if id == MENU_SKIP {
-            self.toggle_skip_silence();
-        } else if self.has_selection() {
-            match id {
-                MENU_TRIM => self.begin_trim(),
-                MENU_NOTES => self.begin_notes(ui),
-                MENU_RENAME => self.begin_rename(ui),
-                MENU_SPLIT => self.split_selected(),
-                MENU_ENHANCE => self.enhance_selected(),
-                _ => self.export_selected(),
+        self.selected_memo().map(|m| (format!("{}.wav", m.title), m.path.clone()))
+    }
+
+    /// A line under the record button, after the Export command finished.
+    pub fn set_notice(&mut self, text: &str) {
+        self.error.clear();
+        self.notice = text.into();
+        self.dirty = true;
+    }
+
+    /// A red line under the record button.
+    pub fn set_error(&mut self, text: &str) {
+        self.error = text.into();
+        self.dirty = true;
+    }
+
+    /// Runs a menu item. False for an id this app does not declare (Export is run by the app, which owns the save panel).
+    pub fn menu(&mut self, ui: &Ui, id: u32) -> bool {
+        match id {
+            MENU_SKIP => self.toggle_skip_silence(),
+            MENU_NEW_FOLDER => self.begin_new_folder(ui),
+            MENU_DELETE_FOLDER => self.delete_current_folder(),
+            MENU_PAUSE => {
+                if self.recording {
+                    self.toggle_pause();
+                }
             }
+            MENU_TRIM | MENU_NOTES | MENU_RENAME | MENU_SPLIT | MENU_ENHANCE | MENU_FAVORITE | MENU_REPLACE => {
+                if self.has_selection() {
+                    match id {
+                        MENU_TRIM => self.begin_trim(),
+                        MENU_NOTES => self.begin_notes(ui),
+                        MENU_RENAME => self.begin_rename(ui),
+                        MENU_SPLIT => self.split_selected(),
+                        MENU_ENHANCE => self.enhance_selected(),
+                        MENU_FAVORITE => self.toggle_favorite(),
+                        _ => self.begin_replace(),
+                    }
+                }
+            }
+            n if (MENU_MOVE..MENU_MOVE + 100).contains(&n) => {
+                if self.has_selection() {
+                    let k = (n - MENU_MOVE) as usize;
+                    if k == 0 {
+                        self.move_selected("");
+                    } else if let Some(folder) = self.folders.get(k - 1).cloned() {
+                        self.move_selected(&folder);
+                    }
+                }
+            }
+            n if (MENU_INPUT..MENU_INPUT + 100).contains(&n) => self.choose_input((n - MENU_INPUT) as usize),
+            _ => return false,
         }
         self.dirty = true;
         true
@@ -753,7 +1331,7 @@ impl VoiceMemos {
             Ok((first, second)) => {
                 self.error.clear();
                 self.reload();
-                self.selected = self.memos.iter().position(|m| m.path == first);
+                self.select_path(&first);
                 let name = |p: &Path| p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 self.notice = format!("Split into {} and {}", name(&first), name(&second));
             }
@@ -773,7 +1351,7 @@ impl VoiceMemos {
             Ok(path) => {
                 self.error.clear();
                 self.reload();
-                self.selected = self.memos.iter().position(|m| m.path == path);
+                self.select_path(&path);
                 self.position_ms = 0.0;
                 let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
                 self.notice = format!("Enhanced copy saved as {name}");
@@ -782,23 +1360,6 @@ impl VoiceMemos {
                 self.reload();
                 self.error = format!("Cannot enhance: {e}");
             }
-        }
-    }
-
-    /// Copies the selected recording to the Downloads folder; the original stays.
-    fn export_selected(&mut self) {
-        let Some(memo) = self.selected.and_then(|i| self.memos.get(i)).cloned() else { return };
-        let Some(home) = std::env::var_os("HOME") else {
-            self.error = "Cannot export: there is no home folder".into();
-            return;
-        };
-        let dir = PathBuf::from(home).join("Downloads");
-        match store::export_copy(&memo, &dir) {
-            Ok(path) => {
-                self.error.clear();
-                self.notice = format!("Exported to {}", path.display());
-            }
-            Err(e) => self.error = format!("Cannot export: {e}"),
         }
     }
 
@@ -821,6 +1382,10 @@ impl VoiceMemos {
         if commit {
             if let Err(e) = store::write_notes(&edit.path, edit.view.text()) {
                 self.error = format!("Cannot save the notes: {e}");
+            }
+            // the search looks in the notes
+            if !self.query.is_empty() {
+                self.refilter();
             }
         }
         self.dirty = true;
@@ -878,8 +1443,33 @@ impl VoiceMemos {
             } else if let Some(ed) = &mut self.editor {
                 ed.field.edit(ui, &out, t);
             }
+        } else if self.search_focused {
+            self.search_key(out);
         }
         self.dirty = true;
+    }
+
+    /// Whether the search field has the keyboard (so Escape is for it).
+    pub fn search_active(&self) -> bool {
+        self.search_focused
+    }
+
+    /// Keys in the search field: typing, Backspace and the side arrows; Enter and Escape give the keyboard back. The
+    /// list follows every change.
+    fn search_key(&mut self, out: Out) {
+        match out {
+            Out::Text(text) => {
+                let room = MAX_QUERY.saturating_sub(self.query.chars().count());
+                self.query.push_str(&text.chars().take(room).collect::<String>());
+            }
+            Out::Backspace => self.query.pop(),
+            Out::Named("Left") => self.query.move_caret(false),
+            Out::Named("Right") => self.query.move_caret(true),
+            Out::Enter | Out::Hide | Out::Named("Escape") => self.search_focused = false,
+            _ => {}
+        }
+        self.refilter();
+        self.drop_hidden_selection();
     }
 
     // layout ------------------------------------------------------------
@@ -903,26 +1493,55 @@ impl VoiceMemos {
         ui.pt(self.side_pt(ui))
     }
 
-    /// The sidebar's list area in points: below the large title, down to the home zone.
+    /// The sidebar's list area in points: below the search field, down to the home zone.
     fn column(&self, ui: &Ui) -> bifrost_app::controls::Rect {
         let p = ui.pt(1.0);
-        bifrost_app::controls::Rect { x: 0.0, y: LIST_TOP, w: self.side_pt(ui), h: ((self.h as f32 - home_zone(ui)) / p - LIST_TOP).max(0.0) }
+        bifrost_app::controls::Rect { x: 0.0, y: LIST_ROWS_TOP, w: self.side_pt(ui), h: ((self.h as f32 - home_zone(ui)) / p - LIST_ROWS_TOP).max(0.0) }
     }
 
-    /// The recordings as a Golden Gate source list: title and date, the duration (or position while playing) trailing.
+    /// The search field under the large title, in points.
+    fn search_rect(&self, ui: &Ui) -> Rect {
+        Rect { x: SPACE_M, y: LIST_TOP, w: (self.side_pt(ui) - 2.0 * SPACE_M).max(0.0), h: SEARCH_H }
+    }
+
+    /// The height of everything the sidebar lists, in points: the places, the "Recordings" header and the recordings.
+    fn sidebar_height(&self) -> f32 {
+        PLACE_ROW * self.places().len() as f32 + PLACE_HEADER + ROW * self.visible.len() as f32
+    }
+
+    /// The sidebar as a Golden Gate source list: the places (All Recordings, Favourites, the folders, Recently
+    /// Deleted), then the recordings of the place that match the search, each with title and date and the duration
+    /// (or position while playing) trailing.
     fn sidebar(&self) -> SourceList {
-        let items = self.memos.iter().enumerate().map(|(i, memo)| {
+        let places = self.places();
+        let mut items: Vec<SidebarItem> = Vec::with_capacity(places.len() + 1 + self.visible.len());
+        for (k, place) in places.iter().enumerate() {
+            let symbol = match place {
+                Scope::All => "music.note.list",
+                Scope::Favorites => "star",
+                Scope::Folder(_) => "folder",
+                Scope::Deleted => "trash",
+            };
+            items.push(SidebarItem::row(PLACE_BASE + k as u32, &Self::place_title(place)).with_symbol(symbol).with_count(self.place_count(place) as u32));
+        }
+        items.push(SidebarItem::header("Recordings"));
+        for &i in &self.visible {
+            let memo = &self.memos[i];
             let day = library::day_title(&library::civil(memo.mtime, self.wall.offset));
             let shown = if self.playing.as_deref() == Some(memo.path.as_path()) {
                 format!("{} / {}", store::clock(self.position_ms as u64), store::clock(memo.duration_ms))
             } else {
                 store::clock(memo.duration_ms)
             };
-            SidebarItem::row(i as u32, &memo.title).with_subtitle(&day).with_trailing(&shown)
-        }).collect();
-        let mut list = SourceList::new(items, ROW, ROW);
+            let row = SidebarItem::row(i as u32, &memo.title).with_subtitle(&day).with_trailing(&shown);
+            items.push(if memo.favorite { row.with_symbol("star") } else { row });
+        }
+        let mut list = SourceList::new(items, PLACE_ROW, PLACE_HEADER);
         list.two_line_h = ROW;
-        list.set_selected(self.selected.map(|i| i as u32));
+        // a selected recording is the highlighted row; with none, the place shown is
+        let place = places.iter().position(|p| *p == self.scope).map(|k| PLACE_BASE + k as u32);
+        let recording = self.selected.filter(|i| self.visible.contains(i)).map(|i| i as u32);
+        list.set_selected(recording.or(place));
         list
     }
 
@@ -941,6 +1560,13 @@ impl VoiceMemos {
         let size = ui.pt(RECORD_PT);
         let (x, w) = self.pane(ui);
         (x + (w - size) / 2.0, self.list_bottom(ui) - ui.pt(SPACE_HUGE) - size, size, size)
+    }
+
+    /// The Pause (Resume) button beside the record button while a take is in progress.
+    fn pause_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let r = self.record_rect(ui);
+        let size = ui.pt(TRANSPORT_PT);
+        (r.0 + r.2 + ui.pt(SPACE_XL), r.1 + (r.3 - size) / 2.0, size, size)
     }
 
     fn wave_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
@@ -982,15 +1608,27 @@ impl VoiceMemos {
         self.dirty = true;
     }
 
-    /// The detail pane's unified toolbar: Rename and Delete (Confirm Delete while asking).
+    /// The detail pane's unified toolbar: Trim, Notes, Rename, Favourite and Delete (Confirm Delete while asking); in
+    /// Recently Deleted, Recover and Delete Forever.
     fn bar(&self) -> Toolbar {
         let on = self.selected.is_some() && !self.recording;
+        if self.selected_memo().is_some_and(|m| m.deleted) {
+            let label = if self.confirm_delete { "Confirm Delete" } else { "Delete Forever" };
+            return Toolbar::new(vec![
+                ToolbarItem::flexible_space(),
+                ToolbarItem::button(BAR_RECOVER, "Recover").enabled(on),
+                ToolbarItem::button(BAR_DELETE, label).enabled(on),
+            ]);
+        }
         let delete = if self.confirm_delete { ToolbarItem::button(BAR_DELETE, "Confirm Delete") } else { ToolbarItem::icon(BAR_DELETE, "Delete", "trash") };
+        let favorite = self.selected_memo().is_some_and(|m| m.favorite);
+        let star_label = if favorite { "Remove from Favourites" } else { "Add to Favourites" };
         Toolbar::new(vec![
             ToolbarItem::flexible_space(),
             ToolbarItem::button(BAR_TRIM, "Trim").enabled(on),
             ToolbarItem::button(BAR_NOTES, "Notes").enabled(on),
             ToolbarItem::button(BAR_RENAME, "Rename").enabled(on),
+            ToolbarItem::icon(BAR_FAVORITE, star_label, "star").selected(favorite).enabled(on),
             delete.enabled(on),
         ])
     }
@@ -1027,7 +1665,8 @@ impl VoiceMemos {
             return nodes;
         }
         // the recordings sidebar is a list even while it has no rows (the empty state), so it is published as one
-        nodes.push(Node { id: CTL_SIDEBAR, role: Role::List, label: "Recordings".into(), value: self.memos.len().to_string(), bounds: self.column(ui), enabled: true });
+        nodes.push(Node { id: CTL_SIDEBAR, role: Role::List, label: "Recordings".into(), value: self.visible.len().to_string(), bounds: self.column(ui), enabled: true });
+        nodes.push(Node { id: CTL_SEARCH, role: Role::TextField, label: "Search Recordings".into(), value: self.query.to_string(), bounds: self.search_rect(ui), enabled: true });
         let bar = self.bar();
         nodes.extend(self.bar_layout(ui).visible.iter().filter_map(|(id, r)| {
             let item = bar.items.iter().find(|i| i.id == *id)?;
@@ -1037,6 +1676,10 @@ impl VoiceMemos {
         let button = |id: u64, label: &str, r: (f32, f32, f32, f32), enabled: bool| Node { id, role: Role::Button, label: label.into(), value: String::new(), bounds: pts(ui, r), enabled };
         let record = if self.recording { "Stop Recording" } else { "Record" };
         nodes.push(button(CTL_RECORD, record, self.record_rect(ui), true));
+        if self.recording {
+            let pause = if self.is_paused() { "Resume Recording" } else { "Pause Recording" };
+            nodes.push(button(CTL_PAUSE, pause, self.pause_rect(ui), true));
+        }
         if !self.recording && self.selected.is_some() {
             nodes.push(button(CTL_BACK, "Skip Back 15 Seconds", self.transport_rect(ui, 0), true));
             let play = if self.playing.is_some() { "Pause" } else { "Play" };
@@ -1110,13 +1753,15 @@ impl VoiceMemos {
             return Some(Target::Record);
         }
         if self.recording {
-            return None;
+            return Self::inside(self.pause_rect(ui), x, y).then_some(Target::Pause);
         }
         if self.selected.is_some() {
             for (target, r) in [
                 (Target::Trim, self.bar_rect(ui, BAR_TRIM)),
                 (Target::Notes, self.bar_rect(ui, BAR_NOTES)),
                 (Target::Rename, self.rename_rect(ui)),
+                (Target::Favorite, self.bar_rect(ui, BAR_FAVORITE)),
+                (Target::Recover, self.bar_rect(ui, BAR_RECOVER)),
                 (Target::Delete, self.delete_rect(ui)),
                 (Target::Back, self.transport_rect(ui, 0)),
                 (Target::Play, self.transport_rect(ui, 1)),
@@ -1134,8 +1779,15 @@ impl VoiceMemos {
         }
         if x < self.side_w(ui) && y >= ui.pt(LIST_TOP) && y < self.list_bottom(ui) {
             let p = ui.pt(1.0);
+            let field = self.search_rect(ui);
+            if search::hits_clear(field, !self.query.is_empty(), x / p, y / p) {
+                return Some(Target::SearchClear);
+            }
+            if field.contains(x / p, y / p) {
+                return Some(Target::Search);
+            }
             if let Some(id) = self.sidebar().hit(self.column(ui), self.scroll.offset() / p, x / p, y / p) {
-                return Some(Target::Row(id as usize));
+                return Some(if id >= PLACE_BASE { Target::Place((id - PLACE_BASE) as usize) } else { Target::Row(id as usize) });
             }
             return Some(Target::List);
         }
@@ -1172,7 +1824,24 @@ impl VoiceMemos {
         if target != Target::Delete {
             self.confirm_delete = false;
         }
+        if !matches!(target, Target::Search | Target::SearchClear) {
+            self.search_focused = false;
+        }
         match target {
+            Target::Place(k) => {
+                if let Some(scope) = self.places().get(k).cloned() {
+                    self.set_scope(scope);
+                }
+            }
+            Target::Search => self.search_focused = true,
+            Target::SearchClear => {
+                self.query.clear();
+                self.search_focused = true;
+                self.refilter();
+            }
+            Target::Pause => self.toggle_pause(),
+            Target::Recover => self.recover_selected(),
+            Target::Favorite => self.toggle_favorite(),
             Target::Record => {
                 if self.recording {
                     self.finish_recording();
@@ -1259,7 +1928,7 @@ impl VoiceMemos {
                     }
                     return;
                 }
-                if matches!(self.pressed, Some(Target::Row(_) | Target::List)) {
+                if matches!(self.pressed, Some(Target::Row(_) | Target::Place(_) | Target::List)) {
                     self.scrolling = true;
                     self.scroll.down(y, t);
                 }
@@ -1330,7 +1999,7 @@ impl VoiceMemos {
 
     pub fn tick(&mut self, ui: &Ui, t: f64) -> bool {
         self.now = t;
-        self.scroll.set_max((ui.pt(LIST_TOP + ROW * self.memos.len() as f32) - self.list_bottom(ui)).max(0.0));
+        self.scroll.set_max((ui.pt(LIST_ROWS_TOP + self.sidebar_height()) - self.list_bottom(ui)).max(0.0));
         self.dirty |= self.scroll.tick(t);
         if let Some(ed) = &mut self.editor {
             self.dirty |= ed.field.tick(ui, t);
@@ -1343,7 +2012,7 @@ impl VoiceMemos {
     }
 
     pub fn next_wake(&self, t: f64) -> Option<f64> {
-        let mut due = (self.recording || self.playing.is_some()).then_some(t + POLL_MS);
+        let mut due = ((self.recording && !self.is_paused()) || self.playing.is_some()).then_some(t + POLL_MS);
         if due.is_none() {
             due = self.audio.next_wake(t);
         }
@@ -1428,9 +2097,10 @@ impl VoiceMemos {
         let pane_centre = (px, 0.0, pw, 0.0);
         if self.recording {
             // live recording: timer and a scrolling waveform
-            let text = store::clock(self.rec_elapsed_ms);
+            let text = store::clock(self.rec_base_ms + self.rec_elapsed_ms);
             let live = self.live.clone();
-            self.text(s, ui, "New Recording", MAC_TITLE1_PT, Weight::Bold, LABEL.now(), px + m, ui.pt(TITLE_Y));
+            let heading = if self.take.as_ref().is_some_and(|t| t.replace.is_some()) { "Replacement Take" } else { "New Recording" };
+            self.text(s, ui, heading, MAC_TITLE1_PT, Weight::Bold, LABEL.now(), px + m, ui.pt(TITLE_Y));
             Self::bars(s, ui, wave, &live, 0.0, true);
             s.fill_rect(wave.0 as usize, (wave.1 + wave.3 / 2.0) as usize, wave.2 as usize, 1, SEPARATOR_C.now());
             self.centred(s, ui, &text, DISPLAY_SMALL_PT, LABEL.now(), (pane_centre.0, wave.1 + wave.3 + ui.pt(SPACE_XL), pane_centre.2, ui.pt(48.0)));
@@ -1518,6 +2188,24 @@ impl VoiceMemos {
         let d = if self.recording { r.2 * 0.38 } else { r.2 - 2.0 * (inset + ui.pt(SPACE_XS)) };
         let corner = if self.recording { ui.pt(SPACE_S) } else { d / 2.0 };
         s.fill_rrect(cx - d / 2.0, cy - d / 2.0, d, d, corner, RED);
+        if self.recording {
+            // Pause (two bars) or Resume (a triangle) on a plate beside the record button
+            let pause = self.pause_rect(ui);
+            let fill = if self.pressed == Some(Target::Pause) { plate_down() } else { plate() };
+            s.fill_rrect(pause.0, pause.1, pause.2, pause.3, pause.2 / 2.0, fill);
+            let (px, py, g) = (pause.0 + pause.2 / 2.0, pause.1 + pause.3 / 2.0, ui.pt(22.0));
+            if self.is_paused() {
+                let cols = g as usize;
+                for c in 0..cols {
+                    let h = g * (1.0 - c as f32 / cols as f32);
+                    s.fill_rect((px - g * 0.35) as usize + c, (py - h / 2.0) as usize, 1, h as usize, LABEL.now());
+                }
+            } else {
+                for dx in [-0.32f32, 0.08] {
+                    s.fill_rrect(px + g * dx, py - g / 2.0, g * 0.24, g, g * 0.12, LABEL.now());
+                }
+            }
+        }
 
         // the detail pane's unified toolbar
         widgets::toolbar_band(s, ui, Rect { x: side / ui.pt(1.0), y: 0.0, w: pw / ui.pt(1.0), h: UNIFIED_BAR_PT });
@@ -1525,6 +2213,8 @@ impl VoiceMemos {
             Some(Target::Trim) => Some(BAR_TRIM),
             Some(Target::Notes) => Some(BAR_NOTES),
             Some(Target::Rename) => Some(BAR_RENAME),
+            Some(Target::Favorite) => Some(BAR_FAVORITE),
+            Some(Target::Recover) => Some(BAR_RECOVER),
             Some(Target::Delete) => Some(BAR_DELETE),
             _ => None,
         };
@@ -1533,14 +2223,34 @@ impl VoiceMemos {
         // sidebar: the Golden Gate source list over the full-height shaded column, with the large title in the top
         // band (beside the traffic lights) and the home zone below. Rows scrolled under the title repaint it.
         s.fill_rect(0, 0, side as usize, self.h as usize, SIDEBAR_BG.now());
-        let pressed = match self.pressed { Some(Target::Row(i)) => Some(i as u32), _ => None };
+        let pressed = match self.pressed {
+            Some(Target::Row(i)) => Some(i as u32),
+            Some(Target::Place(k)) => Some(PLACE_BASE + k as u32),
+            _ => None,
+        };
         widgets::source_list(s, ui, self.column(ui), &self.sidebar(), self.scroll.offset() / ui.pt(1.0), pressed);
-        let list_top = ui.pt(LIST_TOP);
+        let list_top = ui.pt(LIST_ROWS_TOP);
         s.fill_rect(0, 0, side as usize, list_top as usize - 1, SIDEBAR_BG.now());
         s.fill_rect(0, bottom as usize, side as usize, (self.h as f32 - bottom) as usize, SIDEBAR_BG.now());
-        widgets::large_title(s, ui, &self.sidebar_layout(ui), "All Recordings", UNIFIED_BAR_PT);
-        if self.memos.is_empty() {
-            self.centred(s, ui, "No Recordings", MAC_TITLE3_PT, LABEL_2.now(), (0.0, list_top, side, ui.pt(EMPTY_H)));
+        let title = ui.fit(&Self::place_title(&self.scope), MAC_LARGE_TITLE_PT, side - ui.pt(3.0 * SPACE_XL));
+        widgets::large_title(s, ui, &self.sidebar_layout(ui), &title, UNIFIED_BAR_PT);
+        widgets::search_field(s, ui, &self.query, self.search_rect(ui), "Search", self.search_focused);
+        if self.visible.is_empty() {
+            // under the places and the "Recordings" header
+            let below = list_top + ui.pt(PLACE_ROW * self.places().len() as f32 + PLACE_HEADER) - self.scroll.offset();
+            if below >= list_top && below + ui.pt(EMPTY_H) <= bottom {
+                let message = if !self.query.is_empty() {
+                    "No Results"
+                } else {
+                    match self.scope {
+                        Scope::All => "No Recordings",
+                        Scope::Favorites => "No Favourites",
+                        Scope::Folder(_) => "Folder Is Empty",
+                        Scope::Deleted => "Nothing Deleted",
+                    }
+                };
+                self.centred(s, ui, message, MAC_TITLE3_PT, LABEL_2.now(), (0.0, below, side, ui.pt(EMPTY_H)));
+            }
         }
         s.fill_rect(side as usize, 0, 1, bottom as usize, SEPARATOR_C.now());
     }
@@ -1567,11 +2277,11 @@ impl VoiceMemos {
     /// rename sheet's do.
     fn draw_trim(&mut self, s: &mut Surface, ui: &Ui) {
         let Some(edit) = self.trim.as_ref() else { return };
-        let (range, index) = (edit.range, edit.memo);
+        let (range, index, replace) = (edit.range, edit.memo, edit.replace);
         let Some(memo) = self.memos.get(index).cloned() else { return };
         self.button(s, ui, Target::Cancel, "Cancel", BLUE, self.cancel_rect(ui));
-        self.button(s, ui, Target::Done, "Done", BLUE, self.done_rect(ui));
-        self.centred(s, ui, "Trim", MAC_TITLE3_PT, LABEL.now(), (0.0, ui.pt(UNIFIED_BAR_PT), self.w as f32, ui.pt(44.0)));
+        self.button(s, ui, Target::Done, if replace { "Record" } else { "Done" }, BLUE, self.done_rect(ui));
+        self.centred(s, ui, if replace { "Replace" } else { "Trim" }, MAC_TITLE3_PT, LABEL.now(), (0.0, ui.pt(UNIFIED_BAR_PT), self.w as f32, ui.pt(44.0)));
         let wave = self.wave_rect(ui);
         if self.peaks_for.as_deref() != Some(memo.path.as_path()) {
             self.peaks = store::peaks(&memo.path, 256);
@@ -1585,7 +2295,8 @@ impl VoiceMemos {
             let x = self.trim_x(ui, secs, length);
             s.fill_rrect(x - hw / 2.0, top, hw, hh, hw / 2.0, BLUE);
         }
-        let keep = format!("Keeps {} of {}", store::clock((range.duration() * 1000.0) as u64), store::clock(memo.duration_ms));
+        let verb = if replace { "Replaces" } else { "Keeps" };
+        let keep = format!("{verb} {} of {}", store::clock((range.duration() * 1000.0) as u64), store::clock(memo.duration_ms));
         let (px, pw) = self.pane(ui);
         self.centred(s, ui, &keep, MAC_FOOTNOTE_PT, LABEL_2.now(), (px, wave.1 + wave.3 + ui.pt(SPACE_XXL), pw, ui.pt(SPACE_XL)));
     }
@@ -1644,7 +2355,11 @@ impl VoiceMemos {
     fn draw_editor(&mut self, s: &mut Surface, ui: &Ui, t: f64) {
         self.button(s, ui, Target::Cancel, "Cancel", BLUE, self.cancel_rect(ui));
         self.button(s, ui, Target::Done, "Done", BLUE, self.done_rect(ui));
-        self.centred(s, ui, "Rename", MAC_TITLE3_PT, LABEL.now(), (0.0, ui.pt(UNIFIED_BAR_PT), self.w as f32, ui.pt(44.0)));
+        let heading = match self.editor.as_ref().map(|e| e.kind) {
+            Some(EditKind::NewFolder) => "New Folder",
+            _ => "Rename",
+        };
+        self.centred(s, ui, heading, MAC_TITLE3_PT, LABEL.now(), (0.0, ui.pt(UNIFIED_BAR_PT), self.w as f32, ui.pt(44.0)));
         let f = self.field_rect(ui);
         let pad = ui.pt(SPACE_L);
         s.fill_rrect(f.0 - pad, f.1, f.2 + 2.0 * pad, f.3, ui.pt(RADIUS), CARD_BG.now());
@@ -1679,7 +2394,8 @@ mod tests {
         store::save(&app.dir, "20261004-120000", &wav, 100).unwrap();
         app.reload();
         assert_eq!(app.memos.len(), 1);
-        let r = app.sidebar().item_rect(0, app.column(&ui), 0.0);
+        // the places come first, then the "Recordings" header, then the recordings
+        let r = app.sidebar().item_rect(app.places().len() + 1, app.column(&ui), 0.0);
         let (x, y) = (ui.pt(r.x + 10.0), ui.pt(r.y + 10.0));
         app.touch(&ui, Event::Down(x, y), 0.0);
         app.touch(&ui, Event::Up(x, y), 10.0);
@@ -1691,7 +2407,8 @@ mod tests {
         app.activate(&ui, Target::Delete);
         assert!(app.confirm_delete && app.memos.len() == 1, "the first tap only asks");
         app.activate(&ui, Target::Delete);
-        assert!(app.memos.is_empty());
+        assert!(app.visible.is_empty(), "the recording left the list");
+        assert!(app.memos.len() == 1 && app.memos[0].deleted, "it waits in Recently Deleted");
         let _ = std::fs::remove_dir_all(&app.dir);
     }
 
@@ -1937,6 +2654,326 @@ mod tests {
         app.touch(&ui, Event::Up(r.0 + r.2 * 2.0, y), 0.0);
         assert_eq!(app.volume, 1.0);
         assert!(!app.volume_drag, "the drag ends on release");
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    fn two_recordings(app: &mut VoiceMemos) {
+        let wav = springboard::media::capture::wav_bytes(&springboard::media::capture::pcm16(8000, 1), &vec![0; 4000]);
+        store::save(&app.dir, "20261004-120000", &wav, 100).unwrap();
+        store::save(&app.dir, "20261005-120000", &wav, 200).unwrap();
+        app.reload();
+    }
+
+    #[test]
+    fn favourites_narrow_the_list_and_unmarking_leaves_it() {
+        let (mut app, ui) = app("favourites");
+        two_recordings(&mut app);
+        assert_eq!(app.visible.len(), 2);
+        app.selected = Some(0);
+        assert!(!app.selected_favorite());
+        assert!(app.menu(&ui, MENU_FAVORITE));
+        assert!(app.selected_favorite(), "the first pick marks it");
+        assert!(app.memos[0].favorite);
+        app.set_scope(Scope::Favorites);
+        assert_eq!(app.visible.len(), 1, "only the favourite is listed");
+        assert!(app.selected.is_none(), "another place starts with nothing selected");
+        app.selected = Some(app.visible[0]);
+        app.activate(&ui, Target::Favorite);
+        assert!(app.visible.is_empty(), "an unmarked recording leaves Favourites");
+        assert!(app.selected.is_none());
+        assert_eq!(app.place_count(&Scope::All), 2);
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn typing_in_the_search_field_filters_by_title_and_notes() {
+        let (mut app, ui) = app("search");
+        two_recordings(&mut app);
+        let first = app.memos[1].path.clone();
+        store::write_notes(&first, "buy milk").unwrap();
+        // a press on the field gives it the keyboard
+        let field = app.search_rect(&ui);
+        let (x, y) = (ui.pt(field.x + 40.0), ui.pt(field.y + field.h / 2.0));
+        app.touch(&ui, Event::Down(x, y), 0.0);
+        app.touch(&ui, Event::Up(x, y), 10.0);
+        assert!(app.search_active());
+        app.key(&ui, Out::Text("MILK".into()), 0.0);
+        assert_eq!(app.visible.len(), 1, "the notes are searched");
+        assert_eq!(app.memos[app.visible[0]].path, first);
+        app.key(&ui, Out::Backspace, 0.0);
+        app.key(&ui, Out::Backspace, 0.0);
+        app.key(&ui, Out::Backspace, 0.0);
+        app.key(&ui, Out::Backspace, 0.0);
+        assert_eq!(app.visible.len(), 2, "an empty search lists everything");
+        app.key(&ui, Out::Text("20261005".into()), 0.0);
+        assert_eq!(app.visible.len(), 1, "titles are searched");
+        app.key(&ui, Out::Text("zzz".into()), 0.0);
+        assert!(app.visible.is_empty());
+        // the clear button empties the field and keeps the keyboard
+        app.activate(&ui, Target::SearchClear);
+        assert_eq!(app.visible.len(), 2);
+        assert!(app.search_active());
+        app.key(&ui, Out::Named("Escape"), 0.0);
+        assert!(!app.search_active(), "Escape gives the keyboard back");
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn a_search_that_hides_the_selection_clears_it() {
+        let (mut app, ui) = app("search-hide");
+        two_recordings(&mut app);
+        app.selected = Some(0);
+        app.activate(&ui, Target::Search);
+        app.key(&ui, Out::Text("20261004".into()), 0.0);
+        assert!(app.selected.is_none(), "the newest recording does not match");
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn the_search_field_is_published_with_a_label() {
+        let (app, ui) = app("search-node");
+        let nodes = app.controls(&ui);
+        let field = nodes.iter().find(|n| n.role == Role::TextField).expect("a text field");
+        assert_eq!(field.label, "Search Recordings");
+    }
+
+    #[test]
+    fn a_press_on_a_place_shows_it() {
+        let (mut app, ui) = app("places");
+        two_recordings(&mut app);
+        let r = app.sidebar().item_rect(1, app.column(&ui), 0.0);
+        let (x, y) = (ui.pt(r.x + 10.0), ui.pt(r.y + 10.0));
+        app.touch(&ui, Event::Down(x, y), 0.0);
+        app.touch(&ui, Event::Up(x, y), 10.0);
+        assert_eq!(app.scope, Scope::Favorites, "the second place is Favourites");
+        assert!(app.visible.is_empty());
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn delete_goes_to_recently_deleted_where_it_can_be_recovered_or_removed_for_good() {
+        let (mut app, ui) = app("trash");
+        one_recording(&mut app, 4000);
+        app.activate(&ui, Target::Delete);
+        app.activate(&ui, Target::Delete);
+        assert!(app.visible.is_empty());
+        let last = app.places().len() - 1;
+        app.activate(&ui, Target::Place(last));
+        assert_eq!(app.scope, Scope::Deleted);
+        assert_eq!(app.visible.len(), 1);
+        app.selected = Some(app.visible[0]);
+        assert!(!app.has_selection(), "edit commands do not apply to a deleted recording");
+        app.activate(&ui, Target::Recover);
+        assert!(app.visible.is_empty() && !app.memos[0].deleted, "the recording is back");
+        assert!(app.notice.starts_with("Recovered"), "{}", app.notice);
+        app.set_scope(Scope::All);
+        assert_eq!(app.visible.len(), 1);
+
+        // and once more, this time removed for good
+        app.selected = Some(0);
+        app.activate(&ui, Target::Delete);
+        app.activate(&ui, Target::Delete);
+        app.set_scope(Scope::Deleted);
+        app.selected = Some(app.visible[0]);
+        app.activate(&ui, Target::Delete);
+        assert!(app.confirm_delete && app.memos.len() == 1, "Delete Forever asks first");
+        app.activate(&ui, Target::Delete);
+        assert!(app.memos.is_empty(), "nothing is left");
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn a_new_folder_takes_recordings_and_deleting_it_moves_them_up() {
+        let (mut app, ui) = app("folders");
+        one_recording(&mut app, 4000);
+        assert!(app.menu(&ui, MENU_NEW_FOLDER));
+        assert!(app.editor.is_some(), "the name is asked for");
+        app.editor.as_mut().unwrap().field.set_text(&ui, "Work");
+        app.end_rename(true);
+        assert_eq!(app.scope, Scope::Folder("Work".into()), "the new folder is shown");
+        assert_eq!(app.folders().to_vec(), vec!["Work".to_string()]);
+        assert_eq!(app.record_dir(), app.dir.join("Work"), "new recordings go into the folder shown");
+
+        // a second folder of the same name is refused
+        app.menu(&ui, MENU_NEW_FOLDER);
+        app.editor.as_mut().unwrap().field.set_text(&ui, "work");
+        app.end_rename(true);
+        assert!(app.error.contains("Cannot create the folder"), "{}", app.error);
+
+        app.set_scope(Scope::All);
+        app.selected = Some(0);
+        assert!(app.menu(&ui, MENU_MOVE + 1), "the first folder");
+        assert_eq!(app.memos[0].folder, "Work");
+        assert_eq!(app.selected_folder(), "Work");
+        app.set_scope(Scope::Folder("Work".into()));
+        assert_eq!(app.visible.len(), 1);
+        assert!(app.in_folder());
+        assert!(app.menu(&ui, MENU_DELETE_FOLDER));
+        assert_eq!(app.scope, Scope::All);
+        assert!(app.folders().is_empty());
+        assert_eq!(app.memos.len(), 1);
+        assert_eq!(app.memos[0].folder, "", "the recording moved up");
+        assert_eq!(app.visible.len(), 1);
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    fn write_part(path: &Path, samples: usize) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, springboard::media::capture::wav_bytes(&springboard::media::capture::pcm16(8000, 1), &vec![7; samples])).unwrap();
+    }
+
+    fn open_take(app: &mut VoiceMemos, target: &Path, current: &Path, stop_for: Option<StopFor>, replace: Option<Replacement>) {
+        app.recording = true;
+        app.recording_path = Some(current.to_path_buf());
+        app.take = Some(Take { target: target.to_path_buf(), parts: Vec::new(), current: current.to_path_buf(), stop_for, paused: false, replace });
+    }
+
+    #[test]
+    fn a_paused_take_stays_open_and_its_parts_join_when_it_ends() {
+        let (mut app, ui) = app("pause");
+        let target = app.dir.join("Voice Memo 20261013-120000.wav");
+        let (p0, p1) = (store::part_path(&target, 0), store::part_path(&target, 1));
+        write_part(&p0, 4000);
+        open_take(&mut app, &target, &p0, Some(StopFor::Pause), None);
+        app.part_done(500);
+        assert!(app.is_paused() && app.is_recording(), "a paused take is still open");
+        assert_eq!(app.rec_base_ms, 500, "the timer keeps what was recorded");
+        assert!(app.recording_path.is_none());
+        assert!(app.memos.is_empty(), "nothing is listed until the take ends");
+        // there is no audio service here, so a resume cannot start and the take stays paused
+        app.toggle_pause();
+        assert!(app.error.contains("Cannot resume"), "{}", app.error);
+        assert!(app.is_paused());
+        assert!(!app.menu(&ui, 9999));
+
+        // the second part, as a resume would have started it, and the end of the take
+        write_part(&p1, 2000);
+        if let Some(take) = app.take.as_mut() {
+            take.current = p1.clone();
+            take.paused = false;
+            take.stop_for = Some(StopFor::Finish);
+        }
+        app.recording_path = Some(p1.clone());
+        app.part_done(250);
+        assert!(!app.recording && app.take.is_none());
+        assert_eq!(app.memos.len(), 1);
+        assert_eq!(app.memos[0].duration_ms, 750, "both parts, back to back");
+        assert_eq!(app.memos[0].title, "Voice Memo 20261013-120000");
+        assert!(!p0.exists() && !p1.exists(), "the parts are gone");
+        assert_eq!(app.selected, Some(0), "the new recording is selected");
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn stopping_a_paused_take_saves_it_at_once() {
+        let (mut app, _) = app("pause-stop");
+        let target = app.dir.join("Voice Memo 20261013-130000.wav");
+        let p0 = store::part_path(&target, 0);
+        write_part(&p0, 4000);
+        open_take(&mut app, &target, &p0, None, None);
+        if let Some(take) = app.take.as_mut() {
+            take.parts.push(p0.clone());
+            take.paused = true;
+        }
+        app.finish_recording();
+        assert!(!app.recording && app.take.is_none());
+        assert_eq!(app.memos.len(), 1);
+        assert_eq!(app.memos[0].duration_ms, 500);
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn a_take_that_failed_keeps_the_finished_parts() {
+        let (mut app, _) = app("pause-abort");
+        let target = app.dir.join("Voice Memo 20261013-140000.wav");
+        let (p0, p1) = (store::part_path(&target, 0), store::part_path(&target, 1));
+        write_part(&p0, 4000);
+        write_part(&p1, 100);
+        open_take(&mut app, &target, &p1, None, None);
+        if let Some(take) = app.take.as_mut() {
+            take.parts.push(p0.clone());
+        }
+        app.abort_take();
+        assert_eq!(app.memos.len(), 1, "the part before the failure is saved");
+        assert_eq!(app.memos[0].duration_ms, 500);
+        assert!(!p1.exists(), "the part that failed is dropped");
+
+        // a take that failed before anything was finished leaves nothing
+        let target = app.dir.join("Voice Memo 20261013-150000.wav");
+        let p0 = store::part_path(&target, 0);
+        write_part(&p0, 100);
+        open_take(&mut app, &target, &p0, None, None);
+        app.abort_take();
+        assert!(!app.recording && app.take.is_none() && !p0.exists());
+        assert_eq!(app.memos.len(), 1);
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn replace_picks_a_span_then_splices_the_new_take_over_it() {
+        let (mut app, ui) = app("replace");
+        let samples: Vec<i16> = (0..8000).map(|i| i as i16).collect();
+        store::save(&app.dir, "20261013-100000", &springboard::media::capture::wav_bytes(&springboard::media::capture::pcm16(8000, 1), &samples), 100).unwrap();
+        app.reload();
+        app.selected = Some(0);
+        assert!(app.menu(&ui, MENU_REPLACE));
+        assert!(app.trim.as_ref().is_some_and(|t| t.replace), "Replace opens the span picker");
+        if let Some(edit) = app.trim.as_mut() {
+            edit.range.set_start(0.25);
+            edit.range.set_end(0.5);
+        }
+        // Record starts the take; without an audio service it cannot, and says so
+        app.activate(&ui, Target::Done);
+        assert!(app.trim.is_none() && !app.recording);
+        assert!(app.error.contains("audio service"), "{}", app.error);
+
+        // the take as the service would have written it, ended
+        let target = app.dir.join("Voice Memo 20261013-110000.wav");
+        let p0 = store::part_path(&target, 0);
+        write_part(&p0, 2000);
+        let job = Replacement { memo: app.memos[0].path.clone(), start: 0.25, end: 0.5 };
+        open_take(&mut app, &target, &p0, Some(StopFor::Finish), Some(job));
+        app.part_done(250);
+        assert_eq!(app.memos.len(), 2, "the original and the replaced copy");
+        let copy = &app.memos[app.selected.unwrap()];
+        assert!(copy.title.ends_with(" replaced"), "{}", copy.title);
+        assert_eq!(copy.duration_ms, 1000, "a take as long as the span keeps the length");
+        assert!(!p0.exists());
+        let _ = std::fs::remove_dir_all(&app.dir);
+    }
+
+    #[test]
+    fn pause_only_applies_while_recording_and_the_input_menu_sets_the_default_input() {
+        let (mut app, ui) = app("menus");
+        app.take_wants();
+        assert!(app.menu(&ui, MENU_PAUSE), "the item is declared");
+        assert!(!app.is_paused() && !app.is_recording());
+
+        app.inputs = vec![("usb".into(), "USB mic".into()), ("desk".into(), "Desk mic".into())];
+        app.input_id = Some("desk".into());
+        assert_eq!(app.input_choices(), vec![("USB mic".to_string(), false), ("Desk mic".to_string(), true)]);
+        assert!(app.menu(&ui, MENU_INPUT));
+        assert!(matches!(app.take_wants().as_slice(), [Want::SetInput(id)] if id == "usb"));
+        assert_eq!(app.notice, "Input changed to USB mic");
+
+        app.recording = true;
+        app.menu(&ui, MENU_INPUT + 1);
+        assert!(app.take_wants().is_empty(), "the input does not change during a take");
+        assert!(app.error.contains("Stop the recording"), "{}", app.error);
+    }
+
+    #[test]
+    fn export_names_the_selected_recording() {
+        let (mut app, _) = app("export");
+        assert!(app.export_source().is_none(), "nothing selected");
+        one_recording(&mut app, 800);
+        let (name, path) = app.export_source().unwrap();
+        assert_eq!(name, "Voice Memo 20261004-120000.wav");
+        assert_eq!(path, app.memos[0].path);
+        app.set_notice("Exported Voice Memo.wav");
+        assert_eq!(app.notice, "Exported Voice Memo.wav");
+        app.set_error("Cannot export: x");
+        assert_eq!(app.error, "Cannot export: x");
         let _ = std::fs::remove_dir_all(&app.dir);
     }
 }
