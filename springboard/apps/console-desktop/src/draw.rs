@@ -2,7 +2,7 @@
 //! is `Console::geo`, which the hit tests share, so a tap lands on what is drawn. Colours are the kit's semantic
 //! tokens (`Pair`s resolved with `now()`), so Light and Dark follow the appearance.
 
-use crate::console::{Col, Console, Geo, B_SEARCH, FOOT_PT, HEAD_PT, ROW_PT, SIDE_PT, SIDE_SCROLL};
+use crate::console::{Col, Console, Geo, B_SEARCH, CELL_PAD_PT, EXPAND_LINE_PT, FOOT_PT, HEAD_PT, ROW_PT, SIDE_PT, SIDE_SCROLL};
 use crate::model::Level;
 use crate::signposts::{self, Mark};
 use bifrost_app::controls::Rect;
@@ -16,7 +16,7 @@ use bifrost_app::widgets;
 const US_PER_SEC: i64 = 1_000_000;
 const US_PER_MS: i64 = 1_000;
 /// Text inset in a table cell, and the Type column's inset (its level dot comes first).
-const PAD: f32 = 8.0;
+const PAD: f32 = CELL_PAD_PT;
 const TYPE_PAD: f32 = 16.0;
 /// Detail pane inset and the width of its field names.
 const PANE_PAD: f32 = 16.0;
@@ -60,7 +60,7 @@ fn width(ui: &Ui, label: &str, pt: f32, weight: Weight) -> f32 {
 }
 
 /// The text cut into lines no wider than `max` points at `pt`, breaking at spaces.
-fn wrap(ui: &Ui, body: &str, pt: f32, max: f32) -> Vec<String> {
+pub(crate) fn wrap(ui: &Ui, body: &str, pt: f32, max: f32) -> Vec<String> {
     let mut lines = Vec::new();
     for para in body.lines() {
         let mut cur = String::new();
@@ -117,8 +117,11 @@ impl Console {
         let g = self.geo(ui);
         let max = self.fit_scroll(ui);
         self.set_stick_bottom(max);
+        self.apply_reveal(ui, max);
         fill(s, ui, 0.0, 0.0, g.w, g.h, CONTENT_BG.now());
-        self.draw_sidebar(ui, s);
+        if self.show_sidebar {
+            self.draw_sidebar(ui, s);
+        }
         self.draw_rows(ui, s, &g);
         if let Some(x) = g.pane_x {
             self.draw_pane(ui, s, &g, x);
@@ -146,22 +149,25 @@ impl Console {
             }
             return;
         }
-        let (first, last) = self.row_range(ui);
+        let rows = self.table_rows(ui, g);
+        let (first, last) = self.row_range(&rows, g);
         let offset = self.scroll.offset();
         for i in first..last {
             let seq = self.visible[i];
             let Some(e) = self.buffer.get(seq) else { continue };
-            let y = g.table_top + i as f32 * ROW_PT - offset;
+            let y = g.table_top + rows.top_of(i) - offset;
+            let height = rows.height_of(i);
             let mid = y + ROW_PT / 2.0;
             let selected = self.selected == Some(seq);
             if selected {
-                fill(s, ui, g.table_x, y, table_w, ROW_PT, SELECTION.now());
+                fill(s, ui, g.table_x, y, table_w, height, SELECTION.now());
             }
             let ink = if selected { WHITE } else { LABEL.now() };
             let quiet = if selected { WHITE } else { LABEL_2.now() };
             let process = if e.process.is_empty() { "-" } else { e.process.as_str() };
             let message = one_line(&e.message);
             let stamp = clock(e.date);
+            let pid = if e.pid > 0 { e.pid.to_string() } else { "-".to_string() };
             for &(col, x, w) in &g.cols {
                 match col {
                     Col::Type => {
@@ -171,8 +177,17 @@ impl Console {
                     }
                     Col::Time => text(&mut self.labels, s, ui, &stamp, MAC_SUBHEAD_PT, Weight::Regular, quiet, x + PAD, mid, w - 2.0 * PAD),
                     Col::Process => text(&mut self.labels, s, ui, process, MAC_SUBHEAD_PT, Weight::Regular, ink, x + PAD, mid, w - 2.0 * PAD),
+                    Col::Pid => text(&mut self.labels, s, ui, &pid, MAC_SUBHEAD_PT, Weight::Regular, quiet, x + PAD, mid, w - 2.0 * PAD),
                     Col::Subsystem => text(&mut self.labels, s, ui, &e.subsystem, MAC_SUBHEAD_PT, Weight::Regular, quiet, x + PAD, mid, w - 2.0 * PAD),
                     Col::Category => text(&mut self.labels, s, ui, &e.category, MAC_SUBHEAD_PT, Weight::Regular, quiet, x + PAD, mid, w - 2.0 * PAD),
+                    Col::Message if height > ROW_PT => {
+                        // an expanded row: the message wrapped over as many lines as the row grew by
+                        let lines = ((height - ROW_PT) / EXPAND_LINE_PT).round() as usize + 1;
+                        for (k, line) in wrap(ui, &e.message, MAC_SUBHEAD_PT, w - 2.0 * PAD).into_iter().take(lines).enumerate() {
+                            let line_mid = mid + k as f32 * EXPAND_LINE_PT;
+                            text(&mut self.labels, s, ui, &line, MAC_SUBHEAD_PT, Weight::Regular, ink, x + PAD, line_mid, w - 2.0 * PAD);
+                        }
+                    }
                     Col::Message => text(&mut self.labels, s, ui, &message, MAC_SUBHEAD_PT, Weight::Regular, ink, x + PAD, mid, w - 2.0 * PAD),
                 }
             }
@@ -242,7 +257,7 @@ impl Console {
 
     /// The toolbar band, the table header, the footer and the toolbar's items and search field.
     fn draw_chrome(&mut self, ui: &Ui, s: &mut Surface, g: &Geo) {
-        let x0 = SIDE_PT;
+        let x0 = self.side_w();
         widgets::toolbar_band(s, ui, Rect { x: x0, y: 0.0, w: g.w - x0, h: UNIFIED_BAR_PT });
         let (bar, layout) = self.bar_layout(ui);
         widgets::toolbar(s, ui, self.band(ui), &bar, None);
@@ -253,15 +268,8 @@ impl Console {
         let table_w = g.table_right - g.table_x;
         fill(s, ui, g.table_x, UNIFIED_BAR_PT, table_w, HEAD_PT, CONTENT_BG.now());
         for &(col, x, w) in &g.cols {
-            let (title, pad) = match col {
-                Col::Type => ("Type", TYPE_PAD),
-                Col::Time => ("Time", PAD),
-                Col::Process => ("Process", PAD),
-                Col::Subsystem => ("Subsystem", PAD),
-                Col::Category => ("Category", PAD),
-                Col::Message => ("Message", PAD),
-            };
-            text(&mut self.labels, s, ui, title, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), x + pad, UNIFIED_BAR_PT + HEAD_PT / 2.0, w - 2.0 * PAD);
+            let pad = if col == Col::Type { TYPE_PAD } else { PAD };
+            text(&mut self.labels, s, ui, col.title(), MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), x + pad, UNIFIED_BAR_PT + HEAD_PT / 2.0, w - 2.0 * PAD);
         }
         fill(s, ui, g.table_x, UNIFIED_BAR_PT + HEAD_PT - 1.0, table_w, 1.0, SEPARATOR_C.now());
 

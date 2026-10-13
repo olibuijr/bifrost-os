@@ -1,23 +1,30 @@
 //! The Console window's state and behaviour: the views, the streaming, the search and the table selection, and the
 //! geometry that drawing and hit tests share. Points for the kit (`Rect`, `ui.pt`), pixels only where drawing.
 
+use crate::columns::{self, ColumnSet};
 use crate::cursor;
+use crate::draw;
+use crate::find;
+use crate::kernel::{self, KernelReports};
+use crate::opened::OpenedLog;
+use crate::rows::{Extra, Rows};
 use crate::export;
 use crate::diagnostics::{self, DailySource, HangSource};
 use crate::model::{self, Buffer, Levels, LogEntry, Query, SavedSearch, MAX_ENTRIES};
 use crate::signposts;
 use crate::security::{self, Security};
-use crate::source::{Coredumps, Follow, Journal, LogFile, Sink, Source};
+use crate::source::{Coredumps, Follow, Journal, Loaded, LogFile, Sink, Source};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
 use bifrost_app::controls::{Node, Rect, Role, TextField};
-use bifrost_app::kit::ui::{MAC_BODY_PT, SPACE_S};
+use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_SUBHEAD_PT, SPACE_S};
 use bifrost_app::kit::{Scroller, TextCache, Ui, Weight};
-use bifrost_app::layout::UNIFIED_BAR_PT;
+use bifrost_app::layout::{traffic_lights_trailing, UNIFIED_BAR_PT};
 use bifrost_app::widgets::{CAPSULE_PT, TOOLBAR_GAP_PT};
 use bifrost_app::dispatch::DispatchQueue;
 use bifrost_app::{KeyInput, TouchKind};
 use bifrost_core::log_cursor::Position;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -31,6 +38,8 @@ const SIDE_HEADER_PT: f32 = 26.0;
 pub const SIDE_SCROLL: f32 = -(UNIFIED_BAR_PT + 4.0);
 /// Table rows, the table header and the status footer (points).
 pub const ROW_PT: f32 = 22.0;
+/// Text inset in a table cell (points), which the expanded rows wrap inside.
+pub const CELL_PAD_PT: f32 = 8.0;
 pub const HEAD_PT: f32 = 22.0;
 pub const FOOT_PT: f32 = 24.0;
 /// The detail pane's width range, shown only when a row is selected and the window has room for it.
@@ -52,8 +61,15 @@ const ROW_SIGNPOST: u32 = 3;
 const ROW_SECURITY: u32 = 4;
 const ROW_HANG: u32 = 5;
 const ROW_DAILY: u32 = 6;
+const ROW_KERNEL: u32 = 7;
 const FILE_ROW: u32 = 100;
 const SAVED_ROW: u32 = 200;
+const OPENED_ROW: u32 = 300;
+/// Entries read when an opened file or a captured archive is shown: all it holds.
+const OPENED_LOAD: usize = MAX_ENTRIES;
+/// Lines of a message an expanded row shows at most, and the height of each line after the first (points).
+const EXPAND_LINES: usize = 12;
+pub const EXPAND_LINE_PT: f32 = 15.0;
 
 // Toolbar item ids (also the published control ids).
 pub const B_STREAM: u32 = 1;
@@ -71,19 +87,13 @@ pub enum View {
     Daily,
     Signposts,
     Security,
+    Kernel,
     File(usize),
+    /// An opened file or a captured archive: indexes `Console::opened`.
+    Opened(usize),
 }
 
-/// The table's columns, left to right.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Col {
-    Type,
-    Time,
-    Process,
-    Subsystem,
-    Category,
-    Message,
-}
+pub use crate::columns::Col;
 
 /// Where the table and the panes are, in points. `cols` holds each column's x and width.
 pub struct Geo {
@@ -144,6 +154,19 @@ pub struct Console {
     pub power_note: String,
     pub labels: TextCache,
     press: Press,
+    /// Which columns the table shows (View > Visible Columns).
+    pub columns: ColumnSet,
+    /// View > Show Sidebar and View > Show Details.
+    pub show_sidebar: bool,
+    pub show_details: bool,
+    /// Sequence numbers of the rows whose whole message is shown (View > Expand Message).
+    expanded: BTreeSet<u64>,
+    /// The text Find Next and Find Previous step to; empty means the search field's.
+    pub find_text: String,
+    /// A row to scroll into view at the next draw (set by Find Next and Find Previous).
+    reveal: Option<u64>,
+    /// Files opened and archives captured, shown under Opened Files in the sidebar.
+    pub opened: Vec<OpenedLog>,
 }
 
 impl Console {
@@ -175,6 +198,13 @@ impl Console {
             power_note: String::new(),
             labels: TextCache::default(),
             press: Press::None,
+            columns: ColumnSet::default(),
+            show_sidebar: true,
+            show_details: true,
+            expanded: BTreeSet::new(),
+            find_text: String::new(),
+            reveal: None,
+            opened: Vec::new(),
         }
     }
 
@@ -198,7 +228,9 @@ impl Console {
             View::Daily => Box::new(DailySource),
             View::Signposts => Box::new(Journal),
             View::Security => Box::new(Security),
+            View::Kernel => Box::new(KernelReports::default()),
             View::File(i) => Box::new(LogFile { path: self.files.get(i).cloned().unwrap_or_default() }),
+            View::Opened(i) => Box::new(Loaded { entries: self.opened.get(i).map(|o| o.entries.clone()).unwrap_or_default() }),
         };
         self.view = view;
         self.buffer.clear();
@@ -207,9 +239,12 @@ impl Console {
         self.detail = None;
         self.position = None;
         self.after = None;
+        self.expanded.clear();
+        self.reveal = None;
         self.status.clear();
         self.scroll.jump_top();
-        let (loaded, _timing) = signposts::timed(|| self.source.load(LOAD));
+        let limit = if matches!(view, View::Opened(_)) { OPENED_LOAD } else { LOAD };
+        let (loaded, _timing) = signposts::timed(|| self.source.load(limit));
         match loaded {
             Ok(entries) => {
                 for e in entries {
@@ -222,6 +257,7 @@ impl Console {
             View::Security => self.status = security::NOTE.to_string(),
             View::Hangs => self.status = diagnostics::HANG_NOTE.to_string(),
             View::Daily => self.status = diagnostics::DAILY_NOTE.to_string(),
+            View::Kernel if self.status.is_empty() => self.status = kernel::NOTE.to_string(),
             _ => {}
         }
         self.rebuild();
@@ -343,6 +379,8 @@ impl Console {
         self.detail = None;
         self.position = None;
         self.after = None;
+        self.expanded.clear();
+        self.reveal = None;
         if let Ok(mut p) = self.pending.lock() {
             p.clear();
         }
@@ -357,12 +395,19 @@ impl Console {
         items.push(SidebarItem::row(ROW_HANG, "Hang Diagnostics").with_symbol("exclamationmark.triangle"));
         items.push(SidebarItem::row(ROW_DAILY, "Daily Summary").with_symbol("calendar"));
         items.push(SidebarItem::row(ROW_SIGNPOST, "Signposts").with_symbol("clock"));
+        items.push(SidebarItem::row(ROW_KERNEL, "Kernel Reports").with_symbol("flag"));
         items.push(SidebarItem::row(ROW_SECURITY, "Security Events").with_symbol("info.circle"));
         // the section appears once a search is saved, so the default sidebar is unchanged
         if !self.saved.is_empty() {
             items.push(SidebarItem::header("Saved Searches"));
             for (i, s) in self.saved.iter().enumerate() {
                 items.push(SidebarItem::row(SAVED_ROW + i as u32, &s.text).with_symbol("magnifyingglass"));
+            }
+        }
+        if !self.opened.is_empty() {
+            items.push(SidebarItem::header("Opened Files"));
+            for (i, o) in self.opened.iter().enumerate() {
+                items.push(SidebarItem::row(OPENED_ROW + i as u32, &o.name).with_symbol("doc"));
             }
         }
         items.push(SidebarItem::header("Log Files"));
@@ -378,13 +423,15 @@ impl Console {
             View::Daily => ROW_DAILY,
             View::Signposts => ROW_SIGNPOST,
             View::Security => ROW_SECURITY,
+            View::Kernel => ROW_KERNEL,
             View::File(i) => FILE_ROW + i as u32,
+            View::Opened(i) => OPENED_ROW + i as u32,
         }));
         list
     }
 
     fn sidebar_hit(&self, ui: &Ui, x: f32, y: f32) -> Option<u32> {
-        if x >= SIDE_PT {
+        if !self.show_sidebar || x >= SIDE_PT {
             return None;
         }
         let bounds = Rect { x: 0.0, y: 0.0, w: SIDE_PT, h: self.h / ui.pt(1.0) };
@@ -392,6 +439,13 @@ impl Console {
     }
 
     fn select_row(&mut self, id: u32) {
+        if id >= OPENED_ROW {
+            let i = (id - OPENED_ROW) as usize;
+            if i < self.opened.len() && self.view != View::Opened(i) {
+                self.open_view(View::Opened(i));
+            }
+            return;
+        }
         if id >= SAVED_ROW {
             self.open_saved((id - SAVED_ROW) as usize);
             return;
@@ -403,6 +457,7 @@ impl Console {
             ROW_SECURITY => View::Security,
             ROW_HANG => View::Hangs,
             ROW_DAILY => View::Daily,
+            ROW_KERNEL => View::Kernel,
             id if id >= FILE_ROW && ((id - FILE_ROW) as usize) < self.files.len() => View::File((id - FILE_ROW) as usize),
             _ => return,
         };
@@ -453,12 +508,21 @@ impl Console {
         self.w / ui.pt(1.0)
     }
 
+    /// The sidebar's width in points: nothing while it is hidden.
+    pub fn side_w(&self) -> f32 {
+        if self.show_sidebar {
+            SIDE_PT
+        } else {
+            0.0
+        }
+    }
+
     pub fn geo(&self, ui: &Ui) -> Geo {
         let w = self.w_pt(ui);
         let h = self.h / ui.pt(1.0);
-        let table_x = SIDE_PT;
+        let table_x = self.side_w();
         let pane_w = (w * 0.34).clamp(PANE_MIN_PT, PANE_MAX_PT);
-        let pane = self.selected.is_some() && w - SIDE_PT >= PANE_ROOM_PT;
+        let pane = self.selected.is_some() && self.show_details && w - table_x >= PANE_ROOM_PT;
         let table_right = if pane { w - pane_w } else { w };
         let table_w = (table_right - table_x).max(0.0);
         Geo {
@@ -469,14 +533,15 @@ impl Console {
             table_top: UNIFIED_BAR_PT + HEAD_PT,
             table_bottom: (h - FOOT_PT).max(UNIFIED_BAR_PT + HEAD_PT),
             pane_x: pane.then_some(table_right),
-            cols: columns(table_x, table_w),
+            cols: columns::layout(table_x, table_w, self.columns),
         }
     }
 
-    /// The toolbar band over the table and the pane.
+    /// The toolbar band over the table and the pane. With the sidebar hidden it starts past the traffic lights.
     pub fn band(&self, ui: &Ui) -> Rect {
         let w = self.w_pt(ui);
-        Rect { x: SIDE_PT + 12.0, y: (UNIFIED_BAR_PT - CAPSULE_PT) / 2.0, w: (w - SIDE_PT - 24.0).max(0.0), h: CAPSULE_PT }
+        let x = if self.show_sidebar { SIDE_PT + 12.0 } else { traffic_lights_trailing() + TOOLBAR_GAP_PT };
+        Rect { x, y: (UNIFIED_BAR_PT - CAPSULE_PT) / 2.0, w: (w - x - 12.0).max(0.0), h: CAPSULE_PT }
     }
 
     fn bar(&self) -> Toolbar {
@@ -513,25 +578,51 @@ impl Console {
     }
 
     /// The table row (sequence number) under a point, given the current scroll.
-    fn row_at(&self, ui: &Ui, y: f32) -> Option<u64> {
+    pub(crate) fn row_at(&self, ui: &Ui, y: f32) -> Option<u64> {
         let g = self.geo(ui);
         if y < g.table_top || y > g.table_bottom {
             return None;
         }
-        let index = ((y - g.table_top + self.scroll.offset()) / ROW_PT).floor();
-        if index < 0.0 {
-            return None;
-        }
-        self.visible.get(index as usize).copied()
+        let index = self.table_rows(ui, &g).locate(y - g.table_top + self.scroll.offset());
+        self.visible.get(index).copied()
+    }
+
+    /// The row heights: every row is `ROW_PT` tall and an expanded one is taller by the lines its message needs, so
+    /// the extra lines are measured here against the Message column's width.
+    pub fn table_rows(&self, ui: &Ui, g: &Geo) -> Rows {
+        let message_w = g.cols.iter().find(|c| c.0 == Col::Message).map(|c| (c.2 - 2.0 * CELL_PAD_PT).max(0.0));
+        let extras: Vec<Extra> = match message_w {
+            Some(w) if !self.expanded.is_empty() => self
+                .expanded
+                .iter()
+                .filter_map(|seq| {
+                    let index = self.visible.binary_search(seq).ok()?;
+                    let message = &self.buffer.get(*seq)?.message;
+                    let lines = draw::wrap(ui, message, MAC_SUBHEAD_PT, w).len().clamp(1, EXPAND_LINES);
+                    Some((index, (lines - 1) as f32 * EXPAND_LINE_PT))
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        Rows::new(ROW_PT, extras)
     }
 
     /// The largest scroll offset for the rows, and sets it on the scroller.
     pub fn fit_scroll(&mut self, ui: &Ui) -> f32 {
         let g = self.geo(ui);
-        let content = self.visible.len() as f32 * ROW_PT;
+        let content = self.table_rows(ui, &g).content_height(self.visible.len());
         let max = (content - (g.table_bottom - g.table_top)).max(0.0);
         self.scroll.set_max(max);
         max
+    }
+
+    /// Scrolls to the row Find Next or Find Previous chose, now that the geometry and the scroll range are known.
+    pub fn apply_reveal(&mut self, ui: &Ui, max: f32) {
+        let Some(seq) = self.reveal.take() else { return };
+        let Ok(index) = self.visible.binary_search(&seq) else { return };
+        let g = self.geo(ui);
+        let to = self.table_rows(ui, &g).reveal(index, self.scroll.offset(), g.table_bottom - g.table_top).min(max);
+        self.scroll.jump_to(to);
     }
 
     // --- selection and the detail text ---
@@ -624,7 +715,7 @@ impl Console {
         match kind {
             TouchKind::Down => {
                 let g = self.geo(ui);
-                self.press = if x < SIDE_PT {
+                self.press = if x < self.side_w() {
                     Press::Sidebar
                 } else if y < UNIFIED_BAR_PT {
                     self.toolbar_hit(ui, x, y).map_or(Press::None, Press::Toolbar)
@@ -687,11 +778,11 @@ impl Console {
     }
 
     /// The rows the table shows, for the drawing code.
-    pub fn row_range(&self, ui: &Ui) -> (usize, usize) {
-        let g = self.geo(ui);
-        let first = (self.scroll.offset() / ROW_PT).floor().max(0.0) as usize;
-        let visible = ((g.table_bottom - g.table_top) / ROW_PT).ceil() as usize + 2;
-        (first.min(self.visible.len()), (first + visible).min(self.visible.len()))
+    pub fn row_range(&self, rows: &Rows, g: &Geo) -> (usize, usize) {
+        let offset = self.scroll.offset();
+        let first = rows.locate(offset);
+        let last = rows.locate(offset + (g.table_bottom - g.table_top)) + 2;
+        (first.min(self.visible.len()), last.min(self.visible.len()))
     }
 
     /// Whether the scroller is still moving, so the window draws again.
@@ -711,18 +802,122 @@ impl Console {
             MENU_SUBSYSTEM => self.show_subsystem(),
             MENU_SAVE_SEARCH => self.keep_search(),
             MENU_DELETE_SEARCH => self.drop_search(),
+            MENU_RELOAD => self.reload(),
+            MENU_SIDEBAR => self.show_sidebar = !self.show_sidebar,
+            MENU_DETAILS => self.show_details = !self.show_details,
+            MENU_EXPAND => self.toggle_expanded(),
+            MENU_COLLAPSE_ALL => self.expanded.clear(),
+            MENU_FIND_NEXT => self.find_step(true),
+            MENU_FIND_PREVIOUS => self.find_step(false),
+            MENU_USE_SELECTION => self.use_selection_for_find(),
+            id if (MENU_COLUMN..MENU_COLUMN + Col::ALL.len() as u32).contains(&id) => {
+                self.columns.toggle(Col::ALL[(id - MENU_COLUMN) as usize]);
+            }
+            id if (MENU_RECENT..MENU_RECENT + MAX_OPENED as u32).contains(&id) => {
+                let i = (id - MENU_RECENT) as usize;
+                // the menu lists the newest first
+                if let Some(i) = self.opened.len().checked_sub(1 + i) {
+                    self.select_row(OPENED_ROW + i as u32);
+                }
+            }
             _ => return false,
         }
         true
     }
 
-    /// Log menu: Save Messages. Writes the selected message, or every message the window shows when none is selected,
-    /// to `EXPORT_DIR` under `home`. The saved path, or the error, goes to the status line.
-    pub fn save_messages(&mut self, home: &Path, now_secs: i64) {
-        let text = match self.selected_entry() {
+    /// View > Reload: reads the current view again.
+    pub fn reload(&mut self) {
+        self.open_view(self.view);
+    }
+
+    /// View > Expand Message / Collapse Message: shows the selected message whole in the table, or in one line again.
+    pub fn toggle_expanded(&mut self) {
+        let Some(seq) = self.selected else { return };
+        if !self.expanded.remove(&seq) {
+            self.expanded.insert(seq);
+        }
+    }
+
+    /// Whether the selected message is shown whole (the menu item then reads Collapse).
+    pub fn selected_expanded(&self) -> bool {
+        self.selected.is_some_and(|s| self.expanded.contains(&s))
+    }
+
+    /// Whether any message is shown whole (Collapse All Messages).
+    pub fn any_expanded(&self) -> bool {
+        !self.expanded.is_empty()
+    }
+
+    /// The query Find Next and Find Previous match with: the find text, else the search field's.
+    fn find_query(&self) -> Query {
+        if self.find_text.trim().is_empty() {
+            Query::parse(&self.search)
+        } else {
+            Query::parse(&self.find_text)
+        }
+    }
+
+    /// Edit > Find Next and Find Previous: selects the next or previous shown message that matches the find text, wrapping
+    /// at the ends, and scrolls to it. The table keeps every row; only the selection moves.
+    pub fn find_step(&mut self, forward: bool) {
+        let query = self.find_query();
+        let found = find::step(&self.visible, self.selected, forward, |seq| self.buffer.get(seq).is_some_and(|e| query.matches(e)));
+        match found {
+            Some(seq) => {
+                self.select(seq);
+                self.reveal = Some(seq);
+                self.stick = false;
+                self.status.clear();
+            }
+            None => self.status = "No message matches.".into(),
+        }
+    }
+
+    /// Edit > Use Selection for Find: the selected message's first line becomes the find text.
+    pub fn use_selection_for_find(&mut self) {
+        let Some(text) = self.selected_entry().map(find::text_for).filter(|t| !t.is_empty()) else { return };
+        self.status = format!("Find: {text}");
+        self.find_text = text;
+    }
+
+    /// File > Open and Capture Archive: the log joins the Opened Files section and is shown. The oldest one goes when
+    /// `MAX_OPENED` are held; its grant is returned for the caller to release.
+    pub fn add_opened(&mut self, log: OpenedLog) -> Option<bifrost_app::proto::GrantId> {
+        let dropped = if self.opened.len() >= MAX_OPENED { self.opened.remove(0).grant } else { None };
+        self.opened.push(log);
+        self.open_view(View::Opened(self.opened.len() - 1));
+        dropped
+    }
+
+    /// The opened log in view, if the view is one.
+    pub fn active_opened(&self) -> Option<&OpenedLog> {
+        match self.view {
+            View::Opened(i) => self.opened.get(i),
+            _ => None,
+        }
+    }
+
+    /// Forgets the opened log that holds `grant` (it was moved to the Trash). The live journal is shown if it was in view.
+    pub fn forget_opened(&mut self, grant: bifrost_app::proto::GrantId) {
+        let viewing = matches!(self.view, View::Opened(_));
+        self.opened.retain(|o| o.grant != Some(grant));
+        if viewing {
+            self.open_view(View::Live);
+        }
+    }
+
+    /// The text File > Save Messages writes: the selected message, or every message the window shows.
+    pub fn messages_to_save(&self) -> String {
+        match self.selected_entry() {
             Some(e) => export::text([e]),
             None => export::text(self.visible.iter().filter_map(|s| self.buffer.get(*s))),
-        };
+        }
+    }
+
+    /// Save Messages without a save panel (a shell that has none): writes to `EXPORT_DIR` under `home`. The saved path, or
+    /// the error, goes to the status line.
+    pub fn save_messages(&mut self, home: &Path, now_secs: i64) {
+        let text = self.messages_to_save();
         if text.is_empty() {
             self.status = "No messages to save.".into();
             return;
@@ -792,7 +987,8 @@ impl Console {
             View::Daily => "No Crashes or Hangs",
             View::Signposts => "No Signposts",
             View::Security => "No Security Events",
-            View::File(_) => "No Log Entries",
+            View::Kernel => "No Kernel Reports",
+            View::File(_) | View::Opened(_) => "No Log Entries",
         }
     }
 
@@ -826,25 +1022,6 @@ fn item_w(ui: &Ui) -> impl Fn(&ToolbarItem) -> f32 + '_ {
     }
 }
 
-/// The columns across the table, from `x0` over `table_w` points. Subsystem and Category give way on a narrow
-/// table; Message takes the rest.
-fn columns(x0: f32, table_w: f32) -> Vec<(Col, f32, f32)> {
-    let mut spec: Vec<(Col, f32)> = vec![(Col::Type, 84.0), (Col::Time, 96.0), (Col::Process, 128.0)];
-    if table_w >= 620.0 {
-        spec.push((Col::Subsystem, 150.0));
-        spec.push((Col::Category, 96.0));
-    }
-    let fixed: f32 = spec.iter().map(|c| c.1).sum();
-    let mut x = x0;
-    let mut out = Vec::with_capacity(spec.len() + 1);
-    for (col, w) in spec {
-        out.push((col, x, w));
-        x += w;
-    }
-    out.push((Col::Message, x, (table_w - fixed).max(0.0)));
-    out
-}
-
 /// "1,234" with a comma every three digits.
 fn group(n: usize) -> String {
     let digits = n.to_string();
@@ -872,6 +1049,28 @@ pub const MENU_SAVE_SEARCH: u32 = 9;
 pub const MENU_DELETE_SEARCH: u32 = 10;
 /// Log menu: Save Messages. Handled by the app (it needs the home directory), not by `menu`.
 pub const MENU_SAVE_MESSAGES: u32 = 11;
+/// View menu: Reload, Show Sidebar, Show Details, Expand or Collapse Message, Collapse All Messages.
+pub const MENU_RELOAD: u32 = 12;
+pub const MENU_SIDEBAR: u32 = 13;
+pub const MENU_DETAILS: u32 = 14;
+pub const MENU_EXPAND: u32 = 15;
+pub const MENU_COLLAPSE_ALL: u32 = 16;
+/// Edit menu: Find Next, Find Previous, Use Selection for Find.
+pub const MENU_FIND_NEXT: u32 = 17;
+pub const MENU_FIND_PREVIOUS: u32 = 18;
+pub const MENU_USE_SELECTION: u32 = 19;
+/// File menu: Open, Capture Archive, Reveal in Files, Move to Trash. Handled by the app (they need the shell's
+/// document and workspace services), not by `menu`.
+pub const MENU_OPEN: u32 = 20;
+pub const MENU_CAPTURE: u32 = 21;
+pub const MENU_REVEAL: u32 = 22;
+pub const MENU_TRASH: u32 = 23;
+/// View > Visible Columns: item `MENU_COLUMN + i` toggles `Col::ALL[i]`.
+pub const MENU_COLUMN: u32 = 30;
+/// File > Open Recent: item `MENU_RECENT + i` shows the i-th newest opened log.
+pub const MENU_RECENT: u32 = 40;
+/// Logs held under Opened Files; opening one more drops the oldest.
+pub const MAX_OPENED: usize = 8;
 
 #[cfg(test)]
 mod tests {
@@ -886,13 +1085,4 @@ mod tests {
         assert_eq!(group(1_234_567), "1,234,567");
     }
 
-    #[test]
-    fn narrow_tables_drop_subsystem_and_category() {
-        let wide = columns(190.0, 900.0);
-        let narrow = columns(190.0, 500.0);
-        assert_eq!(wide.iter().map(|c| c.0).collect::<Vec<_>>(), vec![Col::Type, Col::Time, Col::Process, Col::Subsystem, Col::Category, Col::Message]);
-        assert_eq!(narrow.iter().map(|c| c.0).collect::<Vec<_>>(), vec![Col::Type, Col::Time, Col::Process, Col::Message]);
-        let last = narrow.last().unwrap();
-        assert!((last.1 - (190.0 + 84.0 + 96.0 + 128.0)).abs() < 0.01 && last.2 > 0.0);
-    }
 }
