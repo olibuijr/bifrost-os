@@ -1310,6 +1310,27 @@ Gaps, decided here: no `URLSessionConfiguration` (other than background), delega
 (`URLCache` is memory only); no cookie storage or `URLCredential`s (the Deildu `Client` keeps its own jar); no
 `Vary`, `Expires` or `Age` handling; one connection per request (`Connection: close`); `URLError` has the few codes
 used here. The assistant app moved onto `URLSession::bytes`.
+### URLSession completion (2026-10-13)
+
+Host tests only (`sdk/tests/url_session.rs`, loopback servers); a row becomes `parity` after a Midget check.
+
+| Apple | Here |
+|---|---|
+| `URLSessionConfiguration.default / .ephemeral / .background(withIdentifier:)` | `url_background::URLSessionConfiguration::{default_configuration, ephemeral, background}`, `identifier()`; fields for cache policy, timeout, cookie, credential and cache stores |
+| `URLSession(configuration:delegate:)` | `ConfiguredSession::new(config, session, delegate)`, blocking `data` / `data_at(req, now)` |
+| `urlSession(_:didReceive:completionHandler:)`, `URLAuthenticationChallenge` | `URLSessionTaskDelegate::did_receive(&AuthChallenge) -> AuthDisposition`; a 401 Basic challenge is retried once, the credential is stored per `URLProtectionSpace` unless its persistence is `None` |
+| `HTTPCookieStorage` in a session | cookies attached and stored per request (`http_should_set_cookies`), accept policy honoured |
+| `URLCache`, `CachedURLResponse`, `URLRequest.CachePolicy` | `url_cache::{URLCache, CachedURLResponse, CachePolicy}`: directory store, memory/disk capacity, `Cache-Control`/`ETag`/304, oldest-first eviction |
+| `URLSessionTaskMetrics` | `ConfiguredSession::last_metrics()`: per-transaction url, status, duration, bytes, `FetchType` |
+| background session | `BackgroundSession::open(id, dir)`, `enqueue_download`, `run_pending`: the queue is a file, so a rebuilt session resumes unfinished downloads |
+| `URLSessionWebSocketTask` | `websocket::URLSessionWebSocketTask`: `connect`, `send`, `receive`, `send_ping`, `cancel(code, reason)` over `ws://` |
+| `URLSessionStreamTask` | `url_stream_task::URLSessionStreamTask`: `connect`, `write`, `write_line`, `read_data`, `read_line`, `close_write` |
+| `NetService`, `NetServiceBrowser` | `net_service`: publish/stop, TXT, browser with `did_find` / `did_remove`, over `dns_service` |
+
+Decided gaps: Digest, client-certificate and server-trust challenges; `AcceptPolicy.onlyFromMainDocumentDomain`; `wss://`
+and secure stream upgrade; upload tasks and OS-level background transfer; an mDNS responder (the browser is fed by a
+transport); no `Vary`, `Expires` or `Age` handling; `URLError` has the few codes used here. The shared session's
+`url::URLCache` stays memory only.
 
 ## Unified Logging (`os.Logger`, `OSLogStore`, `log` CLI; milestone `docs/milestone-unified-logging.md`, Phase 1)
 

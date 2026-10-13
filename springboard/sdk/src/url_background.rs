@@ -1,4 +1,13 @@
-//! Background `URLSession` sessions and download resume data (Foundation parity).
+//! `URLSessionConfiguration` (default, ephemeral, background), a configured session that wires the cookie jar, the
+//! credential storage, the disk `URLCache` and authentication challenges into requests, `URLSessionTaskMetrics`, and
+//! background `URLSession` sessions with download resume data (Foundation parity).
+//!
+//! `ConfiguredSession::data` is blocking (call it from a background thread). Per request it: applies the cache policy,
+//! attaches cookies, sends, stores `Set-Cookie`, and on a 401 with `WWW-Authenticate: Basic` asks the delegate
+//! (`urlSession(_:didReceive:completionHandler:)`) and retries once with the chosen credential. Digest is not answered
+//! (the challenge goes to the delegate and the 401 is returned unless it cancels or supplies nothing).
+//! A background configuration builds a `BackgroundSession` (`URLSessionConfiguration::background_session`); building
+//! one with the same identifier picks the unfinished downloads up again.
 //!
 //! `BackgroundConfiguration` mirrors `URLSessionConfiguration.background(withIdentifier:)`, `ResumeData` the
 //! `NSURLSessionDownloadTaskResumeData` blob, and `BackgroundSession` a session whose download tasks are persisted
@@ -6,7 +15,10 @@
 //! goes through `URLSession::bytes`; a resumed task sends `Range` and `If-Range`, and a `200` instead of `206`
 //! restarts from zero.
 
+use crate::http_auth::{parse_www_authenticate, AuthChallenge, AuthDisposition, URLCredentialStorage, URLProtectionSpace};
+use crate::http_cookies::HTTPCookieStorage;
 use crate::url::{HTTPURLResponse, URLError, URLRequest, URLSession};
+use crate::url_cache::{CacheDecision, CachePolicy, URLCache};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::fs::OpenOptions;
@@ -14,6 +26,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 /// `NSURLSessionDownloadTaskResumeData`: the key of the resume blob in an error's user info.
 pub const URL_SESSION_DOWNLOAD_TASK_RESUME_DATA: &str = "NSURLSessionDownloadTaskResumeData";
@@ -337,6 +350,234 @@ fn unescape(s: &str) -> String {
         }
     }
     out
+}
+
+/// The three kinds of configuration.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ConfigurationKind {
+    Default,
+    Ephemeral,
+    Background(BackgroundConfiguration),
+}
+
+/// `URLSessionConfiguration`.
+#[derive(Clone)]
+pub struct URLSessionConfiguration {
+    pub kind: ConfigurationKind,
+    pub request_cache_policy: CachePolicy,
+    pub timeout_interval_for_request: Duration,
+    pub http_should_set_cookies: bool,
+    pub http_cookie_storage: Option<Arc<Mutex<HTTPCookieStorage>>>,
+    pub url_credential_storage: Option<Arc<Mutex<URLCredentialStorage>>>,
+    pub url_cache: Option<Arc<URLCache>>,
+}
+
+impl URLSessionConfiguration {
+    /// `.default`: cookies and credentials on, cache `cache`.
+    pub fn default_configuration(cache: Option<Arc<URLCache>>) -> Self {
+        URLSessionConfiguration {
+            kind: ConfigurationKind::Default,
+            request_cache_policy: CachePolicy::UseProtocolCachePolicy,
+            timeout_interval_for_request: Duration::from_secs(60),
+            http_should_set_cookies: true,
+            http_cookie_storage: Some(Arc::new(Mutex::new(HTTPCookieStorage::new()))),
+            url_credential_storage: Some(Arc::new(Mutex::new(URLCredentialStorage::new()))),
+            url_cache: cache,
+        }
+    }
+    /// `.ephemeral`: nothing is cached; cookies and credentials live only in this configuration.
+    pub fn ephemeral() -> Self {
+        URLSessionConfiguration { kind: ConfigurationKind::Ephemeral, ..Self::default_configuration(None) }
+    }
+    /// `.background(withIdentifier:)`.
+    pub fn background(identifier: &str) -> Self {
+        URLSessionConfiguration { kind: ConfigurationKind::Background(BackgroundConfiguration::background(identifier)), ..Self::default_configuration(None) }
+    }
+    /// `identifier`: set for background configurations only.
+    pub fn identifier(&self) -> Option<&str> {
+        match &self.kind {
+            ConfigurationKind::Background(c) => Some(&c.identifier),
+            _ => None,
+        }
+    }
+    /// The background configuration (`isDiscretionary`, `sessionSendsLaunchEvents`), for background kinds only.
+    pub fn background_configuration(&self) -> Option<&BackgroundConfiguration> {
+        match &self.kind {
+            ConfigurationKind::Background(c) => Some(c),
+            _ => None,
+        }
+    }
+    /// Opens (or restores) the background session this configuration names, persisting its tasks under `dir`.
+    /// `None` for default and ephemeral configurations.
+    pub fn background_session(&self, session: URLSession, dir: &Path) -> Option<BackgroundSession> {
+        self.background_configuration().map(|c| BackgroundSession::open(c.clone(), session, dir))
+    }
+}
+
+/// `URLSessionTaskDelegate` (the part that answers challenges).
+pub trait URLSessionTaskDelegate: Send + Sync {
+    /// `urlSession(_:task:didReceive:completionHandler:)`.
+    fn did_receive(&self, challenge: &AuthChallenge) -> AuthDisposition;
+}
+
+/// `URLSessionTaskMetrics`, one transaction per request sent.
+#[derive(Clone, Debug, PartialEq)]
+pub struct URLSessionTaskMetrics {
+    pub transactions: Vec<TransactionMetrics>,
+    pub task_interval: Duration,
+}
+
+/// `URLSessionTaskTransactionMetrics`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TransactionMetrics {
+    pub url: String,
+    pub status_code: Option<u16>,
+    pub duration: Duration,
+    pub response_body_bytes: usize,
+    pub resource_fetch_type: FetchType,
+}
+
+/// `URLSessionTaskMetrics.ResourceFetchType`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FetchType {
+    NetworkLoad,
+    LocalCache,
+}
+
+fn unix_now() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// A session built from a configuration.
+pub struct ConfiguredSession {
+    pub configuration: URLSessionConfiguration,
+    session: URLSession,
+    delegate: Option<Arc<dyn URLSessionTaskDelegate>>,
+    last_metrics: Mutex<Option<URLSessionTaskMetrics>>,
+}
+
+impl ConfiguredSession {
+    /// `URLSession(configuration:delegate:)` over a transport session (`URLSession::shared()` or a test one).
+    pub fn new(configuration: URLSessionConfiguration, session: URLSession, delegate: Option<Arc<dyn URLSessionTaskDelegate>>) -> Self {
+        ConfiguredSession { configuration, session, delegate, last_metrics: Mutex::new(None) }
+    }
+
+    /// `URLSessionTask.metrics` of the latest `data` call.
+    pub fn last_metrics(&self) -> Option<URLSessionTaskMetrics> {
+        self.last_metrics.lock().unwrap().clone()
+    }
+
+    fn send(&self, req: &URLRequest, now: u64, txs: &mut Vec<TransactionMetrics>) -> Result<(HTTPURLResponse, Vec<u8>), URLError> {
+        let mut req = req.clone();
+        if req.timeout == Duration::from_secs(60) {
+            req.timeout = self.configuration.timeout_interval_for_request;
+        }
+        if self.configuration.http_should_set_cookies {
+            if let Some(jar) = &self.configuration.http_cookie_storage {
+                crate::url::attach_cookies(&mut req, &jar.lock().unwrap(), now);
+            }
+        }
+        let started = Instant::now();
+        let cancel = AtomicBool::new(false);
+        let mut body = Vec::new();
+        let resp = self.session.bytes(&req, &cancel, &mut |_| {}, &mut |c| {
+            body.extend_from_slice(c);
+            true
+        })?;
+        txs.push(TransactionMetrics {
+            url: req.url.clone(),
+            status_code: Some(resp.status_code),
+            duration: started.elapsed(),
+            response_body_bytes: body.len(),
+            resource_fetch_type: FetchType::NetworkLoad,
+        });
+        if self.configuration.http_should_set_cookies {
+            if let Some(jar) = &self.configuration.http_cookie_storage {
+                crate::url::store_cookies(&resp, &mut jar.lock().unwrap(), now);
+            }
+        }
+        Ok((resp, body))
+    }
+
+    /// `dataTask`, blocking: cache policy, cookies, one authentication retry, cache store. `now` is Unix seconds.
+    pub fn data_at(&self, request: &URLRequest, now: u64) -> Result<(HTTPURLResponse, Vec<u8>), URLError> {
+        let begun = Instant::now();
+        let mut txs = Vec::new();
+        let result = self.data_inner(request, now, &mut txs);
+        *self.last_metrics.lock().unwrap() = Some(URLSessionTaskMetrics { transactions: txs, task_interval: begun.elapsed() });
+        result
+    }
+
+    /// `data_at` with the system clock.
+    pub fn data(&self, request: &URLRequest) -> Result<(HTTPURLResponse, Vec<u8>), URLError> {
+        self.data_at(request, unix_now())
+    }
+
+    fn data_inner(&self, request: &URLRequest, now: u64, txs: &mut Vec<TransactionMetrics>) -> Result<(HTTPURLResponse, Vec<u8>), URLError> {
+        let mut req = request.clone();
+        let cache = self.configuration.url_cache.as_ref().filter(|_| req.method == "GET");
+        let mut revalidating = false;
+        if let Some(cache) = cache {
+            match cache.decide(&req.url, self.configuration.request_cache_policy, now) {
+                CacheDecision::UseCache => {
+                    let c = cache.cached_response(&req.url).ok_or(URLError::Cancelled)?;
+                    txs.push(TransactionMetrics {
+                        url: req.url.clone(),
+                        status_code: Some(c.response.status_code),
+                        duration: Duration::ZERO,
+                        response_body_bytes: c.data.len(),
+                        resource_fetch_type: FetchType::LocalCache,
+                    });
+                    return Ok((c.response, c.data));
+                }
+                CacheDecision::Fail => return Err(URLError::CannotConnect("not in the cache".into())),
+                CacheDecision::Revalidate(tag) => {
+                    req.set_header("If-None-Match", &tag);
+                    revalidating = true;
+                }
+                CacheDecision::Load => {}
+            }
+        }
+        let (mut resp, mut body) = self.send(&req, now, txs)?;
+        if resp.status_code == 401 {
+            if let Some(retry) = self.answer_challenge(&req, &resp) {
+                (resp, body) = self.send(&retry, now, txs)?;
+            }
+        }
+        if let Some(cache) = cache {
+            if resp.status_code == 304 && revalidating {
+                if let Some(c) = cache.renew(&req.url, &resp, now) {
+                    return Ok((c.response, c.data));
+                }
+            } else if resp.status_code == 200 {
+                cache.store_cached_response(&resp, &body, now);
+            }
+        }
+        Ok((resp, body))
+    }
+
+    /// The request to retry after a Basic challenge, or `None` when the delegate declines or the scheme is not Basic.
+    fn answer_challenge(&self, req: &URLRequest, resp: &HTTPURLResponse) -> Option<URLRequest> {
+        let challenge = parse_www_authenticate(resp.value("WWW-Authenticate")?)?;
+        let space = URLProtectionSpace::for_challenge(&req.url, &challenge)?;
+        let storage = self.configuration.url_credential_storage.as_ref()?;
+        let ch = AuthChallenge::new(space.clone());
+        let disposition = match &self.delegate {
+            Some(d) => d.did_receive(&ch),
+            None => ch.disposition(&storage.lock().unwrap()),
+        };
+        match disposition {
+            AuthDisposition::UseCredential(cred) if challenge.scheme == "basic" => {
+                if cred.persistence != crate::http_auth::CredentialPersistence::None {
+                    storage.lock().unwrap().set_credential(cred.clone(), space);
+                }
+                let mut retry = req.clone();
+                cred.apply_to(&mut retry);
+                Some(retry)
+            }
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
