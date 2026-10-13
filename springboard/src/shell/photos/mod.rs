@@ -18,6 +18,7 @@ pub mod grid;
 pub mod import;
 pub mod library;
 pub mod link;
+pub mod memories;
 pub mod meta;
 pub mod models;
 pub mod recipe;
@@ -202,6 +203,9 @@ pub enum Target {
     AddKeywordOpen,
     PasteEdits,
     MergeDuplicates,
+    /// the More page's Play Slideshow row, and its Memories switch
+    PlayAlbum,
+    MemoriesToggle,
     /// the More page's rows for smart albums: save the search as one, change the rules of one, delete one
     SaveSmart,
     EditRules,
@@ -377,6 +381,8 @@ pub enum Album {
     User(u8),
     /// a smart album: the slot of its saved rules
     Smart(u8),
+    /// a memory: index into the month clusters
+    Memory(u8),
 }
 
 /// At most this many user albums.
@@ -405,6 +411,7 @@ impl Album {
             Self::Duplicates => "Duplicates",
             Self::User(_) => "Album",
             Self::Smart(_) => "Smart Album",
+            Self::Memory(_) => "Memory",
         }
     }
 }
@@ -481,6 +488,8 @@ pub struct Photos {
     user_albums: Vec<(String, Vec<Photo>)>,
     /// smart albums, by `sa.<slot>.` prefs
     smart_albums: Vec<SmartEntry>,
+    /// the busiest months, newest first, offered as albums (see `memories.rs`)
+    memories: Vec<(String, Vec<Photo>)>,
     /// the current album after the date filter: what the grid and viewer index
     view: Vec<Photo>,
     /// the active month filter: its title and `[start, end)` in Unix seconds
@@ -612,6 +621,7 @@ impl Photos {
             screenshots: vec![],
             user_albums: vec![],
             smart_albums: vec![],
+            memories: vec![],
             view: vec![],
             filter: None,
             selection: Selection::default(),
@@ -742,6 +752,7 @@ impl Photos {
             Album::Trash => &self.trash,
             Album::User(i) => self.user_albums.get(i as usize).map_or(&[][..], |u| &u.1),
             Album::Smart(slot) => self.smart_albums.iter().find(|a| a.slot == slot).map_or(&[][..], |a| &a.photos),
+            Album::Memory(i) => self.memories.get(i as usize).map_or(&[][..], |m| &m.1),
         }
     }
 
@@ -757,6 +768,7 @@ impl Photos {
         let names: Vec<(usize, String)> = self.user_albums.iter().enumerate().map(|(i, u)| (i, u.0.clone())).collect();
         v.extend(albums::album_order(&names, self.albums_by_name()).into_iter().map(|i| Album::User(i as u8)));
         v.extend(self.smart_albums.iter().map(|a| Album::Smart(a.slot)));
+        v.extend((0..self.memories.len()).map(|i| Album::Memory(i as u8)));
         v
     }
 
@@ -790,7 +802,10 @@ impl Photos {
         if !self.search.is_empty() {
             v.push(Target::SearchClear);
         }
-        v.extend([Target::KeywordsOpen, Target::ImportOpen]);
+        if !self.view.is_empty() && self.album != Album::Trash {
+            v.push(Target::PlayAlbum);
+        }
+        v.extend([Target::KeywordsOpen, Target::ImportOpen, Target::MemoriesToggle]);
         if self.stack.undo_label().is_some() {
             v.push(Target::UndoLast);
         }
@@ -843,6 +858,7 @@ impl Photos {
         match album {
             Album::User(i) => self.user_albums.get(i as usize).map_or_else(|| album.title().to_string(), |u| u.0.clone()),
             Album::Smart(slot) => self.smart_albums.iter().find(|a| a.slot == slot).map_or_else(|| album.title().to_string(), |a| a.name.clone()),
+            Album::Memory(i) => self.memories.get(i as usize).map_or_else(|| album.title().to_string(), |m| format!("Memory: {}", m.0)),
             _ => album.title().to_string(),
         }
     }
@@ -1043,8 +1059,16 @@ impl Photos {
                 Some(SmartEntry { slot: slot as u8, name, rules, photos })
             })
             .collect();
+        let shots: HashSet<PathBuf> = self.screenshots.iter().map(|p| p.path.clone()).collect();
+        let candidates: Vec<Photo> = self.visible.iter().filter(|p| !shots.contains(&p.path)).cloned().collect();
+        self.memories = if self.prefs.get("memories") == Some("0") { Vec::new() } else { memories::clusters(&candidates, self.offset, memories::MIN_PHOTOS, memories::MAX_MEMORIES) };
         if let Album::Smart(slot) = self.album {
             if !self.smart_albums.iter().any(|a| a.slot == slot) {
+                self.album = Album::All;
+            }
+        }
+        if let Album::Memory(i) = self.album {
+            if self.memories.get(i as usize).is_none() {
                 self.album = Album::All;
             }
         }
@@ -1975,6 +1999,16 @@ impl Photos {
                 }
             }
             Target::DeleteSmart => self.delete_smart(ui),
+            Target::PlayAlbum => {
+                self.more_menu = false;
+                self.start_slideshow(self.photos().to_vec(), 0, t);
+            }
+            Target::MemoriesToggle => {
+                let on = self.prefs.get("memories") == Some("0");
+                self.pref_set("memories", if on { "1" } else { "0" });
+                self.more_menu = false;
+                self.rebuild(ui);
+            }
             Target::ChooseAlbum(album) => self.select_album(ui, album),
             Target::AlbumCancel => self.album_menu = false,
             Target::SortOrder => {
@@ -2507,6 +2541,7 @@ impl Photos {
                     (Album::Duplicates, _) => ("No Duplicates", "Pictures that are the same file appear here."),
                     (Album::User(_), _) => ("No Photos", "Open a photo and tap Album to add it here."),
                     (Album::Smart(_), _) => ("No Photos", "No photo matches the rules of this smart album."),
+                    (Album::Memory(_), _) => ("No Photos", "This memory has no photos left."),
                 };
                 self.label(s, ui, title, 22.0, Weight::Bold, WHITE, cx, cy - ui.pt(14.0));
                 self.label(s, ui, hint, 15.0, Weight::Regular, SECONDARY, cx, cy + ui.pt(14.0));

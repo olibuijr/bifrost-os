@@ -685,6 +685,8 @@ impl Photos {
             Target::SearchOpen => ("Search".to_string(), WHITE, shorten(&self.search)),
             Target::SearchClear => ("Clear Search".to_string(), BLUE, String::new()),
             Target::KeywordsOpen => ("Keywords".to_string(), WHITE, String::new()),
+            Target::PlayAlbum => ("Play Slideshow".to_string(), BLUE, String::new()),
+            Target::MemoriesToggle => ("Memories".to_string(), WHITE, if self.prefs.get("memories") == Some("0") { "Off" } else { "On" }.to_string()),
             Target::ImportOpen => ("Import from Folder".to_string(), WHITE, String::new()),
             Target::UndoLast => (format!("Undo {}", self.stack.undo_label().unwrap_or("")), BLUE, String::new()),
             Target::RedoLast => (format!("Redo {}", self.stack.redo_label().unwrap_or("")), BLUE, String::new()),
@@ -1113,6 +1115,49 @@ mod tests {
         assert_eq!(p.sheet, None);
         let url = crate::shell::clipboard::text().expect("a link on the pasteboard");
         assert_eq!(link::parse(&url), Some(link::Link::Photo(photo.path)));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn busy_months_are_memories_that_play_as_a_slideshow() {
+        let (mut p, dir, ui) = photos("memories", 12);
+        // twelve pictures a day apart from 21 September: ten in September, two in October
+        assert_eq!(p.memories.len(), 1);
+        assert_eq!(p.album_title(Album::Memory(0)), "Memory: September 2026");
+        assert!(p.menu_albums().contains(&Album::Memory(0)));
+        choose_album(&mut p, &ui, Album::Memory(0), 1000.0);
+        assert_eq!(p.photos().len(), 10);
+        frame(&mut p, &ui);
+        // the picker plays the album as a slideshow
+        open_more(&mut p, &ui, 2000.0);
+        more_tap(&mut p, &ui, Target::PlayAlbum, 2200.0);
+        assert!(p.slideshow.as_ref().is_some_and(|s| s.photos.len() == 10 && s.index == 0));
+        assert!(!p.more_menu);
+        p.slideshow = None;
+        // Memories can be switched off, and then they are gone
+        open_more(&mut p, &ui, 3000.0);
+        assert_eq!(p.more_label(Target::MemoriesToggle).2, "On");
+        more_tap(&mut p, &ui, Target::MemoriesToggle, 3200.0);
+        assert!(p.memories.is_empty());
+        assert_eq!(p.album(), Album::All, "the open memory is gone");
+        assert_eq!(p.prefs.get("memories"), Some("0"));
+        assert!(!p.menu_albums().iter().any(|a| matches!(a, Album::Memory(_))));
+        open_more(&mut p, &ui, 4000.0);
+        more_tap(&mut p, &ui, Target::MemoriesToggle, 4200.0);
+        assert_eq!(p.memories.len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn screenshots_are_not_memories() {
+        let (mut p, dir, ui) = photos("memories-shots", 2);
+        for i in 0..6 {
+            picture(&dir.join(format!("Pictures/Screenshot-2026110{}-100000.png", i + 1)), 1_793_000_000 + i * 86_400);
+        }
+        p.rescan();
+        pump_until(&mut p, &ui, |p| !p.scanning);
+        assert_eq!(p.screenshots.len(), 6);
+        assert!(p.memories.is_empty(), "six screenshots in a month do not make a memory");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
