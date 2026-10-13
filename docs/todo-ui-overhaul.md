@@ -1,7 +1,23 @@
 # UI overhaul todo (Settings, light/dark, kit)
 
-Branch `feat/settings-golden-gate`. **No build, check, test or publish until the owner says OK.** Everything below the
-"Done in code (uncompiled)" heading has been edited but never compiled.
+> Status 2026-10-13: this is the working list from the first Settings Golden Gate pass (about 2026-10-09). The
+> "no build" instruction and the branch `feat/settings-golden-gate` are history: the work is merged, built and shipped
+> many times (shell 0.7.25), and the code is compiled and tested. What is done, checked in code:
+> - Item 9 (scheme to separate-process apps): `ToApp::Appearance { flags }` in `springboard/proto/src/lib.rs` carries
+>   the appearance bits; `bifrost_app::appearance` re-exports the engine.
+> - Item 12 (radius rule): `AGENTS.md` "Design" now states window 17 pt, grouped cards 13 pt, selection plates 9 pt. The
+>   `CARD_RADIUS_PT` and `CELL_RADIUS_PT` tokens in `render/src/ui.rs` still read 6.0; check them against that rule.
+> - Item 19 (row glyphs beyond General): `Item::glyph(Glyph::...)` is used across the pages in `src/shell/pages.rs`.
+> - App adoption of the kit and light/dark (items 8 and the apps list): see `docs/golden-gate-sdk-adoption.md`; 28 of 44
+>   apps have no fixed dark colours.
+> - `docs/settings-layout-spec.md` is the layout spec; `goldengate_refimages/` is still not in the repository (item 15).
+> Still open as far as the code shows: the System App work in the first section (the Files manifest says
+> `category = "Utilities"`, the installer plan lists no apps, and the default dock pins every app), items 13, 16, 18 and
+> 20, and the dark palette re-measure (item 14). Items 1 to 7 were fixed by the later builds. Old file names below
+> (`shell/...`) are under `springboard/src/shell/`; `packaging/arch/wayland/apps` is `packaging/arch/wayland/apps/`.
+
+Branch `feat/settings-golden-gate` (merged). The original warning was: no build, check, test or publish until the
+owner says OK; everything below "Done in code" was uncompiled then.
 
 ## New: dock apps are System Apps, installed at first setup
 
@@ -18,7 +34,7 @@ installed during initial setup (not fetched later from the App Store):
   may still be built-in shell apps; decide built-in vs packaged).
 - Verify on a clean Midget install: dock icons present, category shows System App, no App Store download needed.
 
-## Done in code (uncompiled)
+## Done in code (was uncompiled when written)
 
 - `springboard/ui/src/prefs_layout.rs`: measured Settings geometry as a pure model + tests (this one was compiled and
   its 6 tests passed before the no-build instruction; constants were changed afterwards and are untested).

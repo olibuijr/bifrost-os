@@ -1,5 +1,14 @@
 # Integrated PC app and update review — 2026-10-08
 
+> Status 2026-10-13 (shell 0.7.25): history. The platform is much further on than the numbers here (0.4.31, 17 apps).
+> - There are now 44 apps in the workspace under `springboard/apps` and the tests number in the thousands; see
+>   the members in `springboard/Cargo.toml` for the current list.
+> - "PC media playback/recording depends on an audio daemon which is not installed" no longer holds: `bifrost-audiod`,
+>   the PulseAudio and ALSA compatibility layers and the audio bench ship in the package
+>   (`docs/audio-architecture.md`, status section).
+> - Shortcuts execution and Contacts sharing may have changed; they were not re-checked.
+> - The `out/` evidence files named below are not kept in the tree.
+
 This batch integrates the completed HTTPS hardening and the independently packaged PC app ports. The platform maturity program remains partially implemented: SDK decoupling, stable app identity, document grants, privilege brokers, lifecycle restoration, accessibility and measured rendering work are still backlog items.
 
 ## Improvements

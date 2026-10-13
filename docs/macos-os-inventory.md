@@ -25,7 +25,7 @@ build. Shader inventories list libraries and entry-point names; BifrOSt writes i
    `com_apple_MobileAsset_MacSoftwareUpdate/<hash>.zip` OS asset.
 2. `ipsw ota ls` and `ipsw ota extract` on the asset: the system volume payloads, the cryptexes (the OS and app
    cryptexes hold the dyld shared cache and Safari-class apps), and the dyld shared cache.
-3. Walk the extracted tree into the inventory (`tools/parity/os_inventory.py`, to be written): Info.plists, Mach-O
+3. Walk the extracted tree into the inventory (`tools/parity/os_inventory.py`): Info.plists, Mach-O
    load commands and exports, metallib headers and function lists, launchd plists, preference panes and Settings
    extensions.
 
@@ -44,6 +44,7 @@ A new layer of the matrix, `docs/parity-matrix/os/<category>.json`, one entry pe
 | `shaders` | Every `.metallib` (and Metal libraries embedded in binaries): owner framework, entry points, purpose |
 | `cli` | `/usr/bin`, `/usr/sbin`, `/usr/libexec` tools |
 | `formats` | Uniform type declarations, document types, URL schemes |
+| `input-methods` | Input method bundles and keyboard layouts (added after the first plan) |
 | `assets` | Fonts, sounds, wallpapers, cursors, icons: inventory only, never copied |
 
 Each entry: path, kind, identifier, version, description, owner (framework or app), public documentation link if any,
@@ -53,12 +54,24 @@ counts the new layer separately from the public-framework matrix, so the existin
 `bifrost pc parity` gains the layer (`status --os`, `show os/<category>`), `db-export` writes an `os` collection, and
 the published database page gets an OS tab.
 
-## Status (2026-10-12)
+## Status (2026-10-13)
 
-- The installer download is in progress; extraction and the walker follow.
+- The installer was downloaded, extracted and walked. `docs/parity-matrix/os/` holds 10 categories (`apps`, `assets`,
+  `cli`, `daemons`, `drivers`, `frameworks`, `input-methods`, `settings`, `shaders`, `system-ui`), 6807 components, all
+  assessed. `python3 tools/bifrost.py pc parity os-status` prints the table; on this date coverage is 44.7 % of 5722
+  applicable components (`cli` 41.0 % with 198 at parity, `frameworks` 48.6 %, `daemons` 47.0 %, `apps` 38.9 %,
+  `settings` 24.3 %, `system-ui` 22.0 %, `shaders` 10.7 %). Nothing is at `parity` outside `cli`: the other categories
+  need a Midget check before a row goes there.
+- Walker: `tools/parity/os_inventory.py` (from an extracted tree, or from a file index with `--index`).
+  `tools/parity/os_cli.py` plus `os_cli_map.json` assess the command-line tools and verify them on Midget
+  (`bifrost pc parity verify os-cli plan|run|closures`). `tools/parity/os_frameworks.py` reassesses `frameworks`.
+- Per-app inventories: `docs/parity-matrix/apps/<slug>.json` hold feature rows for 30 reference apps against their
+  BifrOSt apps (`bifrost pc parity apps`, `apps --gaps APP`). They are the working list for the app parity waves.
 - From public documentation, before the dig: Core Image (10 filter-family rows), SwiftUI (shader effects, Liquid
   Glass, materials), AppKit (the visual effect material catalogue, glass effect views) and Core Animation (layer
-  filters) rows were added to `data/`. Their per-shader detail comes from the `shaders` category.
+  filters) rows were added to `data/`. Per-shader detail lives in the `shaders` category.
+- Not done: the `bifrost pc parity` forms `status --os` and `show os/<category>` named above were not built as
+  such; `os-status` is the OS summary command. The published database page's OS tab was not re-checked.
 
 ## Framework rows from the SDK matrix
 

@@ -4,7 +4,7 @@ Implemented in `springboard/audio/server/src/tap.rs`: `TapDescription` (processe
 mixdown, Unmuted/Muted/MutedWhenTapped, private), `Tap` (preallocated cycle accumulator and ring; `accumulate`,
 `finish_cycle`, `read_input` never allocate or lock), `TapRegistry` (create needs `audio-capture` else
 `PermissionDenied`; private taps visible to the creator only; `process_exited` cleanup; `indicator_visible`;
-`is_muted(pid)` for the mixer). `springboard/ui/src/process_tap.rs` (kit model) was already complete and is unchanged.
+`is_muted(pid)` for the mixer). The old kit model `ui/src/process_tap.rs` has since been removed.
 
 ## Left
 - Wire into the server: the mixer calls `accumulate_all(pid, frames)` per client then `finish_all()` in ProcessInput,

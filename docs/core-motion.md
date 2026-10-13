@@ -16,6 +16,10 @@ Reference: Apple Core Motion (`CMMotionManager`, `CMAccelerometerData`, `CMGyroD
   implements `SensorSource`.
 - SDK: `bifrost_app::{motion_manager, inertial_sensors}` re-export the same modules, so apps and the shell share one
   model.
+- `springboard/sdk/src/motion_raw.rs`: `RawMotion` joins the two the way `CMMotionManager` does. It scans a sensor
+  tree, starts accelerometer and gyroscope updates and snaps an update interval to a rate the sensor lists in
+  `sampling_frequency_available` (`parse_frequencies`, `nearest_frequency`, `supported_frequencies`,
+  `current_frequency`). A sensor without those files keeps the requested interval and is polled by `RawMotion::tick`.
 
 ## Units and frame
 
@@ -38,6 +42,6 @@ Reference: Apple Core Motion (`CMMotionManager`, `CMAccelerometerData`, `CMGyroD
 ## Not done
 
 - Device motion (attitude) is still the `motion.rs` estimator, not yet fed by the manager.
-- No pedometer, activity or sensor recording here (separate rows).
+- Pedometer, altitude, magnetometer and motion activity are separate models (`core/src/{pedometer,altitude,magnetometer,motion_activity}.rs`, SDK `sensors.rs`) with their own rows. Sensor recording does not exist.
 - Nothing is tested on the VM or on Midget yet. Host unit tests exist in both modules but were not run in this
   round, so the rows stay `partial` until a device test passes.

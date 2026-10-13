@@ -1,5 +1,10 @@
 # Foundation audit (task 10), 2026-10-12
 
+> Status 2026-10-13: FND-1 is fixed (`exec_inside` in `bifrostd/src/lib.rs`). FND-2 to FND-4: no change found in
+> `bifrostd`, `updated` or `netd` (no socket chmod or group, no peer-uid check, no connection cap), so they are still
+> open. FND-5 and FND-6 were never audited in depth. Later hardening: `netd` and `audiod` survive poisoned locks (commit
+> 6a1ca192).
+
 Scope read: bifrostd, netd, updated, `src/bin/privd.rs` (a thin launcher; request validation lives in `src/privd/`, owned elsewhere).
 
 | ID | category | severity | file:lines | problem | fix | test |

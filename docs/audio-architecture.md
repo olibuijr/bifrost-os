@@ -1,14 +1,34 @@
-# BifrOSt audio architecture (plan)
+# BifrOSt audio architecture
 
 Owner request 2026-10-12: a low-latency, pure Rust, hardware-level pro audio server. Take the best ideas from
 PipeWire (and JACK), and structure the code the way the reference platform structures its audio stack. Like
 `docs/graphics-architecture.md`, this is the contract each component is written against. When code and this document
-disagree, fix one of them in the same change. The tasks are in `tasks/audio/`.
+disagree, fix one of them in the same change. The per-task notes are in `docs/audio/`.
 
 Reference names (the platform's framework names) appear only in this document. Code, comments, strings and file
 names use the neutral names in the right-hand columns (`bifrost pc names`).
 
-## Why: what Midget does today (0.5.44, measured 2026-10-12)
+## Status 2026-10-13
+
+The plan is built, not just planned. All 16 crates under `springboard/audio/` are workspace members (types, shm,
+driver, alsa, server, hal, policy, toolbox, units, engine, bench, midi, midid, compat/pulse, compat/alsa,
+compat/jack) and no `todo!` skeleton bodies remain. `bifrost-audiod` serves the control socket with the ALSA, null and
+loopback drivers, hog mode, latency accounting, aggregates and the tap registry. The package installs `bifrost-audiod`
+(own `audio` user, unit and tmpfiles in `packaging/arch/`), `bifrost-audio-bench`, the PulseAudio socket unit and the
+ALSA plug-in with `/etc/alsa/conf.d/50-bifrost.conf`. The shell and the media player are HAL clients.
+Still open:
+- The control loop runs with `NoObjects`: the object tree of `audio/server/src/objects.rs` is not yet served over the
+  socket, so property get, set and listen are limited to what `ServerCore` handles itself.
+- Taps are a registry (`audio/server/src/tap.rs`) that the mixer does not call yet.
+- MIDI: `bifrost-midid` reads rawmidi and the sequencer, but there is no client IPC and no rawmidi output yet.
+- JACK clients are process-local engines, not one shared graph.
+- There is no `bifrost pc audio ls|get|set|top` subcommand; only `bifrost pc audio-bench` exists
+  (`docs/audio-latency.md`). Midget verification steps in `docs/audio/*.md` that name it are targets, not commands.
+- The per-task notes in `docs/audio/` keep their original "left" lists; where a note and the code disagree, the code wins.
+
+The section below describes Midget at the start of the work (0.5.44).
+
+## Why: what Midget did before the server (0.5.44, measured 2026-10-12)
 
 - **No sound server.** Midget runs plain ALSA: no PipeWire, PulseAudio or JACK, and no `/etc/asound.conf`.
   `aplay -L` lists only `default:CARD=PCH` and `sysdefault:CARD=PCH`, with no `dmix`.
@@ -145,7 +165,7 @@ to the daemon through the object model. None of them opens a PCM.
 | AudioToolbox | `bifrost-audio-toolbox` (`audio/toolbox`) | Converter (format, channel map, a high-quality resampler for files, the adaptive resampler for drift), files (moved from `media/audiofile.rs` and the codecs), queue, system sounds |
 | Audio Units | `bifrost-audio-units` (`audio/units`) | Component trait (render block, parameter tree, presets, MIDI in, latency and tail), in-process and out-of-process hosting through the same activation records. Absorbs `ui/src/plugin_host.rs` and `audio_render.rs` |
 | AVFAudio | `bifrost-audio-engine` (`audio/engine`), re-exported by the SDK | Node graph (player, mixer, effect, IO node, tap), offline and manual rendering. Absorbs `ui/src/audio_engine.rs` and `audio_mix.rs` |
-| Core MIDI and `MIDIServer` | `bifrost-midi` and `bifrost-midid` (`audio/midi`, `audio/midid`) | Endpoints, UMP (MIDI 2.0) and MIDI 1.0, timestamps on the host clock, a virtual port per app. Absorbs `core/src/midi_endpoints.rs`, `ui/src/midi_*.rs` |
+| Core MIDI and `MIDIServer` | `bifrost-midi` and `bifrost-midid` (`audio/midi`, `audio/midid`) | Endpoints, UMP (MIDI 2.0) and MIDI 1.0, timestamps on the host clock, a virtual port per app. Absorbs the former `core/src/midi_endpoints.rs` (removed), `ui/src/midi_*.rs` |
 | Session policy (AVAudioSession, defaults) | `bifrost-audio-policy` (`audio/policy`) | Defaults per role (output, input, sound effects), the routing rules on jack events, ducking, hog grants, the microphone permission and indicator. Absorbs `ui/src/audio_session.rs`, `default_device.rs`, `media/route.rs` |
 | Process taps | object class `Tap` in `bifrost-audiod` | A per-process or system mix tap, behind the permission |
 | Compatibility | `bifrost-audio-pulse` (`audio/compat/pulse`), `bifrost-alsa-plugin` (`audio/compat/alsa`, a cdylib for alsa-lib's ioplug), later `bifrost-jack` (`audio/compat/jack`, a libjack ABI) | Unmodified Linux apps |
@@ -164,7 +184,7 @@ hal, then toolbox and units, then engine, then the SDK. The server never depends
 - `PropertyAddress { selector: FourCC, scope: Global|Input|Output|PlayThrough, element: u32 }` (element 0 = main).
 - `get`, `set`, `listen` and `unlisten` over the control socket. Values are typed in `bifrost-audio-types`
   (`PropertyValue`). Listeners get coalesced change notices, then re-read the value.
-- Required device properties (the reference names for the mapping are in `tasks/audio/02-object-model.md`):
+- Required device properties (the reference names for the mapping are in `docs/audio/02-object-model.md`):
   - name, manufacturer, UID and model UID, transport type, is-alive and is-running
   - nominal sample rate and available rates
   - streams per scope, each with a virtual format (f32 non-interleaved) and a physical format

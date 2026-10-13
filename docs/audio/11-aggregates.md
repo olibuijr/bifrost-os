@@ -1,6 +1,6 @@
 # Audio 11: aggregates with drift compensation
 
-Contract: `docs/audio-architecture.md` ("Hog mode, aggregates and taps", design decision 4). Task: `tasks/audio/11-aggregates.md`.
+Contract: `docs/audio-architecture.md` ("Hog mode, aggregates and taps", design decision 4). Task: `docs/audio/11-aggregates.md`.
 
 ## Implemented
 

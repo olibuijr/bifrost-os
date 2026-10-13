@@ -1,5 +1,20 @@
 # Snow Leopard round: system resources first
 
+> Status 2026-10-13 (shell 0.7.25): this file is a log of rounds 1 to 8 on 0.5.7 to 0.5.18. It is history; the
+> numbers are not current. What changed since:
+> - The compositor is `bifrost-wm`, not labwc (`docs/window-server.md`). Every labwc finding below (icon theme, heap,
+>   `rc.xml`) no longer applies. `docs/budgets.toml` and `tools/bench.py` use `bifrost_wm` keys; older rows in
+>   `docs/perf-history.jsonl` still carry `labwc` keys.
+> - The newest recorded Midget run (0.7.24, 2026-10-13) reads: springboard 1.2 wakeups/s, userspace 13.8/s, dbus-broker
+>   1.1/s, bootweave 0, shell PSS 98 MiB (102 MiB after a lock cycle), RAM used 767 MiB, Browser and Files cold launch
+>   about 50 ms. Shell PSS and the lock-cycle value are above their budgets in `docs/budgets.toml` (75 and 80 MiB), so
+>   the memory work in the round 6 and 7 plans is open again.
+> - Idle work since round 8: the term and heartbeat watchers became one sys-watch thread, the volume and sound workers
+>   one audio thread, the app-resources writer exits when idle, the clock file is polled only while Clock runs, and the
+>   SIGTERM watcher blocks on a self-pipe (0.7.8 to 0.7.24).
+> - Boot code is now one project, `springboard/bootweave` (`supervisor.rs`, `frame`, `efi`).
+> - `src/net/ntp.rs` and `src/bare/wayland.rs` still exist; the `timedatectl` fixes in findings 2 and round 3 live there.
+
 Mac OS X 10.6 (2009) shipped "0 new features": it made the system smaller, quieter and faster. BifrOSt adopts the
 same rules. A Snow Leopard round ships only resource, speed and correctness work, and every claim is a measured
 before and after on Midget.
