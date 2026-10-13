@@ -68,8 +68,8 @@ mod tests {
     fn the_list_round_trips_through_its_text() {
         let list = vec![Recent { grant: grant(1), name: "A.json".into() }, Recent { grant: grant(2), name: "B report.json".into() }];
         assert_eq!(parse(&format(&list)), list);
-        assert_eq!(parse(""), Vec::new());
-        assert_eq!(parse("short\tname\nnot a line\n"), Vec::new(), "a bad grant is skipped");
+        assert!(parse("").is_empty());
+        assert!(parse("short\tname\nnot a line\n").is_empty(), "a bad grant is skipped");
     }
 
     #[test]

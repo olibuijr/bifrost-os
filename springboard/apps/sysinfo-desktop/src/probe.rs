@@ -1089,8 +1089,8 @@ mod tests {
     #[test]
     fn a_truncated_smbios_table_stops_cleanly() {
         let t = smbios_fixture();
-        assert_eq!(parse_smbios_memory(&t[..10]), Vec::new());
-        assert_eq!(parse_smbios_memory(&[]), Vec::new());
+        assert!(parse_smbios_memory(&t[..10]).is_empty());
+        assert!(parse_smbios_memory(&[]).is_empty());
     }
 
     #[test]

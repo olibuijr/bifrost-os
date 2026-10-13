@@ -1239,7 +1239,7 @@ mod tests {
     fn the_folded_sections_round_trip_their_text() {
         assert_eq!(parse_collapsed("Hardware, Software,Bogus,Hardware"), vec![Section::Hardware, Section::Software]);
         assert_eq!(format_collapsed(&[Section::Network]), "Network");
-        assert_eq!(parse_collapsed(""), Vec::new());
+        assert!(parse_collapsed("").is_empty());
         assert_eq!(parse_collapsed(&format_collapsed(&SECTIONS)), SECTIONS.to_vec());
     }
 
