@@ -1,55 +1,38 @@
-# Notification Center parity
+# Notification Center (slice notification-center)
 
-Framework: Notification Center (https://developer.apple.com/documentation/notificationcenter), macOS 10.10+.
-Apple marks the framework deprecated in favour of WidgetKit. Matrix row: `docs/parity-matrix/data/notification-center.json`.
+Matrix rows touched (not closed, lead to decide): system-ui `NotificationCenter` (partial), settings
+`Notifications` (partial), settings `FocusSettingsExtension` (partial), frameworks `Focus` (os).
 
-## What was built
+Reference evidence: the shipped macOS 27 extracts under `~/Projects/macos-ref/extract/ref27/` were not consulted in this
+round (no REA evidence ids recorded). Behaviour comes from the existing BifrOSt code and its docs.
 
-Pure models in `springboard/ui/src` (bifrost-ui), std only, no shell wiring yet.
+## Per row
 
-- `springboard/ui/src/widget.rs`
-  - `DisplayMode` (compact or expanded, `toggled()` for the More button). Mirrors `NCWidgetDisplayMode`.
-  - `Insets` and `margin_insets(proposed, custom)`: the widget accepts the proposed margins or returns its own.
-    Mirrors `widgetMarginInsets(forProposedMarginInsets:)`.
-  - `Limits`: the column width and the largest height per mode; expanded is never shorter than compact.
-    Mirrors `widgetActiveDisplayModeDidChange(_:withMaximumSize:)`.
-  - `Controller`: per-widget has-content flag keyed by bundle identifier, with `visible()` filtering a
-    widget list in order. Mirrors `NCWidgetController` (`setHasContent(_:forWidgetWithBundleIdentifier:)`).
-    A widget that never reported stays visible; that choice is BifrOSt's, not Apple's.
-- `springboard/ui/src/widget_list.rs`
-  - `WidgetList<T>`: contents, `row_for`, `item_at`, `visible_rows(height)` (rows that fit, never fewer than
-    `minimum_visible_rows`, never more than the content), `add_button_visible()`, and `delete(row)` allowed only
-    while editing. Mirrors `NCWidgetListViewController` (`contents`, `row(for:)`, `viewController(atRow:)`,
-    `minimumVisibleRowCount`, `hasDividerLines`, `editing`, `showsAddButtonWhenEditing`).
-    Drawing and the per-row content controller are not modelled.
+- **Focus (Do Not Disturb, schedules, allowed apps)**: `springboard/src/shell/notify/store.rs`, `notify/mod.rs`.
+  Done: a per-app "Allow During Focus" switch on Settings > Notifications > App (`notify_page.rs`, `settings.rs`).
+  The allowance is stored in `notifications.ini` under `[focus]`, and `Notify::delivers` lets an allowed app banner and
+  wake the screen while Focus is on. A mute still wins. A banner of an allowed app survives Focus switching on.
+  Still needs Midget checking: the allowed-app row sits on the app page only (no Focus-page list yet).
+- **Per-app page switches**: Lock Screen and Notification Centre now leave an app out of the lock list, the sheet
+  and the desktop column (`notify/list.rs` `listed_in`, `notify/mod.rs` `visible_groups`). Badges switches an app's
+  badge off (`store_changed`). Changing the page refreshes the lists.
+- **Banners vs alerts per app**: already present (`AppNotif::style`, `notify_page.rs`, `presentation_of`).
+- **Grouping and clear / clear all**: already present (`Store::groups`, `center.rs` Clear, Clear All).
+- **Widgets area**: already present (`center.rs` Edit Widgets gallery on existing widget kits).
 
-Each module has unit tests (7 in `widget.rs`, 5 in `widget_list.rs`). Nothing was built or run in this round.
+## Not done
 
-## Official API names mirrored
+- **Notification actions and replies**: the usernotif registry (`src/shell/usernotif.rs`, `usernotif_respond`) has the
+  action and text-input model, but no Notification Center or banner UI calls it. A card needs its category's action
+  buttons and, for a text-input action, a reply field. This needs a card and banner UI pass.
+- **Show Previews** (per-app Always / When Unlocked / Never): stored and shown on the page but not honoured, because
+  the list's privacy flag is global, not per app.
+- **Notification Grouping** (Automatic / By App / Off): stored and shown on the page but not honoured.
+- **Sounds**: stored and shown on the page; the notification path plays no sound.
+- **Focus page list**: no list of every allowed app on the Focus page; only the per-app switch.
 
-- `NCWidgetProviding`: `widgetMarginInsets(forProposedMarginInsets:)`, `widgetActiveDisplayModeDidChange(_:withMaximumSize:)`, `NCWidgetDisplayMode` (`compact`, `expanded`).
-- `NCWidgetController`: `setHasContent(_:forWidgetWithBundleIdentifier:)`, `default()` (the shell owns the instance instead).
-- `NCWidgetListViewController`: `contents`, `row(for:)`, `viewController(atRow:makeIfNecessary:)` (row lookup only), `minimumVisibleRowCount`, `hasDividerLines`, `editing`, `showsAddButtonWhenEditing`.
+## Shared-file edits
 
-Official facts used, from the DocC pages read with `tools/parity/docc.py` (the landing page and the four symbols
-above) and the rendered landing page.
-
-## REA evidence
-
-- Landing page, rendered: `ev_edff570c97d094b615f72c16d3441d6dd6f11507c79f76b0692f81d37f6758b2`
-  (`tools/parity/rea-page.sh https://developer.apple.com/documentation/notificationcenter`). It shows the
-  "Deprecated. Use WidgetKit instead." banner and the four topic groups (widget protocol, controller, search view,
-  list view).
-- The earlier matrix row cited `ev_a365b0b1626848378c0b955b55ce0bc7fb3c3f9ce03a732a868f5783e4460582`; it is kept
-  here for reference only.
-
-## Remaining gaps
-
-- No app-facing SDK type: `bifrost_app` does not expose the widget models, so apps cannot supply a Today widget.
-- The models are not used by the Today View: no hide of empty widgets, no display-mode switch, no size limits.
-- `widgetPerformUpdate` and the editing callbacks (`widgetAllowsEditing`, `widgetDidBeginEditing`, `widgetDidEndEditing`)
-  have no counterpart.
-- The search view (`NCWidgetSearchViewController`, `NCWidgetSearchViewDelegate`) is not started.
-- The list view has no drawing, no content view controller per row and no delegate.
-- The Notification Center column does not show widgets (`springboard/src/shell/notify/center.rs`).
-- WidgetKit is not implemented; it is outside this framework.
+- `springboard/src/shell/mod.rs`: the notify settings snapshot passes `focus_allowed`; the change match gains
+  `FocusAllowed`, and `App` now refreshes the store.
+- `springboard/src/shell/settings.rs`: `set_notify` takes `focus_allowed`; `notify_edit` gains the `FocusAllowed` arm.
