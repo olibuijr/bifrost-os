@@ -150,6 +150,8 @@ pub enum Target {
     EditFilter(Filter),
     EditRevert,
     EditPane(EditPane),
+    /// a button of the Tools page
+    EditTool(Tool),
     Slide(Slider),
 }
 
@@ -159,16 +161,59 @@ pub enum EditPane {
     Adjust,
     Effects,
     Crop,
+    /// buttons rather than sliders: rotate left, flips, Auto Enhance and the histogram
+    Tools,
+}
+
+/// The buttons of the Tools page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tool {
+    RotateLeft,
+    FlipHorizontal,
+    FlipVertical,
+    AutoEnhance,
+}
+
+impl Tool {
+    pub fn label(self) -> &'static str {
+        match self {
+            Tool::RotateLeft => "Rotate Left",
+            Tool::FlipHorizontal => "Flip Horizontal",
+            Tool::FlipVertical => "Flip Vertical",
+            Tool::AutoEnhance => "Auto Enhance",
+        }
+    }
+
+    /// Does the tool in `edit` show as on (the flips and Auto Enhance toggle).
+    pub fn is_on(self, edit: &Edit) -> bool {
+        match self {
+            Tool::RotateLeft => false,
+            Tool::FlipHorizontal => edit.flip_h,
+            Tool::FlipVertical => edit.flip_v,
+            Tool::AutoEnhance => edit.auto,
+        }
+    }
+
+    /// Runs the tool on `edit`.
+    pub fn apply(self, edit: &mut Edit) {
+        match self {
+            Tool::RotateLeft => edit.rotate(false),
+            Tool::FlipHorizontal => edit.flip_h = !edit.flip_h,
+            Tool::FlipVertical => edit.flip_v = !edit.flip_v,
+            Tool::AutoEnhance => edit.auto = !edit.auto,
+        }
+    }
 }
 
 impl EditPane {
-    pub const ALL: [EditPane; 3] = [EditPane::Adjust, EditPane::Effects, EditPane::Crop];
+    pub const ALL: [EditPane; 4] = [EditPane::Adjust, EditPane::Effects, EditPane::Crop, EditPane::Tools];
 
     pub fn label(self) -> &'static str {
         match self {
             EditPane::Adjust => "Adjust",
             EditPane::Effects => "Effects",
             EditPane::Crop => "Crop",
+            EditPane::Tools => "Tools",
         }
     }
 
@@ -178,6 +223,7 @@ impl EditPane {
             EditPane::Adjust => &[Slider::Brightness, Slider::Contrast, Slider::Exposure, Slider::Saturation, Slider::Warmth],
             EditPane::Effects => &[Slider::Blur, Slider::Vignette],
             EditPane::Crop => &[Slider::Straighten, Slider::Crop],
+            EditPane::Tools => &[],
         }
     }
 }
@@ -275,11 +321,14 @@ struct Editor {
     edit: Edit,
     preview: Image,
     pane: EditPane,
+    /// the luminance histogram of the preview
+    hist: [u32; edit::HISTOGRAM_BINS],
 }
 
 impl Editor {
     fn refresh(&mut self) {
         self.preview = self.edit.apply(&self.src);
+        self.hist = edit::histogram(&self.preview);
     }
 }
 
@@ -1296,7 +1345,7 @@ impl Photos {
                         if let Some(src) = src {
                             self.sheet = None;
                             let edit = self.recipe(&p).unwrap_or_default();
-                            let mut ed = Editor { photo: p, preview: src.clone(), src, edit, pane: EditPane::Adjust };
+                            let mut ed = Editor { photo: p, preview: src.clone(), src, edit, pane: EditPane::Adjust, hist: [0; edit::HISTOGRAM_BINS] };
                             ed.refresh();
                             self.editor = Some(ed);
                         }
@@ -1325,6 +1374,12 @@ impl Photos {
             Target::EditRevert => {
                 if let Some(ed) = &mut self.editor {
                     ed.edit = Edit::default();
+                    ed.refresh();
+                }
+            }
+            Target::EditTool(tool) => {
+                if let Some(ed) = &mut self.editor {
+                    tool.apply(&mut ed.edit);
                     ed.refresh();
                 }
             }
@@ -1601,6 +1656,11 @@ impl Photos {
             },
             1 => Filter::ALL.get((x / (w / Filter::ALL.len() as f32)) as usize).map(|&f| Target::EditFilter(f)),
             2 => EditPane::ALL.get((x / (w / EditPane::ALL.len() as f32)) as usize).map(|&p| Target::EditPane(p)),
+            row if pane == EditPane::Tools => match row {
+                3 => [Tool::RotateLeft, Tool::FlipHorizontal, Tool::FlipVertical].get((x / (w / 3.0)) as usize).map(|&t| Target::EditTool(t)),
+                4 => Some(Target::EditTool(Tool::AutoEnhance)),
+                _ => None,
+            },
             row => pane.sliders().get(row - 3).map(|&s| Target::Slide(s)),
         }
     }
@@ -2080,6 +2140,27 @@ impl Photos {
             let kx = edit::slider_pos(slider.value(&cur), x0, x1, lo, hi);
             s.fill_rrect(kx - ui.pt(5.0), cy - ui.pt(11.0), ui.pt(10.0), ui.pt(22.0), flat(ui), WHITE);
         }
+        if pane == EditPane::Tools {
+            let third = w / 3.0;
+            for (i, t) in [Tool::RotateLeft, Tool::FlipHorizontal, Tool::FlipVertical].into_iter().enumerate() {
+                let color = if t.is_on(&cur) { BLUE } else { WHITE };
+                self.label(s, ui, t.label(), 15.0, if t.is_on(&cur) { Weight::Semibold } else { Weight::Regular }, tint(Target::EditTool(t), color), third * (i as f32 + 0.5), panel + row * 3.5);
+            }
+            let auto = Tool::AutoEnhance;
+            let color = if auto.is_on(&cur) { BLUE } else { WHITE };
+            self.label(s, ui, auto.label(), 15.0, if auto.is_on(&cur) { Weight::Semibold } else { Weight::Regular }, tint(Target::EditTool(auto), color), w / 2.0, panel + row * 4.5);
+            // the histogram fills the rows below the buttons
+            if let Some(ed) = &self.editor {
+                let (hx, hy, hw, hh) = (m, panel + row * 5.0 + ui.pt(6.0), w - 2.0 * m, row * 3.0 - ui.pt(12.0));
+                s.fill_rrect(hx, hy, hw, hh, flat(ui), rgba(255, 255, 255, 20));
+                for (bx, h) in histogram_columns(&ed.hist, hw as usize / 2).into_iter().enumerate() {
+                    let bar = (h * hh) as usize;
+                    if bar > 0 {
+                        s.fill_rect(hx as usize + bx * 2, (hy + hh) as usize - bar, 2, bar, WHITE);
+                    }
+                }
+            }
+        }
     }
 
     /// Vertical centre of the slideshow's play/pause row.
@@ -2196,6 +2277,16 @@ impl Photos {
         self.label(s, ui, action, 20.0, Weight::Regular, dim(color, Target::SheetAction), cx, at);
         self.label(s, ui, "Cancel", 20.0, Weight::Semibold, dim(BLUE, Target::SheetCancel), cx, at + row);
     }
+}
+
+/// The histogram squeezed into `columns` bars with heights 0..=1 (the tallest bar is 1). `columns` of 0 gives none.
+pub fn histogram_columns(bins: &[u32; edit::HISTOGRAM_BINS], columns: usize) -> Vec<f32> {
+    if columns == 0 {
+        return Vec::new();
+    }
+    let sums: Vec<u64> = (0..columns).map(|c| bins[c * bins.len() / columns..((c + 1) * bins.len() / columns).max(c * bins.len() / columns + 1).min(bins.len())].iter().map(|&b| b as u64).sum()).collect();
+    let max = sums.iter().copied().max().unwrap_or(0).max(1) as f32;
+    sums.into_iter().map(|v| v as f32 / max).collect()
 }
 
 /// Rows in a sheet: the share sheet lists Slideshow, Copy, Save to Files,
@@ -2755,7 +2846,7 @@ mod tests {
         tap(&mut p, &ui, x1, top + row * 3.5, 2300.0);
         assert_eq!(p.editor.as_ref().map(|e| e.edit.brightness), Some(1.0));
         // the Effects tab: its first slider is blur, and the right end is the full radius
-        tap(&mut p, &ui, 1200.0 / 3.0 * 1.5, top + row * 2.5, 2350.0);
+        tap(&mut p, &ui, 1200.0 / 4.0 * 1.5, top + row * 2.5, 2350.0);
         assert_eq!(p.editor.as_ref().map(|e| e.pane), Some(EditPane::Effects));
         tap(&mut p, &ui, x1, top + row * 3.5, 2360.0);
         assert_eq!(p.editor.as_ref().map(|e| (e.edit.blur, e.edit.brightness)), Some((1.0, 1.0)));
@@ -2775,6 +2866,43 @@ mod tests {
         tap(&mut p, &ui, 100.0, ui.pt(STATUS_PT) + 5.0, 3200.0);
         assert!(p.editor.is_none() && p.viewer.is_some());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_tools_page_flips_rotates_and_enhances() {
+        let (mut p, dir, ui) = photos("tools", 1);
+        p.open_viewer(0);
+        p.tick(&ui, 1000.0);
+        pump_until(&mut p, &ui, |p| p.full.len() == 1);
+        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
+        tap(&mut p, &ui, 1200.0 * 0.69, cy, 2000.0);
+        let (row, top) = (ui.pt(EDIT_ROW_PT), p.edit_panel_top(&ui));
+        tap(&mut p, &ui, 1200.0 / 4.0 * 3.5, top + row * 2.5, 2100.0);
+        assert_eq!(p.editor.as_ref().map(|e| e.pane), Some(EditPane::Tools));
+        tap(&mut p, &ui, 1200.0 / 6.0, top + row * 3.5, 2200.0);
+        assert_eq!(p.editor.as_ref().map(|e| e.edit.turns), Some(3), "Rotate Left is a quarter back");
+        tap(&mut p, &ui, 600.0, top + row * 3.5, 2300.0);
+        tap(&mut p, &ui, 1000.0, top + row * 3.5, 2400.0);
+        tap(&mut p, &ui, 600.0, top + row * 4.5, 2500.0);
+        let e = p.editor.as_ref().map(|e| e.edit).unwrap();
+        assert!(e.flip_h && e.flip_v && e.auto);
+        tap(&mut p, &ui, 600.0, top + row * 3.5, 2600.0);
+        assert_eq!(p.editor.as_ref().map(|e| e.edit.flip_h), Some(false), "a second tap turns the flip off");
+        assert!(p.editor.as_ref().is_some_and(|e| e.hist.iter().sum::<u32>() > 0), "the histogram follows the preview");
+        frame(&mut p, &ui);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn histogram_columns_scale_to_the_tallest() {
+        let mut bins = [0u32; edit::HISTOGRAM_BINS];
+        bins[0] = 10;
+        bins[255] = 5;
+        let cols = histogram_columns(&bins, 128);
+        assert_eq!((cols.len(), cols[0], cols[127]), (128, 1.0, 0.5));
+        assert!(histogram_columns(&bins, 0).is_empty());
+        assert_eq!(histogram_columns(&bins, 256).len(), 256);
+        assert_eq!(histogram_columns(&[0; edit::HISTOGRAM_BINS], 4), vec![0.0; 4]);
     }
 
     #[test]
