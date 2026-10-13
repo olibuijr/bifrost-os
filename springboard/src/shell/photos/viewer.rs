@@ -49,6 +49,8 @@ pub struct Viewer {
     last_tap: Option<(f32, f32, f64)>,
     /// a single tap waiting out the double-tap window
     pending_tap: Option<f64>,
+    /// the clock of the last `tick`, so the snap-back runs on elapsed time
+    last_tick: Option<f64>,
     pub chrome: bool,
 }
 
@@ -57,7 +59,7 @@ impl Viewer {
     pub fn new(index: usize, count: usize, w: f32, h: f32) -> Self {
         let mut pager = Pager::new(count.max(1), w);
         pager.jump_to(index);
-        Viewer { index: index.min(count.saturating_sub(1)), count, w, h, pager, zoom: 1.0, pan: (0.0, 0.0), raw_pan: (0.0, 0.0), over: (0.0, 0.0), fit: (w, h), touch: None, last_tap: None, pending_tap: None, chrome: true }
+        Viewer { index: index.min(count.saturating_sub(1)), count, w, h, pager, zoom: 1.0, pan: (0.0, 0.0), raw_pan: (0.0, 0.0), over: (0.0, 0.0), fit: (w, h), touch: None, last_tap: None, pending_tap: None, last_tick: None, chrome: true }
     }
 
     /// Tells the viewer how big the current photo draws at zoom 1.
@@ -189,8 +191,10 @@ impl Viewer {
     /// Advances paging and the tap timer; the action a settled tap resolves to.
     pub fn tick(&mut self, t: f64) -> Action {
         self.pager.tick(t);
+        let dt = self.last_tick.map_or(0.0, |last| ((t - last) / 1000.0) as f32);
+        self.last_tick = Some(t);
         if self.touch.is_none() && self.over != (0.0, 0.0) {
-            self.over = (zoom::decay(self.over.0, 0.25), zoom::decay(self.over.1, 0.25));
+            self.over = (zoom::decay(self.over.0, dt), zoom::decay(self.over.1, dt));
         }
         let page = self.pager.page();
         if page != self.index && self.touch.is_none() {
