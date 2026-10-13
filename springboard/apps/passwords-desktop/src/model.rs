@@ -1,40 +1,57 @@
-//! Passwords model: the logins in the shared passwords group, search, generated passwords and the CSV import and
-//! export. Pure logic (no window, no keychain), so it is tested alone; `main.rs` does the calls and the drawing.
+//! Passwords model: the items in the shared passwords group (logins, secure notes and certificates), search,
+//! generated passwords and the CSV import and export. Pure logic (no window, no keychain), so it is tested alone;
+//! `main.rs` does the calls and the drawing.
 //!
-//! Secrets only leave the model as the caller asks for them: a listing carries sites, accounts and times, never a
-//! password. Nothing here logs or formats a password for display except the generated one the user asked for.
+//! Secrets only leave the model as the caller asks for them: a listing carries names, accounts and kinds, never a
+//! password, note body or certificate. Nothing here logs or formats a secret for display except the generated
+//! password the user asked for.
 
 use bifrost_app::password_gen::{self, Rules};
+use bifrost_app::passwords::{kind_of, name_of, Kind};
 
 /// Length of a generated password.
 pub const GENERATED_LENGTH: usize = 20;
 
-/// One login as the list shows it. The password is not held here; it is read from the keychain when asked for.
+/// One item as the list shows it. The secret is not held here; it is read from the keychain when asked for.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Login {
-    pub site: String,
+pub struct Item {
+    pub kind: Kind,
+    /// The keychain service: the site of a login, or a kind prefix and the title or label (see `passwords::kind_of`).
+    pub service: String,
     pub account: String,
 }
 
-/// Sorts by site, then account, ignoring case, so the list matches the Settings page order.
-pub fn sort(logins: &mut [Login]) {
-    logins.sort_by(|a, b| a.site.to_lowercase().cmp(&b.site.to_lowercase()).then_with(|| a.account.to_lowercase().cmp(&b.account.to_lowercase())));
+impl Item {
+    /// Builds the item for one listing row.
+    pub fn new(service: String, account: String) -> Item {
+        Item { kind: kind_of(&service), service, account }
+    }
+
+    /// The name the list shows: the site, the note title or the certificate label.
+    pub fn name(&self) -> &str {
+        name_of(&self.service)
+    }
 }
 
-/// Whether a login matches the search text: every space-separated word must appear in the site or the account
+/// Sorts by name, then account, ignoring case, so the list matches the Settings page order.
+pub fn sort(items: &mut [Item]) {
+    items.sort_by(|a, b| a.name().to_lowercase().cmp(&b.name().to_lowercase()).then_with(|| a.account.to_lowercase().cmp(&b.account.to_lowercase())));
+}
+
+/// Whether an item matches the search text: every space-separated word must appear in the name or the account
 /// (case-insensitive). An empty query matches everything.
-pub fn matches(login: &Login, query: &str) -> bool {
-    let site = login.site.to_lowercase();
-    let account = login.account.to_lowercase();
+pub fn matches(item: &Item, query: &str) -> bool {
+    let name = item.name().to_lowercase();
+    let account = item.account.to_lowercase();
     query.split_whitespace().all(|w| {
         let w = w.to_lowercase();
-        site.contains(&w) || account.contains(&w)
+        name.contains(&w) || account.contains(&w)
     })
 }
 
-/// The logins that match `query`, in their current order.
-pub fn filter<'a>(logins: &'a [Login], query: &str) -> Vec<&'a Login> {
-    logins.iter().filter(|l| matches(l, query)).collect()
+/// The items of `kind` that match `query`, in their current order.
+pub fn filter<'a>(items: &'a [Item], kind: Kind, query: &str) -> Vec<&'a Item> {
+    items.iter().filter(|i| i.kind == kind && matches(i, query)).collect()
 }
 
 /// A new password from the kernel random pool: upper and lower case letters, digits and symbols.
@@ -51,7 +68,7 @@ where
     password_gen::generate_with(&Rules::standard(length), below).map_err(|e| e.to_string())
 }
 
-/// One row of an import: a login with its password.
+/// One row of an import or export: a login with its password.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
     pub site: String,
@@ -59,7 +76,8 @@ pub struct Entry {
     pub password: String,
 }
 
-/// The result of reading a CSV: the usable rows, and how many rows were skipped for a missing field.
+/// The result of reading a CSV: the usable rows, and how many rows were skipped (a missing field, or a site that
+/// would be stored as a note or certificate).
 #[derive(Debug, PartialEq, Eq)]
 pub struct Import {
     pub entries: Vec<Entry>,
@@ -117,7 +135,8 @@ pub fn parse_csv(text: &str) -> Result<Vec<Vec<String>>, String> {
 
 /// Reads a logins CSV. The first row is the header; the columns are found by name: the site as `site`, `url`, `name`
 /// or `website`; the account as `account`, `username`, `login` or `email`; the password as `password`. A row without
-/// a site, an account or a password is skipped and counted.
+/// a site, an account or a password is skipped and counted, and so is a site that starts with a note or certificate
+/// prefix, since it would be stored as one of those kinds.
 pub fn parse_import(text: &str) -> Result<Import, String> {
     let rows = parse_csv(text)?;
     let Some((header, body)) = rows.split_first() else {
@@ -132,7 +151,7 @@ pub fn parse_import(text: &str) -> Result<Import, String> {
     for row in body {
         let get = |i: usize| row.get(i).map(|v| v.trim()).unwrap_or("");
         let (s, a, p) = (get(site), get(account), row.get(password).map(String::as_str).unwrap_or(""));
-        if s.is_empty() || a.is_empty() || p.is_empty() {
+        if s.is_empty() || a.is_empty() || p.is_empty() || kind_of(s) != Kind::Login {
             skipped += 1;
         } else {
             entries.push(Entry { site: s.to_string(), account: a.to_string(), password: p.to_string() });
@@ -163,27 +182,48 @@ pub fn render_export(entries: &[Entry]) -> String {
 mod tests {
     use super::*;
 
-    fn login(site: &str, account: &str) -> Login {
-        Login { site: site.into(), account: account.into() }
+    fn login(site: &str, account: &str) -> Item {
+        Item::new(site.into(), account.into())
     }
 
     #[test]
-    fn sort_is_by_site_then_account_ignoring_case() {
+    fn items_take_their_kind_and_name_from_the_service() {
+        let note = Item::new("note:Wi-Fi codes".into(), "secure-note".into());
+        assert_eq!(note.kind, Kind::SecureNote);
+        assert_eq!(note.name(), "Wi-Fi codes");
+        let cert = Item::new("cert:Work CA".into(), "certificate".into());
+        assert_eq!(cert.kind, Kind::Certificate);
+        assert_eq!(cert.name(), "Work CA");
+        assert_eq!(login("github.com", "me").name(), "github.com");
+    }
+
+    #[test]
+    fn sort_is_by_name_then_account_ignoring_case() {
         let mut v = vec![login("b.example", "me"), login("A.example", "zed"), login("a.example", "amy")];
         sort(&mut v);
-        let order: Vec<(&str, &str)> = v.iter().map(|l| (l.site.as_str(), l.account.as_str())).collect();
+        let order: Vec<(&str, &str)> = v.iter().map(|l| (l.service.as_str(), l.account.as_str())).collect();
         assert_eq!(order, [("a.example", "amy"), ("A.example", "zed"), ("b.example", "me")]);
     }
 
     #[test]
-    fn search_matches_every_word_in_site_or_account() {
+    fn search_matches_every_word_in_name_or_account() {
         let l = login("github.com", "olibuijr");
         assert!(matches(&l, ""));
         assert!(matches(&l, "GitHub"));
-        assert!(matches(&l, "git oli"), "words may come from the site and the account");
+        assert!(matches(&l, "git oli"), "words may come from the name and the account");
         assert!(!matches(&l, "git bank"));
+        let note = Item::new("note:Wi-Fi codes".into(), "secure-note".into());
+        assert!(matches(&note, "wi-fi"), "a note is searched by its title");
         let all = vec![login("github.com", "a"), login("bank.is", "b")];
-        assert_eq!(filter(&all, "bank").len(), 1);
+        assert_eq!(filter(&all, Kind::Login, "bank").len(), 1);
+    }
+
+    #[test]
+    fn filter_keeps_one_kind_at_a_time() {
+        let all = vec![login("github.com", "a"), Item::new("note:github notes".into(), "secure-note".into())];
+        assert_eq!(filter(&all, Kind::Login, "github").len(), 1);
+        assert_eq!(filter(&all, Kind::SecureNote, "github").len(), 1);
+        assert!(filter(&all, Kind::Certificate, "github").is_empty());
     }
 
     #[test]
@@ -217,6 +257,14 @@ mod tests {
         assert_eq!(got.entries[1].password, "p,w");
         assert!(parse_import("site,account\n").is_err(), "a header without a password column is refused");
         assert!(parse_import("").is_err());
+    }
+
+    #[test]
+    fn import_skips_a_site_that_would_be_stored_as_a_note() {
+        let got = parse_import("site,account,password\nnote:x,me,hunter2\nok.example,me,pw\n").unwrap();
+        assert_eq!(got.skipped, 1);
+        assert_eq!(got.entries.len(), 1);
+        assert_eq!(got.entries[0].site, "ok.example");
     }
 
     #[test]

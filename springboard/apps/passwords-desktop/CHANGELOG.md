@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0
+
+- Passwords lists three kinds of item in the shared passwords group: Logins, Notes and Certificates tabs. A note or
+  certificate is found by search, shows its first line after Reveal, copies and deletes like a login; Generate and
+  the CSV import and export stay with logins.
+- The item model and the store name live in one place: the shell's credential store (`springboard::credentials`),
+  which the Settings Passwords page and the SDK also use. Notes and certificates are kept under a `note:` or
+  `cert:` service prefix, so no site name can be taken for one.
+- Still missing: creating a note or certificate (needs a text editor), showing a whole multi-line note, and the
+  passcode check in this app before reveal (the Settings page asks for it; this app does not yet).
+
 ## 0.1.0
 
 - New app Passwords (`is.olibuijr.passwords.desktop`): lists the logins in the shared passwords group (the same
