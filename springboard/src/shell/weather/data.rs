@@ -140,6 +140,16 @@ pub struct Current {
     pub day: bool,
     pub humidity: u8,
     pub wind_kmh: f64,
+    /// the direction the wind comes from, degrees clockwise from north (0 when the answer has none)
+    pub wind_dir: f64,
+    /// the strongest gust in km/h (0 when the answer has none)
+    pub gust_kmh: f64,
+    /// dew point in Celsius (the temperature when the answer has none)
+    pub dew: f64,
+    /// sea-level pressure in hPa (0 when the answer has none)
+    pub pressure_hpa: f64,
+    /// the place's local clock at the reading, "13:15" (empty when the answer has none)
+    pub clock: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -149,6 +159,12 @@ pub struct Hour {
     pub temp: f64,
     pub code: u8,
     pub day: bool,
+    /// chance of precipitation in percent (0 when the answer has none)
+    pub precip_prob: u8,
+    /// precipitation of the hour in millimetres
+    pub precip_mm: f64,
+    /// visibility in metres (0 when the answer has none)
+    pub visibility_m: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -163,6 +179,10 @@ pub struct Day {
     /// local "06:12" (empty when the answer has none)
     pub sunrise: String,
     pub sunset: String,
+    /// highest chance of precipitation of the day in percent
+    pub precip_prob: u8,
+    /// precipitation total of the day in millimetres
+    pub precip_mm: f64,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -170,6 +190,10 @@ pub struct Forecast {
     pub current: Current,
     pub hours: Vec<Hour>,
     pub days: Vec<Day>,
+    /// precipitation in millimetres per 15 minutes from the current quarter hour (empty when the answer has none)
+    pub minutes: Vec<f64>,
+    /// pressure change over the next three hours in hPa (0 when unknown)
+    pub pressure_change: f64,
 }
 
 impl Forecast {
@@ -210,6 +234,11 @@ pub fn parse_forecast(text: &str) -> Option<Forecast> {
         day: num("is_day").is_none_or(|d| d != 0.0),
         humidity: num("relative_humidity_2m").unwrap_or(0.0).clamp(0.0, 100.0) as u8,
         wind_kmh: num("wind_speed_10m").unwrap_or(0.0),
+        wind_dir: num("wind_direction_10m").unwrap_or(0.0),
+        gust_kmh: num("wind_gusts_10m").unwrap_or(0.0),
+        dew: num("dew_point_2m").or(num("temperature_2m"))?,
+        pressure_hpa: num("pressure_msl").unwrap_or(0.0),
+        clock: cur.get("time").and_then(Json::string).and_then(|t| t.get(11..16)).unwrap_or("").to_string(),
     };
     let now = cur.get("time").and_then(Json::string).unwrap_or("");
     let hourly = root.get("hourly")?;
@@ -217,11 +246,17 @@ pub fn parse_forecast(text: &str) -> Option<Forecast> {
     let (temps, codes) = (numbers(hourly.get("temperature_2m"))?, numbers(hourly.get("weather_code"))?);
     let flags = numbers(hourly.get("is_day")).unwrap_or_default();
     let from = times.iter().position(|t| t.string().is_some_and(|t| t.get(..13).unwrap_or(t) >= now.get(..13).unwrap_or(now))).unwrap_or(0);
+    let column = |k: &str| hourly.get(k).and_then(|v| numbers(Some(v))).unwrap_or_default();
+    let (prob, mm, vis, press) = (column("precipitation_probability"), column("precipitation"), column("visibility"), column("pressure_msl"));
+    let pressure_change = match (press.get(from), press.get(from + 3)) {
+        (Some(a), Some(b)) => b - a,
+        _ => 0.0,
+    };
     let hours = (from..times.len().min(temps.len()).min(codes.len()))
         .take(24)
         .filter_map(|i| {
             let t = times[i].string()?;
-            Some(Hour { label: t.get(11..13)?.to_string(), temp: temps[i], code: codes[i] as u8, day: flags.get(i).is_none_or(|&d| d != 0.0) })
+            Some(Hour { label: t.get(11..13)?.to_string(), temp: temps[i], code: codes[i] as u8, day: flags.get(i).is_none_or(|&d| d != 0.0), precip_prob: prob.get(i).map_or(0, |p| p.clamp(0.0, 100.0) as u8), precip_mm: mm.get(i).copied().unwrap_or(0.0), visibility_m: vis.get(i).copied().unwrap_or(0.0) })
         })
         .collect();
     let daily = root.get("daily")?;
@@ -232,15 +267,27 @@ pub fn parse_forecast(text: &str) -> Option<Forecast> {
         .filter_map(|i| {
             let clock = |k: &str| daily.get(k).and_then(|v| v.array()?.get(i)?.string()?.get(11..16).map(str::to_string)).unwrap_or_default();
             let uv = daily.get("uv_index_max").and_then(|v| v.array()?.get(i)?.number()).unwrap_or(0.0);
-            Some(Day { label: weekday_label(dates[i].string()?)?, code: dcodes[i] as u8, max: max[i], min: min[i], uv, sunrise: clock("sunrise"), sunset: clock("sunset") })
+            let at = |k: &str| daily.get(k).and_then(|v| v.array()?.get(i)?.number()).unwrap_or(0.0);
+            Some(Day { label: weekday_label(dates[i].string()?)?, code: dcodes[i] as u8, max: max[i], min: min[i], uv, sunrise: clock("sunrise"), sunset: clock("sunset"), precip_prob: at("precipitation_probability_max").clamp(0.0, 100.0) as u8, precip_mm: at("precipitation_sum") })
         })
         .collect();
-    Some(Forecast { current, hours, days })
+    let minutes = parse_minutes(&root, now);
+    Some(Forecast { current, hours, days, minutes, pressure_change })
+}
+
+/// The 15-minute precipitation series from the quarter hour of `now` ("2026-10-04T13:15") on, up to one hour
+/// (four values); empty when the answer carries no `minutely_15` block.
+fn parse_minutes(root: &Json, now: &str) -> Vec<f64> {
+    let Some(block) = root.get("minutely_15") else { return vec![] };
+    let (Some(times), Some(values)) = (block.get("time").and_then(Json::array), numbers(block.get("precipitation"))) else { return vec![] };
+    let key = now.get(..16).unwrap_or(now);
+    let from = times.iter().position(|t| t.string().is_some_and(|t| t.get(..16).unwrap_or(t) >= key)).unwrap_or(0);
+    values.iter().skip(from).take(4).copied().collect()
 }
 
 pub fn forecast_url(loc: &Location) -> String {
     format!(
-        "{FORECAST_API}?latitude={:.4}&longitude={:.4}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset&forecast_days=10&timezone=auto",
+        "{FORECAST_API}?latitude={:.4}&longitude={:.4}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m,pressure_msl,is_day&hourly=temperature_2m,weather_code,is_day,precipitation_probability,precipitation,visibility,pressure_msl&daily=weather_code,temperature_2m_max,temperature_2m_min,uv_index_max,sunrise,sunset,precipitation_probability_max,precipitation_sum&minutely_15=precipitation&forecast_days=10&timezone=auto",
         loc.lat, loc.lon
     )
 }
@@ -482,6 +529,39 @@ mod tests {
         assert_eq!(f.days[1].max, 10.0);
         assert_eq!((f.days[0].uv, f.days[0].sunrise.as_str(), f.days[1].sunset.as_str()), (2.4, "07:41", "18:17"));
         assert!(parse_forecast("{}").is_none() && parse_forecast("nope").is_none());
+    }
+
+    const DETAILED: &str = r#"{"current":{"time":"2026-10-04T13:15","temperature_2m":7.4,"relative_humidity_2m":81,"weather_code":61,"wind_speed_10m":22.5,"wind_direction_10m":225,"wind_gusts_10m":41.0,"dew_point_2m":4.2,"pressure_msl":1002.5},
+        "hourly":{"time":["2026-10-04T13:00","2026-10-04T14:00","2026-10-04T15:00","2026-10-04T16:00"],"temperature_2m":[6.0,7.0,8.0,8.0],"weather_code":[3,61,2,2],"precipitation_probability":[10,60,30,0],"precipitation":[0.0,1.2,0.1,0.0],"visibility":[24000,9000,10000,20000],"pressure_msl":[1002.5,1001.0,1000.5,999.5]},
+        "daily":{"time":["2026-10-04"],"weather_code":[61],"temperature_2m_max":[8.2],"temperature_2m_min":[3.0],"precipitation_probability_max":[70],"precipitation_sum":[4.5]},
+        "minutely_15":{"time":["2026-10-04T13:00","2026-10-04T13:15","2026-10-04T13:30","2026-10-04T13:45","2026-10-04T14:00","2026-10-04T14:15"],"precipitation":[0.0,0.2,0.4,0.0,0.1,0.3]}}"#;
+
+    #[test]
+    fn parses_wind_dew_pressure_precipitation_visibility_and_minutes() {
+        let f = parse_forecast(DETAILED).unwrap();
+        assert_eq!((f.current.wind_dir, f.current.gust_kmh, f.current.dew, f.current.pressure_hpa), (225.0, 41.0, 4.2, 1002.5));
+        assert_eq!(f.current.clock, "13:15");
+        assert_eq!((f.hours[0].precip_prob, f.hours[1].precip_prob, f.hours[1].precip_mm, f.hours[1].visibility_m), (10, 60, 1.2, 9000.0));
+        assert_eq!((f.days[0].precip_prob, f.days[0].precip_mm), (70, 4.5));
+        assert_eq!(f.minutes, vec![0.2, 0.4, 0.0, 0.1], "four quarter hours from the current one");
+        assert!((f.pressure_change + 3.0).abs() < 1e-9, "1002.5 now, 999.5 three hours later");
+    }
+
+    #[test]
+    fn missing_detail_columns_default_to_zero() {
+        let f = parse_forecast(FORECAST).unwrap();
+        assert_eq!((f.current.wind_dir, f.current.gust_kmh, f.current.pressure_hpa), (0.0, 0.0, 0.0));
+        assert_eq!(f.current.dew, f.current.temp, "no dew point falls back to the temperature");
+        assert!(f.minutes.is_empty() && f.pressure_change == 0.0);
+        assert_eq!((f.hours[0].precip_prob, f.days[0].precip_mm), (0, 0.0));
+    }
+
+    #[test]
+    fn url_asks_for_the_detail_columns() {
+        let u = forecast_url(&Location { name: "A".into(), region: String::new(), lat: 1.0, lon: 2.0 });
+        for k in ["wind_gusts_10m", "dew_point_2m", "pressure_msl", "precipitation_probability", "visibility", "precipitation_sum", "minutely_15=precipitation"] {
+            assert!(u.contains(k), "{k}");
+        }
     }
 
     #[test]

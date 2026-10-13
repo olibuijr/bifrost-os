@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.6.0 — 2026-10-13
+
+- Detail tiles: wind direction and gusts with a compass dial, dew point under humidity, a sun path on the sunrise tile, and new Precipitation, Visibility and Pressure tiles that follow the unit setting.
+- A Next Hour card with a summary sentence and quarter-hour precipitation bars; precipitation chance under each hour and each day.
+- The Locations sidebar shows each place's temperature; Delete removes the selected place.
+- The forecast request asks for the extra columns (wind, dew point, pressure, visibility, precipitation, minutely_15).
+
 ## 1.5.3 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

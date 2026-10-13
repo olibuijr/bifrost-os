@@ -9,8 +9,8 @@
   "summary": {
     "features": 32,
     "parity": 11,
-    "partial": 7,
-    "gap": 13,
+    "partial": 11,
+    "gap": 9,
     "n/a": 1,
     "coverage_pct": 46.8
   },
@@ -20,8 +20,8 @@
       "area": "view",
       "apple": "Source list of saved places, each with a live temperature and condition",
       "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:391",
-      "note": "Sidebar rows list the places with a subtitle; rows carry no current temperature or condition glyph.",
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:313",
+      "note": "Each sidebar row shows the place's last known temperature on the right; no condition glyph in the row yet (SidebarItem has no icon slot for a drawn glyph).",
       "wire": "Store each place's last Summary (data.rs:271) and draw its temperature and condition glyph on the right of the row in weather.rs side_rows (weather.rs:391), using shell::weather::glyph."
     },
     {
@@ -38,8 +38,8 @@
       "area": "view",
       "apple": "Delete from the list (Edit > Delete, swipe, context menu)",
       "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:55",
-      "note": "A remove button per row on the Locations page; no Delete key or context menu in the sidebar.",
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:952",
+      "note": "Delete or Backspace removes the selected place from the main page (code 46 mapped in main.rs). The sidebar secondary-click menu is still missing.",
       "wire": "Handle the Delete key in weather.rs key() (weather.rs:933) for the selected sidebar row and add a secondary-click menu with Remove."
     },
     {
@@ -74,8 +74,8 @@
       "area": "forecast",
       "apple": "Scrolling strip of hours with temperature, condition and precipitation chance",
       "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1154",
-      "note": "Hours with temperature and glyph, scrolls sideways; no precipitation chance, no sunrise or sunset markers in the strip.",
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+      "note": "Precipitation chance under each hour's glyph (rounded to 5, hidden below 10). Sunrise and sunset markers between the hours are still missing.",
       "wire": "Add precipitation_probability and the day's sunrise and sunset to the hourly query (data.rs:243) and draw the percentage under the glyph and sun markers between the hours in weather.rs:1154."
     },
     {
@@ -83,17 +83,17 @@
       "area": "forecast",
       "apple": "Ten days with condition, range bar against the period's range, precipitation chance",
       "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1173",
-      "note": "Ten day rows with glyph, high and low; no range bar, no precipitation chance.",
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+      "note": "Range bar already scaled to the ten-day extremes; the daily precipitation chance is now under each day's glyph.",
       "wire": "Draw a min-max range bar per day scaled to the ten-day extremes in weather.rs:1173 and add precipitation_probability_max to the daily query (data.rs:243)."
     },
     {
       "feature": "Minute-by-minute next-hour precipitation",
       "area": "forecast",
       "apple": "Next-hour precipitation chart with a summary sentence",
-      "status": "gap",
-      "bifrost": "springboard/apps/weather-desktop/src/insights.rs:19",
-      "note": "DATA_HAS_MINUTE is false: the forecast service is not asked for minutely data.",
+      "status": "partial",
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+      "note": "Next Hour card above the hourly strip: summary sentence and four quarter-hour bars from minutely_15 precipitation (details.rs next_hour_summary, next_hour_bars). Quarter-hour resolution, not per minute.",
       "wire": "Request minutely_15 precipitation in forecast_url (data.rs:243), add Forecast.minutes in data.rs:169 and draw a Next Hour card above the hourly strip."
     },
     {
@@ -119,8 +119,8 @@
       "area": "detail",
       "apple": "Sunrise with sunset in the footer, path of the sun",
       "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1214",
-      "note": "Times only, no sun-path graphic.",
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+      "note": "Sun path arc with the sun at its position between sunrise and sunset.",
       "wire": "Draw the day arc with the sun position from the two times in weather.rs:1214."
     },
     {
@@ -128,8 +128,8 @@
       "area": "detail",
       "apple": "Wind speed, gusts and direction compass",
       "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1215",
-      "note": "Speed in km/h or mph; no gusts, no direction.",
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+      "note": "Note gives the compass point and gusts; a dotted compass dial marks the direction the wind comes from. No arrow needle or tick labels besides N.",
       "wire": "Add wind_direction_10m and wind_gusts_10m to the current query (data.rs:243), extend data::Current (data.rs:136) and draw a compass dial in the tile."
     },
     {
@@ -137,8 +137,8 @@
       "area": "detail",
       "apple": "Humidity with dew point",
       "status": "partial",
-      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1216",
-      "note": "Percentage only.",
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+      "note": "Note shows the dew point in the temperature unit.",
       "wire": "Add dew_point_2m to the current query (data.rs:243) and show it as the tile note."
     },
     {
@@ -163,27 +163,27 @@
       "feature": "Precipitation tile",
       "area": "detail",
       "apple": "Rain or snow amount for 24 hours and the next days",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Precipitation amounts are not requested.",
+      "status": "partial",
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+      "note": "Next 24 hours total with tomorrow's amount as the note, mm or in following the unit setting. Snow is not separated from rain.",
       "wire": "Add precipitation_sum to the daily and precipitation to the hourly query (data.rs:243), a Precipitation tile in weather.rs:1212 and mm or in following the unit setting."
     },
     {
       "feature": "Visibility tile",
       "area": "detail",
       "apple": "Visibility distance with a note",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Not requested.",
+      "status": "partial",
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+      "note": "Visibility in km or mi from the hourly series with a descriptive note.",
       "wire": "Add visibility to the hourly query (data.rs:243) and a Visibility tile in weather.rs:1212 with km or mi."
     },
     {
       "feature": "Pressure tile",
       "area": "detail",
       "apple": "Barometric pressure with a trend dial",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Not requested.",
+      "status": "partial",
+      "bifrost": "springboard/apps/weather-desktop/src/weather.rs:1136",
+      "note": "hPa or inHg with a Rising, Falling or Steady note from the three-hour change. No trend dial.",
       "wire": "Add pressure_msl to the current query (data.rs:243) and a Pressure tile in weather.rs:1212 with hPa or inHg and a rising or falling note."
     },
     {

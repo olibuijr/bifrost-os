@@ -2,6 +2,7 @@
 //! hosted through the SDK. The shell draws the keyboard; the app
 //! asks for it with `wants_keyboard` and receives typed keys as `Input::Key`.
 
+mod details;
 mod insights;
 mod services;
 mod weather;
@@ -106,6 +107,7 @@ impl App for WeatherApp {
                     KeyInput::Code(9) => Out::Named("Tab"),
                     KeyInput::Code(37) => Out::Named("Left"),
                     KeyInput::Code(39) => Out::Named("Right"),
+                    KeyInput::Code(46) => Out::Named("Delete"),
                     KeyInput::Code(_) => return false,
                 };
                 c.key(&ctx.ui, out, bifrost_app::proto::sys::now_ms());

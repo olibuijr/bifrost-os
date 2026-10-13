@@ -14,9 +14,9 @@ use springboard::shell::weather::data::{Hour, Units};
 /// The data service the forecast comes from, and the page that carries its terms.
 pub const DATA_SERVICE: &str = "Open-Meteo";
 pub const DATA_LEGAL_URL: &str = "https://open-meteo.com/en/terms";
-/// The forecast request asks for no weather alerts and no minute forecast, so the place has neither from this source.
+/// The forecast request asks for no weather alerts but does ask for the 15-minute precipitation series.
 pub const DATA_HAS_ALERTS: bool = false;
-pub const DATA_HAS_MINUTE: bool = false;
+pub const DATA_HAS_MINUTE: bool = true;
 
 /// Zoom of the map card: at this level about two degrees of the world fit across a 400-point card.
 pub const MAP_ZOOM: f64 = 8.0;
@@ -201,7 +201,7 @@ mod tests {
     use super::*;
 
     fn hour(temp: f64) -> Hour {
-        Hour { label: "13".into(), temp, code: 0, day: true }
+        Hour { label: "13".into(), temp, code: 0, day: true, precip_prob: 0, precip_mm: 0.0, visibility_m: 0.0 }
     }
 
     #[test]
