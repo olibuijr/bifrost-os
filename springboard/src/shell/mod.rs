@@ -587,6 +587,18 @@ pub struct Shell {
     capture: Option<capture::Session>,
     /// the screen recording in progress (the toolbar's Record buttons, `rec start`, `screencapture -v`)
     rec: Option<screenrec::Session>,
+    /// the Options menu's choices, kept across capture sessions
+    capture_prefs: capture::Prefs,
+    /// the display's refresh rate and whether the GPU path is up (`set_display`): the recording's frame rate
+    rec_display: (u32, bool),
+    /// the loop's clock (ms) at its last pass, for recordings that finish between passes
+    rec_clock: f64,
+    /// finished recordings whose audio take is still on its way from the audio service
+    rec_mux: Vec<screenrec::PendingMux>,
+    /// audio muxes running on their threads
+    rec_muxing: usize,
+    /// the muxed movies come back here, so the loop opens them on the shell thread
+    rec_ready: (std::sync::mpsc::Sender<std::path::PathBuf>, std::sync::mpsc::Receiver<std::path::PathBuf>),
     /// the Files browser, alive in the background once opened
     files: Option<Files>,
     /// the roots Files offers (tests point them at a temp dir)
@@ -857,6 +869,12 @@ impl Shell {
             shot_tap: false,
             capture: None,
             rec: None,
+            capture_prefs: capture::Prefs::default(),
+            rec_display: (screenrec::FPS, false),
+            rec_clock: 0.0,
+            rec_mux: Vec::new(),
+            rec_muxing: 0,
+            rec_ready: std::sync::mpsc::channel(),
             files: None,
             files_locations: files::fs::locations(),
             audio: crate::svc::audio::Client::for_root(&apphost::root()),
@@ -4184,7 +4202,7 @@ impl Shell {
             "screen" => capture::Pick::Screen,
             other => return Err(format!("no capture mode {other}")),
         };
-        let mut session = capture::Session::new();
+        let mut session = capture::Session::with_prefs(self.capture_prefs);
         session.pick = pick;
         self.capture = Some(session);
         self.dirty = true;
@@ -4202,10 +4220,25 @@ impl Shell {
             return vec![];
         }
         match ev {
-            Event::Down(x, y) => match sess.tool_at(&self.ui, w, h, x, y) {
-                Some(tool) => sess.pressed = Some(tool),
-                None => sess.press(x, y),
-            },
+            Event::Down(x, y) => {
+                if let Some(row) = sess.option_at(&self.ui, w, h, x, y) {
+                    sess.prefs.choose(row);
+                    self.capture_prefs = sess.prefs;
+                    if row == capture::OptionRow::Microphone {
+                        self.ask_microphone();
+                    }
+                } else if sess.on_menu(&self.ui, w, h, x, y) {
+                    // the card's padding does nothing
+                } else if sess.menu && !sess.on_toolbar(&self.ui, w, h, x, y) {
+                    // a press outside the open menu only closes it
+                    sess.menu = false;
+                } else {
+                    match sess.tool_at(&self.ui, w, h, x, y) {
+                        Some(tool) => sess.pressed = Some(tool),
+                        None => sess.press(x, y),
+                    }
+                }
+            }
             Event::Move(x, y) => sess.moved(x, y),
             Event::Up(x, y) => {
                 if let Some(pressed) = sess.pressed.take() {
@@ -4218,7 +4251,7 @@ impl Shell {
                     return vec![];
                 }
                 if let Some(r) = sess.release(x, y, &frames, w, h, s) {
-                    sess.pending = Some((r, capture::Countdown::new(t, sess.timer)));
+                    sess.pending = Some((r, capture::Countdown::new(t, sess.prefs.timer)));
                     if sess.due(t) {
                         self.finish_capture(t);
                     }
@@ -4241,7 +4274,7 @@ impl Shell {
             }
             return;
         }
-        let pointer = sess.pointer.then_some(sess.at);
+        let pointer = sess.prefs.pointer.then_some(sess.at);
         self.take_capture(region, pointer, t);
     }
 

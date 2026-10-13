@@ -661,7 +661,7 @@ impl Shell {
             }
             // Shift+Cmd+5 opens the screenshot toolbar; Escape closes it before it goes Back
             Shortcut::Capture if !self.is_locked() => {
-                self.capture = Some(super::capture::Session::new());
+                self.capture = Some(super::capture::Session::with_prefs(self.capture_prefs));
                 vec![]
             }
             Shortcut::Back if self.capture.is_some() => {
