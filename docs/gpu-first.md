@@ -163,3 +163,35 @@ The presenter's live backdrop (`Presenter::set_window_stack`, `under`, `Backdrop
 sees wallpaper plus the shell's own windows; other clients' toplevels are neither sampled nor drawn by the shell.
 Under bifrost-wm the shell sends ext-background-effect blur regions and the window server blurs the real scene
 (`docs/window-server.md`, "Live blur per compositor path"). Switch: `BIFROST_WM_MATERIALS=0`.
+
+## Presenter pacing, buffer reuse and fallback (round 75)
+
+**Pacing.** Desktop frames are paced by the compositor: each commit requests a `wl_surface.frame` callback and the
+next frame is drawn when it arrives (`present`, `state.pending`), so no frame is drawn on a timer and nothing spins.
+The 33 ms backdrop cap (`retry_in_ms`) is a one-shot wake-up, not a poll. On Mesa, implicit dma-buf fencing means a
+pass only needs `glFlush`. The non-Mesa path (`BIFROST_GPU_WAIT=1`, NVIDIA) still blocks once per pass on an EGL
+fence; a native fence fd or a server-side wait would remove that stall (follow-up).
+
+**Buffer reuse.** Drawables are a fixed ring per surface (the desktop keeps one spare, `GPU_POOL_MIN..MAX`), allocated
+once and reused; a surface's content layer and every backdrop pyramid are textures created on size change and kept.
+A new dma-buf is only allocated when every drawable is held by the compositor, and the spare is freed after 5 s idle.
+
+**Glass caching.** The wallpaper blur is computed once per wallpaper change (`set_wallpaper` key). The live backdrop
+(`rebuild_live`) and each window's behind-window backdrop (`under`) rebuild only when their dirty flag is set and at
+most every 33 ms; a skipped rebuild is retried by a one-shot timer. An unchanged backdrop costs no blur passes.
+
+**Health and fallback.** `gpu/health.rs` holds the presenter's first failure. It is set by:
+- `eglMakeCurrent` failing (lost context, checked at the start of every draw);
+- a GL error flag after a pass: out of memory or a lost context end the presenter, any other flag is logged once and
+  drawing goes on (a benign flag must not cost the GPU path);
+- a pass whose fence does not signal within 100 ms (the GPU is not making progress, which is what a freeze looks like).
+
+Once set, `draw` returns nothing and reports nothing as presented. The Wayland path (`src/bare/wayland.rs`) then calls
+`fall_back`: the dma-buf `wl_buffer`s are destroyed, the presenter is dropped, the SHM buffers are marked fully
+damaged, and `Display::take_gpu_fallback` makes the shell draw a full CPU frame on the next loop. The SHM path
+was already allocated at startup, so the switch needs no new buffers. Failures are logged as
+`GPU presenter failed, falling back to the SHM path: <reason>` (journal, `presenter` logger).
+
+Backdrop allocation is all-or-nothing (`alloc_live`, the wallpaper chain in `set_wallpaper`): a failure part way
+frees the textures it made. Tests: `gpu::health` (host), `wl::stack_tests`.
+Not measured on Midget yet: the fallback path has only been read through, not run on a lost context.

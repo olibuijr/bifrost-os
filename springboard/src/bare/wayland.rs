@@ -93,6 +93,8 @@ struct State {
 struct Gpu { p: Presenter, glass: Vec<Glass>, log: (std::time::Instant, usize, f64, f64, usize), draw: (usize, f64), last_frame: std::time::Instant }
 pub struct Display { conn: Connection, queue: EventQueue<State>, state: State,
     stats: Option<(std::time::Instant,usize,usize)>, gpu: Option<Gpu>,
+    /// the GPU presenter gave up and the SHM path took over: the shell must draw a full frame (`take_gpu_fallback`)
+    fell_back: bool,
 }
 /// Wraps presenter drawables in `wl_buffer`s; fails when the compositor does not list the format.
 fn gpu_buffers(state:&State, infos:&[BufferInfo], qh:&QueueHandle<State>) -> io::Result<Vec<GpuSlot>> {
@@ -162,7 +164,7 @@ impl Display {
             }
         };
         transient(conn.flush())?;
-        Ok(Self { conn, queue, state, stats, gpu })
+        Ok(Self { conn, queue, state, stats, gpu, fell_back: false })
     }
     pub fn active(&self) -> bool {!self.state.idle}
     pub fn resumed(&mut self) -> bool {std::mem::take(&mut self.state.resumed)}
@@ -388,6 +390,7 @@ impl Display {
                 for a in &areas {w.surface.damage_buffer(a.x0 as i32,a.y0 as i32,(a.x1-a.x0) as i32,(a.y1-a.y0) as i32);}
                 w.surface.frame(&qh,false); w.surface.commit(); s.busy=true;
             }
+            if let Some(why)=g.p.failure().map(str::to_owned) { self.fall_back(&why); return Ok(()); }
             // live materials: tell the presenter which windows sit behind the glass (z order, content origin)
             let stack:Vec<(u32,i32,i32)>=self.state.z.iter().filter_map(|id|self.state.windows.get(id).filter(|w|w.configured).map(|w|(GPU_WINDOW+*id,w.frame.x,w.frame.y))).collect();
             g.p.set_window_stack(stack);
@@ -533,6 +536,7 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
                 w.surface.commit();s.busy=true;
                 mark_chrome_frame(id);
             }
+            if let Some(why)=g.p.failure().map(str::to_owned) { self.fall_back(&why); }
             return Ok(());
         }
         for (&id, w) in self.state.chrome.iter_mut() {
@@ -600,6 +604,21 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
         pool_trim_in_ms(v.len(), v.last().is_some_and(|s| s.busy), g.last_frame.elapsed().as_secs_f32())
     }
     pub fn gpu_active(&self) -> bool { self.gpu.is_some() }
+    /// True once after the GPU presenter gave up: the shell then draws a full CPU frame for the SHM path.
+    pub fn take_gpu_fallback(&mut self) -> bool { std::mem::take(&mut self.fell_back) }
+    /// The GPU presenter failed (`why`): the shell leaves it for good and draws through SHM. The dma-buf buffers go
+    /// first (the compositor keeps what it still holds), then the presenter is dropped, and the SHM buffers are marked
+    /// fully damaged so the next frame repaints them whole.
+    fn fall_back(&mut self, why: &str) {
+        bifrost_core::log::shell_logger("presenter").error(format!("GPU presenter failed, falling back to the SHM path: {why}"));
+        for (_, slots) in self.state.gpu_slots.drain() {
+            for s in slots { s.buffer.destroy(); }
+        }
+        self.gpu = None;
+        for slot in &mut self.state.slots { slot.damage.all(); }
+        self.fell_back = true;
+        let _ = self.conn.flush();
+    }
     pub fn note_draw(&mut self, ms: f64) { if let Some(g) = &mut self.gpu { g.draw.0 += 1; g.draw.1 += ms; } }
     pub fn present(&mut self, pixels: &[u32], damage: &Damage) -> io::Result<()> {
         if self.state.lock_wanted && !self.state.lock.as_ref().is_some_and(|l|l.configured) { return Ok(()); }
@@ -634,6 +653,7 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
                 return Ok(());
             };
             let areas = g.p.draw(GPU_BG, slot, pixels, w, damage, Backdrop::Full{x:0,y:0}, &g.glass);
+            if let Some(why) = g.p.failure().map(str::to_owned) { self.fall_back(&why); return Ok(()); }
             let st = g.p.stats;
             g.log.1 += 1; g.log.2 += st.upload_ms; g.log.3 += st.render_ms; g.log.4 += st.uploaded_px;
             if g.log.0.elapsed().as_secs() >= 10 {

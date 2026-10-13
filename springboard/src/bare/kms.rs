@@ -769,6 +769,9 @@ impl Display {
     pub fn wayland_take_glass_retry(&mut self) -> bool {self.wayland.as_mut().is_some_and(|w| w.take_glass_retry())}
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_gpu_active(&self) -> bool {self.wayland.as_ref().is_some_and(|w| w.gpu_active())}
+    /// True once after the GPU presenter gave up for the SHM path: the shell draws a full frame.
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_take_gpu_fallback(&mut self) -> bool {self.wayland.as_mut().is_some_and(|w| w.take_gpu_fallback())}
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_wallpaper(&mut self, wp: crate::gfx::View, x: i32) {if let Some(w)=&mut self.wayland {w.wallpaper(wp,x);}}
     #[cfg(feature = "desktop-wayland")]

@@ -15,6 +15,7 @@
 use super::desktop::{self, Bo, Gbm, MOD_INVALID};
 use super::egl::*;
 use super::error::{egl_error, gl_error, has_extension};
+use super::health::Health;
 use crate::gfx::{Area, Damage, View};
 use bifrost_render::glass::Rect as Glass;
 use std::collections::HashMap;
@@ -194,6 +195,9 @@ pub struct Presenter {
     pub stats: Stats,
     /// the driver syncs shared dma-bufs itself (Mesa); otherwise each pass is waited for
     implicit_sync: bool,
+    /// the first GPU failure (lost context, GL error, a pass that never finished): once set, nothing is drawn and
+    /// the shell moves to the SHM path (`failure`)
+    health: Health,
 }
 
 const VS: &str = "#version 300 es
@@ -399,7 +403,13 @@ impl Presenter {
             renderer,
             stats: Stats::default(),
             implicit_sync,
+            health: Health::default(),
         })
+    }
+
+    /// The reason the presenter stopped drawing, once it did. The caller then leaves the GPU for the SHM path.
+    pub fn failure(&self) -> Option<&str> {
+        self.health.failure()
     }
 
     /// Creates (or recreates) surface `id` with `n` drawables; returns them for `wl_buffer`s.
@@ -588,29 +598,10 @@ impl Presenter {
         };
         if slot.as_ref().is_none_or(|l| l.base.w != lw || l.base.h != lh) {
             if let Some(old) = slot.take() {
-                self.free(old.base);
-                for t in old.down.into_iter().chain(old.up) {
-                    self.free(t);
-                }
+                self.free_live(old);
             }
-            let Ok(base) = self.texture(lw, lh, GL_LINEAR, None) else { return };
-            let (mut down, mut up) = (Vec::new(), Vec::new());
-            let (mut w, mut h) = (lw, lh);
-            for _ in 0..3 {
-                w = (w / 2).max(1);
-                h = (h / 2).max(1);
-                match self.texture(w, h, GL_LINEAR, None) {
-                    Ok(t) => down.push(t),
-                    Err(_) => return,
-                }
-            }
-            for i in (0..2).rev() {
-                match self.texture(down[i].w, down[i].h, GL_LINEAR, None) {
-                    Ok(t) => up.push(t),
-                    Err(_) => return,
-                }
-            }
-            slot = Some(Live { base, down, up });
+            let Ok(fresh) = self.alloc_live(lw, lh) else { return };
+            slot = Some(fresh);
         }
         let Some(live) = slot else { return };
         let windows = match under {
@@ -658,13 +649,43 @@ impl Presenter {
             src = (u.tex, u.w, u.h);
         }
         match under {
-            Some(k) => {
-                if let Some(u) = self.under.get_mut(&k) {
-                    u.live = Some(live);
-                }
-            }
+            Some(k) => match self.under.get_mut(&k) {
+                Some(u) => u.live = Some(live),
+                None => self.free_live(live),
+            },
             None => self.live = Some(live),
         }
+    }
+
+    /// Allocates a backdrop pyramid: a `lw` x `lh` base, three halvings down and two back up. A failure part way
+    /// frees what was already made, so a GPU out of memory costs no textures.
+    fn alloc_live(&self, lw: usize, lh: usize) -> io::Result<Live> {
+        let base = self.texture(lw, lh, GL_LINEAR, None)?;
+        let mut down: Vec<Tex> = Vec::with_capacity(3);
+        let (mut w, mut h) = (lw, lh);
+        for _ in 0..3 {
+            w = (w / 2).max(1);
+            h = (h / 2).max(1);
+            match self.texture(w, h, GL_LINEAR, None) {
+                Ok(t) => down.push(t),
+                Err(e) => {
+                    self.free_live(Live { base, down, up: Vec::new() });
+                    return Err(e);
+                }
+            }
+        }
+        let mut up: Vec<Tex> = Vec::with_capacity(2);
+        for i in (0..2).rev() {
+            let (uw, uh) = (down[i].w, down[i].h);
+            match self.texture(uw, uh, GL_LINEAR, None) {
+                Ok(t) => up.push(t),
+                Err(e) => {
+                    self.free_live(Live { base, down, up });
+                    return Err(e);
+                }
+            }
+        }
+        Ok(Live { base, down, up })
     }
 
     pub fn has_surface(&self, id: u32) -> bool {
@@ -740,8 +761,15 @@ impl Presenter {
         let mut chain: Vec<Tex> = Vec::new();
         for &(w, h) in &sizes {
             match self.texture(w, h, GL_LINEAR, None) {
-                Ok(t) => chain.push(t),
-                Err(_) => return,
+                Ok(c) => chain.push(c),
+                Err(_) => {
+                    // free the source and the part of the chain already made: nothing is kept on failure
+                    for c in chain {
+                        self.free(c);
+                    }
+                    self.free(t);
+                    return;
+                }
             }
         }
         let gl = self.gl;
@@ -780,6 +808,9 @@ impl Presenter {
         // a shell surface (not a client window) may carry glass over the live backdrop
         let windowed = !is_window(id);
         self.current();
+        if !self.health.is_ok() {
+            return Vec::new();
+        }
         let t0 = std::time::Instant::now();
         let gl = self.gl;
         let Some(s) = self.surfaces.get_mut(&id) else { return Vec::new() };
@@ -953,6 +984,10 @@ impl Presenter {
         }
         gl!(gl, disable(GL_SCISSOR_TEST));
         self.finish();
+        if !self.health.is_ok() {
+            // the pass failed: the drawable holds no complete frame, so nothing is reported as presented
+            return Vec::new();
+        }
         let t2 = std::time::Instant::now();
         self.stats = Stats {
             upload_ms: (t1 - t0).as_secs_f64() * 1e3,
@@ -995,34 +1030,46 @@ impl Presenter {
         gl!(gl, uniform1i(self.prog.mode, 0));
     }
 
-    /// Makes the presenter's context current (another EGL user on the thread may have switched it).
-    fn current(&self) {
+    /// Makes the presenter's context current (another EGL user on the thread may have switched it). A context that
+    /// will not become current is a lost GPU: it is recorded as the failure.
+    fn current(&mut self) {
         // SAFETY: dpy/ctx are live; surf is null (surfaceless) or the pbuffer made with the context.
-        unsafe { (self.egl.make_current)(self.dpy, self.surf, self.surf, self.ctx) };
+        let ok = unsafe { (self.egl.make_current)(self.dpy, self.surf, self.surf, self.ctx) } != 0;
+        if !ok {
+            self.health.fail(|| "eglMakeCurrent failed: the GPU context is lost".to_string());
+        }
     }
 
-    /// Waits until the GPU finished the pass (vendor neutral: implicit sync is not assumed).
-    fn finish(&self) {
+    /// Waits until the GPU finished the pass (vendor neutral: implicit sync is not assumed). A GL error flag, or a
+    /// pass that does not finish within the wait, is recorded in `health` instead of blocking the shell for good.
+    fn finish(&mut self) {
         if self.implicit_sync {
             // Mesa drivers fence dma-bufs implicitly: the compositor's reads wait for this pass
             gl!(self.gl, flush());
-            return;
-        }
-        if let Some(k) = self.ext.khr {
-            // SAFETY: dpy is initialised and the context current; the sync is destroyed after the wait.
-            let ok = unsafe {
-                let sync = (k.create_sync)(self.dpy, EGL_SYNC_FENCE_KHR, ptr::null());
-                !sync.is_null() && {
+        } else {
+            let waited = self.ext.khr.and_then(|k| {
+                // SAFETY: dpy is initialised and the context current; the sync is destroyed after the wait.
+                unsafe {
+                    let sync = (k.create_sync)(self.dpy, EGL_SYNC_FENCE_KHR, ptr::null());
+                    if sync.is_null() {
+                        return None;
+                    }
                     let r = (k.client_wait)(self.dpy, sync, EGL_SYNC_FLUSH_COMMANDS_BIT_KHR, 100_000_000);
                     (k.destroy_sync)(self.dpy, sync);
-                    r == EGL_CONDITION_SATISFIED_KHR
+                    Some(r)
                 }
-            };
-            if ok {
-                return;
+            });
+            match waited {
+                Some(r) => {
+                    self.health.fence("presenter pass", r);
+                }
+                None => gl!(self.gl, finish()),
             }
         }
-        gl!(self.gl, finish());
+        let e = gl!(self.gl, get_error());
+        if let Some(msg) = self.health.gl_flag("presenter pass", e) {
+            bifrost_core::log::shell_logger("presenter").error(msg);
+        }
     }
 
     /// Draws `tex` over `dst` (x, y, w, h in target pixels), clipped to a rounded rect when given.
