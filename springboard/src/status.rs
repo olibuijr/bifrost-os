@@ -24,10 +24,9 @@ pub fn clock_in(hour: i32, min: i32, h24: bool) -> String {
     }
 }
 
+/// The short date of the menu bar, lock screen and screen saver, in the region Settings > Language & Region chose.
 pub fn date_text(wday: i32, mday: i32, mon: i32) -> String {
-    const DAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    format!("{} {mday} {}", DAYS[wday.rem_euclid(7) as usize], MONTHS[mon.rem_euclid(12) as usize])
+    bifrost_ui::region::short_date(&bifrost_ui::region::current(), wday, mday, mon)
 }
 
 /// Status-bar wifi fan radius in points (measured on the bifrost: 9.75 pt tall,

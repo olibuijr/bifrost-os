@@ -5,6 +5,14 @@
 - Software Update: `softwareupdate --schedule` prints whether the background checks run; `--schedule on|off` switches them.
   Manual checks (`softwareupdate -l`, Settings > Check) still run. The switch is one file in the shell data folder that the
   update agent and the shell's own checker both read.
+- Settings > General > Language & Region is real: preferred language (English or Íslenska, first one wins), Region
+  (twelve regions), First Day of Week (Automatic, Sunday or Monday) and the formats they set (short date, currency).
+  The choice is saved in `settings.ini` (`languages`, `region`, `first_weekday`, `currency`), publishes to the menu bar
+  date (`bifrost_ui::region`, `short_date`), and every app reads it through the SDK `Locale::current()`, with
+  `first_weekday()` and the currency overrides. The system locale follows through privd `locale.set` (`localectl
+  set-locale`, which needs the locale generated, for example `is_IS`).
+  Calendar's month grid still starts on Sunday; it does not read the first-day setting yet.
+
 - Terminal: More menu row "Open link in selection" opens the first web link in the selected text in the browser
   (`terminal/links.rs`, reusing the URL detection in `profile_table.rs`).
 - Input: a third input source, Japanese (Romaji), types the English keys and composes kana in the Search field: romaji

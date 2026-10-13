@@ -44,6 +44,7 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
             Some(Json::Bool(on)) => run("timedatectl", &["set-ntp", if *on { "true" } else { "false" }]).map(|_| obj(vec![])),
             _ => Err(PErr::bad("on must be a boolean")),
         },
+        "locale.set" => set_locale(str_param(p, "lang")?, str_param(p, "region")?),
         "update.check" => update_check(),
         "update.apply" => {
             let kind = str_param(p, "kind")?;
@@ -108,6 +109,34 @@ fn set_timezone(name: &str) -> Result<Json, PErr> {
         return Err(PErr::bad("unknown time zone"));
     }
     run("timedatectl", &["set-timezone", name]).map(|_| obj(vec![]))
+}
+
+/// `ll` or `ll_CC`: two lowercase letters, optionally an underscore and two uppercase ones.
+pub fn locale_shape(name: &str) -> bool {
+    let b = name.as_bytes();
+    match b.len() {
+        2 => b.iter().all(u8::is_ascii_lowercase),
+        5 => b[..2].iter().all(u8::is_ascii_lowercase) && b[2] == b'_' && b[3..].iter().all(u8::is_ascii_uppercase),
+        _ => false,
+    }
+}
+
+/// A locale that is a shape `locale_shape` accepts and whose glibc source is installed (so it can be generated).
+pub fn valid_locale(name: &str) -> bool {
+    locale_shape(name) && Path::new("/usr/share/i18n/locales").join(name).is_file()
+}
+
+/// `localectl set-locale`: `lang` for LANG and `region` for the formats (time, numbers, money, paper, measures).
+fn set_locale(lang: &str, region: &str) -> Result<Json, PErr> {
+    if !valid_locale(lang) || !valid_locale(region) {
+        return Err(PErr::bad("unknown locale"));
+    }
+    let (l, r) = (format!("{lang}.UTF-8"), format!("{region}.UTF-8"));
+    let mut assigns = vec![format!("LANG={l}")];
+    assigns.extend(["LC_TIME", "LC_NUMERIC", "LC_MONETARY", "LC_MEASUREMENT", "LC_PAPER"].iter().map(|k| format!("{k}={r}")));
+    let mut args = vec!["set-locale"];
+    args.extend(assigns.iter().map(String::as_str));
+    run("localectl", &args).map(|_| obj(vec![]))
 }
 
 fn update_check() -> Result<Json, PErr> {
@@ -184,6 +213,21 @@ mod tests {
         for bad in ["", "/etc/passwd", "../../etc/passwd", "Europe/../../x", "a b", "Europe//Oslo", "UTC;reboot"] {
             assert!(!valid_zone(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn locale_names_have_the_glibc_shape() {
+        assert!(locale_shape("is") && locale_shape("is_IS") && locale_shape("en_US"));
+        for bad in ["", "i", "is_is", "IS", "is-IS", "is_IS.UTF-8", "../etc", "is_IS;reboot", "is_I"] {
+            assert!(!locale_shape(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn locale_set_refuses_bad_names_before_localectl_runs() {
+        assert_eq!(call("locale.set", &obj(vec![("lang", s("../x")), ("region", s("is_IS"))])).unwrap_err().code, "bad_params");
+        assert_eq!(call("locale.set", &obj(vec![("lang", s("xx_YY")), ("region", s("is_IS"))])).unwrap_err().code, "bad_params");
+        assert_eq!(call("locale.set", &obj(vec![("lang", s("is_IS"))])).unwrap_err().code, "bad_params");
     }
 
     #[test]

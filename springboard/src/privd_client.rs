@@ -155,6 +155,12 @@ impl Client {
         self.call("time.set_ntp", vec![("on", Json::Bool(on))]).map(|_| ())
     }
 
+    /// Sets the system language (`lang`, LANG) and formats (`region`, LC_TIME and the other format categories)
+    /// through `localectl`; both are locale identifiers such as "is_IS".
+    pub fn set_locale(&self, lang: &str, region: &str) -> Result<(), ClientError> {
+        self.call("locale.set", vec![("lang", privd::s(lang)), ("region", privd::s(region))]).map(|_| ())
+    }
+
     /// Binds a disk image in the account's home folder to a free loop device and returns the device path.
     pub fn loop_attach(&self, path: &str, read_only: bool) -> Result<String, ClientError> {
         let reply = self.call("disk.loop_attach", vec![("path", privd::s(path)), ("read_only", Json::Bool(read_only))])?;
