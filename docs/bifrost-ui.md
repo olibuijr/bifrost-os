@@ -1392,20 +1392,20 @@ Gap: apps still write the datagram themselves, so the check is on read; Console 
 
 ## File system events (`FSEventStream`, `NSFilePresenter` gap)
 
-`bifrost_app::fsevents::FSEventStream::new(paths, latency, flags)` watches folders recursively over inotify (new
-subfolders are added as they appear) with `start()` / `stop()`; drop stops. Events are `FSEvent { path, flags }` with
-`CREATED | REMOVED | RENAMED | MODIFIED | ITEM_IS_DIR | MUST_SCAN_SUB_DIRS`, coalesced per path over `latency`.
+`bifrost_app::fswatch::WatchStream::new(paths, latency, flags)` (Apple's `FSEventStream`) watches folders recursively over inotify (new
+subfolders are added as they appear) with `start()` / `stop()`; drop stops. Events are `WatchEvent { path, flags }` with
+`WatchEventFlags::CREATED | REMOVED | RENAMED | MODIFIED | ITEM_IS_DIR | MUST_SCAN_SUB_DIRS`, coalesced per path over `latency`.
 There is no thread and no timer: return `stream.fd()` from `App::wake_fd`, call `stream.poll(Instant::now())` from
 `tick` (events arrive on the main thread) and `next_deadline()` from `next_wake` while a batch matures.
 `NO_DEFER` delivers the first event after a quiet period immediately; `FILE_EVENTS` is accepted (events are always
-per file). Queue overflow reports `MUST_SCAN_SUB_DIRS` on the roots. Gaps: no event ids or `sinceWhen` history, no
+per file). Queue overflow reports `MUST_SCAN_SUB_DIRS` on the roots. `EventJournal` (a bounded ring of numbered events) answers `replay_since(id)` for `sinceWhen` replays, with `SINCE_NOW` for live-only streams. Gaps: no
 rename pairing (both halves are `RENAMED`), and no `NSFilePresenter` coordination yet. Files uses it (its own
 inotify FFI is gone); Notes, DAW and Music still poll and should migrate.
 
-`FSEventStreamFlags::SHALLOW` is a BifrOSt extension with no Apple counterpart: it watches only the roots, not their
+`WatchStreamFlags::SHALLOW` is a BifrOSt extension with no Apple counterpart: it watches only the roots, not their
 subfolders. Apple's FSEvents is recursive for free because the kernel journals every volume; over inotify a recursive
 stream walks the whole tree when it starts, so Files watches the open folder with `SHALLOW` (Computer `/` and the home
-folder open without a full-tree walk). Test: `fsevents::tests::shallow_watches_only_the_roots`.
+folder open without a full-tree walk). Test: `fswatch::tests::shallow_watches_only_the_roots`.
 
 ## Dispatch (GCD parity)
 
@@ -1613,11 +1613,11 @@ truncated on encode); no `suspensionBehavior` (an app that is not running misses
 `coordinate_writing(path, f)` (exclusive) run `f` under a bounded advisory `flock` (5 s, then `Timeout`) on the
 item's parent directory, so renames cannot slip past the lock. `NSFileCoordinator::add_presenter(Box<dyn FilePresenter>)`
 registers a presenter (token drop removes it) with `presented_item_url`, `presented_item_did_change` and
-`accommodate_deletion`. The change feed is the app's `fsevents::FSEventStream`: pass each `poll()` batch to
+`accommodate_deletion`. The change feed is the app's `fswatch::WatchStream`: pass each `poll()` batch to
 `file_coordination::deliver_events`. A path just written through `coordinate_writing` is not reported back to this
 process once. Gaps: no relinquish or `savePresentedItemChanges` negotiation, no will-move callbacks (a rename is a
 change on both paths), no versions or iCloud coordination, advisory only (uncoordinated processes are not blocked),
-presenters only learn of changes inside folders the app's `FSEventStream` watches. Tests: `file_coordination::tests`.
+presenters only learn of changes inside folders the app's `WatchStream` watches. Tests: `file_coordination::tests`.
 
 ## FileManager (Foundation file system, `bifrost_app::file_manager`)
 
@@ -1913,7 +1913,7 @@ menu), and the user cannot reorder or hide a third-party extra in Settings > Men
 Contract tests: `service_management::tests`, `status_item::tests` (with `Ctx::testing` and `take_sent`),
 `proto::extras::tests` (round trips and limits) and `shell::extras::tests` (registry).
 
-## Core Spotlight (`CSSearchableIndex`, `bifrost_app::spotlight`)
+## Core Spotlight (`CSSearchableIndex`, `bifrost_app::quicksearch`)
 
 Apple's CoreSpotlight lets an app index its own content so system search finds it without launching the app. Ours:
 
@@ -1922,21 +1922,21 @@ Apple's CoreSpotlight lets an app index its own content so system search finds i
 - `CSSearchableIndex::default_index()` with `index_searchable_items(ctx, &items)`, `delete_searchable_items(ctx, &ids)`,
   `delete_searchable_items_with_domain_identifiers(ctx, &domains)` and `delete_all_searchable_items(ctx)`. Indexing an
   existing identifier replaces the item. Calls are fire-and-forget messages to the shell (no completion handler:
-  `ToShell::SpotlightIndex` 0x1c0, `SpotlightDelete` 0x1c1; a message carries at most 8 items, the SDK splits larger calls).
-- The shell keeps the index per app in `<data>/spotlight-index/<app id>.json`, bounded to 1000 items per app (oldest
-  dropped first) and 64 apps, with long text cut by the wire codec. The Spotlight panel lists matches in a Documents
+  `ToShell::QuickSearchIndex` 0x1c0, `QuickSearchDelete` 0x1c1; a message carries at most 8 items, the SDK splits larger calls).
+- The shell keeps the index per app in `<data>/quicksearch-index/<app id>.json`, bounded to 1000 items per app (oldest
+  dropped first) and 64 apps, with long text cut by the wire codec. The search panel (Super+Space, `QuickSearch`) lists matches in a Documents
   section (title match before keyword before description match).
 - Opening a result starts the app and sends `ToApp::ContinueActivity` (0x1c2). The app implements
-  `App::continue_activity(ctx, UserActivity)`; `activity_type == spotlight::ACTION_TYPE` (`CSSearchableItemActionType`,
-  `"com.apple.corespotlightitem"`) and `unique_identifier` is the item's (`CSSearchableItemActivityIdentifier`). The message
+  `App::continue_activity(ctx, UserActivity)`; `activity_type == quicksearch::ACTION_TYPE` (`CSSearchableItemActionType`,
+  `"bifrost.quicksearch.item"`) and `unique_identifier` is the item's (`CSSearchableItemActivityIdentifier`). The message
   may arrive before the first `configure`; the runtime holds it until the app has a context.
 - Adopted in Notes 1.8.6: every note outside Recently Deleted is indexed (title, first lines, folder as keyword) and
   `continue_activity` opens it with `Notes::show_note`.
 
-Tests: `bifrost_proto::spotlight` (wire round trip, packet bound), `bifrost_app::spotlight` (`Ctx::testing` + `take_sent`),
+Tests: `bifrost_proto::quicksearch` (wire round trip, packet bound), `bifrost_app::quicksearch` (`Ctx::testing` + `take_sent`),
 `springboard::shell::spotindex` (ranking, replace, delete, bounds, disk round trip).
 
-Query side (`bifrost_ui::quicksearch_query`, pure model, host-tested, not yet wired to the shell or `bifrost_app`):
+Query side (`bifrost_ui::quicksearch_query`, pure model, host-tested; `bifrost_app::quicksearch::search_items` runs it over an app's own items):
 `SearchQuery::new(query_string, QueryContext{fetch_attributes, filter_queries, source_options})` with `start(items, now,
 found_items, completion)` (batches of 8, `cancel()` / `CancelHandle`, `found_item_count`); language `attr == "text"`
 (`!=`, `<` `>` `<=` `>=` for numbers and times), `*` wildcard, modifiers `c` `d` `w`, `&&` over `||`, parentheses,
@@ -1945,12 +1945,11 @@ found_items, completion)` (batches of 8, `cancel()` / `CancelHandle`, `found_ite
 `delete_searchable_items` (`Error::RemoteConnection` when offline, oldest evicted past capacity, `take_evicted`),
 `begin_batch` / `end_batch(client_state)` / `fetch_last_client_state`, and `IndexDelegate` (`reindex_all_searchable_items`,
 `reindex_searchable_items`) invoked by `index_lost` / `items_corrupt`. Gaps: shell store still the per-app JSON file,
-`sourceOptions` has no effect, `SpotlightSearchTool` is a gap; not tested on Midget.
+`sourceOptions` has no effect, the search-tool bridge is a gap; not tested on Midget.
 
-Gaps, decided and recorded: no `CSSearchQuery` (an app searching its own index; apps search their own data), no
-`CSSearchableIndexDelegate` re-index requests, no `expirationDate`, `rankingHint` or per-attribute `CSSearchableItemAttributeSet`
-types beyond the five above, no completion handler or error for index calls, and the panel does not draw the thumbnail yet
-(it is stored with the item). Items of an app are searched only while it is installed; they are not removed on uninstall.
+Gaps, recorded: the panel does not draw the stored thumbnail yet, and items of an app are searched only while it is installed
+(they are not removed on uninstall). Search of an app's own index is available as `quicksearch::search_items` over the pure
+query model; `CSSearchableIndexDelegate` re-index requests are `reindex_all_with` / `reindex_identifiers_with`.
 
 ### Completion, errors, batches and extended attributes
 
@@ -1981,7 +1980,7 @@ Code: `springboard/ui/src/table.rs`, `springboard/ui/src/panels.rs` (SDK: `bifro
 
 ## Quick Look (`QLPreviewPanel`, `QLPreviewItem`, `QLThumbnailGenerator`)
 
-Code: `springboard/sdk/src/quicklook.rs` (`bifrost_app::quicklook`), wire types `springboard/proto/src/quicklook.rs` (tags 0x1e0 `ToShell::Preview`, 0x1e1 `ToShell::PreviewClose`).
+Code: `springboard/sdk/src/quick_look.rs` (`bifrost_app::quick_look`), wire types `springboard/proto/src/peek.rs` (tags 0x1e0 `ToShell::Preview`, 0x1e1 `ToShell::PreviewClose`).
 
 - **Panel.** `PreviewPanel`: `set_items` (`dataSource`, at most 16 items per message, URL cut to 256 bytes, title to 96), `current_preview_item_index` (always clamped), `step` (arrows, no wrap), `reload_data`, `make_key_and_order_front`, `close`, `toggle` (Space). `PreviewItem` is `previewItemURL` + `previewItemTitle`.
 - **Thumbnails.** `thumbnail_path(url, size, scale)` names a PNG under `$XDG_CACHE_HOME/bifrost-quicklook`; `ThumbnailCache::best_representation` returns the cached path or asks the caller to render it, and caches it (`cache::Cache`).
@@ -1989,7 +1988,7 @@ Code: `springboard/sdk/src/quicklook.rs` (`bifrost_app::quicklook`), wire types 
 
 ## Speech recognition requests and tasks (`SFSpeechRecognizer`, `SFSpeechRecognitionRequest`, `SFSpeechRecognitionTask`)
 
-`ui::recognition_task`, SDK `bifrost_app::speech_recognition`. Pure models, no I/O.
+`ui::recognition_task`, SDK `bifrost_app::speech_recognition` (alias of `ui::recognition_task`). Pure models, no I/O.
 
 - Authorization: `AuthorizationStatus` (`NotDetermined`, `Denied`, `Restricted`, `Authorized`) with one answer per
   device. A second answer is refused and `restrict` overrides any answer, as `authorizationStatus` does.
@@ -2784,9 +2783,9 @@ supported) and `bifrost_app::file_wrapper::FileWrapper` (`read_from`, `write_to(
 
 Mirrors WindowServer global hotkeys and ScreenCaptureKit / `CGWindowListCreateImage` single-frame capture. Status stays partial until checked on Midget.
 
-- `keybindings::action(keysym, Mods) -> Option<Action>` (pure): Super+Space `Spotlight` (sends `spotlight` to the shell control port 127.0.0.1:7777), Super+A `Apps` (starts `/usr/bin/bifrost-apps`), Alt+Tab `NextWindow`, Alt+F4 `CloseWindow` (xdg close request to the focused toplevel), Ctrl+Super+Left/Right/Up/Down `Tile(Arrow)` (half, half, maximize, centre via `tiling.rs`). Modifiers match exactly. `WmState::key` takes these chords before any client sees them; the action runs on the press and the release is swallowed too.
+- `keybindings::action(keysym, Mods) -> Option<Action>` (pure): Super+Space `QuickSearch` (sends `quicksearch` to the shell control port 127.0.0.1:7777), Super+A `Apps` (starts `/usr/bin/bifrost-apps`), Alt+Tab `NextWindow`, Alt+F4 `CloseWindow` (xdg close request to the focused toplevel), Ctrl+Super+Left/Right/Up/Down `Tile(Arrow)` (half, half, maximize, centre via `tiling.rs`). Modifiers match exactly. `WmState::key` takes these chords before any client sees them; the action runs on the press and the release is swallowed too.
 - Screencopy: `session_protocols::write_shm` now writes into the client's wl_shm buffer. The `capture` hook returns RGBA rows (R, G, B, A in memory); `rgba_to_shm` converts to XRGB8888 (alpha forced to 0xff) or ARGB8888 (B, G, R, A in memory, the fix for swapped red and blue), honouring the buffer stride; `crop_rgba` clips a region out of a full-output frame. Other formats are refused.
-- Not done: no backend sets the `capture` hook yet (the render server readback of the composed output, wallpaper and all layers, still has to be wired), so grim, `bifrost-apps --screenshot` and the MCP screenshot tool still get `failed`. Cursor capture sessions and ScreenCaptureKit streams are not covered.
+- Capture backends: `wm/src/capture.rs` implements the `capture` hook for the DRM and headless GLES backends (the composed scene as RGBA rows, with the pointer when asked); the Vulkan presenter does not serve it. Not done: cursor capture sessions and ScreenCaptureKit streams. Not checked on Midget.
 
 ## Recurring events (EventKit: `EKRecurrenceRule`, `EKEventStore.events(matching:)`)
 
