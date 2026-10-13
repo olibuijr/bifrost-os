@@ -127,3 +127,6 @@ pub mod natpmp;
 pub mod aes_gcm;
 pub mod spellcheck;
 pub mod text_replacements;
+pub mod volume;
+pub mod identity;
+pub mod reachability;

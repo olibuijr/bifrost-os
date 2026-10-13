@@ -99,39 +99,9 @@ pub fn check(r: c_int) -> io::Result<c_int> {
     }
 }
 
-/// `struct statvfs` on 64-bit glibc and bionic: eleven `unsigned long`
-/// fields followed by spare space.
-#[repr(C)]
-struct statvfs_t {
-    f_bsize: u64,
-    f_frsize: u64,
-    f_blocks: u64,
-    f_bfree: u64,
-    f_bavail: u64,
-    f_files: u64,
-    f_ffree: u64,
-    f_favail: u64,
-    f_fsid: u64,
-    f_flag: u64,
-    f_namemax: u64,
-    _spare: [u64; 8],
-}
-
-extern "C" {
-    fn statvfs(path: *const c_char, buf: *mut statvfs_t) -> c_int;
-}
-
-/// (total, available) bytes of the filesystem holding `path`.
+/// (total, available) bytes of the filesystem holding `path`. The filesystem call lives in `bifrost_core::volume`.
 pub fn disk_space(path: &str) -> Option<(u64, u64)> {
-    let p = CString::new(path).ok()?;
-    // SAFETY: `p` is NUL-terminated and `st` is a zeroed struct at least as
-    // large as the platform's `struct statvfs`.
-    let mut st: statvfs_t = unsafe { std::mem::zeroed() };
-    if unsafe { statvfs(p.as_ptr(), &mut st) } != 0 {
-        return None;
-    }
-    let unit = if st.f_frsize > 0 { st.f_frsize } else { st.f_bsize };
-    Some((st.f_blocks * unit, st.f_bavail * unit))
+    bifrost_core::volume::capacity(std::path::Path::new(path)).ok().map(|c| (c.total, c.available))
 }
 
 pub fn open_dev(path: &str, flags: c_int) -> io::Result<c_int> {
