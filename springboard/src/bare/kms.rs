@@ -691,12 +691,15 @@ impl Display {
 
     /// Hardware cursor plane (what cosmic-comp/smithay do): the pointer is a 64x64 ARGB sprite the display
     /// controller overlays and moves on its own, so it follows the mouse without recomposing a frame.
-    pub fn set_cursor(&mut self, argb: &[u32]) -> bool {
+    /// `scale` is Cursor Size (1.0 is the sprite as drawn; see `scale_sprite` for what a larger one keeps).
+    pub fn set_cursor(&mut self, argb: &[u32], scale: f32) -> bool {
         if self.virt || argb.len() != 64 * 64 {
             return false;
         }
+        let side = cursor_side(scale);
+        let sprite = scale_sprite(argb, side);
         let ok = (|| -> io::Result<u32> {
-            let mut d = CreateDumb { width: 64, height: 64, bpp: 32, ..Default::default() };
+            let mut d = CreateDumb { width: side as u32, height: side as u32, bpp: 32, ..Default::default() };
             unsafe { ioctl_ptr(self.fd, iowr::<CreateDumb>(b'd', 0xb2), &mut d) }?;
             let mut m = MapDumb { handle: d.handle, ..Default::default() };
             unsafe { ioctl_ptr(self.fd, iowr::<MapDumb>(b'd', 0xb3), &mut m) }?;
@@ -704,8 +707,8 @@ impl Display {
             if map as isize == -1 {
                 return Err(io::Error::last_os_error());
             }
-            unsafe { std::ptr::copy_nonoverlapping(argb.as_ptr(), map as *mut u32, 64 * 64) };
-            let mut c = CursorCmd { flags: 1, crtc_id: self.crtc, width: 64, height: 64, handle: d.handle, ..Default::default() };
+            unsafe { std::ptr::copy_nonoverlapping(sprite.as_ptr(), map as *mut u32, side * side) };
+            let mut c = CursorCmd { flags: 1, crtc_id: self.crtc, width: side as u32, height: side as u32, handle: d.handle, ..Default::default() };
             unsafe { ioctl_ptr(self.fd, iowr::<CursorCmd>(b'd', 0xa3), &mut c) }?;
             Ok(d.handle)
         })();
@@ -1043,6 +1046,24 @@ impl Display {
 
 const DRM_EVENT_FLIP_COMPLETE: u32 = 2;
 
+/// Side of the cursor plane for a Cursor Size: 64 px at 1x, growing with the scale up to 128 px. A driver that
+/// refuses the larger plane fails the ioctl and `set_cursor` returns false, so the pointer is drawn in software.
+pub fn cursor_side(scale: f32) -> usize {
+    let s = if scale.is_finite() { scale.clamp(1.0, 2.0) } else { 1.0 };
+    ((64.0 * s).round() as usize).clamp(64, 128)
+}
+
+/// The 64x64 sprite resampled to `side` x `side` (nearest neighbour). The hotspot stays at the top left.
+pub fn scale_sprite(src: &[u32], side: usize) -> Vec<u32> {
+    let mut out = vec![0u32; side * side];
+    for y in 0..side {
+        for x in 0..side {
+            out[y * side + x] = src[(y * 64 / side) * 64 + x * 64 / side];
+        }
+    }
+    out
+}
+
 /// Timestamp of the last flip-complete event in a read() of DRM events
 /// (struct drm_event header + drm_event_vblank: user_data, tv_sec, tv_usec, ...).
 pub fn flip_time(buf: &[u8]) -> Option<f64> {
@@ -1135,6 +1156,29 @@ pub fn wait_precise(fds: &[c_int], timeout_ms: f64, out: &mut Vec<bool>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cursor_side_grows_with_cursor_size_and_stays_in_range() {
+        assert_eq!(cursor_side(1.0), 64);
+        assert_eq!(cursor_side(1.5), 96);
+        assert_eq!(cursor_side(2.0), 128);
+        assert_eq!(cursor_side(9.0), 128);
+        assert_eq!(cursor_side(0.2), 64);
+        assert_eq!(cursor_side(f32::NAN), 64);
+    }
+
+    #[test]
+    fn scale_sprite_keeps_the_sprite_at_1x_and_doubles_it_at_2x() {
+        let src: Vec<u32> = (0..64 * 64).map(|i| i as u32).collect();
+        assert_eq!(scale_sprite(&src, 64), src);
+        let big = scale_sprite(&src, 128);
+        assert_eq!(big.len(), 128 * 128);
+        // the top-left source pixel fills the 2x2 block at the hotspot; the next source column starts at x = 2
+        assert_eq!((big[0], big[1], big[128], big[129]), (src[0], src[0], src[0], src[0]));
+        assert_eq!(big[2], src[1]);
+        assert_eq!(big[2 * 128], src[64]);
+        assert_eq!(big[127 * 128 + 127], src[63 * 64 + 63]);
+    }
 
     #[test]
     fn virtual_size_parses_the_environment() {

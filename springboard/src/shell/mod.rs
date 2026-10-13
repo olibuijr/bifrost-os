@@ -527,6 +527,8 @@ pub struct Shell {
     fullscreen: bool,
     /// persisted Settings (`settings.ini`), owned here so one writer exists
     prefs: Prefs,
+    /// Screen Zoom (Option+Cmd+8, =, -): the final-frame magnifier the GPU presenter draws (`accessibility::zoom`)
+    screen_zoom: accessibility::zoom::ScreenZoom,
     /// the background update checker; set once the data directory is loaded
     ota: Option<ota::Ota>,
     /// last time (ms) the apps registry was stat'ed for outside changes
@@ -810,6 +812,7 @@ impl Shell {
             dnd: dnd::State::default(),
             fullscreen: false,
             prefs: Prefs::memory(),
+            screen_zoom: Default::default(),
             ota: None,
             disk_check_ms: 0.0,
             idle_off_ms: Options::default().auto_lock_ms as f64,
