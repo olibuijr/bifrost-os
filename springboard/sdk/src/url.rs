@@ -799,7 +799,8 @@ mod upload_tests {
     /// The request head as text, and the bytes after its blank line.
     fn split_request(raw: &[u8]) -> (String, Vec<u8>) {
         let at = raw.windows(4).position(|w| w == b"\r\n\r\n").expect("a blank line ends the head");
-        (String::from_utf8_lossy(&raw[..at]).into_owned(), raw[at + 4..].to_vec())
+        // the head keeps its last header's line ending
+        (String::from_utf8_lossy(&raw[..at + 2]).into_owned(), raw[at + 4..].to_vec())
     }
 
     fn temp_file(bytes: &[u8]) -> (tempfile::TempDir, std::path::PathBuf) {

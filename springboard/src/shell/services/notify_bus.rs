@@ -60,9 +60,25 @@ const SYSTEM_PREFIX: &str = "system.";
 fn may_hear(app: &str, name: &str) -> bool {
     match name {
         CONTACTS_CHANGE => super::contacts::reads(app),
-        CALENDAR_CHANGE => super::app_has_permission(app, super::calendar::PERMISSION),
+        CALENDAR_CHANGE => super::app_has_permission(app, super::calendar::PERMISSION) || calendar_granted_in_tests(app),
         _ => true,
     }
+}
+
+// Installed manifests (where the calendars permission lives) do not exist in unit tests, so tests grant it here.
+#[cfg(test)]
+thread_local! {
+    static TEST_CALENDAR_GRANTS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+fn calendar_granted_in_tests(app: &str) -> bool {
+    TEST_CALENDAR_GRANTS.with(|g| g.borrow().iter().any(|a| a == app))
+}
+
+#[cfg(not(test))]
+fn calendar_granted_in_tests(_: &str) -> bool {
+    false
 }
 
 /// Who owns a token, the name it is on, and whether it is pushed (`true`) or polled.
@@ -352,6 +368,9 @@ mod tests {
     /// A pushed token for `app` on `name`, put in place without the access gate. The calendar permission comes from an
     /// installed manifest, which a unit test cannot install, so the delivery tests use this for that name.
     fn token_past_the_gate(bus: &mut NotifyBus, app: &str, name: &str) {
+        if name == CALENDAR_CHANGE {
+            TEST_CALENDAR_GRANTS.with(|g| g.borrow_mut().push(app.to_string()));
+        }
         let token = bus.center.register(name);
         bus.owners.insert(token, Owner { app: app.into(), name: name.into(), push: true });
     }

@@ -158,7 +158,8 @@ pub fn op_tile(img: &Image, center: (f32, f32), scale: f32, angle: f32, width: f
             let m = t.rem_euclid(2.0);
             if m > 1.0 { 2.0 - m } else { m }
         };
-        (fold(u) * iw, fold(v) * ih)
+        // a tile samples inside the image: pixel centres only, so the edges never blend with transparent outside
+        ((fold(u) * iw).clamp(0.5, iw - 0.5), (fold(v) * ih).clamp(0.5, ih - 0.5))
     })
 }
 

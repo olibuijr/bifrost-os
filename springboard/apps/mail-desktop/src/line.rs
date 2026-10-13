@@ -84,6 +84,8 @@ fn check_literal(n: usize) -> io::Result<()> {
 
 /// The literal bytes a response line holds once one more literal of `n` bytes is folded in; refused past [`MAX_RESPONSE`].
 pub fn response_after(folded: usize, n: usize) -> io::Result<usize> {
+    // one literal over its own cap is reported as that, before the response total
+    check_literal(n)?;
     let total = folded.saturating_add(n);
     if total > MAX_RESPONSE {
         return Err(io::Error::other("server response too large"));

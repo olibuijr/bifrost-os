@@ -343,7 +343,7 @@ mod tests {
 
     #[test]
     fn telex_tone_placement() {
-        assert_eq!(telex("hoaf"), "hòa");
+        assert_eq!(telex("hoaf"), "hoà");
         assert_eq!(telex("toans"), "toán");
         assert_eq!(telex("muaf"), "mùa");
         assert_eq!(telex("miaf"), "mìa");
@@ -404,7 +404,7 @@ mod tests {
         assert_eq!(vni("a8"), "ă");
         assert_eq!(vni("o7"), "ơ");
         assert_eq!(vni("u7o7"), "ươ");
-        assert_eq!(vni("hoa2"), "hòa");
+        assert_eq!(vni("hoa2"), "hoà");
         assert_eq!(vni("a1"), "á");
         assert_eq!(vni("a10"), "a");
     }

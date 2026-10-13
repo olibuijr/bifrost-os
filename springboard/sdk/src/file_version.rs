@@ -1,7 +1,7 @@
 //! `NSFileVersion` parity (Foundation).
 //!
-//! A `FileVersionStore` is the per-app version store: a directory holding one folder per file identity (device and
-//! inode, so a renamed file keeps its history). Each version is an atomic copy named `<millis>-<serial>.<d|k>`
+//! A `FileVersionStore` is the per-app version store: a directory holding one folder per file, keyed by its canonical
+//! path (a safe save replaces the inode, so the inode cannot be the identity; a renamed file starts a new history). Each version is an atomic copy named `<millis>-<serial>.<d|k>`
 //! (`d` discardable, `k` kept) with an optional `.name` sidecar for the localized name.
 //!
 //! Mirrors `currentVersionOfItemAtURL:`, `otherVersionsOfItemAtURL:` (newest first),
@@ -11,7 +11,6 @@
 
 use std::fs;
 use std::io;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -114,9 +113,13 @@ impl FileVersionStore {
         FileVersionStore { root: root.into(), max_discardable: 10, max_discardable_age: Duration::from_secs(30 * 24 * 3600) }
     }
 
+    /// The item's folder, keyed by its canonical path. Not by inode: a safe save (`write_atomic`) renames a new file
+    /// into place, so the inode changes on every save and the history would be lost exactly when an app saves.
     fn dir_for(&self, item: &Path) -> io::Result<PathBuf> {
-        let m = fs::metadata(item)?;
-        Ok(self.root.join(format!("{:x}-{:x}", m.dev(), m.ino())))
+        let path = fs::canonicalize(item)?;
+        // FNV-1a of the path bytes: a stable, short folder name
+        let key = path.as_os_str().as_encoded_bytes().iter().fold(0xcbf2_9ce4_8422_2325u64, |h, &b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3));
+        Ok(self.root.join(format!("{key:016x}")))
     }
 
     /// `currentVersionOfItemAtURL:`.
@@ -282,18 +285,21 @@ mod tests {
         let disc: Vec<_> = v.iter().filter(|x| x.is_discardable()).map(|x| x.modification_date()).collect();
         assert_eq!(disc, vec![at(1020), at(1010)]);
         assert_eq!(v.iter().filter(|x| !x.is_discardable()).count(), 1);
-        store.add_of_item_at(&item, &item, AddingOptions { discardable: true }, at(1115)).unwrap();
+        store.add_of_item_at(&item, &item, AddingOptions { discardable: true }, at(1125)).unwrap();
         let disc = store.other_versions_of_item(&item).iter().filter(|x| x.is_discardable()).count();
         assert_eq!(disc, 1, "1010 and 1020 are older than 100 s");
     }
 
     #[test]
-    fn renamed_file_keeps_its_history() {
+    fn a_safe_save_keeps_the_history_and_a_rename_starts_a_new_one() {
         let (d, store, item) = setup();
         store.add_of_item(&item, &item, AddingOptions::default()).unwrap();
+        // a safe save renames a new file into place: a new inode, the same document
+        bifrost_core::fsutil::write_atomic(&item, b"v2".to_vec()).unwrap();
+        assert_eq!(store.other_versions_of_item(&item).len(), 1);
         let renamed = d.path().join("renamed.txt");
         fs::rename(&item, &renamed).unwrap();
-        assert_eq!(store.other_versions_of_item(&renamed).len(), 1);
+        assert!(store.other_versions_of_item(&renamed).is_empty());
     }
 
     #[test]

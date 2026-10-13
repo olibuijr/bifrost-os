@@ -17,6 +17,10 @@ use crate::motion_manager::{AccelerometerData, GyroData, MotionManager};
 /// and positive are dropped; the result is sorted ascending. A range form (`[min step max]`) is not expanded and
 /// yields nothing.
 pub fn parse_frequencies(text: &str) -> Vec<f64> {
+    // `[min step max]` is the IIO range form, not a list of rates
+    if text.contains('[') {
+        return Vec::new();
+    }
     let mut list: Vec<f64> = text
         .split_whitespace()
         .filter_map(|t| t.parse::<f64>().ok())

@@ -889,7 +889,7 @@ impl AppHost {
         }
         let code = match self.child.as_mut() {
             None => 0,
-            Some(c) => match c.try_wait() {
+            Some(c) => match exit_status_soon(c) {
                 Ok(Some(st)) => st.code().unwrap_or_else(|| 128 + st.signal().unwrap_or(0)),
                 // the socket is gone but the process still runs: it may be finishing a crash (a core dump takes a
                 // moment) or a slow quit. A short-lived thread waits for its real status (SIGKILL after LATE_REAP_MS)
@@ -1640,6 +1640,19 @@ impl Shell {
         format!("apps_running={}\napp_controls={}", run.join(","),self.ext.iter().flatten().map(|h|format!("{}:{}:{:x}",h.id,h.controls.len(),h.commands.0)).collect::<Vec<_>>().join(","))
     }
 }
+
+/// The child's exit status once its socket closed: a process that exits (or crashes) closes the socket a moment before
+/// the kernel reports it, so this polls briefly (at most ~20 ms) before the caller falls back to a late reap.
+fn exit_status_soon(c: &mut std::process::Child) -> std::io::Result<Option<std::process::ExitStatus>> {
+    for _ in 0..10 {
+        if let Some(st) = c.try_wait()? {
+            return Ok(Some(st));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    c.try_wait()
+}
+
 
 #[cfg(test)]
 mod tests {

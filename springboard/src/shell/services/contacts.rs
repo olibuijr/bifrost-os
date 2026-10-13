@@ -144,11 +144,11 @@ fn keys_of(params: &Json) -> Result<Keys, String> {
 
 /// A record from a `save` call: each name must be a known field (or `id`), holding text or a list of text. `null`
 /// clears the field. The `id` is 0 when the call names none.
-fn record_of_json(v: &Json) -> Result<Record, String> {
+fn record_of_json(v: &Json) -> Result<(Record, Vec<Key>), String> {
     let Json::Obj(fields) = v else {
         return Err("a contact is an object of fields".into());
     };
-    let mut record = Record::new(0);
+    let (mut record, mut cleared) = (Record::new(0), Vec::new());
     for (name, value) in fields {
         if name.as_str() == "id" {
             record.id = value.as_u64().ok_or_else(|| "id is a number".to_string())?;
@@ -156,7 +156,11 @@ fn record_of_json(v: &Json) -> Result<Record, String> {
         }
         let key = Key::from_name(name).ok_or_else(|| format!("no contact field {name}"))?;
         let value = match value {
-            Json::Null => Value::Text(String::new()),
+            Json::Null => {
+                // a record drops blank values, so a cleared field is kept aside
+                cleared.push(key);
+                continue;
+            }
             Json::Str(text) => Value::Text(text.clone()),
             Json::Arr(items) => Value::List(
                 items
@@ -168,7 +172,7 @@ fn record_of_json(v: &Json) -> Result<Record, String> {
         };
         record.set(key, value);
     }
-    Ok(record)
+    Ok((record, cleared))
 }
 
 /// The one value a record holds for a key, or blank. The book keeps one phone, one email and one address per contact,
@@ -195,9 +199,15 @@ fn value_of(record: &Record, key: Key) -> Result<String, String> {
 /// The contact a record describes. An update (`base`) changes only the fields the record names, as an update in a
 /// save request writes only the keys it sets, and keeps the flags and label rows. The book stores one name: its last
 /// word is the family name and the rest the given name.
-fn contact_of(id: u64, record: &Record, base: Option<&Contact>) -> Result<Contact, String> {
+fn contact_of(id: u64, (record, cleared): &(Record, Vec<Key>), base: Option<&Contact>) -> Result<Contact, String> {
     let field = |key: Key, kept: &str| -> Result<String, String> {
-        if record.get(key).is_some() { value_of(record, key) } else { Ok(kept.to_string()) }
+        if cleared.contains(&key) {
+            Ok(String::new())
+        } else if record.get(key).is_some() {
+            value_of(record, key)
+        } else {
+            Ok(kept.to_string())
+        }
     };
     let (kept_given, kept_family) = base.map_or(("", ""), |c| c.name.rsplit_once(' ').unwrap_or(("", c.name.as_str())));
     let given = field(Key::GivenName, kept_given)?;
@@ -251,12 +261,13 @@ pub fn apply_save(app_id: &str, params: &Json, book: &[Contact]) -> Result<(Json
         added.push(Json::Num(id as f64));
     }
     for item in updates {
-        let record = record_of_json(item)?;
+        let parsed = record_of_json(item)?;
+        let record = &parsed.0;
         if record.id == 0 {
             return Err("update needs the id of a contact".into());
         }
         let at = next.iter().position(|c| c.id == record.id).ok_or_else(|| format!("no contact {}", record.id))?;
-        let updated = contact_of(record.id, &record, Some(&next[at]))?;
+        let updated = contact_of(record.id, &parsed, Some(&next[at]))?;
         next[at] = updated;
     }
     for item in deletes {
