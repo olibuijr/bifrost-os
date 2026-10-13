@@ -449,6 +449,12 @@ impl Client {
         self.send("GET", url, extra, None, limit)
     }
 
+    /// GET with caller-supplied headers (name, value) and a body size limit. A `User-Agent` header replaces the default one.
+    pub fn get_with_headers(&self, url: &str, headers: &[(&str, &str)], limit: usize) -> io::Result<Response> {
+        let extra = headers.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        self.send("GET", url, extra, None, limit)
+    }
+
     /// POST application/x-www-form-urlencoded.
     pub fn post_form(&self, url: &str, fields: &[(&str, &str)], limit: usize) -> io::Result<Response> {
         let body = form_encode(fields);
@@ -560,7 +566,10 @@ fn request_bytes(method: &str, u: &Url, host: &str, extra: &[(String, String)], 
         target.push('?');
         target.push_str(q);
     }
-    let mut req = format!("{method} {target} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: {USER_AGENT}\r\nAccept: */*\r\nConnection: keep-alive\r\n");
+    // a caller that names its own User-Agent (a tile or geocoder service that asks clients to identify themselves) replaces the default
+    let own_agent = extra.iter().any(|(k, _)| k.eq_ignore_ascii_case("User-Agent"));
+    let agent = if own_agent { String::new() } else { format!("User-Agent: {USER_AGENT}\r\n") };
+    let mut req = format!("{method} {target} HTTP/1.1\r\nHost: {host}\r\n{agent}Accept: */*\r\nConnection: keep-alive\r\n");
     for (k, v) in extra {
         req.push_str(&format!("{k}: {v}\r\n"));
     }
@@ -757,6 +766,17 @@ pub(crate) mod tests {
         assert!(reqs[1].contains("Cookie: sid=42\r\n"), "{}", reqs[1]);
         assert_eq!(*fake.connects.lock().unwrap(), 1, "keep-alive reused the socket");
         assert_eq!(c.jar().header("www.example.net", true).unwrap(), "sid=42");
+    }
+
+    #[test]
+    fn a_named_user_agent_replaces_the_default_one() {
+        let fake = Fake::new(vec![&ok("tile")]);
+        let c = Client::new(fake.clone(), Jar::default());
+        let r = c.get_with_headers("https://tile.example.net/1/2/3.png", &[("User-Agent", "Maps/1.0 (contact)")], 1024).unwrap();
+        assert_eq!(r.body, b"tile");
+        let reqs = fake.requests.lock().unwrap().clone();
+        assert_eq!(reqs[0].matches("User-Agent:").count(), 1, "{}", reqs[0]);
+        assert!(reqs[0].contains("User-Agent: Maps/1.0 (contact)\r\n"));
     }
 
     #[test]

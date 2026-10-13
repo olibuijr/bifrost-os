@@ -84,6 +84,32 @@ impl MapView {
         self.lon = tiles::wrap_lon(clon);
     }
 
+    /// Shows all of `points` (lat, lon) with `pad` points of margin: the highest zoom at which they fit, centred on
+    /// their middle. One point (or none that differ) centres at street level.
+    pub fn fit(&mut self, points: &[(f64, f64)], pad: f64) {
+        let Some(&(lat0, lon0)) = points.first() else { return };
+        if points.iter().all(|&(la, lo)| (la - lat0).abs() < 1e-9 && (lo - lon0).abs() < 1e-9) {
+            self.centre_to(lat0, lon0);
+            self.set_zoom(15.0);
+            return;
+        }
+        let (avail_w, avail_h) = ((self.width - 2.0 * pad).max(1.0), (self.height - 2.0 * pad).max(1.0));
+        // The extents are measured at whole zoom levels from the top down; world pixels double with each level.
+        let mut z = tiles::MAX_ZOOM.floor();
+        loop {
+            let pts: Vec<(f64, f64)> = points.iter().map(|&(la, lo)| tiles::lonlat_to_world(la, lo, z)).collect();
+            let (min_x, max_x) = pts.iter().fold((f64::MAX, f64::MIN), |a, p| (a.0.min(p.0), a.1.max(p.0)));
+            let (min_y, max_y) = pts.iter().fold((f64::MAX, f64::MIN), |a, p| (a.0.min(p.1), a.1.max(p.1)));
+            if (max_x - min_x <= avail_w && max_y - min_y <= avail_h) || z <= tiles::MIN_ZOOM {
+                let (lat, lon) = tiles::world_to_lonlat((min_x + max_x) / 2.0, (min_y + max_y) / 2.0, z);
+                self.centre_to(lat, lon);
+                self.set_zoom(z);
+                return;
+            }
+            z -= 1.0;
+        }
+    }
+
     /// Screen point (in points, origin top-left) of a lat/lon.
     pub fn to_screen(&self, lat: f64, lon: f64) -> (f64, f64) {
         let (cx, cy) = self.centre_world();
@@ -204,6 +230,29 @@ mod tests {
         v.resize(1024.0, 768.0);
         assert_eq!(v.centre(), (0.0, 0.0));
         assert!(v.tiles().len() > small);
+    }
+
+    #[test]
+    fn fitting_shows_every_point_with_the_margin_and_a_single_point_gets_street_level() {
+        let mut v = MapView::new(0.0, 0.0, 2.0, 800.0, 600.0);
+        let points = [(64.1466, -21.9426), (65.6835, -18.1262), (63.4, -20.3)];
+        v.fit(&points, 40.0);
+        for &(la, lo) in &points {
+            let (x, y) = v.to_screen(la, lo);
+            assert!(x >= 40.0 - 1e-6 && x <= 760.0 + 1e-6 && y >= 40.0 - 1e-6 && y <= 560.0 + 1e-6, "{x} {y}");
+        }
+        // one level more would not fit
+        let mut closer = v;
+        closer.set_zoom(v.zoom() + 1.0);
+        assert!(points.iter().any(|&(la, lo)| {
+            let (x, y) = closer.to_screen(la, lo);
+            x < 40.0 || x > 760.0 || y < 40.0 || y > 560.0
+        }));
+        let mut one = MapView::new(0.0, 0.0, 2.0, 800.0, 600.0);
+        one.fit(&[(64.1466, -21.9426)], 40.0);
+        assert!(close(one.zoom(), 15.0) && close(one.centre().0, 64.1466));
+        one.fit(&[], 40.0);
+        assert!(close(one.zoom(), 15.0));
     }
 
     #[test]

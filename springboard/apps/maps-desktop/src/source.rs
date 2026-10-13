@@ -4,6 +4,58 @@
 use crate::tiles::TileId;
 
 pub const DEFAULT_TEMPLATE: &str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+/// The imagery layer of the Satellite map type.
+pub const IMAGERY_TEMPLATE: &str = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+
+/// The map types of the View menu. Each is a tile source preset with the credit its data requires.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MapType {
+    Standard,
+    Satellite,
+}
+
+impl MapType {
+    pub const ALL: [MapType; 2] = [MapType::Standard, MapType::Satellite];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            MapType::Standard => "Map",
+            MapType::Satellite => "Satellite",
+        }
+    }
+
+    pub fn key(self) -> &'static str {
+        match self {
+            MapType::Standard => "standard",
+            MapType::Satellite => "satellite",
+        }
+    }
+
+    /// An unknown or missing value is the standard map.
+    pub fn from_key(key: &str) -> MapType {
+        Self::ALL.into_iter().find(|m| m.key() == key).unwrap_or(MapType::Standard)
+    }
+
+    pub fn template(self) -> &'static str {
+        match self {
+            MapType::Standard => DEFAULT_TEMPLATE,
+            MapType::Satellite => IMAGERY_TEMPLATE,
+        }
+    }
+
+    /// The data credit the tile source asks to be shown in the corner of the map.
+    pub fn attribution(self) -> &'static str {
+        match self {
+            MapType::Standard => "\u{a9} OpenStreetMap contributors",
+            MapType::Satellite => "Imagery \u{a9} Esri, Maxar, Earthstar Geographics",
+        }
+    }
+
+    pub fn source(self, app_version: &str) -> TileSource {
+        TileSource::new(self.template(), &user_agent(app_version)).expect("the preset tile templates are valid")
+    }
+}
+
 /// Pause between tile requests, so one view never bursts at the tile server.
 pub const MIN_REQUEST_INTERVAL_MS: u64 = 500;
 /// Most tile requests in flight at once.
@@ -102,6 +154,20 @@ mod tests {
     fn a_custom_server_gets_its_own_cache_folder() {
         let src = TileSource::new("http://maps.local:8080/t/{z}/{x}/{y}.png", "ua").unwrap();
         assert_eq!(src.cache_key(), "maps.local_8080");
+    }
+
+    #[test]
+    fn every_map_type_has_a_valid_source_its_own_cache_folder_and_a_credit() {
+        let keys: Vec<String> = MapType::ALL.iter().map(|m| m.source("1.0.0").cache_key()).collect();
+        assert_eq!(keys, vec!["tile.openstreetmap.org", "server.arcgisonline.com"]);
+        for m in MapType::ALL {
+            assert_eq!(MapType::from_key(m.key()), m);
+            assert!(!m.attribution().is_empty());
+        }
+        assert_eq!(MapType::from_key("?"), MapType::Standard);
+        let url = MapType::Satellite.source("1.0.0").url(TileId { z: 3, x: 4, y: 2 });
+        assert!(url.ends_with("/tile/3/2/4"), "{url}");
+        assert!(MapType::Standard.attribution().contains("OpenStreetMap"));
     }
 
     #[test]

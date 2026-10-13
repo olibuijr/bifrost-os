@@ -44,6 +44,31 @@ pub struct Step {
     pub distance_m: f64,
 }
 
+impl Step {
+    /// The step as an instruction: "Turn left onto Laugavegur", "Arrive at your destination".
+    pub fn instruction(&self) -> String {
+        let (kind, modifier) = self.maneuver.split_once(' ').unwrap_or((self.maneuver.as_str(), ""));
+        let onto = if self.name.is_empty() { String::new() } else { format!(" onto {}", self.name) };
+        let way = if self.name.is_empty() { String::new() } else { format!(" on {}", self.name) };
+        match kind {
+            "depart" => format!("Head out{way}"),
+            "arrive" => "Arrive at your destination".to_string(),
+            "turn" | "end of road" | "fork" | "on ramp" | "off ramp" if !modifier.is_empty() => format!("Turn {modifier}{onto}"),
+            "roundabout" | "rotary" => format!("Take the roundabout{onto}"),
+            "merge" => format!("Merge{onto}"),
+            "continue" | "new name" => format!("Continue{way}"),
+            "" => format!("Continue{way}"),
+            other if modifier.is_empty() => format!("{}{onto}", capitalise(other)),
+            other => format!("{} {modifier}{onto}", capitalise(other)),
+        }
+    }
+}
+
+fn capitalise(s: &str) -> String {
+    let mut c = s.chars();
+    c.next().map_or(String::new(), |f| f.to_uppercase().collect::<String>() + c.as_str())
+}
+
 /// A computed route, or an estimate when `approximate` is set.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Route {
@@ -51,6 +76,8 @@ pub struct Route {
     pub duration_s: f64,
     pub steps: Vec<Step>,
     pub approximate: bool,
+    /// the line of the route as (lat, lon) points, for drawing; empty when the server sent none
+    pub geometry: Vec<(f64, f64)>,
 }
 
 /// The routing service: an OSRM-compatible base URL, or nothing configured.
@@ -80,7 +107,7 @@ impl Router {
         check_coord(from)?;
         check_coord(to)?;
         Ok(format!(
-            "{base}/route/v1/{}/{:.6},{:.6};{:.6},{:.6}?overview=false&steps=true",
+            "{base}/route/v1/{}/{:.6},{:.6};{:.6},{:.6}?overview=full&geometries=geojson&steps=true&alternatives=true",
             profile.osrm_name(),
             from.1,
             from.0,
@@ -101,17 +128,30 @@ fn check_coord((lat, lon): (f64, f64)) -> Result<(), String> {
 /// Reads an OSRM-compatible reply: the first route with its steps. A reply whose `code` is not `Ok` is an error that
 /// carries the server's message.
 pub fn parse_route(body: &str) -> Result<Route, String> {
+    parse_routes(body).map(|mut all| all.remove(0))
+}
+
+/// Every route of an OSRM-compatible reply (the best first, then the alternatives).
+pub fn parse_routes(body: &str) -> Result<Vec<Route>, String> {
     let doc = json::parse(body)?;
     let code = doc.str_field("code").unwrap_or_default();
     if code != "Ok" {
         let message = doc.str_field("message").unwrap_or_else(|| "no route".into());
         return Err(format!("{code}: {message}"));
     }
-    let first = doc.get("routes").and_then(Json::as_array).and_then(|r| r.first()).ok_or("the reply has no route")?;
-    let distance_m = first.get("distance").and_then(Json::number).ok_or("the route has no distance")?;
-    let duration_s = first.get("duration").and_then(Json::number).ok_or("the route has no duration")?;
+    let list = doc.get("routes").and_then(Json::as_array).unwrap_or(&[]);
+    let routes: Vec<Route> = list.iter().filter_map(route_of).collect();
+    if routes.is_empty() {
+        return Err("the reply has no route".into());
+    }
+    Ok(routes)
+}
+
+fn route_of(item: &Json) -> Option<Route> {
+    let distance_m = item.get("distance").and_then(Json::number)?;
+    let duration_s = item.get("duration").and_then(Json::number)?;
     let mut steps = Vec::new();
-    for leg in first.get("legs").and_then(Json::as_array).unwrap_or(&[]) {
+    for leg in item.get("legs").and_then(Json::as_array).unwrap_or(&[]) {
         for step in leg.get("steps").and_then(Json::as_array).unwrap_or(&[]) {
             let maneuver = step.get("maneuver").and_then(|m| m.str_field("type")).unwrap_or_default();
             let modifier = step.get("maneuver").and_then(|m| m.str_field("modifier")).unwrap_or_default();
@@ -122,7 +162,22 @@ pub fn parse_route(body: &str) -> Result<Route, String> {
             });
         }
     }
-    Ok(Route { distance_m, duration_s, steps, approximate: false })
+    // GeoJSON positions are [lon, lat]
+    let geometry = item
+        .get("geometry")
+        .and_then(|g| g.get("coordinates"))
+        .and_then(Json::as_array)
+        .map(|points| {
+            points
+                .iter()
+                .filter_map(|p| {
+                    let p = p.as_array()?;
+                    Some((p.get(1)?.number()?, p.first()?.number()?))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Some(Route { distance_m, duration_s, steps, approximate: false, geometry })
 }
 
 /// Great-circle distance in metres between two (lat, lon) points.
@@ -137,7 +192,7 @@ pub fn haversine_m(a: (f64, f64), b: (f64, f64)) -> f64 {
 /// The straight-line estimate between two points for a profile. It has no steps and is marked approximate.
 pub fn estimate(from: (f64, f64), to: (f64, f64), profile: Profile) -> Route {
     let distance_m = haversine_m(from, to);
-    Route { distance_m, duration_s: distance_m / profile.estimate_speed_mps(), steps: Vec::new(), approximate: true }
+    Route { distance_m, duration_s: distance_m / profile.estimate_speed_mps(), steps: Vec::new(), approximate: true, geometry: vec![from, to] }
 }
 
 /// Places in `places` whose name contains every word of `query` (case-insensitive), in list order, at most `limit`.
@@ -183,7 +238,7 @@ mod tests {
         let url = r.route_url(REYKJAVIK, AKUREYRI, Profile::Walking).unwrap();
         assert_eq!(
             url,
-            "https://router.example.org/route/v1/foot/-21.942600,64.146600;-18.126200,65.683500?overview=false&steps=true"
+            "https://router.example.org/route/v1/foot/-21.942600,64.146600;-18.126200,65.683500?overview=full&geometries=geojson&steps=true&alternatives=true"
         );
         assert!(r.route_url((91.0, 0.0), AKUREYRI, Profile::Driving).is_err());
     }
@@ -232,9 +287,9 @@ mod tests {
     #[test]
     fn offline_search_matches_every_word_in_list_order_and_respects_the_limit() {
         let places = vec![
-            Place { name: "Laugavegur, Reykjavík".into(), lat: 64.14, lon: -21.93 },
-            Place { name: "Hverfisgata, Reykjavík".into(), lat: 64.15, lon: -21.94 },
-            Place { name: "Laugavegur, Akureyri".into(), lat: 65.68, lon: -18.12 },
+            Place::new("Laugavegur, Reykjavík", 64.14, -21.93),
+            Place::new("Hverfisgata, Reykjavík", 64.15, -21.94),
+            Place::new("Laugavegur, Akureyri", 65.68, -18.12),
         ];
         let found = search_offline(&places, "LAUGAVEGUR reykjavík", 5);
         assert_eq!(found.len(), 1);
@@ -242,5 +297,36 @@ mod tests {
         assert_eq!(search_offline(&places, "laugavegur", 1).len(), 1);
         assert_eq!(search_offline(&places, "laugavegur", 5).len(), 2);
         assert!(search_offline(&places, "   ", 5).is_empty());
+    }
+
+    #[test]
+    fn alternatives_and_the_line_are_parsed() {
+        let body = r#"{"code":"Ok","routes":[
+            {"distance":1000.0,"duration":100.0,"geometry":{"type":"LineString","coordinates":[[-21.9,64.1],[-21.8,64.2]]},"legs":[]},
+            {"distance":1200.0,"duration":90.0,"geometry":{"coordinates":[[-21.9,64.1],[-21.7,64.3]]},"legs":[]},
+            {"duration":5.0}]}"#;
+        let all = parse_routes(body).unwrap();
+        assert_eq!(all.len(), 2, "the entry without a distance is skipped");
+        assert_eq!(all[0].geometry, vec![(64.1, -21.9), (64.2, -21.8)]);
+        assert_eq!(all[1].duration_s, 90.0);
+        assert_eq!(parse_route(body).unwrap().distance_m, 1000.0);
+        assert!(parse_routes(r#"{"code":"Ok","routes":[]}"#).is_err());
+    }
+
+    #[test]
+    fn the_request_asks_for_alternatives_and_the_line() {
+        let url = Router::new(Some("https://r.example")).unwrap().route_url(REYKJAVIK, AKUREYRI, Profile::Driving).unwrap();
+        assert!(url.contains("alternatives=true") && url.contains("overview=full") && url.contains("geometries=geojson"));
+    }
+
+    #[test]
+    fn steps_read_as_instructions() {
+        let step = |m: &str, n: &str| Step { name: n.into(), maneuver: m.into(), distance_m: 10.0 };
+        assert_eq!(step("depart left", "Laugavegur").instruction(), "Head out on Laugavegur");
+        assert_eq!(step("turn right", "Snorrabraut").instruction(), "Turn right onto Snorrabraut");
+        assert_eq!(step("turn left", "").instruction(), "Turn left");
+        assert_eq!(step("arrive", "").instruction(), "Arrive at your destination");
+        assert_eq!(step("roundabout", "Hringbraut").instruction(), "Take the roundabout onto Hringbraut");
+        assert_eq!(step("continue straight", "Route 1").instruction(), "Continue on Route 1");
     }
 }
