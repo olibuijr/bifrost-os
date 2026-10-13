@@ -402,6 +402,9 @@ pub enum ToApp {
     /// reads through `bifrost_ui::compose_method::set_japanese_source`. Sent on first contact and on each change.
     /// Tag 0x162.
     InputSource { japanese: bool },
+    /// A letter held down in the focused field (the key repeat's accent hold): the field takes back the letter typed at
+    /// its press and composes its accents as an open list (digits pick), as its own compose method does. Tag 0x163.
+    AccentHold { letter: char },
     /// `text-input-v3` `delete_surrounding_text`: delete `before` bytes before and `after` bytes after the
     /// selection. Tag 62.
     DeleteSurrounding { before: u32, after: u32 },
@@ -797,6 +800,7 @@ mod tag {
     pub const DELETE_SURROUNDING: u32 = 62;
     pub const ACCESSORY_ACTION: u32 = 63;
     pub const INPUT_SOURCE: u32 = 0x162;
+    pub const ACCENT_HOLD: u32 = 0x163;
 
     pub const HELLO: u32 = 0x101;
     pub const BUFFERS: u32 = 0x102;
@@ -1072,6 +1076,10 @@ impl ToApp {
                 u32_(&mut b, tag::INPUT_SOURCE);
                 b.push(*japanese as u8);
             }
+            ToApp::AccentHold { letter } => {
+                u32_(&mut b, tag::ACCENT_HOLD);
+                u32_(&mut b, *letter as u32);
+            }
             ToApp::Activate(id) => {u32_(&mut b,tag::ACTIVATE);u32_(&mut b,*id as u32);u32_(&mut b,(*id>>32) as u32);}
             ToApp::Command(command) => {u32_(&mut b,tag::COMMAND);u32_(&mut b,*command as u32);}
             ToApp::Quit => u32_(&mut b, tag::QUIT),
@@ -1193,6 +1201,7 @@ impl ToApp {
             tag::DELETE_SURROUNDING => ToApp::DeleteSurrounding { before: r.u32()?, after: r.u32()? },
             tag::ACCESSORY_ACTION => ToApp::AccessoryAction(r.u32()?),
             tag::INPUT_SOURCE => ToApp::InputSource { japanese: r.u8()? != 0 },
+            tag::ACCENT_HOLD => ToApp::AccentHold { letter: char::from_u32(r.u32()?).ok_or(DecodeError::BadValue)? },
             tag::ACTIVATE => {let low=r.u32()? as u64;ToApp::Activate(low|((r.u32()? as u64)<<32))},
             tag::COMMAND => ToApp::Command(Command::from_wire(r.u32()?).ok_or(DecodeError::BadValue)?),
             tag::QUIT => ToApp::Quit,
@@ -1946,6 +1955,7 @@ mod tests {
             ToApp::Appearance { flags: appearance::INCREASE_CONTRAST | appearance::SHOW_BORDERS | 0x8000_0000 },
             ToApp::InputSource { japanese: true },
             ToApp::InputSource { japanese: false },
+            ToApp::AccentHold { letter: 'é' },
         ];
         for m in all {
             assert_eq!(ToApp::decode(&m.encode()), Ok(m.clone()), "{m:?}");

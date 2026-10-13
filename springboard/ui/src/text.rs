@@ -848,6 +848,16 @@ impl TextEditor {
         self.compose.candidates()
     }
 
+    /// A letter held down (the key repeat's accent hold): the letter typed at its press is taken back and shown as
+    /// marked text over its accents (`candidates`). False, and nothing changes, when the letter has none or a
+    /// composition is already open.
+    pub fn accent_hold(&mut self, letter: char) -> bool {
+        let mut composer = std::mem::take(&mut self.compose);
+        let done = compose_method::accent_hold(&mut composer, &mut Editing(&mut *self), letter);
+        self.compose = composer;
+        done
+    }
+
     /// Ends an open composition the way a control key does: the list closes keeping its letter, and a held apostrophe
     /// is typed. Called before every editing command, so no command runs over a half-finished composition.
     pub fn end_composition(&mut self) {
@@ -1635,6 +1645,24 @@ mod compose_tests {
         assert_eq!(e.buf.text(), "è");
         assert_eq!(e.buf.marked_range(), None);
         assert!(e.candidates().is_empty());
+    }
+
+    #[test]
+    fn an_accent_hold_takes_the_letter_back_and_a_digit_picks_its_accent() {
+        let mut e = TextEditor::new(10);
+        e.type_text("e");
+        assert!(e.accent_hold('e'));
+        assert_eq!(e.buf.text(), "e");
+        assert_eq!(e.buf.marked_range(), Some(0..1));
+        assert_eq!(e.candidates().len(), 4);
+        e.type_text("2");
+        assert_eq!(e.buf.text(), "è");
+        assert!(e.candidates().is_empty());
+        // a letter without accents, or a list already open, does nothing
+        assert!(!e.accent_hold('x'));
+        e.type_text("'");
+        e.type_text("o");
+        assert!(!e.accent_hold('e'));
     }
 
     #[test]
