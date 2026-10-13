@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0 - 2026-10-13
+
+- Download Map keeps a list of saved offline areas in the same card; Delete removes an area and the tiles no other
+  saved area needs.
+
 ## 0.2.0 - 2026-10-13
 
 - Maps is now an app: a Golden Gate window with a sidebar (search, Home and Work, Favorites, Collections, Recents), the
