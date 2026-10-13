@@ -22,6 +22,8 @@ pub mod profile;
 pub mod scutil;
 pub mod sw_vers;
 pub mod softwareupdate;
+pub mod textutil;
+pub mod tiff2icns;
 pub mod tmutil;
 
 /// Prints `msg` to stderr prefixed with the tool name and exits with `code`.
