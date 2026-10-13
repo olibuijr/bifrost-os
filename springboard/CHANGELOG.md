@@ -1,6 +1,9 @@
 # BifrOSt changelog
 
-## Unreleased
+## 0.7.0 — 2026-10-13
+
+Round 75: ten parity waves (macOS 27 reverse, daily-driver apps and settings, command-line tools, smoothness).
+
 
 - Screen recording polish: a recording runs at the display's refresh rate (up to 60 frames a second) while the GPU path is
   up, and at 10 frames a second otherwise. The ffmpeg H.264 path and the built-in Motion JPEG AVI writer both stay. With
