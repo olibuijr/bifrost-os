@@ -19,6 +19,7 @@ pub mod sketch;
 pub mod smart;
 
 mod parity;
+mod pdf;
 mod picker;
 pub mod store;
 pub mod system;
@@ -150,6 +151,8 @@ enum Act {
     SortCheckedNow,
     ShareMd,
     ShareText,
+    SharePdf,
+    InsertTable,
     /// move the open note to a folder ("" is no folder)
     MoveTo(String),
     Style(md::Block),
@@ -1472,6 +1475,7 @@ impl Notes {
             (pin.to_string(), Act::TogglePin, false),
             ("Share as Markdown (.md)".to_string(), Act::ShareMd, false),
             ("Share as Text (.txt)".to_string(), Act::ShareText, false),
+            ("Share as PDF (.pdf)".to_string(), Act::SharePdf, false),
             ("Title".to_string(), Act::Style(md::Block::Title), false),
             ("Heading".to_string(), Act::Style(md::Block::Heading), false),
             ("Subheading".to_string(), Act::Style(md::Block::Subheading), false),
@@ -1480,6 +1484,7 @@ impl Notes {
             ("Photo from Library".to_string(), Act::ChoosePhoto, false),
             ("Attach Latest Photo".to_string(), Act::AttachPhoto, false),
             ("Insert Sketch".to_string(), Act::InsertSketch, false),
+            ("Insert Table".to_string(), Act::InsertTable, false),
             ("Check Spelling and Links".to_string(), Act::CheckSpelling, false),
             ("Match Whole Word in Find".to_string(), Act::ToggleWholeWord, self.whole_word),
             ("Replace in Note".to_string(), Act::Replace, false),
@@ -1708,6 +1713,17 @@ impl Notes {
                     self.share_req = Some(springboard::shell::share::Item::Text { title: note.title().to_string(), body: md::to_plain(&note.text) });
                 }
             }
+            Act::SharePdf => {
+                if let Screen::Editor(i) = self.screen {
+                    self.save(t, true);
+                    let note = &self.notes[i];
+                    let bytes = pdf::render(note.title(), &md::to_plain(&note.text));
+                    match store::export_file(&self.dir, note, "pdf", &bytes) {
+                        Ok(path) => self.share_req = Some(springboard::shell::share::Item::File(path)),
+                        Err(error) => self.notice = Some(format!("Unable to export note: {error}")),
+                    }
+                }
+            }
             Act::MoveTo(dest) => self.move_open_note(&dest, t),
             Act::Duplicate => self.duplicate_open_note(ui, t),
             Act::ClearChecked => self.clear_checked(ui, t),
@@ -1746,6 +1762,7 @@ impl Notes {
             }
             Act::AttachPhoto => self.attach_latest_photo(ui, t),
             Act::InsertSketch => self.open_sketch(),
+            Act::InsertTable => self.insert_table(ui, t),
             Act::TogglePin => self.activate(ui, Target::EditorPin, 0.0, 0.0, t),
             Act::ToggleWholeWord => {
                 self.whole_word = !self.whole_word;
@@ -1819,6 +1836,18 @@ impl Notes {
         let caret = self.editor.caret();
         self.editor.replace_range(ui, caret..caret, &line, t, false);
         self.load_images(ui);
+        self.changed(ui, t);
+    }
+
+    /// Insert Table (editor menu): a header row, its rule and one empty row, as a Markdown pipe table, on
+    /// their own paragraph at the caret. Cells are typed in place; the table is saved as plain text.
+    fn insert_table(&mut self, ui: &Ui, t: f64) {
+        let para = self.editor.paragraph_of(self.editor.caret());
+        let at_start = self.editor.caret() == para.start;
+        let table = "| Column | Column |\n| --- | --- |\n|  |  |\n";
+        let line = format!("{}{}\n", if at_start { "" } else { "\n" }, table);
+        let caret = self.editor.caret();
+        self.editor.replace_range(ui, caret..caret, &line, t, false);
         self.changed(ui, t);
     }
 
@@ -3744,6 +3773,26 @@ mod tests {
         let item = n.take_share().expect("a text share");
         assert_eq!(item.file_name(), "My List.txt");
         assert_eq!(item.clip_text(), "My List\n\nMy List\n[x] milk\n\u{2022} eggs");
+        n.run(&ui, Act::SharePdf, 2200.0);
+        let Some(springboard::shell::share::Item::File(pdf_path)) = n.take_share() else { panic!("a PDF share") };
+        assert_eq!(pdf_path.file_name().unwrap(), "My List.pdf");
+        let bytes = std::fs::read(&pdf_path).unwrap();
+        assert!(bytes.starts_with(b"%PDF-1.4"));
+        assert!(String::from_utf8_lossy(&bytes).contains("([x] milk) Tj"), "checklist lines keep their plain text");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn insert_table_puts_a_pipe_table_on_its_own_paragraph() {
+        let ui = ui();
+        let dir = scratch("table");
+        let mut n = app(&ui, &dir);
+        open_with(&mut n, &ui, "Before");
+        n.run(&ui, Act::InsertTable, 1900.0);
+        let text = n.editor.text().to_string();
+        assert!(text.starts_with("Before\n| Column | Column |\n| --- | --- |\n|  |  |\n"), "{text:?}");
+        let pdf = pdf::render("Before", &md::to_plain(&text));
+        assert!(String::from_utf8_lossy(&pdf).contains("Column   |   Column"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
