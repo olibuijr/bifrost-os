@@ -121,6 +121,10 @@ impl Alert {
             Command::Forget(ssid) => ("Forget Wi-Fi Network?", format!("“{ssid}” will no longer join automatically."), "Forget", true),
             Command::ForgetBluetooth(_) => ("Forget Bluetooth Device?", "This computer will no longer pair with it automatically.".to_string(), "Forget", true),
             Command::RemoveTextReplacement(shortcut) => ("Remove Text Replacement?", format!("“{shortcut}” will no longer expand to its phrase."), "Remove", true),
+            Command::Account(danger) => {
+                let (title, message, confirm) = danger.alert();
+                (title, message, confirm, true)
+            }
             Command::ClearCache(c) => (c.label(), c.footer().to_string(), "Clear", false),
             Command::RootedOff => (
                 "Turn Off Rooted Debugging?",
@@ -307,6 +311,8 @@ pub struct Settings {
     st_gate: Option<(Lock, StEdit)>,
     /// the search field over the root page
     search: Search,
+    /// Users & Groups: the last error from privd, shown under the list ("" when none)
+    users_note: String,
 }
 
 /// Display name of the wallpaper with this id ("" when unknown).
@@ -481,6 +487,7 @@ impl Settings {
             st_edge: None,
             st_gate: None,
             search: Search::new(ui, w),
+            users_note: String::new(),
         };
         let root = st.build(ui, PageId::Root, None);
         st.stack.push(root);
@@ -573,6 +580,7 @@ impl Settings {
                 let crashes = diag::load(&self.data_dir);
                 diagnostics_page::spec(&diagnostics_page::PageState { crashes: &crashes, offset: crate::bare::sys::wall_time().1, note: &self.diag_note, sharing: self.diag_rx.is_some() })
             }
+            PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, &super::users_page::View::load(), &self.detail, &self.users_note, &self.opts),
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => self.st_spec(id),
             PageId::PrivacyPermissions => super::pages::permissions_page(&super::services::privacy_permissions::rows()),
             PageId::Backup | PageId::SoftwareUpdate => backup_page::spec(id, &backup_page::PageState { updater: &self.updater, auto_update: self.opts.auto_update, backup_before_update: self.opts.backup_before_update, backup_note: &self.backup_note, latest_backup: backup::latest(&self.data_dir).map(|(_, t)| t) }),
@@ -1161,6 +1169,7 @@ impl Settings {
             PageId::Diagnostics => self.diag_note.clear(),
             PageId::SoftwareUpdate if matches!(self.updater.state, update::State::Idle | update::State::UpToDate | update::State::Failed(_)) => self.updater.check(),
             PageId::Backup => self.backup_note.clear(),
+            PageId::Users => self.users_note.clear(),
             PageId::Fonts => self.load_fonts(),
             _ => {}
         }
@@ -1487,7 +1496,7 @@ impl Settings {
                 if pressed.is_some() && pressed == hit {
                     match hit {
                         Some(SheetHit::Cancel) => self.sheet = None,
-                        Some(SheetHit::Join) => return self.join(),
+                        Some(SheetHit::Join) => return self.join(ui, t),
                         Some(SheetHit::Field) => sh.press(ui, w, h, x, y, t),
                         _ => {}
                     }
@@ -1526,17 +1535,46 @@ impl Settings {
         }
         let submit = self.sheet.as_mut().is_some_and(|sh| sh.edit(ui, out, t));
         if submit {
-            self.join()
+            self.join(ui, t)
         } else {
             vec![]
         }
     }
 
-    fn join(&mut self) -> Vec<Effect> {
+    fn join(&mut self, ui: &Ui, t: f64) -> Vec<Effect> {
+        if let Some((purpose, text)) = self.sheet.as_ref().and_then(|sh| sh.form_result()) {
+            self.sheet = None;
+            return self.form_done(ui, &purpose, &text, t);
+        }
         match self.sheet.take_if(|sh| sh.can_join()) {
             Some(sh) => vec![Effect::Wifi(sh.action())],
             None => vec![],
         }
+    }
+
+    /// A one-field prompt was submitted: privd gets the change, or the flow opens its next prompt.
+    fn form_done(&mut self, ui: &Ui, purpose: &super::forms::Purpose, text: &str, t: f64) -> Vec<Effect> {
+        match super::users_page::finish(purpose, text) {
+            Ok(Some(next)) => self.sheet = Some(Sheet::form(ui, self.w, t, next)),
+            Ok(None) => self.users_note.clear(),
+            Err(e) => self.users_note = e,
+        }
+        self.rebuild_visible(ui);
+        vec![]
+    }
+
+    /// Users & Groups: an edit applies now, or opens the prompt that asks for what it still needs.
+    fn users_act(&mut self, ui: &Ui, edit: super::users_page::Edit, t: f64) -> Vec<Effect> {
+        match super::users_page::apply(&edit, &super::users_page::View::load()) {
+            Ok(Some(prompt)) => {
+                self.users_note.clear();
+                self.sheet = Some(Sheet::form(ui, self.w, t, prompt));
+            }
+            Ok(None) => self.users_note.clear(),
+            Err(e) => self.users_note = e,
+        }
+        self.rebuild_visible(ui);
+        vec![]
     }
 
     /// Applies a zone chosen in the picker: the clock and the page follow at once.
@@ -1760,7 +1798,7 @@ impl Settings {
         match item.action {
             Action::None | Action::Slider(_) => vec![],
             Action::Push(id) => {
-                if matches!(id, PageId::WifiDetail | PageId::BluetoothDetail | PageId::NotificationApp) {
+                if matches!(id, PageId::WifiDetail | PageId::BluetoothDetail | PageId::NotificationApp | PageId::UserDetail | PageId::GroupDetail) {
                     self.detail = item.label.clone();
                 }
                 self.push(ui, id, t);
@@ -1770,6 +1808,7 @@ impl Settings {
                     _ => vec![],
                 }
             }
+            Action::Users(edit) => self.users_act(ui, edit, t),
             Action::LoginItemRemove(id) => {
                 self.login_items.retain(|(a, _)| *a != id);
                 self.login_out.push(id);
@@ -2365,6 +2404,23 @@ impl Settings {
             Command::ForgetBluetooth(addr) => {
                 self.pop(t);
                 vec![Effect::Bluetooth(BtCmd::Forget(addr))]
+            }
+            Command::Account(danger) => {
+                match super::users_page::run(&danger) {
+                    Ok(()) => {
+                        self.users_note.clear();
+                        // the deleted account's or group's page has nothing left to show
+                        if matches!(self.page(), PageId::UserDetail | PageId::GroupDetail) {
+                            self.pop(t);
+                        }
+                        self.rebuild(ui);
+                    }
+                    Err(e) => {
+                        self.users_note = e;
+                        self.rebuild_visible(ui);
+                    }
+                }
+                vec![]
             }
         }
     }
