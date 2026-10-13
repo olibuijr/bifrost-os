@@ -31,7 +31,11 @@ impl Shape {
         let mut p = Path::new();
         match self {
             Shape::Rectangle => p.add_rect(r),
-            Shape::RoundedRectangle(radius) => p.add_rounded_rect(r, radius, radius),
+            Shape::RoundedRectangle(radius) => {
+                // one radius for both axes: clamp it to half the short side, or the corners go elliptical
+                let rad = radius.clamp(0.0, r.w.min(r.h).max(0.0) / 2.0);
+                p.add_rounded_rect(r, rad, rad)
+            }
             Shape::Capsule => {
                 let rad = r.w.min(r.h) / 2.0;
                 p.add_rounded_rect(r, rad, rad)
