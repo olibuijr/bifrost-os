@@ -402,6 +402,23 @@ impl<T: Transport> Client<T> {
         self.exchange(req).map(|_| ())
     }
 
+    /// Holds a queued job so it is not printed until released (Hold-Job).
+    pub fn hold_job(&mut self, printer: &str, job_id: i32) -> Result<(), CupsError> {
+        self.job_op(op::HOLD_JOB, printer, job_id)
+    }
+
+    /// Lets a held job print (Release-Job).
+    pub fn release_job(&mut self, printer: &str, job_id: i32) -> Result<(), CupsError> {
+        self.job_op(op::RELEASE_JOB, printer, job_id)
+    }
+
+    fn job_op(&mut self, operation: u16, printer: &str, job_id: i32) -> Result<(), CupsError> {
+        let req = base(operation)
+            .with(group::OPERATION, "printer-uri", vec![Value::uri(&target(printer)?)])
+            .with(group::OPERATION, "job-id", vec![Value::Integer(job_id)]);
+        self.exchange(req).map(|_| ())
+    }
+
     pub fn pause_printer(&mut self, printer: &str) -> Result<(), CupsError> {
         self.printer_op(op::PAUSE_PRINTER, printer)
     }
@@ -530,6 +547,25 @@ mod tests {
         assert_eq!(printers[1].state, PrinterState::Stopped);
         assert!(!printers[1].accepting_jobs);
         assert_eq!(printers[1].uri, "ipp://localhost/printers/Lab");
+    }
+
+    #[test]
+    fn hold_and_release_send_their_operation_with_the_job_id() {
+        let mut client = Client::new(Canned::new(vec![reply(0, 1, vec![]), reply(0, 2, vec![])]));
+        client.hold_job("Office", 7).unwrap();
+        client.release_job("Office", 7).unwrap();
+        let sent = &client.transport.sent;
+        // the operation id is the big-endian u16 after the 2-byte version
+        assert_eq!(&sent[0][2..4], &op::HOLD_JOB.to_be_bytes());
+        assert_eq!(&sent[1][2..4], &op::RELEASE_JOB.to_be_bytes());
+        assert!(sent[0].windows(4).any(|w| w == 7i32.to_be_bytes()));
+    }
+
+    #[test]
+    fn a_bad_printer_name_is_refused_before_any_request() {
+        let mut client = Client::new(Canned::new(vec![]));
+        assert_eq!(client.hold_job("bad name", 1), Err(CupsError::BadName("bad name".into())));
+        assert!(client.transport.sent.is_empty());
     }
 
     #[test]

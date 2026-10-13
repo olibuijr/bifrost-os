@@ -13,6 +13,8 @@ pub const VERSION_MINOR: u8 = 0;
 pub mod op {
     pub const PRINT_JOB: u16 = 0x0002;
     pub const CANCEL_JOB: u16 = 0x0008;
+    pub const HOLD_JOB: u16 = 0x000C;
+    pub const RELEASE_JOB: u16 = 0x000D;
     pub const GET_JOBS: u16 = 0x000A;
     pub const GET_PRINTER_ATTRIBUTES: u16 = 0x000B;
     pub const PAUSE_PRINTER: u16 = 0x0010;
