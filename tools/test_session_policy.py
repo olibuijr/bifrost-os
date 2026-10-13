@@ -21,34 +21,49 @@ def run_policy(call, *args):
     return proc.stdout
 
 
-def flags(compositor, renderer, chrome):
-    out = run_policy("session_compositor_flags", compositor, renderer, chrome)
+def flags(renderer, chrome, mode=None):
+    args = [renderer, chrome] + ([mode] if mode else [])
+    out = run_policy("session_compositor_flags", *args)
     return [line for line in out.splitlines() if line]
 
 
 class SessionCompositorFlags(unittest.TestCase):
-    def test_labwc_gets_no_flags(self):
-        self.assertEqual(flags("labwc", "vulkan", "1"), [])
-
-    def test_empty_compositor_gets_no_flags(self):
-        self.assertEqual(flags("", "vulkan", "1"), [])
-
-    def test_bifrost_wm_alone_selects_direct_apps(self):
-        self.assertEqual(flags("bifrost-wm", "", ""), ["BIFROST_DIRECT=1"])
+    def test_default_selects_direct_apps(self):
+        self.assertEqual(flags("", ""), ["BIFROST_DIRECT=1"])
 
     def test_vulkan_renderer_adds_the_renderer_word(self):
-        self.assertEqual(flags("bifrost-wm", "vulkan", ""),
-                         ["BIFROST_DIRECT=1", "BIFROST_WM_RENDERER=vulkan"])
+        self.assertEqual(flags("vulkan", ""), ["BIFROST_DIRECT=1", "BIFROST_WM_RENDERER=vulkan"])
 
     def test_chrome_switch_adds_chrome_word(self):
-        self.assertEqual(flags("bifrost-wm", "gles", "1"), ["BIFROST_DIRECT=1", "BIFROST_CHROME=1"])
+        self.assertEqual(flags("gles", "1"), ["BIFROST_DIRECT=1", "BIFROST_CHROME=1"])
 
     def test_full_switch_sets_all_three(self):
-        self.assertEqual(flags("bifrost-wm", "vulkan", "1"),
+        self.assertEqual(flags("vulkan", "1", "normal"),
                          ["BIFROST_DIRECT=1", "BIFROST_WM_RENDERER=vulkan", "BIFROST_CHROME=1"])
 
     def test_chrome_zero_is_off(self):
-        self.assertNotIn("BIFROST_CHROME=1", flags("bifrost-wm", "vulkan", "0"))
+        self.assertNotIn("BIFROST_CHROME=1", flags("vulkan", "0"))
+
+    def test_safe_mode_has_no_flags_whatever_the_switches(self):
+        self.assertEqual(flags("vulkan", "1", "safe"), [])
+
+
+class SessionScript(unittest.TestCase):
+    def setUp(self):
+        with open(os.path.join(os.path.dirname(POLICY), "session")) as f:
+            self.text = f.read()
+
+    def test_no_other_compositor_is_launched(self):
+        self.assertNotIn("labwc", self.text)
+
+    def test_the_fallback_marker_selects_safe_mode(self):
+        self.assertIn("/run/bifrost/compositor-fallback ]] && mode=safe", self.text)
+
+    def test_safe_mode_has_its_own_exit_record(self):
+        self.assertIn("/run/bifrost/wm-safe-exits", self.text)
+
+    def test_display_refresh_starts_with_the_window_server(self):
+        self.assertIn("/usr/lib/bifrost/display-refresh", self.text)
 
 
 class WmExitAction(unittest.TestCase):
