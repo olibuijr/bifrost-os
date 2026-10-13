@@ -50,7 +50,7 @@ Return the branch, commits, the rows implemented, the rows skipped (with why), a
   { label: `app:${name}`, phase: 'Apps', model: 'sonnet', isolation: 'worktree', schema: DONE })))
 
 phase('Inventory')
-const inv = agent(
+const inv = (args && args.skipInventory) ? Promise.resolve(null) : agent(
 `${RULES}
 
 TASK (data + tooling, no app code). Branch: parity/app-inventory-rest.
