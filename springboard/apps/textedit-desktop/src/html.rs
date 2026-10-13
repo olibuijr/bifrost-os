@@ -101,7 +101,11 @@ pub fn write(cells: &[Cell], tab: f32) -> Vec<u8> {
                 out += "<u>";
             }
             for c in &para[i..j] {
-                escape(c.ch, &mut out);
+                match c.ch {
+                    crate::text::LINE_BREAK => out += "<br>",
+                    crate::text::PAGE_BREAK => out += "<br style=\"page-break-after:always\">",
+                    ch => escape(ch, &mut out),
+                }
             }
             if u {
                 out += "</u>";

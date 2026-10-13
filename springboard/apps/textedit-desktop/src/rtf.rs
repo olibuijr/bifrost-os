@@ -5,7 +5,8 @@
 //! the common forms other writers produce (hex escapes, `\uN` with its fallback character, `\plain`, `\pard`), and
 //! skips the destinations it does not use (colour and style tables, info, pictures, `\*` extensions).
 
-use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, DEFAULT_TAB, FAMILIES, MAX_TAB, MIN_TAB, SPACINGS};
+use crate::properties::Properties;
+use crate::text::{Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, DEFAULT_TAB, FAMILIES, LINE_BREAK, MAX_TAB, MIN_TAB, PAGE_BREAK, SPACINGS};
 
 /// Whether `bytes` are an RTF file (the header every RTF file starts with).
 pub fn is_rtf(bytes: &[u8]) -> bool {
@@ -26,7 +27,13 @@ pub fn write(cells: &[Cell]) -> Vec<u8> {
 }
 
 /// Writes the cells as RTF: the font and colour tables, the tab stop distance (`\deftab`, in twips), then paragraphs.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn write_doc(cells: &[Cell], tab: f32) -> Vec<u8> {
+    write_with_info(cells, tab, &Properties::default())
+}
+
+/// Writes the cells as RTF with an info group for the document properties (left out when they are all empty).
+pub fn write_with_info(cells: &[Cell], tab: f32, props: &Properties) -> Vec<u8> {
     let mut out = format!("{{\\rtf1\\ansi\\deff0\\deftab{}{{\\fonttbl", (tab * 20.0).round() as i32);
     for (i, family) in FAMILIES.iter().enumerate() {
         out += &format!("{{\\f{i} {family};}}");
@@ -35,7 +42,9 @@ pub fn write_doc(cells: &[Cell], tab: f32) -> Vec<u8> {
     for (_, [r, g, b]) in COLORS.iter().skip(1) {
         out += &format!("\\red{r}\\green{g}\\blue{b};");
     }
-    out += "}\n";
+    out += "}";
+    out += &info_group(props);
+    out += "\n";
     let mut para_start = true;
     let mut last: Option<Style> = None;
     for c in cells {
@@ -59,6 +68,162 @@ pub fn write_doc(cells: &[Cell], tab: f32) -> Vec<u8> {
     out.into_bytes()
 }
 
+/// The info group for the properties, with the non-empty fields only (the copyright is an extension destination), or
+/// nothing when there are none.
+fn info_group(props: &Properties) -> String {
+    if props.is_empty() {
+        return String::new();
+    }
+    let mut out = String::from("{\\info");
+    for (word, index) in [("title", 0), ("author", 1), ("subject", 2), ("keywords", 3), ("copyright", 4)] {
+        let value = props.get(index);
+        if value.is_empty() {
+            continue;
+        }
+        let text: String = value.chars().map(escape).collect();
+        let star = if word == "copyright" { "\\*" } else { "" };
+        out += &format!("{{{star}\\{word} {text}}}");
+    }
+    out += "}";
+    out
+}
+
+/// Reads the document properties from the info group of an RTF file; a file without one has none.
+pub fn read_info(bytes: &[u8]) -> Properties {
+    let mut props = Properties::default();
+    let Some(at) = bytes.windows(6).position(|w| w == b"{\\info") else { return props };
+    let mut i = at + 6;
+    if bytes.get(i).is_some_and(|b| b.is_ascii_alphabetic()) {
+        return props;
+    }
+    let mut depth = 1;
+    while i < bytes.len() && depth > 0 {
+        match bytes[i] {
+            b'}' => {
+                depth -= 1;
+                i += 1;
+            }
+            b'{' => {
+                i += 1;
+                // a destination that older readers must skip is marked with a star
+                if bytes[i..].starts_with(b"\\*") {
+                    i += 2;
+                }
+                let name_at = i + 1;
+                if bytes.get(i) == Some(&b'\\') && bytes.get(name_at).is_some_and(|b| b.is_ascii_alphabetic()) {
+                    let mut end = name_at;
+                    while end < bytes.len() && bytes[end].is_ascii_alphabetic() {
+                        end += 1;
+                    }
+                    let name = String::from_utf8_lossy(&bytes[name_at..end]).into_owned();
+                    i = end;
+                    if bytes.get(i) == Some(&b' ') {
+                        i += 1;
+                    }
+                    let value = group_text(bytes, &mut i);
+                    props.set_named(&name, &value);
+                } else {
+                    // some other group: step over it
+                    let mut inner = 1;
+                    while i < bytes.len() && inner > 0 {
+                        match bytes[i] {
+                            b'{' => inner += 1,
+                            b'}' => inner -= 1,
+                            b'\\' => i += 1,
+                            _ => {}
+                        }
+                        i += 1;
+                    }
+                }
+            }
+            _ => i += 1,
+        }
+    }
+    props
+}
+
+/// The text of a group from `*i` to its closing brace (which is consumed): escapes decoded, other control words and
+/// nested groups dropped.
+fn group_text(bytes: &[u8], i: &mut usize) -> String {
+    let mut units: Vec<u16> = Vec::new();
+    let mut nested = 0;
+    let mut fallback = 0;
+    while *i < bytes.len() {
+        let b = bytes[*i];
+        *i += 1;
+        match b {
+            b'{' => nested += 1,
+            b'}' => {
+                if nested == 0 {
+                    break;
+                }
+                nested -= 1;
+            }
+            b'\\' => {
+                let Some(&c) = bytes.get(*i) else { break };
+                if c.is_ascii_alphabetic() {
+                    let start = *i;
+                    while *i < bytes.len() && bytes[*i].is_ascii_alphabetic() {
+                        *i += 1;
+                    }
+                    let name = &bytes[start..*i];
+                    let negative = bytes.get(*i) == Some(&b'-');
+                    let digits = if negative { *i + 1 } else { *i };
+                    let mut end = digits;
+                    while end < bytes.len() && bytes[end].is_ascii_digit() {
+                        end += 1;
+                    }
+                    let number: Option<i64> = std::str::from_utf8(&bytes[digits..end]).ok().and_then(|d| d.parse().ok());
+                    if end > digits {
+                        *i = end;
+                    }
+                    if bytes.get(*i) == Some(&b' ') {
+                        *i += 1;
+                    }
+                    if nested == 0 {
+                        match (name, number) {
+                            (b"u", Some(n)) => {
+                                units.push((if negative { -n } else { n }) as u16);
+                                fallback = 1;
+                            }
+                            (b"tab", _) => units.push(u16::from(b' ')),
+                            _ => {}
+                        }
+                    }
+                } else {
+                    *i += 1;
+                    match c {
+                        b'\'' => {
+                            let hex = bytes.get(*i..*i + 2).and_then(|h| std::str::from_utf8(h).ok()).and_then(|h| u8::from_str_radix(h, 16).ok());
+                            *i += 2;
+                            if fallback > 0 {
+                                fallback -= 1;
+                            } else if let (Some(byte), 0) = (hex, nested) {
+                                let mut buf = [0u16; 2];
+                                units.extend_from_slice(cp1252(byte).encode_utf16(&mut buf));
+                            }
+                        }
+                        b'\\' | b'{' | b'}' if nested == 0 => units.push(u16::from(c)),
+                        _ => {}
+                    }
+                }
+            }
+            b'\r' | b'\n' => {}
+            _ => {
+                let (ch, end) = utf8_char(bytes, *i - 1);
+                *i = end;
+                if fallback > 0 {
+                    fallback -= 1;
+                } else if nested == 0 {
+                    let mut buf = [0u16; 2];
+                    units.extend_from_slice(ch.encode_utf16(&mut buf));
+                }
+            }
+        }
+    }
+    String::from_utf16_lossy(&units)
+}
+
 /// Reads an RTF file. Text the reader does not understand is dropped, never shown as garbage.
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn read(bytes: &[u8]) -> Vec<Cell> {
@@ -73,14 +238,25 @@ pub fn read_doc(bytes: &[u8]) -> (Vec<Cell>, f32) {
 }
 
 /// Reads plain text: UTF-8 (invalid bytes become the replacement character), with CR LF as one line break.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn read_plain(bytes: &[u8]) -> Vec<Cell> {
-    let text = String::from_utf8_lossy(bytes).replace("\r\n", "\n");
-    text.chars().filter(|&c| c != '\r').map(|ch| Cell { ch, style: Style::default() }).collect()
+    plain_cells(&crate::encoding::detect(bytes).0)
 }
 
-/// Writes the text without any formatting, as UTF-8.
+/// The cells of plain text: CR LF and a lone CR are one line break each.
+pub fn plain_cells(text: &str) -> Vec<Cell> {
+    text.replace("\r\n", "\n").chars().map(|ch| if ch == '\r' { '\n' } else { ch }).map(|ch| Cell { ch, style: Style::default() }).collect()
+}
+
+/// Writes the text without any formatting, as UTF-8. A line break is a line ending in plain text; a page break stays
+/// the form feed character.
 pub fn write_plain(cells: &[Cell]) -> Vec<u8> {
-    cells.iter().map(|c| c.ch).collect::<String>().into_bytes()
+    plain_text(cells).into_bytes()
+}
+
+/// The characters of the cells as plain text.
+pub fn plain_text(cells: &[Cell]) -> String {
+    cells.iter().map(|c| if c.ch == LINE_BREAK { '\n' } else { c.ch }).collect()
 }
 
 fn align_code(align: Align) -> char {
@@ -140,6 +316,8 @@ fn escape(ch: char) -> String {
         '{' => "\\{".into(),
         '}' => "\\}".into(),
         '\t' => "\\tab ".into(),
+        LINE_BREAK => "\\line ".into(),
+        PAGE_BREAK => "\\page ".into(),
         ' '..='~' => ch.to_string(),
         c if (c as u32) < 0x20 => String::new(),
         c => {
@@ -403,7 +581,9 @@ impl Reader {
                     self.tab = twips as f32 / 20.0;
                 }
             }
-            "par" | "line" => self.push('\n'),
+            "par" => self.push('\n'),
+            "line" => self.push(LINE_BREAK),
+            "page" => self.push(PAGE_BREAK),
             "tab" => self.push('\t'),
             "uc" => self.uc = param.unwrap_or(1).max(0) as usize,
             "u" => {
@@ -488,7 +668,7 @@ fn utf8_char(bytes: &[u8], at: usize) -> (char, usize) {
 
 /// The character a Windows-1252 byte stands for (the code page `\'hh` escapes are written in): the printable
 /// characters of 0x80 to 0x9F differ from Latin-1, which is what every other byte is.
-fn cp1252(byte: u8) -> char {
+pub(crate) fn cp1252(byte: u8) -> char {
     let code = match byte {
         0x80 => 0x20AC,
         0x82 => 0x201A,
@@ -670,5 +850,63 @@ mod tests {
         assert_eq!(write_plain(&cells), b"one\ntwo".to_vec());
         assert!(!is_rtf(b"one"));
         assert!(is_rtf(b"{\\rtf1 x}"));
+    }
+
+    #[test]
+    fn line_and_page_breaks_round_trip_and_are_not_paragraphs() {
+        let cells: Vec<Cell> = "a\u{2028}b\u{c}c\nd".chars().map(|ch| Cell { ch, style: Style::default() }).collect();
+        let bytes = write(&cells);
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        assert!(text.contains("a\\line b\\page c\\par"), "{text}");
+        assert_eq!(read(&bytes), cells);
+        // plain text writes a line break as a line ending
+        assert_eq!(write_plain(&cells), "a\nb\u{c}c\nd".as_bytes().to_vec());
+    }
+
+    #[test]
+    fn plain_text_takes_old_line_endings_and_other_encodings() {
+        assert_eq!(text_of(&read_plain(b"a\rb\r\nc")), "a\nb\nc");
+        assert_eq!(text_of(&read_plain(&[b'c', b'a', b'f', 0xe9])), "café");
+        assert_eq!(text_of(&read_plain(&[0xff, 0xfe, b'h', 0, b'i', 0])), "hi");
+    }
+
+    fn props(title: &str, author: &str, copyright: &str) -> Properties {
+        let mut p = Properties::default();
+        p.title = title.into();
+        p.author = author.into();
+        p.copyright = copyright.into();
+        p
+    }
+
+    #[test]
+    fn the_document_properties_round_trip_through_the_info_group() {
+        let mut p = props("Trip {report}", "Ólafur", "(c) 2026");
+        p.subject = "Iceland".into();
+        p.keywords = "north, summer".into();
+        let bytes = write_with_info(&[], 36.0, &p);
+        assert!(String::from_utf8_lossy(&bytes).contains("{\\info{\\title Trip \\{report\\}}"));
+        assert_eq!(read_info(&bytes), p);
+        // the text reader still skips the group
+        let cells: Vec<Cell> = "visible".chars().map(|ch| Cell { ch, style: Style::default() }).collect();
+        let with_text = write_with_info(&cells, 36.0, &p);
+        assert_eq!(text_of(&read(&with_text)), "visible");
+    }
+
+    #[test]
+    fn a_document_without_properties_has_no_info_group() {
+        let bytes = write_doc(&[], 36.0);
+        assert!(!String::from_utf8_lossy(&bytes).contains("\\info"));
+        assert!(read_info(&bytes).is_empty());
+        assert_eq!(write_doc(&[], 36.0), write_with_info(&[], 36.0, &Properties::default()));
+    }
+
+    #[test]
+    fn a_foreign_info_group_is_read_with_its_escapes() {
+        let src = b"{\\rtf1\\ansi{\\info{\\title Caf\\'e9 \\u8364?uro}{\\author Ada}{\\operator Bob}{\\creatim\\yr2026\\mo1}{\\*\\copyright Me}}body}";
+        let p = read_info(src);
+        assert_eq!(p.title, "Caf\u{e9} \u{20ac}uro");
+        assert_eq!(p.author, "Ada", "other info entries are ignored");
+        assert_eq!(p.copyright, "Me");
+        assert!(read_info(b"{\\rtf1 {\\information x}}").is_empty(), "only the info group counts");
     }
 }

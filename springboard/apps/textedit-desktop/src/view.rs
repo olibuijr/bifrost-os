@@ -3,6 +3,7 @@
 //! reached in device pixels through `Ui::pt`. Colours and type come from the shared tokens only.
 
 use crate::layout::{self, Layout, Line, Marker};
+use crate::properties::{self, PanelLayout};
 use crate::text::{Align, Cell, ListKind, Style, Transform, COLORS, FAMILIES, SPACINGS};
 use bifrost_app::controls::Rect;
 use bifrost_app::document::item;
@@ -105,6 +106,21 @@ pub enum Action {
     HeaderFooter,
     /// Preferences: whether new documents are plain text (true) or rich text (false)
     NewPlain(bool),
+    /// Edit > Insert: a page break, a line break (a new line in the paragraph) and a paragraph break
+    InsertPage,
+    InsertLine,
+    InsertParagraph,
+    /// File > Show Properties, and the panel's two buttons
+    ShowProperties,
+    PropsDone,
+    PropsCancel,
+    /// Preferences > Open and Save: show RTF and HTML files as code
+    MarkupAsCode,
+    /// Format > Text Encoding: save as (index into `encoding::ALL`), and read the text again as another encoding
+    Encoding(u8),
+    Reinterpret(u8),
+    /// Preferences > Open and Save: the encoding of new plain text documents
+    DefaultEncoding(u8),
 }
 
 /// The first menu id of Text Editor's own items. Ids are stable: they are the values a menu sends back.
@@ -179,7 +195,17 @@ impl Action {
             Action::HeaderFooter => MENU_BASE + 0x89,
             Action::NewPlain(false) => MENU_BASE + 0x8a,
             Action::NewPlain(true) => MENU_BASE + 0x8b,
+            Action::InsertPage => MENU_BASE + 0x98,
+            Action::InsertLine => MENU_BASE + 0x99,
+            Action::InsertParagraph => MENU_BASE + 0x9a,
+            Action::ShowProperties => MENU_BASE + 0x8c,
+            Action::PropsDone => MENU_BASE + 0x8d,
+            Action::PropsCancel => MENU_BASE + 0x8e,
+            Action::MarkupAsCode => MENU_BASE + 0x8f,
             Action::Highlight(i) => MENU_BASE + 0x90 + i as u32,
+            Action::Encoding(i) => MENU_BASE + 0xa0 + i as u32,
+            Action::Reinterpret(i) => MENU_BASE + 0xa8 + i as u32,
+            Action::DefaultEncoding(i) => MENU_BASE + 0xb0 + i as u32,
         })
     }
 
@@ -251,7 +277,17 @@ impl Action {
             0x89 => Action::HeaderFooter,
             0x8a => Action::NewPlain(false),
             0x8b => Action::NewPlain(true),
+            0x98 => Action::InsertPage,
+            0x99 => Action::InsertLine,
+            0x9a => Action::InsertParagraph,
+            0x8c => Action::ShowProperties,
+            0x8d => Action::PropsDone,
+            0x8e => Action::PropsCancel,
+            0x8f => Action::MarkupAsCode,
             0x90..=0x97 => Action::Highlight((offset - 0x90) as u8),
+            0xa0..=0xa6 => Action::Encoding((offset - 0xa0) as u8),
+            0xa8..=0xae => Action::Reinterpret((offset - 0xa8) as u8),
+            0xb0..=0xb6 => Action::DefaultEncoding((offset - 0xb0) as u8),
             _ => return None,
         })
     }
@@ -646,6 +682,43 @@ pub fn draw_find(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry, buttons: &[Button
     }
 }
 
+/// The document properties panel's buttons, right-aligned on its bottom row.
+pub fn properties_buttons(ui: &Ui, l: &PanelLayout) -> Vec<Button> {
+    let mut buttons = vec![
+        label_button(ui, "Cancel", Some(Action::PropsCancel), Weight::Regular),
+        label_button(ui, "Done", Some(Action::PropsDone), Weight::Bold),
+    ];
+    buttons[1].active = true;
+    let total = buttons.iter().map(|b| b.rect.w).sum::<f32>() + ITEM_GAP;
+    place_row(&mut buttons, &[2], l.right - total, l.buttons_y);
+    buttons
+}
+
+/// Draws the document properties panel over the page: its title, the five labelled fields (the focused one outlined)
+/// and its buttons.
+pub fn draw_properties(c: &mut dyn Canvas, ui: &Ui, l: &PanelLayout, panel: &properties::Panel, buttons: &[Button]) {
+    let frame = to_px(ui, l.frame);
+    c.fill_rrect(frame, ui.pt(CONTROL_RADIUS), DETAIL_BG.now());
+    c.stroke_rrect(frame, ui.pt(CONTROL_RADIUS), ui.pt(1.0).max(1.0), SEPARATOR_C.now());
+    text_at(c, ui, "Document Properties", MAC_BODY_PT, Weight::Bold, LABEL.now(), l.labels_x, l.title_y);
+    for (i, (label, rect)) in properties::LABELS.iter().zip(l.fields.iter()).enumerate() {
+        let r = to_px(ui, *rect);
+        c.fill_rrect(r, ui.pt(CONTROL_RADIUS), FIELD_BG.now());
+        if panel.focus == i {
+            c.stroke_rrect(r, ui.pt(CONTROL_RADIUS), ui.pt(1.0).max(1.0), LINK);
+        }
+        let name = ui.text(label, MAC_BODY_PT, Weight::Regular, LABEL_3.now());
+        blit(c, &name, ui.pt(l.labels_x), r.y + (r.h - name.h as f32) / 2.0);
+        let inner = ui.pt(rect.w) - 2.0 * ui.pt(BUTTON_PAD);
+        let fitted = ui.fit(panel.draft.get(i), MAC_BODY_PT, inner.max(0.0));
+        let value = ui.text(&fitted, MAC_BODY_PT, Weight::Regular, LABEL.now());
+        blit(c, &value, r.x + ui.pt(BUTTON_PAD), r.y + (r.h - value.h as f32) / 2.0);
+    }
+    for b in buttons {
+        draw_button(c, ui, b);
+    }
+}
+
 /// The page: its background and a clip to the body so text never draws over the bars.
 pub fn page_clip(c: &mut dyn Canvas, ui: &Ui, geom: &Geometry) -> RectF {
     let r = RectF::new(0.0, ui.pt(geom.body_top).floor(), ui.pt(geom.width).ceil(), ui.pt(geom.body_bottom - geom.body_top).ceil());
@@ -735,7 +808,7 @@ fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[
             }
             run.clear();
         }
-        if cell.ch != '\t' {
+        if cell.ch != '\t' && !crate::text::is_break(cell.ch) {
             if run_style.is_none() {
                 run_style = Some(cell.style);
                 run_x = rel;
@@ -746,6 +819,15 @@ fn draw_line(c: &mut dyn Canvas, ui: &Ui, lines: &Layout, line: &Line, cells: &[
     }
     if let Some(s) = run_style {
         flush_run(c, ui, &run, &s, base + run_x, y, line.height);
+    }
+    // a page break shows as a rule across the rest of its line
+    if line.end > line.start && cells[line.end - 1].ch == crate::text::PAGE_BREAK {
+        let from = base + line.width + 4.0;
+        let to = origin_x + lines.width;
+        if to > from {
+            let rule = Rect { x: from, y: y + line.height / 2.0, w: to - from, h: 1.0 };
+            c.fill_rect(to_px(ui, rule), LABEL_3.now());
+        }
     }
 }
 
@@ -910,6 +992,19 @@ mod tests {
             Action::HeaderFooter,
             Action::NewPlain(false),
             Action::NewPlain(true),
+            Action::InsertPage,
+            Action::InsertLine,
+            Action::InsertParagraph,
+            Action::ShowProperties,
+            Action::PropsDone,
+            Action::PropsCancel,
+            Action::MarkupAsCode,
+            Action::Encoding(0),
+            Action::Encoding(6),
+            Action::Reinterpret(0),
+            Action::Reinterpret(6),
+            Action::DefaultEncoding(0),
+            Action::DefaultEncoding(6),
         ];
         let mut ids: Vec<u32> = all.iter().filter_map(|a| a.id()).collect();
         ids.sort_unstable();

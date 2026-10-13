@@ -8,11 +8,13 @@
 
 mod docx;
 mod document;
+mod encoding;
 mod html;
 mod layout;
 mod odt;
 mod prefs;
 mod print;
+mod properties;
 mod rtf;
 mod spell;
 mod text;
@@ -29,6 +31,7 @@ use bifrost_app::print::{Orientation, PrintError, PrintInfo, PrintOperation};
 use bifrost_app::proto::CHORD_FLAG;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use document::TextDocument;
+use encoding::Encoding;
 use layout::Layout;
 use prefs::Options;
 use spell::Spelling;
@@ -78,6 +81,8 @@ struct TextEditApp {
     completion: Option<Completion>,
     /// File > Export as PDF: the save panel's request, until its file is written
     export_request: Option<u32>,
+    /// File > Show Properties: the document being edited and the panel's draft, while the panel is open
+    props: Option<(DocId, properties::Panel)>,
 }
 
 /// A completion in progress: the typed prefix, the cells of the word as completed, and which candidate it shows.
@@ -183,6 +188,7 @@ impl TextEditApp {
             copied_style: None,
             completion: None,
             export_request: None,
+            props: None,
         }
     }
 
@@ -288,12 +294,10 @@ impl TextEditApp {
             Action::Document(id) => {
                 let Some(notices) = self.docs.menu_action(ctx, id) else { return false };
                 // File > New follows the Preferences' document format
-                if id == item::NEW && self.opts.new_plain {
+                if id == item::NEW {
                     for n in &notices {
                         if let Notice::Created(created) = n {
-                            if let Some(d) = self.docs.get_mut(*created) {
-                                d.rich = false;
-                            }
+                            self.apply_new_defaults(*created);
                         }
                     }
                 }
@@ -310,6 +314,35 @@ impl TextEditApp {
                 return true;
             }
             Action::ExportPdf => return self.export_pdf(ctx),
+            Action::InsertPage | Action::InsertLine | Action::InsertParagraph => {
+                // a plain text document has no line break apart from the paragraph break
+                let rich = active_doc(&self.docs).is_some_and(|d| d.rich);
+                let s = match action {
+                    Action::InsertPage => text::PAGE_BREAK,
+                    Action::InsertLine if rich => text::LINE_BREAK,
+                    _ => '\n',
+                };
+                return self.insert_raw(&s.to_string());
+            }
+            Action::ShowProperties => return self.open_properties(),
+            Action::PropsDone => return self.close_properties(true),
+            Action::PropsCancel => return self.close_properties(false),
+            Action::Encoding(index) => return Encoding::from_index(index).is_some_and(|e| self.set_encoding(e)),
+            Action::Reinterpret(index) => return Encoding::from_index(index).is_some_and(|e| self.reinterpret(e)),
+            Action::DefaultEncoding(index) => {
+                let Some(e) = Encoding::from_index(index) else { return false };
+                self.opts.default_encoding = e;
+                self.save_options(ctx);
+                return true;
+            }
+            Action::MarkupAsCode => {
+                self.opts.markup_as_code = !self.opts.markup_as_code;
+                document::set_markup_as_code(self.opts.markup_as_code);
+                self.save_options(ctx);
+                let note = if self.opts.markup_as_code { "RTF and HTML files now open as code" } else { "RTF and HTML files now open formatted" };
+                self.note = Some(note.into());
+                return true;
+            }
             Action::Complete => return self.complete(),
             Action::UseSelection => {
                 let Some(doc) = active_doc(&self.docs) else { return false };
@@ -581,6 +614,108 @@ impl TextEditApp {
         changed
     }
 
+    /// A new document takes the format and the plain text encoding chosen in the Preferences.
+    fn apply_new_defaults(&mut self, id: DocId) {
+        let (plain, encoding) = (self.opts.new_plain, self.opts.default_encoding);
+        if let Some(d) = self.docs.get_mut(id) {
+            if plain {
+                d.rich = false;
+            }
+            d.encoding = encoding;
+        }
+    }
+
+    /// Format > Text Encoding: the encoding a plain text document is saved in. Only a change marks the document edited.
+    fn set_encoding(&mut self, encoding: Encoding) -> bool {
+        if self.refuse_edit() {
+            return true;
+        }
+        let Some(id) = self.docs.active() else { return false };
+        let Some(doc) = self.docs.get_mut(id) else { return false };
+        if doc.rich {
+            self.note = Some("Only plain text has an encoding. Choose Format > Make Plain Text first.".into());
+            return true;
+        }
+        if doc.encoding == encoding {
+            return false;
+        }
+        doc.encoding = encoding;
+        self.docs.mark_edited(id);
+        self.note = Some(format!("Saves as {}", encoding.name()));
+        true
+    }
+
+    /// Format > Reinterpret As: the text was read in the wrong encoding, so its characters go back to bytes and are read
+    /// again in `to`. One undo entry.
+    fn reinterpret(&mut self, to: Encoding) -> bool {
+        if self.refuse_edit() {
+            return true;
+        }
+        let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
+        if doc.rich {
+            self.note = Some("Only plain text has an encoding. Choose Format > Make Plain Text first.".into());
+            return true;
+        }
+        let Some(again) = encoding::reinterpret(&doc.text.text(), doc.encoding, to) else {
+            self.note = Some(format!("The text cannot be read as {}", to.name()));
+            return true;
+        };
+        let len = doc.text.len();
+        doc.text.replace_range(0..len, &normalize_breaks(&again));
+        let end = doc.text.len();
+        doc.text.select(end, end);
+        doc.encoding = to;
+        self.edited();
+        self.note = Some(format!("Read as {}", to.name()));
+        true
+    }
+
+    /// File > Show Properties: opens the panel on the active document's properties.
+    fn open_properties(&mut self) -> bool {
+        let Some(id) = self.docs.active() else { return false };
+        let Some(doc) = self.docs.get(id) else { return false };
+        self.props = Some((id, properties::Panel::new(&doc.properties)));
+        true
+    }
+
+    /// Closes the properties panel; Done (`apply`) stores the draft on the document and marks it edited when it changed.
+    fn close_properties(&mut self, apply: bool) -> bool {
+        let Some((id, panel)) = self.props.take() else { return false };
+        if !apply {
+            return true;
+        }
+        let new = panel.result();
+        let Some(doc) = self.docs.get_mut(id) else { return true };
+        if doc.properties == new {
+            return true;
+        }
+        if doc.read_only {
+            self.note = Some("Editing is prevented. Choose Format > Allow Editing.".into());
+            return true;
+        }
+        doc.properties = new;
+        self.docs.mark_edited(id);
+        self.note = Some("Properties changed".into());
+        true
+    }
+
+    /// A press while the properties panel is open: a button, a field, or nothing (the page behind it is not reachable).
+    fn touch_properties(&mut self, ctx: &Ctx, px: f32, py: f32) -> bool {
+        let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
+        let layout = properties::layout(geom.width, geom.body_top);
+        let buttons = view::properties_buttons(&ctx.ui, &layout);
+        if let Some(b) = buttons.iter().find(|b| b.rect.contains(px, py)) {
+            return match b.action {
+                Some(action) => self.perform(ctx, action),
+                None => false,
+            };
+        }
+        if let (Some(field), Some((_, panel))) = (properties::field_at(&layout, px, py), self.props.as_mut()) {
+            panel.focus = field;
+        }
+        true
+    }
+
     /// Finds the next (or previous) match of the find field from the selection, and selects it.
     fn find_step(&mut self, forward: bool) -> bool {
         if self.find.is_empty() {
@@ -786,6 +921,10 @@ impl TextEditApp {
         if printable.is_empty() {
             return false;
         }
+        if let Some((_, panel)) = self.props.as_mut() {
+            panel.type_text(&printable);
+            return true;
+        }
         if self.find_open && self.focus != Focus::Body {
             match self.focus {
                 Focus::Find => self.find.push_str(&printable),
@@ -835,6 +974,10 @@ impl TextEditApp {
 
     /// Backspace: from the focused field, or the page.
     fn backspace(&mut self) -> bool {
+        if let Some((_, panel)) = self.props.as_mut() {
+            panel.backspace();
+            return true;
+        }
         if self.find_open && self.focus != Focus::Body {
             let field = if self.focus == Focus::Find { &mut self.find } else { &mut self.replace };
             return field.pop().is_some();
@@ -879,6 +1022,9 @@ impl TextEditApp {
         let (px, py) = (x / ctx.ui.s, y / ctx.ui.s);
         match kind {
             TouchKind::Down => {
+                if self.props.is_some() {
+                    return self.touch_properties(ctx, px, py);
+                }
                 let geom = self.geometry(&ctx.ui, ctx.cfg.w, ctx.cfg.h);
                 let (bar, find) = self.buttons(&ctx.ui, &geom);
                 let all: Vec<Button> = bar.into_iter().chain(find).collect();
@@ -992,6 +1138,10 @@ impl TextEditApp {
             menu_item(Action::Transform(Transform::Upper), "Make Upper Case", "", has_sel).depth(1),
             menu_item(Action::Transform(Transform::Lower), "Make Lower Case", "", has_sel).depth(1),
             menu_item(Action::Transform(Transform::Capitalize), "Capitalize", "", has_sel).depth(1),
+            AppMenuItem::submenu("Insert"),
+            menu_item(Action::InsertPage, "Page Break", "", enabled).depth(1),
+            menu_item(Action::InsertLine, "Line Break", "", enabled).depth(1),
+            menu_item(Action::InsertParagraph, "Paragraph Break", "", enabled).depth(1),
             AppMenuItem::separator(),
             menu_item(Action::Complete, "Complete", "alt+escape", enabled),
         ];
@@ -1052,6 +1202,17 @@ impl TextEditApp {
         }
         let read_only = active_doc(&self.docs).is_some_and(|d| d.read_only);
         items.push(menu_item(Action::PreventEditing, if read_only { "Allow Editing" } else { "Prevent Editing" }, "", enabled));
+        // the encoding is a plain text setting: it is saved with the file, and Reinterpret As repairs a wrong guess
+        let current = active_doc(&self.docs).map(|d| d.encoding);
+        items.push(AppMenuItem::separator());
+        items.push(AppMenuItem::submenu("Text Encoding"));
+        for (index, e) in encoding::ALL.iter().enumerate() {
+            items.push(menu_item(Action::Encoding(index as u8), e.name(), "", enabled && !rich).checked(current == Some(*e)).depth(1));
+        }
+        items.push(AppMenuItem::submenu("Reinterpret As"));
+        for (index, e) in encoding::ALL.iter().enumerate() {
+            items.push(menu_item(Action::Reinterpret(index as u8), e.name(), "", enabled && !rich).depth(1));
+        }
         AppMenu { title: "Format".into(), items }
     }
 
@@ -1077,11 +1238,16 @@ impl TextEditApp {
     /// substitutions in Edit, the ruler and wrapping in View, the header and footer in File) and are kept in the
     /// preferences too.
     fn preferences_menu(&self) -> AppMenu {
-        let items = vec![
+        let mut items = vec![
             AppMenuItem::submenu("New Documents"),
             menu_item(Action::NewPlain(false), "Rich Text", "", true).checked(!self.opts.new_plain).depth(1),
             menu_item(Action::NewPlain(true), "Plain Text", "", true).checked(self.opts.new_plain).depth(1),
+            AppMenuItem::submenu("Plain Text Encoding"),
         ];
+        for (index, e) in encoding::ALL.iter().enumerate() {
+            items.push(menu_item(Action::DefaultEncoding(index as u8), e.name(), "", true).checked(self.opts.default_encoding == *e).depth(1));
+        }
+        items.push(menu_item(Action::MarkupAsCode, "Show RTF and HTML Files as Code", "", true).checked(self.opts.markup_as_code));
         AppMenu { title: "Preferences".into(), items }
     }
 
@@ -1093,6 +1259,7 @@ impl TextEditApp {
         let any_edited = self.docs.ids().into_iter().any(|id| self.docs.is_edited(id));
         menu.items.push(menu_item(Action::SaveAll, "Save All", "cmd+alt+s", any_edited));
         menu.items.push(menu_item(Action::ExportPdf, "Export as PDF\u{2026}", "", enabled));
+        menu.items.push(menu_item(Action::ShowProperties, "Show Properties\u{2026}", "cmd+alt+p", enabled));
         menu.items.push(AppMenuItem::separator());
         menu.items.push(menu_item(Action::Print, "Print\u{2026}", "cmd+p", enabled));
         menu.items.push(menu_item(Action::HeaderFooter, "Print Header and Footer", "", enabled).checked(self.opts.header_footer));
@@ -1129,14 +1296,11 @@ impl App for TextEditApp {
         self.spelling.load(ctx);
         self.opts = Options::read(&|key| DocumentHost::pref(ctx, key));
         self.spelling.enabled = self.opts.spell_enabled;
+        document::set_markup_as_code(self.opts.markup_as_code);
         // a window starts with an untitled document, as a new document would
         if self.docs.is_empty() {
             let id = self.docs.new_document();
-            if self.opts.new_plain {
-                if let Some(d) = self.docs.get_mut(id) {
-                    d.rich = false;
-                }
-            }
+            self.apply_new_defaults(id);
         }
     }
 
@@ -1155,6 +1319,21 @@ impl App for TextEditApp {
                 if code & CHORD_FLAG != 0 {
                     // chords are the menus' key equivalents, which the shell routes as menu actions
                     return false;
+                }
+                // the properties panel takes the keys while it is open
+                if self.props.is_some() {
+                    return match code {
+                        8 => self.backspace(),
+                        13 => self.perform(ctx, Action::PropsDone),
+                        27 => self.perform(ctx, Action::PropsCancel),
+                        9 => {
+                            if let Some((_, panel)) = self.props.as_mut() {
+                                panel.next_field();
+                            }
+                            true
+                        }
+                        _ => false,
+                    };
                 }
                 match code {
                     8 => self.backspace(),
@@ -1321,6 +1500,11 @@ impl App for TextEditApp {
             );
         }
         canvas.pop_clip();
+        if let Some((_, panel)) = &self.props {
+            let layout = properties::layout(geom.width, geom.body_top);
+            let buttons = view::properties_buttons(ui, &layout);
+            view::draw_properties(canvas, ui, &layout, panel, &buttons);
+        }
         let (words, chars) = active_doc(&self.docs).map_or((0, 0), |d| (d.text.word_count(), d.text.char_count()));
         view::draw_status(canvas, ui, &geom, words, chars, self.note.as_deref());
         let mut d = Damage::new(w as usize, h as usize);
@@ -1393,6 +1577,95 @@ mod tests {
         assert!(is_formatting(Action::Highlight(2)));
         assert!(is_formatting(Action::PasteStyle));
         assert!(!is_formatting(Action::CopyStyle));
+    }
+
+    fn app_with_plain(bytes: &[u8]) -> TextEditApp {
+        let mut app = TextEditApp::new();
+        let id = app.docs.new_document();
+        *app.docs.get_mut(id).unwrap() = TextDocument::read_bytes(bytes, false).unwrap();
+        app
+    }
+
+    #[test]
+    fn choosing_an_encoding_marks_a_plain_document_edited_and_only_when_it_changes() {
+        let mut app = app_with_plain(b"abc");
+        let id = app.docs.active().unwrap();
+        assert!(!app.docs.is_edited(id));
+        assert!(!app.set_encoding(Encoding::Utf8), "the encoding it already has changes nothing");
+        assert!(!app.docs.is_edited(id));
+        assert!(app.set_encoding(Encoding::Utf16Le));
+        assert_eq!(active_doc(&app.docs).unwrap().encoding, Encoding::Utf16Le);
+        assert!(app.docs.is_edited(id));
+    }
+
+    #[test]
+    fn rich_text_and_read_only_documents_refuse_an_encoding() {
+        let mut app = TextEditApp::new();
+        app.docs.new_document();
+        assert!(app.set_encoding(Encoding::Latin1));
+        assert_eq!(active_doc(&app.docs).unwrap().encoding, Encoding::Utf8, "rich text keeps its encoding");
+        assert!(app.note.as_deref().is_some_and(|n| n.contains("Make Plain Text")));
+        let mut plain = app_with_plain(b"abc");
+        active_doc_mut(&mut plain.docs).unwrap().read_only = true;
+        assert!(plain.set_encoding(Encoding::Latin1));
+        assert_eq!(active_doc(&plain.docs).unwrap().encoding, Encoding::Utf8);
+    }
+
+    #[test]
+    fn reinterpreting_rereads_the_text_and_is_undoable() {
+        // a classic-set file that was guessed as Windows text
+        let mut app = app_with_plain(&[0x8e, b'x']);
+        assert_eq!(active_doc(&app.docs).unwrap().encoding, Encoding::Windows1252);
+        assert_eq!(active_doc(&app.docs).unwrap().text.text(), "\u{17d}x");
+        assert!(app.reinterpret(Encoding::Roman));
+        let doc = active_doc(&app.docs).unwrap();
+        assert_eq!(doc.text.text(), "éx");
+        assert_eq!(doc.encoding, Encoding::Roman);
+        assert!(doc.text.can_undo());
+        // text that is not bytes of the old set cannot be reread
+        let mut app = app_with_plain("→".as_bytes());
+        active_doc_mut(&mut app.docs).unwrap().encoding = Encoding::Latin1;
+        assert!(app.reinterpret(Encoding::Roman));
+        assert_eq!(active_doc(&app.docs).unwrap().text.text(), "→");
+        assert!(app.note.as_deref().is_some_and(|n| n.contains("cannot be read")));
+    }
+
+    #[test]
+    fn the_properties_panel_applies_on_done_and_discards_on_cancel() {
+        let mut app = app_with_plain(b"abc");
+        let id = app.docs.active().unwrap();
+        assert!(app.open_properties());
+        app.props.as_mut().unwrap().1.type_text("  Plan ");
+        assert!(app.close_properties(false));
+        assert!(app.props.is_none());
+        assert!(active_doc(&app.docs).unwrap().properties.is_empty(), "Cancel keeps nothing");
+        assert!(!app.docs.is_edited(id));
+
+        app.open_properties();
+        app.props.as_mut().unwrap().1.type_text("  Plan ");
+        app.props.as_mut().unwrap().1.next_field();
+        app.props.as_mut().unwrap().1.type_text("Ada");
+        assert!(app.close_properties(true));
+        let props = &active_doc(&app.docs).unwrap().properties;
+        assert_eq!((props.title.as_str(), props.author.as_str()), ("Plan", "Ada"));
+        assert!(app.docs.is_edited(id), "changed properties are unsaved changes");
+
+        // unchanged properties are not an edit
+        let mut quiet = app_with_plain(b"x");
+        let qid = quiet.docs.active().unwrap();
+        quiet.open_properties();
+        quiet.close_properties(true);
+        assert!(!quiet.docs.is_edited(qid));
+    }
+
+    #[test]
+    fn properties_cannot_change_while_editing_is_prevented() {
+        let mut app = app_with_plain(b"abc");
+        active_doc_mut(&mut app.docs).unwrap().read_only = true;
+        app.open_properties();
+        app.props.as_mut().unwrap().1.type_text("Title");
+        app.close_properties(true);
+        assert!(active_doc(&app.docs).unwrap().properties.is_empty());
     }
 
     #[test]

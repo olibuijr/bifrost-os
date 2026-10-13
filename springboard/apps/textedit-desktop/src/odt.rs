@@ -4,6 +4,7 @@
 //! paragraph's alignment, line spacing and list; spaces, tabs and line breaks follow the format's whitespace rules.
 //! The writer emits the same subset, so a document survives a round trip.
 
+use crate::properties::{self, Properties};
 use crate::rtf;
 use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, DEFAULT_SIZE, FAMILY_NAMES, SPACINGS};
 use crate::xml::{self, Token};
@@ -249,6 +250,30 @@ fn heading_size(level: u32) -> f32 {
     }
 }
 
+/// The document properties in an OpenDocument package (`meta.xml`); a package without them has none.
+pub fn read_properties(bytes: &[u8]) -> Properties {
+    zipdoc::read_entry(bytes, "meta.xml").map(|meta| properties::read_xml(&String::from_utf8_lossy(&meta))).unwrap_or_default()
+}
+
+/// The metadata part for the properties that an OpenDocument package carries (the copyright has no place in it).
+fn meta_part(props: &Properties) -> String {
+    let mut body = String::new();
+    for (tag, index) in [("dc:title", 0), ("dc:subject", 2), ("meta:initial-creator", 1)] {
+        let value = props.get(index);
+        if !value.is_empty() {
+            body += &format!("<{tag}>{}</{tag}>", xml::escape(value));
+        }
+    }
+    for keyword in props.keywords.split(',').map(str::trim).filter(|k| !k.is_empty()) {
+        body += &format!("<meta:keyword>{}</meta:keyword>", xml::escape(keyword));
+    }
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<office:document-meta \
+xmlns:office=\"urn:oasis:names:tc:opendocument:xmlns:office:1.0\" xmlns:meta=\"urn:oasis:names:tc:opendocument:xmlns:meta:1.0\" \
+xmlns:dc=\"http://purl.org/dc/elements/1.1/\" office:version=\"1.2\"><office:meta>{body}</office:meta></office:document-meta>"
+    )
+}
+
 /// Reads an OpenDocument text package into cells. `None` when it has no readable content part.
 pub fn read(bytes: &[u8]) -> Option<Vec<Cell>> {
     let content = zipdoc::read_entry(bytes, "content.xml")?;
@@ -451,6 +476,13 @@ fn run_text(cells: &[Cell], prev_space: &mut bool, out: &mut String) {
                 out.push_str("<text:tab/>");
                 *prev_space = false;
             }
+            // a page break has no inline form in this format: it is written as a line break
+            crate::text::LINE_BREAK | crate::text::PAGE_BREAK => {
+                out.push_str(&xml::escape(&buffer));
+                buffer.clear();
+                out.push_str("<text:line-break/>");
+                *prev_space = true;
+            }
             c if c.is_control() => {}
             c => {
                 buffer.push(c);
@@ -462,7 +494,13 @@ fn run_text(cells: &[Cell], prev_space: &mut bool, out: &mut String) {
 }
 
 /// The cells as an OpenDocument text package.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn write(cells: &[Cell]) -> Vec<u8> {
+    write_with(cells, &Properties::default())
+}
+
+/// The cells as an OpenDocument text package carrying the document properties.
+pub fn write_with(cells: &[Cell], props: &Properties) -> Vec<u8> {
     // paragraphs: their cells, their properties
     let mut paragraphs: Vec<(&[Cell], Style)> = Vec::new();
     let mut start = 0;
@@ -570,16 +608,23 @@ xmlns:text=\"urn:oasis:names:tc:opendocument:xmlns:text:1.0\" \
 xmlns:fo=\"urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0\" office:version=\"1.2\">\
 <office:automatic-styles>{styles}</office:automatic-styles><office:body><office:text>{body}</office:text></office:body></office:document-content>"
     );
+    let has_meta = (0..4).any(|i| !props.get(i).is_empty());
+    let meta_entry = if has_meta { "<manifest:file-entry manifest:full-path=\"meta.xml\" manifest:media-type=\"text/xml\"/>" } else { "" };
     let manifest = format!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<manifest:manifest xmlns:manifest=\"urn:oasis:names:tc:opendocument:xmlns:manifest:1.0\" manifest:version=\"1.2\">\
 <manifest:file-entry manifest:full-path=\"/\" manifest:media-type=\"{MIMETYPE}\"/>\
-<manifest:file-entry manifest:full-path=\"content.xml\" manifest:media-type=\"text/xml\"/></manifest:manifest>"
+<manifest:file-entry manifest:full-path=\"content.xml\" manifest:media-type=\"text/xml\"/>{meta_entry}</manifest:manifest>"
     );
-    zipdoc::write(&[
+    let meta = meta_part(props);
+    let mut parts: Vec<(&str, &[u8])> = vec![
         ("mimetype", MIMETYPE.as_bytes()),
         ("META-INF/manifest.xml", manifest.as_bytes()),
         ("content.xml", content.as_bytes()),
-    ])
+    ];
+    if has_meta {
+        parts.push(("meta.xml", meta.as_bytes()));
+    }
+    zipdoc::write(&parts)
 }
 
 #[cfg(test)]
@@ -622,6 +667,20 @@ mod tests {
         let package = write(&cells);
         assert!(is_odt(&package));
         assert_eq!(read(&package), Some(cells));
+    }
+
+    #[test]
+    fn the_document_properties_round_trip_and_an_unlabelled_package_has_none() {
+        let mut props = Properties::default();
+        props.title = "Plan <draft>".into();
+        props.author = "Ada".into();
+        props.subject = "Q3".into();
+        props.keywords = "red, blue".into();
+        let package = write_with(&[], &props);
+        assert_eq!(read_properties(&package), props);
+        assert_eq!(read(&package), Some(Vec::new()));
+        assert!(read_properties(&write(&[])).is_empty());
+        assert!(!zipdoc::names(&write(&[])).iter().any(|n| n == "meta.xml"));
     }
 
     #[test]

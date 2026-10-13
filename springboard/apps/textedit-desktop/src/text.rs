@@ -25,6 +25,16 @@ pub fn family_for_name(name: &str) -> u8 {
     }
 }
 
+/// Edit > Insert: a line break starts a new line inside the paragraph, and a page break starts a new page when printing.
+/// Both take no width and are drawn as nothing (a page break shows a rule across the rest of its line).
+pub const LINE_BREAK: char = '\u{2028}';
+pub const PAGE_BREAK: char = '\u{c}';
+
+/// Whether a character is a line or page break.
+pub fn is_break(ch: char) -> bool {
+    ch == LINE_BREAK || ch == PAGE_BREAK
+}
+
 /// The point size of new text.
 pub const DEFAULT_SIZE: f32 = 12.0;
 /// The sizes Bigger and Smaller step through.

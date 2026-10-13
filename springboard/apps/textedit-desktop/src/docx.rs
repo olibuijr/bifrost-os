@@ -4,7 +4,8 @@
 //! The writer emits the same subset, so a document survives a round trip. Pictures, tables' borders, headers and
 //! footers, comments and tracked changes are not carried: their text, where it is in the body, is.
 
-use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, FAMILY_NAMES, SPACINGS};
+use crate::properties::{self, Properties};
+use crate::text::{family_for_name, Align, Cell, ListKind, Style, COLORS, FAMILY_NAMES, LINE_BREAK, PAGE_BREAK, SPACINGS};
 use crate::xml::{self, Token};
 use crate::{rtf, zipdoc};
 use std::collections::HashMap;
@@ -200,7 +201,10 @@ fn parse(document: &str, lists: &HashMap<String, ListKind>) -> Vec<Cell> {
                     }
                 }
                 "w:tab" if !in_ppr => cells.push(Cell { ch: '\t', style: cell_style(&para, &run, heading, size_set) }),
-                "w:br" | "w:cr" => cells.push(Cell { ch: '\n', style: cell_style(&para, &run, heading, size_set) }),
+                "w:br" | "w:cr" => {
+                    let ch = if xml::attr(&attrs, "w:type") == Some("page") { PAGE_BREAK } else { LINE_BREAK };
+                    cells.push(Cell { ch, style: cell_style(&para, &run, heading, size_set) });
+                }
                 _ => {}
             },
             Token::Close(name) => match name.as_str() {
@@ -284,6 +288,14 @@ fn run_xml(cells: &[Cell], out: &mut String) {
                 flush(&mut buffer, out);
                 out.push_str("<w:tab/>");
             }
+            LINE_BREAK => {
+                flush(&mut buffer, out);
+                out.push_str("<w:br/>");
+            }
+            PAGE_BREAK => {
+                flush(&mut buffer, out);
+                out.push_str("<w:br w:type=\"page\"/>");
+            }
             c if c.is_control() => {}
             c => buffer.push(c),
         }
@@ -322,8 +334,34 @@ fn paragraph_xml(cells: &[Cell], style: &Style, out: &mut String) {
     out.push_str("</w:p>");
 }
 
-/// The cells as a `.docx` package.
+/// The document properties in a `.docx` package (title, subject, author, keywords); a package without them has none.
+pub fn read_properties(bytes: &[u8]) -> Properties {
+    zipdoc::read_entry(bytes, "docProps/core.xml").map(|core| properties::read_xml(&String::from_utf8_lossy(&core))).unwrap_or_default()
+}
+
+/// The core properties part for the properties that a `.docx` package carries (the copyright has no place in it).
+fn core_part(props: &Properties) -> String {
+    let mut body = String::new();
+    for (tag, index) in [("dc:title", 0), ("dc:subject", 2), ("dc:creator", 1), ("cp:keywords", 3)] {
+        let value = props.get(index);
+        if !value.is_empty() {
+            body += &format!("<{tag}>{}</{tag}>", xml::escape(value));
+        }
+    }
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<cp:coreProperties \
+xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\">{body}</cp:coreProperties>"
+    )
+}
+
+/// The cells as a `.docx` package without properties.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn write(cells: &[Cell]) -> Vec<u8> {
+    write_with(cells, &Properties::default())
+}
+
+/// The cells as a `.docx` package carrying the document properties.
+pub fn write_with(cells: &[Cell], props: &Properties) -> Vec<u8> {
     let mut body = String::new();
     let mut start = 0;
     loop {
@@ -337,23 +375,39 @@ pub fn write(cells: &[Cell]) -> Vec<u8> {
         start = end + 1;
     }
     let document = format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<w:document xmlns:w=\"{NS}\"><w:body>{body}</w:body></w:document>");
-    let content_types = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
+    let has_core = (0..4).any(|i| !props.get(i).is_empty());
+    let core_type = if has_core {
+        "<Override PartName=\"/docProps/core.xml\" ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/>"
+    } else {
+        ""
+    };
+    let core_rel = if has_core {
+        "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\" Target=\"docProps/core.xml\"/>"
+    } else {
+        ""
+    };
+    let content_types = format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\
 <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\
 <Default Extension=\"xml\" ContentType=\"application/xml\"/>\
 <Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>\
-<Override PartName=\"/word/numbering.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml\"/></Types>";
-    let root_rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
-<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/></Relationships>";
+<Override PartName=\"/word/numbering.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml\"/>{core_type}</Types>");
+    let root_rels = format!("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
+<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/>{core_rel}</Relationships>");
     let document_rels = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\
 <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering\" Target=\"numbering.xml\"/></Relationships>";
     let numbering = numbering_part();
-    zipdoc::write(&[
+    let core = core_part(props);
+    let mut parts: Vec<(&str, &[u8])> = vec![
         ("[Content_Types].xml", content_types.as_bytes()),
         ("_rels/.rels", root_rels.as_bytes()),
         ("word/document.xml", document.as_bytes()),
         ("word/_rels/document.xml.rels", document_rels.as_bytes()),
         ("word/numbering.xml", numbering.as_bytes()),
-    ])
+    ];
+    if has_core {
+        parts.push(("docProps/core.xml", core.as_bytes()));
+    }
+    zipdoc::write(&parts)
 }
 
 #[cfg(test)]
@@ -391,6 +445,30 @@ mod tests {
         let package = write(&cells);
         assert!(is_docx(&package));
         assert_eq!(read(&package), Some(cells));
+    }
+
+    #[test]
+    fn line_and_page_breaks_round_trip() {
+        let cells: Vec<Cell> = "a\u{2028}b\u{c}c".chars().map(|ch| Cell { ch, style: Style::default() }).collect();
+        let package = write(&cells);
+        assert_eq!(read(&package), Some(cells));
+    }
+
+    #[test]
+    fn the_document_properties_round_trip_and_an_unlabelled_package_has_none() {
+        let mut props = Properties::default();
+        props.title = "Plan & notes".into();
+        props.author = "Ada".into();
+        props.subject = "Q3".into();
+        props.keywords = "a, b".into();
+        props.copyright = "not carried".into();
+        let package = write_with(&[], &props);
+        let back = read_properties(&package);
+        assert_eq!((back.title.as_str(), back.author.as_str(), back.subject.as_str(), back.keywords.as_str()), ("Plan & notes", "Ada", "Q3", "a, b"));
+        assert_eq!(back.copyright, "", "a package has no copyright field");
+        assert_eq!(read(&package), Some(Vec::new()));
+        assert!(read_properties(&write(&[])).is_empty());
+        assert!(!zipdoc::names(&write(&[])).iter().any(|n| n.starts_with("docProps")));
     }
 
     #[test]
