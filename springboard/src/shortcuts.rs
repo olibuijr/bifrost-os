@@ -1,10 +1,14 @@
-//! Shortcut data and the built-in action library: a name, a tile colour, a list of actions and an optional daily
-//! reminder, stored one shortcut per line (`name TAB colour TAB action;action [TAB HH:MM]`).
+//! Shortcut data and the built-in action library: a name, a tile colour, a list of actions, an optional daily
+//! reminder, a tile glyph and a folder, stored one shortcut per line
+//! (`name TAB colour TAB action;action [TAB HH:MM [TAB glyph TAB folder]]`).
 //! The Shortcuts app, its control socket and the `shortcuts` command share this model, so they read and write one file.
 //! Values with a choice list (apps, messages, folders, scripts) are picked from that list, never typed, so a stored
-//! value always has a known meaning and never contains the separators `;` or tab.
+//! value always has a known meaning. Free text (a Text step, a prompt, a URL, a file name, a variable name) is escaped
+//! when stored, so it never breaks the `;` and tab separators. Steps with variables and blocks run through `flow`.
 
 use std::path::{Path, PathBuf};
+
+pub mod flow;
 
 /// The file the app saves the list to, inside the app's data directory.
 pub const FILE: &str = "shortcuts.tsv";
@@ -13,6 +17,14 @@ pub const APP_ID: &str = "is.olibuijr.shortcuts.desktop";
 pub const MAX_SHORTCUTS: usize = 64;
 pub const MAX_ACTIONS: usize = 24;
 pub const MAX_NAME: usize = 40;
+/// The longest free text of a step (a Text step, a prompt, a result), in characters.
+pub const MAX_TEXT: usize = 60;
+/// The longest variable name, in characters.
+pub const MAX_VAR: usize = 20;
+/// The longest URL of a "Get Contents of URL" step, in characters.
+pub const MAX_URL: usize = 120;
+/// The most times a Repeat block runs.
+pub const MAX_REPEAT: u32 = 20;
 pub const APP_CHOICES: [&str; 10] =
     ["Notes", "Calendar", "Reminders", "Calculator", "Weather", "Camera", "Photos", "Music", "Clock", "Settings"];
 /// The messages a "Show Notification" step can show.
@@ -23,6 +35,113 @@ pub const COPY_CHOICES: [&str; 4] = ["Thanks", "Be right back", "On my way", "Se
 pub const FOLDER_CHOICES: [&str; 5] = ["Desktop", "Documents", "Downloads", "Pictures", "Music"];
 /// The commands a "Run Shell Script" step can run.
 pub const SCRIPT_CHOICES: [&str; 4] = ["date", "uptime", "df -h /", "free -h"];
+/// The glyphs a tile can show, by symbol name. Index 0 is the plain Shortcuts mark and has no symbol name.
+pub const GLYPHS: [&str; 13] =
+    ["", "star", "house", "clock", "music.note", "photo", "film", "envelope", "phone", "calendar", "globe", "bookmark", "flag"];
+/// The folders the sidebar lists. A shortcut's `folder` is 0 for none, or the position here plus one.
+pub const FOLDERS: [&str; 3] = ["Favorites", "Home", "Work"];
+
+/// The name of folder number `i` (1-based, as stored), or `None` for 0 and numbers past the list.
+pub fn folder_name(i: usize) -> Option<&'static str> {
+    i.checked_sub(1).and_then(|k| FOLDERS.get(k)).copied()
+}
+
+/// A test on the previous step's output, for an `If` block.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Cond {
+    NotEmpty,
+    Empty,
+    /// the output contains this text, ignoring case
+    Contains(String),
+    /// the output is this text, ignoring case and surrounding spaces
+    Equals(String),
+}
+
+impl Cond {
+    fn kind_index(&self) -> usize {
+        match self {
+            Cond::NotEmpty => 0,
+            Cond::Empty => 1,
+            Cond::Contains(_) => 2,
+            Cond::Equals(_) => 3,
+        }
+    }
+
+    fn with_kind(i: usize, operand: &str) -> Cond {
+        match i {
+            0 => Cond::NotEmpty,
+            1 => Cond::Empty,
+            2 => Cond::Contains(operand.into()),
+            _ => Cond::Equals(operand.into()),
+        }
+    }
+
+    /// The text the test compares with; `None` for the tests that compare with nothing.
+    pub fn text(&self) -> Option<&str> {
+        match self {
+            Cond::Contains(t) | Cond::Equals(t) => Some(t),
+            Cond::NotEmpty | Cond::Empty => None,
+        }
+    }
+
+    /// The test as the row shows it.
+    pub fn label(&self) -> String {
+        match self {
+            Cond::NotEmpty => "has a value".into(),
+            Cond::Empty => "is empty".into(),
+            Cond::Contains(t) => format!("contains \"{t}\""),
+            Cond::Equals(t) => format!("is \"{t}\""),
+        }
+    }
+
+    /// Steps to the next kind of test (or the previous); the text carries over, or starts as "text".
+    pub fn step(&mut self, up: bool) {
+        let n = 4;
+        let i = self.kind_index();
+        let j = if up { (i + 1) % n } else { (i + n - 1) % n };
+        let operand = self.text().unwrap_or("text").to_string();
+        *self = Cond::with_kind(j, &operand);
+    }
+
+    /// Whether the test holds for `output`.
+    pub fn holds(&self, output: &str) -> bool {
+        match self {
+            Cond::NotEmpty => !output.trim().is_empty(),
+            Cond::Empty => output.trim().is_empty(),
+            Cond::Contains(t) => output.to_lowercase().contains(&t.to_lowercase()),
+            Cond::Equals(t) => output.trim().to_lowercase() == t.trim().to_lowercase(),
+        }
+    }
+
+    /// The same test with its text passed through `f` (to fill in variables).
+    pub fn map_text(&self, f: impl Fn(&str) -> String) -> Cond {
+        match self {
+            Cond::Contains(t) => Cond::Contains(f(t)),
+            Cond::Equals(t) => Cond::Equals(f(t)),
+            other => other.clone(),
+        }
+    }
+
+    fn encode(&self) -> String {
+        match self {
+            Cond::NotEmpty => "filled".into(),
+            Cond::Empty => "empty".into(),
+            Cond::Contains(t) => format!("contains:{}", esc(t)),
+            Cond::Equals(t) => format!("equals:{}", esc(t)),
+        }
+    }
+
+    fn decode(v: &str) -> Option<Cond> {
+        let (k, rest) = v.split_once(':').unwrap_or((v, ""));
+        Some(match k {
+            "filled" => Cond::NotEmpty,
+            "empty" => Cond::Empty,
+            "contains" => Cond::Contains(free(rest, clean_text)?),
+            "equals" => Cond::Equals(free(rest, clean_text)?),
+            _ => return None,
+        })
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -43,10 +162,29 @@ pub enum Action {
     OpenFolder(String),
     /// runs one of `SCRIPT_CHOICES` in a shell
     RunScript(String),
+    /// outputs this text; `{Name}` stands for a variable and `{Output}` for the previous output
+    Text(String),
+    /// asks the user this question and outputs the answer
+    AskInput(String),
+    /// fetches this http or https URL and outputs what it returns
+    GetUrl(String),
+    /// saves the previous output to a file of this name in Documents
+    SaveFile(String),
+    /// shows this text as the result of the shortcut
+    ShowResult(String),
+    /// keeps the previous output under this variable name
+    SetVariable(String),
+    /// runs the steps up to Otherwise (or End If) when the test holds for the previous output
+    If(Cond),
+    Otherwise,
+    EndIf,
+    /// runs the steps up to End Repeat this many times
+    Repeat(u32),
+    EndRepeat,
 }
 
 /// The kinds the "Add Action" list offers, in order.
-pub const KINDS: [&str; 11] = [
+pub const KINDS: [&str; 19] = [
     "Set Wi-Fi",
     "Set Low Power Mode",
     "Set Do Not Disturb",
@@ -58,6 +196,14 @@ pub const KINDS: [&str; 11] = [
     "Copy Text",
     "Open Folder",
     "Run Shell Script",
+    "Text",
+    "Ask for Input",
+    "Get Contents of URL",
+    "Save File",
+    "Show Result",
+    "Set Variable",
+    "If",
+    "Repeat",
 ];
 
 /// The next or previous of `choices` after `cur` (wrapping). A `cur` that is not one of them counts as the first choice.
@@ -70,6 +216,81 @@ fn cycle(choices: &[&str], cur: &str, up: bool) -> String {
 /// `v` as an owned value when it is one of `choices`.
 fn choice(choices: &[&str], v: &str) -> Option<String> {
     choices.contains(&v).then(|| v.to_string())
+}
+
+/// Escapes the characters that would break the line format: `%`, the separator `;` and line breaks.
+fn esc(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '%' => out.push_str("%25"),
+            ';' => out.push_str("%3B"),
+            '\t' => out.push_str("%09"),
+            '\n' => out.push_str("%0A"),
+            '\r' => out.push_str("%0D"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// The reverse of `esc`. A `%` that does not start a hex pair stays as it is.
+fn unesc(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            let byte = std::str::from_utf8(&b[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok());
+            if let Some(byte) = byte {
+                out.push(byte);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(b[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// A function that cleans free text for one kind of step.
+type Clean = fn(&str) -> String;
+
+/// Unescapes `v` and cleans it with `clean`; `None` when nothing is left.
+fn free(v: &str, clean: Clean) -> Option<String> {
+    let c = clean(&unesc(v));
+    (!c.is_empty()).then_some(c)
+}
+
+/// Free text: no control characters, at most `MAX_TEXT` characters, no spaces at the ends.
+pub fn clean_text(s: &str) -> String {
+    let kept: String = s.chars().filter(|c| !c.is_control()).collect();
+    kept.trim().chars().take(MAX_TEXT).collect::<String>().trim_end().to_string()
+}
+
+/// A variable name: letters, digits, spaces and underscores, at most `MAX_VAR` characters, no spaces at the ends.
+pub fn clean_var(s: &str) -> String {
+    let kept: String = s.chars().filter(|c| c.is_alphanumeric() || *c == ' ' || *c == '_').collect();
+    kept.trim().chars().take(MAX_VAR).collect::<String>().trim_end().to_string()
+}
+
+/// A file name for the Documents folder: no control characters, no path separators or colons, no leading dots, at most
+/// `MAX_NAME` characters.
+pub fn clean_file(s: &str) -> String {
+    let kept: String = s.chars().filter(|c| !c.is_control() && !matches!(c, '/' | '\\' | ':')).collect();
+    kept.trim().trim_start_matches('.').chars().take(MAX_NAME).collect::<String>().trim_end().to_string()
+}
+
+/// A URL with a scheme: `https://` is added when the text has none. No spaces, at most `MAX_URL` characters.
+pub fn clean_url(s: &str) -> String {
+    let kept: String = s.chars().filter(|c| !c.is_control() && !c.is_whitespace()).collect();
+    if kept.is_empty() {
+        return kept;
+    }
+    let lower = kept.to_lowercase();
+    let full = if lower.starts_with("http://") || lower.starts_with("https://") { kept } else { format!("https://{kept}") };
+    full.chars().take(MAX_URL).collect()
 }
 
 impl Action {
@@ -86,7 +307,25 @@ impl Action {
             8 => Action::CopyText(COPY_CHOICES[0].into()),
             9 => Action::OpenFolder(FOLDER_CHOICES[0].into()),
             10 => Action::RunScript(SCRIPT_CHOICES[0].into()),
+            11 => Action::Text("Hello".into()),
+            12 => Action::AskInput("What is your name?".into()),
+            13 => Action::GetUrl("https://example.com".into()),
+            14 => Action::SaveFile("Result.txt".into()),
+            15 => Action::ShowResult("{Output}".into()),
+            16 => Action::SetVariable("Name".into()),
+            17 => Action::If(Cond::NotEmpty),
+            18 => Action::Repeat(2),
             _ => Action::Timer(5),
+        }
+    }
+
+    /// The steps the "Add Action" list adds for kind `i`: one step, or a whole block (If with Otherwise and End If,
+    /// Repeat with End Repeat) so the list never holds an opener without its end.
+    pub fn block(i: usize) -> Vec<Action> {
+        match i {
+            17 => vec![Action::If(Cond::NotEmpty), Action::Otherwise, Action::EndIf],
+            18 => vec![Action::Repeat(2), Action::EndRepeat],
+            _ => vec![Action::of_kind(i)],
         }
     }
 
@@ -103,6 +342,17 @@ impl Action {
             Action::CopyText(_) => KINDS[8],
             Action::OpenFolder(_) => KINDS[9],
             Action::RunScript(_) => KINDS[10],
+            Action::Text(_) => KINDS[11],
+            Action::AskInput(_) => KINDS[12],
+            Action::GetUrl(_) => KINDS[13],
+            Action::SaveFile(_) => KINDS[14],
+            Action::ShowResult(_) => KINDS[15],
+            Action::SetVariable(_) => KINDS[16],
+            Action::If(_) => KINDS[17],
+            Action::Otherwise => "Otherwise",
+            Action::EndIf => "End If",
+            Action::Repeat(_) => KINDS[18],
+            Action::EndRepeat => "End Repeat",
         }
     }
 
@@ -113,9 +363,26 @@ impl Action {
             Action::Wifi(b) | Action::LowPower(b) | Action::Dnd(b) => onoff(b),
             Action::Brightness(p) => format!("{p}%"),
             Action::OpenApp(a) => a.clone(),
-            Action::Screenshot => String::new(),
+            Action::Screenshot | Action::Otherwise | Action::EndIf | Action::EndRepeat => String::new(),
             Action::Timer(m) => format!("{m} min"),
-            Action::Notify(m) | Action::CopyText(m) | Action::OpenFolder(m) | Action::RunScript(m) => m.clone(),
+            Action::Notify(m)
+            | Action::CopyText(m)
+            | Action::OpenFolder(m)
+            | Action::RunScript(m)
+            | Action::Text(m)
+            | Action::AskInput(m)
+            | Action::GetUrl(m)
+            | Action::SaveFile(m)
+            | Action::ShowResult(m)
+            | Action::SetVariable(m) => m.clone(),
+            Action::If(c) => c.label(),
+            Action::Repeat(n) => {
+                if *n == 1 {
+                    "1 time".to_string()
+                } else {
+                    format!("{n} times")
+                }
+            }
         }
     }
 
@@ -135,17 +402,87 @@ impl Action {
             Action::Wifi(b) | Action::LowPower(b) | Action::Dnd(b) => *b = !*b,
             Action::Brightness(p) => *p = if up { (*p + 10).min(100) } else { p.saturating_sub(10) },
             Action::OpenApp(a) => *a = cycle(&APP_CHOICES, a.as_str(), up),
-            Action::Screenshot => {}
             Action::Timer(m) => *m = if up { (*m + 1).min(180) } else { (*m - 1).max(1) },
             Action::Notify(m) => *m = cycle(&NOTE_CHOICES, m.as_str(), up),
             Action::CopyText(m) => *m = cycle(&COPY_CHOICES, m.as_str(), up),
             Action::OpenFolder(m) => *m = cycle(&FOLDER_CHOICES, m.as_str(), up),
             Action::RunScript(m) => *m = cycle(&SCRIPT_CHOICES, m.as_str(), up),
+            Action::If(c) => c.step(up),
+            Action::Repeat(n) => *n = if up { (*n + 1).min(MAX_REPEAT) } else { n.saturating_sub(1).max(1) },
+            Action::Screenshot
+            | Action::Text(_)
+            | Action::AskInput(_)
+            | Action::GetUrl(_)
+            | Action::SaveFile(_)
+            | Action::ShowResult(_)
+            | Action::SetVariable(_)
+            | Action::Otherwise
+            | Action::EndIf
+            | Action::EndRepeat => {}
         }
     }
 
+    /// Whether the row has a stepper.
     pub fn adjustable(&self) -> bool {
-        !matches!(self, Action::Screenshot)
+        !matches!(
+            self,
+            Action::Screenshot
+                | Action::Text(_)
+                | Action::AskInput(_)
+                | Action::GetUrl(_)
+                | Action::SaveFile(_)
+                | Action::ShowResult(_)
+                | Action::SetVariable(_)
+                | Action::Otherwise
+                | Action::EndIf
+                | Action::EndRepeat
+        )
+    }
+
+    /// The free text the user types into this step, if it has any (a Text step, a prompt, a URL, a file name, a result,
+    /// a variable name, the text of an If test).
+    pub fn text(&self) -> Option<&str> {
+        match self {
+            Action::Text(t)
+            | Action::AskInput(t)
+            | Action::GetUrl(t)
+            | Action::SaveFile(t)
+            | Action::ShowResult(t)
+            | Action::SetVariable(t) => Some(t),
+            Action::If(c) => c.text(),
+            _ => None,
+        }
+    }
+
+    /// Replaces the step's free text with `s`, cleaned for the kind of step (see `clean_text`, `clean_var`, `clean_file`,
+    /// `clean_url`). False, and nothing changes, when the step has no free text or nothing is left after cleaning.
+    pub fn set_text(&mut self, s: &str) -> bool {
+        let (slot, clean): (&mut String, Clean) = match self {
+            Action::Text(t) | Action::AskInput(t) | Action::ShowResult(t) => (t, clean_text as Clean),
+            Action::GetUrl(t) => (t, clean_url as Clean),
+            Action::SaveFile(t) => (t, clean_file as Clean),
+            Action::SetVariable(t) => (t, clean_var as Clean),
+            Action::If(Cond::Contains(t)) | Action::If(Cond::Equals(t)) => (t, clean_text as Clean),
+            _ => return false,
+        };
+        let cleaned = clean(s);
+        if cleaned.is_empty() {
+            return false;
+        }
+        *slot = cleaned;
+        true
+    }
+
+    /// The step with its free text passed through `f`, to fill in variables before it runs. Steps with fixed choices
+    /// are returned as they are.
+    pub fn map_text(&self, f: impl Fn(&str) -> String) -> Action {
+        match self {
+            Action::AskInput(t) => Action::AskInput(f(t)),
+            Action::GetUrl(t) => Action::GetUrl(f(t)),
+            Action::SaveFile(t) => Action::SaveFile(f(t)),
+            Action::ShowResult(t) => Action::ShowResult(f(t)),
+            other => other.clone(),
+        }
     }
 
     fn encode(&self) -> String {
@@ -161,6 +498,17 @@ impl Action {
             Action::CopyText(m) => format!("copy:{m}"),
             Action::OpenFolder(m) => format!("folder:{m}"),
             Action::RunScript(m) => format!("script:{m}"),
+            Action::Text(t) => format!("text:{}", esc(t)),
+            Action::AskInput(t) => format!("ask:{}", esc(t)),
+            Action::GetUrl(t) => format!("url:{}", esc(t)),
+            Action::SaveFile(t) => format!("save:{}", esc(t)),
+            Action::ShowResult(t) => format!("result:{}", esc(t)),
+            Action::SetVariable(t) => format!("setvar:{}", esc(t)),
+            Action::If(c) => format!("if:{}", c.encode()),
+            Action::Otherwise => "else".into(),
+            Action::EndIf => "endif".into(),
+            Action::Repeat(n) => format!("repeat:{n}"),
+            Action::EndRepeat => "endrepeat".into(),
         }
     }
 
@@ -183,6 +531,17 @@ impl Action {
             "copy" => Action::CopyText(choice(&COPY_CHOICES, v)?),
             "folder" => Action::OpenFolder(choice(&FOLDER_CHOICES, v)?),
             "script" => Action::RunScript(choice(&SCRIPT_CHOICES, v)?),
+            "text" => Action::Text(free(v, clean_text)?),
+            "ask" => Action::AskInput(free(v, clean_text)?),
+            "url" => Action::GetUrl(free(v, clean_url)?),
+            "save" => Action::SaveFile(free(v, clean_file)?),
+            "result" => Action::ShowResult(free(v, clean_text)?),
+            "setvar" => Action::SetVariable(free(v, clean_var)?),
+            "if" => Action::If(Cond::decode(v)?),
+            "else" => Action::Otherwise,
+            "endif" => Action::EndIf,
+            "repeat" => Action::Repeat(v.parse::<u32>().ok()?.clamp(1, MAX_REPEAT)),
+            "endrepeat" => Action::EndRepeat,
             _ => return None,
         })
     }
@@ -234,6 +593,17 @@ pub struct Shortcut {
     pub actions: Vec<Action>,
     /// a daily reminder time; `None` for no reminder
     pub schedule: Option<Daily>,
+    /// index into `GLYPHS`; 0 is the plain Shortcuts mark
+    pub glyph: usize,
+    /// 0 for no folder, or the position in `FOLDERS` plus one
+    pub folder: usize,
+}
+
+impl Shortcut {
+    /// A shortcut with no reminder, the plain glyph and no folder.
+    pub fn new(name: &str, color: usize, actions: Vec<Action>) -> Shortcut {
+        Shortcut { name: name.into(), color, actions, schedule: None, glyph: 0, folder: 0 }
+    }
 }
 
 pub fn serialize(list: &[Shortcut]) -> String {
@@ -242,8 +612,12 @@ pub fn serialize(list: &[Shortcut]) -> String {
         let name: String = s.name.chars().filter(|c| !c.is_control()).collect();
         let acts: Vec<String> = s.actions.iter().map(Action::encode).collect();
         out += &format!("{name}\t{}\t{}", s.color, acts.join(";"));
-        if let Some(at) = s.schedule {
-            out += &format!("\t{}", at.label());
+        let extra = s.glyph != 0 || s.folder != 0;
+        if s.schedule.is_some() || extra {
+            out += &format!("\t{}", s.schedule.map(Daily::label).unwrap_or_default());
+        }
+        if extra {
+            out += &format!("\t{}\t{}", s.glyph, s.folder);
         }
         out.push('\n');
     }
@@ -258,7 +632,9 @@ pub fn parse(text: &str) -> Vec<Shortcut> {
             let color = f.next()?.parse().ok()?;
             let actions = f.next().unwrap_or("").split(';').filter_map(Action::decode).take(MAX_ACTIONS).collect();
             let schedule = f.next().and_then(Daily::parse);
-            (!name.trim().is_empty()).then_some(Shortcut { name, color, actions, schedule })
+            let glyph = f.next().and_then(|g| g.parse::<usize>().ok()).filter(|g| *g < GLYPHS.len()).unwrap_or(0);
+            let folder = f.next().and_then(|g| g.parse::<usize>().ok()).filter(|g| *g <= FOLDERS.len()).unwrap_or(0);
+            (!name.trim().is_empty()).then_some(Shortcut { name, color, actions, schedule, glyph, folder })
         })
         .take(MAX_SHORTCUTS)
         .collect()
@@ -293,13 +669,216 @@ pub fn app_data_dir() -> PathBuf {
 
 /// The shortcuts a first launch starts with.
 pub fn defaults() -> Vec<Shortcut> {
-    let mk = |name: &str, color, actions| Shortcut { name: name.into(), color, actions, schedule: None };
     vec![
-        mk("Bedtime", 6, vec![Action::Dnd(true), Action::Brightness(10), Action::Wifi(false)]),
-        mk("Save Battery", 3, vec![Action::LowPower(true), Action::Brightness(30)]),
-        mk("Quick Timer", 1, vec![Action::Timer(10)]),
-        mk("Capture", 4, vec![Action::Screenshot, Action::OpenApp("Photos".into())]),
+        Shortcut::new("Bedtime", 6, vec![Action::Dnd(true), Action::Brightness(10), Action::Wifi(false)]),
+        Shortcut::new("Save Battery", 3, vec![Action::LowPower(true), Action::Brightness(30)]),
+        Shortcut::new("Quick Timer", 1, vec![Action::Timer(10)]),
+        Shortcut::new("Capture", 4, vec![Action::Screenshot, Action::OpenApp("Photos".into())]),
     ]
+}
+
+/// A name for the list: control characters removed, no spaces at the ends, at most `MAX_NAME` characters.
+pub fn clean_name(s: &str) -> String {
+    let kept: String = s.chars().filter(|c| !c.is_control()).collect();
+    kept.trim().chars().take(MAX_NAME).collect::<String>().trim_end().to_string()
+}
+
+/// `wanted` as a name no shortcut in `list` has (ignoring case): itself when free, otherwise with " 2", " 3" and so on.
+pub fn unique_name(list: &[Shortcut], wanted: &str) -> String {
+    let cleaned = clean_name(wanted);
+    let base = if cleaned.is_empty() { "Shortcut".to_string() } else { cleaned };
+    let taken = |n: &str| list.iter().any(|s| s.name.to_lowercase() == n.to_lowercase());
+    if !taken(&base) {
+        return base;
+    }
+    (2usize..)
+        .map(|k| {
+            let suffix = format!(" {k}");
+            let room = MAX_NAME.saturating_sub(suffix.chars().count());
+            let head: String = base.chars().take(room).collect();
+            format!("{}{suffix}", head.trim_end())
+        })
+        .find(|n| !taken(n))
+        .unwrap_or_default()
+}
+
+/// Gives shortcut `i` the name `wanted`, cleaned. Fails, and changes nothing, for an empty name or one another
+/// shortcut already has.
+pub fn rename(list: &mut [Shortcut], i: usize, wanted: &str) -> Result<(), String> {
+    if i >= list.len() {
+        return Err("There is no such shortcut.".into());
+    }
+    let name = clean_name(wanted);
+    if name.is_empty() {
+        return Err("A name needs at least one character.".into());
+    }
+    let lower = name.to_lowercase();
+    if list.iter().enumerate().any(|(k, s)| k != i && s.name.to_lowercase() == lower) {
+        return Err(format!("A shortcut named {name} already exists."));
+    }
+    list[i].name = name;
+    Ok(())
+}
+
+/// Adds a copy of shortcut `i` right after it, named "<name> Copy" (made unique) and without the daily reminder, so the
+/// copy does not notify a second time. Returns the copy's position, or `None` when `i` is out of range or the list is full.
+pub fn duplicate(list: &mut Vec<Shortcut>, i: usize) -> Option<usize> {
+    if i >= list.len() || list.len() >= MAX_SHORTCUTS {
+        return None;
+    }
+    let mut copy = list[i].clone();
+    copy.name = unique_name(list, &format!("{} Copy", copy.name));
+    copy.schedule = None;
+    list.insert(i + 1, copy);
+    Some(i + 1)
+}
+
+/// Moves step `k` one place up or down. Returns its new position, or `None` at either end of the list.
+pub fn move_action(actions: &mut [Action], k: usize, up: bool) -> Option<usize> {
+    let to = if up { k.checked_sub(1)? } else { k + 1 };
+    if k >= actions.len() || to >= actions.len() {
+        return None;
+    }
+    actions.swap(k, to);
+    Some(to)
+}
+
+/// Whether `s` matches a search: the text is part of its name, of one of its steps or of its folder, ignoring case.
+/// An empty search matches everything.
+pub fn matches(s: &Shortcut, query: &str) -> bool {
+    let q = query.trim().to_lowercase();
+    q.is_empty()
+        || s.name.to_lowercase().contains(&q)
+        || s.actions.iter().any(|a| a.line().to_lowercase().contains(&q))
+        || folder_name(s.folder).is_some_and(|f| f.to_lowercase().contains(&q))
+}
+
+/// The positions of the shortcuts to show: those in `folder` (`None` for all) that match `query`, in list order.
+pub fn visible(list: &[Shortcut], folder: Option<usize>, query: &str) -> Vec<usize> {
+    list.iter()
+        .enumerate()
+        .filter(|(_, s)| folder.map_or(true, |f| s.folder == f) && matches(s, query))
+        .map(|(i, _)| i)
+        .collect()
+}
+
+/// A ready-made shortcut from the starter gallery, with a line saying what it does.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Starter {
+    pub summary: &'static str,
+    pub shortcut: Shortcut,
+}
+
+/// The starter gallery: shortcuts to add as they are and change afterwards.
+pub fn starters() -> Vec<Starter> {
+    let mk = |summary, name: &str, color, glyph, folder, actions| {
+        let mut shortcut = Shortcut::new(name, color, actions);
+        shortcut.glyph = glyph;
+        shortcut.folder = folder;
+        Starter { summary, shortcut }
+    };
+    vec![
+        mk(
+            "Silence notifications, dim the screen and time an hour.",
+            "Focus Hour",
+            6,
+            3,
+            3,
+            vec![Action::Dnd(true), Action::Brightness(40), Action::Timer(60)],
+        ),
+        mk("Put a short thank-you on the clipboard.", "Say Thanks", 3, 1, 1, vec![Action::CopyText("Thanks".into())]),
+        mk("Show the Downloads folder.", "Open Downloads", 5, 5, 1, vec![Action::OpenFolder("Downloads".into())]),
+        mk(
+            "Show how much room is left on the disk.",
+            "Disk Report",
+            4,
+            0,
+            3,
+            vec![Action::RunScript("df -h /".into()), Action::ShowResult("{Output}".into())],
+        ),
+        mk(
+            "Ask a name and greet it.",
+            "Greeting",
+            1,
+            7,
+            0,
+            vec![
+                Action::AskInput("What is your name?".into()),
+                Action::SetVariable("Name".into()),
+                Action::Text("Hello, {Name}!".into()),
+                Action::ShowResult("{Output}".into()),
+            ],
+        ),
+        mk(
+            "Remind to stand up three times.",
+            "Stretch Reminder",
+            2,
+            11,
+            1,
+            vec![Action::Repeat(3), Action::Notify("Stand up and stretch".into()), Action::EndRepeat],
+        ),
+        mk(
+            "Fetch a page and report whether it changed.",
+            "Check the Site",
+            0,
+            10,
+            3,
+            vec![
+                Action::GetUrl("https://example.com".into()),
+                Action::If(Cond::Contains("Example".into())),
+                Action::ShowResult("The site is up".into()),
+                Action::Otherwise,
+                Action::ShowResult("The site changed".into()),
+                Action::EndIf,
+            ],
+        ),
+    ]
+}
+
+/// Adds starter `n` to `list` under a name no other shortcut has. Returns its position, or `None` for an unknown starter
+/// or a full list.
+pub fn add_starter(list: &mut Vec<Shortcut>, n: usize) -> Option<usize> {
+    if list.len() >= MAX_SHORTCUTS {
+        return None;
+    }
+    let mut shortcut = starters().into_iter().nth(n)?.shortcut;
+    shortcut.name = unique_name(list, &shortcut.name);
+    list.push(shortcut);
+    Some(list.len() - 1)
+}
+
+/// The first line of an exported file.
+pub const EXPORT_HEADER: &str = "#bifrost-shortcuts 1";
+
+/// `list` as the text of an export file: the header, then the shortcuts in the saved format.
+pub fn export(list: &[Shortcut]) -> String {
+    format!("{EXPORT_HEADER}\n{}", serialize(list))
+}
+
+/// Adds the shortcuts of an export file to `list` under names no other shortcut has, without their reminders. Returns how
+/// many were added. Fails for a file that is not an export, one with no shortcuts, or a full list.
+pub fn import(list: &mut Vec<Shortcut>, text: &str) -> Result<usize, String> {
+    if !text.starts_with(EXPORT_HEADER) {
+        return Err("This is not a Shortcuts file.".into());
+    }
+    let incoming = parse(text);
+    if incoming.is_empty() {
+        return Err("The file has no shortcuts.".into());
+    }
+    let mut added = 0;
+    for mut s in incoming {
+        if list.len() >= MAX_SHORTCUTS {
+            break;
+        }
+        s.name = unique_name(list, &s.name);
+        s.schedule = None;
+        list.push(s);
+        added += 1;
+    }
+    if added == 0 {
+        return Err("The list is full.".into());
+    }
+    Ok(added)
 }
 
 #[cfg(test)]
@@ -327,7 +906,22 @@ mod tests {
             Action::CopyText("On my way".into()),
             Action::OpenFolder("Downloads".into()),
             Action::RunScript("df -h /".into()),
+            Action::Text("Hello, {Name}!".into()),
+            Action::AskInput("Which one?".into()),
+            Action::GetUrl("https://example.com/a".into()),
+            Action::SaveFile("Notes.txt".into()),
+            Action::ShowResult("{Output}".into()),
+            Action::SetVariable("Name".into()),
+            Action::If(Cond::Contains("yes".into())),
+            Action::Otherwise,
+            Action::EndIf,
+            Action::Repeat(4),
+            Action::EndRepeat,
         ]
+    }
+
+    fn named(name: &str) -> Shortcut {
+        Shortcut::new(name, 0, Vec::new())
     }
 
     #[test]
@@ -338,8 +932,19 @@ mod tests {
 
     #[test]
     fn every_kind_round_trips_through_the_file() {
-        let l = vec![Shortcut { name: "All".into(), color: 2, actions: every_kind(), schedule: None }];
+        let l = vec![Shortcut::new("All", 2, every_kind())];
         assert_eq!(parse(&serialize(&l)), l);
+    }
+
+    #[test]
+    fn free_text_with_separators_round_trips() {
+        let a = Action::Text("a;b%c".into());
+        let l = vec![Shortcut::new("X", 0, vec![a.clone(), Action::EndIf])];
+        let text = serialize(&l);
+        assert!(text.contains("text:a%3Bb%25c"), "{text}");
+        assert_eq!(parse(&text)[0].actions[0], a);
+        let c = Action::If(Cond::Equals("x;y".into()));
+        assert_eq!(Action::decode(&c.encode()), Some(c));
     }
 
     #[test]
@@ -350,6 +955,27 @@ mod tests {
         assert!(text.lines().nth(1).unwrap().ends_with("\t07:05"));
         assert_eq!(parse(&text), l);
         assert_eq!(parse("A\t2\twifi:1\n")[0].schedule, None);
+    }
+
+    #[test]
+    fn a_glyph_and_a_folder_round_trip_with_and_without_a_reminder() {
+        let mut l = defaults();
+        l[0].glyph = 3;
+        l[0].folder = 2;
+        l[1].glyph = 12;
+        l[1].schedule = Some(Daily { hour: 9, minute: 0 });
+        let text = serialize(&l);
+        assert!(text.lines().next().unwrap().ends_with("\t\t3\t2"), "no reminder leaves its field empty: {text}");
+        assert!(text.lines().nth(1).unwrap().ends_with("\t09:00\t12\t0"));
+        assert_eq!(parse(&text), l);
+        let plain = serialize(&defaults());
+        assert!(!plain.lines().next().unwrap().ends_with("\t0\t0"), "defaults add no extra fields");
+    }
+
+    #[test]
+    fn a_glyph_or_folder_outside_its_list_is_dropped() {
+        let l = parse("A\t2\t\t\t99\t9\n");
+        assert_eq!((l[0].glyph, l[0].folder), (0, 0));
     }
 
     #[test]
@@ -381,6 +1007,21 @@ mod tests {
     }
 
     #[test]
+    fn free_text_is_cleaned_when_read() {
+        let l = parse("A\t2\ttext:;url:example.com;save:../etc/x;setvar:a-b!c;repeat:99;if:bogus\n");
+        assert_eq!(
+            l[0].actions,
+            vec![
+                Action::GetUrl("https://example.com".into()),
+                Action::SaveFile("etcx".into()),
+                Action::SetVariable("abc".into()),
+                Action::Repeat(MAX_REPEAT),
+            ],
+            "an empty text and an unknown test are dropped"
+        );
+    }
+
+    #[test]
     fn steps_clamp() {
         let mut a = Action::Brightness(100);
         a.step(true);
@@ -388,6 +1029,12 @@ mod tests {
         let mut t = Action::Timer(1);
         t.step(false);
         assert_eq!(t, Action::Timer(1));
+        let mut r = Action::Repeat(1);
+        r.step(false);
+        assert_eq!(r, Action::Repeat(1));
+        let mut top = Action::Repeat(MAX_REPEAT);
+        top.step(true);
+        assert_eq!(top, Action::Repeat(MAX_REPEAT));
     }
 
     #[test]
@@ -398,6 +1045,15 @@ mod tests {
         assert!(!Action::Screenshot.adjustable());
         assert!(Action::Timer(5).adjustable());
         assert!(Action::RunScript(SCRIPT_CHOICES[0].into()).adjustable());
+        assert!(Action::If(Cond::Empty).adjustable() && Action::Repeat(2).adjustable());
+        assert!(!Action::Text("x".into()).adjustable() && !Action::EndIf.adjustable());
+    }
+
+    #[test]
+    fn the_add_menu_adds_whole_blocks() {
+        assert_eq!(Action::block(0), vec![Action::Wifi(true)]);
+        assert_eq!(Action::block(17), vec![Action::If(Cond::NotEmpty), Action::Otherwise, Action::EndIf]);
+        assert_eq!(Action::block(18), vec![Action::Repeat(2), Action::EndRepeat]);
     }
 
     #[test]
@@ -408,6 +1064,10 @@ mod tests {
         assert_eq!(Action::Timer(5).value(), "5 min");
         assert_eq!(Action::Screenshot.value(), "");
         assert_eq!(Action::CopyText("Thanks".into()).value(), "Thanks");
+        assert_eq!(Action::Repeat(1).value(), "1 time");
+        assert_eq!(Action::Repeat(3).value(), "3 times");
+        assert_eq!(Action::If(Cond::Contains("a".into())).value(), "contains \"a\"");
+        assert_eq!(Action::EndIf.value(), "");
     }
 
     #[test]
@@ -416,6 +1076,9 @@ mod tests {
         assert_eq!(Action::Screenshot.line(), "Take Screenshot");
         assert_eq!(Action::OpenFolder("Documents".into()).line(), "Open Folder: Documents");
         assert_eq!(Action::RunScript("uptime".into()).line(), "Run Shell Script: uptime");
+        assert_eq!(Action::Text("Hi".into()).line(), "Text: Hi");
+        assert_eq!(Action::EndRepeat.line(), "End Repeat");
+        assert_eq!(Action::If(Cond::Empty).line(), "If: is empty");
     }
 
     #[test]
@@ -465,6 +1128,77 @@ mod tests {
     }
 
     #[test]
+    fn an_if_test_steps_through_its_kinds_and_keeps_its_text() {
+        let mut c = Cond::NotEmpty;
+        c.step(true);
+        assert_eq!(c, Cond::Empty);
+        c.step(true);
+        assert_eq!(c, Cond::Contains("text".into()), "a test with text starts from \"text\"");
+        c = Cond::Contains("ok".into());
+        c.step(true);
+        assert_eq!(c, Cond::Equals("ok".into()), "the text carries over");
+        c.step(true);
+        assert_eq!(c, Cond::NotEmpty, "wraps");
+        c.step(false);
+        assert_eq!(c, Cond::Equals("text".into()));
+    }
+
+    #[test]
+    fn an_if_test_holds_by_its_kind() {
+        assert!(Cond::NotEmpty.holds("x") && !Cond::NotEmpty.holds("  "));
+        assert!(Cond::Empty.holds("") && Cond::Empty.holds(" \n") && !Cond::Empty.holds("a"));
+        assert!(Cond::Contains("PASS".into()).holds("all pass here"));
+        assert!(!Cond::Contains("fail".into()).holds("all pass here"));
+        assert!(Cond::Equals("Yes".into()).holds(" yes\n"));
+        assert!(!Cond::Equals("yes".into()).holds("yes please"));
+    }
+
+    #[test]
+    fn free_text_is_edited_and_cleaned_per_kind() {
+        let mut t = Action::Text("old".into());
+        assert!(t.set_text("  new\ttext "));
+        assert_eq!(t, Action::Text("newtext".into()));
+        assert!(!t.set_text("   "), "an empty text is refused");
+        assert_eq!(t, Action::Text("newtext".into()));
+        let mut u = Action::GetUrl("https://a.example".into());
+        assert!(u.set_text("b.example/x y"));
+        assert_eq!(u, Action::GetUrl("https://b.example/xy".into()));
+        let mut f = Action::SaveFile("a.txt".into());
+        assert!(f.set_text("../b/c.txt"));
+        assert_eq!(f, Action::SaveFile("bc.txt".into()), "separators and leading dots go");
+        let mut v = Action::SetVariable("Name".into());
+        assert!(v.set_text("my var!"));
+        assert_eq!(v, Action::SetVariable("my var".into()));
+        let mut i = Action::If(Cond::Contains("a".into()));
+        assert!(i.set_text("bee"));
+        assert_eq!(i, Action::If(Cond::Contains("bee".into())));
+        let mut none = Action::If(Cond::Empty);
+        assert!(!none.set_text("x"), "a test without text takes none");
+        assert!(!Action::Timer(5).set_text("x"));
+        assert_eq!(Action::Timer(5).text(), None);
+        assert_eq!(Action::If(Cond::Equals("q".into())).text(), Some("q"));
+    }
+
+    #[test]
+    fn free_text_is_capped() {
+        let long = "x".repeat(200);
+        let mut t = Action::Text("a".into());
+        t.set_text(&long);
+        assert_eq!(t.text().unwrap().chars().count(), MAX_TEXT);
+        assert_eq!(clean_var(&long).chars().count(), MAX_VAR);
+        assert!(clean_url(&format!("example.com/{long}")).chars().count() <= MAX_URL);
+        assert_eq!(clean_file(&long).chars().count(), MAX_NAME);
+    }
+
+    #[test]
+    fn text_passes_through_a_function_only_where_variables_apply() {
+        let up = |s: &str| s.to_uppercase();
+        assert_eq!(Action::ShowResult("a".into()).map_text(up), Action::ShowResult("A".into()));
+        assert_eq!(Action::Text("a".into()).map_text(up), Action::Text("a".into()), "Text is expanded by the run itself");
+        assert_eq!(Action::Timer(5).map_text(up), Action::Timer(5));
+    }
+
+    #[test]
     fn list_survives_a_save_and_load_on_disk() {
         let d = dir("disk");
         let path = d.join("shortcuts.tsv");
@@ -486,5 +1220,184 @@ mod tests {
     #[test]
     fn the_app_data_directory_is_named_by_its_app_id() {
         assert!(app_data_dir().ends_with(format!("appdata/{APP_ID}")));
+    }
+
+    #[test]
+    fn a_name_is_cleaned_and_made_unique() {
+        let list = vec![named("Bedtime"), named("Bedtime 2")];
+        assert_eq!(unique_name(&list, "Morning"), "Morning");
+        assert_eq!(unique_name(&list, "  bedtime "), "bedtime 3", "case does not make a name new");
+        assert_eq!(unique_name(&list, ""), "Shortcut");
+        assert_eq!(clean_name("a\tb\n"), "ab");
+        let long = "n".repeat(60);
+        assert_eq!(clean_name(&long).chars().count(), MAX_NAME);
+        let full = vec![named(&"n".repeat(MAX_NAME))];
+        let next = unique_name(&full, &"n".repeat(MAX_NAME));
+        assert_eq!(next.chars().count(), MAX_NAME, "the number fits inside the length limit");
+        assert!(next.ends_with(" 2"));
+    }
+
+    #[test]
+    fn renaming_refuses_an_empty_or_taken_name() {
+        let mut list = vec![named("One"), named("Two")];
+        assert_eq!(rename(&mut list, 0, "  Uno  "), Ok(()));
+        assert_eq!(list[0].name, "Uno");
+        assert!(rename(&mut list, 0, "  ").is_err());
+        assert!(rename(&mut list, 0, "two").unwrap_err().contains("already exists"));
+        assert_eq!(list[0].name, "Uno", "a refused rename changes nothing");
+        assert_eq!(rename(&mut list, 1, "TWO"), Ok(()), "a shortcut may change the case of its own name");
+        assert!(rename(&mut list, 5, "x").is_err());
+    }
+
+    #[test]
+    fn a_copy_follows_its_original_without_the_reminder() {
+        let mut list = defaults();
+        list[1].schedule = Some(TIMES[0]);
+        list[1].glyph = 4;
+        list[1].folder = 1;
+        let at = duplicate(&mut list, 1).unwrap();
+        assert_eq!(at, 2);
+        assert_eq!(list.len(), 5);
+        assert_eq!(list[2].name, "Save Battery Copy");
+        assert_eq!(list[2].actions, list[1].actions);
+        assert_eq!((list[2].glyph, list[2].folder, list[2].color), (4, 1, 3));
+        assert_eq!(list[2].schedule, None);
+        assert_eq!(list[1].schedule, Some(TIMES[0]), "the original keeps its reminder");
+        duplicate(&mut list, 1).unwrap();
+        assert_eq!(list[2].name, "Save Battery Copy 2", "a second copy gets a number");
+    }
+
+    #[test]
+    fn a_full_list_or_a_bad_position_makes_no_copy() {
+        let mut list: Vec<Shortcut> = (0..MAX_SHORTCUTS).map(|n| named(&format!("S{n}"))).collect();
+        assert_eq!(duplicate(&mut list, 0), None);
+        let mut few = defaults();
+        assert_eq!(duplicate(&mut few, 9), None);
+        assert_eq!(few.len(), 4);
+    }
+
+    #[test]
+    fn a_step_moves_up_and_down_and_stops_at_the_ends() {
+        let mut a = vec![Action::Wifi(true), Action::Screenshot, Action::Timer(5)];
+        assert_eq!(move_action(&mut a, 1, true), Some(0));
+        assert_eq!(a, vec![Action::Screenshot, Action::Wifi(true), Action::Timer(5)]);
+        assert_eq!(move_action(&mut a, 0, true), None);
+        assert_eq!(move_action(&mut a, 2, false), None);
+        assert_eq!(move_action(&mut a, 1, false), Some(2));
+        assert_eq!(a, vec![Action::Screenshot, Action::Timer(5), Action::Wifi(true)]);
+        assert_eq!(move_action(&mut a, 7, true), None);
+    }
+
+    #[test]
+    fn a_search_matches_names_steps_and_folders() {
+        let mut s = Shortcut::new("Morning Routine", 0, vec![Action::OpenApp("Weather".into())]);
+        s.folder = 3;
+        assert!(matches(&s, ""));
+        assert!(matches(&s, "  morn "));
+        assert!(matches(&s, "WEATHER"), "a step matches");
+        assert!(matches(&s, "work"), "the folder matches");
+        assert!(!matches(&s, "evening"));
+    }
+
+    #[test]
+    fn the_visible_list_filters_by_folder_and_search() {
+        let mut list = defaults();
+        list[0].folder = 2;
+        list[2].folder = 2;
+        assert_eq!(visible(&list, None, ""), vec![0, 1, 2, 3]);
+        assert_eq!(visible(&list, Some(2), ""), vec![0, 2]);
+        assert_eq!(visible(&list, Some(2), "timer"), vec![2]);
+        assert_eq!(visible(&list, Some(1), ""), Vec::<usize>::new());
+        assert_eq!(visible(&list, None, "battery"), vec![1]);
+    }
+
+    #[test]
+    fn folder_numbers_name_the_folders() {
+        assert_eq!(folder_name(0), None);
+        assert_eq!(folder_name(1), Some("Favorites"));
+        assert_eq!(folder_name(FOLDERS.len()), Some(FOLDERS[FOLDERS.len() - 1]));
+        assert_eq!(folder_name(FOLDERS.len() + 1), None);
+    }
+
+    #[test]
+    fn every_starter_is_valid_and_survives_the_file() {
+        let all = starters();
+        assert!(all.len() >= 5);
+        let mut names = std::collections::HashSet::new();
+        for s in &all {
+            assert!(names.insert(s.shortcut.name.to_lowercase()), "{} twice", s.shortcut.name);
+            assert!(s.shortcut.name.chars().count() <= MAX_NAME);
+            assert!(!s.summary.is_empty());
+            assert!(!s.shortcut.actions.is_empty() && s.shortcut.actions.len() <= MAX_ACTIONS);
+            assert!(s.shortcut.glyph < GLYPHS.len() && s.shortcut.folder <= FOLDERS.len());
+            let back = parse(&serialize(std::slice::from_ref(&s.shortcut)));
+            assert_eq!(back, vec![s.shortcut.clone()], "{} changes when saved", s.shortcut.name);
+        }
+    }
+
+    #[test]
+    fn every_starter_has_balanced_blocks() {
+        for s in starters() {
+            let mut open = 0i32;
+            for a in &s.shortcut.actions {
+                match a {
+                    Action::If(_) | Action::Repeat(_) => open += 1,
+                    Action::EndIf | Action::EndRepeat => open -= 1,
+                    _ => {}
+                }
+                assert!(open >= 0, "{}", s.shortcut.name);
+            }
+            assert_eq!(open, 0, "{}", s.shortcut.name);
+        }
+    }
+
+    #[test]
+    fn adding_a_starter_uses_a_free_name() {
+        let mut list = vec![named("Say Thanks")];
+        let at = add_starter(&mut list, 1).unwrap();
+        assert_eq!(list[at].name, "Say Thanks 2");
+        assert_eq!(list[at].actions, vec![Action::CopyText("Thanks".into())]);
+        assert_eq!(add_starter(&mut list, 99), None);
+        let mut full: Vec<Shortcut> = (0..MAX_SHORTCUTS).map(|n| named(&format!("S{n}"))).collect();
+        assert_eq!(add_starter(&mut full, 0), None);
+    }
+
+    #[test]
+    fn an_export_imports_into_another_list() {
+        let mut src = defaults();
+        src[0].schedule = Some(TIMES[1]);
+        src[1].glyph = 2;
+        let text = export(&src);
+        assert!(text.starts_with(EXPORT_HEADER));
+        let mut dst = vec![named("Bedtime")];
+        assert_eq!(import(&mut dst, &text), Ok(4));
+        assert_eq!(dst.len(), 5);
+        assert_eq!(dst[1].name, "Bedtime 2", "a name that is taken gets a number");
+        assert_eq!(dst[1].schedule, None, "a reminder does not travel with the file");
+        assert_eq!(dst[2].glyph, 2);
+        assert_eq!(dst[2].actions, src[1].actions);
+    }
+
+    #[test]
+    fn a_file_that_is_not_an_export_is_refused() {
+        let mut list = defaults();
+        assert!(import(&mut list, "hello\n").is_err());
+        assert!(import(&mut list, &serialize(&defaults())).is_err(), "the saved list has no header");
+        assert!(import(&mut list, &format!("{EXPORT_HEADER}\n")).unwrap_err().contains("no shortcuts"));
+        assert_eq!(list, defaults());
+    }
+
+    #[test]
+    fn an_import_stops_at_a_full_list() {
+        let mut list: Vec<Shortcut> = (0..MAX_SHORTCUTS - 1).map(|n| named(&format!("S{n}"))).collect();
+        assert_eq!(import(&mut list, &export(&defaults())), Ok(1));
+        assert_eq!(list.len(), MAX_SHORTCUTS);
+        assert!(import(&mut list, &export(&defaults())).unwrap_err().contains("full"));
+    }
+
+    #[test]
+    fn the_glyph_list_starts_with_the_plain_mark() {
+        assert_eq!(GLYPHS[0], "");
+        assert!(GLYPHS[1..].iter().all(|g| !g.is_empty()));
     }
 }
