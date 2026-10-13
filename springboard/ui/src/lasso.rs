@@ -70,6 +70,13 @@ pub struct Selection {
 }
 
 impl Selection {
+    /// A selection of the given stroke indices (sorted and de-duplicated).
+    pub fn from_indices(mut indices: Vec<usize>) -> Self {
+        indices.sort_unstable();
+        indices.dedup();
+        Selection { indices }
+    }
+
     pub fn indices(&self) -> &[usize] {
         &self.indices
     }
@@ -108,6 +115,13 @@ impl Selection {
 mod tests {
     use super::*;
     use crate::drawing::{Ink, InkKind, Stroke, StrokePoint};
+
+    #[test]
+    fn from_indices_sorts_and_drops_repeats() {
+        let sel = Selection::from_indices(vec![3, 1, 3, 2]);
+        assert_eq!(sel.indices(), &[1, 2, 3]);
+        assert!(sel.contains_stroke(2) && !sel.contains_stroke(0));
+    }
 
     fn square() -> Lasso {
         let mut l = Lasso::new();

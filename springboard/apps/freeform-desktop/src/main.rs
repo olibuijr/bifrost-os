@@ -14,6 +14,15 @@ use std::path::PathBuf;
 
 /// The File menu's Export as PNG item.
 const MENU_EXPORT: u32 = 1;
+const MENU_UNDO: u32 = 2;
+const MENU_REDO: u32 = 3;
+const MENU_COPY: u32 = 4;
+const MENU_PASTE: u32 = 5;
+const MENU_DUPLICATE: u32 = 6;
+const MENU_DELETE: u32 = 7;
+const MENU_FRONT: u32 = 8;
+const MENU_BACK: u32 = 9;
+const MENU_ROW: u32 = 10;
 
 struct FreeformApp {
     app: Option<freeform::Freeform>,
@@ -55,7 +64,8 @@ impl App for FreeformApp {
             Some(c) => c.set_size(w, h),
             None => {
                 let home = PathBuf::from(std::env::var("HOME").unwrap_or_default());
-                self.app = Some(freeform::Freeform::new(&ctx.ui, w, h).with_save_dir(home.join("Pictures")).with_tips(tip_store(&home)))
+                let board = home.join(".local/share/is.olibuijr.freeform.desktop");
+                self.app = Some(freeform::Freeform::new(&ctx.ui, w, h).with_save_dir(home.join("Pictures")).with_tips(tip_store(&home)).with_store(board))
             }
         }
         self.services.configure(ctx);
@@ -91,18 +101,59 @@ impl App for FreeformApp {
         self.app.as_ref().map(|c| c.controls()).unwrap_or_default()
     }
 
-    /// The app's File menu (the shell bar merges it into its own File menu). Export is off until the board has a stroke.
+    /// The app's menus (the shell bar merges them into its own File and Edit menus). Export is off until the board has
+    /// a stroke; the edit and arrange items follow the undo stacks and the selection.
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
-        let has = self.app.as_ref().is_some_and(|c| c.has_strokes());
-        vec![AppMenu { title: "File".into(), items: vec![AppMenuItem::new(MENU_EXPORT, "Export as PNG...").key("cmd+shift+e").enabled(has)] }]
+        let app = self.app.as_ref();
+        let has = app.is_some_and(|c| c.has_strokes());
+        let selected = app.is_some_and(|c| c.has_selection());
+        let can_undo = app.is_some_and(|c| c.can_undo());
+        let can_redo = app.is_some_and(|c| c.can_redo());
+        vec![
+            AppMenu { title: "File".into(), items: vec![AppMenuItem::new(MENU_EXPORT, "Export as PNG...").key("cmd+shift+e").enabled(has)] },
+            AppMenu {
+                title: "Edit".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_UNDO, "Undo").key("cmd+z").enabled(can_undo),
+                    AppMenuItem::new(MENU_REDO, "Redo").key("cmd+shift+z").enabled(can_redo),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(selected),
+                    AppMenuItem::new(MENU_PASTE, "Paste").key("cmd+v"),
+                    AppMenuItem::new(MENU_DUPLICATE, "Duplicate").key("cmd+d").enabled(selected),
+                    AppMenuItem::new(MENU_DELETE, "Delete").enabled(selected),
+                ],
+            },
+            AppMenu {
+                title: "Arrange".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_FRONT, "Bring to Front").key("cmd+alt+f").enabled(selected),
+                    AppMenuItem::new(MENU_BACK, "Send to Back").key("cmd+alt+b").enabled(selected),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_ROW, "Arrange in Row").enabled(selected),
+                ],
+            },
+        ]
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
-        if id != MENU_EXPORT {
-            return false;
+        if id == MENU_PASTE {
+            self.services.paste(ctx);
+            return true;
         }
         let Some(c) = &mut self.app else { return false };
-        c.export_as_png(&ctx.ui);
+        match id {
+            MENU_EXPORT => c.export_as_png(&ctx.ui),
+            MENU_UNDO => c.undo_step(),
+            MENU_REDO => c.redo_step(),
+            MENU_COPY => c.copy_selected(),
+            MENU_DUPLICATE => c.duplicate_selection(&ctx.ui),
+            MENU_DELETE => c.delete_selected(&ctx.ui),
+            MENU_FRONT => c.reorder_selection(&ctx.ui, true),
+            MENU_BACK => c.reorder_selection(&ctx.ui, false),
+            MENU_ROW => c.arrange_in_row(&ctx.ui),
+            _ => return false,
+        }
+        self.drain(ctx);
         true
     }
 
@@ -124,11 +175,17 @@ impl App for FreeformApp {
     }
 
     fn suspend(&mut self, ctx: &Ctx) {
+        if let Some(c) = &mut self.app {
+            c.flush();
+        }
         self.services.suspend(ctx);
     }
 
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
         let took = self.services.reply(ctx, request, result);
+        if let (Some(c), Some(strokes)) = (&mut self.app, self.services.take_pasted()) {
+            c.paste_strokes(&ctx.ui, &strokes);
+        }
         self.sync_export(ctx);
         took
     }

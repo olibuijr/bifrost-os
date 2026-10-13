@@ -65,17 +65,17 @@
    "area": "menu",
    "apple": "Edit > Undo",
    "status": "partial",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:516",
-   "note": "toolbar only; not in the Edit menu",
+   "bifrost": "springboard/apps/freeform-desktop/src/main.rs:106",
+   "note": "Edit > Undo with Cmd+Z, enabled by the undo stack (freeform.rs:398). Needs a check on the lab machine.",
    "wire": "Expose Undo in the Edit AppMenu (main.rs:97) with cmd+Z"
   },
   {
    "feature": "Redo",
    "area": "menu",
    "apple": "Edit > Redo",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:408",
+   "note": "Redo stack of snapshots, cleared by every new edit; Edit > Redo with Cmd+Shift+Z. Needs a check on the lab machine.",
    "wire": "Keep a redo stack of Snapshot in freeform.rs and wire cmd+shift+Z"
   },
   {
@@ -91,9 +91,9 @@
    "feature": "Paste / duplicate",
    "area": "menu",
    "apple": "Edit > Paste / Duplicate",
-   "status": "gap",
-   "bifrost": "",
-   "note": "strokes go to the pasteboard but are never read back",
+   "status": "partial",
+   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:443",
+   "note": "Edit > Duplicate (freeform.rs:443) and Edit > Paste (services.rs:101 reads the stroke type; freeform.rs:459 inserts). Pasted strokes land at a fixed offset, not at the pointer; PNG-only pasteboards are not read yet.",
    "wire": "Read STROKES_UTI (services.rs:20) or PNG from the pasteboard and insert at the pointer; add Edit > Paste and Duplicate"
   },
   {
@@ -110,8 +110,8 @@
    "area": "menu",
    "apple": "Arrange menu",
    "status": "partial",
-   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:926",
-   "note": "lines up in a row only",
+   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:466",
+   "note": "Arrange menu: Bring to Front, Send to Back, Arrange in Row. Align left/centre/right and distribute are not done.",
    "wire": "Add Bring to Front / Send to Back / Align to an Arrange AppMenu"
   },
   {
@@ -181,9 +181,9 @@
    "feature": "Board persistence",
    "area": "document",
    "apple": "board documents",
-   "status": "gap",
-   "bifrost": "",
-   "note": "board is not saved; quitting loses it",
+   "status": "partial",
+   "bifrost": "springboard/apps/freeform-desktop/src/freeform.rs:340",
+   "note": "The board and each stroke's look are written to the data folder 1 s after an edit and on suspend, and loaded at launch (freeform.rs:354). Single board only.",
    "wire": "Serialise Drawing::to_text plus styles to data_dir on change; load in configure (main.rs)"
   },
   {
