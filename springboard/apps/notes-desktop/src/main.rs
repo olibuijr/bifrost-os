@@ -12,6 +12,7 @@ use bifrost_app::proto::{DocErrorCode, DocMode};
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Commands, Ctx, DocumentEvent, Input, TouchKind};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
+use bifrost_app::status_item::{MenuItem as StatusMenuItem, StatusBar, StatusItem, StatusItemLength};
 use bifrost_core::json::Json;
 use springboard::shell::keyboard::Out;
 use springboard::shell::clock::Wall;
@@ -30,6 +31,8 @@ struct NotesApp {
     restorable: Option<(notes::View, Option<String>)>,
     /// the recent-note titles last given to the widget timeline (sent again only when they change)
     widget: Option<Vec<String>>,
+    /// the menu bar extra with New Quick Note, made once the window is configured
+    quick: Option<StatusItem>,
 }
 
 /// The list view as a restoration key: `all`, `trash` or `folder:<name>`.
@@ -121,6 +124,16 @@ const MENU_NEW: u32 = 1;
 const MENU_DELETE: u32 = 2;
 const MENU_IMPORT: u32 = 3;
 const MENU_FIND: u32 = 4;
+/// the menu bar extra's entry: New Quick Note (its own id space, from `status_item_action`)
+const QUICK_NEW: u32 = 1;
+
+/// The menu bar extra (Notes' status item): New Quick Note starts a note from the menu bar, as Cmd+N does.
+fn quick_note_item(ctx: &Ctx) -> StatusItem {
+    let item = StatusBar::system().status_item(StatusItemLength::Variable);
+    item.set_symbol(ctx, "square.and.pencil");
+    item.set_menu(ctx, &[StatusMenuItem::new(QUICK_NEW, "New Quick Note")]);
+    item
+}
 /// evdev Z (the Undo and Redo chords are the editor's: Cmd+Z, Cmd+Shift+Z).
 const KEY_Z: u32 = 44;
 /// evdev C: Cmd+C copies the editor's selection to the pasteboard (rich text with a plain fallback).
@@ -165,6 +178,7 @@ impl App for NotesApp {
                 n.set_hardware_keyboard(true);
                 self.notes = Some(n);
                 ctx.wants_keyboard(true);
+                self.quick = Some(quick_note_item(ctx));
             }
         }
     }
@@ -222,6 +236,14 @@ impl App for NotesApp {
 
     fn undo_titles(&self, _ctx: &Ctx) -> (String, String) {
         self.notes.as_ref().map(|n| n.undo_titles()).unwrap_or_default()
+    }
+
+    /// A chosen entry of the menu bar extra: New Quick Note runs the same action as Note > New Note.
+    fn status_item_action(&mut self, ctx: &Ctx, item: u32, id: u32) -> bool {
+        if self.quick.as_ref().map(|q| q.id()) != Some(item) || id != QUICK_NEW {
+            return false;
+        }
+        self.menu_action(ctx, MENU_NEW)
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
@@ -482,5 +504,5 @@ impl App for NotesApp {
 
 
 fn main() {
-    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, indexed: Default::default(), next_index: 0.0, restorable: None, widget: None });
+    bifrost_app::run(NotesApp { notes: None, last_wall: 0.0, export: None, import: None, indexed: Default::default(), next_index: 0.0, restorable: None, widget: None, quick: None });
 }
