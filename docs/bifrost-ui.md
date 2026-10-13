@@ -1566,6 +1566,17 @@ never snapshots "Loading…".
 (plain text, else file URLs, else HTML) to the Wayland selection; other types stay inside BifrOSt until the presenter offers
 multi-MIME data sources (today one rich type, png then html, rtf, uri-list, goes out through `wl-copy --type`). The shell pushes `ToApp::Pasteboard` with the bytes to every other connected app.
 
+#### NSPasteboard items and named boards
+
+`bifrost_app::pasteboard::NativePasteboard::named(name)` mirrors `NSPasteboard(name:)`; `general()`, `drag()` and `find()` use
+the Apple names. A board holds a list of `bifrost_app::pasteboard_item::PasteboardItem` (`NSPasteboardItem`: `set_data`,
+`set_string`, `data`, `string`, `types`). Board calls: `write_items(ctx, &[item])` (appends; `clear_contents` first to replace),
+`items()` (`pasteboardItems`), `read_items(&[uti])` (items with a conforming type), `available_type(&[uti])` (first requested type
+the board conforms to, by UTType conformance), `can_read_item(&[uti])`, and `change_count()` (bumped by each `clear_contents`).
+The older `set_data`, `set_string`, `data`, `types` work on the first item, so a legacy copy stays a single item. Gap: the shell
+wire (`PasteboardSet`) is a flat (type, data) list, so only the first item of the general board reaches the shell and other apps;
+named boards are local to the app (cross-app named boards are `pasteboard_types::Board`). Not modelled: data providers.
+
 ## Printing (NSPrintInfo / NSPrintOperation parity)
 
 `bifrost_app::print` (`springboard/ui/src/print.rs`, re-exported by the SDK as `pub use bifrost_ui::print`). Updated in round 75
