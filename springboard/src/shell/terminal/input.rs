@@ -104,7 +104,7 @@ impl Shell {
         };
         let modal = matches!(
             self.terminal_ui.panel,
-            Panel::Connections | Panel::Processes | Panel::Form | Panel::More
+            Panel::Connections | Panel::Processes | Panel::Form | Panel::More | Panel::Command
         );
         match ev {
             Event::Down(x, y)
@@ -150,9 +150,7 @@ impl Shell {
                     self.terminal_chrome_tap(x, y, t);
                     let area = self.term_area();
                     if area != old {
-                        for term in self.term.iter_mut() {
-                            term.resize(area);
-                        }
+                        self.resize_terminals();
                     }
                 }
                 true

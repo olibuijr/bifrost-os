@@ -149,6 +149,24 @@ pub struct Terminal {
     outbox: Vec<u8>,
     /// cells picked by a long-press drag, in visible-row coordinates
     selection: Option<Selection>,
+    /// the profile's caret shape: drawn in place of the default block (a program's own shape wins)
+    cursor: Option<CursorShape>,
+    /// the profile blinks the caret; `blink_on` is the phase the shell last set
+    blink: bool,
+    blink_on: bool,
+}
+
+/// Half a blink period of the caret, in milliseconds (on for one half, off for the next).
+pub const BLINK_MS: f64 = 500.0;
+
+/// Whether a blinking caret is on at time `t` (ms).
+pub fn blink_phase(t: f64) -> bool {
+    ((t / BLINK_MS).floor() as i64).rem_euclid(2) == 0
+}
+
+/// The next time after `t` (ms) at which the blinking caret changes phase.
+pub fn next_blink(t: f64) -> f64 {
+    ((t / BLINK_MS).floor() + 1.0) * BLINK_MS
 }
 
 impl Terminal {
@@ -174,7 +192,7 @@ impl Terminal {
         let pty = Pty::spawn(argv, &env, cols as u16, rows as u16, login.as_ref())?;
         let mut term = Term::new(cols, rows, history_lines());
         term.set_default_colors(THEME.fg, THEME.bg);
-        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None })
+        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true })
     }
 
     /// The px rect the terminal occupies.
@@ -338,8 +356,7 @@ impl Terminal {
     /// screen: the shell copies just those rows when nothing around the grid changed.
     pub fn repaint(&mut self) -> Vec<usize> {
         let (cx, cy) = self.term.cursor();
-        let show = self.term.cursor_visible();
-        let shape = self.term.cursor_shape();
+        let (show, shape) = self.cursor_state();
         let cols = self.term.cols();
         let mut changed = Vec::new();
         for y in 0..self.term.rows() {
@@ -379,6 +396,29 @@ impl Terminal {
         self.term.advance(bytes);
     }
 
+    /// Sets the profile caret: `shape` replaces the default block (None keeps the program's choice) and `blink`
+    /// hides the caret in the off phase of `blink_phase`.
+    pub fn set_cursor(&mut self, shape: Option<CursorShape>, blink: bool) {
+        self.cursor = shape;
+        self.blink = blink;
+    }
+
+    /// Moves the caret blink to phase `on`; true when that changes what is drawn.
+    pub fn set_blink_phase(&mut self, on: bool) -> bool {
+        let changed = self.blink && self.blink_on != on;
+        self.blink_on = on;
+        changed
+    }
+
+    /// Whether the caret is drawn now, and its shape: the profile shape replaces only the program's default block.
+    fn cursor_state(&self) -> (bool, CursorShape) {
+        let shape = match (self.term.cursor_shape(), self.cursor) {
+            (CursorShape::Block, Some(profile)) => profile,
+            (own, _) => own,
+        };
+        (self.term.cursor_visible() && (!self.blink || self.blink_on), shape)
+    }
+
     /// Nothing is drawn over the grid (no selection, no find highlights).
     pub fn plain(&self) -> bool {
         self.selection.is_none() && self.find.is_empty()
@@ -387,8 +427,7 @@ impl Terminal {
     /// Repaints damaged rows into the canvas and copies it into the area.
     pub fn draw(&mut self, s: &mut Surface) {
         let (cx, cy) = self.term.cursor();
-        let show = self.term.cursor_visible();
-        let shape = self.term.cursor_shape();
+        let (show, shape) = self.cursor_state();
         let cols = self.term.cols();
         for y in 0..self.term.rows() {
             let cells = self.term.visible_row(y);
@@ -489,6 +528,11 @@ impl Terminal {
     }
     pub fn take_clipboard(&mut self) -> Option<String> { self.term.take_clipboard() }
     pub fn cwd(&self) -> Option<String> { self.pty.cwd() }
+
+    /// The visible row `row` as text, trailing blanks dropped (for link detection on a tap).
+    pub fn row_text(&self, row: usize) -> String {
+        self.term.visible_row(row).iter().map(|c| c.ch).collect::<String>().trim_end().to_string()
+    }
 
     /// The last `n` non-blank visible lines, trailing spaces trimmed (for
     /// the Today View widget).
@@ -616,6 +660,22 @@ mod tests {
         }
         assert!(t.bell, "the BEL byte sets the flag");
         assert!(!t.viewport_text().contains('\u{7}'), "a bell is not printed");
+    }
+
+    #[test]
+    fn caret_blinks_on_half_periods_and_reports_phase_changes() {
+        assert!(blink_phase(0.0) && blink_phase(499.0));
+        assert!(!blink_phase(500.0) && !blink_phase(999.0));
+        assert!(blink_phase(1000.0));
+        assert_eq!(next_blink(0.0), 500.0);
+        assert_eq!(next_blink(499.9), 500.0);
+        assert_eq!(next_blink(500.0), 1000.0);
+        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
+        assert!(!t.set_blink_phase(false), "a steady caret has no phase to change");
+        t.set_cursor(None, true);
+        assert!(t.set_blink_phase(false), "the blinking caret changes phase");
+        assert!(!t.set_blink_phase(false), "same phase, nothing to draw");
+        assert!(t.set_blink_phase(true));
     }
 
     #[test]

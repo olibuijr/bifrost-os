@@ -1469,6 +1469,10 @@ impl Shell {
             if let Some(w) = self.term_touch.next_wake() {
                 due = Some(due.map_or(w, |d| d.min(w)));
             }
+            if self.terminal_ui.blink {
+                let w = term::next_blink(t);
+                due = Some(due.map_or(w, |d| d.min(w)));
+            }
         }
         if self.screen_on && self.screen == Screen::App(AppId::Photos) {
             if let Some(w) = self.photos.as_ref().and_then(Photos::next_wake) {
@@ -2795,6 +2799,12 @@ impl Shell {
         }
         if self.screen == Screen::App(AppId::Terminal) {
             self.dirty |= self.terminal_ui.tick(t);
+            if self.terminal_ui.blink {
+                let on = term::blink_phase(t);
+                for tab in self.term.iter_mut() {
+                    self.dirty |= tab.set_blink_phase(on);
+                }
+            }
             if let Some(term) = self.term.as_mut() {
                 self.dirty |= self.term_touch.tick(term, t);
             }
@@ -3860,10 +3870,16 @@ impl Shell {
     }
 
     fn new_terminal_tab(&mut self, dir: Option<String>) -> bool {
+        self.spawn_terminal_tab(self.term_cmd, dir)
+    }
+
+    /// Opens a tab running `argv` (the login shell, or a New command line); `dir` is cd'd into first.
+    fn spawn_terminal_tab(&mut self, argv: &[&str], dir: Option<String>) -> bool {
         let size = self.ui.pt(termcore::zoom::SIZES[self.terminal_ui.settings.zoom] as f32);
-        match Terminal::spawn(self.mono, self.term_area(), size, self.term_cmd) {
+        match Terminal::spawn(self.mono, self.term_area(), size, argv) {
             Ok(mut term) => {
                 term.appearance(self.terminal_ui.settings.theme, size);
+                term.set_cursor(Some(self.terminal_ui.cursor.shape()), self.terminal_ui.blink);
                 if let Some(dir) = dir { term.write(format!("cd '{}'\r", dir.replace('\'', "'\\''")).as_bytes()); }
                 self.term.push(term);
                 self.term_touch = termtouch::TermTouch::default();
@@ -3883,8 +3899,7 @@ impl Shell {
             return;
         }
         self.keyboard.set_shown(shown, t);
-        let area = self.term_area();
-        for term in self.term.iter_mut() { term.resize(area); }
+        self.resize_terminals();
     }
 
     fn terminal_touch(&mut self, ev: Event, t: f64) {
@@ -3896,6 +3911,7 @@ impl Shell {
                 self.keyboard.down(x, y - top, t);
             }
             Event::Down(x, y) => {
+                self.select_pane_at(x);
                 if let Some(term) = self.term.as_mut() {
                     self.term_touch.down(&self.ui, term, x, y, t);
                 }
@@ -3917,6 +3933,13 @@ impl Shell {
                     Some(term) => self.term_touch.up(&self.ui, term, x, y, self.w as f32),
                     None => false,
                 };
+                if let Some(url) = self.term_touch.take_link() {
+                    self.terminal_ui.message = match self.desktop_open_url(&url, t) {
+                        Ok(()) => "Opened link".into(),
+                        Err(e) => format!("Could not open link: {e}"),
+                    };
+                    self.dirty = true;
+                }
                 if tap {
                     self.set_keyboard(true, t);
                 }
@@ -3957,12 +3980,11 @@ impl Shell {
         let bg = term::theme_background(self.terminal_ui.settings.theme);
         let (w, top, bottom) = (w as usize, top as usize, (top + h) as usize);
         s.fill_rect(0, 0, w, top, bg);
-        match self.term.as_mut() {
-            Some(term) => {
-                term.draw(s);
-                self.term_touch.draw(s, &self.ui);
-            }
-            None => s.fill_rect(0, top, w, bottom - top, bg),
+        if self.term.is_some() {
+            self.draw_panes(s);
+            self.term_touch.draw(s, &self.ui);
+        } else {
+            s.fill_rect(0, top, w, bottom - top, bg);
         }
         s.fill_rect(0, bottom, w, self.h as usize, bg);
         self.draw_terminal_chrome(s, t);

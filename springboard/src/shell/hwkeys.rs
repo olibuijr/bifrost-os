@@ -569,6 +569,11 @@ impl Shell {
             return vec![];
         }
         let in_terminal = matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_)));
+        // Secure Keyboard Entry: while the Terminal is in front, only its own keys run; the shell's shortcuts
+        // (switcher, search, input source, Home, Back, window keys) never see them.
+        if self.screen == Screen::App(AppId::Terminal) && self.terminal_ui.secure && !matches!(sc, Shortcut::Term(_) | Shortcut::Paste) {
+            return vec![];
+        }
         let fx = match sc {
             Shortcut::QuickSearch => {
                 self.open_quicksearch_hw(t);

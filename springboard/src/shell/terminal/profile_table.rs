@@ -8,6 +8,53 @@ pub enum CursorStyle {
     Bar,
 }
 
+impl CursorStyle {
+    /// The caret shape the terminal grid draws for this style.
+    pub fn shape(self) -> termcore::term::CursorShape {
+        match self {
+            CursorStyle::Block => termcore::term::CursorShape::Block,
+            CursorStyle::Underline => termcore::term::CursorShape::Underline,
+            CursorStyle::Bar => termcore::term::CursorShape::Bar,
+        }
+    }
+
+    /// The menu label.
+    pub fn label(self) -> &'static str {
+        match self {
+            CursorStyle::Block => "Block",
+            CursorStyle::Underline => "Underline",
+            CursorStyle::Bar => "Bar",
+        }
+    }
+
+    /// The stored preference value (`terminal.cursor`).
+    pub fn key(self) -> &'static str {
+        match self {
+            CursorStyle::Block => "block",
+            CursorStyle::Underline => "underline",
+            CursorStyle::Bar => "bar",
+        }
+    }
+
+    /// The style a stored preference names; anything unknown is the block.
+    pub fn from_key(key: Option<&str>) -> Self {
+        match key {
+            Some("underline") => CursorStyle::Underline,
+            Some("bar") => CursorStyle::Bar,
+            _ => CursorStyle::Block,
+        }
+    }
+
+    /// The next style in the menu's cycle: Block, Underline, Bar.
+    pub fn next(self) -> Self {
+        match self {
+            CursorStyle::Block => CursorStyle::Underline,
+            CursorStyle::Underline => CursorStyle::Bar,
+            CursorStyle::Bar => CursorStyle::Block,
+        }
+    }
+}
+
 /// A Term profile: colours, default text size and cursor. `follows_scheme` is Basic only
 /// (black on white in Light, white on black in Dark); the others keep their colours in both schemes.
 #[derive(Clone, Copy, Debug)]
@@ -117,6 +164,19 @@ mod tests {
         assert_eq!(u[0].2, "https://a.io/x_(y)");
         assert_eq!(u[1].2, "http://b.dev");
         assert!(detect_urls("xhttps://no").is_empty());
+    }
+
+    #[test]
+    fn cursor_styles_cycle_and_round_trip_their_keys() {
+        assert_eq!(CursorStyle::Block.next(), CursorStyle::Underline);
+        assert_eq!(CursorStyle::Underline.next(), CursorStyle::Bar);
+        assert_eq!(CursorStyle::Bar.next(), CursorStyle::Block);
+        for style in [CursorStyle::Block, CursorStyle::Underline, CursorStyle::Bar] {
+            assert_eq!(CursorStyle::from_key(Some(style.key())), style);
+        }
+        assert_eq!(CursorStyle::from_key(None), CursorStyle::Block);
+        assert_eq!(CursorStyle::from_key(Some("beam")), CursorStyle::Block);
+        assert_eq!(CursorStyle::Bar.shape(), termcore::term::CursorShape::Bar);
     }
 
     #[test]

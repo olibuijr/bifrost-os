@@ -1064,10 +1064,7 @@ impl Shell {
         self.resize_app(w.app, b.w, b.h);
         if w.app == AppId::Terminal {
             self.with_size(b.w, b.h, |sh| {
-                let area = sh.term_area();
-                for term in sh.term.iter_mut() {
-                    term.resize(area);
-                }
+                sh.resize_terminals();
             });
         }
         if w.app == AppId::Files {

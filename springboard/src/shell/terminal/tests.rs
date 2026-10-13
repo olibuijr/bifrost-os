@@ -1,4 +1,5 @@
 use super::super::tests::{pump_until, terminal};
+use super::super::{AppId, Screen};
 use super::*;
 fn tap_control(sh: &mut Shell, i: usize, t: f64) {
     sh.terminal_action(i, t + 20.0);
@@ -346,4 +347,85 @@ fn open_link_reports_when_the_selection_has_no_link() {
     tap_control(&mut sh, 7, 2000.0);
     tap_control(&mut sh, 15, 2100.0);
     assert_eq!(sh.terminal_ui.message, "No link in selection");
+}
+
+#[test]
+fn new_command_runs_in_its_own_tab_and_an_empty_line_stays_open() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(19, 2000.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Command);
+    sh.terminal_run_command(2100.0);
+    assert_eq!(sh.terminal_ui.message, "Type a command to run");
+    assert_eq!(sh.term.len(), 1);
+    sh.terminal_ui.command.as_mut().unwrap().set_text(&sh.ui, "echo ran-command; read y");
+    sh.terminal_run_command(2200.0);
+    assert_eq!(sh.term.len(), 2, "the command opened a tab");
+    assert_eq!(sh.term.active_index(), 1);
+    assert_eq!(sh.terminal_ui.panel, Panel::None, "the panel closes once it runs");
+    pump_until(&mut sh, |sh| sh.term.as_ref().unwrap().viewport_text().contains("ran-command"));
+}
+
+#[test]
+fn secure_keyboard_entry_keeps_shell_shortcuts_out_of_the_terminal() {
+    use super::super::hwkeys::Shortcut;
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(18, 2000.0);
+    assert!(sh.terminal_ui.secure);
+    assert!(sh.terminal_ui.message.starts_with("Secure keyboard entry on"));
+    sh.hw_shortcut(Shortcut::AppSwitch, 2100.0);
+    assert!(matches!(sh.screen, Screen::App(AppId::Terminal)), "the switcher does not take the terminal's keys");
+    sh.terminal_menu_action(18, 2200.0);
+    assert!(!sh.terminal_ui.secure);
+    sh.hw_shortcut(Shortcut::AppSwitch, 2300.0);
+    assert!(matches!(sh.screen, Screen::Switcher), "without it the switcher opens as before");
+}
+
+#[test]
+fn window_group_saves_tab_folders_and_opens_them_as_tabs() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(23, 2000.0);
+    assert_eq!(sh.terminal_ui.message, "No window group saved");
+    sh.terminal_menu_action(22, 2100.0);
+    assert!(sh.terminal_ui.message.starts_with("Saved "), "{}", sh.terminal_ui.message);
+    let saved = groups::decode(sh.prefs.get(groups::KEY).unwrap_or(""));
+    sh.terminal_menu_action(23, 2200.0);
+    assert_eq!(sh.term.len(), 1 + saved.len(), "one new tab per saved folder");
+}
+
+#[test]
+fn split_pane_sits_beside_the_active_tab_and_a_tap_picks_the_pane() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(20, 2000.0);
+    assert_eq!(sh.term.len(), 2);
+    assert_eq!(sh.term.pair(), Some((0, 1)));
+    let left = sh.term.get(0).unwrap().area();
+    let right = sh.term.get(1).unwrap().area();
+    assert_eq!(left.1, right.1, "both panes start on the same row");
+    assert!(left.2 < sh.w && right.2 < sh.w && left.0 + left.2 < right.0, "side by side, with a gap");
+    sh.select_pane_at(10.0);
+    assert_eq!(sh.term.active_index(), 0);
+    sh.select_pane_at((sh.w - 10) as f32);
+    assert_eq!(sh.term.active_index(), 1, "a tap on the right half selects the right pane");
+    sh.terminal_menu_action(20, 2100.0);
+    assert_eq!(sh.term.len(), 2, "a second split is refused while one is open");
+    assert!(sh.terminal_ui.message.starts_with("Close the split pane first"));
+    sh.terminal_menu_action(21, 2200.0);
+    assert_eq!(sh.term.len(), 1, "closing the active pane leaves the other one");
+    assert_eq!(sh.term.split(), None);
+    assert_eq!(sh.term.get(0).unwrap().area(), sh.term_area(), "the last pane takes the whole area");
+}
+
+#[test]
+fn cursor_style_and_blink_persist_and_reload() {
+    let mut sh = terminal(&["/bin/sh"]);
+    assert_eq!(MENU[16], "Cursor style");
+    sh.terminal_menu_action(16, 2000.0);
+    assert_eq!(sh.terminal_ui.cursor, profile_table::CursorStyle::Underline);
+    sh.terminal_menu_action(16, 2100.0);
+    sh.terminal_menu_action(17, 2200.0);
+    assert!(sh.terminal_ui.blink);
+    let mut reloaded = TerminalUi::default();
+    reloaded.load(&sh.prefs);
+    assert_eq!(reloaded.cursor, profile_table::CursorStyle::Bar);
+    assert!(reloaded.blink);
 }

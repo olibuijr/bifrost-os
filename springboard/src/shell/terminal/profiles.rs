@@ -19,6 +19,32 @@ impl Shell {
         }
         self.dirty = true;
     }
+    /// Turns Secure Keyboard Entry on or off and saves it. While on, the shell's shortcuts (switcher, search,
+    /// Home, Back, window keys) stay out of the Terminal's keys (see `hwkeys`).
+    pub(super) fn terminal_toggle_secure(&mut self) {
+        self.terminal_ui.secure = !self.terminal_ui.secure;
+        let secure = self.terminal_ui.secure;
+        self.terminal_ui.message = match self.prefs.set("terminal.secure_input", if secure { "1" } else { "0" }) {
+            Ok(()) if secure => "Secure keyboard entry on: shortcuts stay in the terminal".into(),
+            Ok(()) => "Secure keyboard entry off".into(),
+            Err(e) => format!("Could not save keyboard entry: {e}"),
+        };
+        self.dirty = true;
+    }
+
+    /// Applies the profile caret (style and blink) to every tab and saves it.
+    pub(super) fn terminal_cursor_changed(&mut self) {
+        let (shape, blink) = (self.terminal_ui.cursor.shape(), self.terminal_ui.blink);
+        for term in self.term.iter_mut() {
+            term.set_cursor(Some(shape), blink);
+        }
+        let style_saved = self.prefs.set("terminal.cursor", self.terminal_ui.cursor.key());
+        let saved = style_saved.and_then(|_| self.prefs.set("terminal.blink", if blink { "1" } else { "0" }));
+        if let Err(e) = saved {
+            self.terminal_ui.message = format!("Could not save cursor: {e}");
+        }
+        self.dirty = true;
+    }
     pub(super) fn terminal_appearance(&mut self) {
         let settings = self.terminal_ui.settings;
         for term in self.term.iter_mut() {

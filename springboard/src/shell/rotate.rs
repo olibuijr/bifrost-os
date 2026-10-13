@@ -287,10 +287,7 @@ impl Shell {
         if let Some(st) = &mut self.settings {
             st.resize(&self.ui, w, h);
         }
-        let area = self.term_area();
-        for term in self.term.iter_mut() {
-            term.resize(area);
-        }
+        self.resize_terminals();
         self.damage = Damage::new(w as usize, h as usize);
         self.rows.clear();
         self.drawn = Drawn::Nothing;

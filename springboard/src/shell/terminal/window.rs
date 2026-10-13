@@ -211,6 +211,15 @@ impl Shell {
                     }
                 }
             }
+            Panel::Command => {
+                if ly < 44.0 && lx >= w - 44.0 {
+                    self.terminal_close_panel(t);
+                } else if ly >= h - 56.0 && lx >= w - 120.0 {
+                    self.terminal_run_command(t);
+                } else if ly >= 44.0 && ly < h - 56.0 {
+                    self.set_keyboard(true, t);
+                }
+            }
             Panel::More => {
                 if ly < 44.0 && lx >= w - 80.0 {
                     self.terminal_close_panel(t);
