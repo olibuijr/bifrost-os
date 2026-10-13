@@ -18,7 +18,7 @@ pub enum Edit {
 }
 
 /// The printers as the scheduler has them now, or why they could not be read.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct View {
     pub printers: Vec<Printer>,
     pub error: Option<String>,
