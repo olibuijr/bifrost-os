@@ -3,7 +3,7 @@
 //! where the surface is drawn.
 
 use crate::inspect::{self, Inspection};
-use crate::model::{self, Column, Filter, History, Signal, Sort, SortKey, Tab, UpdateFrequency};
+use crate::model::{self, Column, ColumnSet, EnergyAverages, Filter, History, Signal, Sort, SortKey, Tab, UpdateFrequency};
 use crate::sample::{ProcSample, Sampler, Snapshot};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sheet;
@@ -14,6 +14,7 @@ use bifrost_app::kit::{Scroller, TextCache, Ui, Weight};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets::{CAPSULE_PT, TOOLBAR_GAP_PT};
 use bifrost_app::TouchKind;
+use std::collections::HashMap;
 
 /// Sidebar width (points) and the inset of the content from it and from the window edge.
 pub const SIDE_PT: f32 = 180.0;
@@ -48,18 +49,24 @@ const ROW_OTHER: u32 = 3;
 const ROW_SYSTEM: u32 = 4;
 const ROW_ACTIVE: u32 = 5;
 const ROW_INACTIVE: u32 = 6;
+const ROW_SELECTED: u32 = 7;
+const ROW_GPU: u32 = 8;
 /// Menu item ids for the app's own menu.
 pub const MENU_QUIT: u32 = 1;
 pub const MENU_FIND: u32 = 2;
 pub const MENU_FORCE: u32 = 3;
 pub const MENU_INSPECT: u32 = 4;
 pub const MENU_COPY: u32 = 5;
+pub const MENU_DELTAS: u32 = 6;
+pub const MENU_CPU_HISTORY: u32 = 7;
 /// Update Frequency radio items: MENU_FREQ + index into `UpdateFrequency::ALL`.
 pub const MENU_FREQ: u32 = 20;
 /// Send Signal items: MENU_SIGNAL + index into `model::SIGNALS`.
 pub const MENU_SIGNAL: u32 = 40;
 /// Filter items of the View menu: MENU_FILTER + index into `Filter::ALL`.
 pub const MENU_FILTER: u32 = 60;
+/// View > Columns items: MENU_COLUMN + index into `Tab::all_columns()` of the current tab.
+pub const MENU_COLUMN: u32 = 100;
 
 /// Where a press started, so the release can act on the same thing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -109,6 +116,16 @@ pub struct Monitor {
     /// The process being inspected (its pid and the last reading), shown in place of the graph.
     pub inspector: Option<(u32, Inspection)>,
     pub frequency: UpdateFrequency,
+    /// Which optional columns the user turned on or off (View > Columns).
+    pub columns: ColumnSet,
+    /// Processes shown relative to the moment Show Deltas was turned on for them, by pid.
+    pub baselines: HashMap<u32, ProcSample>,
+    /// The process whose family the Selected Processes filter shows.
+    pub scope: Option<u32>,
+    /// Running energy means by process name, for the 12 hr Average column.
+    pub averages: EnergyAverages,
+    /// The CPU graph shows one strip per core (View > CPU History) instead of the total.
+    pub cpu_history: bool,
 }
 
 impl Monitor {
@@ -133,6 +150,11 @@ impl Monitor {
             press: Press::None,
             inspector: None,
             frequency: UpdateFrequency::VeryOften,
+            columns: ColumnSet::default(),
+            baselines: HashMap::new(),
+            scope: None,
+            averages: EnergyAverages::default(),
+            cpu_history: false,
         }
     }
 
@@ -148,8 +170,13 @@ impl Monitor {
         if !due {
             return moving;
         }
+        let dt = self.last_sample.map_or(self.frequency.seconds() as f64, |last| (t - last) / 1000.0);
         self.last_sample = Some(t);
-        let snap = self.sampler.sample(t);
+        let mut snap = self.sampler.sample(t);
+        self.averages.record(&snap.procs, dt);
+        for p in &mut snap.procs {
+            p.energy_avg = self.averages.mean(&p.name);
+        }
         self.history.record(&snap);
         self.snapshot = Some(snap);
         self.rebuild();
@@ -177,8 +204,22 @@ impl Monitor {
     /// Recomputes the table rows from the last reading and the filter, search and sort.
     pub fn rebuild(&mut self) {
         let query = self.query.to_string().to_lowercase();
+        if let Some(s) = &self.snapshot {
+            // a process that ended takes its baseline with it
+            self.baselines.retain(|pid, _| s.procs.iter().any(|p| p.pid == *pid));
+            if self.filter == Filter::Selected && !self.scope.map_or(false, |root| s.procs.iter().any(|p| p.pid == root)) {
+                self.filter = Filter::All;
+                self.scope = None;
+                self.status = "The selected process has exited".into();
+                self.sync_scans();
+            }
+        }
+        let only = match (self.filter, self.scope, &self.snapshot) {
+            (Filter::Selected, Some(root), Some(s)) => Some(model::descendants(&s.procs, root)),
+            _ => None,
+        };
         self.rows = match &self.snapshot {
-            Some(s) => model::visible(&s.procs, self.filter, self.sampler.own_uid, &query, self.sort),
+            Some(s) => model::visible_within(&s.procs, self.filter, self.sampler.own_uid, &query, self.sort, only.as_ref()),
             None => Vec::new(),
         };
         if let Some(pid) = self.selected {
@@ -192,13 +233,79 @@ impl Monitor {
         self.tab = tab;
         self.sort = tab.default_sort();
         self.scroll.jump_top();
+        self.sync_scans();
         self.rebuild();
     }
 
+    /// Chooses the process filter. Selected Processes needs a selected process: it shows that one and what it started.
     pub fn set_filter(&mut self, filter: Filter) {
+        if filter == Filter::Selected {
+            let Some(pid) = self.selected else {
+                self.status = "Select a process first".into();
+                return;
+            };
+            self.scope = Some(pid);
+        } else {
+            self.scope = None;
+        }
         self.filter = filter;
         self.scroll.jump_top();
+        self.sync_scans();
         self.rebuild();
+    }
+
+    /// Tells the sampler which costly readings the window needs now: the GPU on the GPU tab and under the GPU filter,
+    /// the sleep blockers on the Energy tab while its Preventing Sleep column is shown. A reading that has just been
+    /// turned on is taken at once.
+    fn sync_scans(&mut self) {
+        let gpu = self.tab == Tab::Gpu || self.filter == Filter::Gpu;
+        let sleep = self.tab == Tab::Energy && self.tab.columns(&self.columns).iter().any(|c| c.key == Some(SortKey::PreventingSleep));
+        let turned_on = (gpu && !self.sampler.scan_gpu) || (sleep && !self.sampler.scan_sleep);
+        self.sampler.scan_gpu = gpu;
+        self.sampler.scan_sleep = sleep;
+        if turned_on {
+            self.last_sample = None;
+        }
+    }
+
+    /// View > Columns: shows or hides the optional column at `index` of the current tab. Returns the new preference
+    /// string to store, or None when there is no such column or it cannot be hidden.
+    pub fn toggle_column(&mut self, index: usize) -> Option<String> {
+        let col = self.tab.all_columns().into_iter().nth(index).filter(|c| !c.required)?;
+        self.columns.toggle(self.tab, &col);
+        // sorting by a column that is gone would leave the order unexplained
+        if !self.tab.columns(&self.columns).iter().any(|c| c.key == Some(self.sort.key)) {
+            self.sort = self.tab.default_sort();
+        }
+        self.sync_scans();
+        self.rebuild();
+        Some(self.columns.to_pref())
+    }
+
+    /// Replaces the shown columns with a stored choice (at startup).
+    pub fn set_columns(&mut self, columns: ColumnSet) {
+        self.columns = columns;
+        self.sync_scans();
+    }
+
+    /// View > CPU History: one strip per core in place of the total.
+    pub fn set_cpu_history(&mut self, on: bool) {
+        self.cpu_history = on;
+    }
+
+    /// Whether the selected process is shown relative to a baseline.
+    pub fn deltas_on_selected(&self) -> bool {
+        self.selected.map_or(false, |pid| self.baselines.contains_key(&pid))
+    }
+
+    /// Process > Show Deltas for Process: counts the selected process's CPU time, bytes and GPU time from now, or
+    /// goes back to counting from the start of the process.
+    pub fn toggle_deltas(&mut self) {
+        let Some(p) = self.selected_proc().cloned() else { return };
+        if self.baselines.remove(&p.pid).is_none() {
+            self.status = format!("Showing deltas for {}", p.name);
+            self.baselines.insert(p.pid, p);
+        }
     }
 
     fn sort_clicked(&mut self, key: SortKey) {
@@ -238,7 +345,7 @@ impl Monitor {
 
     /// The selected row as tab-separated text, for Edit > Copy.
     pub fn copy_text(&self) -> Option<String> {
-        self.selected_proc().map(|p| model::row_text(p, self.tab))
+        self.selected_proc().map(|p| model::row_text(p, self.tab, &self.columns, self.baselines.get(&p.pid)))
     }
 
     fn signal_selected(&mut self, sig: i32, verb: &str) {
@@ -306,7 +413,7 @@ impl Monitor {
     /// The table's columns with their x positions and widths in points, the fill column taking the rest.
     pub fn col_frames(&self, ui: &Ui) -> Vec<(Column, f32, f32)> {
         let g = self.geo(ui);
-        let cols = self.tab.columns();
+        let cols = self.tab.columns(&self.columns);
         let fixed: f32 = cols.iter().map(|c| c.width).sum();
         let fill = (g.content_w - fixed).max(80.0);
         let mut x = g.content_x;
@@ -361,6 +468,8 @@ impl Monitor {
             SidebarItem::row(ROW_SYSTEM, Filter::System.label()).with_symbol("gearshape"),
             SidebarItem::row(ROW_ACTIVE, Filter::Active.label()).with_symbol("bolt"),
             SidebarItem::row(ROW_INACTIVE, Filter::Inactive.label()).with_symbol("moon"),
+            SidebarItem::row(ROW_SELECTED, Filter::Selected.label()).with_symbol("checkmark.circle"),
+            SidebarItem::row(ROW_GPU, Filter::Gpu.label()).with_symbol("desktopcomputer"),
         ];
         let mut list = SourceList::new(items, 28.0, 26.0);
         list.set_selected(Some(match self.filter {
@@ -370,6 +479,8 @@ impl Monitor {
             Filter::System => ROW_SYSTEM,
             Filter::Active => ROW_ACTIVE,
             Filter::Inactive => ROW_INACTIVE,
+            Filter::Selected => ROW_SELECTED,
+            Filter::Gpu => ROW_GPU,
         }));
         list
     }
@@ -389,6 +500,8 @@ impl Monitor {
             ROW_SYSTEM => Filter::System,
             ROW_ACTIVE => Filter::Active,
             ROW_INACTIVE => Filter::Inactive,
+            ROW_SELECTED => Filter::Selected,
+            ROW_GPU => Filter::Gpu,
             _ => Filter::All,
         };
         self.set_filter(filter);
@@ -621,7 +734,7 @@ mod tests {
     fn copy_text_follows_the_selection_and_tab() {
         let mut m = Monitor::new(800.0, 600.0);
         assert_eq!(m.copy_text(), None);
-        m.rows = vec![crate::sample::ProcSample { pid: 7, name: "sh".into(), user: "me".into(), uid: 1, cpu: 1.0, rss: 0, threads: 2, read_bps: 0.0, write_bps: 0.0 }];
+        m.rows = vec![crate::sample::ProcSample { pid: 7, name: "sh".into(), user: "me".into(), uid: 1, cpu: 1.0, threads: 2, ..Default::default() }];
         m.selected = Some(7);
         assert_eq!(m.copy_text().as_deref(), Some("sh\tme\t1.0%\t2\t7"));
     }
@@ -648,5 +761,104 @@ mod tests {
         m.force_quit_selected();
         m.quit_selected();
         assert!(m.status.is_empty());
+    }
+
+    fn proc(pid: u32, ppid: u32, name: &str) -> ProcSample {
+        ProcSample { pid, ppid, name: name.into(), ..Default::default() }
+    }
+
+    fn with_rows(m: &mut Monitor, procs: Vec<ProcSample>) {
+        m.snapshot = Some(Snapshot {
+            cpu: Default::default(),
+            memory: Default::default(),
+            disk_read_bps: 0.0,
+            disk_write_bps: 0.0,
+            ifaces: Vec::new(),
+            procs,
+            cores: Vec::new(),
+            gpu_busy: None,
+        });
+        m.rebuild();
+    }
+
+    #[test]
+    fn selected_processes_shows_the_family_of_the_selection() {
+        let mut m = Monitor::new(800.0, 600.0);
+        with_rows(&mut m, vec![proc(1, 0, "init"), proc(10, 1, "shell"), proc(11, 10, "ls"), proc(12, 1, "other")]);
+        m.set_filter(Filter::Selected);
+        assert_eq!(m.filter, Filter::All, "needs a selection");
+        assert_eq!(m.status, "Select a process first");
+        m.selected = Some(10);
+        m.set_filter(Filter::Selected);
+        let pids: Vec<u32> = m.rows.iter().map(|p| p.pid).collect();
+        assert_eq!(pids, vec![10, 11]);
+        // the process ends: the filter gives way to All
+        with_rows(&mut m, vec![proc(1, 0, "init"), proc(12, 1, "other")]);
+        assert_eq!(m.filter, Filter::All);
+        assert_eq!(m.rows.len(), 2);
+    }
+
+    #[test]
+    fn deltas_toggle_on_the_selected_process_and_end_with_it() {
+        let mut m = Monitor::new(800.0, 600.0);
+        with_rows(&mut m, vec![proc(10, 1, "shell"), proc(11, 1, "ls")]);
+        m.toggle_deltas();
+        assert!(m.baselines.is_empty(), "nothing selected");
+        m.selected = Some(10);
+        m.toggle_deltas();
+        assert!(m.deltas_on_selected());
+        m.toggle_deltas();
+        assert!(!m.deltas_on_selected());
+        m.toggle_deltas();
+        with_rows(&mut m, vec![proc(11, 1, "ls")]);
+        assert!(m.baselines.is_empty(), "the baseline leaves with the process");
+    }
+
+    #[test]
+    fn hiding_the_sorted_column_resets_the_sort() {
+        let mut m = Monitor::new(800.0, 600.0);
+        let index = Tab::Cpu.all_columns().iter().position(|c| c.key == Some(SortKey::Threads)).unwrap();
+        m.sort = Sort { key: SortKey::Threads, descending: true };
+        let pref = m.toggle_column(index).expect("threads can be hidden");
+        assert_eq!(pref, "CPU/Threads");
+        assert_eq!(m.sort, Tab::Cpu.default_sort());
+        assert!(m.tab.columns(&m.columns).iter().all(|c| c.key != Some(SortKey::Threads)));
+        // the % CPU column is required
+        let required = Tab::Cpu.all_columns().iter().position(|c| c.key == Some(SortKey::Cpu)).unwrap();
+        assert_eq!(m.toggle_column(required), None);
+        assert_eq!(m.toggle_column(99), None);
+    }
+
+    #[test]
+    fn the_gpu_and_sleep_readings_follow_what_is_shown() {
+        let mut m = Monitor::new(800.0, 600.0);
+        assert!(!m.sampler.scan_gpu && !m.sampler.scan_sleep);
+        m.last_sample = Some(5.0);
+        m.set_tab(Tab::Gpu);
+        assert!(m.sampler.scan_gpu);
+        assert_eq!(m.last_sample, None, "a reading just turned on is taken at once");
+        m.set_tab(Tab::Energy);
+        assert!(!m.sampler.scan_gpu && m.sampler.scan_sleep);
+        m.set_tab(Tab::Cpu);
+        assert!(!m.sampler.scan_sleep);
+        m.set_filter(Filter::Gpu);
+        assert!(m.sampler.scan_gpu);
+    }
+
+    #[test]
+    fn copy_follows_the_shown_columns_and_the_baseline() {
+        let mut m = Monitor::new(800.0, 600.0);
+        let cpu_time = Tab::Cpu.all_columns().iter().position(|c| c.key == Some(SortKey::CpuTime)).unwrap();
+        m.toggle_column(cpu_time);
+        let mut p = proc(7, 1, "sh");
+        p.user = "me".into();
+        p.cpu_ticks = 500;
+        m.rows = vec![p.clone()];
+        m.selected = Some(7);
+        assert_eq!(m.copy_text().as_deref(), Some("sh\tme\t0.0%\t0:05.00\t0\t7"));
+        let mut base = p.clone();
+        base.cpu_ticks = 200;
+        m.baselines.insert(7, base);
+        assert_eq!(m.copy_text().as_deref(), Some("sh\tme\t0.0%\t0:03.00\t0\t7"));
     }
 }

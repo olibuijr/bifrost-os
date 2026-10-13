@@ -30,12 +30,35 @@ pub struct Inspection {
     pub threads_total: usize,
     /// Set when the descriptor table could not be read.
     pub denied: bool,
+    pub ppid: u32,
+    /// The parent's short name (empty when it has gone or is not readable).
+    pub parent: String,
+    /// Page faults served from memory and from disk so far.
+    pub minor_faults: u64,
+    pub major_faults: u64,
+    /// Context switches so far: the process gave up the CPU, or the kernel took it away.
+    pub voluntary_switches: u64,
+    pub involuntary_switches: u64,
 }
 
 /// `cmdline` bytes (NUL separated) as one line.
 pub fn command_line(raw: &[u8]) -> String {
     let parts: Vec<String> = raw.split(|&b| b == 0).filter(|p| !p.is_empty()).map(|p| String::from_utf8_lossy(p).into_owned()).collect();
     parts.join(" ")
+}
+
+/// The parent pid and the minor and major fault counts of a `stat` line (fields 4, 10 and 12, counted from the last
+/// `)` because the name may hold spaces).
+pub fn parse_stat_extras(stat: &str) -> Option<(u32, u64, u64)> {
+    let close = stat.rfind(')')?;
+    let rest: Vec<&str> = stat.get(close + 1..)?.split_whitespace().collect();
+    Some((rest.get(1)?.parse().ok()?, rest.get(7)?.parse().ok()?, rest.get(9)?.parse().ok()?))
+}
+
+/// The voluntary and involuntary context switches of `/proc/<pid>/status` (zero for a missing line).
+pub fn parse_switches(status: &str) -> (u64, u64) {
+    let value = |key: &str| status.lines().find_map(|l| l.strip_prefix(key)).and_then(|v| v.trim().parse().ok()).unwrap_or(0);
+    (value("voluntary_ctxt_switches:"), value("nonvoluntary_ctxt_switches:"))
 }
 
 /// Reads the state, name and ticks from one `stat` line (the name may hold spaces and parentheses).
@@ -72,6 +95,15 @@ pub fn inspect_in(proc: &Path, pid: u32) -> Inspection {
         cwd: fs::read_link(dir.join("cwd")).map(|p| p.display().to_string()).unwrap_or_default(),
         ..Inspection::default()
     };
+    if let Some((ppid, minor, major)) = fs::read_to_string(dir.join("stat")).ok().and_then(|t| parse_stat_extras(&t)) {
+        out.ppid = ppid;
+        out.minor_faults = minor;
+        out.major_faults = major;
+        out.parent = fs::read_to_string(proc.join(ppid.to_string()).join("comm")).map(|c| c.trim().to_string()).unwrap_or_default();
+    }
+    if let Ok(status) = fs::read_to_string(dir.join("status")) {
+        (out.voluntary_switches, out.involuntary_switches) = parse_switches(&status);
+    }
     match fs::read_dir(dir.join("fd")) {
         Ok(entries) => {
             let mut fds: Vec<(u32, String)> = entries
@@ -152,10 +184,26 @@ mod tests {
     }
 
     #[test]
+    fn stat_extras_read_the_parent_and_the_faults() {
+        let stat = "42 (my (odd) name) S 7 42 42 0 -1 4194560 100 0 9 0 7 5 0 0 20 0 1 0 100 1000 10";
+        assert_eq!(parse_stat_extras(stat), Some((7, 100, 9)));
+        assert_eq!(parse_stat_extras("42 (x) S"), None);
+    }
+
+    #[test]
+    fn context_switches_come_from_the_status_file() {
+        let status = "Name:\tsh\nvoluntary_ctxt_switches:\t12\nnonvoluntary_ctxt_switches:\t3\n";
+        assert_eq!(parse_switches(status), (12, 3));
+        assert_eq!(parse_switches("Name:\tsh\n"), (0, 0));
+    }
+
+    #[test]
     fn this_process_can_be_inspected() {
         let i = inspect(std::process::id());
         assert!(!i.exe.is_empty());
         assert!(i.threads_total >= 1);
         assert!(!i.denied);
+        assert!(i.ppid > 0);
+        assert!(i.minor_faults > 0);
     }
 }

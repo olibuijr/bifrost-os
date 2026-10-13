@@ -2,8 +2,9 @@
 //! user names from `/etc/passwd`. The parsers are pure functions over the file text, so they are tested without
 //! touching `/proc`. Rates come from the difference between two samples and the time between them.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::process::Command;
 
 /// Clock ticks per second in `/proc/<pid>/stat` (USER_HZ, 100 on Linux).
 pub const TICKS_PER_SEC: f64 = 100.0;
@@ -44,9 +45,37 @@ pub struct Memory {
     pub cached: u64,
     pub swap_total: u64,
     pub swap_free: u64,
+    pub buffers: u64,
+    pub shmem: u64,
+    /// Kernel memory that cannot be reclaimed: slab, kernel stacks and page tables.
+    pub sunreclaim: u64,
+    pub kernel_stack: u64,
+    pub page_tables: u64,
+    /// Compressed swap pool (`Zswap`), the memory the compressed pages occupy.
+    pub zswap: u64,
 }
 
 impl Memory {
+    /// Memory the kernel holds for itself and cannot give back.
+    pub fn wired(&self) -> u64 {
+        self.sunreclaim + self.kernel_stack + self.page_tables
+    }
+
+    /// Shared and tmpfs memory.
+    pub fn shared(&self) -> u64 {
+        self.shmem
+    }
+
+    /// File cache the kernel can drop: page cache without shared memory, plus buffers.
+    pub fn file_cache(&self) -> u64 {
+        self.cached.saturating_sub(self.shmem) + self.buffers
+    }
+
+    /// Memory used by programs: what is in use, less the kernel's and the shared part.
+    pub fn app(&self) -> u64 {
+        self.used().saturating_sub(self.wired() + self.shared())
+    }
+
     /// Memory in use: everything the kernel does not count as available.
     pub fn used(&self) -> u64 {
         self.total.saturating_sub(self.available)
@@ -71,6 +100,8 @@ pub struct Iface {
     pub name: String,
     pub rx: u64,
     pub tx: u64,
+    pub rx_packets: u64,
+    pub tx_packets: u64,
 }
 
 /// An interface with its rates over the last interval (bytes per second).
@@ -81,12 +112,15 @@ pub struct IfaceRate {
     pub tx_bps: f64,
     pub rx_total: u64,
     pub tx_total: u64,
+    pub rx_packets: u64,
+    pub tx_packets: u64,
 }
 
 /// One process, as the table shows it.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ProcSample {
     pub pid: u32,
+    pub ppid: u32,
     pub name: String,
     pub user: String,
     pub uid: u32,
@@ -97,6 +131,21 @@ pub struct ProcSample {
     pub threads: u32,
     pub read_bps: f64,
     pub write_bps: f64,
+    /// Virtual size in bytes.
+    pub vsize: u64,
+    /// User plus system CPU time so far, in ticks.
+    pub cpu_ticks: u64,
+    /// Bytes read and written so far (the cumulative counters behind the rates).
+    pub read_total: u64,
+    pub write_total: u64,
+    /// Share of the GPU's engines over the last interval, in percent. Zero unless the sampler scans the GPU.
+    pub gpu: f32,
+    /// GPU engine time used so far, in nanoseconds.
+    pub gpu_ns: u64,
+    /// Whether the process holds a blocking sleep or idle inhibitor (only read while the sampler scans for them).
+    pub prevents_sleep: bool,
+    /// Mean energy score of the processes of this name since the monitor started, weighted towards the last 12 hours.
+    pub energy_avg: f64,
 }
 
 /// Everything read in one pass.
@@ -108,12 +157,17 @@ pub struct Snapshot {
     pub disk_write_bps: f64,
     pub ifaces: Vec<IfaceRate>,
     pub procs: Vec<ProcSample>,
+    /// Busy share of each core over the interval, in percent, in core order.
+    pub cores: Vec<f32>,
+    /// All processes' GPU shares together, capped at 100; None while the sampler is not scanning the GPU.
+    pub gpu_busy: Option<f32>,
 }
 
 /// The fields of `/proc/<pid>/stat` the monitor uses.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProcStat {
     pub name: String,
+    pub ppid: u32,
     /// User plus system time, in ticks.
     pub ticks: u64,
     pub threads: u32,
@@ -121,7 +175,19 @@ pub struct ProcStat {
 
 /// Parses the aggregate `cpu` line of `/proc/stat`.
 pub fn parse_proc_stat(text: &str) -> Option<CpuTotals> {
-    let line = text.lines().find(|l| l.starts_with("cpu "))?;
+    totals_of(text.lines().find(|l| l.starts_with("cpu "))?)
+}
+
+/// The per-core `cpuN` lines of `/proc/stat`, in core order.
+pub fn parse_core_stats(text: &str) -> Vec<CpuTotals> {
+    text.lines()
+        .filter(|l| l.strip_prefix("cpu").and_then(|r| r.chars().next()).map_or(false, |c| c.is_ascii_digit()))
+        .filter_map(totals_of)
+        .collect()
+}
+
+/// The totals on one `cpu` or `cpuN` line.
+fn totals_of(line: &str) -> Option<CpuTotals> {
     let f: Vec<u64> = line.split_whitespace().skip(1).filter_map(|v| v.parse().ok()).collect();
     if f.len() < 4 {
         return None;
@@ -161,6 +227,12 @@ pub fn parse_meminfo(text: &str) -> Memory {
             "Cached" => m.cached = bytes,
             "SwapTotal" => m.swap_total = bytes,
             "SwapFree" => m.swap_free = bytes,
+            "Buffers" => m.buffers = bytes,
+            "Shmem" => m.shmem = bytes,
+            "SUnreclaim" => m.sunreclaim = bytes,
+            "KernelStack" => m.kernel_stack = bytes,
+            "PageTables" => m.page_tables = bytes,
+            "Zswap" => m.zswap = bytes,
             _ => {}
         }
     }
@@ -195,16 +267,17 @@ pub fn parse_diskstats(text: &str) -> (u64, u64) {
     (read, written)
 }
 
-/// Parses `/proc/net/dev`: receive bytes are the first counter after the colon, transmit bytes the ninth.
+/// Parses `/proc/net/dev`: receive bytes and packets are the first two counters after the colon, transmit bytes and
+/// packets the ninth and tenth.
 pub fn parse_netdev(text: &str) -> Vec<Iface> {
     text.lines()
         .filter_map(|line| {
             let (name, rest) = line.split_once(':')?;
             let n: Vec<u64> = rest.split_whitespace().filter_map(|v| v.parse().ok()).collect();
-            if n.len() < 9 {
+            if n.len() < 10 {
                 return None;
             }
-            Some(Iface { name: name.trim().to_string(), rx: n[0], tx: n[8] })
+            Some(Iface { name: name.trim().to_string(), rx: n[0], tx: n[8], rx_packets: n[1], tx_packets: n[9] })
         })
         .collect()
 }
@@ -219,7 +292,8 @@ pub fn parse_stat(text: &str) -> Option<ProcStat> {
     let utime: u64 = rest.get(11)?.parse().ok()?;
     let stime: u64 = rest.get(12)?.parse().ok()?;
     let threads: u32 = rest.get(17)?.parse().ok()?;
-    Some(ProcStat { name, ticks: utime + stime, threads })
+    let ppid: u32 = rest.get(1)?.parse().ok()?;
+    Some(ProcStat { name, ppid, ticks: utime + stime, threads })
 }
 
 /// The real user id: the first number of the `Uid:` line of `/proc/<pid>/status`.
@@ -231,6 +305,133 @@ pub fn parse_uid(status: &str) -> Option<u32> {
 /// Resident pages: the second field of `/proc/<pid>/statm`.
 pub fn parse_rss_pages(statm: &str) -> Option<u64> {
     statm.split_whitespace().nth(1)?.parse().ok()
+}
+
+/// Virtual size in pages: the first field of `/proc/<pid>/statm`.
+pub fn parse_vsize_pages(statm: &str) -> Option<u64> {
+    statm.split_whitespace().next()?.parse().ok()
+}
+
+/// What `/proc/<pid>/fdinfo/<fd>` of a DRM descriptor says about GPU use (the kernel's drm-usage-stats format): the
+/// client it belongs to, as `pdev/client-id`, and the engine time of all its engines in nanoseconds. None when the
+/// descriptor is not a DRM client. Several descriptors of one process can be the same client; count each client once.
+pub fn parse_drm_fdinfo(text: &str) -> Option<(String, u64)> {
+    let (mut driver, mut client, mut pdev, mut ns) = (false, String::new(), String::new(), 0u64);
+    for line in text.lines() {
+        let Some((key, value)) = line.split_once(':') else { continue };
+        let value = value.trim();
+        match key {
+            "drm-driver" => driver = true,
+            "drm-client-id" => client = value.to_string(),
+            "drm-pdev" => pdev = value.to_string(),
+            _ => {
+                let engine = key.strip_prefix("drm-engine-");
+                if engine.map_or(false, |e| !e.starts_with("capacity-")) {
+                    if let Some(n) = value.strip_suffix("ns").and_then(|n| n.trim().parse::<u64>().ok()) {
+                        ns += n;
+                    }
+                }
+            }
+        }
+    }
+    driver.then(|| (format!("{pdev}/{client}"), ns))
+}
+
+/// A logind inhibitor lock (one row of `ListInhibitors`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Inhibitor {
+    pub what: String,
+    pub who: String,
+    pub why: String,
+    pub mode: String,
+    pub uid: u32,
+    pub pid: u32,
+}
+
+/// Splits `busctl` output into words. Quoted strings come back without the quotes and with their backslash escapes
+/// resolved.
+fn busctl_words(text: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut chars = text.chars().peekable();
+    while let Some(&c) = chars.peek() {
+        if c.is_whitespace() {
+            chars.next();
+        } else if c == '"' {
+            chars.next();
+            let mut word = String::new();
+            while let Some(c) = chars.next() {
+                match c {
+                    '\\' => word.extend(chars.next()),
+                    '"' => break,
+                    _ => word.push(c),
+                }
+            }
+            words.push(word);
+        } else {
+            let mut word = String::new();
+            while let Some(&c) = chars.peek() {
+                if c.is_whitespace() {
+                    break;
+                }
+                word.push(c);
+                chars.next();
+            }
+            words.push(word);
+        }
+    }
+    words
+}
+
+/// Parses `busctl call ... ListInhibitors`: the signature, a count, then six fields per lock (what, who, why, mode,
+/// uid, pid). A malformed reply gives no locks.
+pub fn parse_inhibitors(text: &str) -> Vec<Inhibitor> {
+    let words = busctl_words(text);
+    let Some(count) = words.get(1).and_then(|c| c.parse::<usize>().ok()) else { return Vec::new() };
+    let fields = &words[2..];
+    if fields.len() < count * 6 {
+        return Vec::new();
+    }
+    fields
+        .chunks_exact(6)
+        .take(count)
+        .filter_map(|f| Some(Inhibitor { what: f[0].clone(), who: f[1].clone(), why: f[2].clone(), mode: f[3].clone(), uid: f[4].parse().ok()?, pid: f[5].parse().ok()? }))
+        .collect()
+}
+
+/// The processes holding a lock that keeps the machine awake: a blocking sleep or idle inhibitor.
+pub fn sleep_blockers(locks: &[Inhibitor]) -> HashSet<u32> {
+    locks.iter().filter(|l| l.mode == "block" && l.what.split(':').any(|w| w == "sleep" || w == "idle")).map(|l| l.pid).collect()
+}
+
+/// Asks logind for its inhibitor locks. Empty when `busctl` or logind is not there.
+fn read_inhibitors() -> HashSet<u32> {
+    let out = Command::new("busctl")
+        .args(["--system", "call", "org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager", "ListInhibitors"])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => sleep_blockers(&parse_inhibitors(&String::from_utf8_lossy(&o.stdout))),
+        _ => HashSet::new(),
+    }
+}
+
+/// Engine time of the DRM clients a process holds open, in nanoseconds. Descriptors of other users are unreadable
+/// and count as nothing.
+fn read_gpu_ns(pid: u32) -> u64 {
+    let Ok(fds) = fs::read_dir(format!("/proc/{pid}/fd")) else { return 0 };
+    let mut seen = HashSet::new();
+    let mut total = 0;
+    for fd in fds.flatten() {
+        if !fs::read_link(fd.path()).map_or(false, |t| t.starts_with("/dev/dri/")) {
+            continue;
+        }
+        let Some(text) = read_file(&format!("/proc/{pid}/fdinfo/{}", fd.file_name().to_string_lossy())) else { continue };
+        if let Some((client, ns)) = parse_drm_fdinfo(&text) {
+            if seen.insert(client) {
+                total += ns;
+            }
+        }
+    }
+    total
 }
 
 /// Bytes read and written by a process, from `/proc/<pid>/io` (zero when the file is not readable).
@@ -269,11 +470,31 @@ pub struct Sampler {
     last_ms: Option<f64>,
     cpu: Option<CpuTotals>,
     disk: Option<(u64, u64)>,
+    cores: Vec<CpuTotals>,
     net: HashMap<String, (u64, u64)>,
-    procs: HashMap<u32, (u64, u64, u64)>,
+    procs: HashMap<u32, Prev>,
     users: HashMap<u32, String>,
+    sleep_blockers: HashSet<u32>,
+    blockers_read_at: Option<f64>,
     /// The user id of this process; its processes are the ones the monitor may quit.
     pub own_uid: u32,
+    /// Read the DRM descriptors of every process for GPU time. Costly on a busy machine, so only while it is shown.
+    pub scan_gpu: bool,
+    /// Ask logind which processes keep the machine awake (every `BLOCKERS_EVERY_MS`). Only while it is shown.
+    pub scan_sleep: bool,
+}
+
+/// How long the list of sleep blockers is trusted before logind is asked again (milliseconds).
+const BLOCKERS_EVERY_MS: f64 = 10_000.0;
+
+/// A process's counters at the previous reading.
+#[derive(Clone, Copy)]
+struct Prev {
+    ticks: u64,
+    read: u64,
+    written: u64,
+    /// None when the GPU was not scanned then, so no rate can be taken.
+    gpu_ns: Option<u64>,
 }
 
 impl Sampler {
@@ -302,6 +523,13 @@ impl Sampler {
             }
             _ => CpuShare::default(),
         };
+        let cores = read_file("/proc/stat").map(|t| parse_core_stats(&t)).unwrap_or_default();
+        let core_busy: Vec<f32> = cores
+            .iter()
+            .enumerate()
+            .map(|(i, now)| self.cores.get(i).map_or(0.0, |prev| cpu_share(*prev, *now).busy))
+            .collect();
+        self.cores = cores;
         let memory = read_file("/proc/meminfo").map(|t| parse_meminfo(&t)).unwrap_or_default();
 
         let (read, written) = read_file("/proc/diskstats").map(|t| parse_diskstats(&t)).unwrap_or((0, 0));
@@ -323,10 +551,20 @@ impl Sampler {
                 tx_bps: rate(iface.tx.saturating_sub(ptx)),
                 rx_total: iface.rx,
                 tx_total: iface.tx,
+                rx_packets: iface.rx_packets,
+                tx_packets: iface.tx_packets,
                 name: iface.name,
             });
         }
 
+        if self.scan_sleep && self.blockers_read_at.map_or(true, |at| now_ms - at >= BLOCKERS_EVERY_MS) {
+            self.sleep_blockers = read_inhibitors();
+            self.blockers_read_at = Some(now_ms);
+        }
+        if !self.scan_sleep {
+            self.sleep_blockers.clear();
+            self.blockers_read_at = None;
+        }
         let mut procs = Vec::new();
         let mut seen = HashMap::new();
         if let Ok(entries) = fs::read_dir("/proc") {
@@ -335,21 +573,31 @@ impl Sampler {
                 let base = format!("/proc/{pid}");
                 let Some(stat) = read_file(&format!("{base}/stat")).and_then(|t| parse_stat(&t)) else { continue };
                 let uid = read_file(&format!("{base}/status")).and_then(|t| parse_uid(&t)).unwrap_or(u32::MAX);
-                let rss = read_file(&format!("{base}/statm")).and_then(|t| parse_rss_pages(&t)).unwrap_or(0) * PAGE_BYTES;
+                let statm = read_file(&format!("{base}/statm"));
+                let rss = statm.as_deref().and_then(parse_rss_pages).unwrap_or(0) * PAGE_BYTES;
+                let vsize = statm.as_deref().and_then(parse_vsize_pages).unwrap_or(0) * PAGE_BYTES;
                 let (read, written) = read_file(&format!("{base}/io")).map(|t| parse_io(&t)).unwrap_or((0, 0));
-                let (cpu, read_bps, write_bps) = match self.procs.get(&pid).copied() {
+                let gpu_ns = self.scan_gpu.then(|| read_gpu_ns(pid));
+                let before = self.procs.get(&pid).copied();
+                let (cpu, read_bps, write_bps) = match before {
                     // ticks / TICKS_PER_SEC seconds of CPU over dt seconds, as a percentage
-                    Some((pt, pr, pw)) => (
-                        dt.map_or(0.0, |d| (stat.ticks.saturating_sub(pt) as f64 / TICKS_PER_SEC / d * 100.0) as f32),
-                        rate(read.saturating_sub(pr)),
-                        rate(written.saturating_sub(pw)),
+                    Some(prev) => (
+                        dt.map_or(0.0, |d| (stat.ticks.saturating_sub(prev.ticks) as f64 / TICKS_PER_SEC / d * 100.0) as f32),
+                        rate(read.saturating_sub(prev.read)),
+                        rate(written.saturating_sub(prev.written)),
                     ),
                     None => (0.0, 0.0, 0.0),
                 };
-                seen.insert(pid, (stat.ticks, read, written));
+                // GPU time over dt seconds is nanoseconds / 1e9 / dt of engine time, as a percentage
+                let gpu = match (before.and_then(|b| b.gpu_ns), gpu_ns, dt) {
+                    (Some(prev), Some(now), Some(d)) => (now.saturating_sub(prev) as f64 / 1e9 / d * 100.0) as f32,
+                    _ => 0.0,
+                };
+                seen.insert(pid, Prev { ticks: stat.ticks, read, written, gpu_ns });
                 let user = self.users.get(&uid).cloned().unwrap_or_else(|| uid.to_string());
                 procs.push(ProcSample {
                     pid,
+                    ppid: stat.ppid,
                     name: stat.name,
                     user,
                     uid,
@@ -358,13 +606,22 @@ impl Sampler {
                     threads: stat.threads,
                     read_bps,
                     write_bps,
+                    vsize,
+                    cpu_ticks: stat.ticks,
+                    read_total: read,
+                    write_total: written,
+                    gpu,
+                    gpu_ns: gpu_ns.unwrap_or(0),
+                    prevents_sleep: self.sleep_blockers.contains(&pid),
+                    energy_avg: 0.0,
                 });
             }
         }
         // processes that ended drop out of the previous readings
         self.procs = seen;
 
-        Snapshot { cpu, memory, disk_read_bps, disk_write_bps, ifaces, procs }
+        let gpu_busy = self.scan_gpu.then(|| procs.iter().map(|p| p.gpu).sum::<f32>().min(100.0));
+        Snapshot { cpu, memory, disk_read_bps, disk_write_bps, ifaces, procs, cores: core_busy, gpu_busy }
     }
 }
 
@@ -429,7 +686,7 @@ mod tests {
         let text = "Inter-|   Receive\n face |bytes packets\n    lo: 1 1 0 0 0 0 0 0 2 2 0 0 0 0 0 0\n  eth0: 1000 3 0 0 0 0 0 0 500 4 0 0 0 0 0 0\n";
         let ifaces = parse_netdev(text);
         assert_eq!(ifaces.len(), 2);
-        assert_eq!(ifaces[1], Iface { name: "eth0".into(), rx: 1000, tx: 500 });
+        assert_eq!(ifaces[1], Iface { name: "eth0".into(), rx: 1000, tx: 500, rx_packets: 3, tx_packets: 4 });
     }
 
     #[test]
@@ -439,6 +696,61 @@ mod tests {
         assert_eq!(s.name, "Web (Content) x");
         assert_eq!(s.ticks, 50);
         assert_eq!(s.threads, 7);
+        assert_eq!(s.ppid, 1);
+    }
+
+    #[test]
+    fn per_core_lines_are_read_in_order_and_the_total_line_is_left_out() {
+        let text = "cpu  10 0 10 80 0 0 0 0\ncpu0 5 0 5 40 0 0 0 0\ncpu1 5 0 5 40 0 0 0 0\nintr 1\ncpuidle 3\n";
+        let cores = parse_core_stats(text);
+        assert_eq!(cores.len(), 2);
+        assert_eq!(cores[1].total, 50);
+        assert!(parse_core_stats("cpu  1 2 3 4\n").is_empty());
+    }
+
+    #[test]
+    fn meminfo_breakdown_splits_programs_kernel_shared_and_cache() {
+        let m = parse_meminfo(
+            "MemTotal: 1000 kB\nMemAvailable: 400 kB\nCached: 300 kB\nBuffers: 20 kB\nShmem: 50 kB\nSUnreclaim: 30 kB\nKernelStack: 5 kB\nPageTables: 15 kB\nZswap: 7 kB\n",
+        );
+        assert_eq!(m.wired(), 50 * 1024);
+        assert_eq!(m.shared(), 50 * 1024);
+        assert_eq!(m.file_cache(), (300 - 50 + 20) * 1024);
+        assert_eq!(m.app(), (600 - 50 - 50) * 1024);
+        assert_eq!(m.zswap, 7 * 1024);
+    }
+
+    #[test]
+    fn virtual_size_is_the_first_statm_field() {
+        assert_eq!(parse_vsize_pages("2000 300 10 1 0 50 0"), Some(2000));
+        assert_eq!(parse_vsize_pages(""), None);
+    }
+
+    #[test]
+    fn drm_fdinfo_sums_the_engines_and_names_the_client() {
+        let text = "pos:\t0\ndrm-driver:\tamdgpu\ndrm-client-id:\t12\ndrm-pdev:\t0000:03:00.0\ndrm-engine-gfx:\t1500 ns\ndrm-engine-compute:\t500 ns\ndrm-engine-capacity-gfx:\t1\ndrm-memory-vram:\t8 KiB\n";
+        assert_eq!(parse_drm_fdinfo(text), Some(("0000:03:00.0/12".to_string(), 2000)));
+        assert_eq!(parse_drm_fdinfo("pos:\t0\nflags:\t02\n"), None);
+    }
+
+    #[test]
+    fn inhibitor_replies_parse_with_quoted_text_and_pick_the_blockers() {
+        let reply = "a(ssssuu) 3 \"sleep\" \"NetworkManager\" \"needs \\\"a\\\" pause\" \"delay\" 0 932 \"idle:sleep\" \"Firefox\" \"Playing video\" \"block\" 1000 4242 \"shutdown\" \"Updater\" \"Updating\" \"block\" 0 77\n";
+        let locks = parse_inhibitors(reply);
+        assert_eq!(locks.len(), 3);
+        assert_eq!(locks[0].why, "needs \"a\" pause");
+        assert_eq!(locks[1].pid, 4242);
+        let blockers = sleep_blockers(&locks);
+        assert!(blockers.contains(&4242));
+        assert!(!blockers.contains(&932));
+        assert!(!blockers.contains(&77));
+    }
+
+    #[test]
+    fn a_truncated_inhibitor_reply_gives_no_locks() {
+        assert!(parse_inhibitors("a(ssssuu) 2 \"sleep\" \"x\"").is_empty());
+        assert!(parse_inhibitors("").is_empty());
+        assert!(parse_inhibitors("garbage").is_empty());
     }
 
     #[test]

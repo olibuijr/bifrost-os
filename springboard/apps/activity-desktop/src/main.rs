@@ -16,11 +16,18 @@ mod window;
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
-use model::{Filter, UpdateFrequency, SIGNALS};
-use window::{Monitor, MENU_COPY, MENU_FILTER, MENU_FIND, MENU_FORCE, MENU_FREQ, MENU_INSPECT, MENU_QUIT, MENU_SIGNAL};
+use model::{ColumnSet, Filter, Tab, UpdateFrequency, SIGNALS};
+use window::{
+    Monitor, MENU_COLUMN, MENU_COPY, MENU_CPU_HISTORY, MENU_DELTAS, MENU_FILTER, MENU_FIND, MENU_FORCE, MENU_FREQ, MENU_INSPECT, MENU_QUIT,
+    MENU_SIGNAL,
+};
 
 /// The preference holding View > Update Frequency, in seconds.
 const PREF_FREQUENCY: &str = "updateSeconds";
+/// The preference holding the View > Columns choices (`ColumnSet::to_pref`).
+const PREF_COLUMNS: &str = "columns";
+/// The preference holding View > CPU History.
+const PREF_CPU_HISTORY: &str = "cpuHistory";
 
 struct ActivityApp {
     monitor: Option<Monitor>,
@@ -39,6 +46,8 @@ impl App for ActivityApp {
             None => {
                 let mut m = Monitor::new(w, h);
                 m.set_frequency(UpdateFrequency::from_seconds(ctx.defaults().int(PREF_FREQUENCY)));
+                m.set_columns(ColumnSet::from_pref(&ctx.defaults().string(PREF_COLUMNS).unwrap_or_default()));
+                m.set_cpu_history(ctx.defaults().bool(PREF_CPU_HISTORY));
                 self.monitor = Some(m);
             }
         }
@@ -89,6 +98,7 @@ impl App for ActivityApp {
             process.push(AppMenuItem::new(MENU_SIGNAL + i as u32, &format!("SIG{}", sig.name)).enabled(can_signal).depth(1));
         }
         process.push(AppMenuItem::separator());
+        process.push(AppMenuItem::new(MENU_DELTAS, "Show Deltas for Process").checked(m.deltas_on_selected()).enabled(m.has_selected()));
         process.push(AppMenuItem::new(MENU_INSPECT, "Inspect Process").enabled(m.has_selected()));
         process.push(AppMenuItem::new(MENU_FIND, "Find Process").key("cmd+f"));
 
@@ -96,10 +106,15 @@ impl App for ActivityApp {
         for (i, f) in Filter::ALL.iter().enumerate() {
             view.push(AppMenuItem::new(MENU_FILTER + i as u32, f.label()).checked(m.filter == *f).depth(1));
         }
+        view.push(AppMenuItem::submenu("Columns"));
+        for (i, col) in m.tab.all_columns().iter().enumerate() {
+            view.push(AppMenuItem::new(MENU_COLUMN + i as u32, col.title).checked(m.columns.shown(m.tab, col)).enabled(!col.required).depth(1));
+        }
         view.push(AppMenuItem::submenu("Update Frequency"));
         for (i, f) in UpdateFrequency::ALL.iter().enumerate() {
             view.push(AppMenuItem::new(MENU_FREQ + i as u32, f.label()).checked(m.frequency == *f).depth(1));
         }
+        view.push(AppMenuItem::new(MENU_CPU_HISTORY, "CPU History").checked(m.cpu_history).enabled(m.tab == Tab::Cpu));
         vec![
             AppMenu { title: "Edit".into(), items: vec![AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(m.has_selected())] },
             AppMenu { title: "View".into(), items: view },
@@ -125,6 +140,22 @@ impl App for ActivityApp {
             MENU_FIND => {
                 m.focus_search();
                 ctx.wants_keyboard(true);
+                true
+            }
+            MENU_DELTAS => {
+                m.toggle_deltas();
+                true
+            }
+            MENU_CPU_HISTORY => {
+                let on = !m.cpu_history;
+                m.set_cpu_history(on);
+                ctx.defaults_mut().set_bool(PREF_CPU_HISTORY, on);
+                true
+            }
+            n if (MENU_COLUMN..MENU_COLUMN + 32).contains(&n) => {
+                if let Some(pref) = m.toggle_column((n - MENU_COLUMN) as usize) {
+                    ctx.defaults_mut().set_string(PREF_COLUMNS, &pref);
+                }
                 true
             }
             MENU_COPY => {

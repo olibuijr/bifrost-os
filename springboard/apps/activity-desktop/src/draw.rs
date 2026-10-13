@@ -4,7 +4,7 @@
 //! the appearance.
 
 use crate::inspect::Inspection;
-use crate::model::{bytes, energy, percent, rate, Column, SortKey, Tab, HISTORY};
+use crate::model::{self, bytes, energy, percent, rate, Column, SortKey, Tab, HISTORY};
 use crate::sample::{ProcSample, Snapshot};
 use crate::window::{Geo, Monitor, B_SEARCH, FOOT_PT, HEAD_PT, ROW_PT, SIDE_PT, SIDE_SCROLL};
 use bifrost_app::controls::Rect;
@@ -62,20 +62,29 @@ struct Graph {
 fn draw_inspector(labels: &mut TextCache, s: &mut Surface, ui: &Ui, r: Rect, pid: u32, data: &Inspection) {
     let x = r.x + CARD_PAD;
     let w = r.w - 2.0 * CARD_PAD;
-    let title = format!("Process {pid}");
+    let title = if data.ppid > 0 && !data.parent.is_empty() {
+        format!("Process {pid}   Parent {} ({})", data.parent, data.ppid)
+    } else {
+        format!("Process {pid}")
+    };
     text(labels, s, ui, &title, MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), x, r.y + 16.0, w);
     let command = if data.command.is_empty() { &data.exe } else { &data.command };
     text(labels, s, ui, command, MAC_SUBHEAD_PT, Weight::Regular, LABEL.now(), x, r.y + 34.0, w);
     let counts = format!("Folder {}   Open Files {}   Sockets {}   Threads {}", data.cwd, data.files_total, data.sockets, data.threads_total);
     text(labels, s, ui, &counts, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, r.y + 50.0, w);
+    let stats = format!(
+        "Page Faults {} minor, {} major   Context Switches {} voluntary, {} involuntary",
+        data.minor_faults, data.major_faults, data.voluntary_switches, data.involuntary_switches
+    );
+    text(labels, s, ui, &stats, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, r.y + 64.0, w);
 
     let half = (w - CARD_PAD) / 2.0;
     let right = x + half + CARD_PAD;
-    text(labels, s, ui, "Open Files", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), x, r.y + 66.0, half);
-    text(labels, s, ui, "Threads", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), right, r.y + 66.0, half);
+    text(labels, s, ui, "Open Files", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), x, r.y + 80.0, half);
+    text(labels, s, ui, "Threads", MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), right, r.y + 80.0, half);
     const LINE: f32 = 12.5;
-    for i in 0..4 {
-        let mid = r.y + 80.0 + i as f32 * LINE;
+    for i in 0..3 {
+        let mid = r.y + 94.0 + i as f32 * LINE;
         let file = match data.files.get(i) {
             Some(f) => f.clone(),
             None if i == 0 && data.denied => "Open files are not readable for this process".into(),
@@ -89,20 +98,14 @@ fn draw_inspector(labels: &mut TextCache, s: &mut Surface, ui: &Ui, r: Rect, pid
     }
 }
 
-/// The text of one table cell for a process row.
-fn cell(p: &ProcSample, key: Option<SortKey>) -> String {
-    match key {
-        Some(SortKey::Name) => p.name.clone(),
-        Some(SortKey::User) => p.user.clone(),
-        Some(SortKey::Cpu) => format!("{:.1}", p.cpu),
-        Some(SortKey::Memory) => bytes(p.rss),
-        Some(SortKey::Energy) => format!("{:.1}", energy(p)),
-        Some(SortKey::DiskRead) => rate(p.read_bps),
-        Some(SortKey::DiskWrite) => rate(p.write_bps),
-        Some(SortKey::Threads) => p.threads.to_string(),
-        Some(SortKey::Pid) => p.pid.to_string(),
-        None => String::new(),
+/// The text of one table cell for a process row: the model's figure, with a mark on the name of a process shown as
+/// deltas.
+fn cell(p: &ProcSample, key: Option<SortKey>, base: Option<&ProcSample>) -> String {
+    let mut label = model::cell_text(p, key, base);
+    if key == Some(SortKey::Name) && base.is_some() {
+        label.push_str(" (deltas)");
     }
+    label
 }
 
 /// The text of one cell for an interface row on the Network tab, by the column's title.
@@ -112,6 +115,8 @@ fn iface_cell(i: &crate::sample::IfaceRate, title: &str) -> String {
         "Sent/s" => rate(i.tx_bps),
         "Total Received" => bytes(i.rx_total),
         "Total Sent" => bytes(i.tx_total),
+        "Packets In" => i.rx_packets.to_string(),
+        "Packets Out" => i.tx_packets.to_string(),
         _ => i.name.clone(),
     }
 }
@@ -160,7 +165,15 @@ impl Monitor {
                 Graph {
                     title: "Memory Used",
                     value: format!("{} of {}", bytes(m.used()), bytes(m.total)),
-                    detail: format!("Cached Files {}   Swap Used {}", bytes(m.cached), bytes(m.swap_used())),
+                    detail: format!(
+                        "App {}   Kernel {}   Shared {}   Cached Files {}   Compressed {}   Swap Used {}",
+                        bytes(m.app()),
+                        bytes(m.wired()),
+                        bytes(m.shared()),
+                        bytes(m.file_cache()),
+                        bytes(m.zswap),
+                        bytes(m.swap_used())
+                    ),
                     plots: vec![(h.memory.values().collect(), SYSTEM_PURPLE.now())],
                     scale: 100.0,
                 }
@@ -185,6 +198,16 @@ impl Monitor {
                     scale: h.disk_read.peak().max(h.disk_write.peak()).max(DISK_FLOOR),
                 }
             }
+            Tab::Gpu => {
+                let top = snap.and_then(|s| s.procs.iter().max_by(|a, b| a.gpu.total_cmp(&b.gpu))).filter(|p| p.gpu > 0.0);
+                Graph {
+                    title: "GPU History",
+                    value: snap.and_then(|s| s.gpu_busy).map_or_else(|| "Reading the GPU".to_string(), percent),
+                    detail: top.map_or_else(|| "No process is using the GPU".to_string(), |p| format!("Highest: {} ({})", p.name, percent(p.gpu))),
+                    plots: vec![(h.gpu.values().collect(), SYSTEM_GREEN.now())],
+                    scale: 100.0,
+                }
+            }
             Tab::Network => {
                 let (rx, tx, n): (f64, f64, usize) = snap.map_or((0.0, 0.0, 0), |s| (s.ifaces.iter().map(|i| i.rx_bps).sum(), s.ifaces.iter().map(|i| i.tx_bps).sum(), s.ifaces.len()));
                 Graph {
@@ -205,6 +228,10 @@ impl Monitor {
             draw_inspector(&mut self.labels, s, ui, r, pid, &data);
             return;
         }
+        if self.tab == Tab::Cpu && self.cpu_history {
+            self.draw_cores(ui, s, r);
+            return;
+        }
         let graph = self.graph();
         let x = r.x + CARD_PAD;
         let w = r.w - 2.0 * CARD_PAD;
@@ -223,6 +250,38 @@ impl Monitor {
                 let bh = (v / graph.scale).clamp(0.0, 1.0) * plot_h;
                 let bx = x + (offset + i) as f32 * slot;
                 fill(s, ui, bx, plot_y + plot_h - bh, (slot - 1.0).max(1.0), bh, *color);
+            }
+        }
+    }
+
+    /// The CPU graph card as one strip per core, newest sample at the right, in two rows when there are more than four.
+    fn draw_cores(&mut self, ui: &Ui, s: &mut Surface, r: Rect) {
+        const GAP: f32 = 6.0;
+        let x = r.x + CARD_PAD;
+        let w = r.w - 2.0 * CARD_PAD;
+        let cores = self.history.cores.len();
+        let busy = self.snapshot.as_ref().map_or(0.0, |snap| snap.cpu.busy);
+        text(&mut self.labels, s, ui, "CPU History", MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), x, r.y + 16.0, w);
+        let detail = format!("{cores} cores   Total {}", percent(busy));
+        text(&mut self.labels, s, ui, &detail, MAC_SUBHEAD_PT, Weight::Regular, LABEL.now(), x, r.y + 34.0, w);
+        if cores == 0 {
+            return;
+        }
+        let rows = if cores > 4 { 2 } else { 1 };
+        let per_row = (cores + rows - 1) / rows;
+        let top = r.y + 48.0;
+        let tile_h = ((r.h - 58.0) - GAP * (rows - 1) as f32) / rows as f32;
+        let tile_w = (w - GAP * (per_row - 1) as f32) / per_row as f32;
+        let color = SYSTEM_BLUE.now();
+        for (i, series) in self.history.cores.iter().enumerate() {
+            let tx = x + (i % per_row) as f32 * (tile_w + GAP);
+            let ty = top + (i / per_row) as f32 * (tile_h + GAP);
+            fill(s, ui, tx, ty + tile_h, tile_w, 1.0, SEPARATOR_C.now());
+            let slot = tile_w / HISTORY as f32;
+            let offset = HISTORY.saturating_sub(series.len());
+            for (k, v) in series.values().enumerate() {
+                let bh = (v / 100.0).clamp(0.0, 1.0) * tile_h;
+                fill(s, ui, tx + (offset + k) as f32 * slot, ty + tile_h - bh, (slot - 1.0).max(1.0), bh, color);
             }
         }
     }
@@ -272,7 +331,8 @@ impl Monitor {
             let quiet = if selected { WHITE } else { LABEL_2.now() };
             for (col, cx, cw) in &cols {
                 let color = if col.key == Some(SortKey::Name) { ink } else { quiet };
-                text(&mut self.labels, s, ui, &cell(p, col.key), MAC_SUBHEAD_PT, Weight::Regular, color, cx + PAD, mid, cw - 2.0 * PAD);
+                let label = cell(p, col.key, self.baselines.get(&p.pid));
+                text(&mut self.labels, s, ui, &label, MAC_SUBHEAD_PT, Weight::Regular, color, cx + PAD, mid, cw - 2.0 * PAD);
             }
         }
     }
