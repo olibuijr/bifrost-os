@@ -838,6 +838,7 @@ fn run() -> std::io::Result<()> {
                     hw_keys.reset();
                     key_repeat = Default::default();
                     sleeper.screen_on(t);
+                    boost.restore_wifi_power_save();
                     if let Err(e) = disp.set_dpms(true) {
                         eprintln!("springboard: dpms on: {e}");
                     }
@@ -961,6 +962,15 @@ fn run() -> std::io::Result<()> {
         }
         if let Some(outcome) = sleeper.tick(t) {
             eprintln!("springboard: suspend {outcome:?}");
+            if outcome == sleep::Outcome::Resumed {
+                // the wall clock stood still while asleep: re-anchor it now, not on the next 1 s info tick
+                let (unix, offset) = sys::wall_time();
+                shell.set_wall(unix, offset, sys::now_ms());
+                // the Wi-Fi chip comes back with its own power state; put the profile's mode back
+                boost.restore_wifi_power_save();
+                // the kernel may have reset the scanout and surfaces while asleep: repaint everything
+                shell.force_full_redraw();
+            }
         }
         // after the effects, so a Wi-Fi switch flip is already reflected
         let network_changed=wayland && springboard::shell::desktop_network::take_changed();
