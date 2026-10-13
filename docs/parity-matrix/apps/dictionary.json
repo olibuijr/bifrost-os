@@ -25,44 +25,44 @@
       "apple": "Info.plist NSServices",
       "status": "partial",
       "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:295",
-      "note": "look-up intent and Look Up Clipboard exist; no services-menu entry",
+      "note": "look-up intent and Look Up Clipboard exist; no services-menu API in the SDK yet",
       "wire": "Register a services-menu entry that opens the app with the selected word"
     },
     {
       "feature": "dict: / x-dictionary URL schemes",
       "area": "integration",
       "apple": "Info.plist CFBundleURLTypes",
-      "status": "gap",
-      "bifrost": "",
-      "note": "",
-      "wire": "Handle Input::Open for dict: URLs in event main.rs:258 and call look_up"
+      "status": "partial",
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:763",
+      "note": "Input::Open handles dict: and x-dictionary: URLs; the manifest does not register the schemes yet",
+      "wire": ""
     },
     {
       "feature": "Dictionary scope bar (All / per dictionary)",
       "area": "view",
       "apple": "ScopeBarView.nib; Go > Select Next/Previous Dictionary",
-      "status": "gap",
-      "bifrost": "",
-      "note": "All hits stacked",
-      "wire": "Add a scope bar above the result with All plus each library dictionary, filtering hits; cmd+alt+arrows"
+      "status": "partial",
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:897",
+      "note": "Scope bar and Go > Select Next/Previous Dictionary (cmd+alt+arrows); needs lab check",
+      "wire": ""
     },
     {
       "feature": "Back / Forward history",
       "area": "menu",
       "apple": "MainMenu.nib History > Back, Forward",
-      "status": "gap",
-      "bifrost": "",
-      "note": "",
-      "wire": "Keep a lookup history; toolbar buttons and cmd+[ / cmd+]"
+      "status": "partial",
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:186",
+      "note": "Toolbar buttons, Go menu, cmd+[ / cmd+]; Clear History",
+      "wire": ""
     },
     {
       "feature": "Follow cross-reference links",
       "area": "view",
       "apple": "definition view links",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Plain text result",
-      "wire": "Make cross-reference words tappable in lines() and call look_up"
+      "status": "partial",
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:436",
+      "note": "Tapping a word known to a dictionary looks it up; words are not drawn as links",
+      "wire": ""
     },
     {
       "feature": "New Window / New Tab",
@@ -70,17 +70,17 @@
       "apple": "MainMenu.nib File > New Window, New Tab",
       "status": "gap",
       "bifrost": "",
-      "note": "",
+      "note": "Not done: the SDK has no multi-window or tab API",
       "wire": "Support several windows through the SDK multi-window API"
     },
     {
       "feature": "Print definition",
       "area": "menu",
       "apple": "MainMenu.nib File > Print",
-      "status": "gap",
-      "bifrost": "",
-      "note": "",
-      "wire": "Send the shown lines to the print service; File menu cmd+p"
+      "status": "partial",
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:335",
+      "note": "File menu Print (cmd+p) sends text to the default printer",
+      "wire": ""
     },
     {
       "feature": "Copy definition",
@@ -95,19 +95,19 @@
       "feature": "Find in definition",
       "area": "menu",
       "apple": "MainMenu.nib Edit > Find, Find Next/Previous",
-      "status": "gap",
-      "bifrost": "",
-      "note": "",
-      "wire": "Add a find bar highlighting matches in lines(); cmd+f"
+      "status": "partial",
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:945",
+      "note": "Find bar with line highlight, cmd+f, cmd+g, cmd+shift+g; highlights whole lines, not the matched words",
+      "wire": ""
     },
     {
       "feature": "Text size control",
       "area": "toolbar",
       "apple": "DictionaryWindow.nib text-size control",
-      "status": "gap",
-      "bifrost": "",
-      "note": "",
-      "wire": "Add a size control scaling MAC_BODY_PT in lines() main.rs:127; persist the pref"
+      "status": "partial",
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:885",
+      "note": "A-/A+ toolbar buttons and View menu cmd+= / cmd+- / cmd+0; persisted in prefs.txt",
+      "wire": ""
     },
     {
       "feature": "Front/back matter",
@@ -122,37 +122,37 @@
       "feature": "Open Dictionaries Folder",
       "area": "menu",
       "apple": "MainMenu.nib File > Open Dictionaries Folder",
-      "status": "gap",
-      "bifrost": "",
-      "note": "",
-      "wire": "Open data_dir/dictionaries through the file-manager intent; File menu"
+      "status": "partial",
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:796",
+      "note": "Opens a file:// URL through the shell; depends on the shell routing it to Files",
+      "wire": ""
     },
     {
       "feature": "Settings: choose and order dictionaries",
       "area": "settings",
       "apple": "Preferences.nib dictionary list with checkboxes and drag order",
-      "status": "gap",
-      "bifrost": "",
-      "note": "All installed dictionaries used",
-      "wire": "Add Settings with an enabled/ordered list stored in data_dir, applied to load_library results"
+      "status": "partial",
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:621",
+      "note": "Settings page (cmd+,) with On/Off, Up/Down; drag reorder not done",
+      "wire": ""
     },
     {
       "feature": "Settings: font size",
       "area": "settings",
       "apple": "Preferences.nib font size",
-      "status": "gap",
-      "bifrost": "",
-      "note": "",
-      "wire": "Store the text-size pref from the toolbar control in Settings"
+      "status": "partial",
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:658",
+      "note": "Size buttons in the settings page",
+      "wire": ""
     },
     {
       "feature": "Rename dictionary label",
       "area": "panel",
       "apple": "DictionaryWindow.nib label sheet",
-      "status": "gap",
-      "bifrost": "",
-      "note": "",
-      "wire": "Rename a dictionary's display label in Settings"
+      "status": "partial",
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:650",
+      "note": "Rename inline in the settings page; stored in prefs.txt",
+      "wire": ""
     },
     {
       "feature": "Look-up intent",

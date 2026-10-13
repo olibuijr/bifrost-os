@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Back and Forward history (toolbar, Go menu, cmd+[ and cmd+]), a scope bar with Select Next/Previous Dictionary, and tapping a word in a definition to follow it.
+- Find in Definition (cmd+f, cmd+g), Print (cmd+p), Open Dictionaries Folder, and dict: / x-dictionary: links.
+- Text size buttons and View menu; a settings page to turn dictionaries on or off, reorder and rename them.
+
 ## 0.1.0
 
 - New app: Dictionary. Reads StarDict dictionaries (.ifo, .idx, .dict) from the app's dictionaries folder and the system's stardict folder.
