@@ -197,6 +197,19 @@ impl NotifyBus {
         }
     }
 
+    /// Stats the store files under `data_dir` when the interval since the last stat has passed.
+    fn stat_stores(&mut self, data_dir: &Path, t: f64) {
+        match self.stat_at {
+            Some(at) if t - at < STORE_STAT_INTERVAL => {}
+            _ => {
+                self.stat_at = Some(t);
+                let contacts = crate::shell::contactstore::store_path(data_dir);
+                let calendar = super::calendar::store_path(data_dir);
+                self.stores = (stamp(&contacts), stamp(&calendar));
+            }
+        }
+    }
+
     /// Posts the system name for each change since the last call. The first call only records the state.
     fn system_changes(&mut self, now: Seen) {
         if let Some(prev) = self.last.replace(now) {
@@ -244,15 +257,7 @@ impl SystemService for NotifyBus {
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
         let running = |app: &str| crate::shell::apphost::slot_of(app).is_some_and(|slot| shell.ext.get(slot).is_some_and(|h| h.is_some()));
         self.prune(running);
-        match self.stat_at {
-            Some(at) if t - at < STORE_STAT_INTERVAL => {}
-            _ => {
-                self.stat_at = Some(t);
-                let contacts = crate::shell::contactstore::store_path(&shell.data_dir);
-                let calendar = super::calendar::store_path(&shell.data_dir);
-                self.stores = (stamp(&contacts), stamp(&calendar));
-            }
-        }
+        self.stat_stores(&shell.data_dir, t);
         let now = Seen {
             light: bifrost_render::appearance::target_is_light(),
             locked: shell.is_locked(),
@@ -615,6 +620,34 @@ mod tests {
         let mut bus = NotifyBus::default();
         assert!(bus.handle("app.a", "post", &name(CONTACTS_CHANGE)).is_err());
         assert!(bus.handle("app.a", "post", &name(CALENDAR_CHANGE)).is_err());
+    }
+
+    /// A fresh data directory for one test, under the crate's `target` folder like the other scratch dirs.
+    fn scratch_data_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-notify-bus").join(std::process::id().to_string()).join(tag);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn the_store_files_are_stat_d_at_most_once_a_second_and_a_save_is_seen_after_the_interval() {
+        let data = scratch_data_dir("tick");
+        let contacts = crate::shell::contactstore::store_path(&data);
+        std::fs::create_dir_all(contacts.parent().unwrap()).unwrap();
+        let mut bus = NotifyBus::default();
+        bus.stat_stores(&data, 0.0);
+        assert_eq!(bus.stores.0, None, "no file yet");
+        std::fs::write(&contacts, "first\n").unwrap();
+        bus.stat_stores(&data, 0.5);
+        assert_eq!(bus.stores.0, None, "inside the interval the files are not stat'ed again");
+        bus.stat_stores(&data, 1.0);
+        let first = bus.stores.0.expect("the file is seen once the interval has passed");
+        std::fs::write(&contacts, "second save, longer\n").unwrap();
+        bus.stat_stores(&data, 1.5);
+        assert_eq!(bus.stores.0, Some(first), "a save inside the interval waits for the next stat");
+        bus.stat_stores(&data, 2.0);
+        assert_ne!(bus.stores.0, Some(first), "the save is seen after the interval");
     }
 
     #[test]
