@@ -221,6 +221,8 @@ pub struct Desk {
     pub(super) raise_front: bool,
     #[cfg(feature = "desktop-wayland")]
     window_cache: std::collections::HashMap<u32, CachedWindow>,
+    /// a built-in window whose body may be reused this frame (only the key state moved; see `draw_window`)
+    reuse_body: Option<AppId>,
     #[cfg(feature = "desktop-wayland")]
     body_cache: std::collections::HashMap<AppId, Vec<u32>>,
     #[cfg(feature = "desktop-wayland")]
@@ -1652,6 +1654,14 @@ impl Shell {
                         continue;
                     }
                 }
+                // only the key state moved on a built-in whose content is quiet (drawn after the last input and the
+                // last change Settings reported): its body is reused and only the frame, dim and lights are drawn
+                // (bringing another window forward cost a 31 ms frame on the lab PC, round 75)
+                let quiet_body = !matches!(w.app, AppId::External(_)) && cached.as_ref().is_some_and(|c|
+                    c.width == w.r.w as usize && c.height == w.r.h as usize && c.focused != focused && c.maximized == w.maximized
+                    && c.drawn > self.last_input && c.drawn > self.settings_changed && t - c.drawn < 1000.)
+                    && (w.app != AppId::Settings || self.settings.as_ref().is_some_and(|st| st.next_wake(t).map_or(true, |x| x > t)));
+                self.desk.as_mut().unwrap().reuse_body = quiet_body.then_some(w.app);
                 // Reuse the shared scratch buffer instead of a fresh zeroed allocation per window per frame.
                 let mut px = std::mem::take(&mut self.desk.as_mut().unwrap().window_buf);
                 px.clear(); px.resize(w.r.w as usize * w.r.h as usize, 0);
@@ -1734,17 +1744,25 @@ impl Shell {
         let persistent = std::env::var_os("SPRINGBOARD_WAYLAND").is_some() && matches!(w.app, AppId::External(_)) && !self.keyboard.shown() && !self.keyboard.animating();
         #[cfg(not(feature = "desktop-wayland"))]
         let persistent = false;
+        // a built-in on the Wayland path keeps its last (undimmed) body too, so a key-state change can reuse it
         #[cfg(feature = "desktop-wayland")]
-        let mut buf = if persistent { self.desk.as_mut().unwrap().body_cache.remove(&w.app).unwrap_or_default() } else { std::mem::take(&mut self.desk.as_mut().unwrap().buf) };
+        let builtin = std::env::var_os("SPRINGBOARD_WAYLAND").is_some() && !matches!(w.app, AppId::External(_));
+        #[cfg(not(feature = "desktop-wayland"))]
+        let builtin = false;
+        let reuse = builtin && self.desk.as_mut().unwrap().reuse_body.take() == Some(w.app) && !self.keyboard.shown() && !self.keyboard.animating();
+        #[cfg(feature = "desktop-wayland")]
+        let mut buf = if persistent || builtin { self.desk.as_mut().unwrap().body_cache.remove(&w.app).unwrap_or_default() } else { std::mem::take(&mut self.desk.as_mut().unwrap().buf) };
         #[cfg(not(feature = "desktop-wayland"))]
         let mut buf = std::mem::take(&mut self.desk.as_mut().unwrap().buf);
         let fresh = buf.len() != bw * bh;
-        if !persistent {buf.clear();}
+        if !persistent && !(reuse && !fresh) {buf.clear();}
         buf.resize(bw * bh, BLACK);
         {
             let mut sub = Surface { w: bw, h: bh, stride: bw, px: &mut buf, y0: 0 };
             let app = w.app;
-            if persistent && !fresh && !self.keyboard.shown() && !self.keyboard.animating() {
+            if reuse && !fresh {
+                // the body is the one drawn last time: nothing in it changed
+            } else if persistent && !fresh && !self.keyboard.shown() && !self.keyboard.animating() {
                 if let AppId::External(slot) = app { self.ext_blit_damage(&mut sub,slot as usize,&mut crate::gfx::Damage::new(bw,bh)); }
             } else {
                 self.with_size(b.w, b.h, |sh| sh.draw_app_body(&mut sub, app, t));
@@ -1753,7 +1771,7 @@ impl Shell {
         if full_size(w.app) && rad > 0.0 { copy_rect_rounded(s, &buf, bw, bh, b.x, b.y, rad); } else { copy_rect(s, &buf, bw, bh, b.x, b.y); }
         if !focused { dim_rect(s.px, s.stride, b.x.max(0) as usize, (b.y.max(0) as usize).saturating_sub(s.y0), ((b.x + b.w).max(0) as usize).min(s.w), ((b.y + b.h).max(0) as usize).saturating_sub(s.y0).min(s.h), BACKGROUND_DIM); }
         #[cfg(feature = "desktop-wayland")]
-        if persistent { self.desk.as_mut().unwrap().body_cache.insert(w.app,buf); }
+        if persistent || builtin { self.desk.as_mut().unwrap().body_cache.insert(w.app,buf); }
         else { self.desk.as_mut().unwrap().buf = buf; }
         #[cfg(not(feature = "desktop-wayland"))]
         { self.desk.as_mut().unwrap().buf = buf; }

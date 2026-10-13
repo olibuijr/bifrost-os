@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.5 — 2026-10-13
+
+- Smoothness: a built-in window keeps its last body, so when only the key state moves (another window comes forward) and nothing in it changed since it was drawn, the body is reused and only the frame, the dim and the lights are drawn.
+
 ## 0.7.4 — 2026-10-13
 
 - Smoothness: when only the key window changes (Cmd-Tab, a click on a back window), a full-size app's window copies its body again from the app's last frame, dimmed or not, and repaints its lights, instead of drawing the whole window afresh (the Browser switch was a 31 ms frame on the lab PC).
