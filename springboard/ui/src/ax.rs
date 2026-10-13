@@ -940,7 +940,7 @@ mod tree_tests {
     }
 
     #[test]
-    fn apple_role_strings_follow_the_kit_roles() {
+    fn role_strings_follow_the_kit_roles() {
         assert_eq!(AxRole::from(Role::Button).raw(), "AXButton");
         assert_eq!(AxRole::from(Role::Slider).raw(), "AXSlider");
         assert_eq!(AxRole::from(Role::Toggle).raw(), "AXCheckBox");
