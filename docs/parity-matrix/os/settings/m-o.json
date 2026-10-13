@@ -38,9 +38,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no pointer settings page; services/cursor_service.rs only",
+   "bifrost": "springboard/src/shell/mouse_page.rs; springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Same Mouse page (identifier com.apple.Mouse-Settings.extension); host only, see Mouse.",
    "rea": []
   },
   {
@@ -178,9 +178,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no pointer settings page; services/cursor_service.rs only",
+   "bifrost": "springboard/src/shell/mouse_page.rs; springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Mouse page, host only: tracking speed, pointer acceleration (stored, not yet applied to the input layer), scrolling speed, double-click speed (stored, not yet read by the shell), natural scrolling, secondary click side. Needs a Midget check; no Bluetooth mouse pairing rows or per-device settings.",
    "rea": []
   },
   {

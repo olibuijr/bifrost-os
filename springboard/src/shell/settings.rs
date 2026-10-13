@@ -2052,6 +2052,15 @@ impl Settings {
                 }
                 vec![]
             }
+            Slider::MouseDoubleClick => {
+                let v = v.clamp(0., 1.);
+                self.opts.double_click_ms = super::mouse_page::double_click_from_slider(v);
+                self.list_mut().expect("list").set_slider(g, i, v);
+                if release {
+                    self.opts.save(prefs);
+                }
+                vec![]
+            }
             Slider::LiquidGlass => {
                 let v = v.clamp(0., 1.);
                 self.list_mut().expect("list").set_slider(g, i, v);
@@ -2279,6 +2288,12 @@ impl Settings {
                     }
                     Pick::TrackpadSecondary(k) => {
                         self.opts.trackpad_secondary = k.min(super::options::TRACKPAD_SECONDARY.len() - 1);
+                        self.opts.save(prefs);
+                        self.apply_pointer();
+                        vec![]
+                    }
+                    Pick::MouseSecondary(k) => {
+                        self.opts.swap_buttons = super::mouse_page::swaps_buttons(k);
                         self.opts.save(prefs);
                         self.apply_pointer();
                         vec![]
@@ -2562,11 +2577,7 @@ impl Settings {
                 self.apply_pointer();
                 on
             }
-            Toggle::SwapButtons => {
-                let on = flip(&mut self.opts.swap_buttons);
-                self.apply_pointer();
-                on
-            }
+            Toggle::MouseAcceleration => flip(&mut self.opts.mouse_accel),
             Toggle::LoginNamePassword => flip(&mut self.opts.login_name_password),
             Toggle::LoginHints => flip(&mut self.opts.login_hints),
             Toggle::FunctionStandard => {

@@ -98,9 +98,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no trackpad settings page",
+   "bifrost": "springboard/src/shell/pages.rs (PageId::Trackpad)",
+   "status": "partial",
+   "note": "Same Trackpad page; see Trackpad.",
    "rea": []
   },
   {
@@ -158,9 +158,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no users and groups page",
+   "bifrost": "springboard/src/shell/users_page.rs",
+   "status": "partial",
+   "note": "Users & Groups page: accounts and groups from the system, create, delete, admin flag, password change via the login service, login options. Missing: login-item and parental-control rows, picture picker, sharing-only users. Host only.",
    "rea": []
   },
   {
@@ -258,9 +258,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no trackpad settings page",
+   "bifrost": "springboard/src/shell/pages.rs (PageId::Trackpad)",
+   "status": "partial",
+   "note": "Trackpad page: tracking speed, tap to click, secondary click, natural scrolling, gesture links. Missing: click pressure, force touch, look up, scroll and zoom gesture rows, per-device settings. Host only.",
    "rea": []
   },
   {

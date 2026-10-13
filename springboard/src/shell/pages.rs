@@ -205,8 +205,8 @@ pub enum Toggle {
     NaturalScroll,
     /// Trackpad > Tap to Click
     TapToClick,
-    /// Mouse > Swap Left and Right Buttons
-    SwapButtons,
+    /// Mouse > Pointer Acceleration
+    MouseAcceleration,
     /// Users & Groups > Login Options: name and password fields at sign-in
     LoginNamePassword,
     /// Users & Groups > Login Options: password hints at sign-in
@@ -221,6 +221,8 @@ pub enum Toggle {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Pick {
+    /// Mouse > Secondary Click: index into `mouse_page::SECONDARY_BUTTON`
+    MouseSecondary(usize),
     /// Keyboard > Modifier Keys: the modifier key (index into `kb_input::REMAPPABLE`) sends the choice (index into `kb_input::REMAP_TARGETS`)
     Remap(usize, usize),
     /// Settings > Sound: the n-th listed output / input becomes the default
@@ -296,6 +298,8 @@ pub enum Slider {
     MouseSpeed,
     /// Mouse > Scrolling Speed
     MouseScroll,
+    /// Mouse > Double-Click Speed (see `mouse_page::double_click_from_slider`)
+    MouseDoubleClick,
     /// Trackpad > Tracking Speed
     TrackpadSpeed,
     /// Accessibility > Cursor Size, 0..1 (`accessibility::AccessibilitySettings::cursor_size`)
@@ -630,7 +634,7 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("passwords", "logins saved website accounts"),
     ("users & groups", "accounts user admin password login"),
     ("trackpad", "touchpad pointer click scroll gestures tap"),
-    ("mouse", "pointer scroll speed buttons"),
+    ("mouse", "pointer wheel scroll speed buttons double-click secondary click acceleration tracking"),
     ("night shift", "warm color temperature schedule evening"),
     ("print & scan", "printer scanner printing scanning paper"),
     ("sharing", "computer name hostname file sharing remote"),
@@ -1018,16 +1022,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 .footer("Gestures are set in General › Gestures."),
             ],
         ),
-        PageId::Mouse => page(
-            "Mouse",
-            false,
-            vec![
-                Group::new(vec![Item::slider(Ends::Speed, speed_slider(o.mouse_speed), Action::Slider(Slider::MouseSpeed))]).header("TRACKING SPEED"),
-                Group::new(vec![Item::slider(Ends::Speed, speed_slider(o.mouse_scroll), Action::Slider(Slider::MouseScroll))]).header("SCROLLING SPEED"),
-                Group::new(vec![Item::new("Natural Scrolling").switch(o.natural_scroll, Action::Toggle(Toggle::NaturalScroll))]).footer("The content moves with the wheel, as it does on a touch screen."),
-                Group::new(vec![Item::new("Swap Left and Right Buttons").switch(o.swap_buttons, Action::Toggle(Toggle::SwapButtons))]).footer("The left button becomes the secondary button and the right button the primary one."),
-            ],
-        ),
+        PageId::Mouse => page("Mouse", false, super::mouse_page::groups(o)),
         PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, m.users, m.detail, "", o),
         PageId::Fonts => fonts_page(m),
         PageId::FontPick(role) => font_pick_page(m, role),

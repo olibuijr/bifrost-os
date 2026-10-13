@@ -178,9 +178,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "the share sheet exists (shell/share); no sharing settings page",
+   "bifrost": "springboard/src/shell/sharing_page.rs",
+   "status": "partial",
+   "note": "Same Sharing page; see SharingPref.",
    "rea": []
   },
   {
@@ -838,9 +838,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "the share sheet exists (shell/share); no sharing settings page",
+   "bifrost": "springboard/src/shell/sharing_page.rs",
+   "status": "partial",
+   "note": "Sharing page: computer name, Remote Login, File Sharing, Screen Sharing via the privileged service, Nearby Share, AirPlay & Handoff. Missing: Media Sharing, Printer Sharing, Content Caching, Internet Sharing, local host name rows. Host only.",
    "rea": []
   },
   {

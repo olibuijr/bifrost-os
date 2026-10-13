@@ -218,9 +218,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no internet accounts page",
+   "bifrost": "springboard/src/shell/internet_accounts_page.rs",
+   "status": "partial",
+   "note": "Same Internet Accounts page; see InternetAccounts.",
    "rea": []
   },
   {
@@ -238,9 +238,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no internet accounts page",
+   "bifrost": "springboard/src/shell/internet_accounts_page.rs",
+   "status": "partial",
+   "note": "Internet Accounts page: mail, calendar and contact accounts with per-service switches, add and remove. Missing: provider sign-in flows (OAuth), account detail panes, notes service. Host only.",
    "rea": []
   }
  ]

@@ -2066,3 +2066,16 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## System Settings: Mouse pane (`springboard/src/shell/mouse_page.rs`)
+
+The Mouse pane is its own page (`PageId::Mouse`, `x-apple.systempreferences:com.apple.Mouse-Settings.extension`), separate from Trackpad.
+Rows: Tracking Speed, Pointer Acceleration, Scrolling Speed, Double-Click Speed, Natural Scrolling and Secondary Click
+(Click on Right Side / Click on Left Side). Constants (`DOUBLE_CLICK_RANGE_MS`, `SECONDARY_BUTTON`) and the slider mapping live in
+`mouse_page.rs`; `Options` stores `mouse_speed`, `mouse_scroll`, `double_click_ms`, `mouse_accel` and `swap_buttons` (settings keys
+`mouse_speed`, `mouse_scroll_speed`, `double_click_ms`, `mouse_acceleration`, `swap_buttons`). Tap to Click and the two-finger secondary
+click stay on Trackpad only. Gaps: Pointer Acceleration and Double-Click Speed are stored but not yet read by the input layer or the
+shell's double-click detection (`pointer_prefs::Tuning` has no field for them); Natural Scrolling is one setting shared with Trackpad,
+where Apple keeps one per device. Audit of the other panes (Trackpad, Print & Scan, Sharing, Internet Accounts, Users & Groups): the
+pages exist (`pages.rs`, `print_scan_page.rs`, `sharing_page.rs`, `internet_accounts_page.rs`, `users_page.rs`); their parity rows are
+`partial` with the missing parts listed, none `parity` until checked on Midget.
