@@ -45,7 +45,7 @@ impl Shell {
  }
  pub(super) fn dock_app_key(&self,index:usize)->Option<String>{if let Some(a)=apps().get(index){return Some(a.icon.into());} #[cfg(feature="desktop-wayland")]if index>apps().len(){return self.desk.as_ref()?.linux_apps.get(index-apps().len()-1).map(|a|format!("linux:{}",a.app_id));}None}
 #[cfg(feature = "desktop-wayland")]
- pub(super) fn dock_popup_rect(&self)->Option<(usize,usize,usize,usize)>{let d=self.desk.as_ref()?;let (x,y)=d.dock_menu_anchor;let width=self.ui.pt(260.) as usize;let height=self.ui.pt(if d.dock_menu_target.is_some(){404.}else{260.}) as usize;Some(((x as usize).min((self.w as usize).saturating_sub(width)),(y as usize).min((self.h as usize).saturating_sub(height)).max(self.desktop_bar_height()),width,height))}
+ pub(super) fn dock_popup_rect(&self)->Option<(usize,usize,usize,usize)>{let d=self.desk.as_ref()?;let (x,y)=d.dock_menu_anchor;let width=self.ui.pt(260.) as usize;let items=d.dock_menu_target.and_then(|i|apps().get(i).map(|a|a.id)).and_then(|id|if let AppId::External(slot)=id{self.ext.get(slot as usize).and_then(Option::as_ref).map(|h|h.dock_menu.len())}else{None}).unwrap_or(0);let base=if d.dock_menu_target.is_some(){404.}else{260.};let extra=if items>0{items as f32*24.+10.}else{0.};let height=self.ui.pt(base+extra) as usize;Some(((x as usize).min((self.w as usize).saturating_sub(width)),(y as usize).min((self.h as usize).saturating_sub(height)).max(self.desktop_bar_height()),width,height))}
  pub(super) fn dock_pointer(&mut self,event:Pointer,t:f64)->Option<Vec<Effect>> {
   if !self.desk_active()||self.is_locked(){return None;}
   if let Pointer::Hover(x,y)=event {

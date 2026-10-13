@@ -348,6 +348,8 @@ pub struct AppHost {
     pub badge: String,
     /// Progress and attention bounce the app set on its Dock tile (the `dock` service).
     pub tile: super::desktop_dock::TileState,
+    /// The items the app set on its Dock menu (the `dock` service's `menu`), shown under the app's own rows.
+    pub dock_menu: Vec<super::services::dock_tile::MenuEntry>,
     /// `ToShell::DocumentState`: the document's title, unsaved-changes flag and file name (cleaned by `clean_badge`-style trimming).
     pub doc_title: String,
     pub doc_edited: bool,
@@ -444,6 +446,7 @@ impl AppHost {
             last_notification: None,
             badge: String::new(),
             tile: Default::default(),
+            dock_menu: Vec::new(),
             sudden: false,
             activity: 0,
             quit_at: None,

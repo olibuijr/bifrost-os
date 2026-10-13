@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Dock: an app sets its own items in the Dock's menu (`dock` service `menu`, SDK `dock_tile::set_menu`). Items show under the
+  app's Open, Keep in Dock and Quit rows; choosing one sends the app its id as `ContextAction`. Up to eight items.
 - Software Update: `softwareupdate --schedule` prints whether the background checks run; `--schedule on|off` switches them.
   Manual checks (`softwareupdate -l`, Settings > Check) still run. The switch is one file in the shell data folder that the
   update agent and the shell's own checker both read.
