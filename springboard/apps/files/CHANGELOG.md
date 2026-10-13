@@ -2,6 +2,7 @@
 
 - A Files drag shows a drag image: the icon of the first item, with a count badge when the drag carries more than one item.
 - A file dropped on a Files window from another app is copied as a background job with progress and can be cancelled, instead of copying on the UI thread. The copy streams in chunks, so a large file no longer stalls the window.
+- Speed: a large folder shows its first rows at once. The folder is read in batches (64 rows, then 512 at a time) and the sorted list replaces them when the read ends. Subfolder item counts are no longer read with every listing; the control API counts a folder only when it is asked for. An expanded folder in the list view is read again only when its modification time changes, instead of on every refresh.
 
 ## 1.27.0 — 2026-10-13
 

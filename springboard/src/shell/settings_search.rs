@@ -1,10 +1,17 @@
 //! The Settings search field: a capsule with a magnifier under the root
-//! page's large title, its docked keyboard, and the title filter that
-//! narrows the root rows like bifrost Settings.
+//! page's large title, its docked keyboard, and the index it searches.
+//! The index lists every pane and every setting row of the pages Settings
+//! reaches from its root (`index`), matched by name and keyword (`matches`);
+//! while there is a query the root page shows the matches (`results`).
+//! Other apps reach a pane by name through `find_page`.
 
+use std::collections::{HashSet, VecDeque};
+
+use super::fuzzy;
 use super::glyphs;
 use super::keyboard::{self, Keyboard, Out};
-use super::list::{Group, Spec};
+use super::list::{Group, Item, Spec};
+use super::pages::{self, Action, PageId};
 use super::textfield::TextField;
 use super::ui::{home_zone, Ui, FIELD_BG, MAC_BODY_PT, SECONDARY};
 use super::Event;
@@ -161,30 +168,262 @@ impl Search {
     }
 }
 
-/// Keeps the rows whose title contains `query` (case-insensitive) and
-/// drops the groups left empty; an empty query keeps everything.
-pub fn filter(spec: &mut Spec, query: &str) {
-    let q = query.trim().to_lowercase();
-    if q.is_empty() {
-        return;
+/// One thing Search finds: a pane, or a setting on a pane. `page` is what a tap opens (the pane itself, or the page
+/// the setting sits on); `place` is the title of the page the row is listed on.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Entry {
+    pub label: String,
+    pub page: PageId,
+    pub place: String,
+    /// the row opens a pane of its own
+    pub pane: bool,
+    /// folded label, place and keywords, space separated
+    words: String,
+    /// `words` without spaces and punctuation, so "wifi" finds "Wi-Fi"
+    squashed: String,
+}
+
+impl Entry {
+    fn new(label: &str, page: PageId, place: &str, pane: bool) -> Entry {
+        let words = fuzzy::fold(&format!("{label} {place} {}", pages::keywords(label)));
+        let squashed = squash(&words);
+        Entry { label: label.to_string(), page, place: place.to_string(), pane, words, squashed }
     }
-    for g in &mut spec.groups {
-        g.items.retain(|i| i.label.to_lowercase().contains(&q));
+
+    fn matches_word(&self, word: &str) -> bool {
+        self.words.contains(word) || self.squashed.contains(&squash(word))
     }
-    spec.groups.retain(|g: &Group| !g.items.is_empty());
+}
+
+fn squash(s: &str) -> String {
+    s.chars().filter(|c| c.is_alphanumeric()).collect()
+}
+
+/// A pane whose rows open a page with data of its own (a Wi-Fi network, a crash): found by its row, never listed.
+fn detail(id: PageId) -> bool {
+    matches!(id, PageId::WifiDetail | PageId::BluetoothDetail | PageId::NotificationApp | PageId::UserDetail | PageId::GroupDetail | PageId::GameController(_))
+}
+
+/// A pane Search lists but does not walk: its rows are personal (passwords, accounts), read from the disk, change
+/// with every device, or the pane is a grid. It is still found by its own row on the page that links to it.
+fn walked(id: PageId) -> bool {
+    !matches!(
+        id,
+        PageId::Wallpaper
+            | PageId::Passwords
+            | PageId::InternetAccounts
+            | PageId::Diagnostics
+            | PageId::Storage
+            | PageId::Passcode
+            | PageId::Developer
+            | PageId::ScreenTime
+            | PageId::StDowntime
+            | PageId::StLimits
+            | PageId::StAllowed
+            | PageId::Users
+            | PageId::Groups
+            | PageId::GameControllers
+            | PageId::FontPick(_)
+            | PageId::Graphics
+    )
+}
+
+/// Every pane reachable from the root page, and every setting row on them, walked from `spec_of` (a page's live spec).
+/// A row that opens a pane is listed as that pane; a row without an action is information and is not listed.
+pub fn index(mut spec_of: impl FnMut(PageId) -> Spec) -> Vec<Entry> {
+    let mut out: Vec<Entry> = Vec::new();
+    let mut seen: HashSet<(String, PageId)> = HashSet::new();
+    let mut walk: VecDeque<PageId> = VecDeque::from([PageId::Root]);
+    let mut visited: HashSet<PageId> = HashSet::from([PageId::Root]);
+    while let Some(id) = walk.pop_front() {
+        let page = spec_of(id);
+        for item in page.groups.iter().flat_map(|g| g.items.iter()) {
+            let label = item.label.trim();
+            if label.is_empty() {
+                continue;
+            }
+            let entry = match item.action {
+                Action::None => continue,
+                Action::Push(target) => {
+                    if detail(target) {
+                        continue;
+                    }
+                    if walked(target) && visited.insert(target) {
+                        walk.push_back(target);
+                    }
+                    Entry::new(label, target, &page.title, true)
+                }
+                _ => Entry::new(label, id, &page.title, false),
+            };
+            if seen.insert((entry.label.clone(), entry.page)) {
+                out.push(entry);
+            }
+        }
+    }
+    out
+}
+
+/// The entries that match `query`: every word of it must match part of an entry. Entries whose label starts with the
+/// whole query come first, then those whose label contains it; the rest keep the index order.
+pub fn matches<'a>(index: &'a [Entry], query: &str) -> Vec<&'a Entry> {
+    let q = fuzzy::fold(query.trim());
+    let words: Vec<String> = q.split_whitespace().filter(|w| !squash(w).is_empty()).map(str::to_string).collect();
+    if words.is_empty() {
+        return Vec::new();
+    }
+    let mut hits: Vec<(u8, &Entry)> = index.iter().filter(|e| words.iter().all(|w| e.matches_word(w))).map(|e| (rank(e, &q), e)).collect();
+    hits.sort_by_key(|(r, _)| *r);
+    hits.into_iter().map(|(_, e)| e).collect()
+}
+
+fn rank(e: &Entry, query: &str) -> u8 {
+    let label = fuzzy::fold(&e.label);
+    if label.starts_with(query) {
+        0
+    } else if label.contains(query) {
+        1
+    } else {
+        2
+    }
+}
+
+/// The root page while Search has a query: one row per match (its name, and the page it sits on under it), or a
+/// single "No Results" row. A tap opens the match's page.
+pub fn results(index: &[Entry], query: &str) -> Spec {
+    let mut items: Vec<Item> = matches(index, query)
+        .into_iter()
+        .map(|e| {
+            let mut item = Item::new(e.label.clone()).value(e.place.clone());
+            item.action = Action::Push(e.page);
+            item
+        })
+        .collect();
+    if items.is_empty() {
+        items.push(Item::new("No Results"));
+    }
+    Spec { id: PageId::Root, title: "Settings".into(), large: true, groups: vec![Group::new(items)] }
+}
+
+/// Names other apps and menus use for a pane that no row is labelled with.
+const ALIASES: &[(&str, PageId)] = &[
+    ("Wi-Fi Settings", PageId::Wifi),
+    ("Network Settings", PageId::Network),
+    ("Bluetooth Settings", PageId::Bluetooth),
+    ("Sound", PageId::Sounds),
+    ("Displays", PageId::Display),
+    ("Desktop & Dock", PageId::HomeScreen),
+    ("Privacy & Security", PageId::Privacy),
+    ("Users & Groups", PageId::Users),
+    ("Print & Scan", PageId::PrintScan),
+    ("Keyboard Shortcuts", PageId::Shortcuts),
+    ("Lock Screen", PageId::LockScreen),
+    ("Screen Time", PageId::ScreenTime),
+    ("Trackpad", PageId::Trackpad),
+    ("Mouse", PageId::Mouse),
+];
+
+/// The pane an alias names ("Wi-Fi Settings"), if it is one.
+pub fn alias(name: &str) -> Option<PageId> {
+    let n = fuzzy::fold(name.trim());
+    ALIASES.iter().find(|(a, _)| fuzzy::fold(a) == n).map(|(_, id)| *id)
+}
+
+/// The page a deep link names: an alias, else the pane whose label is the name, else the setting with that label.
+pub fn find_page(index: &[Entry], name: &str) -> Option<PageId> {
+    if let Some(id) = alias(name) {
+        return Some(id);
+    }
+    let n = fuzzy::fold(name.trim());
+    if n.is_empty() {
+        return None;
+    }
+    index
+        .iter()
+        .find(|e| e.pane && fuzzy::fold(&e.label) == n)
+        .or_else(|| index.iter().find(|e| fuzzy::fold(&e.label) == n))
+        .map(|e| e.page)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shell::list::Item;
-    use crate::shell::pages::PageId;
+    use crate::shell::pages::Pick;
+
+    fn page(id: PageId, title: &str, items: Vec<Item>) -> Spec {
+        Spec { id, title: title.into(), large: false, groups: vec![Group::new(items)] }
+    }
+
+    fn push(label: &str, to: PageId) -> Item {
+        let mut item = Item::new(label);
+        item.action = Action::Push(to);
+        item
+    }
+
+    fn setting(label: &str) -> Item {
+        let mut item = Item::new(label);
+        item.action = Action::Pick(Pick::Nearby(0));
+        item
+    }
+
+    /// A small settings tree: Root > Network > Wi-Fi (with a detail row and a setting), Root > Battery, Root > Passwords.
+    fn tree(id: PageId) -> Spec {
+        match id {
+            PageId::Root => page(PageId::Root, "Settings", vec![push("Network", PageId::Network), push("Battery", PageId::Battery), push("Passwords", PageId::Passwords)]),
+            PageId::Network => page(PageId::Network, "Network", vec![push("Wi-Fi", PageId::Wifi), Item::new("Version")]),
+            PageId::Wifi => page(PageId::Wifi, "Wi-Fi", vec![setting("Ask to Join"), push("Cafe", PageId::WifiDetail)]),
+            PageId::Battery => page(PageId::Battery, "Battery", vec![setting("Low Power Mode")]),
+            other => panic!("walked a page Search must not read: {other:?}"),
+        }
+    }
+
+    fn found(index: &[Entry]) -> Vec<(String, PageId, bool)> {
+        index.iter().map(|e| (e.label.clone(), e.page, e.pane)).collect()
+    }
 
     #[test]
-    fn filter_keeps_matching_rows_and_drops_empty_groups() {
-        let mut spec = Spec { id: PageId::Root, title: "Settings".into(), large: true, groups: vec![Group::new(vec![Item::new("Wi-Fi"), Item::new("Bluetooth")]), Group::new(vec![Item::new("Battery")])] };
-        filter(&mut spec, " BLUE ");
-        assert_eq!(spec.groups.len(), 1);
-        assert_eq!(spec.groups[0].items[0].label, "Bluetooth");
+    fn index_lists_panes_and_settings_with_the_page_they_open() {
+        let idx = index(tree);
+        let f = found(&idx);
+        assert!(f.contains(&("Network".into(), PageId::Network, true)));
+        assert!(f.contains(&("Wi-Fi".into(), PageId::Wifi, true)));
+        assert!(f.contains(&("Ask to Join".into(), PageId::Wifi, false)), "a setting opens the page it is on");
+        assert!(f.contains(&("Low Power Mode".into(), PageId::Battery, false)));
+        assert!(f.contains(&("Passwords".into(), PageId::Passwords, true)), "a private pane is found by its row");
+        assert!(!f.iter().any(|(l, ..)| l == "Cafe"), "a detail row is not a result");
+        assert!(!f.iter().any(|(l, ..)| l == "Version"), "a row without an action is not a result");
+        assert_eq!(idx.iter().find(|e| e.label == "Wi-Fi").map(|e| e.place.as_str()), Some("Network"));
+    }
+
+    #[test]
+    fn search_matches_names_keywords_and_squashed_words() {
+        let idx = index(tree);
+        assert!(matches(&idx, "").is_empty());
+        assert_eq!(matches(&idx, "wi-fi")[0].label, "Wi-Fi", "a label prefix ranks first");
+        assert!(matches(&idx, "wifi").iter().any(|e| e.label == "Wi-Fi"), "punctuation is ignored");
+        assert!(matches(&idx, "ask join").iter().any(|e| e.label == "Ask to Join"), "every word must match");
+        assert!(matches(&idx, "wireless").iter().any(|e| e.label == "Wi-Fi"), "a keyword finds the pane");
+        assert!(matches(&idx, "zzzz").is_empty());
+    }
+
+    #[test]
+    fn results_show_matches_or_no_results() {
+        let idx = index(tree);
+        let spec = results(&idx, "battery");
+        let first = &spec.groups[0].items[0];
+        assert_eq!((first.label.as_str(), &first.action), ("Battery", &Action::Push(PageId::Battery)));
+        let none = results(&idx, "zzzz");
+        assert_eq!(none.groups[0].items.len(), 1);
+        assert_eq!(none.groups[0].items[0].action, Action::None);
+    }
+
+    #[test]
+    fn deep_links_resolve_aliases_and_labels() {
+        let idx = index(tree);
+        assert_eq!(find_page(&idx, "Wi-Fi Settings"), Some(PageId::Wifi));
+        assert_eq!(find_page(&idx, "battery"), Some(PageId::Battery));
+        assert_eq!(find_page(&idx, "Low Power Mode"), Some(PageId::Battery));
+        assert_eq!(find_page(&idx, "Nope"), None);
+        assert_eq!(find_page(&idx, "  "), None);
+        assert_eq!(alias("Print & Scan"), Some(PageId::PrintScan));
     }
 }

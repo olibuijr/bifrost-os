@@ -43,6 +43,7 @@ impl Files {
         let (sort, bin) = (self.sort, self.bin());
         let chain = if virtual_folder { vec![] } else { ancestor_chain(&path) };
         let work = move || {
+            let batch_path = path.clone();
             let result = if let Some(list) = tagged {
                 Ok(list)
             } else if let Some((folder, index)) = smart {
@@ -50,7 +51,11 @@ impl Files {
             } else if path == Path::new(fs::RECENTS) {
                 Ok(fs::recent_in(&roots, fs::RECENT_LIMIT))
             } else {
-                fs::list(&path).map_err(|e| e.to_string())
+                // a folder's rows go to the UI as they are read, so a large folder shows its first rows at once
+                fs::list_batched(&path, |batch| {
+                    let _ = tx.send(Listing { path: batch_path.clone(), result: Ok(batch.to_vec()), ancestors: vec![], partial: true });
+                })
+                .map_err(|e| e.to_string())
             };
             let (in_bin, keep_order) = (path == bin, path == Path::new(fs::RECENTS) || path.starts_with(TAGGED));
             let result = result.map(|mut rows| {
@@ -60,13 +65,13 @@ impl Files {
             let ancestors = chain
                 .into_iter()
                 .filter_map(|folder| {
-                    fs::list(&folder).ok().map(|mut list| {
+                    fs::list_batched(&folder, |_| {}).ok().map(|mut list| {
                         order(&mut list, sort);
                         (folder, list)
                     })
                 })
                 .collect();
-            let _ = tx.send(Listing { path, result, ancestors });
+            let _ = tx.send(Listing { path, result, ancestors, partial: false });
         };
         // Under the test pin the listing is read at once, so a snapshot never catches "Loading…" on a busy machine.
         if bifrost_app::testing::pinned() {

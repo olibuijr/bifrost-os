@@ -187,24 +187,62 @@ fn mtime_of(md: &std::fs::Metadata) -> i64 {
     md.modified().ok().and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_secs() as i64)
 }
 
-/// Reads a directory into unsorted entries (dot files included). The
-/// Recents stand-in lists the newest files and the Recently Deleted folder
-/// shows original names; the trash folder itself stays out of listings.
-pub fn list(dir: &Path) -> io::Result<Vec<Entry>> {
+/// The first batch a streamed listing hands out is small, so the first rows of a large folder show at once.
+const FIRST_BATCH: usize = 64;
+/// Later batches of a streamed listing.
+const BATCH: usize = 512;
+
+/// The Recents, tag and Recently Deleted stand-in folders, which are not read from the directory itself.
+fn is_stand_in(dir: &Path) -> bool {
+    dir == Path::new(RECENTS) || dir.starts_with(TAG_ROOT) || dir == trash_dir()
+}
+
+fn list_stand_in(dir: &Path) -> io::Result<Vec<Entry>> {
     if dir == Path::new(RECENTS) {
         return Ok(recent_in(&recent_roots(), RECENT_LIMIT));
     }
     if dir.starts_with(TAG_ROOT) {
         return Ok(list_tag(dir));
     }
-    if dir == trash_dir() {
-        return list_trash(dir);
-    }
-    list_dir(dir)
+    list_trash(dir)
 }
 
-fn list_dir(dir: &Path) -> io::Result<Vec<Entry>> {
+/// Reads a directory into unsorted entries (dot files included). The
+/// Recents stand-in lists the newest files and the Recently Deleted folder
+/// shows original names; the trash folder itself stays out of listings.
+/// Subfolders get their item counts while the folder is small enough.
+pub fn list(dir: &Path) -> io::Result<Vec<Entry>> {
+    if is_stand_in(dir) {
+        return list_stand_in(dir);
+    }
+    let mut out = read_plain(dir, &mut |_: &[Entry]| {})?;
+    if out.len() <= COUNT_LIMIT {
+        for e in out.iter_mut().filter(|e| e.is_dir) {
+            e.items = count_items(&e.path);
+        }
+    }
+    Ok(out)
+}
+
+/// Reads `dir` like [`list`] but without item counts, handing each batch of entries to `emit` as it is read, so a
+/// large folder shows its first rows before the whole folder is read. The returned list is the whole folder,
+/// unsorted. Stand-in folders have no batches: they return their list with no `emit` calls.
+pub fn list_batched(dir: &Path, mut emit: impl FnMut(&[Entry])) -> io::Result<Vec<Entry>> {
+    if is_stand_in(dir) {
+        return list_stand_in(dir);
+    }
+    read_plain(dir, &mut emit)
+}
+
+/// The number of entries in a folder, or None when it cannot be read. Counts are not part of a listing: the Files app
+/// asks for one only where it shows it.
+pub fn count_items(dir: &Path) -> Option<usize> {
+    std::fs::read_dir(dir).ok().map(|d| d.count())
+}
+
+fn read_plain(dir: &Path, emit: &mut impl FnMut(&[Entry])) -> io::Result<Vec<Entry>> {
     let mut out = vec![];
+    let mut sent = 0;
     for e in std::fs::read_dir(dir)? {
         let Ok(e) = e else { continue };
         let name = e.file_name().to_string_lossy().into_owned();
@@ -219,11 +257,14 @@ fn list_dir(dir: &Path) -> io::Result<Vec<Entry>> {
             Err(_) => (false, 0, 0),
         };
         out.push(Entry { kind: kind_of(&name, is_dir), name, path, is_dir, size, mtime, items: None });
-    }
-    if out.len() <= COUNT_LIMIT {
-        for e in out.iter_mut().filter(|e| e.is_dir) {
-            e.items = std::fs::read_dir(&e.path).ok().map(|d| d.count());
+        let batch = if sent == 0 { FIRST_BATCH } else { BATCH };
+        if out.len() - sent >= batch {
+            emit(&out[sent..]);
+            sent = out.len();
         }
+    }
+    if sent < out.len() {
+        emit(&out[sent..]);
     }
     Ok(out)
 }
@@ -685,6 +726,36 @@ pub(crate) mod tests {
         assert_eq!(v[1].path, dir.join("sub"));
         assert!(list(&dir.join("missing")).is_err());
         assert!(available(&dir).is_some_and(|b| b > 0));
+    }
+
+    #[test]
+    fn batched_listing_streams_small_first_batch_and_skips_counts() {
+        let dir = temp("batched");
+        for i in 0..300 {
+            std::fs::write(dir.join(format!("f{i:03}.txt")), "x").unwrap();
+        }
+        std::fs::create_dir(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("sub/x"), "").unwrap();
+        let mut batches: Vec<usize> = vec![];
+        let mut names: Vec<String> = vec![];
+        let all = list_batched(&dir, |b| {
+            batches.push(b.len());
+            names.extend(b.iter().map(|e| e.name.clone()));
+        })
+        .unwrap();
+        // the first batch is the small one; the batches add up to the whole folder
+        assert_eq!(batches[0], FIRST_BATCH);
+        assert_eq!(batches.iter().sum::<usize>(), all.len());
+        assert_eq!(all.len(), 301);
+        let mut seen: Vec<String> = all.iter().map(|e| e.name.clone()).collect();
+        seen.sort();
+        names.sort();
+        assert_eq!(names, seen);
+        // a streamed listing carries no item counts; list() adds them only while the folder is under COUNT_LIMIT
+        assert!(all.iter().all(|e| e.items.is_none()));
+        assert_eq!(list(&dir).unwrap().iter().find(|e| e.name == "sub").unwrap().items, None);
+        assert_eq!(count_items(&dir.join("sub")), Some(1));
+        assert_eq!(count_items(&dir.join("missing")), None);
     }
 
     #[test]

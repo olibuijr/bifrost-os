@@ -17,6 +17,9 @@
 //!
 //! Bounds: `MAX_PER_APP` items per app (the oldest are dropped first), at most `MAX_APPS` apps, and every field is
 //! already cut by the wire codec, so one app cannot grow the index without limit.
+//!
+//! Speed: a query that extends the previous word query (typing more) ranks only the items that query matched; only
+//! the best `limit` are built; expiry is skipped until an item is due; and saves are written by one saver thread.
 
 use super::fuzzy::Matcher;
 use crate::gfx::{rgba, Image};
@@ -26,6 +29,7 @@ use bifrost_ui::language::{dominant_language, Language};
 use bifrost_ui::lexical_tags;
 use bifrost_ui::metaquery::{self, Predicate};
 use bifrost_ui::uttype;
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -106,10 +110,36 @@ pub struct Found {
     pub thumbnail: String,
 }
 
+/// The entries a word query matched, and the query they matched for. A query whose words extend these (more typing)
+/// can only match these entries, so it ranks them instead of every entry.
+#[derive(Default)]
+struct Narrow {
+    gen: u64,
+    words: Vec<String>,
+    kinds: Vec<&'static str>,
+    window: Option<(u64, u64)>,
+    /// (app position, entry position) in `apps` order
+    hits: Vec<(usize, usize)>,
+}
+
 #[derive(Default)]
 pub struct Index {
     apps: BTreeMap<String, Vec<Entry>>,
     dirty: Vec<String>,
+    /// bumped by every change to the items (see `mark`); a narrowing is only reused within one generation
+    gen: u64,
+    /// no item expires before this (Unix seconds), so `prune` returns early until then; 0 when not known
+    next_expiry: u64,
+    narrow: RefCell<Option<Narrow>>,
+}
+
+/// True when every word of `new` extends the word of `old` at its place (the last word of `old` may be shorter). Then
+/// whatever matches `new` matches `old` too, so the entries `old` matched hold every entry `new` can match.
+fn extends(old: &[String], new: &[String]) -> bool {
+    match old.split_last() {
+        Some((last, head)) => new.len() >= old.len() && head.iter().zip(new).all(|(a, b)| a == b) && new[old.len() - 1].starts_with(last.as_str()),
+        None => false,
+    }
 }
 
 fn safe_name(app_id: &str) -> bool {
@@ -154,6 +184,7 @@ impl Index {
     }
 
     fn mark(&mut self, app_id: &str) {
+        self.gen += 1;
         if !self.dirty.iter().any(|d| d == app_id) {
             self.dirty.push(app_id.to_string());
         }
@@ -179,6 +210,8 @@ impl Index {
         self.rank_hits(Some(app_id), query, limit, now_secs())
     }
 
+    /// Ranks the matches, best first, and builds only the `limit` best. The order is the score, then the newest
+    /// (higher position in its app), then the app order. A word query also leaves its matches in `narrow`.
     fn rank_hits(&self, only: Option<&str>, query: &str, limit: usize, now: u64) -> Vec<Found> {
         let f = parse_query(query, now);
         if f.words.is_empty() && f.kinds.is_empty() && f.window.is_none() {
@@ -187,25 +220,63 @@ impl Index {
         let words: Vec<Matcher> = f.words.iter().map(|w| Matcher::new(w.as_str())).collect();
         let query_lang = if words.is_empty() { None } else { dominant_language(&f.words.join(" ")) };
         let window = f.window.map(|(from, to)| window_predicate(from, to));
-        let mut hits = vec![];
-        for (app, list) in &self.apps {
-            if only.map_or(false, |a| a != app.as_str()) {
-                continue;
-            }
-            for (age, e) in list.iter().enumerate().rev() {
+        let lists: Vec<(&str, &[Entry])> = self.apps.iter().map(|(app, list)| (app.as_str(), list.as_slice())).collect();
+        let narrowed = if only.is_none() && !f.words.is_empty() { self.narrowed(&f) } else { None };
+        let mut ranked: Vec<(((u8, u8, bool, usize), std::cmp::Reverse<usize>), usize, usize)> = vec![];
+        {
+            let mut consider = |ai: usize, ei: usize| {
+                let e = &lists[ai].1[ei];
                 if !passes(e, &f.kinds, window.as_ref()) {
-                    continue;
+                    return;
                 }
                 // a query of filters alone ranks every match equal, so the newest comes first
                 let key = if words.is_empty() { Some((0, 0, false, 0)) } else { score(&words, e, query_lang) };
                 if let Some(key) = key {
-                    let found = Found { app_id: app.clone(), unique_id: e.item.unique_id.clone(), domain: e.item.domain.clone(), title: e.item.title.clone(), kind: e.kind, thumbnail: e.item.thumbnail.clone() };
-                    hits.push(((key, std::cmp::Reverse(age)), found));
+                    ranked.push(((key, std::cmp::Reverse(ei)), ai, ei));
+                }
+            };
+            match &narrowed {
+                Some(prev) => {
+                    for &(ai, ei) in prev {
+                        consider(ai, ei);
+                    }
+                }
+                None => {
+                    for (ai, (app, list)) in lists.iter().enumerate() {
+                        if only.map_or(false, |a| a != *app) {
+                            continue;
+                        }
+                        for ei in 0..list.len() {
+                            consider(ai, ei);
+                        }
+                    }
                 }
             }
         }
-        hits.sort_by(|a, b| a.0.cmp(&b.0));
-        hits.into_iter().take(limit).map(|(_, f)| f).collect()
+        if only.is_none() && !f.words.is_empty() {
+            let hits = ranked.iter().map(|&(_, ai, ei)| (ai, ei)).collect();
+            *self.narrow.borrow_mut() = Some(Narrow { gen: self.gen, words: f.words.clone(), kinds: f.kinds.clone(), window: f.window, hits });
+        }
+        if ranked.len() > limit {
+            ranked.select_nth_unstable(limit);
+            ranked.truncate(limit);
+        }
+        ranked.sort_unstable();
+        ranked
+            .into_iter()
+            .map(|(_, ai, ei)| {
+                let (app, list) = lists[ai];
+                let e = &list[ei];
+                Found { app_id: app.to_string(), unique_id: e.item.unique_id.clone(), domain: e.item.domain.clone(), title: e.item.title.clone(), kind: e.kind, thumbnail: e.item.thumbnail.clone() }
+            })
+            .collect()
+    }
+
+    /// The entries the last word query matched, when this query extends it under the same filters and no item has
+    /// changed since. Taking them clears the stored narrowing; `rank_hits` stores the new one.
+    fn narrowed(&self, f: &Filters) -> Option<Vec<(usize, usize)>> {
+        let prev = self.narrow.borrow_mut().take()?;
+        (prev.gen == self.gen && prev.kinds == f.kinds && prev.window == f.window && extends(&prev.words, &f.words)).then_some(prev.hits)
     }
 
     /// Sets (or with `None` clears) the expiry of one item. False when the app has no item with that identifier.
@@ -214,12 +285,19 @@ impl Index {
             return false;
         };
         e.expires_at = at;
+        if let Some(t) = at {
+            self.next_expiry = self.next_expiry.min(t);
+        }
         self.mark(app_id);
         true
     }
 
-    /// Drops the items whose expiry is at or before `now` (Unix seconds). Returns how many went.
+    /// Drops the items whose expiry is at or before `now` (Unix seconds). Returns how many went. Returns at once while
+    /// no item can have expired yet, so a keystroke's search does not walk every item.
     pub fn prune(&mut self, now: u64) -> usize {
+        if now < self.next_expiry {
+            return 0;
+        }
         let mut gone = 0;
         let mut changed = vec![];
         for (app, list) in self.apps.iter_mut() {
@@ -231,6 +309,7 @@ impl Index {
             }
         }
         self.apps.retain(|_, l| !l.is_empty());
+        self.next_expiry = self.apps.values().flatten().filter_map(|e| e.expires_at).min().unwrap_or(u64::MAX);
         for app in changed {
             self.mark(&app);
         }
@@ -296,27 +375,48 @@ impl Index {
         ix
     }
 
+    /// The changed apps since the last call, as (app id, their JSON, or None when the app is gone).
+    fn take_writes(&mut self) -> Vec<(String, Option<String>)> {
+        std::mem::take(&mut self.dirty)
+            .into_iter()
+            .filter(|app| safe_name(app))
+            .map(|app| {
+                let text = self.apps.get(&app).map(|list| Index::to_json(list));
+                (app, text)
+            })
+            .collect()
+    }
+
     /// Writes the apps that changed since the last call (and removes the file of an emptied app).
     pub fn save(&mut self, dir: &Path) {
-        for app in std::mem::take(&mut self.dirty) {
-            if !safe_name(&app) {
-                continue;
-            }
-            let path = dir.join(format!("{app}.json"));
-            match self.apps.get(&app) {
-                Some(list) => {
-                    let _ = std::fs::create_dir_all(dir);
-                    let tmp = dir.join(format!("{app}.json.tmp"));
-                    if std::fs::write(&tmp, Index::to_json(list)).and_then(|_| std::fs::rename(&tmp, &path)).is_err() {
-                        let _ = std::fs::remove_file(&tmp);
-                    }
-                }
-                None => {
-                    let _ = std::fs::remove_file(&path);
-                }
-            }
+        for (app, text) in self.take_writes() {
+            write_app(dir, &app, text);
         }
     }
+}
+
+/// Replaces `<dir>/<app>.json` with `text` (through a temporary file), or removes it when `text` is None.
+fn write_app(dir: &Path, app: &str, text: Option<String>) {
+    let path = dir.join(format!("{app}.json"));
+    match text {
+        Some(text) => {
+            let _ = std::fs::create_dir_all(dir);
+            let tmp = dir.join(format!("{app}.json.tmp"));
+            if std::fs::write(&tmp, text).and_then(|_| std::fs::rename(&tmp, &path)).is_err() {
+                let _ = std::fs::remove_file(&tmp);
+            }
+        }
+        None => {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+}
+
+/// The writer thread's queue: (index dir, writes), in the order they were taken.
+type SaveJob = (PathBuf, Vec<(String, Option<String>)>);
+static SAVER: Mutex<Option<std::sync::mpsc::Sender<SaveJob>>> = Mutex::new(None);
+
+impl Index {
 
     /// Drops the items of an app that was uninstalled.
     pub fn forget_app(&mut self, app_id: &str) {
@@ -635,10 +735,31 @@ pub fn search(query: &str, limit: usize) -> Vec<Found> {
     })
 }
 
-/// Saves what changed; called every tick, cheap when nothing did.
+/// Saves what changed; cheap when nothing did. The JSON is made under the lock, and the files are written by one saver
+/// thread in the order they were taken, so the shell's frame does not wait on the disk.
 pub fn flush() {
-    let d = dir();
-    with(|ix| ix.save(&d));
+    let writes = with(|ix| ix.take_writes());
+    if writes.is_empty() {
+        return;
+    }
+    let mut job: SaveJob = (dir(), writes);
+    let mut saver = SAVER.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(tx) = saver.as_ref() {
+        match tx.send(job) {
+            Ok(()) => return,
+            Err(std::sync::mpsc::SendError(back)) => job = back,
+        }
+    }
+    let (tx, rx) = std::sync::mpsc::channel::<SaveJob>();
+    crate::bare::sys::spawn_named("quicksearch-save", move || {
+        for (dir, writes) in rx {
+            for (app, text) in writes {
+                write_app(&dir, &app, text);
+            }
+        }
+    });
+    let _ = tx.send(job);
+    *saver = Some(tx);
 }
 
 #[cfg(test)]
@@ -878,5 +999,91 @@ mod tests {
         assert!(load_thumbnail("a", "/etc/passwd", 8).is_none());
         assert!(load_thumbnail("../a", "t.png", 8).is_none());
         assert!(load_thumbnail("a", "", 8).is_none());
+    }
+
+    fn ids(list: Vec<Found>) -> Vec<String> {
+        list.into_iter().map(|f| f.unique_id).collect()
+    }
+
+    fn sample() -> Index {
+        let mut ix = Index::default();
+        ix.index("a", vec![it("1", "", "Milk", "", &[]), it("2", "", "Milkshake recipe", "", &[]), it("3", "", "Mild weather", "", &[]), it("4", "", "Smilk", "", &[])]);
+        ix.index("b", vec![it("5", "", "Milky way", "", &[]), it("6", "", "Mill plans", "", &[])]);
+        ix
+    }
+
+    #[test]
+    fn a_query_that_extends_the_last_one_ranks_the_same_as_a_fresh_search() {
+        let typed = sample();
+        let _ = typed.search("m", 50);
+        let _ = typed.search("mi", 50);
+        for q in ["mil", "milk", "milk s", "milks", "milk sh"] {
+            let narrowed = ids(typed.search(q, 50));
+            let fresh = ids(sample().search(q, 50));
+            assert_eq!(narrowed, fresh, "query {q:?}");
+        }
+        // a word that does not extend the last one is not narrowed (backspace widens the set again)
+        assert_eq!(ids(typed.search("m", 50)), ids(sample().search("m", 50)));
+    }
+
+    #[test]
+    fn a_change_of_items_drops_the_narrowing() {
+        let mut ix = sample();
+        assert!(ids(ix.search("milk", 50)).contains(&"1".to_string()));
+        ix.index("a", vec![it("9", "", "Milk tea", "", &[])]);
+        assert!(ids(ix.search("milk t", 50)).contains(&"9".to_string()), "the new item is found after a narrowing");
+        ix.delete("a", DELETE_IDS, &["1".into()]);
+        assert!(!ids(ix.search("milk", 50)).contains(&"1".to_string()), "the deleted item is gone");
+    }
+
+    #[test]
+    fn only_the_best_limit_is_built_in_score_order() {
+        let mut ix = Index::default();
+        let items: Vec<_> = (0..40).map(|i| it(&i.to_string(), "", &format!("note {}", i % 3), "", &[])).collect();
+        ix.index("a", items);
+        let all = ids(ix.search("note", 100));
+        assert_eq!(all.len(), 40);
+        assert_eq!(ids(ix.search("note", 5)), all[..5].to_vec(), "the top five of the full order");
+        assert_eq!(ids(ix.search("note", 0)), Vec::<String>::new());
+        // the newest comes first among equal matches
+        assert_eq!(all[0], "39");
+    }
+
+    #[test]
+    fn extends_only_when_each_word_grows_its_place() {
+        let w = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert!(extends(&w(&["mi"]), &w(&["mil"])));
+        assert!(extends(&w(&["mi"]), &w(&["mi", "x"])));
+        assert!(extends(&w(&["a", "mi"]), &w(&["a", "mil"])));
+        assert!(!extends(&w(&["mil"]), &w(&["mi"])), "backspace widens");
+        assert!(!extends(&w(&["a", "mi"]), &w(&["b", "mil"])));
+        assert!(!extends(&w(&["mi", "x"]), &w(&["mi"])));
+        assert!(!extends(&[], &w(&["mi"])));
+    }
+
+    #[test]
+    fn prune_skips_the_walk_until_an_expiry_is_due() {
+        let mut ix = Index::default();
+        ix.index("a", vec![it("1", "", "Ticket", "", &[]), it("2", "", "Ticket two", "", &[])]);
+        assert!(ix.set_expiry("a", "2", Some(300)));
+        assert_eq!(ix.prune(100), 0);
+        assert_eq!(ix.prune(299), 0);
+        assert_eq!(ix.prune(300), 1);
+        assert_eq!(ix.prune(400), 0, "nothing left to expire");
+        assert_eq!(ix.len(), 1);
+    }
+
+    #[test]
+    fn saving_takes_the_changed_apps_and_removes_an_emptied_one() {
+        let mut ix = sample();
+        let writes = ix.take_writes();
+        let names: Vec<&str> = writes.iter().map(|(a, _)| a.as_str()).collect();
+        assert_eq!(names, ["a", "b"]);
+        assert!(writes.iter().all(|(_, t)| t.as_deref().is_some_and(|s| s.starts_with('['))));
+        assert!(ix.take_writes().is_empty(), "nothing changed since");
+        ix.delete("b", DELETE_ALL, &[]);
+        let writes = ix.take_writes();
+        assert_eq!(writes.len(), 1);
+        assert_eq!(writes[0], ("b".to_string(), None));
     }
 }

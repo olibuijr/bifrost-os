@@ -8,6 +8,7 @@ use super::accessibility::{AccessibilitySettings, HOLD_MS, ZOOMS};
 use super::datetime_page::{PickerEvent, ZonePicker};
 use super::timeset_page::{TimeEvent, TimePicker};
 use super::keyboard::Out;
+use super::settings_load::Loaded;
 use super::settings_search::{self, Search};
 use super::night_shift::{NightEdit, NightShift};
 use super::notify_page::{self, NotifyChange, NotifyEdit, NotifyPrefs};
@@ -200,6 +201,45 @@ impl PageView<'_> {
     }
 }
 
+/// What the pages read off the UI thread (see `settings_load`): each keeps the last value it landed, so a page
+/// opens at once from it and rebuilds when a fresh read lands.
+#[derive(Default)]
+struct Loads {
+    fonts: Loaded<super::pages::FontsView>,
+    gpus: Loaded<Vec<super::gpu_page::Gpu>>,
+    crashes: Loaded<Vec<super::diag::CrashEntry>>,
+    latest_backup: Loaded<Option<u64>>,
+    logins: Loaded<Vec<crate::credentials::Login>>,
+    accounts: Loaded<Vec<bifrost_ui::internet_accounts::Account>>,
+    users: Loaded<super::users_page::View>,
+    sharing: Loaded<super::sharing_page::View>,
+    printers: Loaded<super::print_scan_page::View>,
+    screentime: Loaded<(StConfig, Vec<(i64, st_usage::Day)>)>,
+}
+
+impl Loads {
+    /// Takes the reads that landed; true when any value changed.
+    fn poll(&mut self) -> bool {
+        let mut landed = false;
+        landed |= self.fonts.poll();
+        landed |= self.gpus.poll();
+        landed |= self.crashes.poll();
+        landed |= self.latest_backup.poll();
+        landed |= self.logins.poll();
+        landed |= self.accounts.poll();
+        landed |= self.users.poll();
+        landed |= self.sharing.poll();
+        landed |= self.printers.poll();
+        landed |= self.screentime.poll();
+        landed
+    }
+
+    /// A read is running.
+    fn busy(&self) -> bool {
+        self.fonts.busy() || self.gpus.busy() || self.crashes.busy() || self.latest_backup.busy() || self.logins.busy() || self.accounts.busy() || self.users.busy() || self.sharing.busy() || self.printers.busy() || self.screentime.busy()
+    }
+}
+
 pub struct Settings {
     /// the detail pane's width (the whole frame in the phone layout)
     w: i32,
@@ -254,8 +294,8 @@ pub struct Settings {
     login_moved: Vec<String>,
     /// the Login Items & Extensions page's background agents and app extensions (`login_items_page::scan_installed`), with the agents the user turned off
     login_ext: super::login_items_page::LoginExtensions,
-    /// Settings > Fonts, loaded when the page opens
-    fonts: super::pages::FontsView,
+    /// the pages' reads off the UI thread (fonts, graphics, crash logs, ...)
+    loads: Loads,
     sound: super::sound_page::SoundView,
     login_out: Vec<String>,
     /// the Focus time row the time-of-day picker is editing
@@ -280,14 +320,8 @@ pub struct Settings {
     data_dir: PathBuf,
     /// the bifrost Storage measurement, run on a worker thread
     scan: Scanner,
-    /// the graphics adapters shown by Display > Graphics, read when the page opens
-    gpus: Vec<super::gpu_page::Gpu>,
-    /// the adapter read in flight for Display > Graphics (sysfs and the PCI id list are read off the UI thread)
-    gpus_rx: Option<std::sync::mpsc::Receiver<Vec<super::gpu_page::Gpu>>>,
     /// the Back Up Now copy in flight; its result sets the backup note
     backup_rx: Option<std::sync::mpsc::Receiver<Result<usize, String>>>,
-    /// the font library read in flight for Settings > Fonts
-    fonts_rx: Option<std::sync::mpsc::Receiver<super::pages::FontsView>>,
     /// Developer switches as read from the Android properties
     dev: DevState,
     updater: Updater,
@@ -321,6 +355,8 @@ pub struct Settings {
     st_gate: Option<(Lock, StEdit)>,
     /// the search field over the root page
     search: Search,
+    /// what Search finds, while it has a query (see `settings_search::index`)
+    index: Option<Vec<settings_search::Entry>>,
     /// Users & Groups: the last error from privd, shown under the list ("" when none)
     users_note: String,
 }
@@ -416,7 +452,9 @@ impl Settings {
                 item.value.clear();
             }
         }
-        settings_search::filter(&mut root, self.search.query());
+        if let Some(results) = self.search_results() {
+            root = results;
+        }
         let mut page = ListPage::in_pane(ui, root, self.side_w, self.h, None, pane);
         page.select(self.stack.first().map_or(PageId::Root, |e| e.id));
         page
@@ -463,7 +501,7 @@ impl Settings {
             login_moved: Vec::new(),
             login_ext: Default::default(),
             login_out: Vec::new(),
-            fonts: Default::default(),
+            loads: Loads::default(),
             sound: Default::default(),
             notify_edge: None,
             night: NightShift::load(prefs),
@@ -482,10 +520,7 @@ impl Settings {
             detail: String::new(),
             data_dir: super::apphost::root(),
             scan: Scanner::default(),
-            gpus: Vec::new(),
-            gpus_rx: None,
             backup_rx: None,
-            fonts_rx: None,
             dev: DevState { perf_hud: prefs.get(PERF_HUD_PREF) == Some("1"), gpu_scanout: crate::bare::scanout::pref_on(prefs.get(GPU_SCANOUT_PREF)), ..DevState::read() },
             updater: Updater::new(super::apphost::root(), prefs.get(update::URL_PREF)),
             update_badge: false,
@@ -501,6 +536,7 @@ impl Settings {
             st_edge: None,
             st_gate: None,
             search: Search::new(ui, w),
+            index: None,
             users_note: String::new(),
         };
         let root = st.build(ui, PageId::Root, None);
@@ -547,7 +583,7 @@ impl Settings {
 
     fn model(&self) -> Model<'_> {
         let now = self.info.battery_history.last().map_or(0, |s| s.unix);
-        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: &self.fonts, sound: &self.sound }
+        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: &self.loads.fonts.value, sound: &self.sound, sharing: self.loads.sharing.get(), printers: self.loads.printers.get(), users: &self.loads.users.value }
     }
 
     fn wallpaper_name(&self) -> String {
@@ -578,30 +614,25 @@ impl Settings {
                 s.groups.push(notify_page::schedule_group(&NotifyPrefs { clock_24h: self.opts.clock_24h, ..self.notify.clone() }));
                 s
             }
-            PageId::Graphics => super::gpu_page::spec(&self.gpus),
+            PageId::Graphics => super::gpu_page::spec(self.loads.gpus.get().map(Vec::as_slice)),
+            PageId::Sharing => super::pages::sharing_spec(&self.opts, self.loads.sharing.get()),
+            PageId::PrintScan => super::print_scan_page::spec(self.loads.printers.get()),
             PageId::GameControllers | PageId::GameController(_) => super::game_controllers_page::spec(id, &super::services::gamepad_service::snapshot()),
             PageId::Storage | PageId::Passcode | PageId::Developer => {
                 let passcode_on = passcode::Store::load(self.data_dir.join("passcode.ini")).enabled();
                 storage_page::spec(id, &PageState { usage: self.scan.usage.as_ref(), passcode_on, dev: &self.dev })
             }
             PageId::Passwords => {
-                let logins = crate::credentials::logins(&super::apphost::root());
                 let passcode_on = passcode::Store::load(self.data_dir.join("passcode.ini")).enabled();
                 let revealed = self.pw_revealed.as_ref().map(|(site, account, password)| super::passwords_page::Shown { site: site.as_str(), account: account.as_str(), password: password.as_str() });
-                super::passwords_page::spec(&super::passwords_page::PageState { logins: &logins, revealed, offset: crate::bare::sys::wall_time().1, passcode_on })
+                super::passwords_page::spec(&super::passwords_page::PageState { logins: &self.loads.logins.value, revealed, offset: crate::bare::sys::wall_time().1, passcode_on })
             }
-            PageId::InternetAccounts => {
-                let accounts = super::internet_accounts_page::load();
-                super::internet_accounts_page::spec(&super::internet_accounts_page::PageState { accounts: &accounts, note: &self.ia_note })
-            }
-            PageId::Diagnostics => {
-                let crashes = diag::load(&self.data_dir);
-                diagnostics_page::spec(&diagnostics_page::PageState { crashes: &crashes, offset: crate::bare::sys::wall_time().1, note: &self.diag_note, sharing: self.diag_rx.is_some() })
-            }
-            PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, &super::users_page::View::load(), &self.detail, &self.users_note, &self.opts),
+            PageId::InternetAccounts => super::internet_accounts_page::spec(&super::internet_accounts_page::PageState { accounts: &self.loads.accounts.value, note: &self.ia_note }),
+            PageId::Diagnostics => diagnostics_page::spec(&diagnostics_page::PageState { crashes: &self.loads.crashes.value, offset: crate::bare::sys::wall_time().1, note: &self.diag_note, sharing: self.diag_rx.is_some() }),
+            PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, &self.loads.users.value, &self.detail, &self.users_note, &self.opts),
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => self.st_spec(id),
             PageId::PrivacyPermissions => super::pages::permissions_page(&super::services::privacy_permissions::rows()),
-            PageId::Backup | PageId::SoftwareUpdate => backup_page::spec(id, &backup_page::PageState { updater: &self.updater, auto_update: self.opts.auto_update, backup_before_update: self.opts.backup_before_update, backup_note: &self.backup_note, latest_backup: backup::latest(&self.data_dir).map(|(_, t)| t) }),
+            PageId::Backup | PageId::SoftwareUpdate => backup_page::spec(id, &backup_page::PageState { updater: &self.updater, auto_update: self.opts.auto_update, backup_before_update: self.opts.backup_before_update, backup_note: &self.backup_note, latest_backup: self.loads.latest_backup.value }),
             _ => spec(id, &self.model()),
         }
     }
@@ -614,7 +645,9 @@ impl Settings {
         let spec = self.spec_for(id);
         let mut spec = spec;
         if id == PageId::Root {
-            settings_search::filter(&mut spec, self.search.query());
+            if let Some(results) = self.search_results() {
+                spec = results;
+            }
         }
         let title = spec.title.clone();
         // a page opened with no back target is a first-level page: it gets the header card
@@ -643,6 +676,8 @@ impl Settings {
             Act::Hide => self.pw_revealed = None,
             Act::Delete { site, account } => {
                 let _ = crate::credentials::remove(&super::apphost::root(), &site, &account);
+                let root = super::apphost::root();
+                self.loads.logins.start("logins-read", move || crate::credentials::logins(&root));
                 if self.pw_revealed.as_ref().is_some_and(|(s, a, _)| *s == site && *a == account) {
                     self.pw_revealed = None;
                 }
@@ -675,6 +710,7 @@ impl Settings {
                 };
             }
         }
+        self.loads.accounts.start("accounts-read", ia::load);
         self.rebuild_visible(ui);
         vec![]
     }
@@ -805,14 +841,53 @@ impl Settings {
     /// parsed from the files; the page fills in on a later tick.
     fn load_fonts(&mut self) {
         let dir = self.data_dir.to_string_lossy().into_owned();
-        self.fonts_rx = Some(read_on_worker("fonts-read", move || {
+        self.loads.fonts.start("fonts-read", move || {
             use bifrost_render::fontprefs::{family, font_override, installed, library, FontRole};
             super::pages::FontsView {
                 defaults: FontRole::ALL.map(|r| family(&format!("{dir}/{}", r.file())).unwrap_or_default()),
                 overrides: FontRole::ALL.map(|r| font_override(&dir, r)),
+                names: FontRole::ALL.map(|r| font_override(&dir, r).as_deref().and_then(family)),
                 library: installed(&[library(&dir)]),
             }
-        }));
+        });
+    }
+
+    /// Starts the reads a page shows, on worker threads: the page opens at once from the last values read, and
+    /// `tick` rebuilds it when the new ones land. Anything a thread reads is taken from the paths here, on the UI thread.
+    fn start_loads(&mut self, id: PageId) {
+        let dir = self.data_dir.clone();
+        match id {
+            PageId::Fonts | PageId::FontPick(_) => self.load_fonts(),
+            PageId::Graphics => self.loads.gpus.start("gpu-read", super::gpu_page::read_system),
+            PageId::Diagnostics => self.loads.crashes.start("diag-read", move || diag::load(&dir)),
+            PageId::Backup | PageId::SoftwareUpdate => self.loads.latest_backup.start("backup-read", move || backup::latest(&dir).map(|(_, t)| t)),
+            PageId::Passwords => {
+                let root = super::apphost::root();
+                self.loads.logins.start("logins-read", move || crate::credentials::logins(&root));
+            }
+            PageId::InternetAccounts => self.loads.accounts.start("accounts-read", super::internet_accounts_page::load),
+            PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => self.loads.users.start("users-read", super::users_page::View::load),
+            PageId::Sharing => self.loads.sharing.start("sharing-read", super::sharing_page::View::load),
+            PageId::PrintScan => self.loads.printers.start("print-scan-read", super::print_scan_page::View::load),
+            PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => {
+                let (unix, off) = crate::bare::sys::wall_time();
+                self.loads.screentime.start("screentime-read", move || {
+                    let cfg = StConfig::load(&dir.join("screentime.ini"));
+                    let days = st_usage::history(&dir.join("screentime"), st_usage::day_of(unix, off), 7);
+                    (cfg, days)
+                });
+            }
+            _ => {}
+        }
+    }
+
+    /// Takes the reads that landed and rebuilds the page on top when one did; true when a frame is needed.
+    fn poll_loads(&mut self, ui: &Ui) -> bool {
+        if self.loads.poll() {
+            self.rebuild_visible(ui);
+            return true;
+        }
+        false
     }
 
     pub(super) fn set_defaults(&mut self, v: Vec<super::defaultapps::CategoryView>) {
@@ -904,11 +979,9 @@ impl Settings {
 
     /// The Screen Time pages from the day files and the config on disk.
     fn st_spec(&self, id: PageId) -> super::list::Spec {
-        let cfg = StConfig::load(&self.data_dir.join("screentime.ini"));
-        let (unix, off) = crate::bare::sys::wall_time();
-        let days = st_usage::history(&self.data_dir.join("screentime"), st_usage::day_of(unix, off), 7);
+        let (cfg, days) = &self.loads.screentime.value;
         let passcode_on = passcode::Store::load(self.data_dir.join("screentime_passcode.ini")).enabled();
-        screentime::page::spec(id, &StView { weekly: self.st_weekly, days: &days, cfg: &cfg, passcode_on, clock_24h: self.opts.clock_24h })
+        screentime::page::spec(id, &StView { weekly: self.st_weekly, days: days.as_slice(), cfg, passcode_on, clock_24h: self.opts.clock_24h })
     }
 
     /// A Screen Time row was tapped: the passcode keypad first when it guards the edit.
@@ -1073,12 +1146,15 @@ impl Settings {
                 PageId::Fonts
             }
             "Accessibility" | "AssistiveTouch" => PageId::Accessibility,
-            _ => {
-                if self.stack.is_empty() {
-                    self.push(ui, PageId::General, t);
+            _ => match settings_search::alias(name).or_else(|| settings_search::find_page(&self.build_index(), name)) {
+                Some(id) => id,
+                None => {
+                    if self.stack.is_empty() {
+                        self.push(ui, PageId::General, t);
+                    }
+                    return vec![];
                 }
-                return vec![];
-            }
+            },
         };
         self.push(ui, id, t);
         match id {
@@ -1163,25 +1239,15 @@ impl Settings {
             self.rebuild(ui);
             frame = true;
         }
-        // the adapter and font reads started by opening their pages land here
-        if let Some(gpus) = self.gpus_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
-            self.gpus_rx = None;
-            self.gpus = gpus;
-            self.rebuild(ui);
-            frame = true;
-        }
+        frame |= self.poll_loads(ui);
         if let Some(res) = self.backup_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.backup_rx = None;
             self.backup_note = match res {
                 Ok(n) => format!("Backed up {n} files."),
                 Err(e) => format!("Backup failed: {e}"),
             };
-            self.rebuild(ui);
-            frame = true;
-        }
-        if let Some(fonts) = self.fonts_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
-            self.fonts_rx = None;
-            self.fonts = fonts;
+            let dir = self.data_dir.clone();
+            self.loads.latest_backup.start("backup-read", move || backup::latest(&dir).map(|(_, t)| t));
             self.rebuild(ui);
             frame = true;
         }
@@ -1241,16 +1307,16 @@ impl Settings {
         if self.transition.is_some() || self.list().is_some_and(|p| p.animating(t)) || self.sidebar.as_ref().is_some_and(|p| p.animating(t)) || self.passcode.as_ref().is_some_and(|o| o.animating(t)) || self.st_gate.as_ref().is_some_and(|(l, _)| l.animating(t)) {
             return Some(t);
         }
-        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() || self.gpus_rx.is_some() || self.backup_rx.is_some() || self.fonts_rx.is_some() {
+        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() || self.backup_rx.is_some() || self.loads.busy() {
             return Some(t + 100.0);
         }
         self.search.next_wake(t).or_else(|| self.zone_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.time_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.sheet.as_ref().and_then(|sh| sh.next_wake(t)))
     }
 
     fn push(&mut self, ui: &Ui, id: PageId, t: f64) {
+        self.start_loads(id);
         match id {
             PageId::Storage => self.scan.start(self.data_dir.clone()),
-            PageId::Graphics => self.gpus_rx = Some(read_on_worker("gpu-read", super::gpu_page::read_system)),
             PageId::Developer => {
                 let (perf_hud, gpu_scanout) = (self.dev.perf_hud, self.dev.gpu_scanout);
                 self.dev = DevState { perf_hud, gpu_scanout, ..DevState::read() };
@@ -1259,7 +1325,6 @@ impl Settings {
             PageId::SoftwareUpdate if matches!(self.updater.state, update::State::Idle | update::State::UpToDate | update::State::Failed(_)) => self.updater.check(),
             PageId::Backup => self.backup_note.clear(),
             PageId::Users => self.users_note.clear(),
-            PageId::Fonts => self.load_fonts(),
             _ => {}
         }
         let back = self.stack.last().map(|e| e.title.clone());
@@ -1596,9 +1661,29 @@ impl Settings {
     }
 
     /// Applies a key from the password sheet's keyboard.
+    /// Every pane and setting Search finds, walked from the root page's live specs (see `settings_search::index`).
+    fn build_index(&self) -> Vec<settings_search::Entry> {
+        settings_search::index(|id| self.spec_for(id))
+    }
+
+    /// The root page's rows while Search has a query: its matches. None when there is no query.
+    fn search_results(&self) -> Option<super::list::Spec> {
+        let query = self.search.query();
+        if query.trim().is_empty() {
+            return None;
+        }
+        Some(settings_search::results(self.index.as_deref().unwrap_or(&[]), query))
+    }
+
     /// Rebuilds the root page for a changed search query, from the top.
     fn requery(&mut self, ui: &Ui) {
-        // only the root list is filtered by the query
+        // the index is built when a query starts (so it shows the rows as they are now) and dropped when it ends
+        if self.search.query().trim().is_empty() {
+            self.index = None;
+        } else if self.index.is_none() {
+            self.index = Some(self.build_index());
+        }
+        // a query replaces the root list with its matches
         if self.stack.first().is_some_and(|e| e.id == PageId::Root) {
             self.rebuild_pages(ui, 0..1);
         }
@@ -1635,8 +1720,16 @@ impl Settings {
         if let Some((purpose, text)) = self.sheet.as_ref().and_then(|sh| sh.form_result()) {
             self.sheet = None;
             let r = match purpose {
-                super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname => super::sharing_page::finish(&purpose, &text).map(|_| None),
-                super::forms::Purpose::PrinterAddress => super::print_scan_page::finish(&purpose, &text).map(|_| None),
+                super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname => {
+                    let r = super::sharing_page::finish(&purpose, &text).map(|_| None);
+                    self.loads.sharing.start("sharing-read", super::sharing_page::View::load);
+                    r
+                }
+                super::forms::Purpose::PrinterAddress => {
+                    let r = super::print_scan_page::finish(&purpose, &text).map(|_| None);
+                    self.loads.printers.start("print-scan-read", super::print_scan_page::View::load);
+                    r
+                }
                 _ => return self.form_done(ui, &purpose, &text, t),
             };
             self.edit_result(ui, t, r);
@@ -1679,6 +1772,7 @@ impl Settings {
             Ok(None) => self.users_note.clear(),
             Err(e) => self.users_note = e,
         }
+        self.loads.users.start("users-read", super::users_page::View::load);
         self.rebuild_visible(ui);
         vec![]
     }
@@ -2013,7 +2107,9 @@ impl Settings {
                 if let Err(e) = prefs.set(role.pref(), path.as_deref().unwrap_or("")) {
                     eprintln!("springboard: settings.ini: {e}");
                 }
-                self.fonts.overrides[role.index()] = path;
+                let i = role.index();
+                self.loads.fonts.value.names[i] = path.as_deref().and_then(bifrost_render::fontprefs::family);
+                self.loads.fonts.value.overrides[i] = path;
                 self.rebuild_visible(ui);
                 vec![]
             }
@@ -2240,16 +2336,22 @@ impl Settings {
             }
             Action::Users(edit) => {
                 let r = super::users_page::apply(&edit, &super::users_page::View::load());
+                self.loads.users.start("users-read", super::users_page::View::load);
                 self.edit_result(ui, t, r);
                 vec![]
             }
             Action::Sharing(edit) => {
-                let r = super::sharing_page::apply(&edit, &super::sharing_page::View::load());
+                // the view the page last showed; the services are read again on a worker below
+                let view = self.loads.sharing.get().cloned().unwrap_or_else(super::sharing_page::View::load);
+                let r = super::sharing_page::apply(&edit, &view);
+                // the page keeps the last answer until the new read lands
+                self.loads.sharing.start("sharing-read", super::sharing_page::View::load);
                 self.edit_result(ui, t, r);
                 vec![]
             }
             Action::PrintScan(edit) => {
                 let r = super::print_scan_page::apply(&edit);
+                self.loads.printers.start("print-scan-read", super::print_scan_page::View::load);
                 self.edit_result(ui, t, r);
                 vec![]
             }
@@ -2640,6 +2742,8 @@ impl Settings {
             }
             Command::DeleteCrashLogs => {
                 let n = diag::delete_all(&self.data_dir);
+                let dir = self.data_dir.clone();
+                self.loads.crashes.start("diag-read", move || diag::load(&dir));
                 self.diag_note = format!("Deleted {n} crash log file{}.", if n == 1 { "" } else { "s" });
                 self.rebuild(ui);
                 vec![]
@@ -2918,6 +3022,12 @@ mod tests {
 
     fn settle(st: &mut Settings, ui: &Ui) {
         st.tick(ui, 1e9);
+        // the pages' reads run on worker threads (see `settings_load`): wait for them, as a frame would
+        let began = std::time::Instant::now();
+        while st.loads.busy() && began.elapsed() < std::time::Duration::from_secs(5) {
+            std::thread::sleep(std::time::Duration::from_millis(1));
+            st.tick(ui, 1e9);
+        }
     }
 
     fn back(st: &mut Settings, ui: &Ui, prefs: &mut Prefs) {
@@ -2939,6 +3049,29 @@ mod tests {
         (dir, lib.to_string_lossy().into_owned())
     }
 
+    /// Lets the Fonts read on its worker land, as the frames would.
+    fn settle_fonts(st: &mut Settings, ui: &Ui) {
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while st.fonts.busy() && std::time::Instant::now() < end {
+            st.tick(ui, 0.0);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        st.tick(ui, 0.0);
+    }
+
+    #[test]
+    fn a_deep_link_from_another_app_opens_its_pane() {
+        let ui = super::super::tests::ui();
+        let (mut st, _prefs) = settings(&ui, &wifi_info());
+        st.open_page(&ui, "Wi-Fi Settings", 0.0);
+        assert_eq!(st.page(), PageId::Wifi);
+        st.open_page(&ui, "Battery", 0.0);
+        assert_eq!(st.page(), PageId::Battery);
+        st.open_page(&ui, "Print & Scan", 0.0);
+        assert_eq!(st.page(), PageId::PrintScan);
+        assert!(st.open_page(&ui, "No Such Pane", 0.0).is_empty());
+    }
+
     #[test]
     fn picking_a_library_font_saves_the_override_the_shell_reads() {
         use bifrost_render::fontprefs::{family, FontRole};
@@ -2947,14 +3080,16 @@ mod tests {
         let (dir, lib) = font_dir("pick");
         st.set_data_dir(&dir);
         let name = family(&lib).expect("the library font has a family name");
-        for label in ["General", "Fonts", "System Font"] {
+        for label in ["General", "Fonts"] {
             tap_row(&mut st, &ui, &mut prefs, label);
         }
+        settle_fonts(&mut st, &ui);
+        tap_row(&mut st, &ui, &mut prefs, "System Font");
         assert_eq!(st.page(), PageId::FontPick(FontRole::System));
         tap_row(&mut st, &ui, &mut prefs, &name);
         assert_eq!(prefs.get(FontRole::System.pref()), Some(lib.as_str()), "saved under the key the shell reads at start");
-        assert_eq!(st.fonts.overrides[FontRole::System.index()].as_deref(), Some(lib.as_str()));
-        let default = format!("{} (Default)", st.fonts.defaults[FontRole::System.index()]);
+        assert_eq!(st.loads.fonts.value.overrides[FontRole::System.index()].as_deref(), Some(lib.as_str()));
+        let default = format!("{} (Default)", st.loads.fonts.value.defaults[FontRole::System.index()]);
         tap_row(&mut st, &ui, &mut prefs, &default);
         assert_eq!(prefs.get(FontRole::System.pref()), Some(""), "Default clears the override");
         std::fs::remove_dir_all(&dir).unwrap();

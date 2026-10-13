@@ -5,42 +5,72 @@ use crate::ui::{Ui, Weight};
 use crate::gfx::{Image, Surface};
 use std::collections::HashMap;
 
-/// One cached string: its image and the tick of its last use.
-struct Entry {
-    img: Image,
-    tick: u64,
-}
+/// Style of an entry: pt x10, weight, colour.
+type StyleKey = (u32, u8, u32);
 
-/// Style key: (pt x10, weight, colour).
-type Style = (u32, u8, u32);
-
-pub struct TextCache {
-    /// style -> text -> image, so a hit never allocates a key
-    map: HashMap<Style, HashMap<String, Entry>>,
+/// One generation of entries: a hit never allocates a key.
+#[derive(Default)]
+struct Generation {
+    map: HashMap<StyleKey, HashMap<String, Image>>,
     count: usize,
-    /// pixel bytes held by the cached images
     bytes: usize,
-    /// the most pixel bytes kept; the least recently used strings go first
-    budget: usize,
-    /// advances on every lookup, so the smallest tick is the least recently used
-    tick: u64,
-    /// `emoji::generation()` the entries were rendered under
-    emoji_gen: u32,
-    /// `Ui::text_epoch()` the entries were rendered under
-    epoch: u64,
 }
 
-/// Entries kept before the least recently used go (like the glyph cache).
-const MAX_ENTRIES: usize = 512;
+impl Generation {
+    fn get(&self, style: StyleKey, text: &str) -> Option<&Image> {
+        self.map.get(&style)?.get(text)
+    }
+
+    /// Removes and returns an entry, so it can move to the newer generation.
+    fn take(&mut self, style: StyleKey, text: &str) -> Option<Image> {
+        let img = self.map.get_mut(&style)?.remove(text)?;
+        self.count -= 1;
+        self.bytes -= img.px.len() * 4;
+        Some(img)
+    }
+
+    fn insert(&mut self, style: StyleKey, text: &str, img: Image) {
+        self.count += 1;
+        self.bytes += img.px.len() * 4;
+        self.map.entry(style).or_default().insert(text.to_string(), img);
+    }
+}
+
 /// Pixel bytes kept when the cache is not sized to a screen.
 const DEFAULT_BUDGET: usize = 8 * 1024 * 1024;
 /// Bounds of a screen-sized budget: the floor keeps small screens useful, the ceiling caps the memory.
 const MIN_BUDGET: usize = 4 * 1024 * 1024;
 const MAX_BUDGET: usize = 32 * 1024 * 1024;
+/// Entries per generation (the cache holds at most twice this).
+const GEN_ENTRIES: usize = 256;
+/// Pixel bytes per generation at the default budget, before it retires, so large text (the lock clock)
+/// cannot fill the cache.
+const GEN_BYTES: usize = DEFAULT_BUDGET / 2;
 
 /// The pixel budget for a screen of `w` x `h` px: two screens of RGBA text, within `MIN_BUDGET..=MAX_BUDGET`.
 pub fn budget_for_screen(w: usize, h: usize) -> usize {
     (w.saturating_mul(h).saturating_mul(4).saturating_mul(2)).clamp(MIN_BUDGET, MAX_BUDGET)
+}
+
+/// Two generations, so a bounded cache keeps the strings in use rather than starting over
+/// when it fills: `young` takes new renders, `old` holds the previous generation. A hit in `old` moves
+/// the entry to `young`; a full `young` retires `old` and becomes the new `old`. Each generation keeps
+/// half of the pixel budget.
+pub struct TextCache {
+    young: Generation,
+    old: Generation,
+    /// the most pixel bytes kept across both generations
+    budget: usize,
+    /// `emoji::generation()` the entries were rendered under
+    emoji_gen: u32,
+    /// `Ui::text_epoch()` the entries were rendered under
+    epoch: u64,
+    /// advance widths (`Ui::measure`) per (pt bits, weight) -> text -> px
+    widths: HashMap<(u32, u8), HashMap<String, f32>>,
+    /// fitted strings (`Ui::fit`) per (pt bits, max px bits) -> text -> fitted text
+    fits: HashMap<(u32, u32), HashMap<String, String>>,
+    /// widths and fits held, bounded like the images
+    metrics: usize,
 }
 
 impl Default for TextCache {
@@ -49,10 +79,13 @@ impl Default for TextCache {
     }
 }
 
+/// Widths and fits kept before they start over; they are cheap, so there are more of them.
+const MAX_METRICS: usize = 2048;
+
 impl TextCache {
     /// An empty cache holding at most `bytes` of pixels.
     pub fn with_budget(bytes: usize) -> Self {
-        TextCache { map: HashMap::new(), count: 0, bytes: 0, budget: bytes, tick: 0, emoji_gen: 0, epoch: 0 }
+        TextCache { young: Generation::default(), old: Generation::default(), budget: bytes, emoji_gen: 0, epoch: 0 }
     }
 
     /// An empty cache sized to a `w` x `h` screen (see `budget_for_screen`).
@@ -67,11 +100,16 @@ impl TextCache {
 
     /// Pixel bytes held by the cached images.
     pub fn bytes(&self) -> usize {
-        self.bytes
+        self.young.bytes + self.old.bytes
     }
 
-    /// `text` at `pt` points in `weight` and `color`, rendering on a miss.
-    pub fn get(&mut self, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32) -> &Image {
+    /// Pixel bytes one generation may hold before it retires: half the budget.
+    fn gen_bytes(&self) -> usize {
+        self.budget / 2
+    }
+
+    /// Drops the entries rendered under another emoji font or Dynamic Type, bold or contrast setting.
+    fn sync(&mut self, ui: &Ui) {
         // a reloaded emoji font invalidates every cached image that may hold emoji
         let g = crate::emoji::generation();
         let epoch = ui.text_epoch();
@@ -80,46 +118,60 @@ impl TextCache {
             self.epoch = epoch;
             self.clear();
         }
-        let style: Style = ((pt * 10.0) as u32, weight as u8, color);
-        self.tick += 1;
-        let tick = self.tick;
-        let hit = self.map.get_mut(&style).and_then(|m| m.get_mut(text)).map(|e| e.tick = tick).is_some();
-        if !hit {
-            let img = ui.text(text, pt, weight, color);
-            self.bytes += img.px.len() * 4;
-            self.count += 1;
-            self.map.entry(style).or_default().insert(text.to_string(), Entry { img, tick });
-            self.evict_to_limits(style, text);
-        }
-        &self.map[&style][text].img
     }
 
-    /// Drops the least recently used strings until both limits hold. The string just inserted is never dropped.
-    fn evict_to_limits(&mut self, keep_style: Style, keep_text: &str) {
-        while self.count > 1 && (self.count > MAX_ENTRIES || self.bytes > self.budget) {
-            // the oldest entry other than the one just inserted
-            let mut oldest: Option<(u64, Style, &str)> = None;
-            for (style, m) in &self.map {
-                for (text, e) in m {
-                    if *style == keep_style && text == keep_text {
-                        continue;
-                    }
-                    if oldest.map_or(true, |(t, _, _)| e.tick < t) {
-                        oldest = Some((e.tick, *style, text.as_str()));
-                    }
-                }
-            }
-            let Some((_, style, text)) = oldest else { break };
-            let text = text.to_string();
-            let Some(m) = self.map.get_mut(&style) else { break };
-            if let Some(e) = m.remove(&text) {
-                self.bytes -= e.img.px.len() * 4;
-                self.count -= 1;
-            }
-            if m.is_empty() {
-                self.map.remove(&style);
-            }
+    /// `Ui::measure` of `text`, memoised: a bar or a menu that lays out its labels every frame shapes each one once.
+    pub fn width(&mut self, ui: &Ui, text: &str, pt: f32, weight: Weight) -> f32 {
+        self.sync(ui);
+        let style = (pt.to_bits(), weight as u8);
+        if let Some(&w) = self.widths.get(&style).and_then(|m| m.get(text)) {
+            return w;
         }
+        let w = ui.measure(text, pt, weight);
+        self.room_for_metric();
+        self.widths.entry(style).or_default().insert(text.to_string(), w);
+        self.metrics += 1;
+        w
+    }
+
+    /// `Ui::fit` of `text` into `max_px`, memoised like `width`.
+    pub fn fit(&mut self, ui: &Ui, text: &str, pt: f32, max_px: f32) -> String {
+        self.sync(ui);
+        let style = (pt.to_bits(), max_px.to_bits());
+        if let Some(s) = self.fits.get(&style).and_then(|m| m.get(text)) {
+            return s.clone();
+        }
+        let s = ui.fit(text, pt, max_px);
+        self.room_for_metric();
+        self.fits.entry(style).or_default().insert(text.to_string(), s.clone());
+        self.metrics += 1;
+        s
+    }
+
+    /// Starts the widths and fits over once they fill up.
+    fn room_for_metric(&mut self) {
+        if self.metrics >= MAX_METRICS {
+            self.widths.clear();
+            self.fits.clear();
+            self.metrics = 0;
+        }
+    }
+
+    /// `text` at `pt` points in `weight` and `color`, rendering on a miss.
+    pub fn get(&mut self, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32) -> &Image {
+        self.sync(ui);
+        let style = ((pt * 10.0) as u32, weight as u8, color);
+        if self.young.get(style, text).is_none() {
+            let img = match self.old.take(style, text) {
+                Some(img) => img,
+                None => ui.text(text, pt, weight, color),
+            };
+            if self.young.count >= GEN_ENTRIES || self.young.bytes >= self.gen_bytes() {
+                self.old = std::mem::take(&mut self.young);
+            }
+            self.young.insert(style, text, img);
+        }
+        self.young.get(style, text).expect("the entry was just inserted")
     }
 
     /// Draws `text` one cached glyph at a time, for strings that change
@@ -148,23 +200,19 @@ impl TextCache {
 
     /// Drops everything cached (after a density or theme change).
     pub fn clear(&mut self) {
-        self.map.clear();
-        self.count = 0;
-        self.bytes = 0;
+        self.young = Generation::default();
+        self.old = Generation::default();
+        self.widths.clear();
+        self.fits.clear();
+        self.metrics = 0;
     }
 
     pub fn len(&self) -> usize {
-        self.count
-    }
-
-    /// True when some style caches `text`.
-    #[cfg(test)]
-    fn holds(&self, text: &str) -> bool {
-        self.map.values().any(|m| m.contains_key(text))
+        self.young.count + self.old.count
     }
 
     pub fn is_empty(&self) -> bool {
-        self.count == 0
+        self.len() == 0
     }
 }
 
@@ -232,33 +280,73 @@ mod tests {
     }
 
     #[test]
+    fn widths_and_fits_match_the_ui_and_are_remembered() {
+        let _emoji = crate::tests::emoji_lock();
+        let ui = crate::tests::ui();
+        let mut c = TextCache::default();
+        let w = c.width(&ui, "Wi-Fi", 13.0, Weight::Semibold);
+        assert_eq!(w, ui.measure("Wi-Fi", 13.0, Weight::Semibold));
+        assert_eq!(c.width(&ui, "Wi-Fi", 13.0, Weight::Semibold), w);
+        assert_eq!(c.metrics, 1, "the second width is a hit");
+        let fit = c.fit(&ui, "a very long network name indeed", 13.0, 40.0);
+        assert_eq!(fit, ui.fit("a very long network name indeed", 13.0, 40.0));
+        assert_eq!(c.fit(&ui, "a very long network name indeed", 13.0, 40.0), fit);
+        assert_eq!(c.metrics, 3);
+        assert_eq!(c.len(), 0, "widths and fits leave the images alone");
+    }
+
+    #[test]
+    fn widths_follow_dynamic_type_and_the_metric_cache_is_bounded() {
+        let _emoji = crate::tests::emoji_lock();
+        let mut ui = crate::tests::ui();
+        let mut c = TextCache::default();
+        let normal = c.width(&ui, "Settings", 13.0, Weight::Regular);
+        ui.text_scale = 1.5;
+        let larger = c.width(&ui, "Settings", 13.0, Weight::Regular);
+        assert!(larger > normal, "Dynamic Type must not serve the old width ({larger} vs {normal})");
+        for i in 0..MAX_METRICS + 10 {
+            c.width(&ui, &i.to_string(), 12.0, Weight::Regular);
+        }
+        assert!(c.metrics <= MAX_METRICS);
+    }
+
+    #[test]
     fn cache_is_bounded() {
         let _emoji = crate::tests::emoji_lock();
         let ui = crate::tests::ui();
         let mut c = TextCache::default();
-        for i in 0..MAX_ENTRIES + 10 {
+        for i in 0..2 * GEN_ENTRIES + 10 {
             c.get(&ui, &i.to_string(), 12.0, Weight::Regular, WHITE);
         }
-        assert!(c.len() <= MAX_ENTRIES);
+        assert!(c.len() <= 2 * GEN_ENTRIES);
         assert!(!c.is_empty());
     }
 
     #[test]
-    fn eviction_drops_the_least_recently_used_string_not_everything() {
+    fn a_full_cache_keeps_the_strings_in_use() {
         let _emoji = crate::tests::emoji_lock();
         let ui = crate::tests::ui();
         let mut c = TextCache::default();
-        c.get(&ui, "keep", 12.0, Weight::Regular, WHITE);
-        for i in 0..MAX_ENTRIES - 1 {
-            c.get(&ui, &format!("fill{i}"), 12.0, Weight::Regular, WHITE);
-            // touching "keep" makes it the most recently used string every time
-            c.get(&ui, "keep", 12.0, Weight::Regular, WHITE);
+        // a hot string is touched between every cold render, so it survives each retirement of a generation
+        for i in 0..4 * GEN_ENTRIES {
+            c.get(&ui, "hot", 12.0, Weight::Regular, WHITE);
+            c.get(&ui, &i.to_string(), 12.0, Weight::Regular, WHITE);
         }
-        assert_eq!(c.len(), MAX_ENTRIES);
-        c.get(&ui, "one more", 12.0, Weight::Regular, WHITE);
-        assert_eq!(c.len(), MAX_ENTRIES, "one entry went, the rest stayed");
-        assert!(c.holds("keep"), "the recently used string survives");
-        assert!(!c.holds("fill0"), "the oldest string went first");
+        assert!(c.len() <= 2 * GEN_ENTRIES, "{}", c.len());
+        let holds = |g: &Generation, text: &str| g.map.values().any(|m| m.contains_key(text));
+        assert!(holds(&c.young, "hot") || holds(&c.old, "hot"), "the hot string was rendered again and again");
+    }
+
+    #[test]
+    fn large_images_are_bounded_by_bytes() {
+        let _emoji = crate::tests::emoji_lock();
+        let ui = crate::tests::ui();
+        let mut c = TextCache::default();
+        for i in 0..40 {
+            c.get(&ui, &format!("{i}"), 300.0, Weight::Regular, WHITE);
+        }
+        assert!(c.young.bytes < GEN_BYTES + GEN_BYTES / 2 && c.old.bytes < GEN_BYTES + GEN_BYTES / 2, "{} {}", c.young.bytes, c.old.bytes);
+        assert!(c.len() < 40, "the byte budget retired a generation");
     }
 
     #[test]
@@ -268,9 +356,11 @@ mod tests {
         let mut c = TextCache::with_budget(64 * 1024);
         for i in 0..200 {
             c.get(&ui, &format!("budget {i}"), 13.0, Weight::Regular, WHITE);
-            assert!(c.bytes() <= c.budget() || c.len() == 1, "{} bytes over a {} budget", c.bytes(), c.budget());
+            // each generation keeps half the budget, plus the one image that retires it
+            assert!(c.bytes() <= 2 * c.budget(), "{} bytes over a {} budget", c.bytes(), c.budget());
         }
         assert!(c.len() >= 1);
+        assert!(c.len() < 200, "the budget retired the early strings");
         assert_eq!(budget_for_screen(1920, 1080), 2 * 1920 * 1080 * 4);
         assert_eq!(budget_for_screen(16, 16), MIN_BUDGET, "small screens get the floor");
         assert_eq!(budget_for_screen(7680, 4320), MAX_BUDGET, "large screens get the ceiling");

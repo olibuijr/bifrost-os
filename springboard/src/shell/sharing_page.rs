@@ -21,7 +21,7 @@ pub enum Edit {
 }
 
 /// The computer name and the service states as the system has them now.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct View {
     pub computer: String,
     pub services: Vec<(&'static str, bool)>,

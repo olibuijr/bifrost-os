@@ -366,7 +366,18 @@ impl App for Files {
             self.navigate(folder, true);
             changed = true;
         }
-        if let Some(done) = self.job.as_ref().and_then(|rx| rx.try_recv().ok()) {
+        // a folder's batches land as the worker reads them; the final listing replaces them and ends the load
+        while let Some(done) = self.job.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            if done.partial {
+                if done.path == self.path {
+                    if let Ok(batch) = done.result {
+                        self.append_batch(batch);
+                    }
+                }
+                self.revision += 1;
+                changed = true;
+                continue;
+            }
             if done.path == self.path {
                 self.loading = false;
                 self.ancestors = done.ancestors;
@@ -389,6 +400,7 @@ impl App for Files {
             self.update_controls();
             self.catch_up();
             changed = true;
+            break;
         }
         let mut finished = None;
         if let Some(work) = self.work.as_mut() {
@@ -753,6 +765,40 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn streamed_batches_fill_the_rows_before_the_listing_ends() {
+        let mut files = fixture(vec![]);
+        files.listing.clear();
+        files.rows.clear();
+        files.loading = true;
+        files.append_batch(vec![folder("a"), folder("b")]);
+        files.append_batch(vec![folder("c")]);
+        assert_eq!(files.rows.len(), 3, "the first rows show before the folder is read");
+        assert_eq!(files.listing.len(), 3);
+        assert_eq!(files.vo.depth, vec![0, 0, 0]);
+        // with a folder expanded the rows are rebuilt from the listing; the folder does not exist, so nothing splices in
+        files.vo.expanded.insert(PathBuf::from("/fixture/a"));
+        files.append_batch(vec![folder("d")]);
+        assert_eq!(files.rows.len(), 4);
+        assert_eq!(files.listing.len(), 4);
+    }
+
+    #[test]
+    fn expanded_folder_children_are_read_again_only_after_the_folder_changes() {
+        let dir = temp("kids");
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("sub/a"), "x").unwrap();
+        let vo = ViewOpts::default();
+        assert_eq!(vo.kids_of(&dir.join("sub")).map(|k| k.len()), Some(1));
+        assert_eq!(vo.kids_of(&dir.join("sub")).map(|k| k.len()), Some(1), "a second read is served from the cache");
+        // the folder's modification time is coarse, so wait before the change
+        std::thread::sleep(std::time::Duration::from_millis(30));
+        std::fs::write(dir.join("sub/b"), "x").unwrap();
+        assert_eq!(vo.kids_of(&dir.join("sub")).map(|k| k.len()), Some(2));
+        assert_eq!(vo.kids_of(&dir.join("missing")), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn search_finds_names_in_subfolders_and_clearing_restores_the_folder() {
         let dir = temp("search");
