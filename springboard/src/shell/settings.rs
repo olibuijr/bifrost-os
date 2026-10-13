@@ -322,6 +322,10 @@ pub struct Settings {
     scan: Scanner,
     /// the Back Up Now copy in flight; its result sets the backup note
     backup_rx: Option<std::sync::mpsc::Receiver<Result<usize, String>>>,
+    /// the backup copied before Install Now restarts the system, while it runs (its file count, or why it failed)
+    install_rx: Option<std::sync::mpsc::Receiver<Result<usize, String>>>,
+    /// the backup is in and the restart can go ahead (taken by the shell through `take_install_ready`)
+    install_ready: bool,
     /// Developer switches as read from the Android properties
     dev: DevState,
     updater: Updater,
@@ -521,6 +525,8 @@ impl Settings {
             data_dir: super::apphost::root(),
             scan: Scanner::default(),
             backup_rx: None,
+            install_rx: None,
+            install_ready: false,
             dev: DevState { perf_hud: prefs.get(PERF_HUD_PREF) == Some("1"), gpu_scanout: crate::bare::scanout::pref_on(prefs.get(GPU_SCANOUT_PREF)), ..DevState::read() },
             updater: Updater::new(super::apphost::root(), prefs.get(update::URL_PREF)),
             update_badge: false,
@@ -928,6 +934,33 @@ impl Settings {
         std::mem::take(&mut self.dock_out)
     }
 
+    /// True once the update's backup is in and the shell should restart into the new version (taken once).
+    pub(super) fn take_install_ready(&mut self) -> bool {
+        std::mem::take(&mut self.install_ready)
+    }
+
+    /// Takes the update backup's answer when it is in: a success makes the restart ready, a failure says why not.
+    fn poll_install(&mut self, ui: &Ui) -> bool {
+        let Some(rx) = &self.install_rx else { return false };
+        let res = match rx.try_recv() {
+            Ok(res) => res,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return false,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => Err("the backup stopped early".to_string()),
+        };
+        self.install_rx = None;
+        match res {
+            Ok(n) => {
+                self.backup_note = format!("Backed up {n} files before the update.");
+                self.update_badge = false;
+                self.install_ready = true;
+            }
+            // the data is never replaced unsaved: the install stops here
+            Err(e) => self.backup_note = format!("Update not installed: backup failed: {e}"),
+        }
+        self.rebuild(ui);
+        true
+    }
+
     fn notify_edit(&mut self, ui: &Ui, edit: NotifyEdit, g: usize, i: usize, t: f64) {
         match edit {
             NotifyEdit::Scheduled => {
@@ -1240,6 +1273,7 @@ impl Settings {
             frame = true;
         }
         frame |= self.poll_loads(ui);
+        frame |= self.poll_install(ui);
         if let Some(res) = self.backup_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.backup_rx = None;
             self.backup_note = match res {
@@ -1307,7 +1341,7 @@ impl Settings {
         if self.transition.is_some() || self.list().is_some_and(|p| p.animating(t)) || self.sidebar.as_ref().is_some_and(|p| p.animating(t)) || self.passcode.as_ref().is_some_and(|o| o.animating(t)) || self.st_gate.as_ref().is_some_and(|(l, _)| l.animating(t)) {
             return Some(t);
         }
-        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() || self.backup_rx.is_some() || self.loads.busy() {
+        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() || self.backup_rx.is_some() || self.install_rx.is_some() || self.loads.busy() {
             return Some(t + 100.0);
         }
         self.search.next_wake(t).or_else(|| self.zone_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.time_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.sheet.as_ref().and_then(|sh| sh.next_wake(t)))
@@ -1753,7 +1787,9 @@ impl Settings {
             self.rebuild_visible(ui);
             return vec![];
         }
-        match super::users_page::finish(purpose, text) {
+        let finished = super::users_page::finish(purpose, text);
+        self.loads.users.start("users-read", super::users_page::View::load);
+        match finished {
             Ok(Some(next)) => self.sheet = Some(Sheet::form(ui, self.w, t, next)),
             Ok(None) => self.users_note.clear(),
             Err(e) => self.users_note = e,
@@ -1764,7 +1800,8 @@ impl Settings {
 
     /// Users & Groups: an edit applies now, or opens the prompt that asks for what it still needs.
     fn users_act(&mut self, ui: &Ui, edit: super::users_page::Edit, t: f64) -> Vec<Effect> {
-        match super::users_page::apply(&edit, &super::users_page::View::load()) {
+        let view = self.loads.users.get().cloned().unwrap_or_else(super::users_page::View::load);
+        match super::users_page::apply(&edit, &view) {
             Ok(Some(prompt)) => {
                 self.users_note.clear();
                 self.sheet = Some(Sheet::form(ui, self.w, t, prompt));
@@ -2335,7 +2372,8 @@ impl Settings {
                 }
             }
             Action::Users(edit) => {
-                let r = super::users_page::apply(&edit, &super::users_page::View::load());
+                let view = self.loads.users.get().cloned().unwrap_or_else(super::users_page::View::load);
+                let r = super::users_page::apply(&edit, &view);
                 self.loads.users.start("users-read", super::users_page::View::load);
                 self.edit_result(ui, t, r);
                 vec![]
@@ -2344,6 +2382,12 @@ impl Settings {
                 // the view the page last showed; the services are read again on a worker below
                 let view = self.loads.sharing.get().cloned().unwrap_or_else(super::sharing_page::View::load);
                 let r = super::sharing_page::apply(&edit, &view);
+                // a service that just started or stopped shows its new state at once; the read below confirms it
+                if let (super::sharing_page::Edit::Service { id, on }, Ok(None)) = (&edit, &r) {
+                    if let Some(v) = self.loads.sharing.get_mut() {
+                        v.set_service(*id, *on);
+                    }
+                }
                 // the page keeps the last answer until the new read lands
                 self.loads.sharing.start("sharing-read", super::sharing_page::View::load);
                 self.edit_result(ui, t, r);
@@ -2701,16 +2745,17 @@ impl Settings {
                 vec![]
             }
             Command::InstallUpdate => {
+                if self.install_rx.is_some() {
+                    return vec![];
+                }
                 if self.opts.backup_before_update {
-                    // a failed backup stops the install so the data is never replaced unsaved
-                    match backup::back_up_now(&self.data_dir) {
-                        Ok((_, n)) => self.backup_note = format!("Backed up {n} files before the update."),
-                        Err(e) => {
-                            self.backup_note = format!("Update not installed: backup failed: {e}");
-                            self.rebuild(ui);
-                            return vec![];
-                        }
-                    }
+                    // the copy runs on a worker; `poll_install` restarts once it is in, and a failed backup stops the install
+                    // so the data is never replaced unsaved
+                    let dir = self.data_dir.clone();
+                    self.install_rx = Some(read_on_worker("update-backup", move || backup::back_up_now(&dir).map(|(_, n)| n).map_err(|e| e.to_string())));
+                    self.backup_note = "Backing up before the update…".into();
+                    self.rebuild(ui);
+                    return vec![];
                 }
                 self.update_badge = false;
                 vec![Effect::Restart]
@@ -2770,6 +2815,7 @@ impl Settings {
                 match super::users_page::run(&danger) {
                     Ok(()) => {
                         self.users_note.clear();
+                        self.loads.users.start("users-read", super::users_page::View::load);
                         // the deleted account's or group's page has nothing left to show
                         if matches!(self.page(), PageId::UserDetail | PageId::GroupDetail) {
                             self.pop(t);

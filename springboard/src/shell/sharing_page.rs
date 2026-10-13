@@ -58,6 +58,15 @@ impl View {
     pub fn is_on(&self, id: &str) -> bool {
         self.services.iter().any(|&(s, on)| s == id && on)
     }
+
+    /// Records a service the system has just started or stopped, so the page shows it before the next load lands.
+    pub fn set_service(&mut self, id: &str, on: bool) {
+        for (s, state) in self.services.iter_mut() {
+            if *s == id {
+                *state = on;
+            }
+        }
+    }
 }
 
 /// The Computer Name row and the service switches. Each switch's action carries the state it asks for.
@@ -133,6 +142,16 @@ mod tests {
         assert_eq!(g[1].items.len(), 3);
         assert_eq!(g[1].items[0].action, Action::Sharing(Edit::Service { id: "remote_login", on: false }));
         assert_eq!(g[1].items[1].action, Action::Sharing(Edit::Service { id: "file_sharing", on: true }));
+    }
+
+    #[test]
+    fn a_toggle_is_shown_before_the_next_load() {
+        let mut v = View::from_text("", "", off);
+        v.set_service("screen_sharing", true);
+        assert!(v.is_on("screen_sharing"));
+        assert!(!v.is_on("remote_login"));
+        v.set_service("screen_sharing", false);
+        assert!(!v.is_on("screen_sharing"));
     }
 
     #[test]

@@ -25,10 +25,16 @@ it works on Midget.
   Option+Cmd+- are `Shortcut::ZoomStep(true | false)`. Both dispatch in the `Shell` shortcut handler and update
   `Shell::screen_zoom` (`springboard/src/shell/mod.rs`). Locked screens ignore them.
 - Done: the model, the shortcuts and the shell state, with unit tests in `zoom.rs`.
-- Still open: the shell does not yet pass `screen_zoom` to the presenter. The presenter side exists:
-  `Presenter::zoom_into(src, dst_fbo, w, h, uv)` in `springboard/src/gpu/wl.rs` draws the composed frame magnified
-  through the `uv` rect. Wiring needs the frame owner (`src/bare/wayland.rs`, `Gpu`) to call it after the frame is
-  composed, when `screen_zoom.source_rect(..)` is Some. Not done in this round.
+- Done (round 75): the shell passes `Shell::screen_zoom()` and the pointer to the Wayland GPU presenter every
+  frame (`shell.rs` calls `Display::wayland_set_zoom` before both the composed present and the cursor-only present,
+  and `Gpu::set_zoom` stores them in `springboard/src/bare/wayland.rs`). `Gpu::present` takes the whole screen as
+  damage while zoom is on, and on the frame it turns off. After the composition draws the drawable,
+  `Presenter::magnify` (`springboard/src/gpu/wl.rs`) copies the composed frame aside and draws the Full Screen
+  magnification over the drawable. `magnify_for` in `bare/wayland.rs` turns `source_rect` and `lens_rect` into the
+  presenter's normalised coordinates. The former `zoom_into` had no caller and is replaced by `magnify`.
+  Option+Cmd+8 and the zoom steps request a full redraw (`hwkeys.rs`).
+- Limit: zoom is drawn only by the Wayland GPU presenter. The CPU (no presenter) path and the bare scanout path
+  (`bare/gpu_comp.rs`, used when the shell owns the panel) do not magnify.
 - Midget check: Option+Cmd+8 turns zoom on; Option+Cmd+= and - change the factor; the view follows the pointer.
 
 ### Picture in Picture Zoom (lens)
@@ -36,8 +42,10 @@ it works on Midget.
 - Model: `ScreenZoom::lens_rect(pointer, screen)` places a lens (360 x 240 px at 1x) below and to the right of the
   pointer, flipping to the other side at the screen edges. `Mode::Lens` makes `source_rect` sample a lens-sized area
   at the same factor. The Settings choice between Full Screen and Lens is not built: `mode` is `Mode::Full` by default.
-- Still open: a Settings control for the mode, the lens drawing (the presenter draws the lens as a second
-  `zoom_into` into the lens rect), and the lens size at the shell's `ui.pt` scale.
+- Done (round 75): the lens drawing. `Presenter::magnify` with `Magnify::lens` draws the magnified rect into
+  `lens_rect` with a 2 px light rim (`zoom_lens`), over the unmagnified composed frame.
+- Still open: a Settings control for the mode (`mode` stays `Mode::Full`), and the lens size at the shell's `ui.pt`
+  scale (the lens is 360 x 240 screen px at 1x).
 - Midget check: the lens follows the pointer and stays on the screen.
 
 ### Cursor Size (Settings slider; hardware plane)
@@ -50,11 +58,16 @@ it works on Midget.
   neighbour, hotspot at the top left). A driver that refuses the larger plane fails the ioctl, and `set_cursor`
   returns false so the caller draws the pointer in software.
 - Done: the setting, the slider, the sprite scaling and the plane size, with unit tests in `kms.rs`.
-- Still open: no caller of `set_cursor` exists in the shell at this commit (the pointer is drawn by the desktop
-  path). The pointer owner must call `set_cursor(sprite, settings.cursor_scale())` when the setting changes and at
-  start-up. The hardware cursor path was not built or run here.
-- Midget check: the pointer grows from 1x to 2x as the slider moves; on a driver without a 128 px plane the pointer
-  stays at 64 px.
+- Done (round 75): the pointer grows in the shell's own drawing, on every backend. `gfx::cursor::Cursor::set_scale`
+  (`springboard/render/src/gfx/cursor.rs`) scales the disc (12 px at 1x, up to 24 px at 2x) and forgets the shown spot
+  so the panel is redrawn. The shell passes `Shell::cursor_scale()` (the open Settings slider while it is open, else
+  the saved preference) each draw (`bin/shell.rs`). Unit test: `cursor_size_grows_the_disc_and_a_new_size_forgets_the_spot`.
+- Not wired: `kms::Display::set_cursor(argb, scale)` still has no caller in the shell. Wiring it means the hardware
+  plane takes over the whole pointer state (motion through `move_cursor`, the 3 s idle hide, screen off, lock and
+  rotation, which hides it with a null handle). Done in the shell's frame loop, it would also double the pointer
+  while the software disc is still stamped. Not done in this round because it needs Midget to verify. The
+  Wayland path also has no hardware plane: `set_cursor` would issue DRM ioctls on the Wayland socket.
+- Midget check: the pointer grows from 1x to 2x as the slider moves, and the disc stays on the pointer.
 
 ### Accessibility Shortcut chooser (Option+Cmd+F5)
 
@@ -78,7 +91,12 @@ it works on Midget.
 - `springboard/src/shell/pages.rs` (`Slider::CursorSize`, `Pick::AccessibilityShortcut`, `PageId::AccessibilityShortcut`, the Accessibility page rows, `shortcut_label`)
 - `springboard/src/shell/settings.rs` (slider arm, pick arm, preview list)
 - `springboard/src/bare/kms.rs` (`set_cursor(argb, scale)`, `cursor_side`, `scale_sprite`, tests)
-- `springboard/src/gpu/wl.rs` (`Presenter::zoom_into`)
+- `springboard/src/gpu/wl.rs` (`Magnify`, `Presenter::magnify`, `zoom_state`/`zoom_pass`/`zoom_lens`; replaces `zoom_into`)
+- Round 75 additions: `springboard/src/bare/wayland.rs` (`Gpu` zoom state, `Display::set_zoom`, `magnify_for`, present
+  wiring, tests in `zoom_tests`), `springboard/src/bare/kms.rs` (`wayland_set_zoom` passthrough),
+  `springboard/src/shell/mod.rs` (`screen_zoom()`, `cursor_scale()`), `springboard/src/shell/hwkeys.rs` (redraw on zoom
+  keys), `springboard/src/bin/shell.rs` (zoom and cursor-size calls in the frame loop),
+  `springboard/render/src/gfx/cursor.rs` (`set_scale`, scaled disc, test)
 
 ## Shared-file edits the lead must merge with care
 

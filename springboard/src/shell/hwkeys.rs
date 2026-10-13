@@ -647,10 +647,12 @@ impl Shell {
             }
             Shortcut::ZoomToggle if !self.is_locked() => {
                 self.screen_zoom.toggle();
+                self.force_full_redraw();
                 vec![]
             }
             Shortcut::ZoomStep(bigger) if !self.is_locked() => {
                 self.screen_zoom.step(bigger);
+                self.force_full_redraw();
                 vec![]
             }
             Shortcut::FullScreen if self.desk_active() && !self.is_locked() => {
@@ -669,8 +671,10 @@ impl Shell {
                 vec![]
             }
             Shortcut::LookUp if self.desk_active() && !self.is_locked() => self.run_service(bifrost_ui::services_menu::Service::LookUp, t),
-            // Escape closes the Look Up popover first, then the character viewer, before it goes Back
+            // Escape closes the Look Up popover first, then the Accessibility Shortcut panel, then the character viewer, before it goes Back
             Shortcut::Back if self.look_up_escape() => vec![],
+            // Escape hides the Accessibility Shortcut panel, then the character viewer, before it goes Back
+            Shortcut::Back if self.a11y_panel_escape() => vec![],
             // Escape hides the character viewer first, before it goes Back
             Shortcut::Back if self.char_viewer_escape() => vec![],
             Shortcut::Back => self.hw_back(t),

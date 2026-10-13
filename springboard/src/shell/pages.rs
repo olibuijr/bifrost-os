@@ -607,7 +607,7 @@ const KEYWORDS: &[(&str, &str)] = &[
     ("focus", "do not disturb schedule notifications silence"),
     ("do not disturb", "focus silence notifications schedule"),
     ("notifications", "alerts banners badges sounds do not disturb"),
-    ("accessibility", "zoom magnifier voiceover text size contrast reduce motion hearing"),
+    ("accessibility", "zoom magnifier voiceover text size contrast reduce motion hearing screen reader speech spoken transparency animation shortcut pointer cursor switch scanning flashing lights vision touch"),
     ("assistivetouch", "accessibility touch pointer hold"),
     ("battery", "power charge energy low power"),
     ("energy", "power battery sleep display"),
@@ -1281,7 +1281,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Group::new(vec![Item::slider(Ends::Cursor, a.cursor_size, Action::Slider(Slider::CursorSize))]).header("POINTER").footer("The pointer grows as you drag the slider."),
                     Group::new(vec![Item::new("Accessibility Shortcut").value(shortcut_label(&a.shortcut)).link(PageId::AccessibilityShortcut)])
                         .header("SHORTCUT")
-                        .footer("Press Option+Cmd+F5 to switch the chosen features on or off."),
+                        .footer("Press Option+Cmd+F5 to open a panel where you switch the chosen features on or off."),
                     Group::new(vec![
                         Item::new("AssistiveTouch").switch(o.assistive_touch, Action::Toggle(Toggle::AssistiveTouch)),
                         Item::new("Touch Accommodations").value(HOLD_MS[a.hold.min(HOLD_MS.len() - 1)].0).link(PageId::TouchHold),
@@ -1319,7 +1319,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             false,
             vec![Group::new(Feature::ALL.iter().enumerate().map(|(i, f)| Item::new(f.name()).check(m.a11y.shortcut.contains(f), Action::Pick(Pick::AccessibilityShortcut(i)))).collect())
                 .header("FEATURES")
-                .footer("Option+Cmd+F5 switches the checked features on, or off again when they are all on already.")],
+                .footer("Option+Cmd+F5 opens a panel with a checkbox for each feature checked here. Tap a feature in the panel to switch it.")],
         ),
         // built by `game_controllers_page::spec`, which reads the live controllers
         PageId::GameControllers | PageId::GameController(_) => page("", false, vec![]),
