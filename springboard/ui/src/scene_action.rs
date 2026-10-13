@@ -600,7 +600,7 @@ mod tests {
 
     #[test]
     fn keys_replace_and_remove_actions() {
-        let (mut scene, node) = scene_with_node();
+        let (_scene, node) = scene_with_node();
         let mut runner = ActionRunner::new();
         runner.run(node, Action::repeat_forever(Action::wait(1.0)), Some("spin"));
         runner.run(node, Action::move_by(v(1.0, 0.0, 0.0), 1.0), Some("spin"));
