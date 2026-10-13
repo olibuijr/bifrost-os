@@ -73,7 +73,7 @@
     {
       "feature": "Audio output to the speaker",
       "apple": "Playback through CMAudioClock-synchronized sinks (https://developer.apple.com/documentation/coremedia/cmaudioclock)",
-      "bifrost": "springboard/src/media/alsa.rs; springboard/src/media/alsalib.rs; springboard/audiod/ (is.olibuijr.audio service)",
+      "bifrost": "springboard/src/media/audio_out.rs; springboard/src/media/speaker.rs; springboard/audiod/ (is.olibuijr.audio service)",
       "status": "os",
       "note": "Output goes through ALSA's default PCM so PipeWire or PulseAudio can mix. Apps reach it through the audio service, not through a media API."
     },

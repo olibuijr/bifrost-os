@@ -31,14 +31,14 @@
     {
       "feature": "Document structure: xref repair, objects",
       "apple": "PDFDocument read operations, page count, attributes",
-      "bifrost": "springboard/src/shell/books/engine/pdf/doc.rs (xref, object scan when the xref is bad), springboard/src/shell/books/engine/pdf/obj.rs",
+      "bifrost": "springboard/render/src/cg/pdf/doc.rs (xref, object scan when the xref is bad), springboard/render/src/cg/pdf/obj.rs",
       "status": "partial",
       "note": "Reader only; no attribute or metadata API for apps"
     },
     {
       "feature": "PDFPage: page tree and text extraction",
       "apple": "PDFPage string, attributedString, characterBounds(at:), characterIndex(at:), numberOfCharacters",
-      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (walk, page tree), springboard/src/shell/books/engine/pdf/content.rs (Extractor, reading order text)",
+      "bifrost": "springboard/src/shell/books/engine/pdf/mod.rs (walk, page tree), springboard/render/src/cg/pdf/extract.rs (Extractor, reading order text)",
       "status": "partial",
       "note": "Text is extracted in reading order. No per-character bounds or index lookup"
     },

@@ -17,7 +17,7 @@
     {
       "feature": "Path construction and stroking (CGPath, CGMutablePath)",
       "apple": "CGPath, CGMutablePath, move/add/close, fill and stroke path",
-      "bifrost": "springboard/ui/src/affine.rs, springboard/ui/src/gradient.rs, springboard/ui/src/path.rs; wired: springboard/ui/src/stroke_style.rs (dash_polyline, used by style.rs)",
+      "bifrost": "springboard/render/src/cg/path.rs (Affine, Path), springboard/render/src/gradient.rs; wired: springboard/render/src/cg/raster.rs (dash_polyline, used by style.rs)",
       "status": "partial",
       "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No public path type. Bezier flattening exists only for glyph outlines inside the font engine. Apps cannot draw an arbitrary path. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
@@ -31,14 +31,14 @@
     {
       "feature": "Clipping",
       "apple": "CGContextClip, clip rect and clip path, CGContextClipToRect",
-      "bifrost": "springboard/ui/src/clip.rs",
+      "bifrost": "none; the clip model was removed in 97a1746b (parity(cg-context))",
       "status": "partial",
-      "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Surface has no clip. Scroll views redraw the whole window in some cases to avoid clipping."
+      "note": "The clip model (Wave 3, theme-19) is gone, so no code implements this row. The Surface has no clip. Scroll views redraw the whole window in some cases to avoid clipping."
     },
     {
       "feature": "Affine transforms and transform stack (CGAffineTransform, CTM)",
       "apple": "CGAffineTransform, CGContextConcatCTM, CGContextTranslateCTM, CGContextScaleCTM, CGContextRotateCTM",
-      "bifrost": "springboard/ui/src/affine.rs, springboard/ui/src/gradient.rs, springboard/ui/src/path.rs; wired: springboard/ui/src/affine.rs (used by springboard/apps/freeform-desktop/src/freeform.rs edit())",
+      "bifrost": "springboard/render/src/cg/path.rs (Affine, Path), springboard/render/src/gradient.rs; wired: springboard/render/src/cg/path.rs (Affine, used by springboard/apps/freeform-desktop/src/freeform.rs edit())",
       "status": "partial",
       "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The compositor applies transforms to whole window surfaces for window effects. Apps have no per-draw transform stack or CGAffineTransform type. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
@@ -52,21 +52,21 @@
     {
       "feature": "Gradients (linear and radial, CGGradient)",
       "apple": "CGGradient, CGContextDrawLinearGradient, CGContextDrawRadialGradient",
-      "bifrost": "springboard/ui/src/affine.rs, springboard/ui/src/gradient.rs, springboard/ui/src/path.rs; wired: springboard/ui/src/gradient.rs (used by springboard/apps/freeform-desktop/src/style.rs fill_polygon)",
+      "bifrost": "springboard/render/src/cg/path.rs (Affine, Path), springboard/render/src/gradient.rs; wired: springboard/render/src/gradient.rs (used by springboard/apps/freeform-desktop/src/style.rs fill_polygon)",
       "status": "partial",
       "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Gradients exist only inside the browser's tile painter, behind private functions. The SDK does not expose a gradient fill. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
     {
       "feature": "Shadings and gradient functions (CGShading, CGFunction)",
       "apple": "CGShading, CGFunction, CGContextDrawShading",
-      "bifrost": "springboard/render/src/function.rs",
+      "bifrost": "springboard/render/src/cg/pdf/function.rs",
       "status": "partial",
       "note": "Wave 3 (w3-core-graphics, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No callback-based shading or function evaluation in the renderer or the SDK."
     },
     {
       "feature": "Patterns (CGPattern)",
       "apple": "CGPattern, CGContextSetFillPattern",
-      "bifrost": "springboard/render/src/pattern.rs",
+      "bifrost": "springboard/render/src/cg/paint.rs (Pattern)",
       "status": "partial",
       "note": "Wave 3 (w3-core-graphics, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No repeating-pattern fill for paths or rectangles."
     },
@@ -94,7 +94,7 @@
     {
       "feature": "PDF documents (CGPDFDocument, PDF reading)",
       "apple": "CGPDFDocument, CGPDFPage, CGContextDrawPDFPage",
-      "bifrost": "springboard/src/shell/books/engine/pdf/doc.rs, springboard/src/shell/books/engine/pdf/content.rs (BT and Do operators only), springboard/src/shell/books/engine/pdf/image.rs",
+      "bifrost": "springboard/render/src/cg/pdf/doc.rs, springboard/render/src/cg/pdf/interpret.rs (BT and Do operators only), springboard/render/src/cg/pdf/image.rs",
       "status": "partial",
       "note": "The Books engine reads text and images from PDFs and reflows them. It does not draw vector paths, and the reader is private to the Books shell, not exposed to apps."
     },
@@ -108,7 +108,7 @@
     {
       "feature": "Layers and offscreen reusable content (CGLayer)",
       "apple": "CGLayer, CGLayerCreateWithContext, CGContextDrawLayerInRect",
-      "bifrost": "springboard/render/src/reusable_layer.rs",
+      "bifrost": "springboard/render/src/cg/reusable_layer.rs",
       "status": "partial",
       "note": "Wave 6 (b09, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. Group opacity saves and blends a backdrop internally, but there is no app-facing reusable layer object."
     },

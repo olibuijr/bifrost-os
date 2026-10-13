@@ -3,7 +3,7 @@
   "doc": "https://developer.apple.com/documentation/automator",
   "macos_since": "10.4",
   "status": "partial",
-  "bifrost": "springboard/apps/shortcuts-desktop/src/model.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs",
+  "bifrost": "springboard/src/shortcuts.rs, springboard/apps/shortcuts-desktop/src/widget.rs, springboard/sdk/src/intents.rs, springboard/src/shell/intents.rs",
   "summary": "Apple's Automator is a workflow engine that runs ordered action bundles and shell or AppleScript actions, with a workflow view and controller. BifrOSt has no workflow engine and no loadable action bundles. Its closest parts are the Shortcuts app, which stores and edits ordered lists of built-in actions, and the App Intents SDK, which gives apps typed actions. Shortcuts runs nothing yet: its actions are only logged because the shell cannot receive them over the app protocol.",
   "rea_evidence": "ev_92931747df2475eb5c7c1609143dbc235c17a2ebaeacf97a4e6864461e6a6ed8",
   "features": [
@@ -24,7 +24,7 @@
     {
       "feature": "Workflow model (ordered actions and input/output)",
       "apple": "AMWorkflow (actions, addAction, insertAction, moveAction, removeAction, input, output, valueForVariable)",
-      "bifrost": "springboard/apps/shortcuts-desktop/src/model.rs (Shortcut { name, color, actions }, Action enum, parse/serialise one line per shortcut)",
+      "bifrost": "springboard/src/shortcuts.rs (Shortcut { name, color, actions }, Action enum, parse/serialise one line per shortcut)",
       "status": "partial",
       "note": "Shortcuts stores an ordered list of up to 24 built-in actions per shortcut, capped at 64 shortcuts. It has no variables, no input or output passing between steps, and no workflow file format beyond shortcuts.tsv in the app data directory."
     },

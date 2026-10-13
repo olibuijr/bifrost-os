@@ -17,7 +17,7 @@
     {
       "feature": "Audio server driver plug-ins (virtual devices)",
       "apple": "Creating an Audio Server Driver Plug-in, Building an Audio Server Plug-in and Driver Extension, AudioHardwarePlugin",
-      "bifrost": "none; kernel ALSA drivers only (springboard/src/media/alsa.rs)",
+      "bifrost": "none; kernel ALSA drivers only (springboard/audio/alsa/src/lib.rs)",
       "status": "gap",
       "note": "No user-space HAL plug-in loader. A virtual device would need an ALSA loopback or PipeWire node, neither of which is exposed to apps."
     },
@@ -26,7 +26,7 @@
       "apple": "AudioHardwareAggregateDevice",
       "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
       "status": "gap",
-      "note": "The pure model had no caller and was removed. Routing and mixing are delegated to the sound server through libasound's default PCM (springboard/src/media/alsalib.rs). No aggregate device is created or exposed."
+      "note": "The pure model had no caller and was removed. Routing and mixing are delegated to the sound server through libasound's default PCM (springboard/src/media/speaker.rs). No aggregate device is created or exposed."
     },
     {
       "feature": "Process taps (capture a process's output)",
@@ -45,7 +45,7 @@
     {
       "feature": "Speaker playback",
       "apple": "AudioHardwareStream IO, AudioHardwareDevice IO",
-      "bifrost": "springboard/src/media/speaker.rs, springboard/src/media/alsalib.rs, springboard/src/media/alsa.rs (AudioOut trait)",
+      "bifrost": "springboard/src/media/speaker.rs, springboard/src/media/audio_out.rs (AudioOut trait)",
       "status": "partial",
       "note": "Playback works through the default PCM, and idle PCMs close after a delay. Apps write through the audio service, not through a stream API."
     },

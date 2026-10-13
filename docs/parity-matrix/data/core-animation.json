@@ -80,14 +80,14 @@
     {
       "feature": "Shape layer (CAShapeLayer, Bezier paths)",
       "apple": "CAShapeLayer, CAShapeLayerFillRule, CAShapeLayerLineCap, CAShapeLayerLineJoin",
-      "bifrost": "springboard/ui/src/stroke_style.rs, springboard/ui/src/shape.rs (Path::dashed)",
+      "bifrost": "springboard/render/src/cg/raster.rs (dash_polyline), springboard/ui/src/shape.rs (Path::dashed)",
       "status": "partial",
       "note": "Wave 4 (w4-core-animation, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-facing path or stroke API; polygon fill is private to shell modules"
     },
     {
       "feature": "Gradient layer (CAGradientLayer)",
       "apple": "CAGradientLayer, CAGradientLayerType",
-      "bifrost": "springboard/ui/src/gradient.rs",
+      "bifrost": "springboard/render/src/gradient.rs",
       "status": "partial",
       "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. gradients exist only for the browser's CSS engine; no SDK gradient view or layer"
     },

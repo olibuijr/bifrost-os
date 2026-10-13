@@ -52,7 +52,7 @@
     {
       "feature": "System audio service",
       "apple": "Audio Unit host and Core Audio I/O (not a separate Apple feature row)",
-      "bifrost": "springboard/audiod/src/main.rs (audio service owns speaker and microphone), springboard/src/media/alsalib.rs (ALSA output)",
+      "bifrost": "springboard/audiod/src/main.rs (audio service owns speaker and microphone), springboard/src/media/speaker.rs (ALSA output through dl.rs)",
       "status": "os",
       "note": "the service exists, but the SDK has no audio module (springboard/sdk/src/ has no audio file)"
     },
