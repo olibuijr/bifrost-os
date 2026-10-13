@@ -1,139 +1,146 @@
 {
-  "framework": "AVFoundation (Playback, Editing, Common)",
-  "doc": "https://developer.apple.com/documentation/avfoundation",
-  "macos_since": "10.7",
-  "status": "partial",
-  "bifrost": "springboard/src/media/ (shell-internal player, demux, decoders, mixer), springboard/audiod/src/main.rs, springboard/src/shell/audiosvc.rs",
-  "summary": "BifrOSt has a working media stack (MP4/WebM demux, VA-API/ffmpeg video decode, AAC/MP3 audio, ALSA output, A/V sync, ID3/ilst tags), but it is inside the shell and Music app, not an SDK API. Nothing exists for compositions, video effects, export or writing media.",
-  "rea_evidence": "ev_0a8eac4fffbfe8853cb7941e11e3a35275f22d910252c983eb422fcb5cc92d68",
-  "features": [
-    {
-      "feature": "Essentials: AVFoundation updates",
-      "apple": "Release-notes article",
-      "bifrost": "docs/bifrost-ui.md",
-      "status": "n/a",
-      "note": "Documentation article, no API"
-    },
-    {
-      "feature": "Media assets (AVAsset, tracks, metadata)",
-      "apple": "AVAsset, AVURLAsset, AVAssetTrack, AVMetadataItem",
-      "bifrost": "springboard/src/media/demux/mod.rs, springboard/src/media/id3.rs, springboard/src/media/ilst.rs; wired: springboard/apps/podcasts-desktop/src/info.rs (episode length and codec info for the sheet; still partial, no asset object, chapters or artwork)",
-      "status": "partial",
-      "note": "Demux and tag reading exist (MP4, WebM, ID3, ilst) but are shell-internal; no asset or track object for apps Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
-    },
-    {
-      "feature": "Media reading and writing",
-      "apple": "AVAssetReader, AVAssetWriter, AVAssetExportSession, AVAssetImageGenerator",
-      "bifrost": "springboard/ui/src/export_session.rs, springboard/ui/src/frame_grab.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 14 tests. Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Reading samples is internal to the player; no writer, no export, no frame-grab API"
-    },
-    {
-      "feature": "Media types and utilities",
-      "apple": "AVFileType, AVMediaType, AVCaption",
-      "bifrost": "springboard/ui/src/uttype.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 12 tests. File type identification exists; no captions or subtitle model"
-    },
-    {
-      "feature": "Video settings",
-      "apple": "AVVideoSettings keys and constants",
-      "bifrost": "springboard/ui/src/video_settings.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-avfoundation-playback-editing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decode only, no encoder settings"
-    },
-    {
-      "feature": "Audio settings",
-      "apple": "AVAudioSettings keys and constants",
-      "bifrost": "springboard/src/media/convert.rs",
-      "status": "partial",
-      "note": "Sample format conversion exists internally; no settings dictionary"
-    },
-    {
-      "feature": "Media playback (AVPlayer, AVPlayerItem, AVQueuePlayer)",
-      "apple": "AVPlayer, AVPlayerItem, AVQueuePlayer, AVPlayerLooper, interstitials",
-      "bifrost": "springboard/src/media/player.rs, springboard/src/media/audioplayer.rs, springboard/src/media/queue.rs",
-      "status": "os",
-      "note": "Play, pause, seek, buffering and A/V sync work, but only through the shell (Deildu, Files video); apps get no SDK player. No looper, interstitials or rate control"
-    },
-    {
-      "feature": "Video decoding",
-      "apple": "AVPlayerItemVideoOutput, VideoToolbox-backed decode",
-      "bifrost": "springboard/src/media/hwdec/vaapi.rs, springboard/src/media/hwdec/ffmpeg.rs",
-      "status": "os",
-      "note": "VA-API hardware decode with libavcodec fallback; no frame-output API for apps"
-    },
-    {
-      "feature": "Audio output and routing",
-      "apple": "AVPlayer audio, AVAudioSession-style routing",
-      "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/route.rs, springboard/audio/alsa/src/ctl.rs",
-      "status": "os",
-      "note": "audiod and mixer own output and routing; no app-facing session API"
-    },
-    {
-      "feature": "Now Playing and remote commands",
-      "apple": "Playback integration (MPNowPlayingInfoCenter)",
-      "bifrost": "springboard/src/shell/music/system.rs, springboard/sdk/src/widgets.rs",
-      "status": "partial",
-      "note": "Music integrates with the shell; widgets::player draws the mini player (docs/bifrost-ui.md)"
-    },
-    {
-      "feature": "Offline playback and storage",
-      "apple": "AVAssetDownloadTask, AVAssetDownloadStorageManager",
-      "bifrost": "springboard/src/media/stream.rs",
-      "status": "partial",
-      "note": "Progressive streaming to a growing file for playback; no HLS download tasks or storage policy"
-    },
-    {
-      "feature": "Streaming and AirPlay",
-      "apple": "HLS playback, AVRoutePickerView, FairPlay",
-      "bifrost": "springboard/src/media/source.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 2 tests. HTTP sources and MSE demux exist; no HLS, AirPlay or DRM"
-    },
-    {
-      "feature": "Sample buffer playback",
-      "apple": "AVSampleBufferDisplayLayer, AVSampleBufferAudioRenderer, AVSampleBufferRenderSynchronizer",
-      "bifrost": "springboard/ui/src/render_synchronizer.rs",
-      "status": "partial",
-      "note": "Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only an internal MSE feed for the browser; no app renderer or synchronizer"
-    },
-    {
-      "feature": "Composite assets",
-      "apple": "AVMutableComposition, AVMutableCompositionTrack",
-      "bifrost": "springboard/ui/src/composition.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No composition model"
-    },
-    {
-      "feature": "QuickTime movies",
-      "apple": "AVMovie, AVMutableMovie",
-      "bifrost": "springboard/src/media/mp4.rs",
-      "status": "gap",
-      "note": "MP4 parsing only, no movie editing"
-    },
-    {
-      "feature": "Video effects and compositing",
-      "apple": "AVVideoComposition, AVVideoCompositing, AVVideoCompositionCoreAnimationTool",
-      "bifrost": "springboard/ui/src/video_transition.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-avfoundation-playback-editing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No transitions, custom compositor or layer-animation tool"
-    },
-    {
-      "feature": "Audio mixing",
-      "apple": "AVAudioMix, AVMutableAudioMixInputParameters",
-      "bifrost": "springboard/ui/src/composition.rs",
-      "status": "parity",
-      "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A system mixer exists; no per-track volume ramps over an asset"
-    }
-  ],
-  "gaps": [
-    "No SDK media player for apps (everything is in the shell crate)",
-    "No asset/track model or sample reader for apps",
-    "No composition, video composition or audio mix editing",
-    "No writer or export session; no encoder",
-    "No HLS, offline download management, AirPlay or FairPlay",
-    "No sample buffer renderers or synchronizer",
-    "No captions or subtitle model"
-  ]
+ "framework": "AVFoundation (Playback, Editing, Common)",
+ "doc": "https://developer.apple.com/documentation/avfoundation",
+ "macos_since": "10.7",
+ "status": "partial",
+ "bifrost": "springboard/src/media/ (shell-internal player, demux, decoders, mixer), springboard/audiod/src/main.rs, springboard/src/shell/audiosvc.rs",
+ "summary": "BifrOSt has a working media stack (MP4/WebM demux, VA-API/ffmpeg video decode, AAC/MP3 audio, ALSA output, A/V sync, ID3/ilst tags), but it is inside the shell and Music app, not an SDK API. Nothing exists for compositions, video effects, export or writing media.",
+ "rea_evidence": "ev_0a8eac4fffbfe8853cb7941e11e3a35275f22d910252c983eb422fcb5cc92d68",
+ "features": [
+  {
+   "feature": "Essentials: AVFoundation updates",
+   "apple": "Release-notes article",
+   "bifrost": "docs/bifrost-ui.md",
+   "status": "n/a",
+   "note": "Documentation article, no API"
+  },
+  {
+   "feature": "Media assets (AVAsset, tracks, metadata)",
+   "apple": "AVAsset, AVURLAsset, AVAssetTrack, AVMetadataItem",
+   "bifrost": "springboard/src/media/demux/mod.rs, springboard/src/media/id3.rs, springboard/src/media/ilst.rs; wired: springboard/apps/podcasts-desktop/src/info.rs (episode length and codec info for the sheet; still partial, no asset object, chapters or artwork); springboard/ui/src/av_asset.rs (asset load of duration and tracks from WAV)",
+   "status": "partial",
+   "note": "Demux and tag reading exist (MP4, WebM, ID3, ilst) but are shell-internal; no asset or track object for apps Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. Round sprint10/6: asset object with duration and tracks (WAV) in bifrost_ui::av_asset; partial, needs a Midget check."
+  },
+  {
+   "feature": "Media reading and writing",
+   "apple": "AVAssetReader, AVAssetWriter, AVAssetExportSession, AVAssetImageGenerator",
+   "bifrost": "springboard/ui/src/export_session.rs, springboard/ui/src/frame_grab.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 14 tests. Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Reading samples is internal to the player; no writer, no export, no frame-grab API"
+  },
+  {
+   "feature": "Media types and utilities",
+   "apple": "AVFileType, AVMediaType, AVCaption",
+   "bifrost": "springboard/ui/src/uttype.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 12 tests. File type identification exists; no captions or subtitle model"
+  },
+  {
+   "feature": "Video settings",
+   "apple": "AVVideoSettings keys and constants",
+   "bifrost": "springboard/ui/src/video_settings.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-avfoundation-playback-editing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Decode only, no encoder settings"
+  },
+  {
+   "feature": "Audio settings",
+   "apple": "AVAudioSettings keys and constants",
+   "bifrost": "springboard/src/media/convert.rs",
+   "status": "partial",
+   "note": "Sample format conversion exists internally; no settings dictionary"
+  },
+  {
+   "feature": "Media playback (AVPlayer, AVPlayerItem, AVQueuePlayer)",
+   "apple": "AVPlayer, AVPlayerItem, AVQueuePlayer, AVPlayerLooper, interstitials",
+   "bifrost": "springboard/src/media/player.rs, springboard/src/media/audioplayer.rs, springboard/src/media/queue.rs",
+   "status": "os",
+   "note": "Play, pause, seek, buffering and A/V sync work, but only through the shell (Deildu, Files video); apps get no SDK player. No looper, interstitials or rate control"
+  },
+  {
+   "feature": "Video decoding",
+   "apple": "AVPlayerItemVideoOutput, VideoToolbox-backed decode",
+   "bifrost": "springboard/src/media/hwdec/vaapi.rs, springboard/src/media/hwdec/ffmpeg.rs",
+   "status": "os",
+   "note": "VA-API hardware decode with libavcodec fallback; no frame-output API for apps"
+  },
+  {
+   "feature": "Audio output and routing",
+   "apple": "AVPlayer audio, AVAudioSession-style routing",
+   "bifrost": "springboard/audiod/src/main.rs, springboard/src/media/route.rs, springboard/audio/alsa/src/ctl.rs",
+   "status": "os",
+   "note": "audiod and mixer own output and routing; no app-facing session API"
+  },
+  {
+   "feature": "Now Playing and remote commands",
+   "apple": "Playback integration (MPNowPlayingInfoCenter)",
+   "bifrost": "springboard/src/shell/music/system.rs, springboard/sdk/src/widgets.rs",
+   "status": "partial",
+   "note": "Music integrates with the shell; widgets::player draws the mini player (docs/bifrost-ui.md)"
+  },
+  {
+   "feature": "Offline playback and storage",
+   "apple": "AVAssetDownloadTask, AVAssetDownloadStorageManager",
+   "bifrost": "springboard/src/media/stream.rs",
+   "status": "partial",
+   "note": "Progressive streaming to a growing file for playback; no HLS download tasks or storage policy"
+  },
+  {
+   "feature": "Streaming and AirPlay",
+   "apple": "HLS playback, AVRoutePickerView, FairPlay",
+   "bifrost": "springboard/src/media/source.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 2 tests. HTTP sources and MSE demux exist; no HLS, AirPlay or DRM"
+  },
+  {
+   "feature": "Sample buffer playback",
+   "apple": "AVSampleBufferDisplayLayer, AVSampleBufferAudioRenderer, AVSampleBufferRenderSynchronizer",
+   "bifrost": "springboard/ui/src/render_synchronizer.rs",
+   "status": "partial",
+   "note": "Wave 5 (w5-avfoundation-playback-editing, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only an internal MSE feed for the browser; no app renderer or synchronizer"
+  },
+  {
+   "feature": "Composite assets",
+   "apple": "AVMutableComposition, AVMutableCompositionTrack",
+   "bifrost": "springboard/ui/src/composition.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No composition model"
+  },
+  {
+   "feature": "QuickTime movies",
+   "apple": "AVMovie, AVMutableMovie",
+   "bifrost": "springboard/src/media/mp4.rs",
+   "status": "gap",
+   "note": "MP4 parsing only, no movie editing"
+  },
+  {
+   "feature": "Video effects and compositing",
+   "apple": "AVVideoComposition, AVVideoCompositing, AVVideoCompositionCoreAnimationTool",
+   "bifrost": "springboard/ui/src/video_transition.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 4 (w4-avfoundation-playback-editing, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No transitions, custom compositor or layer-animation tool"
+  },
+  {
+   "feature": "Audio mixing",
+   "apple": "AVAudioMix, AVMutableAudioMixInputParameters",
+   "bifrost": "springboard/ui/src/composition.rs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25 by 6 tests. Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A system mixer exists; no per-track volume ramps over an asset"
+  },
+  {
+   "feature": "Playback (player, player item, queue player, looper, time observers)",
+   "apple": "AVPlayer, AVPlayerItem, AVQueuePlayer, AVPlayerLooper, addPeriodicTimeObserver, addBoundaryTimeObserver, AVPlayerItemMetadataOutput",
+   "bifrost": "springboard/ui/src/av_player.rs, springboard/ui/src/av_queue_player.rs, springboard/ui/tests/av_playback.rs",
+   "status": "partial",
+   "note": "Sprint10/6: host-tested model on a caller clock (status, rate, time control status, seek with tolerance, observers, did-play-to-end, action at item end, queue, looper, timed metadata, audio mix ramps). Not wired to the audio engine or apps; parity needs a Midget check."
+  }
+ ],
+ "gaps": [
+  "No SDK media player for apps (everything is in the shell crate)",
+  "No asset/track model or sample reader for apps",
+  "No composition, video composition or audio mix editing",
+  "No writer or export session; no encoder",
+  "No HLS, offline download management, AirPlay or FairPlay",
+  "No sample buffer renderers or synchronizer",
+  "No captions or subtitle model"
+ ]
 }

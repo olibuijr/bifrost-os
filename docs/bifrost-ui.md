@@ -2839,3 +2839,14 @@ applies edits without recording them, `replace_range` and `replace_ranges` recor
 
 Open: draw the view in the SDK (caret, selection, find bar, list markers, attachments), exclusion paths in the layout manager,
 right and centre tab stops, justification, bidirectional text, carry paragraph styles in `bifrost_app::attributed`, and Midget checks.
+
+## AVFoundation playback model (`bifrost_ui::av_player`, `av_queue_player`, `av_asset`)
+
+Pure-Rust, caller-clock playback model (microseconds); types drop the framework prefix.
+
+- `Asset` (`from_wav_bytes`, `load_status`, `duration_us`, `tracks`), `Pcm` (WAV in/out, `slice`, `sine`).
+- `Player`/`PlayerItem`: `status`, `play`, `pause`, `set_rate`, `default_rate`, `time_control_status`, `seek(to, before, after)`, periodic and boundary time observers, `DidPlayToEndTime`, `action_at_item_end`, `volume`, `is_muted`, timed metadata groups. Nothing plays until `play()`; `advance(dt)` drives the clock.
+- `QueuePlayer`: `insert`, `remove`, `advance_to_next_item`, `QueuePlayer::looper(asset)`.
+- `MutableComposition` and `insert_time_range`, `MutableAudioMixInputParameters` volume ramps, `export_wav` (trimmed WAV via `ExportSession`).
+
+Gap: not connected to the audio engine or apps; video tracks and real metadata output are not modelled. Needs a Midget check.

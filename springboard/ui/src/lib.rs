@@ -1100,6 +1100,9 @@ pub mod format_readers;
 
 // Media export, frame grab and render timeline models (parity wave 5, AVFoundation playback and editing)
 pub mod export_session;
+pub mod av_asset;
+pub mod av_player;
+pub mod av_queue_player;
 pub mod frame_grab;
 pub mod render_synchronizer;
 pub mod indirect_command;
