@@ -193,8 +193,9 @@ impl Files {
             icons::clear_button(s, (ox + cx, cy), ui.pt(9.0));
         }
         if d.searching {
-            let cancel = ui.text("Cancel", 17.0, Weight::Regular, BLUE);
-            s.blit(&cancel, (ox + sx + sw + ui.pt(14.0)) as i32, (sy + (sh - cancel.h as f32) / 2.0) as i32, 255, 255);
+            self.with_text(ui, "Cancel", 17.0, Weight::Regular, BLUE, |cancel| {
+                s.blit(cancel, (ox + sx + sw + ui.pt(14.0)) as i32, (sy + (sh - cancel.h as f32) / 2.0) as i32, 255, 255);
+            });
         }
         // breadcrumb and sort control
         let cy = ui.pt(CRUMB_TOP_PT + CRUMB_H_PT / 2.0);
@@ -213,13 +214,15 @@ impl Files {
         for (i, sort) in Sort::ALL.iter().enumerate() {
             let x = ox + pages::sort_x(ui, w, i);
             let current = *sort == self.sort;
-            let label = ui.text(sort.label(), 13.0, if current { Weight::Semibold } else { Weight::Regular }, if current { WHITE } else { SECONDARY });
-            let lw = label.w as f32 + if current { ui.pt(12.0) } else { 0.0 };
-            let lx = x + (ui.pt(SORT_SLOT_PT) - lw) / 2.0;
-            s.blit(&label, lx as i32, (cy - label.h as f32 / 2.0) as i32, 255, if pressed == Some(Target::Sort(*sort)) { 120 } else { 255 });
-            if current {
-                icons::chevron(s, (lx + label.w as f32 + ui.pt(7.0), cy + ui.pt(1.0)), ui.pt(8.0), ui.pt(1.5), icons::Point::Down, WHITE);
-            }
+            let alpha = if pressed == Some(Target::Sort(*sort)) { 120 } else { 255 };
+            self.with_text(ui, sort.label(), 13.0, if current { Weight::Semibold } else { Weight::Regular }, if current { WHITE } else { SECONDARY }, |label| {
+                let lw = label.w as f32 + if current { ui.pt(12.0) } else { 0.0 };
+                let lx = x + (ui.pt(SORT_SLOT_PT) - lw) / 2.0;
+                s.blit(label, lx as i32, (cy - label.h as f32 / 2.0) as i32, 255, alpha);
+                if current {
+                    icons::chevron(s, (lx + label.w as f32 + ui.pt(7.0), cy + ui.pt(1.0)), ui.pt(8.0), ui.pt(1.5), icons::Point::Down, WHITE);
+                }
+            });
         }
         // listing, clipped to its band
         let top = ui.pt(CONTENT_TOP_PT);
@@ -232,10 +235,11 @@ impl Files {
             let third = w as f32 / 3.0;
             let labels = [("Copy", Target::BulkCopy, BLUE), ("Move", Target::BulkMove, BLUE), ("Delete", Target::BulkDelete, RED)];
             for (k, (text, tgt, color)) in labels.into_iter().enumerate() {
-                let img = ui.text(text, 17.0, Weight::Regular, color);
                 let alpha = if n == 0 { 90 } else if pressed == Some(tgt) { 140 } else { 255 };
                 let cx = ox + third * (k as f32 + 0.5);
-                s.blit(&img, (cx - img.w as f32 / 2.0) as i32, (bottom + (ui.pt(FOOTER_PT) - img.h as f32) / 2.0) as i32, 255, alpha);
+                self.with_text(ui, text, 17.0, Weight::Regular, color, |img| {
+                    s.blit(img, (cx - img.w as f32 / 2.0) as i32, (bottom + (ui.pt(FOOTER_PT) - img.h as f32) / 2.0) as i32, 255, alpha);
+                });
             }
         } else if let Some(f) = &d.footer {
             s.blit(f, (ox + (w as f32 - f.w as f32) / 2.0) as i32, (bottom + (ui.pt(FOOTER_PT) - f.h as f32) / 2.0) as i32, 255, 255);
@@ -362,8 +366,9 @@ impl Files {
                 crate::shell::settings::fill_row(s, ui, (*x, *y, *w, *h), first, last, HIGHLIGHT);
             }
             let color = if a.destructive() { RED } else { WHITE };
-            let label = ui.text(a.label(), 17.0, Weight::Regular, color);
-            s.blit(&label, (x + ui.pt(16.0)) as i32, (y + (h - label.h as f32) / 2.0) as i32, 255, 255);
+            self.with_text(ui, a.label(), 17.0, Weight::Regular, color, |label| {
+                s.blit(label, (x + ui.pt(16.0)) as i32, (y + (h - label.h as f32) / 2.0) as i32, 255, 255);
+            });
             let g = ui.pt(22.0);
             icons::menu(s, (x + w - ui.pt(16.0) - g, y + (h - g) / 2.0), g, a.glyph(), color);
             let next_in_section = rows.get(i + 1).is_some_and(|(_, (_, ny, ..))| (*ny - (y + h)).abs() < 0.5);
