@@ -147,3 +147,98 @@ pub(crate) fn distributed_incoming(name: &str, user_info: HashMap<String, String
     DistributedNotificationCenter.post(name, user_info);
     heard
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    fn info(k: &str, v: &str) -> HashMap<String, String> {
+        HashMap::from([(k.to_string(), v.to_string())])
+    }
+
+    #[test]
+    fn a_post_reaches_every_observer_of_the_name_with_its_payload() {
+        let seen: Rc<RefCell<Vec<Notification>>> = Rc::default();
+        let (a, b) = (seen.clone(), seen.clone());
+        let _t1 = NotificationCenter.add_observer("nc.test.payload", None, move |n| a.borrow_mut().push(n.clone()));
+        let _t2 = NotificationCenter.add_observer("nc.test.payload", None, move |n| b.borrow_mut().push(n.clone()));
+        NotificationCenter.post("nc.test.payload", Some(7), info("k", "v"));
+        let got = seen.borrow();
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0], Notification { name: "nc.test.payload".into(), object: Some(7), user_info: info("k", "v") });
+    }
+
+    #[test]
+    fn observers_only_hear_their_own_name() {
+        let hits = Rc::new(Cell::new(0));
+        let h = hits.clone();
+        let _t = NotificationCenter.add_observer("nc.test.name.a", None, move |_| h.set(h.get() + 1));
+        NotificationCenter.post("nc.test.name.b", None, HashMap::new());
+        assert_eq!(hits.get(), 0);
+        NotificationCenter.post("nc.test.name.a", None, HashMap::new());
+        assert_eq!(hits.get(), 1);
+    }
+
+    #[test]
+    fn the_object_filter_matches_only_that_poster_and_none_matches_all() {
+        let filtered = Rc::new(Cell::new(0));
+        let any = Rc::new(Cell::new(0));
+        let (f, a) = (filtered.clone(), any.clone());
+        let _t1 = NotificationCenter.add_observer("nc.test.obj", Some(1), move |_| f.set(f.get() + 1));
+        let _t2 = NotificationCenter.add_observer("nc.test.obj", None, move |_| a.set(a.get() + 1));
+        NotificationCenter.post("nc.test.obj", Some(1), HashMap::new());
+        NotificationCenter.post("nc.test.obj", Some(2), HashMap::new());
+        NotificationCenter.post("nc.test.obj", None, HashMap::new());
+        assert_eq!(filtered.get(), 1);
+        assert_eq!(any.get(), 3);
+    }
+
+    #[test]
+    fn dropping_or_removing_a_token_stops_delivery() {
+        let hits = Rc::new(Cell::new(0));
+        let h = hits.clone();
+        let token = NotificationCenter.add_observer("nc.test.remove", None, move |_| h.set(h.get() + 1));
+        assert!(NotificationCenter.has_observer("nc.test.remove"));
+        NotificationCenter.post("nc.test.remove", None, HashMap::new());
+        NotificationCenter.remove_observer(token);
+        NotificationCenter.post("nc.test.remove", None, HashMap::new());
+        assert_eq!(hits.get(), 1);
+        assert!(!NotificationCenter.has_observer("nc.test.remove"));
+    }
+
+    #[test]
+    fn an_observer_may_post_another_notification_while_running() {
+        let hits = Rc::new(Cell::new(0));
+        let h = hits.clone();
+        let _inner = NotificationCenter.add_observer("nc.test.inner", None, move |_| h.set(h.get() + 1));
+        let _outer = NotificationCenter.add_observer("nc.test.outer", None, |_| {
+            NotificationCenter.post("nc.test.inner", None, HashMap::new());
+        });
+        NotificationCenter.post("nc.test.outer", None, HashMap::new());
+        assert_eq!(hits.get(), 1);
+    }
+
+    #[test]
+    fn distributed_names_are_a_separate_namespace() {
+        let local = Rc::new(Cell::new(0));
+        let dist = Rc::new(Cell::new(0));
+        let (l, d) = (local.clone(), dist.clone());
+        let _t1 = NotificationCenter.add_observer("nc.test.shared", None, move |_| l.set(l.get() + 1));
+        let _t2 = DistributedNotificationCenter.add_observer("nc.test.shared", move |_| d.set(d.get() + 1));
+        DistributedNotificationCenter.post("nc.test.shared", info("a", "b"));
+        assert_eq!((local.get(), dist.get()), (0, 1));
+        NotificationCenter.post("nc.test.shared", None, HashMap::new());
+        assert_eq!((local.get(), dist.get()), (1, 1));
+    }
+
+    #[test]
+    fn an_incoming_distributed_post_reports_whether_anyone_heard_it() {
+        assert!(!distributed_incoming("nc.test.incoming", HashMap::new()));
+        let got = Rc::new(RefCell::new(None));
+        let g = got.clone();
+        let _t = DistributedNotificationCenter.add_observer("nc.test.incoming", move |n| *g.borrow_mut() = Some(n.user_info.clone()));
+        assert!(distributed_incoming("nc.test.incoming", info("x", "1")));
+        assert_eq!(got.borrow().clone(), Some(info("x", "1")));
+    }
+}
