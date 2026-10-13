@@ -2,6 +2,7 @@
 //! geometry that drawing and hit tests share. Points for the kit (`Rect`, `ui.pt`), pixels only where drawing.
 
 use crate::cursor;
+use crate::export;
 use crate::diagnostics::{self, DailySource, HangSource};
 use crate::model::{self, Buffer, Levels, LogEntry, Query, SavedSearch, MAX_ENTRIES};
 use crate::signposts;
@@ -17,7 +18,7 @@ use bifrost_app::widgets::{CAPSULE_PT, TOOLBAR_GAP_PT};
 use bifrost_app::dispatch::DispatchQueue;
 use bifrost_app::{KeyInput, TouchKind};
 use bifrost_core::log_cursor::Position;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -715,6 +716,23 @@ impl Console {
         true
     }
 
+    /// Log menu: Save Messages. Writes the selected message, or every message the window shows when none is selected,
+    /// to `EXPORT_DIR` under `home`. The saved path, or the error, goes to the status line.
+    pub fn save_messages(&mut self, home: &Path, now_secs: i64) {
+        let text = match self.selected_entry() {
+            Some(e) => export::text([e]),
+            None => export::text(self.visible.iter().filter_map(|s| self.buffer.get(*s))),
+        };
+        if text.is_empty() {
+            self.status = "No messages to save.".into();
+            return;
+        }
+        self.status = match export::save(&home.join(export::EXPORT_DIR), &export::file_name(now_secs), &text) {
+            Ok(path) => format!("Saved {}", path.display()),
+            Err(e) => format!("Could not save: {e}"),
+        };
+    }
+
     /// Log menu: walk mode. Shows the messages after the selected one, or back to every message.
     pub fn toggle_after(&mut self) {
         if self.after.take().is_none() {
@@ -852,6 +870,8 @@ pub const MENU_COPY: u32 = 8;
 /// Log menu: Save Search and Delete Saved Search, for the search field's text.
 pub const MENU_SAVE_SEARCH: u32 = 9;
 pub const MENU_DELETE_SEARCH: u32 = 10;
+/// Log menu: Save Messages. Handled by the app (it needs the home directory), not by `menu`.
+pub const MENU_SAVE_MESSAGES: u32 = 11;
 
 #[cfg(test)]
 mod tests {

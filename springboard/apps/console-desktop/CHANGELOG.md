@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.0 — 2026-10-13
+
+- Save Messages (Log menu): writes the selected message, or every message the window shows when none is selected, to a new
+  `Console-<time>.log` in Documents/Console. A save never overwrites an earlier file. The result shows in the status line.
+
 ## 1.4.2 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
