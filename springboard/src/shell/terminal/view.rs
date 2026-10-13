@@ -584,6 +584,9 @@ impl Shell {
                             menu_key(i).unwrap_or_default()
                         ),
                         3 => THEMES[self.terminal_ui.settings.theme].name.into(),
+                        16 => self.terminal_ui.cursor.label().into(),
+                        17 => String::from(if self.terminal_ui.blink { "On" } else { "Off" }),
+                        18 => String::from(if self.terminal_ui.secure { "On" } else { "Off" }),
                         _ => menu_key(i).map_or_else(|| "›".into(), String::from),
                     };
                     text(

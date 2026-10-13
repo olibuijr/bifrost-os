@@ -1438,6 +1438,10 @@ impl Shell {
             if let Some(w) = self.term_touch.next_wake() {
                 due = Some(due.map_or(w, |d| d.min(w)));
             }
+            if self.terminal_ui.blink {
+                let w = term::next_blink(t);
+                due = Some(due.map_or(w, |d| d.min(w)));
+            }
         }
         if self.screen_on && self.screen == Screen::App(AppId::Photos) {
             if let Some(w) = self.photos.as_ref().and_then(Photos::next_wake) {
@@ -2738,6 +2742,12 @@ impl Shell {
         }
         if self.screen == Screen::App(AppId::Terminal) {
             self.dirty |= self.terminal_ui.tick(t);
+            if self.terminal_ui.blink {
+                let on = term::blink_phase(t);
+                for tab in self.term.iter_mut() {
+                    self.dirty |= tab.set_blink_phase(on);
+                }
+            }
             if let Some(term) = self.term.as_mut() {
                 self.dirty |= self.term_touch.tick(term, t);
             }
@@ -3800,6 +3810,7 @@ impl Shell {
         match Terminal::spawn(self.mono, self.term_area(), size, self.term_cmd) {
             Ok(mut term) => {
                 term.appearance(self.terminal_ui.settings.theme, size);
+                term.set_cursor(Some(self.terminal_ui.cursor.shape()), self.terminal_ui.blink);
                 if let Some(dir) = dir { term.write(format!("cd '{}'\r", dir.replace('\'', "'\\''")).as_bytes()); }
                 self.term.push(term);
                 self.term_touch = termtouch::TermTouch::default();

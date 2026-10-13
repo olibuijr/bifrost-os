@@ -50,7 +50,7 @@ const BADGE: u32 = pack(38, 38, 38, 255);
 const RED: u32 = pack(224, 90, 79, 255);
 const ACCENT: u32 = pack(42, 166, 106, 255);
 const ROW: f32 = 40.0;
-const MENU: [&str; 16] = [
+const MENU: [&str; 24] = [
     "Find in scrollback",
     "Smaller text",
     "Larger text",
@@ -67,6 +67,14 @@ const MENU: [&str; 16] = [
     "Reset terminal",
     "SSH connections",
     "Open link in selection",
+    "Cursor style",
+    "Blink cursor",
+    "Secure keyboard entry",
+    "New command",
+    "Split pane",
+    "Close split pane",
+    "Save window group",
+    "Open window group",
 ];
 /// True for the Find line's "n of m" match count (secondary), false for "No matches" and warnings (red).
 fn find_count(message: &str) -> bool {
@@ -121,6 +129,11 @@ pub struct TerminalUi {
     delete_confirm: bool,
     /// a tab whose job is running and whose close button was tapped once
     pending_close: Option<usize>,
+    /// the profile's caret style and whether it blinks (More menu rows; saved in prefs)
+    pub cursor: profile_table::CursorStyle,
+    pub blink: bool,
+    /// Secure Keyboard Entry: while the Terminal is in front, the shell's own shortcuts do not get its keys
+    pub secure: bool,
 }
 impl Default for TerminalUi {
     fn default() -> Self {
@@ -150,6 +163,9 @@ impl Default for TerminalUi {
             pending_signal: None,
             delete_confirm: false,
             pending_close: None,
+            cursor: profile_table::CursorStyle::Block,
+            blink: false,
+            secure: false,
         }
     }
 }
@@ -167,6 +183,9 @@ impl TerminalUi {
             prefs.get("terminal.theme").unwrap_or("0"),
             prefs.get("terminal.zoom").unwrap_or("4")
         ));
+        self.cursor = profile_table::CursorStyle::from_key(prefs.get("terminal.cursor"));
+        self.blink = prefs.get("terminal.blink") == Some("1");
+        self.secure = prefs.get("terminal.secure_input") == Some("1");
     }
     pub fn next_wake(&self) -> Option<f64> {
         Some(if self.panel == Panel::Processes {

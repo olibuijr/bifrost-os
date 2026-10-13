@@ -208,6 +208,15 @@ impl Shell {
                 self.terminal_close_panel(t);
             }
             14 => self.terminal_action(0, t),
+            16 => {
+                self.terminal_ui.cursor = self.terminal_ui.cursor.next();
+                self.terminal_cursor_changed();
+            }
+            17 => {
+                self.terminal_ui.blink = !self.terminal_ui.blink;
+                self.terminal_cursor_changed();
+            }
+            18 => self.terminal_toggle_secure(),
             // The first web link in the selection opens in the browser.
             15 => {
                 let link = self
