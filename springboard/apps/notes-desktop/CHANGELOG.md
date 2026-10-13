@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.16.0 — 2026-10-13
+
+- Format menu (the Format entry in the More menu of an open note, and a Format menu in the menu bar): paragraph styles Title, Heading, Subheading, Body, Monostyled (four leading spaces), Block Quote (`> `); lists Bulleted, Dashed (an en dash), Numbered and Checklist; character styles Bold, Italic, Underline (`++text++`), Strikethrough (`~~text~~`), Highlight (`==text==`) and Inline Code. The editor draws strike-through, underline, highlight and the quote bar. Cmd+U, Cmd+Shift+X and Cmd+Shift+H apply the new character styles.
+- Indentation: Tab and Shift+Tab (also Increase and Decrease Indent in the Format menu) move list lines one level in or out. Ctrl+Cmd+Up and Ctrl+Cmd+Down (or Move Item Up and Down) move a list item, with the items nested under it, past its neighbour.
+- Checklists: Mark All and Unmark All in the Format menu tick or untick every item in one undo step.
+- Tables: with the caret in a table, the Format menu adds a row above or below, a column left or right, deletes the row or column, or converts the table to text with tab-separated cells.
+- Tags: a `#word` that starts a word is a tag. The sidebar has a Tags section with a count per tag, the list menu lists them too, and choosing one shows the notes that carry it. Notes in Recently Deleted are not counted.
+- Group by Date (list menu): the list is cut into Today, Previous 7 Days, Previous 30 Days and month sections when sorted by a date. Pinned notes keep their own section above. Search and the title sort show the list without date sections.
+- Newest First and Oldest First (list menu) set the direction of the date sorts; the choice is remembered.
+- Math Results: turn it on in the Note menu or the Format menu, and typing `=` after a calculation (`12 * 3 =`) writes the answer. Calculate Math Results answers every such line in the note at once. It reads `+ - * / % ^` and brackets.
+- Add Link (Cmd+K, Format menu): asks for a web address and turns the selection into a `[text](address)` link.
+- Note menu: Copy as Markdown, Paste as Markdown, Paste and Match Style (removes the Markdown marks of the pasted text), Math Results and a Recent Notes submenu with the five newest notes.
+- Import to Notes accepts HTML and RTF files and converts them to Markdown: headings, bold, italic, links, lists, quotes and code stay; images, colours and fonts are dropped.
+- Menu bar extra: Resume Last Quick Note reopens the note New Quick Note made last. The list menu has a setting to make New Quick Note resume it too.
+- Shortcuts: new intents Open Note (by title or id) and Open Folder.
+- Not in this version: tags are not completed while typing and cannot be combined in a filter; tables are still not drawn as a grid; Tab and Shift+Tab, the new chords and the menu-bar entries have not been tried on Midget; locked notes, the attachment browser, the gallery view, collapsible sections, separate note windows, Speak, a settings window, user-made smart folders and note links by URL are still missing.
+
 ## 1.15.0 — 2026-10-13
 
 - Note > Print... (Cmd+P) prints the open note as plain text in Helvetica, wrapped to the page, through the shared print
