@@ -1,4 +1,8 @@
 # Changelog
+
+## 0.1.1 — 2026-10-13
+
+- Timeline: a day heading (Today, Yesterday, or the date) where each day's messages start, and a typing line ("bob is typing...") at the foot of the conversation when others type. Typing is read from the sync; the app does not send its own typing state yet.
 ## 0.1.0 — 2026-10-13
 
 - New app: Messages, a Matrix client. Sign in with a homeserver, user name and password (https only). The password goes
