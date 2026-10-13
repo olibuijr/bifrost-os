@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.0 — 2026-10-13
+
+- Chapters: when a feed links to a chapters file (the `podcast:chapters` JSON format) instead of listing the marks
+  itself, Podcasts reads it when the episode plays or its page opens. Chapters marked as hidden are left out.
+- Transcript: tap a timed line to jump to it.
+
 ## 1.8.0 — 2026-10-13
 
 - Library: the sidebar has Search, New Episodes (unplayed episodes of every show, newest first), Up Next, Downloaded,

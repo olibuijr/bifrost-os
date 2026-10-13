@@ -145,8 +145,8 @@
    "area": "panel",
    "apple": "Chapters",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:2363",
-   "note": "Podcast namespace chapter marks parsed from the feed; listed on the episode page and in a Now Playing Chapters panel (tap to seek, current one highlighted). Chapters hosted in a separate JSON file are not read.",
+   "bifrost": "springboard/apps/podcasts-desktop/src/chapters.rs:14",
+   "note": "Podcast namespace chapter marks parsed from the feed, or read from the JSON file a podcast:chapters link names (fetched when the episode plays or its page opens; hidden entries skipped); listed on the episode page and in a Now Playing Chapters panel (tap to seek, current one highlighted). Built on parity/team-d-podcasts; not yet verified on Midget.",
    "wire": "Parse chapter metadata and list chapters in the player sheet"
   },
   {
@@ -190,8 +190,8 @@
    "area": "panel",
    "apple": "Transcript view",
    "status": "partial",
-   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:1325",
-   "note": "Feed transcript link fetched (WebVTT, SubRip, plain text) and shown in a Now Playing Transcript panel that follows the position. No tap-to-seek on a line and no search in the transcript.",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:1775",
+   "note": "Feed transcript link fetched (WebVTT, SubRip, plain text) and shown in a Now Playing Transcript panel that follows the position; tapping a timed line seeks to it. No search in the transcript. Built on parity/team-d-podcasts; not yet verified on Midget.",
    "wire": "Fetch feed transcript links; a transcript panel synced to the position"
   },
   {

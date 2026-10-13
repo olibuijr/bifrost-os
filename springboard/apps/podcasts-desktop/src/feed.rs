@@ -16,6 +16,8 @@ pub struct Episode {
     pub notes: String,
     /// Chapter marks from the feed, in start order.
     pub chapters: Vec<Chapter>,
+    /// The address of a JSON file holding the chapters, empty when the feed names none (the feed's own marks win).
+    pub chapters_url: String,
     /// The address of the transcript file, empty when the feed names none.
     pub transcript: String,
 }
@@ -282,6 +284,7 @@ pub fn parse(xml: &str) -> (String, Vec<Episode>) {
                 .map(|t| html_to_text(&t))
                 .unwrap_or_default(),
             chapters: chapters(item),
+            chapters_url: attribute(item, "podcast:chapters", "url").unwrap_or_default(),
             transcript: attribute(item, "podcast:transcript", "url").unwrap_or_default(),
         });
     }
@@ -411,12 +414,14 @@ mod tests {
 <item><title>E</title><pubDate>Sat, 01 Jan 2000 00:00:00 GMT</pubDate>
 <description><![CDATA[<p>First &amp; second</p><p>Third<br/>line</p>]]></description>
 <podcast:transcript url="https://x.test/t.vtt" type="text/vtt"/>
+<podcast:chapters url="https://x.test/c.json" type="application/json+chapters"/>
 <psc:chapter start="00:01:00" title="Later"/><psc:chapter start="0" title="Intro"/>
 <enclosure url="https://x.test/1.mp3"/></item></channel></rss>"#;
         let (_, eps) = parse(xml);
         assert_eq!(eps[0].ts, 946_684_800);
         assert_eq!(eps[0].notes, "First & second\nThird\nline");
         assert_eq!(eps[0].transcript, "https://x.test/t.vtt");
+        assert_eq!(eps[0].chapters_url, "https://x.test/c.json");
         assert_eq!(eps[0].chapters, [Chapter { start_ms: 0, title: "Intro".into() }, Chapter { start_ms: 60_000, title: "Later".into() }]);
     }
 
