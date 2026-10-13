@@ -731,9 +731,7 @@ fn mark_chrome_frame(id: u32) {
 /// (`bootreveal::DESKTOP_PARTS`): the wallpaper is drawn into the desktop surface. The boot frame's reveal waits for
 /// all three parts so it never gives way to a partial desktop.
 fn mark_first_frame() {
-    use std::sync::atomic::{AtomicBool, Ordering};
-    static DONE: AtomicBool = AtomicBool::new(false);
-    if DONE.swap(true, Ordering::Relaxed) { return; }
+    if !crate::bootsplash::note_first_desktop_frame() { return; }
     crate::bootsplash::mark(crate::bootreveal::DESKTOP_PARTS[0]);
     if let Some(dir) = std::env::var_os("XDG_RUNTIME_DIR") {
         let _ = std::fs::write(std::path::Path::new(&dir).join("shell-ready"), b"1\n");
