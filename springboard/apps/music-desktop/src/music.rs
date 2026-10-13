@@ -14,6 +14,7 @@ pub mod chrome;
 pub mod engine;
 pub mod jobs;
 pub mod library;
+pub mod marks;
 pub mod nowplay;
 pub mod playlists;
 pub mod system;
@@ -31,6 +32,7 @@ use bifrost_app::audio::Client;
 use bifrost_app::proto::sys::now_ms;
 use engine::{AudioPlayer, LiveStatus, Phase, Repeat, Snapshot, Track};
 use library::Library;
+use marks::{Marks, Shelf};
 use playlists::Playlists;
 use springboard::deildu::art::{self, Cache};
 use bifrost_app::controls::prefs_layout::m;
@@ -169,6 +171,8 @@ pub enum Target {
 enum MenuItem {
     PlayNext,
     PlayLast,
+    /// flip the song's favourite flag
+    Favourite,
     AddTo(usize),
     NewPlaylist,
     /// (playlist, position in it)
@@ -265,6 +269,11 @@ pub struct Music {
     /// the saved queue, waiting for the scan to finish
     restore: Option<(UpNext, f64)>,
     playlists: Playlists,
+    /// favourites, ratings and the play log, and the smart list shown on the Songs page
+    marks: Marks,
+    shelf: Shelf,
+    /// the song last logged as played
+    logged: Option<PathBuf>,
     /// a playlist name being typed
     renaming: Option<String>,
     menu: Option<Menu>,
@@ -382,6 +391,9 @@ impl Music {
             store: None,
             restore: None,
             playlists: Playlists::default(),
+            marks: Marks::default(),
+            shelf: Shelf::All,
+            logged: None,
             renaming: None,
             menu: None,
             np_swipe: None,
@@ -408,6 +420,7 @@ impl Music {
     /// queue comes back paused once the library is scanned.
     pub fn enable_library_store(&mut self, dir: PathBuf) {
         self.playlists = Playlists::open(dir.join("Playlists"));
+        self.marks = Marks::open(dir.join("marks.txt"));
         self.restore = std::fs::read_to_string(dir.join("queue.txt")).ok().and_then(|t| UpNext::from_text(&t));
         self.store = Some(dir);
         self.dirty = true;
@@ -456,6 +469,7 @@ impl Music {
 
     fn rebuild_view(&mut self) {
         self.view = browse::view(&self.library.songs, &self.search, self.sort);
+        self.shelf.apply(&mut self.view, &self.library.songs, &self.marks);
     }
 
     fn refilter(&mut self) {
@@ -1147,6 +1161,7 @@ impl Music {
 
     /// Keeps the app's Now Playing session in step with the engine's snapshot: the playing song or station as content.
     fn sync_now_playing(&mut self) {
+        self.log_play();
         let content = self.snap.track.as_ref().and_then(|t| {
             let (_, live, title, artist) = self.texts(t, self.snap.live.as_ref());
             let album = if live { String::new() } else { self.library.songs.get(t.id as usize).map(|s| s.album.clone()).unwrap_or_default() };
@@ -1156,6 +1171,83 @@ impl Music {
         if let Some(session) = self.now_playing.as_mut() {
             nowplay::sync(session, snap, content);
         }
+    }
+
+    /// Logs the song that started playing in the play history (Recently Played), once per start.
+    fn log_play(&mut self) {
+        let Some(path) = self.snap.track.as_ref().filter(|t| !t.is_live() && self.snap.playing).map(|t| t.path.clone()) else { return };
+        if self.logged.as_ref() == Some(&path) {
+            return;
+        }
+        self.marks.record_play(&path, unix_now());
+        self.logged = Some(path);
+        if self.shelf == Shelf::RecentlyPlayed {
+            self.rebuild_view();
+        }
+    }
+
+    /// The path of the library song playing now (None for a station or nothing).
+    fn current_path(&self) -> Option<PathBuf> {
+        self.snap.track.as_ref().filter(|t| !t.is_live()).map(|t| t.path.clone())
+    }
+
+    /// (favourite, stars) of the song playing now, for the Song menu.
+    pub fn current_marks(&self) -> Option<(bool, u8)> {
+        let path = self.current_path()?;
+        Some((self.marks.is_favourite(&path), self.marks.rating(&path)))
+    }
+
+    /// Song > Favourite on the playing song. True when there was a song.
+    pub fn toggle_favourite_current(&mut self) -> bool {
+        let Some(path) = self.current_path() else { return false };
+        self.marks.toggle_favourite(&path);
+        self.after_marks();
+        true
+    }
+
+    /// Song > Rating on the playing song (0 clears). True when there was a song.
+    pub fn rate_current(&mut self, stars: u8) -> bool {
+        let Some(path) = self.current_path() else { return false };
+        self.marks.set_rating(&path, stars);
+        self.after_marks();
+        true
+    }
+
+    fn after_marks(&mut self) {
+        if matches!(self.shelf, Shelf::Favourites | Shelf::TopRated) {
+            self.rebuild_view();
+        }
+        self.dirty = true;
+    }
+
+    /// Shows a smart list (Recently Added, Favourite Songs ...) on the Songs page.
+    pub fn show_shelf(&mut self, shelf: Shelf, t: f64) {
+        self.activate(Target::Seg(2), t);
+        self.shelf = shelf;
+        self.rebuild_view();
+        self.scroll.jump_top();
+        self.dirty = true;
+    }
+
+    /// Controls > Volume Up / Down: moves the volume by `delta` (a fraction), within 0 to 1.
+    pub fn nudge_volume(&mut self, delta: f32) {
+        let _ = self.set_volume_from((self.volume + delta).clamp(0.0, 1.0));
+        self.dirty = true;
+    }
+
+    /// Controls > Shuffle.
+    pub fn toggle_shuffle(&mut self) {
+        self.control(nowplaying::Target::Shuffle);
+    }
+
+    /// Controls > Repeat: off, all, one.
+    pub fn cycle_repeat(&mut self) {
+        self.control(nowplaying::Target::Repeat);
+    }
+
+    /// The playback state the Controls menu shows: (playing, shuffled, repeat).
+    pub fn transport_state(&self) -> (bool, bool, engine::Repeat) {
+        (self.snap.playing, self.snap.shuffle, self.snap.repeat)
     }
 
     /// Runs a system playback command (by its name: play, pause, toggle, next, previous) on the transport. False when
@@ -1359,7 +1451,7 @@ impl Music {
     }
 
     fn open_menu(&mut self, song: usize, from: Option<(usize, usize)>) {
-        let mut items = vec![MenuItem::PlayNext, MenuItem::PlayLast];
+        let mut items = vec![MenuItem::PlayNext, MenuItem::PlayLast, MenuItem::Favourite];
         items.extend((0..self.playlists.lists().len()).map(MenuItem::AddTo));
         items.push(MenuItem::NewPlaylist);
         if let Some((p, at)) = from {
@@ -1373,6 +1465,10 @@ impl Music {
         match item {
             MenuItem::PlayNext => self.queue_add(song, true),
             MenuItem::PlayLast => self.queue_add(song, false),
+            MenuItem::Favourite => {
+                self.marks.toggle_favourite(&path);
+                self.after_marks();
+            }
             MenuItem::AddTo(p) => {
                 self.playlists.add(p, &path);
             }
@@ -1398,6 +1494,11 @@ impl Music {
     fn activate(&mut self, target: Target, t: f64) -> Vec<Effect> {
         match target {
             Target::Seg(i) => {
+                if self.shelf != Shelf::All {
+                    self.shelf = Shelf::All;
+                    self.rebuild_view();
+                    self.scroll.jump_top();
+                }
                 let tab = [Tab::Artists, Tab::Albums, Tab::Songs, Tab::Radio, Tab::Playlists][i.min(4)];
                 if tab != self.tab || self.pages.len() > 1 {
                     self.tab = tab;
@@ -1720,6 +1821,9 @@ impl Music {
                     self.label(s, ui, &clock(d), MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now(), self.w as f32 - ui.pt(FAV_ZONE_PT), mid, 1.0);
                 }
             }
+            if thumbs && self.marks.is_favourite(&path) {
+                icons::heart(s, (self.w as f32 - ui.pt(BPM_RIGHT_PT) - ui.pt(SPACE_XXL), mid), ui.pt(SPACE_L), PINK);
+            }
             let dots = if pressed == Some(Target::More(i)) { LABEL_3.now() } else { LABEL_2.now() };
             Self::ellipsis(s, (self.w as f32 - m - ui.pt(SPACE_M), mid), ui.pt(SPACE_XXS), ui.pt(SPACE_S), dots);
             s.fill_rrect(text_x, y + row - 1.0, self.w as f32 - text_x, 1.0, 0.0, SEPARATOR_C.now());
@@ -1892,6 +1996,7 @@ impl Music {
             let (text, color) = match item {
                 MenuItem::PlayNext => ("Play Next".to_string(), LABEL.now()),
                 MenuItem::PlayLast => ("Play Last".to_string(), LABEL.now()),
+                MenuItem::Favourite => (if self.marks.is_favourite(&self.library.songs[song].path) { "Remove from Favourites" } else { "Favourite" }.to_string(), LABEL.now()),
                 MenuItem::AddTo(p) => (format!("Add to {}", self.playlists.lists().get(p).map_or("", |l| l.name.as_str())), LABEL.now()),
                 MenuItem::NewPlaylist => ("Add to New Playlist".to_string(), LABEL.now()),
                 MenuItem::RemoveFromPlaylist(..) => ("Remove from Playlist".to_string(), PINK),

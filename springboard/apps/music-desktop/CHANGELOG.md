@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.0 — 2026-10-13
+
+- Song and Controls menus in the menu bar: Play/Pause, Next, Previous, Shuffle, Repeat and volume with shortcuts;
+  Favourite and a 1 to 5 star Rating for the playing song.
+- Favourites show a heart in the song rows and the song menu has Favourite.
+- New source list entries: Recently Added, Recently Played, Favourite Songs and Top Rated. Marks and the play log are
+  kept in the Music data folder.
+
 ## 1.6.2 — 2026-10-13
 
 - The Now Playing sheet slides on the shared `PanelReveal` motion from the SDK kit (`bifrost_app::kit::motion`), so it follows

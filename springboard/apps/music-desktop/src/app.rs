@@ -15,7 +15,7 @@ use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::layout::{SIDEBAR_FRACTION, SIDEBAR_MAX_PT, SIDEBAR_MIN_PT, UNIFIED_BAR_PT};
 use bifrost_app::now_playing::{self, CommandState, PlaybackState, RemoteCommand};
 use bifrost_app::widgets;
-use bifrost_app::{App, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use springboard::shell::music::radio::Http;
 use std::path::{Path, PathBuf};
@@ -29,6 +29,20 @@ const SEARCH_W: f32 = 180.;
 /// Accessibility ids of the Play and Shuffle buttons on the album and playlist pages (sidebar rows use 100 to 299).
 const NODE_PLAY: u64 = 300;
 const NODE_SHUFFLE: u64 = 301;
+
+/// Menu item ids of the Controls and Song menus.
+const MENU_PLAY_PAUSE: u32 = 1;
+const MENU_NEXT: u32 = 2;
+const MENU_PREVIOUS: u32 = 3;
+const MENU_SHUFFLE: u32 = 4;
+const MENU_REPEAT: u32 = 5;
+const MENU_VOLUME_UP: u32 = 6;
+const MENU_VOLUME_DOWN: u32 = 7;
+const MENU_FAVOURITE: u32 = 20;
+/// Rating 0 (clear) to 5: `MENU_RATING + stars`.
+const MENU_RATING: u32 = 30;
+/// A volume step of the Controls menu, as a fraction of full.
+const VOLUME_STEP: f32 = 0.1;
 
 /// What a pointer went down on.
 #[derive(Clone, Copy, PartialEq)]
@@ -317,6 +331,15 @@ impl MusicApp {
     }
 }
 
+/// The Controls menu's Repeat item names what choosing it does next.
+fn repeat_title(r: music::engine::Repeat) -> &'static str {
+    match r {
+        music::engine::Repeat::Off => "Repeat All",
+        music::engine::Repeat::All => "Repeat One",
+        _ => "Turn Repeat Off",
+    }
+}
+
 fn shell_dir() -> PathBuf {
     PathBuf::from(std::env::var("BIFROST_SERVICE_ROOT").unwrap_or_else(|_| "/var/lib/springboard".into()))
 }
@@ -440,6 +463,59 @@ impl App for MusicApp {
         due
     }
 
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        let Some(m) = &self.app else { return Vec::new() };
+        let (playing, shuffled, repeat) = m.transport_state();
+        let has_song = m.current_marks().is_some();
+        let (favourite, stars) = m.current_marks().unwrap_or((false, 0));
+        let controls = vec![
+            AppMenuItem::new(MENU_PLAY_PAUSE, if playing { "Pause" } else { "Play" }).enabled(m.has_track()),
+            AppMenuItem::new(MENU_NEXT, "Next").key("cmd+right").enabled(m.has_track()),
+            AppMenuItem::new(MENU_PREVIOUS, "Previous").key("cmd+left").enabled(m.has_track()),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_SHUFFLE, "Shuffle").key("cmd+alt+s").checked(shuffled).enabled(m.has_track() && !m.is_live()),
+            AppMenuItem::new(MENU_REPEAT, repeat_title(repeat)).key("cmd+alt+r").checked(repeat != music::engine::Repeat::Off).enabled(m.has_track() && !m.is_live()),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_VOLUME_UP, "Increase Volume").key("cmd+up"),
+            AppMenuItem::new(MENU_VOLUME_DOWN, "Decrease Volume").key("cmd+down"),
+        ];
+        let mut song = vec![AppMenuItem::new(MENU_FAVOURITE, if favourite { "Remove from Favourites" } else { "Favourite" }).key("cmd+alt+l").enabled(has_song), AppMenuItem::submenu("Rating")];
+        song.push(AppMenuItem::new(MENU_RATING, "None").checked(stars == 0).enabled(has_song).depth(1));
+        for n in 1..=5u32 {
+            let key = format!("cmd+alt+{n}");
+            song.push(AppMenuItem::new(MENU_RATING + n, &format!("{n} Star{}", if n == 1 { "" } else { "s" })).key(&key).checked(u32::from(stars) == n).enabled(has_song).depth(1));
+        }
+        vec![AppMenu { title: "Song".into(), items: song }, AppMenu { title: "Controls".into(), items: controls }]
+    }
+
+    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+        let Some(m) = self.app.as_mut() else { return false };
+        match id {
+            MENU_PLAY_PAUSE => m.remote_command("toggle"),
+            MENU_NEXT => m.remote_command("next"),
+            MENU_PREVIOUS => m.remote_command("previous"),
+            MENU_SHUFFLE => {
+                m.toggle_shuffle();
+                true
+            }
+            MENU_REPEAT => {
+                m.cycle_repeat();
+                true
+            }
+            MENU_VOLUME_UP => {
+                m.nudge_volume(VOLUME_STEP);
+                true
+            }
+            MENU_VOLUME_DOWN => {
+                m.nudge_volume(-VOLUME_STEP);
+                true
+            }
+            MENU_FAVOURITE => m.toggle_favourite_current(),
+            n if (MENU_RATING..=MENU_RATING + 5).contains(&n) => m.rate_current((n - MENU_RATING) as u8),
+            _ => false,
+        }
+    }
+
     fn controls(&self, _: &Ctx) -> Vec<Node> {
         self.nodes.clone()
     }
@@ -494,6 +570,21 @@ mod tests {
         s.set_playback(PlaybackState::Playing, position_ms);
         s.set_command(RemoteCommand::SeekTo, CommandState::Enabled);
         s
+    }
+
+    #[test]
+    fn the_repeat_item_names_the_next_mode() {
+        assert_eq!(repeat_title(music::engine::Repeat::Off), "Repeat All");
+        assert_eq!(repeat_title(music::engine::Repeat::All), "Repeat One");
+        assert_eq!(repeat_title(music::engine::Repeat::One), "Turn Repeat Off");
+    }
+
+    #[test]
+    fn without_a_window_the_menus_are_empty_and_actions_do_nothing() {
+        let ctx = test_ctx();
+        let mut app = MusicApp::new();
+        assert!(app.main_menu(&ctx).is_empty());
+        assert!(!app.menu_action(&ctx, MENU_NEXT));
     }
 
     #[test]
