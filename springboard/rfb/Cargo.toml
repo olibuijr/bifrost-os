@@ -1,0 +1,7 @@
+[package]
+name = "bifrost-rfb"
+version = "0.1.0"
+edition = "2021"
+description = "RFB (VNC) client protocol: handshake, client messages, server message decoding and the framebuffer they update"
+
+[dependencies]

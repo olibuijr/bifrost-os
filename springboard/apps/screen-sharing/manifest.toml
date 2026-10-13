@@ -1,0 +1,11 @@
+id = "is.olibuijr.screensharing.desktop"
+name = "Screen Sharing"
+version = "0.1.0"
+exec = "bifrost-screen-sharing"
+icon = "icon.png"
+window = "full-size"
+min_shell = "0.6.5"
+summary = "View and control another computer's screen over VNC."
+category = "Utilities"
+architecture = "x86_64-linux"
+permissions = ["network"]
