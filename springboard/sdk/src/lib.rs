@@ -70,6 +70,7 @@ pub mod locale;
 pub mod bundle_resources;
 pub mod keychain;
 pub mod keychain_groups;
+pub mod keychain_query;
 pub mod passwords;
 pub mod entropy;
 pub mod passkey;
