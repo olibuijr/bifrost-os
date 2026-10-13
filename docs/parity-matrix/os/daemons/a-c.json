@@ -732,11 +732,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/desktop_dock.rs",
+   "status": "partial",
+   "note": "role filled by desktop_dock.rs and dock_stack.rs; no separate process; runs inside the shell",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.DwellControl.plist",
@@ -900,11 +900,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/desk.rs",
+   "status": "partial",
+   "note": "role filled by desk.rs (desktop and icons) with the Files app; no separate process; file windows are the Files app, not the agent",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.FollowUpUI.plist",
@@ -984,11 +984,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/game_controllers_page.rs",
+   "status": "partial",
+   "note": "role filled by game_controllers_page.rs; no separate process; settings page only",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.GamePolicyAgent.plist",
@@ -1299,11 +1299,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/desktop_bar.rs",
+   "status": "partial",
+   "note": "role filled by desktop_bar.rs; no separate process; no per-app menu extras host API",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.MobileAccessoryUpdater.fudHelperAgent.plist",
@@ -1614,11 +1614,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/accessibility/reader.rs",
+   "status": "partial",
+   "note": "role filled by accessibility/reader.rs; no separate process; no braille or caption panel",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.ScreenTimeAgent.plist",
@@ -1782,11 +1782,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/ota.rs",
+   "status": "partial",
+   "note": "role filled by ota.rs; no separate process; notices come from the update check",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.SpacesTouchBarAgent.plist",
@@ -1824,11 +1824,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "status": "partial",
+   "note": "role filled by quicksearch.rs and quicksearch_math.rs; no separate process; no per-volume metadata server",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.StatusKitAgent.plist",
@@ -1950,11 +1950,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/input_source_hud.rs",
+   "status": "partial",
+   "note": "role filled by input_source_hud.rs and kb_layouts.rs; no separate process; menu extra is part of the menu bar",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.TextInputSwitcher.plist",
@@ -1971,11 +1971,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/input_source_hud.rs",
+   "status": "partial",
+   "note": "role filled by input_source_hud.rs; no separate process; switching goes through fcitx_bridge.rs",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.ThreadCommissionerService.plist",
@@ -2160,11 +2160,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/workspace.rs",
+   "status": "partial",
+   "note": "role filled by workspace.rs and window_fx.rs; no separate process; window placement lives in the shell and compositor config",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.accessibility.AXVisualSupportAgent.plist",
@@ -3861,11 +3861,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/control_center.rs",
+   "status": "partial",
+   "note": "role filled by control_center.rs; no separate process; module set is smaller than Apple's",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.controlstrip.plist",
@@ -3987,11 +3987,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/recent_items.rs",
+   "status": "partial",
+   "note": "role filled by recent_items.rs; no separate process; only recent apps, no shared favorites list",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.coreservices.uiagent.plist",
@@ -4071,11 +4071,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/spotindex.rs",
+   "status": "partial",
+   "note": "role filled by spotindex.rs; no separate process; no donation daemon",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.corespotlightservice.plist",
@@ -6360,11 +6360,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/spotindex.rs",
+   "status": "partial",
+   "note": "role filled by spotindex.rs indexing; no separate process; no importer plug-in workers",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.mdworker.single.arm64.plist",
@@ -6528,11 +6528,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/battery.rs",
+   "status": "partial",
+   "note": "role filled by battery.rs and low_battery.rs; no separate process; no per-app energy details",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.messagesescrowd.plist",
@@ -6990,11 +6990,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/notify/center.rs",
+   "status": "partial",
+   "note": "role filled by notify/ (banner.rs, center.rs, lockwidgets.rs); no separate process; no notification-center widget gallery",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.nsurlsessiond.plist",
@@ -7788,11 +7788,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/screenshot.rs",
+   "status": "partial",
+   "note": "role filled by screenshot.rs and screenrec.rs; no separate process; capture UI is in the shell",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.screensharing.MessagesAgent.plist",
@@ -9447,11 +9447,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/usernotif.rs",
+   "status": "partial",
+   "note": "role filled by usernotif.rs, notify/store.rs and notify/schedule.rs; no separate process; no per-app delivery daemon or push",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.videosubscriptionsd.plist",
@@ -9552,11 +9552,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/wallpaper_page.rs",
+   "status": "partial",
+   "note": "role filled by wallpaper_page.rs; no separate process; no dynamic or aerial wallpaper agent",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.warmd_agent.plist",
@@ -9678,11 +9678,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/login_items_page.rs",
+   "status": "partial",
+   "note": "role filled by login_items_page.rs and login.rs; no separate process; no SMAppService registration daemon",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchAgents/com.apple.xpc.otherbsd.plist",
@@ -11022,11 +11022,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/notify/permission.rs",
+   "status": "partial",
+   "note": "role filled by notify/permission.rs and permission_sheet.rs; no separate process; alerts are shell sheets",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.ValidUpdater.plist",
@@ -11085,11 +11085,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/window_fx.rs",
+   "status": "partial",
+   "note": "role filled by the shell compositor path (window_fx.rs) over labwc; no separate window-server process; labwc owns the display",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.WirelessRadioManager-osx.plist",
@@ -14760,11 +14760,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/login.rs",
+   "status": "partial",
+   "note": "role filled by login.rs and passcode.rs; no separate process; no fast user switching daemon",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.logkextloadsd.plist",
@@ -16629,11 +16629,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: user-facing service or shell component",
+   "bifrost": "springboard/src/shell/sharing_page.rs",
+   "status": "partial",
+   "note": "role filled by sharing_page.rs (toggle only); only the Settings toggle; no screen-sharing server of its own",
    "rea": [],
-   "method": "heuristic"
+   "method": "audit"
   },
   {
    "id": "path:/System/Library/LaunchDaemons/com.apple.scsid.plist",
