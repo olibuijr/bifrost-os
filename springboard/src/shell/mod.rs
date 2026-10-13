@@ -1474,7 +1474,7 @@ impl Shell {
             due.add(Some(w));
         }
         if self.markup_load.is_some() {
-            due = Some(due.map_or(t + 50.0, |d| d.min(t + 50.0)));
+            due.add(Some(t + 50.0));
         }
         if self.screen_on {
             if let Some(w) = self.quicksearch.next_wake(t) {
@@ -3542,7 +3542,7 @@ impl Shell {
     /// The overlays that paint over the app or home frame on the CPU, which the GPU
     /// compositors (zoom, switcher) cannot reproduce.
     pub(super) fn overlay_blocker(&self) -> Option<&'static str> {
-        let checks: [(&'static str, bool); 17] = [
+        let checks: [(&'static str, bool); 18] = [
             ("markup", self.markup.is_some()),
             ("shield", self.shield.is_some()),
             ("control-center", self.cc_active()),

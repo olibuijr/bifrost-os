@@ -1901,10 +1901,10 @@ mod badge_tests {
 
     #[test]
     fn a_failed_launch_names_the_app_and_says_to_try_again() {
-        let (title, body) = launch_failure_text("  Notes ");
+        let (title, body) = crate::shell::apphost::launch_failure_text("  Notes ");
         assert_eq!(title, "Notes could not be opened");
         assert!(body.contains("Try opening it again"));
-        assert_eq!(launch_failure_text("").0, "The app could not be opened");
+        assert_eq!(crate::shell::apphost::launch_failure_text("").0, "The app could not be opened");
     }
 }
 

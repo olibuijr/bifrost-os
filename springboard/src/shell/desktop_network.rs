@@ -461,6 +461,7 @@ mod tests {
 
     #[test]
     fn a_link_problem_names_the_missing_address_or_dns() {
+        use crate::shell::desktop_network::{link_problem, Interface, LinkProblem};
         let up = |ipv4: &[&str], dns: &[&str]| Interface { status: "100 (connected)".into(), ipv4: ipv4.iter().map(|s| s.to_string()).collect(), dns: dns.iter().map(|s| s.to_string()).collect(), ..Interface::default() };
         let never = || -> bool { panic!("no lookup without an address and a server") };
         assert_eq!(link_problem(None, never), None, "no Wi-Fi link");

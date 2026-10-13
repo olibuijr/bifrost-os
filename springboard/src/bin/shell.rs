@@ -378,7 +378,7 @@ fn run() -> std::io::Result<()> {
     let mut last_pointer = ((0.0f32, 0.0f32), false);
     // the display's own cursor plane shows the pointer when the panel has one: it follows the mouse the
     // moment input is read, whatever the shell is drawing, and the frames then carry no cursor at all
-    let hw_cursor = disp.set_cursor(&springboard::gfx::cursor::sprite());
+    let hw_cursor = disp.set_cursor(&springboard::gfx::cursor::sprite(), 1.0);
     let mut plane = springboard::gfx::cursor::Plane::default();
     // the last frame on the panel came from the CPU path, so `frame` is what the panel shows
     let mut cpu_shown = false;

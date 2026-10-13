@@ -1117,7 +1117,7 @@ impl Presenter {
     /// The final-frame zoom (Settings > Accessibility > Zoom): draws the composed frame `src` magnified into the
     /// framebuffer `dst_fbo`, showing only the normalised rect `uv` = (u0, v0, u1, v1) of it. The shell supplies
     /// the rect from `shell::accessibility::zoom`; with zoom off the caller skips this pass.
-    pub fn zoom_into(&self, src: u32, dst_fbo: u32, dst_w: usize, dst_h: usize, uv: [f32; 4]) {
+    pub fn zoom_into(&mut self, src: u32, dst_fbo: u32, dst_w: usize, dst_h: usize, uv: [f32; 4]) {
         self.current();
         let gl = self.gl;
         gl!(gl, bind_framebuffer(GL_FRAMEBUFFER, dst_fbo));
