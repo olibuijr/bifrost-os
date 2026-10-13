@@ -671,6 +671,7 @@ pub mod mesh_primitives;
 pub mod mesh_file;
 pub mod mesh_process;
 pub mod procedural_texture;
+pub mod asset_resolver;
 pub mod morph_skin;
 pub mod shading;
 pub mod composition;
