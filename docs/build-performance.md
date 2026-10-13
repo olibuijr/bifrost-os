@@ -1,6 +1,8 @@
 # BifrOSt build and iteration performance
 
-Measured on Titan, 2026-10-07. First desktop update: 0.3.18.
+Measured on Titan, 2026-10-07. First desktop update: 0.3.18. These numbers are history: the shell is 0.7.x now, the
+workspace is larger and `bifrost pc publish` builds more than the shell (see "Applied"). Re-measure before quoting them.
+Current device budgets and measurements are in [snow-leopard.md](snow-leopard.md), `budgets.toml` and `perf-history.jsonl`.
 
 | Work | Time |
 | --- | --- |
@@ -16,17 +18,28 @@ or measured full-LTO/fast runtime performance comparison.
 
 ## Applied
 
-- `bifrost build --host` uses optimized `fast`, not full LTO. Desktop publishing
-  already defaults to this profile; retain that default. It uses opt-level 3,
+- `cargo build --profile fast` and `bifrost pc publish` use optimized `fast`, not full LTO (`bifrost pc publish --release`
+  opts in). Keep that default. It uses opt-level 3,
   32 codegen units, incremental compilation and the existing lld linker.
-- Package only the shell (`--bin shell`), rather than all binaries or apps.
+- Package only the system binaries, never the apps. `tools/pc-publish.py` builds three cargo invocations: the shell, `bootweave`,
+  `bifrost-portal` and `bifrost-privd` (with `desktop-wayland`); `bifrost-mcp`, `bifrostd`, `bifrost-audiod` and the audio
+  pieces; and `bifrost-wm`, the chrome clients and `bifrost-log`. It also builds the EFI loader from source every time
+  (`tools/build-efi-boot.sh release`, checked by `tools/verify-efi-loader.sh`; the loader is outside the workspace) and syncs
+  and checks the package mirror (`tools/pc_mirror.py`) before the build, which costs download time on the first run after
+  an Arch update.
 - Strip the downloadable copy, retaining symbols in the local binary. The first
   update is 4,640,999 bytes (approximately 4.4 MiB); assets are already installed.
 - Publish a validated artifact with `bifrost pc publish --skip-build` to avoid even
   another Cargo no-op. Normal publishing still builds before packaging.
 - Build/publish prints separate phase times, and builds generate Cargo HTML
   timing reports under `springboard/target/cargo-timings/`.
-- Test desktop code with relevant filters and its desktop preview.
+- Test desktop code with relevant filters and its desktop preview (`bifrost pc smoke APP`).
+- `[profile.fast]` (in `springboard/Cargo.toml`) inherits `release` with `lto = false`, 32 codegen units, incremental, no
+  strip; `springboard/.cargo/config.toml` links x86_64 with lld.
+- Agents never build. The lead's one integration build is `BIFROST_LEAD_BUILD=1 tools/lead-check.sh`; a repo-local
+  `rust-analyzer.toml` with `checkOnSave = false` keeps the editor from re-checking the workspace on every change
+  ([bifrost-pc-workflow.md](bifrost-pc-workflow.md), "Agent waves").
+- Build and test with `--all-targets` when checking: `cargo test` builds examples that `cargo check --tests` skips.
 
 ## Iteration discipline
 
@@ -61,6 +74,7 @@ Sources: [Cargo profiles](https://doc.rust-lang.org/cargo/reference/profiles.htm
 
 ## Desktop rendering and memory, Midget (2026-10-08)
 
+History, shell 0.4.12 (current shell memory and CPU figures are in `budgets.toml`, for example shell PSS under 75 MiB at 0.5.14).
 Shell 0.4.12 shares immutable window pixels between the desktop cache and Wayland
 submission instead of cloning them. Quiet external windows reuse their last image;
 Wayland slots accumulate damage independently until released. Files 1.0.3 paints
@@ -116,6 +130,11 @@ python3 tools/bench.py --no-record            # every host bench, including thes
 Or directly, in `springboard/`:
 `cargo test --profile fast --features desktop-wayland,testkit --lib bench_frame_ -- --ignored --nocapture`.
 The window-menu and window-drag scenes need `desktop-wayland`; without it they are skipped.
+
+Other benches: `bench_ui_*` (kit widgets, `bifrost-ui`), `bench_files_*` (`bifrost-files`) and the render crate's `glass_cost`;
+`tools/bench.py --midget` measures the device against `docs/budgets.toml` (idle CPU and wakeups, PSS, threads, sizes, RAM),
+`--midget --graphics` adds the window-server suite (`tools/graphics_bench.py`), `--audio` the audio latency bench
+(`bifrost pc audio-bench`, [audio-latency.md](audio-latency.md)), and `--history` prints `docs/perf-history.jsonl`.
 
 These run the same drawing code as the shell, but on the host CPU, not on the lab PC's Intel GPU. A pass here does not
 prove the Midget frame time: check the device numbers with `tools/bench.py --midget --graphics`.
