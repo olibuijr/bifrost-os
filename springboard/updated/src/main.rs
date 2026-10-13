@@ -4,7 +4,7 @@
 
 use bifrost_proto::svc;
 use bifrost_proto::svc::update::{Cmd, Evt, Offer, Phase, State};
-use springboard::shell::ota::Ota;
+use springboard::shell::ota::{self, Ota};
 use springboard::shell::update::{self, State as UpdState};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
@@ -71,6 +71,12 @@ impl Core {
             }
             Cmd::Check => self.ota.updater.check(),
             Cmd::Download => self.ota.updater.start_download(),
+            Cmd::Schedule { automatic } => {
+                // the switch is a file in the data directory, so the shell's own checker honours it too
+                if let Err(e) = ota::set_schedule(&self.dir, automatic) {
+                    eprintln!("updated: schedule: {e}");
+                }
+            }
         }
         let evt = Evt::State(self.state());
         self.broadcast(&evt);
@@ -308,6 +314,16 @@ mod tests {
         }
         assert_eq!(c.subscribers.len(), 1);
         assert!(svc::read_frame(&mut a_peer).is_ok());
+    }
+
+    #[test]
+    fn schedule_command_switches_the_background_checks_by_file() {
+        let mut c = core("schedule");
+        assert!(ota::schedule_on(&c.dir));
+        c.apply(Cmd::Schedule { automatic: false });
+        assert!(!ota::schedule_on(&c.dir));
+        c.apply(Cmd::Schedule { automatic: true });
+        assert!(ota::schedule_on(&c.dir));
     }
 
     #[test]

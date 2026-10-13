@@ -25,5 +25,9 @@ fn main() {
             Ok(text) => print!("{text}"),
             Err(e) => die("softwareupdate", &e, 1),
         },
+        Mode::Schedule { automatic } => match softwareupdate::schedule(&sock, automatic) {
+            Ok(text) => print!("{text}"),
+            Err(e) => die("softwareupdate", &e, 1),
+        },
     }
 }

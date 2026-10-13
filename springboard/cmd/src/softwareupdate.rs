@@ -1,9 +1,8 @@
 //! `softwareupdate`: lists and installs OS and app updates through the update agent (`updated`), over its service socket.
 //! The agent does the checking, the download and the staging; this tool asks it and waits for its state.
 //! Supported: `-l` (check now and list what is offered), `-i <label>` and `-a` (download and stage the offered OS update;
-//! the desktop restarts to finish the install). Gap: `--schedule on|off` needs a schedule setting on the agent's
-//! protocol, which it does not have yet, so it is refused. App updates have no install command on the agent's protocol
-//! yet, so `-i` names only the OS update.
+//! the desktop restarts to finish the install) and `--schedule on|off` (the background checks; manual checks always run).
+//! App updates have no install command on the agent's protocol yet, so `-i` names only the OS update.
 
 use bifrost_proto::svc::{self, update::{Cmd, Evt, Phase, State}};
 use std::io;
@@ -24,13 +23,16 @@ pub enum Mode {
     List,
     /// `-i` labels and `-a`: the OS update is downloaded and staged when `all` or its label is named.
     Install { labels: Vec<String>, all: bool },
+    /// `--schedule on|off`: whether the background checks run.
+    Schedule { automatic: bool },
 }
 
-/// Reads the arguments. `--schedule` is recognised so it can be refused with a reason.
+/// Reads the arguments.
 pub fn parse(args: &[String]) -> Result<Mode, String> {
     let mut list = false;
     let mut all = false;
     let mut labels = Vec::new();
+    let mut schedule = None;
     let mut it = args.iter();
     while let Some(arg) = it.next() {
         match arg.as_str() {
@@ -38,9 +40,21 @@ pub fn parse(args: &[String]) -> Result<Mode, String> {
             "-l" => list = true,
             "-a" => all = true,
             "-i" => labels.push(it.next().ok_or("-i needs an update label")?.clone()),
-            "--schedule" => return Err("--schedule is not supported yet: the update agent has no schedule setting".into()),
+            "--schedule" => {
+                schedule = Some(match it.next().map(String::as_str) {
+                    Some("on") => true,
+                    Some("off") => false,
+                    _ => return Err("--schedule takes on or off".into()),
+                })
+            }
             other => return Err(format!("option {other} is not supported yet")),
         }
+    }
+    if let Some(automatic) = schedule {
+        if list || all || !labels.is_empty() {
+            return Err("--schedule cannot be combined with -l, -i or -a".into());
+        }
+        return Ok(Mode::Schedule { automatic });
     }
     if list && (all || !labels.is_empty()) {
         return Err("-l lists updates; it cannot be combined with -i or -a".into());
@@ -136,6 +150,23 @@ pub fn check(path: &PathBuf) -> Result<State, String> {
     Ok(state)
 }
 
+/// Switches the background checks on or off. The agent answers commands in order, so its pong after the switch
+/// means the switch is written. Returns the text to print.
+pub fn schedule(path: &PathBuf, automatic: bool) -> Result<String, String> {
+    let mut stream = connect(path)?;
+    send(&mut stream, &Cmd::Schedule { automatic }).map_err(|e| e.to_string())?;
+    send(&mut stream, &Cmd::Ping).map_err(|e| e.to_string())?;
+    loop {
+        let payload = svc::read_frame(&mut stream).map_err(|e| format!("the update agent stopped answering: {e}"))?;
+        match Evt::decode(&payload) {
+            Ok(Evt::Pong { .. }) => break,
+            Ok(_) => {}
+            Err(_) => return Err("the update agent sent a message this tool does not understand".into()),
+        }
+    }
+    Ok(format!("Automatic check is {}.\n", if automatic { "on" } else { "off" }))
+}
+
 /// Downloads and stages the offered OS update. Returns the text to print when it is staged.
 pub fn install(path: &PathBuf, labels: &[String], all: bool) -> Result<String, String> {
     let mut stream = connect(path)?;
@@ -181,8 +212,16 @@ mod tests {
     }
 
     #[test]
-    fn schedule_and_mixed_flags_are_refused_with_reasons() {
-        assert!(parse(&args(&["--schedule", "on"])).unwrap_err().contains("schedule"));
+    fn schedule_switches_the_background_checks_and_takes_on_or_off() {
+        assert_eq!(parse(&args(&["--schedule", "on"])), Ok(Mode::Schedule { automatic: true }));
+        assert_eq!(parse(&args(&["--schedule", "off"])), Ok(Mode::Schedule { automatic: false }));
+        assert!(parse(&args(&["--schedule", "maybe"])).unwrap_err().contains("on or off"));
+        assert!(parse(&args(&["--schedule"])).unwrap_err().contains("on or off"));
+        assert!(parse(&args(&["-l", "--schedule", "off"])).unwrap_err().contains("cannot be combined"));
+    }
+
+    #[test]
+    fn mixed_flags_are_refused_with_reasons() {
         assert!(parse(&args(&["-l", "-a"])).unwrap_err().contains("cannot be combined"));
         assert!(parse(&args(&["-x"])).unwrap_err().contains("-x"));
     }

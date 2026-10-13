@@ -20,7 +20,7 @@ use super::notify::store::Notification;
 use super::store::{api, install, net};
 use super::update::{self, Manifest, Updater};
 use super::{AppId, Shell};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 
 /// First check this long after start-up.
@@ -29,6 +29,29 @@ pub const STARTUP_DELAY_S: f64 = 30.0;
 pub const INTERVAL_S: f64 = 15.0 * 60.0;
 /// A Wi-Fi reconnect triggers a check only when the last one is older than this.
 pub const MIN_GAP_S: f64 = 300.0;
+
+/// The file in the data directory whose presence switches the background checks off
+/// (`softwareupdate --schedule off`). Manual checks still run.
+pub const SCHEDULE_OFF_FILE: &str = "update-schedule-off";
+
+/// Whether the background checks run: on unless the schedule was switched off.
+pub fn schedule_on(dir: &Path) -> bool {
+    !dir.join(SCHEDULE_OFF_FILE).exists()
+}
+
+/// Switches the background checks on or off, in the data directory every updater shares.
+pub fn set_schedule(dir: &Path, automatic: bool) -> std::io::Result<()> {
+    let file = dir.join(SCHEDULE_OFF_FILE);
+    if automatic {
+        match std::fs::remove_file(&file) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        }
+    } else {
+        std::fs::create_dir_all(dir)?;
+        std::fs::write(&file, b"")
+    }
+}
 
 pub const OS_KEY: &str = "ota_notified_os";
 pub const APPS_KEY: &str = "ota_notified_apps";
@@ -192,6 +215,8 @@ pub fn reload_provided(apps: &[install::InstalledApp]) {
 }
 
 pub struct Ota {
+    /// the data directory, where the schedule switch lives
+    dir: PathBuf,
     sched: Schedule,
     rx: Option<Receiver<Found>>,
     /// the OS update on offer
@@ -212,8 +237,8 @@ pub struct Ota {
 
 impl Ota {
     pub fn new(dir: PathBuf, url: Option<&str>) -> Self {
-        let updater = Updater::new(dir, url);
-        Ota { sched: Schedule::default(), rx: None, os: None, apps: vec![], system: vec![], reload: vec![], url: updater.url().to_string(), updater, fresh: false, next_poll: 0.0 }
+        let updater = Updater::new(dir.clone(), url);
+        Ota { dir, sched: Schedule::default(), rx: None, os: None, apps: vec![], system: vec![], reload: vec![], url: updater.url().to_string(), updater, fresh: false, next_poll: 0.0 }
     }
 
     /// Once a second is plenty for the shell's 60 Hz tick.
@@ -244,7 +269,7 @@ impl Ota {
                 Err(TryRecvError::Empty) => {}
                 Err(TryRecvError::Disconnected) => self.rx = None,
             }
-        } else if self.sched.due(now, wifi, low_power, charging) {
+        } else if schedule_on(&self.dir) && self.sched.due(now, wifi, low_power, charging) {
             // a desktop's OS updates come from pacman; its store packages (the keyboard, other system packages) still come
             // from the store, so the store check runs on every platform
             let pacman = self.updater.source() == update::Source::Pacman;
@@ -331,6 +356,29 @@ mod tests {
 
     fn ota() -> Ota {
         Ota::new(std::env::temp_dir().join("sb-ota-nonexistent"), None)
+    }
+
+    #[test]
+    fn the_schedule_switch_is_a_file_in_the_data_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(schedule_on(dir.path()));
+        set_schedule(dir.path(), false).unwrap();
+        assert!(!schedule_on(dir.path()));
+        set_schedule(dir.path(), false).unwrap();
+        set_schedule(dir.path(), true).unwrap();
+        assert!(schedule_on(dir.path()));
+        set_schedule(dir.path(), true).unwrap();
+        assert!(schedule_on(dir.path()), "turning on twice is fine");
+    }
+
+    #[test]
+    fn a_switched_off_schedule_starts_no_background_check() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut o = Ota::new(dir.path().to_path_buf(), None);
+        set_schedule(dir.path(), false).unwrap();
+        // wifi is up and the startup delay has passed: an enabled schedule would check now
+        assert!(!o.tick(100.0, true, false, false, false, "0.1.0", "g"));
+        assert!(o.rx.is_none(), "no background check while the schedule is off");
     }
 
     #[test]
