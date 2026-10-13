@@ -72,6 +72,7 @@ pub mod bt_address;
 pub mod bt_service_browser;
 pub mod obex_packet;
 pub mod backup_exclude;
+pub mod snapshot_backup;
 pub mod quarantine;
 pub mod dns_settings;
 pub mod content_filter;
