@@ -614,6 +614,7 @@ pub mod calendar_access;
 pub mod calendar_conference;
 pub mod calendar_error;
 pub mod calendar_participant;
+pub mod calendar_store;
 pub mod calendar_store_changes;
 pub mod collection;
 pub mod dockdrag;
