@@ -2227,7 +2227,7 @@ impl Settings {
             Toggle::KeyboardHaptics => flip(&mut self.opts.keyboard_haptics),
             Toggle::LockSound => flip(&mut self.opts.lock_sound),
             Toggle::Clock24 => flip(&mut self.opts.clock_24h),
-            Toggle::Layout(i) => super::kb_layouts::toggle(super::kb_layouts::Layout::ALL[i.min(1)]),
+            Toggle::Layout(i) => super::kb_layouts::toggle(super::kb_layouts::Layout::ALL[i.min(super::kb_layouts::Layout::ALL.len() - 1)]),
             Toggle::AutoCaps => flip(&mut self.opts.auto_caps),
             Toggle::EnableCapsLock => flip(&mut self.opts.enable_caps_lock),
             Toggle::PeriodShortcut => flip(&mut self.opts.period_shortcut),

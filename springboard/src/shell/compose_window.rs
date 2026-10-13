@@ -2,6 +2,10 @@
 //! (`bifrost_ui::imsession::InputSession`, the candidate window model). A typed apostrophe and then a letter open the
 //! candidate list over the field; the letter shows as marked text. Digits 1 to 9 pick a candidate and commit it; any
 //! other key ends the composition and keeps the letter. The window is painted last in `Shell::draw`, above the windows.
+//!
+//! With the Japanese (Romaji) source on, the same field takes the kana method (`bifrost_ui::kana_method`): romaji
+//! becomes marked hiragana as it is typed, Space opens the hiragana and katakana list, and a digit picks from it.
+use super::kb_layouts::{self, Layout};
 use super::keyboard::Out;
 use super::ui::{Ui, Weight, LABEL, MAC_BODY_PT, MENU_SOLID, WHITE};
 use super::{Effect, Shell};
@@ -9,6 +13,7 @@ use crate::gfx::Surface;
 use bifrost_ui::candidates::PanelType;
 use bifrost_ui::compose_method::{self, Compose, Step};
 use bifrost_ui::imsession::InputSession;
+use bifrost_ui::kana_method::KanaMethod;
 use bifrost_ui::prefs_layout::m;
 
 /// Row pitch, padding and width of the candidate window, in points.
@@ -18,10 +23,12 @@ const WIDTH_PT: f32 = 180.0;
 /// Top of the window as a share of the screen height (the Search card sits at the top).
 const TOP_SHARE: f32 = 0.3;
 
-/// The compose method's state in the shell: the armed apostrophe and the open composition, if any.
+/// The compose method's state in the shell: the armed apostrophe, the open kana composition and the open candidate
+/// list, if any.
 #[derive(Default)]
 pub struct ComposeWindow {
     method: Compose,
+    kana: KanaMethod,
     session: Option<InputSession>,
 }
 
@@ -43,6 +50,11 @@ impl ComposeWindow {
 impl Shell {
     /// Keys typed while the Search field is open go through the compose method first.
     pub(super) fn compose_search_key(&mut self, out: Out, t: f64) -> Vec<Effect> {
+        if kb_layouts::active() == Layout::Japanese {
+            return self.kana_search_key(out, t);
+        }
+        // a switch away from Japanese in the middle of a kana composition keeps what was composed
+        self.kana_end(None);
         let text = match out {
             Out::Text(text) => text,
             other => {
@@ -96,6 +108,95 @@ impl Shell {
             field.set_marked(&self.ui, &text, text.len());
             field.unmark(&self.ui, true);
         }
+        self.dirty = true;
+    }
+
+    /// Keys typed while the Japanese source is on: romaji is composed as marked kana. Space opens the candidate list
+    /// (hiragana, katakana); a digit picks from an open list; any other key ends the composition and is typed as usual.
+    fn kana_search_key(&mut self, out: Out, t: f64) -> Vec<Effect> {
+        let text = match out {
+            Out::Text(text) => text,
+            Out::Backspace if self.compose_ime.session.is_none() && self.compose_ime.kana.is_composing() => {
+                self.compose_ime.kana.backspace();
+                self.kana_show();
+                return vec![];
+            }
+            other => {
+                self.kana_end(None);
+                return self.quicksearch_key(other, t);
+            }
+        };
+        if let Some(i) = self.compose_ime.session.as_ref().and_then(|s| compose_method::pick(s.candidates(), &text)) {
+            self.kana_end(Some(i));
+            return vec![];
+        }
+        let mut chars = text.chars();
+        let single = match (chars.next(), chars.next()) {
+            (Some(c), None) => Some(c),
+            _ => None,
+        };
+        match single {
+            Some(' ') if self.compose_ime.session.is_none() && !self.compose_ime.kana.candidates().is_empty() => {
+                self.kana_open_list();
+                vec![]
+            }
+            Some(c) if c.is_ascii_alphabetic() || c == '-' => {
+                // a letter typed while the list is open ends that list and keeps its first candidate
+                if self.compose_ime.session.is_some() {
+                    self.kana_end(None);
+                }
+                self.compose_ime.kana.push(c);
+                self.kana_show();
+                vec![]
+            }
+            _ => {
+                self.kana_end(None);
+                self.quicksearch_key(Out::Text(text), t)
+            }
+        }
+    }
+
+    /// Shows the composed kana (and the pending romaji) as the field's marked text; nothing composed removes the mark.
+    fn kana_show(&mut self) {
+        let text = self.compose_ime.kana.marked();
+        let field = self.quicksearch.field_mut();
+        if text.is_empty() {
+            field.unmark(&self.ui, false);
+        } else {
+            field.set_marked(&self.ui, &text, text.len());
+        }
+        self.dirty = true;
+    }
+
+    /// Opens the candidate list over the composed kana: hiragana first, then katakana.
+    fn kana_open_list(&mut self) {
+        let candidates = self.compose_ime.kana.candidates();
+        let first = candidates.first().cloned().unwrap_or_default();
+        let mut session = InputSession::new(0, PanelType::SingleColumnScrolling);
+        session.update(&first, &first);
+        session.set_candidates(candidates);
+        self.compose_ime.session = Some(session);
+        self.dirty = true;
+    }
+
+    /// Ends the kana composition. `pick` chooses candidate `i` of the open list (the pending romaji follows it); with no
+    /// pick the composed text is kept as it is. Nothing composed does nothing.
+    fn kana_end(&mut self, pick: Option<usize>) {
+        // nothing composed: an apostrophe list (or nothing) is left as it is
+        if !self.compose_ime.kana.is_composing() {
+            return;
+        }
+        let pending = self.compose_ime.kana.pending().to_string();
+        let chosen = pick.and_then(|i| self.compose_ime.kana.candidates().into_iter().nth(i));
+        self.compose_ime.session = None;
+        let composed = self.compose_ime.kana.take().unwrap_or_default();
+        let text = match chosen {
+            Some(c) => format!("{c}{pending}"),
+            None => composed,
+        };
+        let field = self.quicksearch.field_mut();
+        field.set_marked(&self.ui, &text, text.len());
+        field.unmark(&self.ui, true);
         self.dirty = true;
     }
 
@@ -164,6 +265,28 @@ mod tests {
         sh.compose_search_key(Out::Named("Backspace"), 0.0);
         assert!(!sh.compose_ime.is_open());
         assert!(!sh.compose_ime.method.is_armed());
+    }
+
+    #[test]
+    fn romaji_composes_kana_in_the_field_on_the_japanese_source() {
+        let mut sh = crate::shell::tests::shell();
+        // the source is enabled and switched to for this test only, and put back after it
+        kb_layouts::toggle(Layout::Japanese);
+        kb_layouts::set_active(Layout::Japanese);
+        sh.compose_search_key(Out::Text("k".into()), 0.0);
+        sh.compose_search_key(Out::Text("a".into()), 0.0);
+        assert_eq!(sh.quicksearch.field_mut().text(), "か");
+        assert_eq!(sh.quicksearch.field_mut().marked_range(), Some((0, 1)));
+        // Space opens the hiragana and katakana list; digit 2 picks the katakana
+        sh.compose_search_key(Out::Text(" ".into()), 0.0);
+        assert!(sh.compose_ime.is_open());
+        assert_eq!(sh.compose_ime.candidates(), &["か".to_string(), "カ".to_string()]);
+        sh.compose_search_key(Out::Text("2".into()), 0.0);
+        assert!(!sh.compose_ime.is_open());
+        assert_eq!(sh.quicksearch.field_mut().text(), "カ");
+        assert_eq!(sh.quicksearch.field_mut().marked_range(), None);
+        kb_layouts::set_active(Layout::Icelandic);
+        kb_layouts::toggle(Layout::Japanese);
     }
 
     #[test]

@@ -142,6 +142,11 @@ impl KanaMethod {
         format!("{}{}", self.kana, self.romaji)
     }
 
+    /// The romaji still waiting for its vowel: shown after the kana and kept as typed when a candidate is picked.
+    pub fn pending(&self) -> &str {
+        &self.romaji
+    }
+
     /// The candidate list for the composition: its hiragana, then its katakana. Empty when no kana is composed.
     pub fn candidates(&self) -> Vec<String> {
         if self.kana.is_empty() {

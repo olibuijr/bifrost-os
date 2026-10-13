@@ -9,15 +9,18 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering::Relaxed};
 pub enum Layout {
     Icelandic,
     English,
+    /// Romaji typed on a US board; the kana method (`bifrost_ui::kana_method`) turns it into kana.
+    Japanese,
 }
 
 impl Layout {
-    pub const ALL: [Layout; 2] = [Layout::Icelandic, Layout::English];
+    pub const ALL: [Layout; 3] = [Layout::Icelandic, Layout::English, Layout::Japanese];
 
     pub fn name(self) -> &'static str {
         match self {
             Layout::Icelandic => "Icelandic",
             Layout::English => "English (US)",
+            Layout::Japanese => "Japanese (Romaji)",
         }
     }
 
@@ -29,6 +32,7 @@ impl Layout {
         match self {
             Layout::Icelandic => "is",
             Layout::English => "en_US",
+            Layout::Japanese => "ja",
         }
     }
 
@@ -36,7 +40,7 @@ impl Layout {
     pub fn keymap(self) -> &'static str {
         match self {
             Layout::Icelandic => "is",
-            Layout::English => "us",
+            Layout::English | Layout::Japanese => "us",
         }
     }
 
@@ -45,6 +49,7 @@ impl Layout {
         match self {
             Layout::Icelandic => "IS",
             Layout::English => "ABC",
+            Layout::Japanese => "あ",
         }
     }
 }
@@ -73,7 +78,7 @@ pub fn state() -> (u8, u8) {
 
 /// The keyboard process takes the shell's choice. An empty or out-of-range state is ignored.
 pub fn apply(mask: u8, active: u8) {
-    let mask = mask & 0b11;
+    let mask = mask & 0b111;
     if mask == 0 || active as usize >= Layout::ALL.len() || mask & (1 << active) == 0 {
         return;
     }
@@ -139,7 +144,7 @@ fn save() {
 
 pub fn active() -> Layout {
     load();
-    Layout::ALL[(ACTIVE.load(Relaxed) as usize).min(1)]
+    Layout::ALL[(ACTIVE.load(Relaxed) as usize).min(Layout::ALL.len() - 1)]
 }
 
 pub fn enabled() -> Vec<Layout> {
@@ -213,7 +218,7 @@ pub fn cycle() -> Layout {
 pub fn letters(l: Layout) -> [&'static [&'static str]; 3] {
     match l {
         Layout::Icelandic => ICELANDIC,
-        Layout::English => ENGLISH,
+        Layout::English | Layout::Japanese => ENGLISH,
     }
 }
 
@@ -261,7 +266,17 @@ mod tests {
     fn each_source_names_its_keymap_and_menu_bar_label() {
         assert_eq!(Layout::Icelandic.keymap(), "is");
         assert_eq!(Layout::English.keymap(), "us");
+        assert_eq!(Layout::Japanese.keymap(), "us", "romaji is typed on the US board");
         assert_eq!(Layout::Icelandic.short_name(), "IS");
         assert_eq!(Layout::English.short_name(), "ABC");
+    }
+
+    #[test]
+    fn japanese_is_a_third_source_that_types_the_english_letters() {
+        assert_eq!(Layout::ALL.len(), 3);
+        assert_eq!(letters(Layout::Japanese), letters(Layout::English));
+        assert_eq!(by_name("Japanese (Romaji)"), Some(Layout::Japanese));
+        assert!(accent_allowed(Layout::Japanese, "é"));
+        assert!(!accent_allowed(Layout::Japanese, "þ"));
     }
 }
