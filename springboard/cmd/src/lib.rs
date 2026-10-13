@@ -30,6 +30,7 @@ pub mod softwareupdate;
 pub mod textutil;
 pub mod tiff2icns;
 pub mod tmutil;
+pub mod what;
 
 /// Prints `msg` to stderr prefixed with the tool name and exits with `code`.
 pub fn die(tool: &str, msg: &str, code: i32) -> ! {

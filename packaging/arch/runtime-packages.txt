@@ -103,6 +103,7 @@ tcpdump
 tcsh
 tftp-hpa
 tidy
+tk
 traceroute
 unzip
 usd
