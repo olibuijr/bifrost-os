@@ -675,6 +675,7 @@ pub mod asset_resolver;
 pub mod stereo_camera;
 pub mod skeleton;
 pub mod scattering;
+pub mod texture_mip;
 pub mod morph_skin;
 pub mod shading;
 pub mod composition;
