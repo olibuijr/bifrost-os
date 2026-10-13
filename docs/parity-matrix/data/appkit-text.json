@@ -31,9 +31,9 @@
     {
       "feature": "Text Display: spell checking",
       "apple": "NSSpellChecker",
-      "bifrost": "springboard/sdk/src/spellcheck.rs (tokenizer, pluggable Dictionary, learned and ignored words); wired: springboard/core/src/spellcheck.rs (model, moved from sdk); springboard/sdk/src/spellcheck.rs (SDK re-export); springboard/src/shell/services/text_services.rs (shell service `text`); springboard/sdk/src/text_services.rs (client)",
+      "bifrost": "springboard/sdk/src/spellcheck.rs (tokenizer, pluggable Dictionary, learned and ignored words); wired: springboard/core/src/spellcheck.rs (model, moved from sdk); springboard/sdk/src/spellcheck.rs (SDK re-export); springboard/src/shell/services/text_services.rs (shell service `text`); springboard/sdk/src/text_services.rs (client); springboard/apps/textedit-desktop/src/spell.rs over bifrost_app::spellcheck",
       "status": "partial",
-      "note": "no system-wide spelling panel or autocorrect UI in text views Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
+      "note": "no system-wide spelling panel or autocorrect UI in text views Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity. round 75, host only: wired into TextEdit; needs Midget check."
     },
     {
       "feature": "Text Display: data detectors",

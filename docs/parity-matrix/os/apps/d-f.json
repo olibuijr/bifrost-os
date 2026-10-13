@@ -18,9 +18,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "the Dictionary settings page exists, no dictionary app",
+   "bifrost": "springboard/apps/dictionary-desktop",
+   "status": "partial",
+   "note": "the Dictionary settings page exists, no dictionary app round 75, host only: app: StarDict lookup, search field; was gap.",
    "rea": []
   },
   {
@@ -78,9 +78,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "springboard/src/shell/pages.rs",
+   "bifrost": "springboard/src/shell/pages.rs; springboard/apps/fontbook-desktop",
    "status": "partial",
-   "note": "Fonts settings page, no font manager app",
+   "note": "Fonts settings page, no font manager app round 75, host only: app 0.2.0 (preview, remove font).",
    "rea": []
   },
   {
@@ -118,9 +118,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no colour picker utility",
+   "bifrost": "springboard/apps/colormeter-desktop",
+   "status": "partial",
+   "note": "no colour picker utility round 75, host only: app 0.2.0 with screen sample service; was gap.",
    "rea": []
   },
   {
@@ -138,9 +138,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no disk utility app",
+   "bifrost": "springboard/apps/diskutil-desktop",
+   "status": "partial",
+   "note": "no disk utility app round 75, host only: sidebar, info, mount, eject; erase and first aid in core only; was gap.",
    "rea": []
   },
   {

@@ -39,9 +39,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/src/shell/hwkeys.rs (KeyRepeat::accent_hold), springboard/src/shell/compose_window.rs",
+   "status": "partial",
+   "note": "heuristic: no counterpart yet round 75, host only: Search field only; was gap.",
    "rea": [],
    "method": "heuristic"
   }

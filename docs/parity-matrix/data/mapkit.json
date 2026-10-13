@@ -17,9 +17,9 @@
     {
       "feature": "Map camera and region",
       "apple": "MKCoordinateRegion, MKCoordinateSpan, MKMapCamera, MapCameraPosition",
-      "bifrost": "springboard/ui/src/geo.rs; wired: springboard/apps/weather-desktop/src/insights.rs (map_view at MAP_ZOOM, grid)",
+      "bifrost": "springboard/ui/src/geo.rs; wired: springboard/apps/weather-desktop/src/insights.rs (map_view at MAP_ZOOM, grid); springboard/ui/src/geo.rs (CoordinateRegion, MapCamera, MapCameraPosition)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. a coordinate pair exists; no region, span or camera type Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. a coordinate pair exists; no region, span or camera type Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. round 75, host only: camera and region model, no SDK map view."
     },
     {
       "feature": "Annotations, markers and overlays",
@@ -87,9 +87,9 @@
     {
       "feature": "Geographic coordinate types (MKMapPoint, MKMapRect, MKMapSize)",
       "apple": "MKMapPoint, MKMapRect, MKMapSize, MKDistanceFormatter",
-      "bifrost": "springboard/ui/src/geo.rs",
+      "bifrost": "springboard/ui/src/geo.rs; springboard/ui/src/geo.rs (MapPoint, MapRect, MapSize)",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. only a GPS display string exists; no projection or distance types"
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. only a GPS display string exists; no projection or distance types round 75, host only: coordinate types in geo.rs."
     },
     {
       "feature": "Street-level imagery (Look Around)",

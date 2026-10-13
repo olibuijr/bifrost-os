@@ -18,9 +18,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no mail app; defaultapps.rs names a mail handler only",
+   "bifrost": "springboard/apps/mail-desktop",
+   "status": "partial",
+   "note": "no mail app; defaultapps.rs names a mail handler only round 75, host only: live window, accounts, new-mail poll; was gap.",
    "rea": []
   },
   {

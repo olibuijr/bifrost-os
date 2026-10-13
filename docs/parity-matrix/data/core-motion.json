@@ -10,9 +10,9 @@
     {
       "feature": "Device motion (attitude, rotation rate, gravity-free acceleration)",
       "apple": "CMMotionManager, CMDeviceMotion, CMAttitude, CMAttitudeReferenceFrame",
-      "bifrost": "springboard/core/src/motion.rs, springboard/core/src/sensor_log.rs, springboard/render/src/gfx/rotate.rs",
+      "bifrost": "springboard/core/src/motion.rs, springboard/core/src/sensor_log.rs, springboard/render/src/gfx/rotate.rs; springboard/sdk/src/sensors.rs over springboard/core/src/motion.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attitude or rotation-rate values exist. The shell keeps only a discrete orientation from the sensor."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No attitude or rotation-rate values exist. The shell keeps only a discrete orientation from the sensor. round 75, host only: SDK path; no IMU feed."
     },
     {
       "feature": "Device orientation (four-way)",
@@ -38,16 +38,16 @@
     {
       "feature": "Magnetometer",
       "apple": "CMMagnetometerData",
-      "bifrost": "springboard/core/src/magnetometer.rs",
+      "bifrost": "springboard/core/src/magnetometer.rs; springboard/sdk/src/sensors.rs over springboard/core/src/magnetometer.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No magnetometer reader or SDK API found."
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No magnetometer reader or SDK API found. round 75, host only: SDK path; no reader."
     },
     {
       "feature": "Altitude and ambient pressure",
       "apple": "CMAltimeter, CMAltitudeData, CMAbsoluteAltitudeData, CMAmbientPressureData, CMRecordedPressureData",
-      "bifrost": "springboard/core/src/altitude.rs",
+      "bifrost": "springboard/core/src/altitude.rs; springboard/sdk/src/sensors.rs over springboard/core/src/altitude.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No barometer or altitude API. Desktop hardware rarely has these sensors."
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No barometer or altitude API. Desktop hardware rarely has these sensors. round 75, host only: SDK path; no barometer reader."
     },
     {
       "feature": "Recorded sensor data and batched history",
@@ -59,16 +59,16 @@
     {
       "feature": "Motion activity (walking, running, stationary, automotive)",
       "apple": "CMMotionActivityManager, CMMotionActivity, CMHeadphoneActivityManager",
-      "bifrost": "springboard/core/src/motion_activity.rs",
+      "bifrost": "springboard/core/src/motion_activity.rs; springboard/sdk/src/sensors.rs over springboard/core/src/motion_activity.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No activity recognition API."
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No activity recognition API. round 75, host only: SDK path; no sensor feed."
     },
     {
       "feature": "Pedometer, step counter and odometer",
       "apple": "CMPedometer, CMPedometerData, CMPedometerEvent, CMStepCounter, CMOdometerData",
-      "bifrost": "springboard/core/src/pedometer.rs",
+      "bifrost": "springboard/core/src/pedometer.rs; springboard/sdk/src/sensors.rs over springboard/core/src/pedometer.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No step or pedometer data. Desktop PCs are not carried by users, so this is low priority."
+      "note": "Wave 2 (theme-27, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No step or pedometer data. Desktop PCs are not carried by users, so this is low priority. round 75, host only: SDK path; no sensor feed."
     },
     {
       "feature": "Heart rate data (1 Hz)",

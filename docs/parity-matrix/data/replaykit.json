@@ -12,14 +12,14 @@
       "apple": "RPScreenRecorder: startRecording(handler:), stopRecording(withOutput:completionHandler:), discardRecording(handler:), isRecording, isAvailable",
       "bifrost": "springboard/ui/src/recording.rs (Recorder)",
       "status": "partial",
-      "note": "Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no video capture path in the shell, the SDK or the MCP tools; the REA render of the landing page marks RPScreenRecorder as Deprecated, but the DocC JSON for that symbol does not show the flag, so the deprecation is unconfirmed"
+      "note": "Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no video capture path in the shell, the SDK or the MCP tools; the REA render of the landing page marks RPScreenRecorder as Deprecated, but the DocC JSON for that symbol does not show the flag, so the deprecation is unconfirmed round 75, host only: recorder model."
     },
     {
       "feature": "Clip buffering and export",
       "apple": "RPScreenRecorder: startClipBuffering, stopClipBuffering, exportClip(to:duration:)",
       "bifrost": "springboard/ui/src/clip_buffer.rs (ClipBuffer::export)",
       "status": "partial",
-      "note": "Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no rolling buffer of screen or audio"
+      "note": "Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no rolling buffer of screen or audio round 75, host only: clip buffer model."
     },
     {
       "feature": "Microphone capture during recording",
@@ -31,30 +31,30 @@
     {
       "feature": "App and system audio capture",
       "apple": "RPSampleBufferType audio samples from startCapture(handler:completionHandler:)",
-      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
-      "status": "gap",
-      "note": "The pure model had no caller and was removed. audiod plays and records the microphone only; no loopback of app output"
+      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area; springboard/ui/src/recording.rs (SampleKind, Recorder::push_sample)",
+      "status": "partial",
+      "note": "The pure model had no caller and was removed. audiod plays and records the microphone only; no loopback of app output round 75, host only: proposed; no loopback capture yet."
     },
     {
       "feature": "Camera preview during recording",
       "apple": "RPScreenRecorder: isCameraEnabled, cameraPreviewView, cameraPosition, RPCameraPosition",
-      "bifrost": "springboard/ui/src/recording.rs (CameraPosition",
+      "bifrost": "springboard/ui/src/recording.rs (CameraPosition; springboard/ui/src/recording.rs (CameraPosition, Recorder::set_camera)",
       "status": "partial",
-      "note": "Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the camera module serves the Camera app, not a recording overlay; no preview view is exposed to apps"
+      "note": "Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. the camera module serves the Camera app, not a recording overlay; no preview view is exposed to apps round 75, host only: no preview view."
     },
     {
       "feature": "Capture delegate and availability",
       "apple": "RPScreenRecorderDelegate, RPScreenRecorder.shared()",
-      "bifrost": "springboard/ui/src/recording.rs (Recorder::is_available",
+      "bifrost": "springboard/ui/src/recording.rs (Recorder::is_available; springboard/ui/src/recording.rs (Recorder::is_available, take_events)",
       "status": "partial",
-      "note": "Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no recorder object or availability callback"
+      "note": "Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no recorder object or availability callback round 75, host only: event model."
     },
     {
       "feature": "Preview and edit UI for a recording",
       "apple": "RPPreviewViewController",
       "bifrost": "springboard/ui/src/recording.rs (Trim); wired: springboard/apps/voicememos-desktop/src/main.rs (main_menu, menu_action); voicememos.rs begin_trim via the Recording menu",
       "status": "partial",
-      "note": "Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no clip preview or trim sheet in the shell or SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no clip preview or trim sheet in the shell or SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. round 75, host only: trim model, no sheet."
     },
     {
       "feature": "Live broadcast controller and handlers",

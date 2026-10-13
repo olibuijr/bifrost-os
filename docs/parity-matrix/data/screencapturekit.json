@@ -61,7 +61,7 @@
       "apple": "SCClipBufferingOutput, SCRecordingEditor, SCVideoEffectOutput and their delegates",
       "bifrost": "springboard/ui/src/clip_buffer.rs, springboard/ui/src/recording.rs (Trim)",
       "status": "partial",
-      "note": "Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No instant-replay buffer or recording editor exists. The media stack is audio-focused (springboard/audiod) plus hardware video decode in springboard/src/media/."
+      "note": "Wave 2 (theme-17, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No instant-replay buffer or recording editor exists. The media stack is audio-focused (springboard/audiod) plus hardware video decode in springboard/src/media/. round 75, host only: clip buffer and trim model."
     },
     {
       "feature": "Stream errors and lifecycle (SCStreamDelegate, SCStreamError)",

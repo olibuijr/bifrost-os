@@ -52,9 +52,9 @@
     {
       "feature": "Audio recording",
       "apple": "AVAudioRecorder",
-      "bifrost": "springboard/src/media/capture.rs, springboard/audiod/src/main.rs, springboard/apps/voicememos-desktop/src/voicememos.rs",
+      "bifrost": "springboard/src/media/capture.rs, springboard/audiod/src/main.rs, springboard/apps/voicememos-desktop/src/voicememos.rs; springboard/src/media/capture.rs, springboard/audiod/src/main.rs, springboard/apps/voicememos-desktop (Enhance)",
       "status": "partial",
-      "note": "Record start/stop to WAV through the audio service; no level metering API, no format settings, no AAC/ALAC recording"
+      "note": "Record start/stop to WAV through the audio service; no level metering API, no format settings, no AAC/ALAC recording round 75, host only: noise-gated copy of a take."
     },
     {
       "feature": "Audio engine and processing graph",
