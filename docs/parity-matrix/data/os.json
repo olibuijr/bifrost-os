@@ -17,9 +17,9 @@
     {
       "feature": "Logging: privacy and message formatting",
       "apple": "Message Argument Formatters, privacy: .public / .private",
-      "bifrost": "springboard/core/src/log.rs:99 (private()), :104 (redact)",
+      "bifrost": "springboard/core/src/log.rs:99 (private()), :104 (redact); springboard/core/src/log_format.rs (LogArg)",
       "status": "partial",
-      "note": "Privacy is per subsystem, not per value. No format specifiers or per-argument .private(mask:)."
+      "note": "LogArg: per-value privacy (auto/public/private/sensitive, mask .hash), hex/decimal, fixed float precision, align left/right(columns). Not Midget-verified; no interpolation macro."
     },
     {
       "feature": "Logging: runtime configuration",

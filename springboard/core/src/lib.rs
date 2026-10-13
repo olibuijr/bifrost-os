@@ -12,6 +12,7 @@ pub mod sha1;
 pub mod hkdf;
 pub mod fsutil;
 pub mod log;
+pub mod log_format;
 pub mod log_entries;
 pub mod log_cursor;
 pub mod signpost;
