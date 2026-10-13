@@ -4,7 +4,7 @@
   "macos_since": "10.10",
   "status": "partial",
   "bifrost": "springboard/src/shell/login.rs, springboard/src/privd/pam.rs, springboard/src/shell/passcode.rs, springboard/src/keychain.rs, springboard/sdk/src/keychain.rs",
-  "summary": "BifrOSt checks a device-owner password at login and unlock (PAM through the root helper) and a lock-screen passcode, but apps get no API for either and there is no biometric support. The app keychain is the only app-facing secret store, and it has no user-presence or biometric access control.",
+  "summary": "BifrOSt checks a device-owner password at login and unlock (PAM through the root helper) and a lock-screen passcode, but apps get no API for either and there is no biometric support. The app keychain is the only app-facing secret store, and it has no user-presence or biometric access control. The authentication prompt state machine is a pure model in springboard/ui/src/auth_prompt.rs; the shell does not draw a reusable sheet yet.",
   "rea_evidence": "ev_970ec89cf86817a12826f704b629abf4861aad230b10053a9350fe42ebe2caea",
   "features": [
     {
@@ -24,9 +24,9 @@
     {
       "feature": "Authentication prompt UI (LocalAuthenticationView)",
       "apple": "LocalAuthenticationView (SwiftUI)",
-      "bifrost": "springboard/src/shell/login.rs (login field), springboard/src/shell/passcode.rs (passcode prompt)",
-      "status": "gap",
-      "note": "The Rust shell has no SwiftUI. Only the system login and lock prompts exist; an app cannot show a reusable authentication sheet."
+      "bifrost": "springboard/ui/src/auth_prompt.rs; springboard/src/shell/login.rs (login field), springboard/src/shell/passcode.rs (passcode prompt)",
+      "status": "partial",
+      "note": "Pure state model of a password sheet: attempts left, lockout after the limit (default 5, the same as the local_auth service, which stays the authority), cancel and fallback choice (fallback only when offered). It has no caller yet and is not LocalAuthenticationView itself; that view's biometric icon model is springboard/ui/src/auth_view.rs. Host unit tests (9). Built on parity/team-a-03; not yet verified on Midget. The shell does not draw a reusable sheet yet."
     },
     {
       "feature": "Keychain items protected by user presence or biometrics",
@@ -83,6 +83,7 @@
     "No app-facing authentication API: an app cannot ask the user for the account password or passcode before a sensitive action (the LAContext evaluatePolicy equivalent).",
     "Keychain items have no access control. Any item an app can read is readable without user presence (docs/bifrost-ui.md, Keychain, parity gaps).",
     "No authentication-gated rights, persisted secrets or key pairs (LARight, LAPersistedRight, LASecret, LAPrivateKey).",
-    "No device capability query for enrolled biometry or passcode (LADomainState and kLABiometryType constants)."
+    "No device capability query for enrolled biometry or passcode (LADomainState and kLABiometryType constants).",
+    "Reusable authentication sheet drawn by the shell (state model in springboard/ui/src/auth_prompt.rs)"
   ]
 }

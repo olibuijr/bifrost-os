@@ -17,9 +17,9 @@
     {
       "feature": "Incoming call UI",
       "apple": "CXCallUpdate, CXAnswerCallAction, PushKit VoIP pushes",
-      "bifrost": "springboard/sdk/src/usernotif.rs (generic notifications only)",
-      "status": "gap",
-      "note": "no full-screen/banner call interface with answer and decline"
+      "bifrost": "springboard/ui/src/call_ui.rs (CallUpdate, IncomingCard); springboard/sdk/src/usernotif.rs (generic notifications only)",
+      "status": "partial",
+      "note": "Pure model with host unit tests: the card for a ringing call is a banner while the screen is in use and full screen while it is locked, with answer and decline requests. Not wired into the shell, which draws no call card, and not yet verified on Midget. No VoIP push wake-up."
     },
     {
       "feature": "Outgoing calls",

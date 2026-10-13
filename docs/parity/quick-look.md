@@ -72,3 +72,10 @@ Existing code kept and extended, not duplicated: `springboard/sdk/src/peek.rs` (
   page did not load, so the exact Apple case names are not confirmed.
 - Doc errors in `docs/bifrost-ui.md` lines 1420 and 1423 (file names and cache directory) remain; this round did not
   edit shared docs.
+
+## PDF page context (review of parity/team-a-03)
+
+The branch first added `pdf_pages.rs`. Its page stepping, page label and fit scale duplicate `springboard/ui/src/pdfview.rs`
+(`PdfView::next_page`, `previous_page`, `go_to_page`, `effective_scale`) and `pdfpage.rs` (`fit_scale`), both already
+used by Books, so the module was removed. The "PDF multi-page preview context" row stays `gap`: the Quick Look preview
+does not use `PdfView`. Its note points to the existing model.

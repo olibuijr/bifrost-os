@@ -1135,3 +1135,5 @@ pub mod printer_caps;
 pub mod scanner;
 pub mod material_style;
 pub mod thumb_service;
+pub mod auth_prompt;
+pub mod video_info;

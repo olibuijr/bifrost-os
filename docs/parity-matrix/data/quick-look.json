@@ -54,7 +54,7 @@
       "apple": "QLPreviewRequestCreatePDFContext, QLPreviewPDFStyle (https://developer.apple.com/documentation/quicklook/qlpreviewrequestcreatepdfcontext(_:_:_:_:))",
       "bifrost": "springboard/src/files/preview.rs (is_pdf) and springboard/src/files/mod.rs (PDF text through springboard/src/shell/books/engine)",
       "status": "gap",
-      "note": "PDFs show extracted text, not a rendered page view with a PDF style option."
+      "note": "PDFs show extracted text, not a rendered page view with a PDF style option. The page layout, paging and fit model is springboard/ui/src/pdfview.rs (used by Books, see the PDFKit row); the Quick Look preview does not use it."
     },
     {
       "feature": "Preview of USDZ in augmented reality",
