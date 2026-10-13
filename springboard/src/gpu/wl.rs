@@ -313,6 +313,12 @@ void main() {
     o = c;
 }";
 
+/// The first stack position where `old` and `new` differ (a window moved, appeared, left or changed order).
+/// A window's backdrop reads only the windows below it, so only the windows above that position need a new one.
+fn stack_change_from(old: &[(u32, i32, i32)], new: &[(u32, i32, i32)]) -> usize {
+    old.iter().zip(new).position(|(a, b)| a != b).unwrap_or(old.len().min(new.len()))
+}
+
 /// Marks dirty the backdrops of the windows at stack position `from` and above, and lists them as changed.
 fn under_dirty_from(stack: &[(u32, i32, i32)], under: &mut HashMap<u32, Under>, changed: &mut Vec<u32>, from: usize) {
     for &(k, ..) in stack.iter().skip(from) {
@@ -502,6 +508,7 @@ impl Presenter {
     /// A change rebuilds the backdrop with the next draw.
     pub fn set_window_stack(&mut self, stack: Vec<(u32, i32, i32)>) {
         if self.stack != stack {
+            let from = stack_change_from(&self.stack, &stack);
             self.stack = stack;
             self.live_dirty = true;
             self.live_changed = true;
@@ -512,7 +519,7 @@ impl Presenter {
                     self.free_live(l);
                 }
             }
-            self.under_dirty_from(0);
+            self.under_dirty_from(from + 1);
         }
     }
 
@@ -1306,6 +1313,21 @@ mod stack_tests {
         assert!(under[&k(3)].dirty && !under[&k(2)].dirty && !under[&k(9)].dirty);
         under_dirty_from(&stack, &mut under, &mut changed, 0);
         assert_eq!(changed, vec![k(3), k(2)]);
+    }
+
+    #[test]
+    fn a_stack_change_only_dirties_the_windows_above_it() {
+        let a = (WINDOW_KEY_BASE + 1, 0, 0);
+        let b = (WINDOW_KEY_BASE + 2, 10, 10);
+        let c = (WINDOW_KEY_BASE + 3, 20, 20);
+        // nothing changed: the first position is past both stacks
+        assert_eq!(stack_change_from(&[a, b, c], &[a, b, c]), 3);
+        // the top window moved: only the position of the top changed
+        assert_eq!(stack_change_from(&[a, b, c], &[a, b, (c.0, 30, 30)]), 2);
+        // the bottom window moved: everything above it may see a new backdrop
+        assert_eq!(stack_change_from(&[a, b, c], &[(a.0, 1, 0), b, c]), 0);
+        // a window added on top changes nothing below it
+        assert_eq!(stack_change_from(&[a, b], &[a, b, c]), 2);
     }
 
     #[test]

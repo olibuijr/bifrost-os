@@ -647,7 +647,7 @@ impl Shell {
         for w in desk.wins.iter().filter(|w|!w.minimized) {
             let Some(id)=apps().iter().position(|a|a.id==w.app).map(|i|i as u32+1) else{return false};
             if !desk.window_cache.contains_key(&id) {return false;}
-            frames.push(crate::bare::wayland::WindowFrame {id,title:apps()[(id-1) as usize].name.into(),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new(),fx:bifrost_render::glass::Fx::IDENTITY});
+            frames.push(crate::bare::wayland::WindowFrame {id,title:apps()[(id-1) as usize].name.into(),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new(),fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
             let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
             let (dh,nd)=drag_zone(w,&m,controls);
             if let Some(f)=frames.last_mut(){f.drag_height=dh;f.no_drag=nd;}
@@ -1544,12 +1544,14 @@ impl Shell {
                     drag_zone(w,&m,controls)
                 };
                 let corner=self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS);
+                // shell-drawn content is opaque (no vibrancy, see `take_wayland_materials`); a client's may not be
+                let opaque=!matches!(w.app,AppId::External(_));
                 if unchanged && quiet {
                     self.desk.as_mut().unwrap().frames.push(crate::bare::wayland::WindowFrame {
                         id, title: apps()[(id-1) as usize].name.to_string(), x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, title_height:m.title,
-                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY,
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque,
                     });
                     self.desk.as_mut().unwrap().window_cache.insert(id,cached.unwrap());
                     continue;
@@ -1592,7 +1594,7 @@ impl Shell {
                         let desk=self.desk.as_mut().unwrap();
                         desk.body_cache.remove(&w.app);
                         desk.window_cache.insert(id,retained);
-                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:apps()[(id-1) as usize].name.into(),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY});
+                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:apps()[(id-1) as usize].name.into(),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque});
                         continue;
                     }
                 }
@@ -1615,7 +1617,7 @@ impl Shell {
                 desk.frames.push(crate::bare::wayland::WindowFrame {
                     id, title: apps()[(id-1) as usize].name.to_string(), x:w.r.x, y:w.r.y,
                     width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, title_height:m.title,
-                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY,
+                    drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque,
                 });
                 continue;
             }

@@ -13,6 +13,7 @@ pub mod damage;
 pub mod error;
 pub mod health;
 pub mod nv12;
+pub mod occlusion;
 pub mod overlay;
 pub mod plan;
 pub mod quad;
