@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.4 — 2026-10-13
+
+- Smoothness: when only the key window changes (Cmd-Tab, a click on a back window), a full-size app's window copies its body again from the app's last frame, dimmed or not, and repaints its lights, instead of drawing the whole window afresh (the Browser switch was a 31 ms frame on the lab PC).
+
 ## 0.7.3 — 2026-10-13
 
 - Smoothness: an outline's rows near its top and bottom edges also skip the empty stretch between the corner squares (still bit for bit). Host benches at 2560x1440: focus switch 19.9 to 16.3 ms, Settings repaint 9.2 to 7.8 ms (`bench_focus_switch`, `bench_settings_window_draw`).

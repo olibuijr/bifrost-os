@@ -1556,6 +1556,11 @@ impl Shell {
                 let mut cached = self.desk.as_mut().unwrap().window_cache.remove(&id);
                 let unchanged = cached.as_ref().is_some_and(|c|
                     c.width == w.r.w as usize && c.height == w.r.h as usize && c.focused == focused && c.maximized == w.maximized && c.hover == hover);
+                // only the key state moved (Cmd-Tab, a click on a back window): a full-size app's window is its body plus
+                // the lights over it, so the body is copied again from the app's last frame (dimmed when it lost focus)
+                // instead of drawing the whole window afresh (a 31 ms frame on the lab PC, round 75)
+                let refocus = !unchanged && full_size(w.app) && matches!(w.app, AppId::External(_)) && cached.as_ref().is_some_and(|c|
+                    c.width == w.r.w as usize && c.height == w.r.h as usize && c.focused != focused && c.maximized == w.maximized && c.hover == hover);
                 if self.keyboard.shown() || self.keyboard.animating() {
                     self.desk.as_mut().unwrap().body_cache.remove(&w.app);
                 }
@@ -1603,11 +1608,17 @@ impl Shell {
                     let width=w.r.w as usize; let height=w.r.h as usize; let top=title_of(w.app,&m) as usize;
                     let body_h=height.saturating_sub(top);
                     let mapped=self.ext.get(slot as usize).and_then(Option::as_ref).filter(|h|h.running()).and_then(|h|h.frame()).map(|(_,w,h)|(w,h));
-                    if unchanged && !self.keyboard.shown() && !self.keyboard.animating() && mapped==Some((width,body_h)) {
+                    if (unchanged || refocus) && !self.keyboard.shown() && !self.keyboard.animating() && mapped==Some((width,body_h)) {
                         let mut retained=cached.take().unwrap();
+                        retained.focused=focused;
                         let pixels=std::sync::Arc::make_mut(&mut retained.pixels);
                         let mut body_damage=crate::gfx::Damage::new(width,body_h);
-                        self.ext_blit_damage(&mut Surface{w:width,h:body_h,stride:width,px:&mut pixels[top*width..],y0:0},slot as usize,&mut body_damage);
+                        let mut body=Surface{w:width,h:body_h,stride:width,px:&mut pixels[top*width..],y0:0};
+                        if refocus {
+                            if let Some(Some(h))=self.ext.get_mut(slot as usize) { body_damage.union(&h.blit(&mut body,true)); }
+                        } else {
+                            self.ext_blit_damage(&mut body,slot as usize,&mut body_damage);
+                        }
                         let mut damage=crate::gfx::Damage::new(width,height);
                         for a in body_damage.areas() {damage.add(a.x0 as i32,(a.y0+top) as i32,(a.x1-a.x0) as i32,(a.y1-a.y0) as i32);}
                         if !focused { for a in body_damage.areas() { dim_rect(pixels, width, a.x0, a.y0 + top, a.x1, a.y1 + top, BACKGROUND_DIM); } }
