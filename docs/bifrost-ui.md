@@ -577,11 +577,26 @@ restart; no `UNNotificationSound`, attachments, `userInfo`, interruption levels,
 - **Result**: `App::share_done(request, Some(app id | "copy"))`, or `None` when the menu was dismissed. Copy puts text and URLs
   on the clipboard, one per line, and a file as its name.
 
-Gaps (not matched yet): only apps declaring `handles`/`schemes` appear (macOS also offers system services such as Mail, Messages,
-AirDrop, Add to Reading List and Notes); there is no per-item `NSSharingService` object (`canPerform(withItems:)`,
-`perform(withItems:)`, `delegate` callbacks, `sharingServicePicker(_:sharingServicesForItems:proposedSharingServices:)`), no
-`NSItemProvider` / rich items (images as data, attributed strings, several representations), no preferred edge, no share-sheet
-extensions installed by apps, the menu is a plain context menu (no icons, no "More..."), and Copy of a file copies only its name.
+- **Service objects** (`NativeSharingService`, roadmap parity "Social"): `share::SharingService::sharing_services_for_items(&items,
+  &installed)` returns the services that take the items, in the menu's order (apps by name, Compose Post, Copy). `installed` is a
+  `share::Candidate` list the caller builds from the manifests it may offer (its own app left out). `SharingService::named(COPY |
+  COMPOSE)` builds the built-in services. Each service has `name()` (app id, `COPY` or `COMPOSE`) and `title()`, `can_perform(&items)`
+  (every item must match the service's `handles`/`schemes`; Copy and Compose take every kind; nothing to share is never performable)
+  and `perform(ctx, &items)`, which for Copy puts `copy_text` on the clipboard and returns false for the rest.
+- **Picker and delegates** (`NativeSharingServicePicker` with its delegate): `SharingServicePicker::new(&items, &installed)` offers
+  `services()`; `show(ctx, anchor)` shows the menu and returns the request. The answer goes to `share_done(request, target, &mut picker,
+  &mut sharer)`, which returns false for a request that is not the menu on screen. A chosen service calls
+  `SharingServicePickerDelegate::did_choose(Some(&service))` then `SharingServiceDelegate::did_share_items(&items)`; a dismissed menu
+  calls `did_choose(None)`; a target the picker never offered calls `did_choose(None)` and
+  `did_fail_to_share_items(&items, ShareError::NotOffered(id))`. The shell cannot tell a failed delivery from a dismissal (both
+  answer an empty target), so a failed delivery reads as a dismissal.
+
+Gaps (not matched yet): only apps declaring `handles`/`schemes` appear (the system services such as Mail, Messages, AirDrop, Add to
+Reading List and Notes are not offered); no `image` on a service; `perform` for an app or Compose Post does not hand the items over
+directly (the shell has no message for one named target), so the menu does it; no
+`sharingServicePicker(_:sharingServicesForItems:proposedSharingServices:)` hook to add or remove services; no `NSItemProvider` / rich
+items (images as data, attributed strings, several representations), no preferred edge, no share-sheet extensions installed by apps,
+the menu is a plain context menu (no icons, no "More..."), and Copy of a file copies only its name.
 
 ## Typed drag and drop (`NSDraggingSource` / `NSDraggingDestination`, roadmap item 5c)
 

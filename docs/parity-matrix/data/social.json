@@ -36,6 +36,13 @@
       "note": "Reports the chosen app id, 'copy', or None when dismissed. It has no posted, cancelled or done states. Wired into the UI in wiring wave 3 (0.5.39); verify on Midget for parity."
     },
     {
+      "feature": "Sharing service objects and picker delegate (NSSharingService, NSSharingServicePicker)",
+      "apple": "NSSharingService(named:), NSSharingService.sharingServices(forItems:), title, canPerform(withItems:), perform(withItems:), NSSharingServicePickerDelegate.sharingServicePicker(_:didChoose:), NSSharingServiceDelegate didShareItems / didFailToShareItems",
+      "bifrost": "springboard/sdk/src/share.rs (SharingService, SharingServicePicker, SharingServicePickerDelegate, SharingServiceDelegate, ShareError); shell side springboard/src/shell/sharing.rs (targets, handles, copy_text)",
+      "status": "partial",
+      "note": "Host unit tests only: services are built from the same rules the shell's menu uses, canPerform checks each item kind, and a share_done answer reaches did_choose and did_share_items or did_fail_to_share_items. Copy performs through the clipboard. No image property, and perform for an app or Compose Post goes through the menu because the shell has no message for one named target. Parity needs a Midget check of the menu."
+    },
+    {
       "feature": "HTTP request assembly for a service",
       "apple": "SLRequest(forServiceType:requestMethod:url:parameters:), preparedURLRequest(), perform(handler:)",
       "bifrost": "springboard/sdk/src/url.rs (URLRequest::new, URLRequest::post, set_header, URLSession::data_task)",
@@ -75,6 +82,6 @@
     "No compose sheet that posts to a social network (SLComposeViewController equivalent).",
     "No social account store or request signing (SLRequest.account equivalent).",
     "No service-typed HTTP request builder and no multipart body (SLRequest equivalent).",
-    "The share menu offers only installed apps, with no per-item NSSharingService objects or delegate callbacks (see docs/bifrost-ui.md, 'Share sheet' gaps)."
+    "The share services have no image property and perform(withItems:) reaches only Copy; an app or Compose Post is performed through the menu, because the shell has no message for one named target (see docs/bifrost-ui.md, 'Share sheet' gaps)."
   ]
 }
