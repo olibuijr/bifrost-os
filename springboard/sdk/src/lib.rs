@@ -149,6 +149,7 @@ pub mod authorization;
 pub mod audio_session;
 pub mod now_playing;
 pub mod thumbnails;
+pub mod web_download;
 pub mod webview;
 pub mod webview_dev;
 pub mod power_sources;

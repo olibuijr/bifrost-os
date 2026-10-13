@@ -1000,6 +1000,13 @@ snapshots. The engine renders in software (llvmpipe) because SDK apps get no `/d
 - `WebProcessPool::find(id, query, FindDirection)` and `find_clear` follow `find(_:configuration:)`; the count is `WebViewState::find_matches`. Gap: Servo 0.7.0 has no find API, so the engine injects script (`innerText` count plus `window.find`, case-insensitive, wrapping). No highlight-all, no match index, only the total; the case and whole-word options of `WKFindConfiguration` are not exposed.
 - Session restore (tabs, titles, selected tab) and Cmd+Shift+T (10-entry stack) are app-level; per-tab back/forward history is not restored (only the last URL).
 
+### Downloads (`web_download`)
+
+- `navigation_response_policy(content_disposition, mime)` is `WKNavigationResponsePolicy.download` for attachments and MIME types the view cannot render; `WebViewEvent::DownloadStarted` is `didBecome download`.
+- `WebDownload` is `WKDownload` (`original_request`, `web_view`, `progress`, `cancel()` returning `ResumeData` with offset and ETag). `WebDownloadDelegate` mirrors `WKDownloadDelegate` (`decide_destination`, `download_did_finish`, `download_did_fail` with resume data, `will_perform_redirection`); return values stand for completion handlers. `DownloadDriver` feeds transfer events to the delegate.
+- `unique_destination` picks `name (1).ext` in the chosen folder; `resume_headers` builds the `Range` and `If-Range` headers.
+- Gap: the engine does not emit `DownloadStarted` yet and the Browser still uses its own model; verify on Midget before marking parity.
+
 ### Developer tools (`webview_dev`, Browser round 53)
 
 `bifrost_app::webview_dev` extends `WebProcessPool` for Safari-style developer tooling (`WKWebView.evaluateJavaScript`

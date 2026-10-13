@@ -107,6 +107,10 @@ pub enum WebViewEvent {
     Menu { id: WebViewId, token: u32, kind: MenuKind, rect: (i32, i32, i32, i32), items: Vec<MenuEntry> },
     /// The page withdrew dialog or menu `token` (navigation, script): close it without answering.
     ControlHidden(WebViewId, u32),
+    /// `navigationAction(_:didBecome:)` / `navigationResponse(_:didBecome:)`: the navigation became a download
+    /// (`NavigationResponsePolicy::Download`, see `web_download`). Build a `WebDownload` from `url` and ask the
+    /// `WebDownloadDelegate` for a destination.
+    DownloadStarted { id: WebViewId, url: String, suggested_filename: String },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
