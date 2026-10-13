@@ -39,11 +39,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/date",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: date --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/dd",
@@ -60,11 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/dd",
+   "status": "partial",
+   "note": "Midget 0.7.25: dd installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/df",
@@ -81,11 +81,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/df",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: df --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/echo",
@@ -102,11 +102,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "echo",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: echo --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/ed",
@@ -144,11 +144,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/expr",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: expr --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/sbin/disklabel",
@@ -186,11 +186,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/dmesg",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: dmesg --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/sbin/dynamic_pager",
@@ -249,11 +249,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/fsck",
+   "status": "partial",
+   "note": "Midget 0.7.25: fsck installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/sbin/fsck_cs",
@@ -984,11 +984,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/diff",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: diff --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/diff3",
@@ -1005,11 +1005,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/diff3",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: diff3 --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/diffstat",
@@ -1068,11 +1068,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/dirname",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: dirname --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/dispqlen.d",
@@ -1362,11 +1362,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/du",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: du --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/dyld_usage",
@@ -1467,11 +1467,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/env",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: env --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/erb",
@@ -1572,11 +1572,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/expand",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: expand --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/expect",
@@ -1635,11 +1635,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "false",
+   "status": "partial",
+   "note": "Midget 0.7.25: false installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/fddist",
@@ -1698,11 +1698,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/file",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: file --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/filebyproc.d",
@@ -1782,11 +1782,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/find",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: find --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/findrule",
@@ -1887,11 +1887,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/fmt",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: fmt --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/fold",
@@ -1908,11 +1908,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/fold",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: fold --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/footprint",
@@ -2013,11 +2013,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/fuser",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: fuser --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/DataDetectorsLocalSources",
@@ -3252,11 +3252,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/fdisk",
+   "status": "partial",
+   "note": "Midget 0.7.25: fdisk installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/filecoordinationd",

@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/bash",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: bash --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/cat",
@@ -39,11 +39,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/cat",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: cat --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/chmod",
@@ -60,11 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/chmod",
+   "status": "partial",
+   "note": "Midget 0.7.25: chmod installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/cp",
@@ -81,11 +81,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/cp",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: cp --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/csh",
@@ -459,11 +459,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "alias",
+   "status": "partial",
+   "note": "Midget 0.7.25: alias installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/app-sso",
@@ -900,11 +900,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/awk",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: awk --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/b64decode",
@@ -984,11 +984,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/basename",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: basename --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/bashbug",
@@ -1005,11 +1005,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/bashbug",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: bashbug --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/batch",
@@ -1194,11 +1194,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/tar",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: tar --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/bspatch",
@@ -1299,11 +1299,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/bunzip2",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: bunzip2 --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/bzdiff",
@@ -1320,11 +1320,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/bzdiff",
+   "status": "partial",
+   "note": "Midget 0.7.25: bzdiff installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/bzegrep",
@@ -1362,11 +1362,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/bzgrep",
+   "status": "partial",
+   "note": "Midget 0.7.25: bzgrep installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/bzip2recover",
@@ -1383,11 +1383,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/bzip2recover",
+   "status": "partial",
+   "note": "Midget 0.7.25: bzip2recover installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/bzmore",
@@ -1404,11 +1404,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/bzmore",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: bzmore --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/caffeinate",
@@ -1446,11 +1446,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/cal",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: cal --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/calendar",
@@ -1530,11 +1530,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/certtool",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: certtool --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/chflags",
@@ -1572,11 +1572,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/chfn",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: chfn --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/chgrp",
@@ -1593,11 +1593,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/chgrp",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: chgrp --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/chpass",
@@ -1635,11 +1635,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/cksum",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: cksum --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/clear",
@@ -1656,11 +1656,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/clear",
+   "status": "partial",
+   "note": "Midget 0.7.25: clear installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/cmp",
@@ -1677,11 +1677,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/cmp",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: cmp --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/codecctl",
@@ -1740,11 +1740,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/col",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: col --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/colrm",
@@ -1761,11 +1761,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/colrm",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: colrm --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/column",
@@ -1782,11 +1782,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/column",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: column --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/comm",
@@ -1803,11 +1803,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/comm",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: comm --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/compress",
@@ -2118,11 +2118,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/csplit",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: csplit --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/csreq",
@@ -2202,11 +2202,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/cups-config",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: cups-config --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/cupstestppd",
@@ -2244,11 +2244,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/curl",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: curl --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/curl-config",
@@ -2265,11 +2265,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/curl-config",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: curl-config --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/cut",
@@ -2286,11 +2286,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/cut",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: cut --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/libexec/ASPCarryLog",
@@ -4281,11 +4281,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/auditd",
+   "status": "partial",
+   "note": "Midget 0.7.25: auditd installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/auditreduce",
@@ -4491,11 +4491,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/chroot",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: chroot --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/ckksctl",

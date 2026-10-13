@@ -39,11 +39,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/ps",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: ps --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/pwd",
@@ -60,11 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "pwd",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: pwd --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/realpath",
@@ -81,11 +81,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/realpath",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: realpath --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/rm",
@@ -102,11 +102,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/rm",
+   "status": "partial",
+   "note": "Midget 0.7.25: rm installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/rmdir",
@@ -123,11 +123,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/rmdir",
+   "status": "partial",
+   "note": "Midget 0.7.25: rmdir installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/sbin/pfctl",
@@ -165,11 +165,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/ping",
+   "status": "partial",
+   "note": "Midget 0.7.25: ping installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/sbin/ping6",
@@ -228,11 +228,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/reboot",
+   "status": "partial",
+   "note": "Midget 0.7.25: reboot installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/sbin/route",
@@ -417,11 +417,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/passwd",
+   "status": "partial",
+   "note": "Midget 0.7.25: passwd installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/paste",
@@ -438,11 +438,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/paste",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: paste --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/patch",
@@ -480,11 +480,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/pathchk",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: pathchk --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/pathopens.d",
@@ -564,11 +564,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/pcap-config",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: pcap-config --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/pcsctest",
@@ -606,11 +606,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/perl",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: perl --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/perl5.34",
@@ -711,11 +711,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/pgrep",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: pgrep --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/pico",
@@ -1236,11 +1236,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/pr",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: pr --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/priclass.d",
@@ -1299,11 +1299,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/printenv",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: printenv --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/printf",
@@ -1320,11 +1320,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "printf",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: printf --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/procsystime",
@@ -1656,11 +1656,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/readlink",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: readlink --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/renice",
@@ -1677,11 +1677,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/renice",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: renice --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/rev",
@@ -1698,11 +1698,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/rev",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: rev --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/ri",

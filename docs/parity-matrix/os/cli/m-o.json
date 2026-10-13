@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/mkdir",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: mkdir --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/bin/mv",
@@ -39,11 +39,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/mv",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: mv --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/sbin/md5",
@@ -81,11 +81,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/md5sum",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: md5sum --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/sbin/mknod",
@@ -102,11 +102,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/mknod",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: mknod --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/sbin/mount",
@@ -123,11 +123,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/mount",
+   "status": "partial",
+   "note": "Midget 0.7.25: mount installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/sbin/mount_9p",
@@ -333,11 +333,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/nologin",
+   "status": "partial",
+   "note": "Midget 0.7.25: nologin installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/macbinary",
@@ -711,11 +711,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/mesg",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: mesg --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/metalperftrace",
@@ -837,11 +837,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/mkfifo",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: mkfifo --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/mktemp",
@@ -858,11 +858,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/mktemp",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: mktemp --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/modelcatalogdump",
@@ -1215,11 +1215,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/newgrp",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: newgrp --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/newproc.d",
@@ -1278,11 +1278,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/nice",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: nice --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/nl",
@@ -1299,11 +1299,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/nl",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: nl --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/nohup",
@@ -1320,11 +1320,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/nohup",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: nohup --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/notifyutil",
@@ -1509,11 +1509,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/openssl",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: openssl --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/osacompile",

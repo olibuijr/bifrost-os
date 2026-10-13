@@ -60,11 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/w",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: w --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/wall",
@@ -81,11 +81,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/wall",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: wall --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/wc",
@@ -102,11 +102,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/wc",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: wc --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/wdutil",
@@ -165,11 +165,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/whereis",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: whereis --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/which",
@@ -207,11 +207,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/who",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: who --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/whois",
@@ -270,11 +270,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/write",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: write --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/xar",
@@ -312,11 +312,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/xargs",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: xargs --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/xattr",
@@ -438,11 +438,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/xml2-config",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: xml2-config --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/xmlcatalog",
@@ -459,11 +459,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/xmlcatalog",
+   "status": "partial",
+   "note": "Midget 0.7.25: xmlcatalog installed, --version/--help probe failed",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/xmllint",
@@ -480,11 +480,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/xmllint",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: xmllint --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/xpath",
@@ -753,11 +753,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/yes",
+   "status": "partial",
+   "note": "Midget 0.7.25: yes installed, not run headless (changes machine state)",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/zcmp",
@@ -774,11 +774,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/zcmp",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: zcmp --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/zforce",
@@ -795,11 +795,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/zforce",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: zforce --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/zip",
@@ -942,11 +942,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/zless",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: zless --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/znew",
@@ -963,11 +963,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/znew",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: znew --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/bin/zprint",
@@ -1425,11 +1425,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/zdump",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: zdump --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/usr/sbin/zic",
@@ -1446,11 +1446,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "/usr/bin/zic",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: zic --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }

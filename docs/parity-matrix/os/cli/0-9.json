@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: POSIX tool, Linux base",
+   "bifrost": "[",
+   "status": "parity",
+   "note": "verified on Midget 0.7.25: [ --version/--help exits 0",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }
