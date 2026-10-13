@@ -96,6 +96,113 @@ pub fn load_pixels(path: &str) -> Option<Image> {
     Image::from_raw(&std::fs::read(path).ok()?)
 }
 
+/// The kinds of picture a generator can deliver, from the cheapest to the best (`QLThumbnailGenerator.Request.RepresentationTypes`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RepresentationType {
+    /// The icon of the file's type.
+    Icon,
+    /// A small picture of the content, drawn quickly (half the requested edge).
+    LowQualityThumbnail,
+    /// The picture at the requested size.
+    Thumbnail,
+}
+
+impl RepresentationType {
+    /// All kinds, the default of a request that names none.
+    pub const ALL: [RepresentationType; 3] = [RepresentationType::Icon, RepresentationType::LowQualityThumbnail, RepresentationType::Thumbnail];
+}
+
+/// A generator request (`QLThumbnailGenerator.Request`): the file, the size in points, the scale and the wanted kinds.
+#[derive(Clone, Debug, PartialEq)]
+pub struct GeneratorRequest {
+    pub request: ThumbRequest,
+    types: Vec<RepresentationType>,
+}
+
+impl GeneratorRequest {
+    /// An empty `types` list means every kind. Duplicates are dropped and the kinds are kept cheapest first.
+    pub fn new(path: &str, size: u32, scale: f32, types: &[RepresentationType]) -> Result<Self, RequestError> {
+        let request = ThumbRequest::new(path, size, scale, ThumbKind::Thumbnail)?;
+        let mut types = if types.is_empty() { RepresentationType::ALL.to_vec() } else { types.to_vec() };
+        types.sort();
+        types.dedup();
+        Ok(GeneratorRequest { request, types })
+    }
+
+    pub fn representation_types(&self) -> &[RepresentationType] {
+        &self.types
+    }
+
+    /// The service requests to send, in delivery order: the kind, the shell request for it and the pixel edge the
+    /// answer will carry.
+    pub fn plan(&self) -> Vec<(RepresentationType, ThumbRequest, u32)> {
+        self.types
+            .iter()
+            .map(|&t| {
+                let (kind, size) = match t {
+                    RepresentationType::Icon => (ThumbKind::Icon, self.request.size),
+                    RepresentationType::LowQualityThumbnail => (ThumbKind::Thumbnail, (self.request.size / 2).max(1)),
+                    RepresentationType::Thumbnail => (ThumbKind::Thumbnail, self.request.size),
+                };
+                let req = ThumbRequest { size, kind, ..self.request.clone() };
+                let px = req.px();
+                (t, req, px)
+            })
+            .collect()
+    }
+}
+
+/// One delivered picture (`QLThumbnailRepresentation`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Representation {
+    pub kind: RepresentationType,
+    pub reply: Reply,
+}
+
+/// Tracks the answers of one `generateRepresentations(for:update:)` call. Feed it each reply or event; it hands back
+/// the representation to pass to the update handler, never a worse one than already delivered.
+#[derive(Debug)]
+pub struct Generation {
+    plan: Vec<(RepresentationType, u32)>,
+    best: Option<RepresentationType>,
+    done: bool,
+}
+
+impl Generation {
+    pub fn new(req: &GeneratorRequest) -> Self {
+        Generation { plan: req.plan().into_iter().map(|(t, _, px)| (t, px)).collect(), best: None, done: false }
+    }
+
+    /// The representation a reply is for. None for a reply that is pending, for another size, or not better than
+    /// what was delivered. A failed reply ends the generation.
+    pub fn accept(&mut self, reply: Reply) -> Option<Representation> {
+        if self.done {
+            return None;
+        }
+        match reply.state {
+            State::Pending => return None,
+            State::Failed(_) => {
+                self.done = true;
+                return None;
+            }
+            _ => {}
+        }
+        let is_icon = matches!(reply.state, State::Icon { .. });
+        let kind = self.plan.iter().rev().find(|(t, px)| *px == reply.px && (*t == RepresentationType::Icon) == is_icon).map(|(t, _)| *t)?;
+        if self.best.is_some_and(|b| b >= kind) {
+            return None;
+        }
+        self.best = Some(kind);
+        self.done = self.plan.last().is_some_and(|(t, _)| *t == kind);
+        Some(Representation { kind, reply })
+    }
+
+    /// True once the best wanted kind arrived or a request failed.
+    pub fn is_finished(&self) -> bool {
+        self.done
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,5 +269,60 @@ mod tests {
         let im = load_pixels(p.to_str().unwrap()).unwrap();
         assert_eq!((im.w, im.h, im.px.len()), (1, 1, 1));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn ready(px: u32, state: State) -> Reply {
+        Reply { file: "/a/b.png".into(), px, state }
+    }
+
+    fn pixels() -> State {
+        State::Pixels { image: "/c/x.raw".into(), w: 1, h: 1 }
+    }
+
+    fn icon() -> State {
+        State::Icon { type_id: "public.png".into(), badge: None }
+    }
+
+    #[test]
+    fn a_request_orders_and_dedups_its_kinds() {
+        let r = GeneratorRequest::new("/a/b.png", 128, 2.0, &[RepresentationType::Thumbnail, RepresentationType::Icon, RepresentationType::Icon]).unwrap();
+        assert_eq!(r.representation_types(), &[RepresentationType::Icon, RepresentationType::Thumbnail]);
+        assert_eq!(GeneratorRequest::new("/a/b.png", 128, 1.0, &[]).unwrap().representation_types().len(), 3);
+        assert_eq!(GeneratorRequest::new("a/b.png", 128, 1.0, &[]), Err(RequestError::BadPath));
+    }
+
+    #[test]
+    fn the_plan_goes_icon_then_low_quality_then_full() {
+        let plan = GeneratorRequest::new("/a/b.png", 100, 2.0, &[]).unwrap().plan();
+        let kinds: Vec<_> = plan.iter().map(|p| (p.0, p.1.kind, p.2)).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                (RepresentationType::Icon, ThumbKind::Icon, 200),
+                (RepresentationType::LowQualityThumbnail, ThumbKind::Thumbnail, 100),
+                (RepresentationType::Thumbnail, ThumbKind::Thumbnail, 200),
+            ]
+        );
+    }
+
+    #[test]
+    fn updates_arrive_icon_then_low_then_final_and_never_go_back() {
+        let mut g = Generation::new(&GeneratorRequest::new("/a/b.png", 100, 2.0, &[]).unwrap());
+        assert_eq!(g.accept(ready(200, State::Pending)), None);
+        assert_eq!(g.accept(ready(200, icon())).unwrap().kind, RepresentationType::Icon);
+        assert_eq!(g.accept(ready(100, pixels())).unwrap().kind, RepresentationType::LowQualityThumbnail);
+        assert!(!g.is_finished());
+        assert_eq!(g.accept(ready(200, icon())), None, "an icon is no better than the low picture");
+        assert_eq!(g.accept(ready(200, pixels())).unwrap().kind, RepresentationType::Thumbnail);
+        assert!(g.is_finished());
+        assert_eq!(g.accept(ready(100, pixels())), None);
+    }
+
+    #[test]
+    fn a_failure_ends_the_generation() {
+        let mut g = Generation::new(&GeneratorRequest::new("/a/b.png", 100, 1.0, &[]).unwrap());
+        assert_eq!(g.accept(ready(100, State::Failed("gone".into()))), None);
+        assert!(g.is_finished());
+        assert_eq!(g.accept(ready(100, icon())), None);
     }
 }
