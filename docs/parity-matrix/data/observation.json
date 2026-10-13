@@ -12,7 +12,7 @@
       "apple": "Observable() macro, Observable protocol",
       "bifrost": "springboard/sdk/src/observable_object.rs (observable_model! macro)",
       "status": "partial",
-      "note": "Declarative macro: observable_model! { struct Name { field: T = init } } gives a struct whose fields are Observable<T>, all linked to one ObservableObject publisher. No derive, so no per-property opt-out (ObservationIgnored) and no computed properties. Built on parity/team-a-09; not yet verified on Midget."
+      "note": "Declarative macro: observable_model! { struct Name { field: T = init } } gives a struct whose fields are Observable<T>, all linked to one ObservableObject publisher. No derive, so no per-property opt-out (ObservationIgnored) and no computed properties. No app uses the macro yet (only its tests). Built on parity/team-a-09; not yet verified on Midget."
     },
     {
       "feature": "Change notification on value change",

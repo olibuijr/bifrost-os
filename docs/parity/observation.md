@@ -24,7 +24,7 @@ crates, no `unsafe`, no hardware or network.
    `observable_model! { pub struct Session { pub name: String = String::from("guest"), pub count: u32 = 0 } }`.
    `Session::new()` sets the initial values, links every field to one `ObservableObjectPublisher`, and implements
    `ObservableObject`, so a write to any field notifies `object_will_change`. The subscriptions live in the struct.
-   Built on parity/team-a-09; not yet verified on Midget.
+   No app uses it yet. Built on parity/team-a-09; not yet verified on Midget.
 
 Tests added in the same module (run by the next build stage, not run here): re-entrant set order, durable
 cancellation during a change, tracking fires once for a read value, tracking fires for any of several reads,

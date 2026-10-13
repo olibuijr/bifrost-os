@@ -62,6 +62,7 @@ macro_rules! observable_model {
         $(#[$meta])*
         $vis struct $name {
             changes: $crate::observable_object::ObservableObjectPublisher,
+            #[allow(dead_code)]
             links: $crate::observable::Cancellables,
             $($fvis $field: $crate::observable::Observable<$ty>,)*
         }

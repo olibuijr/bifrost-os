@@ -15,11 +15,11 @@ modules, Supporting types and conventions).
   (none, straight, premultiplied). It gives channel counts, row and buffer sizes and a length check. `to_bytes`
   serialises the renderer's premultiplied `u32` pixels into any of those layouts. `from_bytes_u8` reads 8-bit
   buffers back. `unpremultiply`, `widen` and `narrow` are the helpers.
-- `springboard/render/src/rendering_intent.rs`: `Intent` (perceptual, relative colorimetric, saturation, absolute
-  colorimetric), `IntentTransform` (a conversion under one intent, with optional `BlackPoints`) and
+- `springboard/render/src/rendering_intent.rs`: `Intent` (an alias of `cg::color::RenderingIntent`, extended with `ALL`,
+  `name` and `adapts_white`), `IntentTransform` (a conversion under one intent, with optional `BlackPoints`) and
   `compensate_black`, the affine black point map. Perceptual compresses out-of-gamut colours toward the neutral grey
   of their mean; saturation clips them; absolute uses `colorspace::matrix_absolute`, which skips white adaptation.
-  Built on parity/team-a-09; not yet verified on Midget.
+  Nothing outside its tests calls it yet. Built on parity/team-a-09; not yet verified on Midget.
 - Both modules are registered in `springboard/render/src/lib.rs`, one line each. Both have unit tests covering
   the matrix math, transfer curves, white-point mapping, round trips, gamut clamping, buffer sizes and byte order.
 
@@ -32,7 +32,7 @@ Pure std: no crates, no `unsafe`, no hardware, no services.
 | `colorspace::Transform` | ColorSyncTransform (colour transforms, `ColorSyncTransformConvert` by matrix only) |
 | `colorspace::Space::DisplayP3`, `AdobeRgb`, `RommRgb`, `Srgb` | kColorSyncDisplayP3Profile, kColorSyncAdobeRGB1998Profile, kColorSyncROMMRGBProfile, kColorSyncSRGBProfile |
 | `pixel_layout::Layout`, `Depth`, `Alpha` | ColorSyncDataLayout, ColorSyncDataDepth, ColorSyncAlphaInfo |
-| `rendering_intent::Intent`, `BlackPoints` | Rendering intents, black point compensation |
+| `cg::color::RenderingIntent` (`rendering_intent::Intent`), `rendering_intent::BlackPoints` | Rendering intents, black point compensation |
 
 The names are only the concepts. The Apple symbols are not used in code (owner rule).
 

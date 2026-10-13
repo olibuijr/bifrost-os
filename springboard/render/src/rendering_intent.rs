@@ -6,46 +6,38 @@
 //! black point compensation step. The formulas are the usual definitions, applied to linear light. There is no ICC
 //! profile reader here, so the intent stored in a profile's lookup tables is not used; the caller picks the intent.
 
+use super::cg::color::RenderingIntent;
 use super::colorspace::{matrix, matrix_absolute, Mat3, Space};
 
-/// How a conversion treats colours the destination cannot show, and whether the white point is adapted.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Intent {
-    /// Out-of-gamut colours are compressed toward the neutral grey of the same mean, so their order is kept.
-    /// White is adapted.
-    Perceptual,
-    /// Colours inside the destination are kept exactly; out-of-gamut values are left out of range, and the caller
-    /// clamps them when it encodes. White is adapted.
-    RelativeColorimetric,
-    /// Out-of-gamut channels are clipped to the destination, which keeps the vivid colours of graphics. This is a
-    /// plain clip, not the reshaping a profile's saturation table would do. White is adapted.
-    Saturation,
-    /// The absolute XYZ of each input colour is kept, so a source white is not mapped to a destination white.
-    AbsoluteColorimetric,
-}
+/// The rendering intent of a conversion. This is the enum the colour model in `cg::color` already uses, so the
+/// two conversion paths share one vocabulary. `Default` behaves as relative colorimetric here.
+pub type Intent = RenderingIntent;
 
-impl Intent {
-    /// Every intent, in declaration order.
-    pub const ALL: [Intent; 4] = [
-        Intent::Perceptual,
-        Intent::RelativeColorimetric,
-        Intent::Saturation,
-        Intent::AbsoluteColorimetric,
+impl RenderingIntent {
+    /// The four named intents, in the order a colour settings page lists them.
+    pub const ALL: [RenderingIntent; 4] = [
+        RenderingIntent::Perceptual,
+        RenderingIntent::RelativeColorimetric,
+        RenderingIntent::Saturation,
+        RenderingIntent::AbsoluteColorimetric,
     ];
 
     /// The name a colour settings page shows.
     pub fn name(self) -> &'static str {
         match self {
-            Intent::Perceptual => "Perceptual",
-            Intent::RelativeColorimetric => "Relative Colorimetric",
-            Intent::Saturation => "Saturation",
-            Intent::AbsoluteColorimetric => "Absolute Colorimetric",
+            RenderingIntent::Default => "Default",
+            RenderingIntent::Perceptual => "Perceptual",
+            RenderingIntent::RelativeColorimetric => "Relative Colorimetric",
+            RenderingIntent::Saturation => "Saturation",
+            RenderingIntent::AbsoluteColorimetric => "Absolute Colorimetric",
         }
     }
 
-    /// Whether the intent maps the source white onto the destination white.
+    /// Whether the intent maps the source white onto the destination white. Perceptual compresses out-of-gamut
+    /// colours toward grey, saturation clips them, relative colorimetric and the default leave them out of range,
+    /// and absolute colorimetric keeps the source white as it is.
     pub fn adapts_white(self) -> bool {
-        self != Intent::AbsoluteColorimetric
+        self != RenderingIntent::AbsoluteColorimetric
     }
 }
 
@@ -91,7 +83,7 @@ fn compress_to_gamut(c: [f64; 3]) -> [f64; 3] {
         }
     }
     let t = t.clamp(0.0, 1.0);
-    c.map(|v| grey + (v - grey) * t)
+    c.map(|v| (grey + (v - grey) * t).clamp(0.0, 1.0))
 }
 
 /// A conversion between two working spaces under one rendering intent, optionally with black point compensation.
@@ -133,9 +125,14 @@ impl IntentTransform {
         out = match self.intent {
             Intent::Perceptual => compress_to_gamut(out),
             Intent::Saturation => out.map(|c| c.clamp(0.0, 1.0)),
-            Intent::RelativeColorimetric | Intent::AbsoluteColorimetric => out,
+            Intent::Default | Intent::RelativeColorimetric | Intent::AbsoluteColorimetric => out,
         };
-        out.map(|c| self.to.from_linear(c))
+        let encoded = out.map(|c| self.to.from_linear(c));
+        match self.intent {
+            // Encoding can overshoot 1 by a rounding step; these two intents promise an in-range result.
+            Intent::Perceptual | Intent::Saturation => encoded.map(|c| c.clamp(0.0, 1.0)),
+            _ => encoded,
+        }
     }
 
     /// Converts one 8-bit colour, clamping the result to 0..=255.
@@ -162,6 +159,8 @@ mod tests {
         assert!(Intent::Saturation.adapts_white());
         assert!(Intent::RelativeColorimetric.adapts_white());
         assert!(!Intent::AbsoluteColorimetric.adapts_white());
+        assert!(Intent::Default.adapts_white());
+        assert_eq!(Intent::Default.name(), "Default");
     }
 
     #[test]
