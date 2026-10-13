@@ -3,6 +3,7 @@
 pub mod background_effect;
 pub mod bifrost_material;
 pub mod boot;
+pub mod capture;
 pub mod decorations;
 #[cfg(feature = "drm")]
 pub mod drm;
