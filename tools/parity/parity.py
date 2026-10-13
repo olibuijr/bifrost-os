@@ -201,24 +201,30 @@ def tablet_entries(own, bad, index, macos):
         if e.get("index_slug"):
             by_index[e["index_slug"]].append(e)
     out, bad = [], list(bad)
+    replaced = {e["slug"] for e in own}  # macOS entries an own file replaces (same file name)
+    replaced_frameworks = {e["index_slug"] for e in own if e.get("index_slug") == e["slug"]}  # a whole split framework
     for e in own:
         e["source"] = "own"
         if e.get("reuse") is not None:
             try:
-                _, target = parse_reuse(e["reuse"], e.get("index_slug") or e["slug"])
+                same_name = any(b["slug"] == e["slug"] for b in macos)  # a part file extends that part
+                _, target = parse_reuse(e["reuse"], e["slug"] if same_name else e.get("index_slug") or e["slug"])
             except ValueError as err:
                 bad.append(f"{e['slug']}: {err}")
             else:
-                if by_index.get(target):
-                    e = merge_reused(e, by_index[target])
+                bases = by_index.get(target) or [b for b in macos if b["slug"] == target]  # a framework or one of its parts
+                if bases:
+                    replaced |= {b["slug"] for b in bases}
+                    e = merge_reused(e, bases)
                 else:
                     bad.append(f"{e['slug']}: reuse target {target!r} has no macOS assessment")
         out.append(e)
-    have = {e["index_slug"] for e in out if e.get("index_slug")}
     for r in index:
-        if r["slug"] in have:
+        if r["slug"] in replaced_frameworks:
             continue
         for b in by_index.get(r["slug"], []):
+            if b["slug"] in replaced:
+                continue
             out.append(dict(b, since=r.get(SINCE["ipados"], ""), group=r.get("group", b["group"]), parent=r["title"],
                             deprecated=bool(r.get("deprecated")), source="macos", reuse=None, given=set()))
     return out, bad

@@ -236,6 +236,15 @@ class Loading(unittest.TestCase):
         (s,) = [e for e in entries if e["index_slug"] == "swiftui"]
         self.assertEqual([r["feature"] for r in s["rows"]], ["Stacks", "Text", "Table", "Pencil"])
 
+    def test_an_own_part_file_keeps_the_other_parts(self):
+        own = {"swiftui-views": fw("SwiftUI", "partial", [row("Table", "gap"), row("Pencil", "gap")], reuse="macos")}
+        with Tree(*standard(), own):
+            entries, bad = parity.load_entries("ipados")
+        self.assertEqual(bad, [])
+        parts = {e["slug"]: [(r["feature"], r["status"]) for r in e["rows"]] for e in entries if e["index_slug"] == "swiftui"}
+        self.assertEqual(parts, {"swiftui-views": [("Text", "parity"), ("Table", "gap"), ("Pencil", "gap")],
+                                 "swiftui-layout": [("Stacks", "parity")]})
+
     def test_a_reuse_with_no_macos_assessment_is_reported(self):
         own = {"touch-kit": fw("Touch Kit", "gap", [row("Touch", "gap")], reuse="macos:nothing-here")}
         with Tree(*standard(), own):
