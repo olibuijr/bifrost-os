@@ -284,6 +284,8 @@ pub struct Settings {
     gpus: Loaded<Vec<super::gpu_page::Gpu>>,
     /// Settings > Sharing: the computer name and the sharing services, read on a worker when the page opens
     sharing: Loaded<super::sharing_page::View>,
+    /// Settings > Print & Scan: the printers and scanners, read on a worker when the page opens
+    print_scan: Loaded<super::print_scan_page::View>,
     /// Developer switches as read from the Android properties
     dev: DevState,
     updater: Updater,
@@ -480,6 +482,7 @@ impl Settings {
             scan: Scanner::default(),
             gpus: Loaded::default(),
             sharing: Loaded::default(),
+            print_scan: Loaded::default(),
             dev: DevState { perf_hud: prefs.get(PERF_HUD_PREF) == Some("1"), gpu_scanout: crate::bare::scanout::pref_on(prefs.get(GPU_SCANOUT_PREF)), ..DevState::read() },
             updater: Updater::new(super::apphost::root(), prefs.get(update::URL_PREF)),
             update_badge: false,
@@ -574,6 +577,7 @@ impl Settings {
             }
             PageId::Graphics => super::gpu_page::spec(self.gpus.get().map(Vec::as_slice)),
             PageId::Sharing => super::pages::sharing_spec(&self.opts, self.sharing.get()),
+            PageId::PrintScan => super::print_scan_page::spec(self.print_scan.get()),
             PageId::GameControllers | PageId::GameController(_) => super::game_controllers_page::spec(id, &super::services::gamepad_service::snapshot()),
             PageId::Storage | PageId::Passcode | PageId::Developer => {
                 let passcode_on = passcode::Store::load(self.data_dir.join("passcode.ini")).enabled();
@@ -1156,7 +1160,7 @@ impl Settings {
             frame = true;
         }
         // panes whose system read has landed show it on the next frame (a read still running shows its placeholder)
-        if self.gpus.poll() | self.sharing.poll() | self.fonts.poll() {
+        if self.gpus.poll() | self.sharing.poll() | self.fonts.poll() | self.print_scan.poll() {
             self.rebuild_visible(ui);
             frame = true;
         }
@@ -1216,7 +1220,7 @@ impl Settings {
         if self.transition.is_some() || self.list().is_some_and(|p| p.animating(t)) || self.sidebar.as_ref().is_some_and(|p| p.animating(t)) || self.passcode.as_ref().is_some_and(|o| o.animating(t)) || self.st_gate.as_ref().is_some_and(|(l, _)| l.animating(t)) {
             return Some(t);
         }
-        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() || self.gpus.busy() || self.sharing.busy() || self.fonts.busy() {
+        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() || self.gpus.busy() || self.sharing.busy() || self.fonts.busy() || self.print_scan.busy() {
             return Some(t + 100.0);
         }
         self.search.next_wake(t).or_else(|| self.zone_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.time_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.sheet.as_ref().and_then(|sh| sh.next_wake(t)))
@@ -1227,6 +1231,7 @@ impl Settings {
             PageId::Storage => self.scan.start(self.data_dir.clone()),
             PageId::Graphics => self.gpus.start("gpu-read", super::gpu_page::read_system),
             PageId::Sharing => self.sharing.start("sharing-read", super::sharing_page::View::load),
+            PageId::PrintScan => self.print_scan.start("print-scan-read", super::print_scan_page::View::load),
             PageId::Developer => {
                 let (perf_hud, gpu_scanout) = (self.dev.perf_hud, self.dev.gpu_scanout);
                 self.dev = DevState { perf_hud, gpu_scanout, ..DevState::read() };
@@ -1611,8 +1616,16 @@ impl Settings {
         if let Some((purpose, text)) = self.sheet.as_ref().and_then(|sh| sh.form_result()) {
             self.sheet = None;
             let r = match purpose {
-                super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname => super::sharing_page::finish(&purpose, &text).map(|_| None),
-                super::forms::Purpose::PrinterAddress => super::print_scan_page::finish(&purpose, &text).map(|_| None),
+                super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname => {
+                    let r = super::sharing_page::finish(&purpose, &text).map(|_| None);
+                    self.sharing.start("sharing-read", super::sharing_page::View::load);
+                    r
+                }
+                super::forms::Purpose::PrinterAddress => {
+                    let r = super::print_scan_page::finish(&purpose, &text).map(|_| None);
+                    self.print_scan.start("print-scan-read", super::print_scan_page::View::load);
+                    r
+                }
                 _ => return self.form_done(ui, &purpose, &text, t),
             };
             self.edit_result(ui, t, r);
@@ -2212,6 +2225,7 @@ impl Settings {
             }
             Action::PrintScan(edit) => {
                 let r = super::print_scan_page::apply(&edit);
+                self.print_scan.start("print-scan-read", super::print_scan_page::View::load);
                 self.edit_result(ui, t, r);
                 vec![]
             }

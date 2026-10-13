@@ -815,7 +815,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         ),
         // the Settings pane reads the computer name and services on a worker and passes them in (`settings.rs`)
         PageId::Sharing => sharing_spec(o, None),
-        PageId::PrintScan => super::print_scan_page::spec(&super::print_scan_page::View::load()),
+        // the Settings pane reads the printers on a worker and passes them in (`settings.rs`)
+        PageId::PrintScan => super::print_scan_page::spec(None),
         PageId::LockScreen => page(
             "Lock Screen",
             false,
