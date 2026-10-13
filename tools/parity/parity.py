@@ -23,6 +23,10 @@ feature rows, filled by agents from the official docs and this repo. This CLI re
   themes [--k N]                 cluster Gap rows across frameworks into work themes -> themes.json
   apply FILE.json [--dry-run]    apply closures [{slug, feature, status, bifrost, note}]: each updates the row it
                                  matches (exact feature, else rerank) or is appended as a new row
+  verify plan|run|closures       promote partial rows to parity from Midget test evidence (tools/parity/verify.py):
+                                 plan [--group G] [--slug S] [--out plan.json] classifies rows logic/ui/hardware/untested;
+                                 run PLAN --version X runs the logic rows' tests on Midget -> results.json;
+                                 closures RESULTS --version X emits apply closures + needs-manual.md
 
 Coverage of a framework: rows that apply (status not n/a) score parity 1, partial 0.5, os 0.5, gap 0;
 coverage = score / applicable rows. A framework with no applicable rows has no coverage (n/a).
@@ -647,6 +651,10 @@ def load_semantic_files():
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["verify"]:
+        import verify
+        return verify.main(argv[1:])
     p = argparse.ArgumentParser(prog="bifrost pc parity", description=(__doc__ or "").split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("status")

@@ -13,7 +13,7 @@ Statuses: `parity`, `partial`, `os`, `gap`, `n/a` (definitions in `agent-brief.m
 (not `n/a`) score parity 1, partial 0.5, os 0.5, gap 0, divided by the applicable rows.
 
 Commands: `bifrost pc parity status | coverage [--group G] [--sort coverage] | show NAME | gaps [--group G] | check | build |
-import DIR | db-export DIR | refresh-index`. `check` fails on unreadable files, cited repo paths that do not exist, and
+import DIR | db-export DIR | refresh-index | verify plan|run|closures` (promote rows from Midget test evidence). `check` fails on unreadable files, cited repo paths that do not exist, and
 frameworks not yet assessed.
 
 When a feature ships, edit its row in `data/<slug>.json` (status, BifrOSt path, note), run `bifrost pc parity check` and
