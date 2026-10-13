@@ -6,11 +6,22 @@ use bifrost_proto::svc;
 use bifrost_proto::svc::net::{Ap, Cmd, Evt, Status};
 use springboard::net::wifi::{self, State, Wifi};
 use std::os::unix::net::UnixStream;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 const ID: &str = "is.olibuijr.net";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Locks the core even after a client handler panicked while holding it. Each command applies whole, so the
+/// state stays usable, and one bad connection must not stop Wi-Fi for every other client.
+fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// `Condvar::wait` with the same poison tolerance as [`lock`].
+fn wait<'a, T>(cv: &Condvar, g: MutexGuard<'a, T>) -> MutexGuard<'a, T> {
+    cv.wait(g).unwrap_or_else(PoisonError::into_inner)
+}
 
 struct Core {
     wifi: Wifi,
@@ -83,7 +94,7 @@ fn serve(core: Arc<Mutex<Core>>, mut stream: UnixStream) {
     while let Ok(frame) = svc::read_frame(&mut stream) {
         let Ok(cmd) = Cmd::decode(&frame) else { continue };
         let subscribe = cmd == Cmd::Subscribe;
-        let mut c = core.lock().unwrap();
+        let mut c = lock(&core);
         let reply = c.apply(cmd);
         if subscribe {
             if let Some(w) = writer.take() {
@@ -102,7 +113,7 @@ fn serve(core: Arc<Mutex<Core>>, mut stream: UnixStream) {
     }
     // the connection is gone: drop its status writer now rather than at the next status change
     if let Some(id) = sub_id {
-        drop_subscriber(&mut core.lock().unwrap().subscribers, id);
+        drop_subscriber(&mut lock(&core).subscribers, id);
     }
 }
 
@@ -125,9 +136,9 @@ fn main() -> std::io::Result<()> {
         let mut last: Option<Status> = None;
         loop {
             std::thread::sleep(Duration::from_millis(250));
-            let mut c = ticker.lock().unwrap();
+            let mut c = lock(&ticker);
             while c.subscribers.is_empty() {
-                c = SUBSCRIBED.wait(c).unwrap();
+                c = wait(&SUBSCRIBED, c);
             }
             let now = c.status();
             if last.as_ref() != Some(&now) {
@@ -159,6 +170,23 @@ mod tests {
         assert_eq!(subs.iter().map(|(i, _)| *i).collect::<Vec<_>>(), vec![2]);
         drop_subscriber(&mut subs, 1);
         assert_eq!(subs.len(), 1, "an id that is gone changes nothing");
+    }
+
+    #[test]
+    fn a_poisoned_core_lock_still_hands_out_the_core() {
+        // a client handler that panics while holding the core must not take the whole daemon down with it
+        let core: Arc<Mutex<Vec<(u64, UnixStream)>>> = Arc::new(Mutex::new(Vec::new()));
+        let poisoner = core.clone();
+        let _ = std::thread::spawn(move || {
+            let _held = poisoner.lock().unwrap();
+            panic!("client handler panicked while holding the core");
+        })
+        .join();
+        assert!(core.is_poisoned());
+        let (a, _a_peer) = UnixStream::pair().expect("pair");
+        lock(&core).push((1, a));
+        drop_subscriber(&mut lock(&core), 1);
+        assert!(lock(&core).is_empty(), "the listener is removed through the poisoned lock");
     }
 
     #[test]

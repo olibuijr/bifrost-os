@@ -10,7 +10,7 @@ use springboard::media::queue::Repeat;
 use springboard::media::stream::Phase;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
 
 /// The wire id and socket name stay `is.olibuijr.audio` so the apps (proto::svc::audio) do not change.
@@ -19,6 +19,17 @@ const ID: &str = "is.olibuijr.audio";
 /// (`media::speaker::CLIENT`), never a device owner. It opens no `/dev/snd` node.
 const CLIENT: &str = springboard::media::speaker::CLIENT;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Locks the core even after a client handler panicked while holding it. Each command applies whole, so the
+/// state stays usable, and one bad connection must not silence the sound for every other client.
+fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// `Condvar::wait` with the same poison tolerance as [`lock`].
+fn wait<'a, T>(cv: &Condvar, g: MutexGuard<'a, T>) -> MutexGuard<'a, T> {
+    cv.wait(g).unwrap_or_else(PoisonError::into_inner)
+}
 
 struct Client {
     stream: UnixStream,
@@ -158,7 +169,7 @@ fn serve(core: Arc<Mutex<Core>>, mut stream: UnixStream) {
     while let Ok(frame) = svc::read_frame(&mut stream) {
         let Ok(cmd) = Cmd::decode(&frame) else { continue };
         let subscribe = cmd == Cmd::Subscribe;
-        let mut c = core.lock().unwrap();
+        let mut c = lock(&core);
         let free = c.recorder.is_none();
         let (starts, stops) = (matches!(cmd, Cmd::RecordStart { .. }), cmd == Cmd::RecordStop);
         let reply = c.apply(cmd);
@@ -182,7 +193,7 @@ fn serve(core: Arc<Mutex<Core>>, mut stream: UnixStream) {
         }
     }
     if recording {
-        core.lock().unwrap().apply(Cmd::RecordStop);
+        lock(&core).apply(Cmd::RecordStop);
     }
 }
 
@@ -203,9 +214,9 @@ fn main() -> std::io::Result<()> {
         let mut last: Option<(Snapshot, u64)> = None;
         loop {
             std::thread::sleep(Duration::from_millis(200));
-            let mut c = ticker.lock().unwrap();
+            let mut c = lock(&ticker);
             while c.clients.is_empty() {
-                c = CLIENTS.wait(c).unwrap();
+                c = wait(&CLIENTS, c);
             }
             let snap = snapshot(c.player.snapshot(), c.muted);
             let key = (snap.position_ms / 1000.0) as u64;
@@ -239,6 +250,21 @@ mod tests {
         let file = track_in(&WireTrack { id: 2, path: "/m/a.mp3".into(), url: None });
         assert_eq!(file.path, PathBuf::from("/m/a.mp3"));
         assert!(file.url.is_none());
+    }
+
+    #[test]
+    fn a_poisoned_core_lock_still_hands_out_the_core() {
+        // a client handler that panics while holding the core must not take the audio service down with it
+        let core: Arc<Mutex<Vec<u32>>> = Arc::new(Mutex::new(vec![1]));
+        let poisoner = core.clone();
+        let _ = std::thread::spawn(move || {
+            let _held = poisoner.lock().unwrap();
+            panic!("client handler panicked while holding the core");
+        })
+        .join();
+        assert!(core.is_poisoned());
+        lock(&core).push(2);
+        assert_eq!(*lock(&core), vec![1, 2]);
     }
 
     #[test]
