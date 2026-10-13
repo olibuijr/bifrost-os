@@ -1963,8 +1963,27 @@ received packets with host-clock timestamps). Decided: the SDK exposes the pure 
 the daemon owns the hub and delivers to apps.
 
 Gaps, decided: no SDK facade that talks to the running daemon yet (apps cannot send to hardware through the SDK until the
-daemon exposes a control socket); MIDI-CI discovery and network sessions remain gaps. Not built or run in this round; the
-tests in `sdk/src/midi.rs` are unrun.
+daemon exposes a control socket). Not built or run in this round; the tests in `sdk/src/midi.rs` are unrun.
+
+MIDI-CI (`bifrost_app::midi_ci`, Apple `MIDICIDiscoveryManager`, `MIDICIDevice`, `MIDICIProfile`): `Message::encode` and
+`Message::decode` convert MIDI-CI 1.1 Universal SysEx (discovery inquiry and reply, invalidate MUID, profile inquiry, profile
+inquiry reply, profile set on, profile enabled report) with 28-bit `Muid`s in 7-bit bytes. `DiscoveryManager` builds the
+broadcast inquiry, answers inquiries for the local device and records `Device`s and their `Profile`s from replies. Decided: no
+property exchange or process inquiry, no transport; the caller moves the bytes. Tests in `sdk/src/midi_ci.rs` are unrun.
+
+Network sessions (`bifrost_app::midi_network`, Apple `MIDINetworkSession`, `MIDINetworkHost`, `MIDINetworkConnection`):
+`NetworkSession` holds enabled, port (default 5004), names, `ConnectionPolicy`, contacts and connections, and drives the
+RTP-MIDI session handshake with `SessionPacket` (`IN`, `OK`, `NO`, `BY`; big endian, protocol 2). Decided: no sockets, no
+Bonjour discovery and no RTP data stream yet. Tests in `sdk/src/midi_network.rs` are unrun.
+
+## Core Motion raw sensors (`bifrost_app::motion_raw`)
+
+`RawMotion` is the `CMMotionManager` raw-sensor facade over the kernel sensor tree: `open(root)`, `start_accelerometer_updates`,
+`start_gyro_updates` (and `_with` handler forms), `accelerometer_data`, `gyro_data`, `set_*_update_interval`, `tick(now)`.
+Accelerometer values are in g and gyroscope rates in rad/s. An interval snaps to the nearest rate listed in the sensor's
+`sampling_frequency_available` and the choice is written to `sampling_frequency`; a sensor without those files keeps the
+requested interval. Decided: no mounting matrix, no hardware on the lab machine, so only a fixture sysfs tree is tested; not
+yet checked on Midget. Tests in `sdk/src/motion_raw.rs` are unrun.
 
 ## AVFAudio: AVAudioPlayer shape and the node graph (`bifrost_app::audio_player`, `bifrost_app::audio_engine`)
 

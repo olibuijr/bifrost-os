@@ -24,16 +24,16 @@
     {
       "feature": "Raw accelerometer events",
       "apple": "CMAccelerometerData, CMAccelerometer updates via CMMotionManager",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No SDK API. No accelerometer reader in springboard/sdk/src or springboard/src."
+      "bifrost": "springboard/sdk/src/motion_raw.rs over springboard/core/src/inertial_sensors.rs and motion_manager.rs",
+      "status": "partial",
+      "note": "Sprint 3: RawMotion startAccelerometerUpdates / accelerometerData over the IIO sensor tree with sampling-rate snapping, tested on a fixture sysfs tree; no hardware on the lab machine, not yet checked on Midget."
     },
     {
       "feature": "Raw gyroscope events",
       "apple": "CMGyroData",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No gyroscope reader or SDK API found."
+      "bifrost": "springboard/sdk/src/motion_raw.rs over springboard/core/src/inertial_sensors.rs and motion_manager.rs",
+      "status": "partial",
+      "note": "Sprint 3: RawMotion startGyroUpdates / gyroData over the IIO sensor tree with sampling-rate snapping, tested on a fixture sysfs tree; no hardware on the lab machine, not yet checked on Midget."
     },
     {
       "feature": "Magnetometer",
