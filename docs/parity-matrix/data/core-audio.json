@@ -94,7 +94,7 @@
     {
       "feature": "Channel layouts and data types",
       "apple": "ManagedAudioChannelLayout, AudioHardwareError",
-      "bifrost": "springboard/ui/src/channel_layout.rs",
+      "bifrost": "springboard/audio/types/src/layout.rs (re-exported by springboard/ui/src/channel_layout.rs)",
       "status": "partial",
       "note": "Wave 4 (w4-core-audio, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No layout type or typed HAL error is exposed. Format handling is per decoder and PCM, with no general channel layout API."
     },

@@ -87,7 +87,7 @@
     {
       "feature": "Gradient layer (CAGradientLayer)",
       "apple": "CAGradientLayer, CAGradientLayerType",
-      "bifrost": "springboard/ui/src/gradient.rs",
+      "bifrost": "springboard/render/src/gradient.rs, springboard/sdk/src/layer_kinds/gradient.rs",
       "status": "partial",
       "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. gradients exist only for the browser's CSS engine; no SDK gradient view or layer"
     },

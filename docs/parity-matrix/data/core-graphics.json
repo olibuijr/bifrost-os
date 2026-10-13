@@ -17,7 +17,7 @@
     {
       "feature": "Path construction and stroking (CGPath, CGMutablePath)",
       "apple": "CGPath, CGMutablePath, move/add/close, fill and stroke path",
-      "bifrost": "springboard/ui/src/affine.rs, springboard/ui/src/gradient.rs, springboard/ui/src/path.rs; wired: springboard/ui/src/stroke_style.rs (dash_polyline, used by style.rs)",
+      "bifrost": "springboard/render/src/cg/path.rs (Path, Affine, copy_by_dashing), springboard/render/src/cg/raster.rs (dash_polyline, fill_stroke), springboard/render/src/gradient.rs",
       "status": "partial",
       "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No public path type. Bezier flattening exists only for glyph outlines inside the font engine. Apps cannot draw an arbitrary path. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
     },
@@ -31,7 +31,7 @@
     {
       "feature": "Clipping",
       "apple": "CGContextClip, clip rect and clip path, CGContextClipToRect",
-      "bifrost": "springboard/ui/src/clip.rs",
+      "bifrost": "springboard/render/src/cg/context.rs (clip_to_rect, clip_to_rects, clip_to_path, clip_to_mask, reset_clip), springboard/render/src/cg/raster.rs (Coverage::clipped_by)",
       "status": "partial",
       "note": "Wave 3 (theme-19, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The Surface has no clip. Scroll views redraw the whole window in some cases to avoid clipping."
     },

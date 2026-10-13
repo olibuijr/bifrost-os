@@ -45,7 +45,7 @@
     {
       "feature": "Text Display: line breaking and truncation",
       "apple": "NSLineBreakMode, NSParagraphStyle",
-      "bifrost": "springboard/ui/src/textfit.rs",
+      "bifrost": "springboard/ui/src/typeset.rs",
       "status": "partial",
       "note": "head, middle, tail truncation and wrapping; no tab stops, indents or hyphenation"
     },

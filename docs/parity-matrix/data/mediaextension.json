@@ -17,7 +17,7 @@
     {
       "feature": "Track readers and sample cursors (METrackReader, METrackInfo, MESampleCursor)",
       "apple": "METrackReader, METrackInfo, MESampleCursor, MESampleLocation, MESampleCursorChunk, MEEstimatedSampleLocation, MEHEVCDependencyInfo",
-      "bifrost": "springboard/src/media/demux/mod.rs (Sample, TrackKind, CodecId)",
+      "bifrost": "springboard/src/media/demux/mod.rs (Sample, TrackKind, CodecId, TrackInfo), springboard/core/src/mediaext.rs",
       "status": "partial",
       "note": "Tracks and samples are parsed internally with microsecond times. No public sample cursor for seeking and stepping; the cursor API is not exposed to apps."
     },
