@@ -518,9 +518,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/src/thumbs/ (thumbnails service)",
+   "status": "partial",
+   "note": "Draws: the picture scaled to fit (thumbs::images::ImageProvider). Needs a Midget check for parity.",
    "rea": []
   },
   {

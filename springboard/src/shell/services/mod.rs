@@ -38,6 +38,7 @@ pub mod display_services;
 pub mod window_services;
 pub mod event_services;
 pub mod thumbnails;
+pub mod thumb_providers;
 
 /// A named service in the shell.
 pub trait SystemService {

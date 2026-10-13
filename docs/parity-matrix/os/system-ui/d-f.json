@@ -738,9 +738,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/src/thumbs/ (thumbnails service)",
+   "status": "partial",
+   "note": "Draws: sample glyphs drawn with the font (thumbs::images::FontProvider). Needs a Midget check for parity.",
    "rea": []
   }
  ]

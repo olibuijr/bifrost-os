@@ -278,9 +278,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "reviewed: no BifrOSt counterpart yet",
+   "bifrost": "springboard/src/thumbs/ (thumbnails service)",
+   "status": "partial",
+   "note": "Draws: first page of plain text laid out on a paper page (thumbs::text::TextProvider). Needs a Midget check for parity.",
    "rea": []
   },
   {
