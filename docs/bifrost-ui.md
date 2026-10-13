@@ -2469,3 +2469,9 @@ loop and which never blocks. `set_new_connection_limit(Some(n))` is `newConnecti
 `service_discovery::ServiceAdvertiser` for the bound port, and the app answers mDNS queries with it. Gaps: TLS listeners
 are refused (`ListenerError::TlsUnsupported`), no IPv6 or interface selection, no automatic Bonjour publishing, no
 `NWConnection` wrapper around `Accepted` yet (the app owns the `TcpStream`). Host tests only; not yet checked on Midget.
+
+## Bundle Resources: URL types (`bifrost_app::bundle_resources`, the `launch` service)
+
+- `URLType::parse_all(&Json)` reads `CFBundleURLTypes` into `URLType { url_name, url_schemes, type_role: BundleTypeRole, handler_rank: HandlerRank }`. Entries without schemes are dropped and schemes are lowercased.
+- `url_scheme(url)` gives the scheme of `myapp://x`.
+- The `launch` service method `application_for_url {url}` answers `{app, apps}`: `urlForApplication(toOpen:)` (the user's default, else the first declaring app) and every declaring app, default first. Web schemes still go to the browser. No universal links.
