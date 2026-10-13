@@ -1,5 +1,6 @@
-//! Digital Color Meter as an installed BifrOSt system app: a magnified view around the pointer, the pixel value in
-//! sRGB, Display P3 and Generic RGB as hex, decimal and percent, a locked readout, and copy as text or as a swatch.
+//! Digital Color Meter as an installed BifrOSt system app: a magnified view around the pointer, the pixel value (or the
+//! mean of an aperture) in several colour spaces as hex, decimal, 16-bit and percent, a readout locked on either or both
+//! axes, copy as text or as a swatch, and the View and Color menus. `menu.rs` holds the menus.
 //! `source.rs` is the only place pixels come from: the shell's `screen` service, asked on a refresh loop (`tick`) and
 //! answered in `service_reply`. `color.rs` holds the pure conversions, `loupe.rs` the magnifier geometry and pointer
 //! state, `window.rs` the state and layout, and `draw.rs` the painting.
@@ -7,16 +8,18 @@
 mod color;
 mod draw;
 mod loupe;
+mod menu;
 mod source;
 mod window;
 
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{clipboard, pack, Damage, Image, Surface};
-use bifrost_app::{screen_sample, App, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::proto::AxAction;
+use bifrost_app::{screen_sample, App, AppMenu, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use color::Rgb8;
 use source::{Ask, ShellSource};
-use window::{ColorMeter, Outcome, Target};
+use window::{ColorMeter, Outcome, Target, CTL_APERTURE};
 
 /// How often the refresh loop asks the shell for the pointer and the pixels around it, in milliseconds.
 const POLL_MS: f64 = 50.0;
@@ -72,10 +75,15 @@ impl App for ColorMeter {
                 match kind {
                     TouchKind::Down => {
                         self.press = self.hit(&ctx.ui, x, y);
-                        false
+                        // the aperture slider acts on the press, then follows the drag
+                        self.press == Target::Aperture && self.drag_aperture(x)
                     }
-                    TouchKind::Move => false,
+                    TouchKind::Move => self.press == Target::Aperture && self.drag_aperture(x),
                     TouchKind::Up => {
+                        if self.press == Target::Aperture {
+                            self.press = Target::Nothing;
+                            return self.drag_aperture(x);
+                        }
                         let released = self.hit(&ctx.ui, x, y);
                         let pressed = std::mem::replace(&mut self.press, Target::Nothing);
                         if released != pressed {
@@ -88,7 +96,7 @@ impl App for ColorMeter {
                                 let outcome = self.activate(released);
                                 self.apply(outcome)
                             }
-                            Target::Nothing => false,
+                            Target::Aperture | Target::Nothing => false,
                         }
                     }
                     TouchKind::Cancel => {
@@ -131,6 +139,25 @@ impl App for ColorMeter {
 
     fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
         self.answer(request, result)
+    }
+
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        self.menus()
+    }
+
+    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+        let outcome = self.perform_menu(id);
+        self.apply(outcome)
+    }
+
+    fn ax_set(&mut self, ctx: &Ctx, id: u64, action: AxAction) -> bool {
+        if id == CTL_APERTURE as u64 {
+            return self.aperture_action(&action);
+        }
+        match action {
+            AxAction::Press => self.event(ctx, Input::Activate(id)),
+            _ => false,
+        }
     }
 
     fn controls(&self, ctx: &Ctx) -> Vec<Node> {
