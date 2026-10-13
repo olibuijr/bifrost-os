@@ -9,10 +9,12 @@
 use super::css::{self, Rule};
 use super::html::{self, Node};
 use super::nav;
-use crate::deildu::http::{Client, Jar, Transport};
+use crate::deildu::http::{Client, Jar, Stream, Transport};
 use crate::gfx::Image;
-use std::collections::VecDeque;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::cell::RefCell;
+use std::collections::{HashMap, VecDeque};
+use std::io::{self, Read, Write};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Arc;
 
@@ -24,6 +26,56 @@ const TEXT_LIMIT: usize = 200 * 1024;
 const MAX_LINKED_SHEETS: usize = 6;
 /// Decoded pictures are shrunk to this many px on a side to bound memory.
 const IMAGE_SIDE: usize = 1600;
+
+thread_local! {
+    /// The cancel flag of the request the current worker thread is running.
+    static CANCEL: RefCell<Option<Arc<AtomicBool>>> = const { RefCell::new(None) };
+}
+
+/// True once the request this thread runs was cancelled by a navigation or a close.
+fn cancelled() -> bool {
+    CANCEL.with(|c| c.borrow().as_ref().is_some_and(|f| f.load(Ordering::SeqCst)))
+}
+
+/// A connection whose reads and writes stop once the request on the reading
+/// thread is cancelled. Connections are pooled across requests, so the flag
+/// is looked up on the thread doing the I/O, not stored with the connection.
+struct Abortable(Box<dyn Stream>);
+
+impl Read for Abortable {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        if cancelled() {
+            return Err(io::Error::other("request cancelled"));
+        }
+        self.0.read(buf)
+    }
+}
+
+impl Write for Abortable {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        if cancelled() {
+            return Err(io::Error::other("request cancelled"));
+        }
+        self.0.write(buf)
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        self.0.flush()
+    }
+}
+
+/// The transport the loader uses: every connection it opens is `Abortable`.
+struct Interruptible {
+    inner: Arc<dyn Transport>,
+}
+
+impl Transport for Interruptible {
+    fn connect(&self, host: &str, port: u16, tls: bool) -> io::Result<Box<dyn Stream>> {
+        self.inner.connect(host, port, tls).map(|s| Box::new(Abortable(s)) as Box<dyn Stream>)
+    }
+    fn upgrade(&self, host: &str, stream: Box<dyn Stream>) -> io::Result<Box<dyn Stream>> {
+        self.inner.upgrade(host, stream).map(|s| Box::new(Abortable(s)) as Box<dyn Stream>)
+    }
+}
 
 /// One style source in document order.
 #[derive(Clone, Debug, PartialEq)]
@@ -153,46 +205,61 @@ pub struct Loader {
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
     active: Arc<AtomicUsize>,
-    queue: VecDeque<Job>,
+    /// queued work, each with the cancel flag of its tab at the time it was asked for
+    queue: VecDeque<(Job, Arc<AtomicBool>)>,
+    /// the live cancel flag of each tab that has work outstanding
+    flags: HashMap<u64, Arc<AtomicBool>>,
 }
 
 impl Loader {
     pub fn new(transport: Arc<dyn Transport>) -> Loader {
         let (tx, rx) = channel();
-        Loader { client: Arc::new(Client::new(transport, Jar::default())), tx, rx, active: Arc::new(AtomicUsize::new(0)), queue: VecDeque::new() }
+        let transport: Arc<dyn Transport> = Arc::new(Interruptible { inner: transport });
+        Loader { client: Arc::new(Client::new(transport, Jar::default())), tx, rx, active: Arc::new(AtomicUsize::new(0)), queue: VecDeque::new(), flags: HashMap::new() }
+    }
+
+    fn flag(&mut self, tab: u64) -> Arc<AtomicBool> {
+        self.flags.entry(tab).or_insert_with(|| Arc::new(AtomicBool::new(false))).clone()
     }
 
     pub fn page(&mut self, tab: u64, nav: u64, url: &str) {
         // a new page request goes ahead of queued sub-resources
-        self.queue.push_front(Job::Page { tab, nav, url: url.to_string() });
+        let flag = self.flag(tab);
+        self.queue.push_front((Job::Page { tab, nav, url: url.to_string() }, flag));
         self.pump();
     }
 
     pub fn sheet(&mut self, tab: u64, nav: u64, slot: usize, url: &str) {
-        self.queue.push_back(Job::Sheet { tab, nav, slot, url: url.to_string() });
+        let flag = self.flag(tab);
+        self.queue.push_back((Job::Sheet { tab, nav, slot, url: url.to_string() }, flag));
         self.pump();
     }
 
     pub fn image(&mut self, tab: u64, nav: u64, src: &str, url: &str) {
-        self.queue.push_back(Job::Image { tab, nav, src: src.to_string(), url: url.to_string() });
+        let flag = self.flag(tab);
+        self.queue.push_back((Job::Image { tab, nav, src: src.to_string(), url: url.to_string() }, flag));
         self.pump();
     }
 
-    /// Drops queued work for a tab (it navigated away or closed); requests
-    /// already running finish and are ignored by their stale numbers.
+    /// Cancels a tab's work (it navigated away or closed): queued requests
+    /// are dropped and running ones stop at their next read or write.
     pub fn cancel(&mut self, tab: u64) {
-        self.queue.retain(|j| match j {
+        self.queue.retain(|(j, _)| match j {
             Job::Page { tab: t, .. } | Job::Sheet { tab: t, .. } | Job::Image { tab: t, .. } => *t != tab,
         });
+        if let Some(flag) = self.flags.remove(&tab) {
+            flag.store(true, Ordering::SeqCst);
+        }
     }
 
     fn pump(&mut self) {
         while self.active.load(Ordering::SeqCst) < MAX_WORKERS {
-            let Some(job) = self.queue.pop_front() else { break };
+            let Some((job, flag)) = self.queue.pop_front() else { break };
             self.active.fetch_add(1, Ordering::SeqCst);
             let (client, tx, active) = (self.client.clone(), self.tx.clone(), self.active.clone());
             std::thread::spawn(move || {
                 crate::gfx::affinity::background_thread();
+                CANCEL.with(|c| *c.borrow_mut() = Some(flag));
                 let msg = run(&client, job);
                 // sent before the slot frees, so an idle loader has delivered everything
                 let _ = tx.send(msg);
@@ -376,5 +443,21 @@ pub mod tests {
         l.image(2, 1, "b", "http://x.test/b");
         l.cancel(1);
         assert_eq!(l.queue.len(), 1);
+    }
+
+    #[test]
+    fn a_cancelled_connection_stops_reading_and_writing() {
+        let t = Fake::new(&[("x.test", "text/plain", b"hello")]);
+        let wrapped = Interruptible { inner: t };
+        let mut s = wrapped.connect("x.test", 80, false).unwrap();
+        let mut buf = [0u8; 8];
+        let flag = Arc::new(AtomicBool::new(false));
+        CANCEL.with(|c| *c.borrow_mut() = Some(flag.clone()));
+        s.write_all(b"GET / HTTP/1.1\r\n\r\n").unwrap();
+        assert!(s.read(&mut buf).unwrap() > 0, "a live request reads");
+        flag.store(true, Ordering::SeqCst);
+        assert!(s.read(&mut buf).is_err(), "a cancelled request stops reading");
+        assert!(s.write_all(b"x").is_err(), "and stops writing");
+        CANCEL.with(|c| *c.borrow_mut() = None);
     }
 }

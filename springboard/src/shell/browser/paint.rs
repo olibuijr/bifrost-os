@@ -13,21 +13,49 @@ use std::collections::{HashMap, HashSet};
 /// Highlight behind selected text, on the white page.
 pub const SELECT_BG: Color = Color::rgb(184, 212, 255);
 const PLACEHOLDER: u32 = pack(228, 228, 230, 255);
-const SCALED_KEEP: usize = 16;
+/// Byte budget for the screen-size copies of a page's pictures.
+const SCALED_BYTES: usize = 32 << 20;
 const SLANT: f32 = 0.2;
 
+/// A screen-size copy of a picture, with the tick it was last drawn at.
+struct Scaled {
+    img: Image,
+    used: u64,
+}
+
 /// Decoded pictures of one page, plus their screen-size versions.
-#[derive(Default)]
 pub struct Images {
     raw: HashMap<String, Image>,
-    scaled: HashMap<(String, usize, usize), Image>,
+    scaled: HashMap<(String, usize, usize), Scaled>,
+    scaled_bytes: usize,
+    scaled_budget: usize,
+    tick: u64,
     failed: HashSet<String>,
 }
 
+impl Default for Images {
+    fn default() -> Self {
+        Self::with_scaled_budget(SCALED_BYTES)
+    }
+}
+
 impl Images {
+    pub fn with_scaled_budget(bytes: usize) -> Images {
+        Images { raw: HashMap::new(), scaled: HashMap::new(), scaled_bytes: 0, scaled_budget: bytes, tick: 0, failed: HashSet::new() }
+    }
+
     pub fn insert(&mut self, src: &str, img: Image) {
-        self.scaled.retain(|(s, ..), _| s != src);
+        let stale: Vec<(String, usize, usize)> = self.scaled.keys().filter(|(s, ..)| s == src).cloned().collect();
+        for k in stale {
+            self.drop_scaled(&k);
+        }
         self.raw.insert(src.to_string(), img);
+    }
+
+    fn drop_scaled(&mut self, key: &(String, usize, usize)) {
+        if let Some(e) = self.scaled.remove(key) {
+            self.scaled_bytes -= e.img.w * e.img.h * 4;
+        }
     }
 
     pub fn fail(&mut self, src: &str) {
@@ -50,19 +78,29 @@ impl Images {
         self.raw.is_empty()
     }
 
-    /// The picture at exactly `w` x `h` px, scaled once and kept.
+    /// The picture at exactly `w` x `h` px, scaled once and kept. Copies
+    /// drawn recently survive; the least recently drawn are dropped to stay
+    /// within the byte budget, so a page with many pictures never rescales
+    /// all of them on every frame.
     pub fn scaled(&mut self, src: &str, w: usize, h: usize) -> Option<&Image> {
-        let raw = self.raw.get(src)?;
         let key = (src.to_string(), w.max(1), h.max(1));
-        if !self.scaled.contains_key(&key) {
-            if self.scaled.len() >= SCALED_KEEP {
-                self.scaled.clear();
-            }
-            let factor = (raw.w / key.1).min(raw.h / key.2).max(1);
-            let img = if factor > 1 { crate::imgdec::box_down(raw, factor).resized(key.1, key.2) } else { raw.resized(key.1, key.2) };
-            self.scaled.insert(key.clone(), img);
+        self.tick += 1;
+        let tick = self.tick;
+        if let Some(e) = self.scaled.get_mut(&key) {
+            e.used = tick;
+            return self.scaled.get(&key).map(|e| &e.img);
         }
-        self.scaled.get(&key)
+        let raw = self.raw.get(src)?;
+        let factor = (raw.w / key.1).min(raw.h / key.2).max(1);
+        let img = if factor > 1 { crate::imgdec::box_down(raw, factor).resized(key.1, key.2) } else { raw.resized(key.1, key.2) };
+        let bytes = img.w * img.h * 4;
+        while self.scaled_bytes + bytes > self.scaled_budget {
+            let Some(oldest) = self.scaled.iter().min_by_key(|(_, e)| e.used).map(|(k, _)| k.clone()) else { break };
+            self.drop_scaled(&oldest);
+        }
+        self.scaled_bytes += bytes;
+        self.scaled.insert(key.clone(), Scaled { img, used: tick });
+        self.scaled.get(&key).map(|e| &e.img)
     }
 }
 
@@ -261,6 +299,23 @@ mod tests {
         assert_eq!(out.px[0], 0, "the top row starts shifted right");
         assert_eq!(out.px[1 * out.w - 1], 0xff00_00ff);
         assert_eq!(out.px[9 * out.w], 0xff00_00ff, "the bottom row stays put");
+    }
+
+    #[test]
+    fn scaled_copies_stay_within_the_budget_and_recent_ones_survive() {
+        // a 1 MiB budget holds one 400x400 copy (640 KB) but not two
+        let mut imgs = Images::with_scaled_budget(1 << 20);
+        imgs.insert("a.png", Image::new(512, 512));
+        assert_eq!(imgs.scaled("a.png", 400, 400).map(|i| (i.w, i.h)), Some((400, 400)));
+        assert!(imgs.scaled("a.png", 401, 400).is_some());
+        assert!(imgs.scaled_bytes <= 1 << 20, "budget kept: {}", imgs.scaled_bytes);
+        assert_eq!(imgs.scaled.len(), 1, "the older copy was dropped");
+        assert!(imgs.scaled.contains_key(&("a.png".to_string(), 401, 400)), "the recent copy is kept");
+        assert!(imgs.scaled("a.png", 401, 400).is_some(), "a hit returns the kept copy");
+        // replacing the picture drops its copies and their bytes
+        imgs.insert("a.png", Image::new(512, 512));
+        assert_eq!(imgs.scaled_bytes, 0);
+        assert!(imgs.scaled.is_empty());
     }
 
     #[test]
