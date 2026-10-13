@@ -12,6 +12,7 @@ use super::ui::Ui;
 use crate::gfx::Surface;
 use crate::scene::STATUS_PT;
 use crate::term::{Selection, Terminal};
+use termcore::mouse::MouseEvent;
 
 /// Finger travel that turns a press into a drag.
 const SLOP_PT: f32 = 10.0;
@@ -115,6 +116,12 @@ impl TermTouch {
     /// Counts taps on one cell: a second one selects its word, a third its line (as Terminal does).
     /// A tap on another cell, or after the window, starts again at one.
     fn tap(&mut self, term: &mut Terminal, cell: (usize, usize), t: f64) {
+        // A program that asked for the mouse (and is allowed it) gets the click; the tap then selects and opens nothing.
+        if term.report_mouse(MouseEvent::Press, cell) {
+            term.report_mouse(MouseEvent::Release, cell);
+            self.last_tap = None;
+            return;
+        }
         let count = match self.last_tap {
             Some((last, at, n)) if last == cell && t - at < MULTI_TAP_MS => n % 3 + 1,
             _ => 1,
@@ -336,6 +343,41 @@ mod tests {
         assert!(!tt.up(&ui, &mut term, 600.0, 700.0, 1200.0));
         tt.dismiss();
         assert!(tt.menu().is_none());
+    }
+
+    #[test]
+    fn a_tap_is_a_click_for_a_program_that_asked_for_the_mouse() {
+        let ui = ui();
+        let mut term = terminal(&[
+            "/bin/sh",
+            "-c",
+            "/bin/stty raw -echo; printf '\\033[?1000h\\033[?1006h'; echo ready; /bin/head -c 18 | /bin/od -An -c; read x",
+        ]);
+        pump_until(&mut term, "ready");
+        let mut tt = TermTouch::default();
+        let (x, y) = centre(&term, 6, 0);
+        tt.down(&ui, &mut term, x, y, 1000.0);
+        assert!(tt.up(&ui, &mut term, x, y, 1100.0));
+        tt.down(&ui, &mut term, x, y, 1150.0);
+        tt.up(&ui, &mut term, x, y, 1200.0);
+        assert_eq!(term.selection(), None, "a double tap selects nothing while the program has the mouse");
+        let screen = pump_until(&mut term, "1   m");
+        assert!(screen.contains("1   M") && screen.contains("1   m"), "press and release reached the program: {screen:?}");
+    }
+
+    #[test]
+    fn with_mouse_reporting_off_a_tap_stays_with_the_terminal() {
+        let ui = ui();
+        let mut term = terminal(&["/bin/sh", "-c", "printf '\\033[?1000h\\033[?1006hhello world\\n'; read x"]);
+        pump_until(&mut term, "hello world");
+        term.set_mouse_reporting(false);
+        let mut tt = TermTouch::default();
+        let (x, y) = centre(&term, 1, 0);
+        tt.down(&ui, &mut term, x, y, 1000.0);
+        tt.up(&ui, &mut term, x, y, 1100.0);
+        tt.down(&ui, &mut term, x, y, 1150.0);
+        tt.up(&ui, &mut term, x, y, 1200.0);
+        assert_eq!(term.selected_text().as_deref(), Some("hello"), "the double tap selects the word");
     }
 
     #[test]

@@ -45,6 +45,10 @@ impl Shell {
                     term.clear_history();
                 }
             }
+            TermKey::UseSelectionForFind => self.terminal_use_selection_for_find(t),
+            TermKey::Mark => self.terminal_toggle_mark(),
+            TermKey::PreviousMark => self.terminal_jump_mark(false),
+            TermKey::NextMark => self.terminal_jump_mark(true),
             TermKey::Bigger => self.terminal_action(3, t),
             TermKey::Smaller => self.terminal_action(2, t),
             TermKey::ActualSize => {
@@ -104,7 +108,14 @@ impl Shell {
         };
         let modal = matches!(
             self.terminal_ui.panel,
-            Panel::Connections | Panel::Processes | Panel::Form | Panel::More | Panel::Command
+            Panel::Connections
+                | Panel::Processes
+                | Panel::Form
+                | Panel::More
+                | Panel::Command
+                | Panel::Title
+                | Panel::Shell
+                | Panel::Help
         );
         match ev {
             Event::Down(x, y)
@@ -133,6 +144,7 @@ impl Shell {
                         Panel::Connections => (self.terminal_ui.config.entries().len(), 52.0),
                         Panel::Processes => (self.terminal_ui.processes.len(), 40.0),
                         Panel::More => (MENU.len(), 44.0),
+                        Panel::Help => (help::lines().len(), HELP_PITCH),
                         _ => (0, 0.0),
                     };
                     let limit =

@@ -234,6 +234,9 @@ impl Shell {
             }
             Panel::Processes => "Processes",
             Panel::Command => "New Command",
+            Panel::Title => "Tab Title",
+            Panel::Shell => "Login Shell",
+            Panel::Help => "Terminal Help",
             _ => "Terminal",
         };
         if panel == Panel::Form {
@@ -275,14 +278,15 @@ impl Shell {
                 255,
                 255,
             );
+            let done = matches!(panel, Panel::More | Panel::Help);
             button(
                 s,
                 ui,
-                if panel == Panel::More { "Done" } else { "×" },
+                if done { "Done" } else { "×" },
                 (
-                    px + pw - ui.pt(if panel == Panel::More { 80.0 } else { 44.0 }),
+                    px + pw - ui.pt(if done { 80.0 } else { 44.0 }),
                     py,
-                    ui.pt(if panel == Panel::More { 80.0 } else { 44.0 }),
+                    ui.pt(if done { 80.0 } else { 44.0 }),
                     title_h,
                 ),
                 false,
@@ -292,6 +296,21 @@ impl Shell {
             Panel::Command => {
                 if let Some(field) = &self.terminal_ui.command {
                     field.draw(s, ui, (px + ui.pt(16.0), content_top + ui.pt(16.0), pw - ui.pt(32.0), ui.pt(36.0)), t);
+                }
+            }
+            Panel::Title | Panel::Shell => {
+                if let Some(field) = &self.terminal_ui.entry {
+                    field.draw(s, ui, (px + ui.pt(16.0), content_top + ui.pt(16.0), pw - ui.pt(32.0), ui.pt(36.0)), t);
+                }
+            }
+            Panel::Help => {
+                let mut list = s.rows(content_top as usize, content_bottom as usize);
+                for (i, (heading, line)) in help::lines().iter().enumerate() {
+                    let y = content_top + ui.pt(i as f32 * HELP_PITCH) - self.terminal_ui.scroll;
+                    if y + ui.pt(HELP_PITCH) < content_top || y >= content_bottom {
+                        continue;
+                    }
+                    text(&mut list, ui, line, px + ui.pt(16.0), y, pw - ui.pt(32.0), if *heading { WHITE } else { SECONDARY });
                 }
             }
             Panel::Connections => {
@@ -581,7 +600,7 @@ impl Shell {
                         px + ui.pt(16.0),
                         y,
                         pw - ui.pt(150.0),
-                        if matches!(i, 11 | 13) { RED } else { WHITE },
+                        if matches!(i, 11 | 13 | item::CLOSE_OTHERS) { RED } else { WHITE },
                     );
                     let detail = match i {
                         1 | 2 => format!(
@@ -593,6 +612,9 @@ impl Shell {
                         16 => self.terminal_ui.cursor.label().into(),
                         17 => String::from(if self.terminal_ui.blink { "On" } else { "Off" }),
                         18 => String::from(if self.terminal_ui.secure { "On" } else { "Off" }),
+                        item::MOUSE => String::from(if self.terminal_ui.mouse_reporting { "On" } else { "Off" }),
+                        item::GROUP_LAUNCH => String::from(if self.terminal_ui.group_launch { "On" } else { "Off" }),
+                        item::LOGIN_SHELL => self.terminal_ui.login_shell.as_deref().map_or_else(|| "Account".to_string(), |path| path.rsplit('/').next().unwrap_or(path).to_string()),
                         _ => menu_key(i).map_or_else(|| "›".into(), String::from),
                     };
                     text(
@@ -674,6 +696,10 @@ impl Shell {
         if panel == Panel::Command {
             button(s, ui, "Run", (px + pw - ui.pt(120.0), bottom - ui.pt(44.0), ui.pt(104.0), ui.pt(32.0)), true);
         }
+        if matches!(panel, Panel::Title | Panel::Shell) {
+            let label = if panel == Panel::Title { "Set" } else { "Save" };
+            button(s, ui, label, (px + pw - ui.pt(120.0), bottom - ui.pt(44.0), ui.pt(104.0), ui.pt(32.0)), true);
+        }
         let message = if !self.terminal_ui.message.is_empty() {
             self.terminal_ui.message.as_str()
         } else {
@@ -682,13 +708,16 @@ impl Shell {
                 Panel::Form => "Enter a name and host. Port defaults to 22.",
                 Panel::Processes => "Select a process to inspect or terminate.",
                 Panel::Command => "The command runs in a new tab that closes when it ends.",
+                Panel::Title => "Leave it empty to use the automatic title.",
+                Panel::Shell => "New tabs run this shell. Empty: the account shell.",
+                Panel::Help => "Touch Done to go back to the terminal.",
                 _ => "Changes to text size and theme are saved automatically.",
             }
         };
         let reserved = match panel {
             Panel::Connections => 236.0,
             Panel::Processes => 264.0,
-            Panel::Command => 136.0,
+            Panel::Command | Panel::Title | Panel::Shell => 136.0,
             _ => 32.0,
         };
         text(

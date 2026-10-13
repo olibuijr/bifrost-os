@@ -42,6 +42,18 @@ impl Shell {
                 }
                 true
             }
+            Panel::Title | Panel::Shell => {
+                if matches!(out, Out::Enter) {
+                    if self.terminal_ui.panel == Panel::Title {
+                        self.terminal_apply_title(t);
+                    } else {
+                        self.terminal_apply_shell(t);
+                    }
+                } else if let Some(field) = &mut self.terminal_ui.entry {
+                    field.edit(&self.ui, out, t);
+                }
+                true
+            }
             Panel::None => false,
             _ => true,
         }
@@ -58,13 +70,14 @@ impl Shell {
             self.ui.s,
             bottom,
             self.terminal_ui.panel == Panel::Form,
-            self.terminal_ui.panel == Panel::More,
+            matches!(self.terminal_ui.panel, Panel::More | Panel::Help),
         )
     }
 
     pub(super) fn terminal_close_panel(&mut self, t: f64) {
         self.terminal_ui.panel = Panel::None;
         self.terminal_ui.pending_signal = None;
+        self.terminal_ui.confirm_others = false;
         self.terminal_ui.down = None;
         self.set_keyboard(self.terminal_ui.restore_keyboard, t);
         self.resize_terminals();
@@ -182,14 +195,8 @@ impl Shell {
                 self.type_out(Out::Named("Paste"), t);
             }
             10 => {
-                if let Some(term) = self.term.as_ref() {
-                    let path = self.data_dir.join("Files/terminal-scrollback.txt");
-                    self.terminal_ui.message = match fs::create_dir_all(path.parent().unwrap())
-                        .and_then(|_| fs::write(&path, term.transcript()))
-                    {
-                        Ok(()) => "Saved to Files/terminal-scrollback.txt".into(),
-                        Err(e) => format!("Could not save: {e}"),
-                    };
+                if let Some(text) = self.term.as_ref().map(|term| term.transcript()) {
+                    self.terminal_ui.message = self.terminal_save_text("terminal-scrollback", &text);
                 }
             }
             11 => {
@@ -226,6 +233,34 @@ impl Shell {
             21 => self.terminal_close_split(t),
             22 => self.terminal_save_group(),
             23 => self.terminal_open_group(t),
+            item::TITLE => self.terminal_open_title(t),
+            item::CLOSE_OTHERS => self.terminal_close_others(t),
+            item::MOVE_LEFT => self.terminal_move_tab(true),
+            item::MOVE_RIGHT => self.terminal_move_tab(false),
+            item::MARK => {
+                self.terminal_close_panel(t);
+                self.terminal_toggle_mark();
+            }
+            item::PREVIOUS_MARK | item::NEXT_MARK => {
+                self.terminal_close_panel(t);
+                self.terminal_jump_mark(i == item::NEXT_MARK);
+            }
+            item::FIND_SELECTION => self.terminal_use_selection_for_find(t),
+            item::PASTE_ESCAPED => self.terminal_paste_escaped(t),
+            item::PASTE_SELECTION => self.terminal_paste_selection(t),
+            item::SEARCH_WEB => self.terminal_search_web(t),
+            item::MAN_PAGE => self.terminal_man_page(t),
+            item::SAVE_SELECTION => {
+                let text = self.term.as_ref().and_then(|term| term.selected_text()).filter(|text| !text.is_empty());
+                self.terminal_ui.message = match text {
+                    Some(text) => self.terminal_save_text("terminal-selection", &text),
+                    None => "Select terminal text first".into(),
+                };
+            }
+            item::MOUSE => self.terminal_toggle_mouse(),
+            item::LOGIN_SHELL => self.terminal_open_shell_panel(t),
+            item::GROUP_LAUNCH => self.terminal_toggle_group_launch(),
+            item::HELP => self.terminal_open_help(t),
             // The first web link in the selection opens in the browser.
             15 => {
                 let link = self

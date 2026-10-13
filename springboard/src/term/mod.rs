@@ -3,6 +3,7 @@
 
 pub(crate) mod identity;
 pub mod control;
+mod marks;
 mod pty;
 mod render;
 mod sessions;
@@ -10,12 +11,13 @@ pub mod process;
 pub use sessions::Sessions;
 
 use crate::font::Font;
-use crate::gfx::{rgba, Image, Surface};
+use crate::gfx::{pack, rgba, Image, Surface};
 use termcore::cell::{attr, Cell};
 use termcore::damage::{row_hash, with_shape, RowCache};
 use termcore::keys::{encode, Key, Mods};
 pub use termcore::select::Selection;
 use termcore::term::{CursorShape, Term};
+use marks::Marks;
 use pty::Pty;
 use render::{paint_row, px, Cursor, GlyphCache, Metrics, THEME};
 use std::ffi::c_int;
@@ -113,6 +115,30 @@ fn shape_code(s: CursorShape) -> u8 {
     }
 }
 
+/// Mixed into a row's damage code while it carries a mark, so setting or losing a mark repaints the row.
+const MARKED: u8 = 0x40;
+
+/// The mark tick in the left margin of a marked row: the shell's accent green.
+const MARK: u32 = pack(42, 166, 106, 255);
+
+/// Draws the tick for grid row `row` into the margin left of the text (at most three pixels wide).
+fn paint_mark(canvas: &mut Image, m: &Metrics, row: usize, last: bool) {
+    let top = if row == 0 { 0 } else { m.pad + row as i32 * m.ch };
+    let bottom = if last { canvas.h as i32 } else { m.pad + (row as i32 + 1) * m.ch };
+    let width = m.pad.clamp(1, 3) as usize;
+    for y in top.max(0) as usize..(bottom.max(0) as usize).min(canvas.h) {
+        let start = y * canvas.w;
+        canvas.px[start..start + width.min(canvas.w)].fill(MARK);
+    }
+}
+
+/// The text a user-typed tab title keeps: control characters dropped, outer blanks trimmed, at most 64 characters.
+/// None when nothing is left, which puts the program's own title back.
+pub fn clean_title(typed: &str) -> Option<String> {
+    let title: String = typed.chars().filter(|c| !c.is_control()).collect::<String>().trim().chars().take(64).collect();
+    (!title.is_empty()).then_some(title)
+}
+
 /// The terminal background pixel, for chrome around the grid.
 pub fn background() -> u32 {
     px(THEME.bg)
@@ -154,6 +180,16 @@ pub struct Terminal {
     /// the profile blinks the caret; `blink_on` is the phase the shell last set
     blink: bool,
     blink_on: bool,
+    /// the lines where a prompt started or the user set a mark (see `marks`)
+    marks: Marks,
+    /// the last bytes of the previous read, so a prompt report split between two reads is still seen
+    osc_carry: Vec<u8>,
+    /// scrollback lines this session keeps; marks are kept until the scrollback is full
+    history: usize,
+    /// a title the user typed for the tab (Edit Title); it replaces the program's title
+    custom_title: Option<String>,
+    /// programs that ask for mouse reports get them; off, clicks and the wheel stay with the terminal
+    mouse_reporting: bool,
 }
 
 /// Half a blink period of the caret, in milliseconds (on for one half, off for the next).
@@ -190,9 +226,10 @@ impl Terminal {
             _ => argv,
         };
         let pty = Pty::spawn(argv, &env, cols as u16, rows as u16, login.as_ref())?;
-        let mut term = Term::new(cols, rows, history_lines());
+        let history = history_lines();
+        let mut term = Term::new(cols, rows, history);
         term.set_default_colors(THEME.fg, THEME.bg);
-        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true })
+        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true, marks: Marks::default(), osc_carry: Vec::new(), history, custom_title: None, mouse_reporting: true })
     }
 
     /// The px rect the terminal occupies.
@@ -248,7 +285,7 @@ impl Terminal {
     /// Sends an xterm mouse report for `event` at cell `cell` when the program asked for it (?1000/?1002/?1003, ?1006);
     /// true when sent, so the caller skips its own selection handling.
     pub fn report_mouse(&mut self, event: termcore::mouse::MouseEvent, cell: (usize, usize)) -> bool {
-        if !self.term.mouse_mode().reports(event) { return false; }
+        if !self.mouse_reporting || !self.term.mouse_mode().reports(event) { return false; }
         let bytes = termcore::mouse::encode(event, cell.0, cell.1, self.term.mouse_sgr());
         self.write(&bytes);
         true
@@ -270,6 +307,7 @@ impl Terminal {
         let background = self.background();
         self.canvas.px.fill(background);
         self.selection = None;
+        self.marks.forget_from(self.term.line_count());
         self.damage.invalidate_all(rows);
         self.area = area;
     }
@@ -294,7 +332,7 @@ impl Terminal {
             match self.pty.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
-                    self.term.advance(&buf[..n]);
+                    self.advance_marked(&buf[..n]);
                     fed += n;
                     changed = true;
                 }
@@ -331,7 +369,7 @@ impl Terminal {
             self.selection = None;
         }
         // A program that asked for mouse reports (htop, vim, tmux with `mouse on`) gets wheel events, not arrow keys.
-        if self.term.mouse_mode().reports(termcore::mouse::MouseEvent::WheelUp) {
+        if self.mouse_reporting && self.term.mouse_mode().reports(termcore::mouse::MouseEvent::WheelUp) {
             let ev = if lines > 0 { termcore::mouse::MouseEvent::WheelUp } else { termcore::mouse::MouseEvent::WheelDown };
             let (cols, rows) = (self.term.cols(), self.term.rows());
             for _ in 0..lines.unsigned_abs().min(8) {
@@ -358,13 +396,19 @@ impl Terminal {
         let (cx, cy) = self.term.cursor();
         let (show, shape) = self.cursor_state();
         let cols = self.term.cols();
+        let rows = self.term.rows();
+        let mark_rows = self.mark_rows();
         let mut changed = Vec::new();
-        for y in 0..self.term.rows() {
+        for y in 0..rows {
             let cells = self.term.visible_row(y);
             let cursor = (show && y == cy).then(|| Cursor { col: cx.min(cols - 1), shape });
-            let hash = with_shape(row_hash(cells, cursor.map(|c| c.col)), shape_code(shape));
+            let marked = mark_rows[y];
+            let hash = with_shape(row_hash(cells, cursor.map(|c| c.col)), shape_code(shape) | if marked { MARKED } else { 0 });
             if self.damage.update(y, hash) {
                 paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, &termcore::palette::THEMES[self.theme]), y, cells, cols, cursor);
+                if marked {
+                    paint_mark(&mut self.canvas, &self.metrics, y, y + 1 == rows);
+                }
                 changed.push(y);
             }
         }
@@ -393,7 +437,7 @@ impl Terminal {
     /// Feeds bytes as if the child wrote them.
     #[cfg(any(test, feature = "testkit"))]
     pub fn feed(&mut self, bytes: &[u8]) {
-        self.term.advance(bytes);
+        self.advance_marked(bytes);
     }
 
     /// Sets the profile caret: `shape` replaces the default block (None keeps the program's choice) and `blink`
@@ -429,12 +473,18 @@ impl Terminal {
         let (cx, cy) = self.term.cursor();
         let (show, shape) = self.cursor_state();
         let cols = self.term.cols();
-        for y in 0..self.term.rows() {
+        let rows = self.term.rows();
+        let mark_rows = self.mark_rows();
+        for y in 0..rows {
             let cells = self.term.visible_row(y);
             let cursor = (show && y == cy).then(|| Cursor { col: cx.min(cols - 1), shape });
-            let hash = with_shape(row_hash(cells, cursor.map(|c| c.col)), shape_code(shape));
+            let marked = mark_rows[y];
+            let hash = with_shape(row_hash(cells, cursor.map(|c| c.col)), shape_code(shape) | if marked { MARKED } else { 0 });
             if self.damage.update(y, hash) {
                 paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, &termcore::palette::THEMES[self.theme]), y, cells, cols, cursor);
+                if marked {
+                    paint_mark(&mut self.canvas, &self.metrics, y, y + 1 == rows);
+                }
             }
         }
         s.copy(self.canvas.view(), self.area.0, self.area.1);
@@ -462,6 +512,9 @@ impl Terminal {
 
     /// Tab caption: the title the program set, else the running job's name, else `shell N`.
     pub fn title(&self, index: usize) -> String {
+        if let Some(title) = &self.custom_title {
+            return title.clone();
+        }
         termcore::tabs::label(self.term.title(), self.job().as_deref(), index as u32 + 1)
     }
 
@@ -517,7 +570,7 @@ impl Terminal {
 
     /// Drops the highlights of the other matches; the current one stays selected.
     pub fn clear_find(&mut self) { self.find.clear(); }
-    pub fn clear_history(&mut self) { self.term.clear_history(); self.selection = None; self.search_match = None; self.find.clear(); }
+    pub fn clear_history(&mut self) { self.term.clear_history(); self.marks.clear(); self.selection = None; self.search_match = None; self.find.clear(); }
     pub fn reset(&mut self) { self.term.advance(b"\x1bc"); self.clear_history(); self.damage.invalidate_all(self.term.rows()); }
     pub fn select_all(&mut self) {
         self.selection = Some(Selection { anchor: (0, 0), head: (self.term.cols() - 1, self.term.rows() - 1) });
@@ -528,6 +581,90 @@ impl Terminal {
     }
     pub fn take_clipboard(&mut self) -> Option<String> { self.term.take_clipboard() }
     pub fn cwd(&self) -> Option<String> { self.pty.cwd() }
+
+    /// Sets the tab title the user typed; an empty one puts the program's own title back.
+    pub fn set_custom_title(&mut self, typed: &str) {
+        self.custom_title = clean_title(typed);
+    }
+
+    /// The title the user typed for this tab, if any.
+    pub fn custom_title(&self) -> Option<&str> {
+        self.custom_title.as_deref()
+    }
+
+    /// Lets programs that asked for mouse reports receive them (on), or keeps clicks and the wheel for the terminal (off).
+    pub fn set_mouse_reporting(&mut self, on: bool) {
+        self.mouse_reporting = on;
+    }
+
+    /// Scrollback lines above the screen (none on the alternate screen).
+    fn history_len(&self) -> usize {
+        self.term.line_count().saturating_sub(self.term.rows())
+    }
+
+    /// Feeds the emulator and notes the lines where the shell reported a prompt start. Once the scrollback is full every
+    /// newline can shift the numbering, so the old marks go then.
+    fn advance_marked(&mut self, bytes: &[u8]) {
+        if self.history_len() >= self.history && bytes.contains(&b'\n') {
+            self.marks.clear();
+        }
+        let starts = marks::prompt_starts(&self.osc_carry, bytes);
+        self.osc_carry = marks::tail(&self.osc_carry, bytes);
+        let mut at = 0;
+        for start in starts {
+            self.term.advance(&bytes[at..start]);
+            at = start;
+            if !self.term.alt_screen_active() {
+                let line = self.history_len() + self.term.cursor().1;
+                self.marks.add(line);
+            }
+        }
+        self.term.advance(&bytes[at..]);
+    }
+
+    /// Whether each screen row shows a marked line.
+    fn mark_rows(&self) -> Vec<bool> {
+        let rows = self.term.rows();
+        if self.marks.is_empty() || self.term.alt_screen_active() {
+            return vec![false; rows];
+        }
+        let top = self.history_len().saturating_sub(self.term.view_offset());
+        (0..rows).map(|y| self.marks.contains(top + y)).collect()
+    }
+
+    /// Marks the line the caret is on (the top row while scrolled back), or removes the mark there: Some(true) when it is
+    /// marked now. None on the alternate screen, which keeps no marks.
+    pub fn toggle_mark(&mut self) -> Option<bool> {
+        if self.term.alt_screen_active() {
+            return None;
+        }
+        let view = self.term.view_offset();
+        let line = if view == 0 { self.history_len() + self.term.cursor().1 } else { self.history_len().saturating_sub(view) };
+        Some(self.marks.toggle(line))
+    }
+
+    /// Scrolls so the previous (or next) mark is on the top row; after the last mark the view returns to the live screen.
+    /// False when there is nowhere to go.
+    pub fn jump_mark(&mut self, forward: bool) -> bool {
+        if self.term.alt_screen_active() {
+            return false;
+        }
+        let (history, view) = (self.history_len(), self.term.view_offset());
+        let target = match self.marks.jump(history, view, forward) {
+            Some(target) => target,
+            None if forward && view > 0 => 0,
+            None => return false,
+        };
+        self.term.reset_view();
+        self.term.scroll_view(target as isize);
+        self.selection = None;
+        true
+    }
+
+    /// How many marks the session holds.
+    pub fn mark_count(&self) -> usize {
+        self.marks.len()
+    }
 
     /// The visible row `row` as text, trailing blanks dropped (for link detection on a tap).
     pub fn row_text(&self, row: usize) -> String {
@@ -782,5 +919,80 @@ mod tests {
         t.draw(&mut Surface { w: 400, h: 650, stride: 400, px: &mut buf, y0: 0 });
         assert_eq!(buf[0], 0, "drawn at the new origin");
         assert_eq!(buf[60 * 400], px(THEME.bg));
+    }
+
+    #[test]
+    fn prompt_reports_become_marks_the_view_jumps_between() {
+        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
+        for i in 0..30 {
+            t.feed(format!("line{i}\r\n").as_bytes());
+        }
+        t.feed(b"\x1b]133;A\x07$ one\r\n");
+        for i in 0..30 {
+            t.feed(format!("more{i}\r\n").as_bytes());
+        }
+        t.feed(b"\x1b]133;A\x07$ two");
+        assert_eq!(t.mark_count(), 2, "one mark for each reported prompt");
+        assert_eq!(t.mark_rows().iter().filter(|&&m| m).count(), 1, "the second prompt is on the live screen, the first is in the scrollback");
+        assert!(t.jump_mark(false), "there is a mark above the screen");
+        assert!(t.viewport_text().starts_with("$ one"), "the marked line is the top row: {:?}", t.viewport_text());
+        assert!(t.mark_rows()[0], "and it carries the tick");
+        assert!(!t.jump_mark(false), "no mark above the first one");
+        assert!(t.jump_mark(true), "forward returns to the live screen");
+        assert_eq!(t.term.view_offset(), 0);
+        assert!(!t.jump_mark(true), "already live, no mark below");
+        t.clear_history();
+        assert_eq!(t.mark_count(), 0, "clearing the scrollback drops the marks");
+    }
+
+    #[test]
+    fn a_mark_can_be_set_and_removed_on_the_caret_line() {
+        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
+        t.feed(b"abc");
+        assert_eq!(t.toggle_mark(), Some(true));
+        assert_eq!(t.mark_count(), 1);
+        assert!(t.mark_rows()[0]);
+        assert_eq!(t.toggle_mark(), Some(false), "a second toggle removes it");
+        assert_eq!(t.mark_count(), 0);
+        t.feed(b"\x1b[?1049h");
+        assert_eq!(t.toggle_mark(), None, "no marks on the alternate screen");
+    }
+
+    #[test]
+    fn a_marked_row_is_drawn_with_the_tick_in_the_margin() {
+        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
+        t.feed(b"abc");
+        t.repaint();
+        assert_eq!(t.toggle_mark(), Some(true));
+        assert!(t.repaint().contains(&0), "the marked row is repainted");
+        let y = (t.metrics.pad + t.metrics.ch / 2) as usize;
+        assert_eq!(t.canvas.px[y * t.canvas.w], MARK);
+        assert_eq!(t.canvas.px[(y + 4 * t.metrics.ch as usize) * t.canvas.w], px(THEME.bg), "other rows have none");
+    }
+
+    #[test]
+    fn a_typed_title_replaces_the_program_title_until_it_is_cleared() {
+        assert_eq!(clean_title("  Build\u{7} log  ").as_deref(), Some("Build log"));
+        assert_eq!(clean_title("   \t"), None);
+        assert_eq!(clean_title(&"x".repeat(100)).map(|t| t.chars().count()), Some(64));
+        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
+        assert_eq!(t.title(0), "shell 1");
+        t.set_custom_title("deploy");
+        assert_eq!((t.title(0).as_str(), t.custom_title()), ("deploy", Some("deploy")));
+        t.set_custom_title("");
+        assert_eq!((t.title(0).as_str(), t.custom_title()), ("shell 1", None));
+    }
+
+    #[test]
+    fn mouse_reports_reach_programs_only_while_reporting_is_allowed() {
+        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
+        let press = termcore::mouse::MouseEvent::Press;
+        assert!(!t.report_mouse(press, (1, 1)), "no program asked for the mouse");
+        t.feed(b"\x1b[?1000h\x1b[?1006h");
+        assert!(t.report_mouse(press, (1, 1)));
+        t.set_mouse_reporting(false);
+        assert!(!t.report_mouse(press, (1, 1)), "off: the terminal keeps the click");
+        t.set_mouse_reporting(true);
+        assert!(t.report_mouse(press, (1, 1)));
     }
 }

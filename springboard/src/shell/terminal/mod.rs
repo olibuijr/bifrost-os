@@ -31,15 +31,21 @@ mod split;
 mod control;
 mod find;
 mod groups;
+mod help;
 mod input;
+mod launch;
 mod links;
+mod marks;
 mod menus;
 #[allow(dead_code)]
 pub mod profile_table;
 mod profiles;
+mod selection;
 mod session;
 mod ssh;
+mod startup;
 mod tabs;
+mod title;
 mod view;
 mod window;
 #[cfg(test)]
@@ -53,7 +59,9 @@ const BADGE: u32 = pack(38, 38, 38, 255);
 const RED: u32 = pack(224, 90, 79, 255);
 const ACCENT: u32 = pack(42, 166, 106, 255);
 const ROW: f32 = 40.0;
-const MENU: [&str; 24] = [
+/// Height of one line of the help page.
+const HELP_PITCH: f32 = 30.0;
+const MENU: [&str; 41] = [
     "Find in scrollback",
     "Smaller text",
     "Larger text",
@@ -78,7 +86,44 @@ const MENU: [&str; 24] = [
     "Close split pane",
     "Save window group",
     "Open window group",
+    "Edit tab title",
+    "Close other tabs",
+    "Move tab left",
+    "Move tab right",
+    "Mark line",
+    "Previous mark",
+    "Next mark",
+    "Use selection for find",
+    "Paste escaped text",
+    "Paste selection",
+    "Search the web for selection",
+    "Open man page for selection",
+    "Save selection to Files",
+    "Allow mouse reporting",
+    "Login shell",
+    "Open window group at launch",
+    "Terminal help",
 ];
+/// More-menu rows added after the first 24; `terminal_menu_action` and the row details match on these.
+pub(crate) mod item {
+    pub const TITLE: usize = 24;
+    pub const CLOSE_OTHERS: usize = 25;
+    pub const MOVE_LEFT: usize = 26;
+    pub const MOVE_RIGHT: usize = 27;
+    pub const MARK: usize = 28;
+    pub const PREVIOUS_MARK: usize = 29;
+    pub const NEXT_MARK: usize = 30;
+    pub const FIND_SELECTION: usize = 31;
+    pub const PASTE_ESCAPED: usize = 32;
+    pub const PASTE_SELECTION: usize = 33;
+    pub const SEARCH_WEB: usize = 34;
+    pub const MAN_PAGE: usize = 35;
+    pub const SAVE_SELECTION: usize = 36;
+    pub const MOUSE: usize = 37;
+    pub const LOGIN_SHELL: usize = 38;
+    pub const GROUP_LAUNCH: usize = 39;
+    pub const HELP: usize = 40;
+}
 /// True for the Find line's "n of m" match count (secondary), false for "No matches" and warnings (red).
 fn find_count(message: &str) -> bool {
     message.split_once(" of ").is_some_and(|(a, b)| a.parse::<usize>().is_ok() && b.parse::<usize>().is_ok())
@@ -92,6 +137,10 @@ fn menu_key(i: usize) -> Option<&'static str> {
         7 => "\u{2318}A",
         8 => "\u{2318}C",
         11 => "\u{2318}K",
+        item::MARK => "\u{2318}U",
+        item::PREVIOUS_MARK => "\u{2318}\u{2191}",
+        item::NEXT_MARK => "\u{2318}\u{2193}",
+        item::FIND_SELECTION => "\u{2318}E",
         _ => return None,
     })
 }
@@ -106,6 +155,12 @@ pub enum Panel {
     More,
     /// New command: a line typed here runs in a new tab that closes when the command ends
     Command,
+    /// Edit tab title: a name for the active tab
+    Title,
+    /// Login shell: the program new tabs run
+    Shell,
+    /// Terminal help: the keys and gestures
+    Help,
 }
 pub struct TerminalUi {
     pub settings: Settings,
@@ -141,6 +196,16 @@ pub struct TerminalUi {
     pub secure: bool,
     /// the command line of the New command panel
     command: Option<TextField>,
+    /// the line of the Edit tab title and Login shell panels (one is open at a time)
+    entry: Option<TextField>,
+    /// programs that ask for mouse reports get them (More menu row; saved in prefs)
+    pub mouse_reporting: bool,
+    /// the shell new tabs run; None is the account's login shell
+    pub login_shell: Option<String>,
+    /// the saved window group opens when the Terminal starts
+    pub group_launch: bool,
+    /// Close other tabs named running programs and waits for a second choice
+    confirm_others: bool,
 }
 impl Default for TerminalUi {
     fn default() -> Self {
@@ -174,6 +239,11 @@ impl Default for TerminalUi {
             blink: false,
             secure: false,
             command: None,
+            entry: None,
+            mouse_reporting: true,
+            login_shell: None,
+            group_launch: false,
+            confirm_others: false,
         }
     }
 }
@@ -194,6 +264,9 @@ impl TerminalUi {
         self.cursor = profile_table::CursorStyle::from_key(prefs.get("terminal.cursor"));
         self.blink = prefs.get("terminal.blink") == Some("1");
         self.secure = prefs.get("terminal.secure_input") == Some("1");
+        self.mouse_reporting = prefs.get("terminal.mouse") != Some("0");
+        self.login_shell = prefs.get(startup::SHELL_KEY).filter(|path| !path.is_empty()).map(str::to_string);
+        self.group_launch = prefs.get(startup::LAUNCH_KEY) == Some("1");
     }
     pub fn next_wake(&self) -> Option<f64> {
         Some(if self.panel == Panel::Processes {

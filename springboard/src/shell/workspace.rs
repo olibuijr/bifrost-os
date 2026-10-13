@@ -211,6 +211,10 @@ impl super::Shell {
             },
             Route::App(key) => {
                 let Some(def) = super::apps::apps().iter().find(|a| a.icon == key).map(|a| a.id) else { return (WorkspaceStatus::NotFound, Vec::new()) };
+                // the Terminal is not an external app: its ssh, telnet and x-man-page links run in a new tab
+                if def == super::AppId::Terminal {
+                    return if self.terminal_open_link(url, t) { (WorkspaceStatus::Ok, Vec::new()) } else { denied() };
+                }
                 self.desk_open_or_start(def, t);
                 if let super::AppId::External(slot) = def {
                     self.ext_send(slot as usize, &ToApp::Open { url: url.to_string() });

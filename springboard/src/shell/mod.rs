@@ -4060,11 +4060,15 @@ impl Shell {
         if self.term.as_ref().is_some_and(|t| t.alive()) {
             return;
         }
-        self.new_terminal_tab(None);
+        self.terminal_launch_tabs();
     }
 
+    /// Opens a tab running the login shell: the one chosen in the Terminal's More menu, else the account's.
     fn new_terminal_tab(&mut self, dir: Option<String>) -> bool {
-        self.spawn_terminal_tab(self.term_cmd, dir)
+        match self.terminal_login_shell() {
+            Some(shell) => self.spawn_terminal_tab(&[shell.as_str(), "-l"], dir),
+            None => self.spawn_terminal_tab(self.term_cmd, dir),
+        }
     }
 
     /// Opens a tab running `argv` (the login shell, or a New command line); `dir` is cd'd into first.
@@ -4074,6 +4078,7 @@ impl Shell {
             Ok(mut term) => {
                 term.appearance(self.terminal_ui.settings.theme, size);
                 term.set_cursor(Some(self.terminal_ui.cursor.shape()), self.terminal_ui.blink);
+                term.set_mouse_reporting(self.terminal_ui.mouse_reporting);
                 if let Some(dir) = dir { term.write(format!("cd '{}'\r", dir.replace('\'', "'\\''")).as_bytes()); }
                 self.term.push(term);
                 self.term_touch = termtouch::TermTouch::default();
