@@ -1,0 +1,225 @@
+{
+ "app": "Voice Memos",
+ "bifrost_app": "voicememos-desktop",
+ "evidence": [
+  "reference bundle absent: ~/Projects/macos-ref/extract/ref27/System/Applications has no Voice Memos.app and `bifrost pc ref index` lists none, so there are no REA evidence ids; rows come from the shipped app's known menus and settings"
+ ],
+ "features": [
+  {
+   "feature": "Record a memo",
+   "area": "toolbar",
+   "apple": "record button",
+   "status": "parity",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:406",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Pause and resume recording",
+   "area": "toolbar",
+   "apple": "pause while recording",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Recording only stops",
+   "wire": "Pause state between start_recording and finish_recording; append on resume"
+  },
+  {
+   "feature": "Recordings list with dates and durations",
+   "area": "view",
+   "apple": "sidebar list",
+   "status": "parity",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:913",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Playback, scrub, skip",
+   "area": "toolbar",
+   "apple": "transport",
+   "status": "parity",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:1157",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Playback volume",
+   "area": "toolbar",
+   "apple": "volume",
+   "status": "parity",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:979",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Rename",
+   "area": "menu",
+   "apple": "Recording > Rename",
+   "status": "parity",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:599",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Delete",
+   "area": "menu",
+   "apple": "Edit > Delete",
+   "status": "parity",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:693",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Recently Deleted with recover",
+   "area": "view",
+   "apple": "sidebar Recently Deleted",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Delete removes at once",
+   "wire": "Move to a .deleted folder; Recently Deleted sidebar row with Recover and Delete Forever"
+  },
+  {
+   "feature": "Trim",
+   "area": "menu",
+   "apple": "Edit > Trim",
+   "status": "parity",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:624",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Replace part of a recording",
+   "area": "menu",
+   "apple": "Edit > Replace",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Record over a selected span in the editor and splice in store.rs"
+  },
+  {
+   "feature": "Split at playhead",
+   "area": "menu",
+   "apple": "Recording > Split",
+   "status": "parity",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:745",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Enhance recording",
+   "area": "menu",
+   "apple": "Enhance",
+   "status": "parity",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:769",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Skip silence",
+   "area": "settings",
+   "apple": "playback options",
+   "status": "parity",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:482",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Playback speed",
+   "area": "settings",
+   "apple": "playback options",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Rate control in the transport passed to the audio player"
+  },
+  {
+   "feature": "Notes per memo",
+   "area": "panel",
+   "apple": "notes",
+   "status": "parity",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:806",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Export / share",
+   "area": "menu",
+   "apple": "File > Share",
+   "status": "partial",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:789",
+   "note": "Fixed copy to Downloads; no save panel",
+   "wire": "Use the document SaveTo flow as photobooth-desktop does"
+  },
+  {
+   "feature": "Folders",
+   "area": "menu",
+   "apple": "File > New Folder",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Subfolders in the memo directory, a sidebar section, Move to Folder"
+  },
+  {
+   "feature": "Favourites",
+   "area": "menu",
+   "apple": "Favorite",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Favourite flag in the sidecar, Favourites row"
+  },
+  {
+   "feature": "Search recordings",
+   "area": "toolbar",
+   "apple": "search field",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Search titles and notes in the sidebar"
+  },
+  {
+   "feature": "Transcription",
+   "area": "panel",
+   "apple": "Transcript",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Local speech-to-text stored in a sidecar and shown in the notes pane"
+  },
+  {
+   "feature": "Input device and quality settings",
+   "area": "settings",
+   "apple": "Settings",
+   "status": "partial",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:340",
+   "note": "Input taken from the device listing; no settings UI",
+   "wire": "Settings window with input picker and sample rate"
+  },
+  {
+   "feature": "System Now Playing integration",
+   "area": "integration",
+   "apple": "media controls",
+   "status": "parity",
+   "bifrost": "springboard/apps/voicememos-desktop/src/voicememos.rs:352",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Location-based naming",
+   "area": "settings",
+   "apple": "Settings > location naming",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Needs a location service",
+   "wire": ""
+  },
+  {
+   "feature": "Cloud sync across devices",
+   "area": "integration",
+   "apple": "cloud sync",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Vendor cloud",
+   "wire": ""
+  }
+ ]
+}

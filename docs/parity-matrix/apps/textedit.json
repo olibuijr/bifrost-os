@@ -1,0 +1,437 @@
+{
+ "app": "TextEdit",
+ "bifrost_app": "textedit-desktop",
+ "evidence": [
+  "ref27/System/Applications/TextEdit.app/Contents/Info.plist",
+  "ref-extract TextEdit.app/Contents/Resources/Edit.loctable",
+  "ref-extract TextEdit.app/Contents/Resources/Preferences.loctable",
+  "ref-extract TextEdit.app/Contents/Resources/Localizable.loctable",
+  "ref-extract TextEdit.app/Contents/Resources/PrintAccessory.loctable",
+  "ref-extract TextEdit.app/Contents/Resources/LinePanel.loctable",
+  "TextEdit.app/Contents/Resources/Base.lproj/{DocumentProperties,Edit,EncodingAccessory,Preferences,PrintPanelAccessory,SelectEncodingsPanel,SelectLinePanel}.nib"
+ ],
+ "summary": {
+  "features": 46,
+  "parity": 10,
+  "partial": 10,
+  "gap": 24,
+  "n/a": 2,
+  "coverage_pct": 34.1
+ },
+ "features": [
+  {
+   "feature": "New / Open / Open Recent / Close / Save / Save As / Duplicate / Rename / Move To / Revert",
+   "area": "menu",
+   "apple": "Edit.nib: File menu (New, Open…, Open Recent, Close, Save, Save As…, Duplicate, Revert to Saved)",
+   "status": "parity",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:668",
+   "note": "SDK DocumentController::file_menu (springboard/sdk/src/document.rs:822) supplies the standard items.",
+   "wire": ""
+  },
+  {
+   "feature": "Save All",
+   "area": "menu",
+   "apple": "Edit.nib: File > Save All",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No save-all across open documents.",
+   "wire": "Add \"Save All\" to file_menu (main.rs:668) iterating self.docs open documents and calling the controller save for each edited one."
+  },
+  {
+   "feature": "Rich text documents (RTF read/write)",
+   "area": "document",
+   "apple": "Info.plist CFBundleDocumentTypes: RTF (Editor)",
+   "status": "parity",
+   "bifrost": "springboard/apps/textedit-desktop/src/document.rs:58",
+   "note": "RTF subset: fonts, char + paragraph formatting, tab width.",
+   "wire": ""
+  },
+  {
+   "feature": "Plain text documents",
+   "area": "document",
+   "apple": "Info.plist CFBundleDocumentTypes: plain text (Editor)",
+   "status": "parity",
+   "bifrost": "springboard/apps/textedit-desktop/src/document.rs:60",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "HTML documents",
+   "area": "document",
+   "apple": "Info.plist CFBundleDocumentTypes: HTML (Editor)",
+   "status": "parity",
+   "bifrost": "springboard/apps/textedit-desktop/src/document.rs:59",
+   "note": "Read and write via html.rs.",
+   "wire": ""
+  },
+  {
+   "feature": "RTFD (rich text with attachments/images)",
+   "area": "document",
+   "apple": "Info.plist: RTFD (Editor); Localizable: RTFD save notices",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Pictures are skipped by the RTF reader (rtf.rs:6).",
+   "wire": "Add an RTFD package reader/writer (folder with TXT.rtf + attachments) in a new rtfd.rs; needs an inline image cell kind in text.rs and drawing in view.rs; register the type in document.rs."
+  },
+  {
+   "feature": "Word .docx / .doc / Word XML / ODT / web archive",
+   "area": "document",
+   "apple": "Info.plist CFBundleDocumentTypes: Word 2007/2003 XML/97, OpenDocument Text, Web archive",
+   "status": "gap",
+   "bifrost": "",
+   "note": "None of these formats.",
+   "wire": "Start with .docx and .odt (zip + XML): new docx.rs/odt.rs mapping paragraphs, runs (b/i/u, font, size, colour) and alignment to text.rs cells; add types in document.rs read/write."
+  },
+  {
+   "feature": "Plain text encodings (open/save encoding accessory, customize list)",
+   "area": "panel",
+   "apple": "EncodingAccessory.nib, SelectEncodingsPanel.nib; Localizable: encoding errors, Customize Encodings List",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Plain text is UTF-8 only.",
+   "wire": "Add an encoding popup to the open/save panels via SDK panel accessory (or a Format > Text Encoding submenu); decode/encode UTF-16/Latin-1/MacRoman in document.rs."
+  },
+  {
+   "feature": "Export as PDF",
+   "area": "menu",
+   "apple": "Edit.nib: File > Export as PDF…",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/print.rs:1",
+   "note": "print.rs already renders PDF for printing; no Export as PDF menu item.",
+   "wire": "Add File > Export as PDF… in file_menu (main.rs:668) that runs print.rs PDF generation and writes it through ctx.save_document with public.pdf."
+  },
+  {
+   "feature": "Print with page setup",
+   "area": "menu",
+   "apple": "Edit.nib: File > Page Setup…, Print…; PrintAccessory: header and footer, rewrap to fit page",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:672",
+   "note": "Print, paper size and orientation exist; no header/footer or rewrap options.",
+   "wire": "Add Header and Footer (title, page n of m) and Rewrap toggles to the print path in print.rs and as checked items under the Print submenu."
+  },
+  {
+   "feature": "Show/Hide document properties (author, title, subject, keywords, copyright)",
+   "area": "panel",
+   "apple": "DocumentProperties.nib; Localizable: Show/Hide Properties, Change Author/Title/…",
+   "status": "gap",
+   "bifrost": "",
+   "note": "RTF reader skips the info group (rtf.rs:6).",
+   "wire": "Read/write the RTF \\info group in rtf.rs into TextDocument properties; add File > Show Properties opening a sheet with the fields."
+  },
+  {
+   "feature": "Undo / Redo",
+   "area": "menu",
+   "apple": "Edit.nib: Edit > Undo, Redo",
+   "status": "parity",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:599",
+   "note": "Named undo actions.",
+   "wire": ""
+  },
+  {
+   "feature": "Cut / Copy / Paste / Select All",
+   "area": "menu",
+   "apple": "Edit.nib: Edit > Cut, Copy, Paste, Select All",
+   "status": "parity",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:603",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Paste and Match Style",
+   "area": "menu",
+   "apple": "Edit.nib: Edit > Paste and Match Style",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Paste behaviour only.",
+   "wire": "Add Edit > Paste and Match Style (cmd+alt+shift+v) inserting plain text with the caret style; Action variant in view.rs."
+  },
+  {
+   "feature": "Delete / Complete / Insert (page break, line break, paragraph break)",
+   "area": "menu",
+   "apple": "Edit.nib: Edit > Delete, Complete, Insert submenu",
+   "status": "gap",
+   "bifrost": "",
+   "note": "None.",
+   "wire": "Add Insert submenu items inserting break characters via insert_raw (main.rs:470); Complete = word completion from the document vocabulary."
+  },
+  {
+   "feature": "Attach Files / Add Link",
+   "area": "menu",
+   "apple": "Edit.nib: Edit > Attach Files…, Link…",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No attachments or links.",
+   "wire": "Add a link attribute on cells in text.rs written as RTF \\field HYPERLINK; Edit > Link… sheet; open via ctx.open_url on Cmd-click."
+  },
+  {
+   "feature": "Find, Find Next/Previous, Replace, Replace All",
+   "area": "menu",
+   "apple": "Edit.nib: Edit > Find submenu",
+   "status": "parity",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:607",
+   "note": "Find bar with replace.",
+   "wire": ""
+  },
+  {
+   "feature": "Use Selection for Find / Jump to Selection",
+   "area": "menu",
+   "apple": "Edit.nib: Edit > Find > Use Selection for Find, Jump to Selection",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Missing.",
+   "wire": "Add both to the Find group in edit_menu: Cmd+E copies the selection into self.find; Cmd+J scrolls to caret."
+  },
+  {
+   "feature": "Spelling: check now, while typing, learn, ignore, correct",
+   "area": "menu",
+   "apple": "Edit.nib: Edit > Spelling and Grammar",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:613",
+   "note": "No grammar check, no Correct Spelling Automatically, no Show Spelling and Grammar panel.",
+   "wire": "Add a \"Correct Spelling Automatically\" checked item applying spell.rs best guess on word end in type_into (main.rs:454); grammar is out of scope."
+  },
+  {
+   "feature": "Substitutions (smart quotes, dashes, links, text replacement, data detectors)",
+   "area": "menu",
+   "apple": "Edit.nib: Edit > Substitutions; Preferences.nib: Smart quotes/dashes/links",
+   "status": "gap",
+   "bifrost": "",
+   "note": "None.",
+   "wire": "Add an Edit > Substitutions submenu with checked Smart Quotes / Smart Dashes; apply in type_into (main.rs:454) when typing quotes or \"--\"; persist in preferences."
+  },
+  {
+   "feature": "Transformations (uppercase, lowercase, capitalise)",
+   "area": "menu",
+   "apple": "Edit.nib: Edit > Transformations",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Missing.",
+   "wire": "Add three items in edit_menu that replace the selection with its transformed string through the text.rs undoable replace."
+  },
+  {
+   "feature": "Speech",
+   "area": "menu",
+   "apple": "Edit.nib: Edit > Speech > Start/Stop Speaking",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No TTS.",
+   "wire": "Start/Stop Speaking items calling the SDK speech service with the selection or document."
+  },
+  {
+   "feature": "Bold / Italic / Underline",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Font > Bold, Italic, Underline",
+   "status": "parity",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:628",
+   "note": "Also in format bar.",
+   "wire": ""
+  },
+  {
+   "feature": "Outline / Strikethrough / Kern / Ligatures / Baseline (super/subscript)",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Font > Outline, Kern, Ligatures, Baseline",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Missing.",
+   "wire": "Add strikethrough and super/subscript flags to the cell style in text.rs, RTF \\strike \\super \\sub in rtf.rs, draw in view.rs; Format > Font items."
+  },
+  {
+   "feature": "Font family and size (Bigger/Smaller, Show Fonts)",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Font > Show Fonts, Bigger, Smaller",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:632",
+   "note": "Fixed list of families (text::FAMILIES) and step sizes; no font panel with all system fonts.",
+   "wire": "Replace the FAMILIES submenu with the SDK font panel (Cmd+T) listing installed fonts; store family name in cells."
+  },
+  {
+   "feature": "Text colour / Highlight (Show Colours)",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Font > Show Colours, Highlight",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:651",
+   "note": "Fixed colour palette only; no background highlight.",
+   "wire": "Add a highlight (background colour) attribute in text.rs with RTF \\highlight/\\cb; open SDK colour panel for custom colours."
+  },
+  {
+   "feature": "Copy Style / Paste Style",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Font > Copy Style, Paste Style",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Missing.",
+   "wire": "Store the caret style in the app on Copy Style; apply to the selection on Paste Style (format_menu)."
+  },
+  {
+   "feature": "Alignment (left, centre, right, justify)",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Text > Align Left/Centre/Justify/Right",
+   "status": "parity",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:640",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Line and paragraph spacing",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Text > Spacing…",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:645",
+   "note": "Preset line spacings only; no before/after paragraph spacing sheet.",
+   "wire": "Add a Spacing… sheet with line height multiple and paragraph before/after values stored in paragraph props (text.rs:68)."
+  },
+  {
+   "feature": "Lists (bullets, numbers)",
+   "area": "menu",
+   "apple": "Edit.nib: Format > List…",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:649",
+   "note": "Bullets and numbers only; no list styles/prefix/start number.",
+   "wire": "Add a List… sheet choosing marker style and start number; extend ListKind in text.rs."
+  },
+  {
+   "feature": "Tables",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Table…",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No tables.",
+   "wire": "Large: table cell blocks in the text model and RTF \\trowd; defer."
+  },
+  {
+   "feature": "Writing direction (left-to-right / right-to-left)",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Text > Writing Direction",
+   "status": "gap",
+   "bifrost": "",
+   "note": "LTR only.",
+   "wire": "Add a paragraph direction prop and right-aligned bidi layout in layout.rs; menu items under Text."
+  },
+  {
+   "feature": "Show/Hide Ruler, Copy/Paste Ruler",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Text > Show Ruler, Copy Ruler, Paste Ruler; Preferences: Show ruler",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/view.rs:656",
+   "note": "Tab ruler always shown in rich text; no toggle, no copy/paste ruler, only tab distance (no indents).",
+   "wire": "Add Format > Text > Show Ruler (cmd+r) toggling geometry(..., ruler) in main.rs:125; add first-line/left indent markers."
+  },
+  {
+   "feature": "Make Plain Text / Make Rich Text",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Make Plain Text; Localizable: conversion confirms",
+   "status": "parity",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:658",
+   "note": "No confirm when plain conversion loses formatting.",
+   "wire": ""
+  },
+  {
+   "feature": "Prevent Editing (read-only)",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Prevent Editing / Allow Editing",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Missing.",
+   "wire": "Add a read_only flag on TextDocument; Format > Prevent Editing toggles it; type_into/backspace/perform refuse edits when set."
+  },
+  {
+   "feature": "Wrap to Page / Wrap to Window",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Wrap to Page; Localizable: Wrap to Window",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Always wraps to the page width.",
+   "wire": "Add a wrap mode to the layout width in ensure_layout (main.rs:187) and a Format item that switches between page and window width."
+  },
+  {
+   "feature": "Allow Hyphenation",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Allow Hyphenation",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No hyphenation.",
+   "wire": "Low priority; soft-hyphen breaking in layout.rs."
+  },
+  {
+   "feature": "Vertical layout",
+   "area": "menu",
+   "apple": "Edit.nib: Format > Make Vertical Layout",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "CJK vertical text layout; out of scope for current text stack.",
+   "wire": ""
+  },
+  {
+   "feature": "Zoom in / out / actual size",
+   "area": "menu",
+   "apple": "Edit.nib: View > Zoom In, Zoom Out, Actual Size",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No zoom.",
+   "wire": "Add a View menu with Zoom In/Out/Actual Size scaling the page in view.rs geometry and draw_canvas (main.rs:837)."
+  },
+  {
+   "feature": "Full screen and dark background for windows",
+   "area": "menu",
+   "apple": "Edit.nib: View > Enter Full Screen, Use Dark Background for Windows",
+   "status": "partial",
+   "bifrost": "",
+   "note": "Full screen is shell window chrome; no dark page option.",
+   "wire": "Add View > Use Dark Background for Windows toggling the page fill in view.rs."
+  },
+  {
+   "feature": "Go to line (Select Line…)",
+   "area": "panel",
+   "apple": "SelectLinePanel.nib, LinePanel strings",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Missing.",
+   "wire": "Add Edit > Find > Select Line… (cmd+L) sheet taking \"n\" or \"n-m\" and selecting those lines via text.rs line index."
+  },
+  {
+   "feature": "Settings: new document format, window size, fonts",
+   "area": "settings",
+   "apple": "Preferences.nib: New Document tab (format, wrap to page, window size, fonts)",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No settings window.",
+   "wire": "Add a Settings window (SDK settings pane): default rich/plain, default fonts, window width/height in characters; apply on New in the controller."
+  },
+  {
+   "feature": "Settings: open and save options (HTML/RTF as code, encodings, HTML saving, .txt extension)",
+   "area": "settings",
+   "apple": "Preferences.nib: Open and Save tab",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No settings.",
+   "wire": "Add Open and Save pane: show HTML/RTF as code, default encodings, HTML doctype/CSS style, add .txt; consult them in document.rs read/write."
+  },
+  {
+   "feature": "Settings: spelling and substitution defaults",
+   "area": "settings",
+   "apple": "Preferences.nib: Options (check spelling as you type, grammar, correct automatically, smart quotes/dashes/links)",
+   "status": "partial",
+   "bifrost": "springboard/apps/textedit-desktop/src/main.rs:702",
+   "note": "Learned words persist in preferences; check-while-typing toggle not persisted as a default.",
+   "wire": "Persist spelling.enabled and substitutions defaults in preferences and expose them in the Settings window."
+  },
+  {
+   "feature": "Services: new window with selection / open selected file",
+   "area": "integration",
+   "apple": "Info.plist NSServices: New window containing selection; Open selected file",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No services provider.",
+   "wire": "Register two text services in the app manifest that create a new document with the text or open the named path through the controller; needs SDK services."
+  },
+  {
+   "feature": "Help",
+   "area": "menu",
+   "apple": "Edit.nib: Help > TextEdit Help",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Apple help book content.",
+   "wire": ""
+  }
+ ]
+}

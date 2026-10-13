@@ -1,0 +1,216 @@
+{
+ "app": "Podcasts",
+ "bifrost_app": "podcasts-desktop",
+ "evidence": [
+  "reference bundle absent: ~/Projects/macos-ref/extract/ref27/System/Applications has no Podcasts.app and `bifrost pc ref index` lists none, so there are no REA evidence ids; rows come from the shipped app's known menus and settings"
+ ],
+ "features": [
+  {
+   "feature": "Follow a show by feed URL",
+   "area": "menu",
+   "apple": "File > Follow a Show by URL",
+   "status": "parity",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:645",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Unfollow / remove a show",
+   "area": "menu",
+   "apple": "show context menu",
+   "status": "parity",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:662",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Library of followed shows",
+   "area": "view",
+   "apple": "sidebar Library > Shows",
+   "status": "parity",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:780",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Episode list per show",
+   "area": "view",
+   "apple": "show page",
+   "status": "parity",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:1154",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Download / remove download",
+   "area": "menu",
+   "apple": "episode menu > Download",
+   "status": "partial",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:341",
+   "note": "Downloads only as part of playing",
+   "wire": "Add Download and Remove Download to an episode context menu, a downloaded badge in draw_rows and a Downloaded sidebar row"
+  },
+  {
+   "feature": "Play/pause, skip back and forward, scrub",
+   "area": "toolbar",
+   "apple": "player controls",
+   "status": "parity",
+   "bifrost": "springboard/apps/podcasts-desktop/src/transport.rs:21",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Playback speed",
+   "area": "menu",
+   "apple": "Controls > Playback Speed",
+   "status": "parity",
+   "bifrost": "springboard/apps/podcasts-desktop/src/transport.rs:31",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Sleep timer",
+   "area": "menu",
+   "apple": "Controls > Sleep Timer",
+   "status": "parity",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:923",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Resume position per episode",
+   "area": "integration",
+   "apple": "playback state",
+   "status": "parity",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:524",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Mark as played / unplayed",
+   "area": "menu",
+   "apple": "episode menu",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Played flag in the store, menu items, dim played rows in draw_rows"
+  },
+  {
+   "feature": "Up Next queue and continuous play",
+   "area": "panel",
+   "apple": "Up Next",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Queue of episode urls, Play Next / Play Last items, auto-advance in end_playback (podcasts.rs:439)"
+  },
+  {
+   "feature": "Refresh feeds",
+   "area": "menu",
+   "apple": "View > Refresh",
+   "status": "partial",
+   "bifrost": "springboard/apps/podcasts-desktop/src/refresh.rs:27",
+   "note": "Batch refresh and status line exist; no manual Refresh command",
+   "wire": "Add a Refresh toolbar item and cmd+R that call fetch_feed for every show"
+  },
+  {
+   "feature": "Search for shows",
+   "area": "toolbar",
+   "apple": "Search sidebar item",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Search field querying an open podcast index; results with Follow buttons"
+  },
+  {
+   "feature": "New episodes across shows",
+   "area": "view",
+   "apple": "Home / New",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Sidebar row merging every show's episodes by date"
+  },
+  {
+   "feature": "Episode notes",
+   "area": "panel",
+   "apple": "episode detail",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Parse item description in feed.rs and show it in an episode detail pane"
+  },
+  {
+   "feature": "Chapters",
+   "area": "panel",
+   "apple": "Chapters",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Parse chapter metadata and list chapters in the player sheet"
+  },
+  {
+   "feature": "Per-show settings (auto-download, keep, order)",
+   "area": "settings",
+   "apple": "show settings sheet",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Per-show options in the store and a settings sheet on the show page"
+  },
+  {
+   "feature": "App settings (skip intervals, refresh period)",
+   "area": "settings",
+   "apple": "Settings window",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Skip intervals are constants",
+   "wire": "Settings window with skip interval choices and refresh period read by transport.rs"
+  },
+  {
+   "feature": "OPML import / export",
+   "area": "document",
+   "apple": "File > Import / Export",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Read and write OPML of followed feeds through the document open/save flow"
+  },
+  {
+   "feature": "System Now Playing integration",
+   "area": "integration",
+   "apple": "media controls",
+   "status": "parity",
+   "bifrost": "springboard/apps/podcasts-desktop/src/podcasts.rs:273",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Transcripts",
+   "area": "panel",
+   "apple": "Transcript view",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Fetch feed transcript links; a transcript panel synced to the position"
+  },
+  {
+   "feature": "App menus: Controls, Episode with shortcuts",
+   "area": "menu",
+   "apple": "MainMenu Controls/Episode",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No main_menu",
+   "wire": "Implement App::main_menu with Controls (Play, Skip, Speed, Sleep) and Episode menus"
+  },
+  {
+   "feature": "Vendor catalogue, charts, paid subscriptions, account sync",
+   "area": "integration",
+   "apple": "Browse / Top Charts",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Vendor-hosted catalogue and accounts",
+   "wire": ""
+  }
+ ]
+}

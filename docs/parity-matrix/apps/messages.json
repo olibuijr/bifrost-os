@@ -1,0 +1,225 @@
+{
+ "app": "Messages",
+ "bifrost_app": "messages-desktop",
+ "evidence": [
+  "reference bundle absent: ~/Projects/macos-ref/extract/ref27/System/Applications has no Messages.app and `bifrost pc ref index` lists none, so there are no REA evidence ids; rows come from the shipped app's known menus and settings"
+ ],
+ "features": [
+  {
+   "feature": "Conversation list with previews and unread counts",
+   "area": "view",
+   "apple": "sidebar list",
+   "status": "parity",
+   "bifrost": "springboard/apps/messages-desktop/src/draw.rs:241",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Send text",
+   "area": "view",
+   "apple": "composer",
+   "status": "parity",
+   "bifrost": "springboard/apps/messages-desktop/src/window.rs:304",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Send attachments",
+   "area": "menu",
+   "apple": "composer + button, drag in",
+   "status": "partial",
+   "bifrost": "springboard/apps/messages-desktop/src/window.rs:320",
+   "note": "Images only; no other files or drag-in",
+   "wire": "Accept any file in the picker (send a file message) and handle drop events"
+  },
+  {
+   "feature": "Paste into composer",
+   "area": "menu",
+   "apple": "Edit > Paste",
+   "status": "parity",
+   "bifrost": "springboard/apps/messages-desktop/src/window.rs:478",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Incoming message notifications",
+   "area": "integration",
+   "apple": "notifications",
+   "status": "parity",
+   "bifrost": "springboard/apps/messages-desktop/src/window.rs:176",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Dock unread badge",
+   "area": "integration",
+   "apple": "dock badge",
+   "status": "parity",
+   "bifrost": "springboard/apps/messages-desktop/src/window.rs:298",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Read receipts",
+   "area": "view",
+   "apple": "Delivered / Read",
+   "status": "parity",
+   "bifrost": "springboard/apps/messages-desktop/src/model.rs:406",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Typing indicator",
+   "area": "view",
+   "apple": "typing bubble",
+   "status": "parity",
+   "bifrost": "springboard/apps/messages-desktop/src/model.rs:281",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Day separators",
+   "area": "view",
+   "apple": "transcript",
+   "status": "parity",
+   "bifrost": "springboard/apps/messages-desktop/src/model.rs:255",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "New conversation",
+   "area": "menu",
+   "apple": "File > New Message",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Rooms come only from sync",
+   "wire": "New Message toolbar item that creates a direct room with an invite in api.rs and selects it"
+  },
+  {
+   "feature": "Delete / leave conversation",
+   "area": "menu",
+   "apple": "Conversation > Delete",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Room row context menu that leaves and forgets the room"
+  },
+  {
+   "feature": "Search",
+   "area": "toolbar",
+   "apple": "search field",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Search field filtering rooms and loaded timeline text"
+  },
+  {
+   "feature": "Reactions",
+   "area": "menu",
+   "apple": "Tapback",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Send and show reaction annotations on bubbles"
+  },
+  {
+   "feature": "Reply to a message",
+   "area": "menu",
+   "apple": "Reply",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Reply relation in send, quoted header in bubble drawing"
+  },
+  {
+   "feature": "Edit and unsend",
+   "area": "menu",
+   "apple": "Edit / Undo Send",
+   "status": "partial",
+   "bifrost": "springboard/apps/messages-desktop/src/protocol.rs:60",
+   "note": "Removed messages render; own messages cannot be edited or removed",
+   "wire": "Context menu on own bubbles: redact, and replace-edit"
+  },
+  {
+   "feature": "End-to-end encryption",
+   "area": "integration",
+   "apple": "encryption",
+   "status": "gap",
+   "bifrost": "springboard/apps/messages-desktop/src/protocol.rs:66",
+   "note": "Encrypted events show a placeholder",
+   "wire": "Integrate an Olm/Megolm implementation for decrypt and encrypted send"
+  },
+  {
+   "feature": "Conversation details (name, members)",
+   "area": "panel",
+   "apple": "Info panel",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Info panel with members and rename"
+  },
+  {
+   "feature": "Mute alerts per conversation",
+   "area": "menu",
+   "apple": "Hide Alerts",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Per-room mute flag that skips ctx.notify"
+  },
+  {
+   "feature": "Pin conversations",
+   "area": "menu",
+   "apple": "Pin",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Pinned rooms sort first"
+  },
+  {
+   "feature": "Account settings and sign out",
+   "area": "settings",
+   "apple": "Settings > Accounts",
+   "status": "partial",
+   "bifrost": "springboard/apps/messages-desktop/src/window.rs:257",
+   "note": "Sign-in sheet; no settings window or sign out",
+   "wire": "Settings window listing the account with Sign Out"
+  },
+  {
+   "feature": "Mark as unread",
+   "area": "menu",
+   "apple": "Conversation menu",
+   "status": "partial",
+   "bifrost": "springboard/apps/messages-desktop/src/window.rs:292",
+   "note": "Read on open only",
+   "wire": "Mark as Unread item"
+  },
+  {
+   "feature": "Emoji picker",
+   "area": "menu",
+   "apple": "Edit > Emoji & Symbols",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Emoji button in the composer"
+  },
+  {
+   "feature": "App menus: Conversation with shortcuts",
+   "area": "menu",
+   "apple": "MainMenu Conversation",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No main_menu",
+   "wire": "App::main_menu with New Message, Delete Conversation, Mark as Unread"
+  },
+  {
+   "feature": "Vendor messaging service, SMS relay, effects",
+   "area": "integration",
+   "apple": "vendor service",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Vendor service and phone relay; BifrOSt uses an open homeserver protocol",
+   "wire": ""
+  }
+ ]
+}

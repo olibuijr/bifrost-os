@@ -1,0 +1,325 @@
+{
+ "app": "Books",
+ "bifrost_app": "books-desktop",
+ "evidence": [
+  "ref27 Books.app is partial: only PlugIns/SharingExtension.appex (Info.plist activation rule: one PDF; BKShareViewController.nib)",
+  "bifrost pc ref index timed out; main-bundle rows from general knowledge of the app, described in own words"
+ ],
+ "features": [
+  {
+   "feature": "Library shelf with covers",
+   "area": "view",
+   "apple": "library window",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:987",
+   "note": "scans Books, Documents, Downloads (main.rs:45)",
+   "wire": ""
+  },
+  {
+   "feature": "Collections: All, Reading Now, Books, PDFs",
+   "area": "view",
+   "apple": "sidebar Library section",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:254",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "User collections",
+   "area": "menu",
+   "apple": "File > New Collection; Add to Collection",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add named collections to store.rs, sidebar rows under a My Collections header (books/mod.rs:987), and menu actions to add/remove books"
+  },
+  {
+   "feature": "Want to Read / Finished, mark as finished",
+   "area": "menu",
+   "apple": "book context menu",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a finished flag to store.rs entries and Finished/Want to Read filters beside Filter::Reading"
+  },
+  {
+   "feature": "Library search",
+   "area": "toolbar",
+   "apple": "toolbar search field",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:342",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Sort library",
+   "area": "menu",
+   "apple": "View > Sort By",
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/books/store.rs:265",
+   "note": "fixed sort by last opened",
+   "wire": "Add View > Sort By (Recent/Title/Author) to the View AppMenu (main.rs:97) and a sort pref in store.rs"
+  },
+  {
+   "feature": "Grid / list library view",
+   "area": "menu",
+   "apple": "View > As Grid / As List",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a list layout in draw.rs and View menu items"
+  },
+  {
+   "feature": "Add to Library",
+   "area": "menu",
+   "apple": "File > Add to Library",
+   "status": "gap",
+   "bifrost": "",
+   "note": "folder scan only",
+   "wire": "Add File > Add to Library... via the shell open panel; copy EPUB/PDF into ~/Books and rescan"
+  },
+  {
+   "feature": "Remove book",
+   "area": "menu",
+   "apple": "Edit > Delete",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:1480",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "EPUB and PDF documents",
+   "area": "document",
+   "apple": "document types",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:931",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Reader with page turn",
+   "area": "view",
+   "apple": "reader window",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:567",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Single page / two pages",
+   "area": "menu",
+   "apple": "View menu",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:99",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Continuous scrolling",
+   "area": "menu",
+   "apple": "View > scrolling view",
+   "status": "gap",
+   "bifrost": "",
+   "note": "main.rs:95 notes it is not wired",
+   "wire": "Add a scroll layout mode in layout.rs and a View menu item"
+  },
+  {
+   "feature": "Table of contents",
+   "area": "panel",
+   "apple": "toolbar Contents",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:1025",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Bookmarks",
+   "area": "toolbar",
+   "apple": "toolbar Bookmark",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:688",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Highlights and notes",
+   "area": "menu",
+   "apple": "Edit > Highlight / Add Note",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:76",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Highlight colours and underline",
+   "area": "menu",
+   "apple": "highlight colour submenu",
+   "status": "gap",
+   "bifrost": "",
+   "note": "single colour",
+   "wire": "Add a colour index to highlights in store.rs and a Highlight Color submenu"
+  },
+  {
+   "feature": "Find in book with next/previous and whole words",
+   "area": "menu",
+   "apple": "Edit > Find",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:73",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Copy selection and quote",
+   "area": "menu",
+   "apple": "Edit > Copy",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:78",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Look Up and Translate",
+   "area": "menu",
+   "apple": "context menu",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:86",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Read Aloud",
+   "area": "menu",
+   "apple": "Edit > Speech",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:61",
+   "note": "narrate.rs",
+   "wire": ""
+  },
+  {
+   "feature": "Appearance: size and theme",
+   "area": "panel",
+   "apple": "toolbar Aa",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:714",
+   "note": "themes store.rs:11",
+   "wire": ""
+  },
+  {
+   "feature": "Font family choice",
+   "area": "panel",
+   "apple": "Aa font list",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a font to store::Settings and a font row in the Display panel; repaginate in layout.rs"
+  },
+  {
+   "feature": "Line spacing / margins / justification",
+   "area": "panel",
+   "apple": "Aa customise",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add spacing and justification to Settings and layout metrics"
+  },
+  {
+   "feature": "Page scrubber",
+   "area": "view",
+   "apple": "bottom page slider",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:1532",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Reading progress and resume",
+   "area": "view",
+   "apple": "Reading Now",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:520",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Print",
+   "area": "menu",
+   "apple": "File > Print",
+   "status": "partial",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:68",
+   "note": "PDF only (main.rs:150)",
+   "wire": "Render EPUB pages from layout.rs into the print service"
+  },
+  {
+   "feature": "Show/hide sidebar",
+   "area": "toolbar",
+   "apple": "View > Show Sidebar",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/books/mod.rs:1036",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Continue reading via user activity / search index",
+   "area": "integration",
+   "apple": "NSUserActivity",
+   "status": "parity",
+   "bifrost": "springboard/apps/books-desktop/src/main.rs:201",
+   "note": "search_index.rs",
+   "wire": ""
+  },
+  {
+   "feature": "Audiobooks",
+   "area": "view",
+   "apple": "Audiobooks section",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add an audiobook (m4b/mp3) collection played through the shell media service with chapters"
+  },
+  {
+   "feature": "Book and audiobook store",
+   "area": "view",
+   "apple": "Store sidebar",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "vendor store",
+   "wire": ""
+  },
+  {
+   "feature": "Cloud sync of library and highlights",
+   "area": "settings",
+   "apple": "Settings sync options",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "vendor cloud; BifrOSt Cloud could cover later",
+   "wire": ""
+  },
+  {
+   "feature": "Reading goals",
+   "area": "settings",
+   "apple": "Settings > Reading Goals",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Track minutes read per day in store.rs and show a goal in Reading Now"
+  },
+  {
+   "feature": "Save PDF to Books share target",
+   "area": "integration",
+   "apple": "SharingExtension.appex (accepts one PDF; BKShareViewController.nib)",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Register books-desktop as a PDF share target in the shell share service; copy into ~/Books"
+  },
+  {
+   "feature": "Settings window",
+   "area": "settings",
+   "apple": "Books > Settings",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a settings pane for library folders and reader defaults"
+  }
+ ]
+}

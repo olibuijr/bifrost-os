@@ -1,0 +1,222 @@
+{
+ "app": "Console",
+ "bifrost_app": "console-desktop",
+ "evidence": [
+  "ref27/System/Applications/Utilities/Console.app/Contents/Info.plist (16 document types: logs, log archives, crash/spin/hang/panic reports, ips, ktrace)",
+  "ref27/System/Applications/Utilities/Console.app/Contents/Resources/Base.lproj/MainMenu.nib",
+  "ref27/System/Applications/Utilities/Console.app/Contents/Resources/Base.lproj/ReportsViewController.nib",
+  "ref27/System/Applications/Utilities/Console.app/Contents/Resources/Base.lproj/ArchiveWindowController.nib",
+  "ref27/System/Applications/Utilities/Console.app/Contents/Resources/Base.lproj/FiltersBarViewController.nib",
+  "ref27/System/Applications/Utilities/Console.app/Contents/Resources/Base.lproj/SourcesViewController.nib",
+  "ref27/System/Applications/Utilities/Console.app/Contents/Resources/Base.lproj/DashboardWindowController.nib"
+ ],
+ "features": [
+  {
+   "feature": "Live log stream with Start/Pause",
+   "area": "toolbar",
+   "apple": "toolbar Start/Pause, Action > Stream",
+   "status": "parity",
+   "bifrost": "springboard/apps/console-desktop/src/console.rs:264",
+   "note": "Journal follow with toggle in toolbar and menu (main.rs:142).",
+   "wire": ""
+  },
+  {
+   "feature": "Include Info / Debug messages",
+   "area": "menu",
+   "apple": "Action > Include Info Messages, Include Debug Messages",
+   "status": "parity",
+   "bifrost": "springboard/apps/console-desktop/src/console.rs:492",
+   "note": "Toolbar toggles and checked menu items main.rs:144.",
+   "wire": ""
+  },
+  {
+   "feature": "Clear display",
+   "area": "toolbar",
+   "apple": "toolbar Clear",
+   "status": "parity",
+   "bifrost": "springboard/apps/console-desktop/src/console.rs:339",
+   "note": "cmd+K.",
+   "wire": ""
+  },
+  {
+   "feature": "Search with field terms (process, subsystem, category, message, type)",
+   "area": "toolbar",
+   "apple": "search field with tokens (FiltersBarViewController.nib)",
+   "status": "parity",
+   "bifrost": "springboard/apps/console-desktop/src/model.rs:213",
+   "note": "Typed prefixes rather than token chips.",
+   "wire": ""
+  },
+  {
+   "feature": "Saved searches in sidebar",
+   "area": "view",
+   "apple": "FiltersBarSaveViewController.nib, sidebar",
+   "status": "parity",
+   "bifrost": "springboard/apps/console-desktop/src/console.rs:363",
+   "note": "Save/Delete Saved Search menu items main.rs:148.",
+   "wire": ""
+  },
+  {
+   "feature": "Sources sidebar (devices, reports, log files)",
+   "area": "view",
+   "apple": "SourcesViewController.nib",
+   "status": "partial",
+   "bifrost": "springboard/apps/console-desktop/src/console.rs:353",
+   "note": "This machine, crash/hang/daily/signpost/security and /var/log files; no other devices.",
+   "wire": "Add a remote-device section listing devices on the LAN that expose the journal over the control socket."
+  },
+  {
+   "feature": "Crash, hang, spin and panic reports",
+   "area": "view",
+   "apple": "Reports sidebar, ReportViewController.nib",
+   "status": "partial",
+   "bifrost": "springboard/apps/console-desktop/src/diagnostics.rs:55",
+   "note": "Crash (coredumpctl) and hang reports; no kernel panic (pstore) view.",
+   "wire": "Add a Kernel Reports row reading /sys/fs/pstore and journalctl -k -b -1 in diagnostics.rs and source.rs."
+  },
+  {
+   "feature": "Detail pane for selected message",
+   "area": "view",
+   "apple": "View > Show Details",
+   "status": "partial",
+   "bifrost": "springboard/apps/console-desktop/src/draw.rs:182",
+   "note": "Pane shows when a row is selected; not toggleable.",
+   "wire": "Add View > Show Details checked item in main.rs that hides/shows the pane via a flag in console.rs geo."
+  },
+  {
+   "feature": "Visible Columns",
+   "area": "menu",
+   "apple": "View > Visible Columns",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Columns are fixed with narrow-width fallback (console.rs:831).",
+   "wire": "Add View > Visible Columns submenu (Type, Time, Process, PID, Subsystem, Category, Message) with a column set in console.rs used by columns()."
+  },
+  {
+   "feature": "Show Activities / Show Sources toggles",
+   "area": "menu",
+   "apple": "View > Show Activities, Show Sources",
+   "status": "partial",
+   "bifrost": "springboard/apps/console-desktop/src/console.rs:353",
+   "note": "Sidebar always shown; no activities view.",
+   "wire": "Add View > Show Sidebar toggle in main.rs; group by systemd unit invocation as the activities analogue."
+  },
+  {
+   "feature": "Expand / Collapse selected rows",
+   "area": "menu",
+   "apple": "View > Expand Selected Rows, Collapse Selected Rows",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add per-row expansion state so multi-line messages show in full in the table; menu items in main.rs."
+  },
+  {
+   "feature": "Show messages after selected / only this subsystem",
+   "area": "menu",
+   "apple": "Action menu",
+   "status": "parity",
+   "bifrost": "springboard/apps/console-desktop/src/console.rs:737",
+   "note": "main.rs:152-154.",
+   "wire": ""
+  },
+  {
+   "feature": "Copy message",
+   "area": "menu",
+   "apple": "Edit > Copy",
+   "status": "parity",
+   "bifrost": "springboard/apps/console-desktop/src/services.rs:129",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Save messages to file",
+   "area": "menu",
+   "apple": "File > Save",
+   "status": "partial",
+   "bifrost": "springboard/apps/console-desktop/src/export.rs:30",
+   "note": "Saves visible rows to the home folder; no save panel to pick the place.",
+   "wire": "Use the SDK save panel to choose the location in console.rs save_messages."
+  },
+  {
+   "feature": "Open log files and archives (document types)",
+   "area": "document",
+   "apple": "File > Open, Open Recent; Info.plist document types",
+   "status": "partial",
+   "bifrost": "springboard/apps/console-desktop/src/source.rs:197",
+   "note": "Lists /var/log files in sidebar; no File > Open, no Open Recent, no .gz/.bz2 decompression, no open-document handling.",
+   "wire": "Add File > Open... (SDK open panel) and Open Recent, accept paths from argv/open-document events in main.rs, decompress .gz in source.rs LogFile, and register log/text types in the app manifest."
+  },
+  {
+   "feature": "Reveal in file manager / Move to Trash for reports",
+   "area": "menu",
+   "apple": "File > Reveal, Move to Trash",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "For crash and log file rows add Reveal in Files (shell open of parent) and Move to Trash in main.rs menus."
+  },
+  {
+   "feature": "Reload",
+   "area": "menu",
+   "apple": "View > Reload",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add View > Reload (cmd+R) that calls console.rs open_view(current view)."
+  },
+  {
+   "feature": "Log archive capture",
+   "area": "panel",
+   "apple": "ArchiveWindowController.nib, ArchiveViewController.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add File > Capture Archive that runs journalctl -b -o export > file on a thread and opens it as a source."
+  },
+  {
+   "feature": "Signposts / timing summary",
+   "area": "view",
+   "apple": "Dashboard / signpost views",
+   "status": "parity",
+   "bifrost": "springboard/apps/console-desktop/src/signposts.rs:46",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Customize Toolbar / Show Toolbar",
+   "area": "menu",
+   "apple": "View > Customize Toolbar",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Needs SDK toolbar customization sheet; wire View > Customize Toolbar."
+  },
+  {
+   "feature": "Find Next / Previous / Use Selection for Find",
+   "area": "menu",
+   "apple": "Edit > Find",
+   "status": "partial",
+   "bifrost": "springboard/apps/console-desktop/src/console.rs:569",
+   "note": "Find focuses the search filter; no next/previous match jumping.",
+   "wire": "Add cmd+G / shift+cmd+G that move selection to the next/previous matching row without filtering."
+  },
+  {
+   "feature": "Text services (spelling, speech, substitutions)",
+   "area": "menu",
+   "apple": "Edit > Spelling, Substitutions, Speech",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Generic text-system menus; the log view is read-only.",
+   "wire": ""
+  },
+  {
+   "feature": "ktrace / trace files",
+   "area": "document",
+   "apple": "Info.plist document types ktrace, trace",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Platform tracing formats.",
+   "wire": ""
+  }
+ ]
+}

@@ -1,0 +1,355 @@
+{
+ "app": "Calendar",
+ "bifrost_app": "calendar-desktop",
+ "evidence": [
+  "ref27 Calendar.app/Contents/Info.plist",
+  "Base.lproj/MainMenu.nib",
+  "Base.lproj/PreferencesPanel.nib",
+  "Base.lproj GoToDay, Subscribe, Publish, AlarmCustom, BackupRestore, TimeZonePickerSheet and *Inspector nibs",
+  "REA open_binary refused (extract has no Contents/MacOS executable), so nibs were read as archive string tables"
+ ],
+ "features": [
+  {
+   "feature": "New Event (toolbar + menu, Cmd+N)",
+   "area": "menu",
+   "apple": "MainMenu.nib File > New Event",
+   "status": "parity",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:77",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "New Event from natural-language text",
+   "area": "menu",
+   "apple": "PreferencesPanel.nib natural-language creation; File > New Event",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:550",
+   "note": "Parses the pasteboard sentence; no inline quick-entry field",
+   "wire": "Add an inline quick-entry text field (toolbar + button long-press or New Event popover) in calendar/chrome.rs that feeds Calendar::new_event_from_text instead of only the pasteboard."
+  },
+  {
+   "feature": "Day / Week / Month / Year views (Cmd+1..4)",
+   "area": "view",
+   "apple": "MainMenu.nib View > By Day/Week/Month/Year",
+   "status": "parity",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:91",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Go to Today / Previous / Next",
+   "area": "menu",
+   "apple": "MainMenu.nib View > Go to Today, Next, Previous",
+   "status": "parity",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:87",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Go to Date sheet",
+   "area": "panel",
+   "apple": "GoToDay.nib; View > Go to Date",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add Command::GoToDate (cmd+shift+t) in calendar.rs:1295 with a date-picker sheet that sets the shown date; list it under Go in main.rs main_menu."
+  },
+  {
+   "feature": "Event editor: title, location, notes, all-day, start/end",
+   "area": "panel",
+   "apple": "event inspector (Edit Event / Show Inspector)",
+   "status": "parity",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:346",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Repeat rules incl. custom recurrence",
+   "area": "panel",
+   "apple": "event inspector repeat popup",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:867",
+   "note": "Fixed preset cycle (store::REPEATS); calendar/recur.rs supports full RRULE but there is no custom-repeat UI",
+   "wire": "Add a Custom repeat sheet (frequency, interval, weekdays, end after N / on date) that writes an RRULE into the rich sidecar via calendar/exchange.rs; open it from Target::Repeat."
+  },
+  {
+   "feature": "Event alerts (several, custom)",
+   "area": "panel",
+   "apple": "AlarmCustom.nib, AlarmInstance.nib",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:868",
+   "note": "One alert from a preset cycle; delivery via notification-schedule works (calendar/connect.rs)",
+   "wire": "Allow a list of alerts per event plus a Custom alert sheet (N minutes/hours/days before, or at a time); store as VALARMs in the rich sidecar and schedule each in connect.rs plan_alerts."
+  },
+  {
+   "feature": "Duplicate Event",
+   "area": "menu",
+   "apple": "MainMenu.nib Edit > Duplicate",
+   "status": "parity",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:599",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Delete event with Undo",
+   "area": "menu",
+   "apple": "MainMenu.nib Edit > Delete / Undo",
+   "status": "parity",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:653",
+   "note": "Undo bar, not the shell Edit > Undo stack",
+   "wire": ""
+  },
+  {
+   "feature": "Cut / Copy / Paste events",
+   "area": "menu",
+   "apple": "MainMenu.nib Edit > Cut/Copy/Paste",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Edit commands only reach text fields",
+   "wire": "Implement copy/paste of the selected event (ICS on the pasteboard via exchange.rs export_event_ics, import_ics on paste onto the selected day); route the shell Edit commands through App::commands in main.rs."
+  },
+  {
+   "feature": "Export Event (.ics)",
+   "area": "document",
+   "apple": "MainMenu.nib File > Export > Export Event",
+   "status": "parity",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:611",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Export calendar (.ics)",
+   "area": "document",
+   "apple": "MainMenu.nib File > Export",
+   "status": "parity",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:686",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Import .ics / .vcs file",
+   "area": "document",
+   "apple": "Info.plist CFBundleDocumentTypes ICS/vCal; File > Import; ImportProgress.nib",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/exchange.rs:82",
+   "note": "import_ics runs only for CalDAV sync results (main.rs:186); no File > Import, no document open",
+   "wire": "Add File > Import... (open panel filtered to .ics) calling Calendar::import_ics with a count toast, and handle opening .ics files from Files via the app open-file hook in main.rs."
+  },
+  {
+   "feature": "Calendar archive backup / restore",
+   "area": "document",
+   "apple": "BackupRestore.nib; File > Export > Calendar Archive",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add Export/Import Calendar Archive (one file holding events.tsv + calendar.ics) under File in main.rs."
+  },
+  {
+   "feature": "Multiple calendars with colours: new, rename, delete, show/hide",
+   "area": "menu",
+   "apple": "File > New Calendar, New Calendar Group; LocalCalendarInspector.nib; Get Info",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Sidebar shows one fixed 'Calendar' row (calendar/chrome.rs:270)",
+   "wire": "Add a calendar id + colour to events (rich sidecar or store column), list calendars in the SourceList with show/hide checkboxes, File > New Calendar, a Get Info inspector for name/colour, and a calendar popup in the editor; tint events by calendar in draw_month/draw_time."
+  },
+  {
+   "feature": "Show / hide calendar list",
+   "area": "view",
+   "apple": "View > Show Calendar List",
+   "status": "parity",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:878",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Week numbers",
+   "area": "settings",
+   "apple": "PreferencesPanel.nib week numbers option",
+   "status": "parity",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:679",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Search events",
+   "area": "toolbar",
+   "apple": "MainMenu.nib Edit > Search; toolbar search field",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/exchange.rs:131",
+   "note": "search() model exists and is tested; no search field or results list",
+   "wire": "Add a toolbar search field in calendar/chrome.rs bars(); show exchange.rs search hits as a list replacing the grid; clicking a hit jumps to its day and opens the editor."
+  },
+  {
+   "feature": "Drag to create / move events in Day and Week",
+   "area": "view",
+   "apple": "day/week view direct manipulation",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/layout.rs:91",
+   "note": "drag_create/drag_move geometry exists and is tested but timeview/touch handling never calls it",
+   "wire": "In Calendar::touch (calendar.rs) on Down+Move in a time column, use layout::drag_create for a new draft and layout::drag_move for a pressed event, save on Up; draw the live block in timeview.rs draw_time."
+  },
+  {
+   "feature": "CalDAV accounts sync",
+   "area": "integration",
+   "apple": "PreferencesPanel.nib Accounts; CalDAVCalendarInspector.nib; View > Refresh Calendars",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:186",
+   "note": "Read-only import from Internet Accounts; no write-back, no per-account calendars, no Refresh command",
+   "wire": "Push local saves/deletes with dav_sync PUT/DELETE, keep each account as its own calendar in the sidebar, add Refresh Calendars (cmd+r) to View."
+  },
+  {
+   "feature": "Subscribe to calendar (webcal URL)",
+   "area": "integration",
+   "apple": "Subscribe.nib; File > New Calendar Subscription; Info.plist webcal scheme",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a New Calendar Subscription sheet taking a URL, fetch the ICS on a refresh interval into a read-only calendar, and register the webcal URL scheme for the app."
+  },
+  {
+   "feature": "Holidays and Birthdays calendars",
+   "area": "integration",
+   "apple": "AddHoliday.nib; BirthdayCalendarInspector.nib; settings show Birthdays/Holidays",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a read-only Birthdays calendar fed from the contacts store and a bundled holiday set, each with a Settings toggle."
+  },
+  {
+   "feature": "Settings: general (week start, day start/end, days per week, default duration, default calendar)",
+   "area": "settings",
+   "apple": "PreferencesPanel.nib General/Advanced panes",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Only week numbers is persisted",
+   "wire": "Add a Settings window (shell Settings hook) with these options persisted beside events.tsv; use them in timeview.rs week_start/scroll_to_morning and new drafts."
+  },
+  {
+   "feature": "Settings: default alerts",
+   "area": "settings",
+   "apple": "PreferencesPanel.nib Alerts pane",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add default alert choices (timed events, all-day events, birthdays) to Settings, applied to new drafts in calendar.rs."
+  },
+  {
+   "feature": "Time zone support",
+   "area": "settings",
+   "apple": "PreferencesPanel.nib time zone support; TimeZonePickerSheet.nib; InspectorTimeZoneView.nib",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/ics.rs:1",
+   "note": "TZID/VTIMEZONE offsets read on import; no per-event zone or view-zone UI",
+   "wire": "Add a time zone popup in the editor (TZID in the rich sidecar) and a toolbar view time-zone override in chrome.rs."
+  },
+  {
+   "feature": "Invitees",
+   "area": "panel",
+   "apple": "iTIPelements.nib; ResendInvitations.nib",
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/invitees.rs:1",
+   "note": "Read-only list of imported attendees; cannot add or invite",
+   "wire": "Add an Add Invitees field with contacts autocomplete and send iTIP REQUEST mail through the Mail service."
+  },
+  {
+   "feature": "Respond to invitations; show declined events",
+   "area": "menu",
+   "apple": "View > Show Declined Events; notifications settings",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Show Accept/Maybe/Decline on events with a pending PARTSTAT for the user, reply via iTIP, and a View toggle for declined events."
+  },
+  {
+   "feature": "Data detectors in event (address from notes, copy phone)",
+   "area": "panel",
+   "apple": "event inspector",
+   "status": "parity",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:831",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Alerts in notifications, Up Next widget, Dock date",
+   "area": "integration",
+   "apple": "View > Show Notifications",
+   "status": "parity",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/connect.rs:1",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Print",
+   "area": "menu",
+   "apple": "MainMenu.nib File > Print; PrintPanel.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add File > Print... rendering the current view through the shell print service."
+  },
+  {
+   "feature": "Publish / share calendar",
+   "area": "menu",
+   "apple": "Publish.nib, PubSuccess.nib; Edit > Share, Stop Publishing",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Tied to the vendor cloud calendar service",
+   "wire": ""
+  },
+  {
+   "feature": "Exchange accounts and delegation",
+   "area": "integration",
+   "apple": "ExchangeCalendarInspector.nib; Delegation pane",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Exchange-server specific",
+   "wire": ""
+  },
+  {
+   "feature": "Travel time and Time to Leave",
+   "area": "settings",
+   "apple": "View > Show Travel Time; Time to Leave setting",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Needs a routing service",
+   "wire": "Add a travel-time field in the editor that pads the event block; Time to Leave alerts once a maps routing service exists."
+  },
+  {
+   "feature": "Reminders shown in calendar",
+   "area": "view",
+   "apple": "View > Show Completed Reminders; RemindersCalendarInspector.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Read dated reminders from the Reminders store and draw them as all-day items, with a View toggle."
+  },
+  {
+   "feature": "Open events in separate windows",
+   "area": "settings",
+   "apple": "PreferencesPanel.nib option",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Offer opening the editor in a second window through the SDK multi-window API."
+  },
+  {
+   "feature": "Zoom in / out of the time grid",
+   "area": "view",
+   "apple": "View > Zoom In / Zoom Out",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add Zoom In/Out commands (cmd+= / cmd+-) changing the hour height in timeview.rs."
+  },
+  {
+   "feature": "User activities / intents (show date, show event, create event)",
+   "area": "intent",
+   "apple": "Info.plist NSUserActivityTypes",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Expose open-date, open-event and create-event methods on the app control socket and the intent registry."
+  }
+ ]
+}

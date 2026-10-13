@@ -1,0 +1,253 @@
+{
+ "app": "Calculator",
+ "bifrost_app": "calculator-desktop",
+ "evidence": [
+  "ref27/System/Applications/Calculator.app/Contents/Info.plist (UIApplicationSceneManifest, no nibs: SwiftUI)",
+  "ref-extract Calculator.app/Contents/Resources/Localizable.loctable",
+  "ref-extract Calculator.app/Contents/Resources/WidgetLocalizable.loctable"
+ ],
+ "summary": {
+  "features": 26,
+  "parity": 11,
+  "partial": 5,
+  "gap": 9,
+  "n/a": 1,
+  "coverage_pct": 54.0
+ },
+ "features": [
+  {
+   "feature": "Basic mode keypad (digits, + - x /, =, %, +/-, AC/C, delete)",
+   "area": "view",
+   "apple": "Localizable: Basic, Add/Subtract/Multiply/Divide/Equals/Percent/Change Sign/All Clear/Delete",
+   "status": "parity",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:396",
+   "note": "Toolbar Basic segment; engine.rs arithmetic.",
+   "wire": ""
+  },
+  {
+   "feature": "Scientific mode (powers, roots, logs, trig, hyperbolic, factorial, e, pi, EE, Rand)",
+   "area": "view",
+   "apple": "Localizable: Scientific, Square/Cube/X to the Y/Roots/Log/Sine…/Factorial/Random Number/Enter Exponent",
+   "status": "parity",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:128",
+   "note": "Full key set incl. inverse via 2nd.",
+   "wire": ""
+  },
+  {
+   "feature": "Second (alternate) functions toggle",
+   "area": "view",
+   "apple": "Localizable: 2nd / Alternate Functions, Secondary Functions (or hold Shift)",
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:136",
+   "note": "2nd key works; holding Shift does not switch the keypad.",
+   "wire": "In main.rs event() treat a held Shift modifier as Act::Second while it is down and redraw the keypad labels."
+  },
+  {
+   "feature": "Missing alternate keys: y^x, 10 to the base, log base y, x-th root both ways",
+   "area": "view",
+   "apple": "Localizable: Y to the X, Log Base y, Y root of X, 2 to the X",
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:146",
+   "note": "2^x and y-th root exist; no y^x, log base y or alternate for 10^x.",
+   "wire": "Add second labels in SCI_KEYS: xʸ -> yˣ (swap operands in eval.rs), 10ˣ -> 2ˣ already, log10 -> logy (binary op in eval.rs)."
+  },
+  {
+   "feature": "Degrees / radians",
+   "area": "view",
+   "apple": "Localizable: Degrees, Radians, Rad",
+   "status": "parity",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:153",
+   "note": "Persisted in settings (history.rs:120).",
+   "wire": ""
+  },
+  {
+   "feature": "Memory keys (mc, m+, m-, mr)",
+   "area": "view",
+   "apple": "Localizable: Add to Memory, Subtract from Memory, Recall Memory, Clear Memory",
+   "status": "parity",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:131",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Parentheses",
+   "area": "view",
+   "apple": "Localizable: Open/Close Parenthesis",
+   "status": "parity",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:129",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Programmer mode (hex/dec/oct/bin bases, bitwise AND/OR/XOR/NOR/NOT, shifts, rotate, byte/word flip, 2's complement, binary view, ASCII/Unicode display)",
+   "area": "view",
+   "apple": "Localizable: Programmer, Hexadecimal, Bitwise …, Shift Left/Right, Rotate, Byte Flip, Word Flip, Show Binary, ASCII value, Unicode value",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Paste accepts 0x/0b/0o (paste.rs) but there is no programmer keypad.",
+   "wire": "Add a \"Programmer\" segment in the toolbar (calc.rs:396) and a new programmer.rs: u64 value with base (2/8/10/16), keypad A-F, AND/OR/XOR/NOR/NOT, <<, >>, shift by y, rotate, byte flip, word flip, negate; a clickable 64-bit binary row; ASCII/Unicode readout. Wire keyboard keys for and, or, xor, not and shifts in main.rs:78."
+  },
+  {
+   "feature": "RPN mode (enter, drop, swap, roll up/down, stack display)",
+   "area": "view",
+   "apple": "Localizable: RPN Mode On/Off, Enter, Drop, Swap, Rotate stack up/down",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No RPN.",
+   "wire": "Add an RPN flag in Settings (history.rs:106) with a View-menu toggle; rpn.rs stack (Vec<f64>) where operators pop two; keypad replaces = with enter; keys cmd+E swap, cmd+Delete drop, cmd+Up/Down roll."
+  },
+  {
+   "feature": "Unit conversion",
+   "area": "view",
+   "apple": "Localizable: Unit Conversion, Category, Input Unit, Result Unit, Swap Units, Recent Units, Search all units",
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/convert.rs:14",
+   "note": "Five categories (length, mass, temperature, speed, volume) with swap; reference has many more categories, recent units and a unit search.",
+   "wire": "Add area, time, data size, energy, pressure, power, angle, fuel in convert.rs; add a search field over all units and a recent-units list stored in settings."
+  },
+  {
+   "feature": "Currency conversion with live rates",
+   "area": "integration",
+   "apple": "Localizable: Currency rates unavailable, rate source credit, Updated %@",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No currency category.",
+   "wire": "Add a Currency category in convert.rs fed by a rates service (titan or cloud endpoint) cached with an \"Updated\" timestamp; show the unavailable state offline."
+  },
+  {
+   "feature": "History sidebar (show/hide, grouped by day, delete one, clear all with confirm)",
+   "area": "view",
+   "apple": "Localizable: History, Show/Hide History, Today/Yesterday/Previous 7/30 Days, Delete, Clear History confirm",
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:394",
+   "note": "Sidebar with list, Copy Tape and Clear History; no day groups, no per-entry delete, no confirm before clearing.",
+   "wire": "In the history pane draw section headers by date from Entry time (history.rs:14), add a per-row delete (context or swipe), and ask for confirmation in the Clear History handler (calc.rs:611)."
+  },
+  {
+   "feature": "Reuse a history entry",
+   "area": "view",
+   "apple": "History list rows (tap to reuse result)",
+   "status": "parity",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:840",
+   "note": "Tapping a row recalls its result into the display.",
+   "wire": ""
+  },
+  {
+   "feature": "Copy result / Paste number",
+   "area": "menu",
+   "apple": "Localizable: Copy, Copy Result, Paste; Edit menu",
+   "status": "parity",
+   "bifrost": "springboard/apps/calculator-desktop/src/copy_service.rs:1",
+   "note": "Shell Edit menu Copy/Paste enabled by commands() (main.rs:121); paste parses many formats (paste.rs).",
+   "wire": ""
+  },
+  {
+   "feature": "Copy expression / copy last result",
+   "area": "menu",
+   "apple": "Localizable: Copy Expression, Copy Last Result",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Only the shown number is copied.",
+   "wire": "Add Copy Expression (copies the sci expression or last history expression) and Copy Last Result to an Edit menu via main_menu; call copy_service."
+  },
+  {
+   "feature": "Paper tape",
+   "area": "panel",
+   "apple": "Window > Show Paper Tape (reference tape)",
+   "status": "parity",
+   "bifrost": "springboard/apps/calculator-desktop/src/tape.rs:1",
+   "note": "Copy Tape puts the receipt on the clipboard; there is no separate tape window or print/save.",
+   "wire": ""
+  },
+  {
+   "feature": "Thousands separator toggle",
+   "area": "settings",
+   "apple": "Localizable: Show/Hide Thousands Separator",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Always on (format.rs).",
+   "wire": "Add a View-menu toggle stored in Settings (history.rs:106) and pass it to format.rs."
+  },
+  {
+   "feature": "Decimal places and scientific notation display",
+   "area": "settings",
+   "apple": "Localizable: Decimal Places, Scientific Notation",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Automatic 9-digit formatting only.",
+   "wire": "Add View > Decimal Places submenu (auto, 0-15) and a Scientific Notation toggle; store in Settings, apply in format.rs."
+  },
+  {
+   "feature": "Keyboard entry for every key",
+   "area": "view",
+   "apple": "Localizable tooltips: \"(or press …)\" shortcuts",
+   "status": "partial",
+   "bifrost": "springboard/apps/calculator-desktop/src/main.rs:78",
+   "note": "Digits, + - * / = %, Return, Delete, Escape work; no (, ), ^, !, e, p, Option-minus sign, Shift-E exponent.",
+   "wire": "Extend the char map in main.rs:78 with ( ) ^ ! e p and sign/exponent shortcuts, mapping to SciKey actions when in Scientific mode."
+  },
+  {
+   "feature": "Mode menu with shortcuts",
+   "area": "menu",
+   "apple": "Localizable: Mode Menu, Change Mode",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No app menu; modes only via toolbar.",
+   "wire": "Implement main_menu in main.rs returning a View menu: Basic (cmd+1), Scientific (cmd+2), Programmer (cmd+3), RPN Mode (cmd+R), Unit Conversion, Show History, Thousands Separator, Decimal Places."
+  },
+  {
+   "feature": "Always on top",
+   "area": "menu",
+   "apple": "Localizable: Always on Top",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Missing.",
+   "wire": "Add a checked Window > Always on Top item that sets the SDK window level for the calculator window."
+  },
+  {
+   "feature": "Evaluate intent / Shortcuts",
+   "area": "intent",
+   "apple": "Calculator app intents (widget Launch Calculator)",
+   "status": "parity",
+   "bifrost": "springboard/apps/calculator-desktop/src/main.rs:127",
+   "note": "\"evaluate\" intent with the expression param.",
+   "wire": ""
+  },
+  {
+   "feature": "Widget / control (launch calculator)",
+   "area": "integration",
+   "apple": "WidgetLocalizable: Launch Calculator App",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No widget or control centre entry.",
+   "wire": "Add a launcher control/widget in the manifest once the shell widget API exists."
+  },
+  {
+   "feature": "Math Notes (expressions in notes)",
+   "area": "integration",
+   "apple": "Localizable: Math Notes, Open Notes, Math Notes Unavailable",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Depends on the reference notes app integration.",
+   "wire": ""
+  },
+  {
+   "feature": "Spoken accessibility labels for keys and results",
+   "area": "view",
+   "apple": "Localizable: Input…, result… VoiceOver formats",
+   "status": "parity",
+   "bifrost": "springboard/apps/calculator-desktop/src/calc.rs:453",
+   "note": "Accessibility nodes with key names and display value.",
+   "wire": ""
+  },
+  {
+   "feature": "Locale number format (decimal comma)",
+   "area": "settings",
+   "apple": "Localizable: Point Separator, comma",
+   "status": "parity",
+   "bifrost": "springboard/apps/calculator-desktop/src/format.rs:1",
+   "note": "Icelandic decimal comma and locale setting persisted.",
+   "wire": ""
+  }
+ ]
+}

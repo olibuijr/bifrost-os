@@ -1,0 +1,318 @@
+{
+ "app": "Stickies",
+ "bifrost_app": "stickies-desktop",
+ "evidence": [
+  "ref27/System/Applications/Stickies.app/Contents/Info.plist",
+  "ref-extract Stickies.app/Contents/Resources/MainMenu.loctable",
+  "ref-extract Stickies.app/Contents/Resources/Localizable.loctable",
+  "Stickies.app/Contents/Resources/Base.lproj/MainMenu.nib",
+  "Stickies.app/Contents/Resources/Base.lproj/SNDocument.nib"
+ ],
+ "summary": {
+  "features": 33,
+  "parity": 5,
+  "partial": 9,
+  "gap": 18,
+  "n/a": 1,
+  "coverage_pct": 29.7
+ },
+ "features": [
+  {
+   "feature": "New note",
+   "area": "menu",
+   "apple": "MainMenu: File > New Note",
+   "status": "parity",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:299",
+   "note": "Cmd+N, cascades position (main.rs:81).",
+   "wire": ""
+  },
+  {
+   "feature": "Close / delete note with unsaved-content confirm",
+   "area": "menu",
+   "apple": "MainMenu: File > Close; Localizable: discard-note confirmation",
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:301",
+   "note": "Delete Sticky Note removes the note at once with no confirmation and no Undo.",
+   "wire": "Add a confirm alert (\"discard this note?\") in main.rs action(MENU_DELETE) when note.text is non-empty, via the SDK alert/sheet API; map Cmd+W to the same path."
+  },
+  {
+   "feature": "Import Text",
+   "area": "menu",
+   "apple": "MainMenu: File > Import Text…",
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:315",
+   "note": "Plain text only; reference also imports rich text (RTF/RTFD).",
+   "wire": "Accept public.rtf in import_panel (main.rs:184) and strip/convert via the textedit-desktop rtf.rs reader moved into a shared crate."
+  },
+  {
+   "feature": "Export Text (current note)",
+   "area": "menu",
+   "apple": "MainMenu: File > Export Text…",
+   "status": "parity",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:316",
+   "note": "Writes .txt named after the note title.",
+   "wire": ""
+  },
+  {
+   "feature": "Export all notes",
+   "area": "menu",
+   "apple": "MainMenu: File > Export All to Notes…",
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:317",
+   "note": "Exports all notes to one text file; the reference exports into the system notes app, grouped by colour.",
+   "wire": "If a BifrOSt notes app exposes an import control method, add an \"Export All to Notes\" item that posts each note with its colour as folder name; keep the text export as is."
+  },
+  {
+   "feature": "Print note",
+   "area": "menu",
+   "apple": "MainMenu: File > Print…",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No print path.",
+   "wire": "Add File > Print… (Cmd+P) in main_menu (main.rs:292) that sends the focused note text to the SDK print service, as textedit-desktop print.rs does."
+  },
+  {
+   "feature": "Undo / Redo of edits and arrange",
+   "area": "menu",
+   "apple": "MainMenu: Edit > Undo/Redo; Localizable: Undo/Redo Arrange",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No undo stack at all.",
+   "wire": "Add an undo stack of Board snapshots in StickiesApp (push before every mutating action/key in main.rs), handle Command::Undo/Redo in event() (main.rs:263)."
+  },
+  {
+   "feature": "Cut / Copy / Paste / Select All",
+   "area": "menu",
+   "apple": "MainMenu: Edit > Cut, Copy, Paste, Select All",
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:265",
+   "note": "Copy copies the whole note, Paste appends at the end; no Cut, no selection, no Select All.",
+   "wire": "Needs a caret+selection model in Note (model.rs:193 says no caret yet); reuse textedit-desktop text.rs buffer for note bodies, then wire Command::Cut/SelectAll."
+  },
+  {
+   "feature": "Caret and text selection inside a note",
+   "area": "view",
+   "apple": "SNDocument text view",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Typing always appends at the end; backspace pops the last char (model.rs:193-210).",
+   "wire": "Replace Note.text String editing with a TextBuffer (caret, selection, arrows, click-to-place) shared with textedit-desktop text.rs; hit-test clicks in touch() Part::Body."
+  },
+  {
+   "feature": "Paste and Match Style / Copy Style / Paste Style",
+   "area": "menu",
+   "apple": "MainMenu: Edit > Paste and Match Style; Format > Font > Copy/Paste Style",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Notes have only a per-note style.",
+   "wire": "After per-run styling exists, add these items to an Edit/Font menu in main_menu."
+  },
+  {
+   "feature": "Find / Replace / Find Next / Use Selection for Find",
+   "area": "menu",
+   "apple": "MainMenu: Edit > Find submenu",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No search.",
+   "wire": "Add Edit > Find… (Cmd+F) with the SDK find bar; search all notes, raise and focus the match note; Cmd+G next."
+  },
+  {
+   "feature": "Spelling and Grammar / Substitutions / Transformations",
+   "area": "menu",
+   "apple": "MainMenu: Edit > Spelling and Grammar, Substitutions, Transformations",
+   "status": "gap",
+   "bifrost": "",
+   "note": "None.",
+   "wire": "Reuse textedit-desktop spell.rs for check-as-you-type underline in draw_body (board.rs:98); add Make Upper/Lower/Capitalise items operating on the selection."
+  },
+  {
+   "feature": "Speech (start/stop speaking)",
+   "area": "menu",
+   "apple": "MainMenu: Edit > Speech",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No text-to-speech.",
+   "wire": "Add Edit > Speech > Start/Stop Speaking calling the SDK speech service, if present, with the focused note text."
+  },
+  {
+   "feature": "Bold / Italic",
+   "area": "menu",
+   "apple": "MainMenu: Font > Bold, Italic",
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:304",
+   "note": "Whole-note toggles only; reference applies to selected runs.",
+   "wire": "Move to per-run attributes once selection exists (see caret row)."
+  },
+  {
+   "feature": "Underline / Strikethrough / Outline",
+   "area": "menu",
+   "apple": "MainMenu: Font > Underline, Strikethrough, Outline",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Missing.",
+   "wire": "Add Underline (Cmd+U) and Strikethrough to Style in model.rs and draw them in board.rs draw_body; menu items next to Bold/Italic."
+  },
+  {
+   "feature": "Bigger / Smaller text and Show Fonts",
+   "area": "menu",
+   "apple": "MainMenu: Font > Bigger, Smaller, Show Fonts",
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:307",
+   "note": "Three fixed sizes (Small/Medium/Large); no font family choice, no Cmd+/Cmd- steps.",
+   "wire": "Map Cmd+= / Cmd+- to stepping TextSize; add a font family field to Style and a Show Fonts item using the SDK font panel."
+  },
+  {
+   "feature": "Kern / Ligature / Baseline (super/subscript)",
+   "area": "menu",
+   "apple": "MainMenu: Font > Kern, Ligature, Baseline",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Typography controls missing.",
+   "wire": "Low value; add after per-run attributes: baseline offset attribute drawn in board.rs."
+  },
+  {
+   "feature": "Text colour (Show Colours)",
+   "area": "menu",
+   "apple": "MainMenu: Font > Show Colours",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Text is always one colour.",
+   "wire": "Add a text colour attribute and a Show Colours item using the SDK colour panel."
+  },
+  {
+   "feature": "Note colours (six colours)",
+   "area": "menu",
+   "apple": "MainMenu: Colour > Yellow, Blue, Green, Pink, Purple, Grey",
+   "status": "parity",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:312",
+   "note": "Six colours; set differs (Orange/Teal instead of Blue/Grey).",
+   "wire": ""
+  },
+  {
+   "feature": "Custom note colour",
+   "area": "menu",
+   "apple": "Localizable: Customize Color…, Customized Color",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Only the fixed palette.",
+   "wire": "Add \"Custom Colour…\" under the colours, open the SDK colour panel, store an rgb in Note (model.rs) and encode it in the JSON."
+  },
+  {
+   "feature": "Use as Default (colour/font for new notes)",
+   "area": "menu",
+   "apple": "MainMenu: Font/Colour > Use as Default",
+   "status": "gap",
+   "bifrost": "",
+   "note": "New notes always start Yellow/Medium.",
+   "wire": "Store default colour+style in the board file; Board::new_note (model.rs:240) applies it; add a \"Use as Default\" item."
+  },
+  {
+   "feature": "Float on Top",
+   "area": "menu",
+   "apple": "MainMenu: Window > Float on Top",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Notes live inside one app window; no per-note float.",
+   "wire": "Either make each note its own shell window with an always-on-top level (SDK window level) or offer Float on Top for the board window via ctx window API; add a checked item."
+  },
+  {
+   "feature": "Translucent",
+   "area": "menu",
+   "apple": "MainMenu: Window > Translucent",
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/board.rs:24",
+   "note": "Inactive notes are always translucent; not a user toggle per note.",
+   "wire": "Add a per-note translucent flag with a checked Window > Translucent item; board.rs uses it instead of the fixed rule."
+  },
+  {
+   "feature": "Collapse / Expand note (and all)",
+   "area": "menu",
+   "apple": "MainMenu: Window > Collapse, Collapse All, Expand All; title-bar double-click",
+   "status": "partial",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:302",
+   "note": "Per-note toggle via menu and disclosure; no Collapse All / Expand All, no double-click on title.",
+   "wire": "Add Collapse All / Expand All items iterating board.notes; handle double-tap on Part::Title in touch() to toggle."
+  },
+  {
+   "feature": "Arrange By (colour, content, date, location) with undo",
+   "area": "menu",
+   "apple": "MainMenu: Window > Arrange By; Localizable: Undo Arrange",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No arrange.",
+   "wire": "Add Window > Arrange By submenu; sort board.notes by colour/text/modified/position and lay them out in a cascade grid; push undo snapshot."
+  },
+  {
+   "feature": "Zoom / Minimise / Bring All to Front",
+   "area": "menu",
+   "apple": "MainMenu: Window > Zoom, Minimise, Bring All to Front",
+   "status": "partial",
+   "bifrost": "",
+   "note": "Shell window menu handles the app window; per-note zoom missing.",
+   "wire": "Add a per-note Zoom that toggles the focused note between its size and a large size (store previous frame in Note)."
+  },
+  {
+   "feature": "Move and resize notes",
+   "area": "view",
+   "apple": "SNDocument window",
+   "status": "parity",
+   "bifrost": "springboard/apps/stickies-desktop/src/main.rs:111",
+   "note": "Drag title to move, grip to resize.",
+   "wire": ""
+  },
+  {
+   "feature": "Autosave and restore of all notes",
+   "area": "document",
+   "apple": "Saved state / StickieDocument type",
+   "status": "parity",
+   "bifrost": "springboard/apps/stickies-desktop/src/store.rs:30",
+   "note": "Saved on every change, restored at launch; broken file moved aside.",
+   "wire": ""
+  },
+  {
+   "feature": "Note info tooltip (created/modified)",
+   "area": "view",
+   "apple": "Localizable: Created/Modified tooltip",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Times are stored (model.rs) but never shown.",
+   "wire": "Show a hover tooltip or a footer line with created/modified dates on the title bar via the SDK tooltip API."
+  },
+  {
+   "feature": "Links and data detectors",
+   "area": "menu",
+   "apple": "MainMenu: Edit > Add Link…, Substitutions > Smart Links, Data Detectors",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No links.",
+   "wire": "Detect URLs in note text, underline them in board.rs, open on Cmd-click via ctx.open_url."
+  },
+  {
+   "feature": "Make Sticky service (selection to new note)",
+   "area": "integration",
+   "apple": "Info.plist NSServices: Make Sticky (Cmd+Shift+Y)",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No service provider.",
+   "wire": "Register a text service in the app manifest that calls Board::add_text (model.rs:268) with the received text; needs SDK services support."
+  },
+  {
+   "feature": "Rich text body with images (RTFD notes)",
+   "area": "document",
+   "apple": "Info.plist StickieDocument; en.lproj welcome .rtfd notes",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Bodies are plain text.",
+   "wire": "Long-term: store notes as rich runs; shared rich-text model with textedit-desktop."
+  },
+  {
+   "feature": "Help",
+   "area": "menu",
+   "apple": "MainMenu: Help > Stickies Help",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Apple help book content.",
+   "wire": ""
+  }
+ ]
+}

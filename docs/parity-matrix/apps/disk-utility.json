@@ -1,0 +1,188 @@
+{
+ "app": "Disk Utility",
+ "bifrost_app": "diskutil-desktop",
+ "evidence": [
+  "ref27/System/Applications/Utilities/Disk Utility.app/Contents/Info.plist (no document types)",
+  "ref27/System/Applications/Utilities/Disk Utility.app/Contents/Resources/Base.lproj/MainMenu.nib",
+  "ref27/System/Applications/Utilities/Disk Utility.app/Contents/Resources/Base.lproj/SUEraseSheetController.nib",
+  "ref27/System/Applications/Utilities/Disk Utility.app/Contents/Resources/Base.lproj/SUFirstAidSheet.nib",
+  "ref27/System/Applications/Utilities/Disk Utility.app/Contents/Resources/Base.lproj/SUPartitionSheetController.nib",
+  "ref27/System/Applications/Utilities/Disk Utility.app/Contents/Resources/Base.lproj/SURestoreSheetController.nib",
+  "ref27/System/Applications/Utilities/Disk Utility.app/Contents/Resources/Base.lproj/SUInfoWindowController.nib",
+  "ref27/System/Applications/Utilities/Disk Utility.app/Contents/Resources/Base.lproj/SURAIDAssistantWindowController.nib",
+  "ref27/System/Applications/Utilities/Disk Utility.app/Contents/Resources/Base.lproj/CreateDiskImageAccessory.nib"
+ ],
+ "features": [
+  {
+   "feature": "Sidebar of internal/external disks and volumes",
+   "area": "view",
+   "apple": "SUSidebarController",
+   "status": "parity",
+   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:339",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Show Only Volumes / Show All Devices",
+   "area": "menu",
+   "apple": "View > Show Only Volumes, Show All Devices",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Always shows disks with partitions.",
+   "wire": "Add View radio items in main.rs and a flag in window.rs sidebar() that hides Kind::Disk rows when volumes-only."
+  },
+  {
+   "feature": "Volume info: capacity, used, free, fs, mount point, SMART",
+   "area": "view",
+   "apple": "SUDeviceWorkspaceViewController",
+   "status": "parity",
+   "bifrost": "springboard/apps/diskutil-desktop/src/model.rs:204",
+   "note": "Usage bar draw.rs:91.",
+   "wire": ""
+  },
+  {
+   "feature": "Get Info window",
+   "area": "menu",
+   "apple": "File > Get Info",
+   "status": "partial",
+   "bifrost": "springboard/apps/diskutil-desktop/src/model.rs:204",
+   "note": "Rows shown inline; no separate full-detail window (UUID, block size, partition type).",
+   "wire": "Add File > Get Info (cmd+I) opening a window listing all lsblk -O fields for the node."
+  },
+  {
+   "feature": "Mount / Unmount / Eject",
+   "area": "toolbar",
+   "apple": "toolbar and File menu",
+   "status": "partial",
+   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:326",
+   "note": "Toolbar only, no menu items.",
+   "wire": "Mirror Mount/Unmount/Eject into a File menu in main.rs main_menu."
+  },
+  {
+   "feature": "Erase with name, format and scheme",
+   "area": "panel",
+   "apple": "SUEraseSheetController.nib",
+   "status": "partial",
+   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:235",
+   "note": "Confirmation erases as FAT32 with an empty label; no name, format or scheme choice.",
+   "wire": "Extend the erase sheet with a Name text field, Format popup (ext4, exFAT, FAT32, NTFS, btrfs) and Scheme popup (GPT/MBR) for disks, feeding DiskRequest::EraseDisk fs/label."
+  },
+  {
+   "feature": "First Aid (check / repair)",
+   "area": "panel",
+   "apple": "SUFirstAidSheet.nib, Disk > Run First Aid",
+   "status": "parity",
+   "bifrost": "springboard/apps/diskutil-desktop/src/window.rs:244",
+   "note": "Check Only and Repair via privd; no streamed log details.",
+   "wire": ""
+  },
+  {
+   "feature": "Partition",
+   "area": "panel",
+   "apple": "SUPartitionSheetController.nib, Disk > Partition",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a Partition sheet with a bar of partitions, add/remove/resize, then a privd DiskRequest::Partition (sgdisk) in bifrost-core and a toolbar button in window.rs:326."
+  },
+  {
+   "feature": "Restore (copy a volume onto another)",
+   "area": "panel",
+   "apple": "SURestoreSheetController.nib, Disk > Restore",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a Restore sheet picking source volume or image; privd request running dd/partclone with progress."
+  },
+  {
+   "feature": "Rename volume",
+   "area": "menu",
+   "apple": "Disk > Rename",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Inline rename in the sidebar or a sheet; privd request using e2label/fatlabel/exfatlabel."
+  },
+  {
+   "feature": "Create image (blank, from folder, from device)",
+   "area": "menu",
+   "apple": "File > New Image",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add File > New Image submenu: blank image via truncate+mkfs, from folder via mkfs -d / mksquashfs, from device via dd, with a save panel (CreateDiskImageAccessory equivalent)."
+  },
+  {
+   "feature": "Open / attach disk image",
+   "area": "menu",
+   "apple": "File > Open Disk Image",
+   "status": "partial",
+   "bifrost": "springboard/apps/diskutil-desktop/src/main.rs:28",
+   "note": "Detach Disk Image exists; no open/attach.",
+   "wire": "Add File > Open Disk Image... using the SDK open panel and a losetup -P attach through disk_session."
+  },
+  {
+   "feature": "Convert / Resize image, Change Password",
+   "area": "menu",
+   "apple": "Images > Convert, Resize, Scan Image For Restore; File > Change Password",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Images menu with Convert (qemu-img convert), Resize (truncate + resize2fs); LUKS change password via cryptsetup through privd."
+  },
+  {
+   "feature": "Container volume add/delete",
+   "area": "menu",
+   "apple": "Edit > Add/Delete volume",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Tied to the platform container file system; btrfs subvolumes would be the analogue, not planned.",
+   "wire": ""
+  },
+  {
+   "feature": "Snapshots",
+   "area": "menu",
+   "apple": "View > Show snapshots",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Platform file-system specific.",
+   "wire": ""
+  },
+  {
+   "feature": "RAID Assistant",
+   "area": "panel",
+   "apple": "SURAIDAssistantWindowController.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "mdadm-based RAID assistant window: choose type, members, create; privd request."
+  },
+  {
+   "feature": "Show in file manager",
+   "area": "menu",
+   "apple": "File > Show in file manager",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a menu item opening the selected mount point in the Files app via shell open."
+  },
+  {
+   "feature": "Usage bar and capacity",
+   "area": "view",
+   "apple": "workspace header bar",
+   "status": "parity",
+   "bifrost": "springboard/apps/diskutil-desktop/src/draw.rs:91",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Enable Journaling / convert file system",
+   "area": "menu",
+   "apple": "File > Enable Journaling, Edit > Convert",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Platform file-system specific.",
+   "wire": ""
+  }
+ ]
+}

@@ -1,0 +1,181 @@
+{
+  "app": "Font Book",
+  "bifrost_app": "fontbook-desktop",
+  "evidence": [
+    "ref27/System/Applications/Font Book.app/Contents/Info.plist",
+    "note: the extract holds only Info.plist for this bundle and the ref index lookup timed out; menu rows come from the app's known role, worded independently, and are lower-confidence"
+  ],
+  "features": [
+    {
+      "feature": "Open font files (TrueType/OpenType/collections/Type 1)",
+      "area": "document",
+      "apple": "Info.plist CFBundleDocumentTypes",
+      "status": "partial",
+      "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:255",
+      "note": "An opened file installs at once; no preview-before-install; Type 1 and suitcases unsupported",
+      "wire": "Show an install preview with an Install button before model::install; extend validate.rs to collections"
+    },
+    {
+      "feature": "App URL scheme",
+      "area": "integration",
+      "apple": "Info.plist CFBundleURLTypes",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "Handle Input::Open for the scheme in event main.rs:235 and select the named family"
+    },
+    {
+      "feature": "Add Fonts menu command",
+      "area": "menu",
+      "apple": "File > Add Fonts",
+      "status": "partial",
+      "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:99",
+      "note": "Install via open/drop only",
+      "wire": "Add File > Add Fonts (cmd+o) with the SDK open panel calling install main.rs:99"
+    },
+    {
+      "feature": "Remove font",
+      "area": "menu",
+      "apple": "File > Remove",
+      "status": "parity",
+      "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:111",
+      "note": "Button in the preview; user installs only",
+      "wire": ""
+    },
+    {
+      "feature": "Turn font on/off",
+      "area": "menu",
+      "apple": "Edit > Turn On/Off",
+      "status": "parity",
+      "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:314",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Collections: new, add/remove members",
+      "area": "view",
+      "apple": "Sidebar collections",
+      "status": "parity",
+      "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:136",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Delete / rename collection",
+      "area": "menu",
+      "apple": "File > delete, rename collection",
+      "status": "partial",
+      "bifrost": "springboard/apps/fontbook-desktop/src/model.rs:98",
+      "note": "delete_collection has no UI; no rename",
+      "wire": "Add Delete Collection and Rename (inline edit) items calling model.rs:98 and a new Library::rename_collection"
+    },
+    {
+      "feature": "Smart collections",
+      "area": "menu",
+      "apple": "File > New Smart Collection",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "Add rule-based collections (style, language, kind) to model.rs and an editor sheet"
+    },
+    {
+      "feature": "Libraries (separate font sets)",
+      "area": "menu",
+      "apple": "File > New Library",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "Add named libraries as folder sets in model::scan_dirs"
+    },
+    {
+      "feature": "Search fonts",
+      "area": "toolbar",
+      "apple": "Toolbar search field",
+      "status": "parity",
+      "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:241",
+      "note": "",
+      "wire": ""
+    },
+    {
+      "feature": "Preview modes: sample, repertoire, info",
+      "area": "view",
+      "apple": "View > sample/repertoire/info",
+      "status": "partial",
+      "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:327",
+      "note": "All drawn together, no switch",
+      "wire": "Add a segmented control in the preview header switching sample, repertoire grid and info"
+    },
+    {
+      "feature": "Custom preview text and size slider",
+      "area": "view",
+      "apple": "View > custom text; size control",
+      "status": "gap",
+      "bifrost": "",
+      "note": "Fixed PREVIEW_TEXT and PREVIEW_SIZES",
+      "wire": "Add an editable sample field and size slider in the preview column; persist in data_dir"
+    },
+    {
+      "feature": "Validate font",
+      "area": "menu",
+      "apple": "File > Validate Font, Validate File",
+      "status": "partial",
+      "bifrost": "springboard/apps/fontbook-desktop/src/main.rs:86",
+      "note": "validate::check runs but issues are never shown as a validation result",
+      "wire": "Add a Validate Font menu item and sheet listing Report issues with pass/warn/fail"
+    },
+    {
+      "feature": "Resolve duplicates",
+      "area": "menu",
+      "apple": "Edit > Resolve Duplicates",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "Detect families with several files in model.rs and offer keep-newest"
+    },
+    {
+      "feature": "Export / print font samples",
+      "area": "menu",
+      "apple": "File > Export Fonts, Print",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "Copy selected font files to a chosen folder; print a sample sheet through the print service"
+    },
+    {
+      "feature": "Show font file in the file manager",
+      "area": "menu",
+      "apple": "File > Show in file manager",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "Reveal the font file through the shell's file-manager intent"
+    },
+    {
+      "feature": "Downloadable system fonts",
+      "area": "integration",
+      "apple": "download button for available fonts",
+      "status": "n/a",
+      "bifrost": "",
+      "note": "Vendor font download service",
+      "wire": ""
+    },
+    {
+      "feature": "Settings: install location, validate before install",
+      "area": "settings",
+      "apple": "Settings window",
+      "status": "gap",
+      "bifrost": "",
+      "note": "",
+      "wire": "Add Settings with install scope and validate-before-install, used by install main.rs:99"
+    },
+    {
+      "feature": "Main menu bar",
+      "area": "menu",
+      "apple": "MainMenu",
+      "status": "gap",
+      "bifrost": "",
+      "note": "fontbook-desktop implements no main_menu",
+      "wire": "Implement App::main_menu and menu_action with the File/Edit/View items above"
+    }
+  ]
+}

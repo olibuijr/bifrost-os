@@ -1,0 +1,198 @@
+{
+ "app": "Shortcuts",
+ "bifrost_app": "shortcuts-desktop",
+ "evidence": [
+  "reference bundle absent: ~/Projects/macos-ref/extract/ref27/System/Applications has no Shortcuts.app and `bifrost pc ref index` lists none, so there are no REA evidence ids; rows come from the shipped app's known menus and settings"
+ ],
+ "features": [
+  {
+   "feature": "Grid of shortcuts",
+   "area": "view",
+   "apple": "All Shortcuts",
+   "status": "parity",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:59",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Create shortcut",
+   "area": "menu",
+   "apple": "File > New Shortcut",
+   "status": "parity",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:66",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Run shortcut",
+   "area": "toolbar",
+   "apple": "Run button",
+   "status": "parity",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:555",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Editor: add, remove, reorder actions",
+   "area": "view",
+   "apple": "editor",
+   "status": "partial",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:569",
+   "note": "Add and remove with value steppers; no reorder",
+   "wire": "Move up/down or drag on editor action rows"
+  },
+  {
+   "feature": "Action library",
+   "area": "panel",
+   "apple": "actions sidebar",
+   "status": "partial",
+   "bifrost": "springboard/src/shortcuts.rs:28",
+   "note": "Twelve fixed action kinds with preset choices; no text, input, web or file actions",
+   "wire": "Extend Action with Text, Ask for Input, Get Contents of URL, Save File, Show Result"
+  },
+  {
+   "feature": "App intents as actions",
+   "area": "integration",
+   "apple": "app actions",
+   "status": "parity",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/automation.rs:33",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Variables between actions",
+   "area": "view",
+   "apple": "editor",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Action output passing and a variable token model in springboard/src/shortcuts.rs"
+  },
+  {
+   "feature": "Control flow: If, Repeat, Choose from Menu",
+   "area": "view",
+   "apple": "scripting actions",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Block actions with nested children in the model and the editor"
+  },
+  {
+   "feature": "Colour and glyph",
+   "area": "panel",
+   "apple": "Details",
+   "status": "partial",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:630",
+   "note": "Colour only",
+   "wire": "Glyph picker beside the swatches"
+  },
+  {
+   "feature": "Rename / duplicate / delete",
+   "area": "menu",
+   "apple": "File / context menu",
+   "status": "partial",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:655",
+   "note": "Delete only",
+   "wire": "Rename field and Duplicate in the editor"
+  },
+  {
+   "feature": "Folders",
+   "area": "view",
+   "apple": "sidebar folders",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Folder field and sidebar sections"
+  },
+  {
+   "feature": "Personal automations",
+   "area": "view",
+   "apple": "Automation",
+   "status": "partial",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:648",
+   "note": "Daily time only",
+   "wire": "Automations list with time, app-open and battery triggers"
+  },
+  {
+   "feature": "Open at login",
+   "area": "settings",
+   "apple": "login item",
+   "status": "parity",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:654",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Keyboard shortcut / menu bar run",
+   "area": "settings",
+   "apple": "Details > keyboard shortcut",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Shell hotkey registration per shortcut"
+  },
+  {
+   "feature": "Import / export shortcut files",
+   "area": "document",
+   "apple": "File > Import / Export",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Serialize a shortcut to a file through the document flow"
+  },
+  {
+   "feature": "Result / snippet panel",
+   "area": "panel",
+   "apple": "result panel",
+   "status": "parity",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:246",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Search shortcuts",
+   "area": "toolbar",
+   "apple": "search field",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Search field filtering the grid"
+  },
+  {
+   "feature": "Shortcuts exposed as system intents and RPC",
+   "area": "integration",
+   "apple": "system intents",
+   "status": "parity",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/main.rs:141",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Starter gallery",
+   "area": "view",
+   "apple": "Gallery",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Bundled starter shortcuts"
+  },
+  {
+   "feature": "App menus",
+   "area": "menu",
+   "apple": "MainMenu",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No main_menu",
+   "wire": "App::main_menu with New Shortcut, Run, Delete"
+  },
+  {
+   "feature": "Cloud sharing links",
+   "area": "integration",
+   "apple": "cloud links",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Vendor cloud",
+   "wire": ""
+  }
+ ]
+}

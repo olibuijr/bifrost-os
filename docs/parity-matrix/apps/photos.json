@@ -1,0 +1,536 @@
+{
+ "app": "Photos",
+ "bifrost_app": "shell built-in Photos (springboard/src/shell/photos)",
+ "evidence": [
+  "ref27/System/Applications/Photos.app/Contents/Info.plist (document types, URL schemes)",
+  "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib",
+  "Photos.app/Contents/Resources/Base.lproj/IPXGeneralPreferences.nib",
+  "Photos.app/Contents/Resources/Base.lproj/IPXExportViewController.nib",
+  "Photos.app/Contents/Resources/Base.lproj/IPXSmartAlbumEditorView.nib",
+  "REA inspect_plist/decode_interface_builder returned target_unavailable (no open target); nibs read statically"
+ ],
+ "features": [
+  {
+   "feature": "Library grid of all photos",
+   "area": "view",
+   "apple": "main window, Library",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/mod.rs:254",
+   "note": "All Photos grid with thumbnails",
+   "wire": ""
+  },
+  {
+   "feature": "Smart collections: Recents, Favorites, Screenshots, Recently Deleted",
+   "area": "view",
+   "apple": "sidebar collections; View > Show Screenshots",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/mod.rs:254",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Favorite / unfavorite a photo",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Favorite",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1439",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Delete to Recently Deleted, recover, delete permanently, 30-day purge",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Delete Photo; Erase Deleted Items",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1494",
+   "note": "recover_one mod.rs:1527, purge_expired mod.rs:726",
+   "wire": ""
+  },
+  {
+   "feature": "Multi-select with batch delete, share and slideshow",
+   "area": "toolbar",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Edit > Select All / Deselect All",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1246",
+   "note": "tap-to-select only; no Select All / Deselect All, no shift-range",
+   "wire": "Add select_all/deselect_all on the selection state in mod.rs and expose Edit > Select All (cmd+A) / Deselect All (cmd+shift+A) through the shell app menu while Photos is frontmost"
+  },
+  {
+   "feature": "New Album and add photo to album",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > New Album; Image > Add to",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/mod.rs:521",
+   "note": "toggle_in_album mod.rs:528",
+   "wire": ""
+  },
+  {
+   "feature": "Remove photo from current album",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Remove from Album",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/mod.rs:528",
+   "note": "toggle_in_album removes when already in album",
+   "wire": ""
+  },
+  {
+   "feature": "New Folder for albums",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > New Folder",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a folder level to albums.rs (folder name + child album ids, persisted beside albums) and a New Folder row next to New Album in the album menu (mod.rs:1894)"
+  },
+  {
+   "feature": "Smart Albums with rule conditions",
+   "area": "panel",
+   "apple": "File > New Smart Album; IPXSmartAlbumEditorView.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a smart album model (conditions on date, favourite, file type, keyword, filename) in albums.rs, evaluated in album_list (mod.rs:491); an editor sheet with condition rows reachable from the album menu"
+  },
+  {
+   "feature": "Rename / delete / sort albums",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Edit Title; Sort > By Custom Order / By Name",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add rename (TextField) and delete rows to the album menu plus sort by name; persist in albums.rs"
+  },
+  {
+   "feature": "Sort by date newest/oldest",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib View > Sort > By Newest/Oldest First",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1915",
+   "note": "persisted as pref \"sort\" (mod.rs:450)",
+   "wire": ""
+  },
+  {
+   "feature": "Filter by date / kind",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib View > Filter By",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:581",
+   "note": "cycle_filter via title tap; set_date_query (mod.rs:559) has no UI caller; no kind filters",
+   "wire": "Add a date field that calls set_date_query, and a Filter By submenu (favorites, edited, photos, videos) in the shell View menu"
+  },
+  {
+   "feature": "Grid zoom bigger / smaller",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib View > Zoom In / Zoom Out",
+   "status": "gap",
+   "bifrost": "",
+   "note": "column count fixed by cols() (mod.rs:553)",
+   "wire": "Make cols() read a zoom level pref; bind cmd+= / cmd+- and pinch on the grid"
+  },
+  {
+   "feature": "Aspect-ratio vs square grid",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib View > Aspect Ratio Grid",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a grid mode pref and draw thumbnails letterboxed instead of cropped in grid.rs"
+  },
+  {
+   "feature": "Full-size viewer with navigation",
+   "area": "view",
+   "apple": "Open Viewer",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/viewer.rs:1",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Pinch / zoom in viewer",
+   "area": "view",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib View > Zoom In/Out in viewer",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/zoom.rs:45",
+   "note": "keyboard zoom shortcuts absent",
+   "wire": ""
+  },
+  {
+   "feature": "Enter Full Screen",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib View > Enter Full Screen",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:476",
+   "note": "fullscreen() reported for the viewer only; no menu toggle",
+   "wire": "Wire View > Enter Full Screen in the shell window chrome to toggle fullscreen for the Photos window"
+  },
+  {
+   "feature": "Info panel with EXIF metadata",
+   "area": "panel",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Window > Info; IPXInfoSummaryContainerView.nib",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1273",
+   "note": "exif.rs parses camera, date, size",
+   "wire": ""
+  },
+  {
+   "feature": "Edit title, caption, keywords",
+   "area": "panel",
+   "apple": "IPXMetadataEditorTitle/Caption ViewController, IPXMetadataKeywordTokensController.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Info is read-only",
+   "wire": "Add editable title/caption/keywords rows to the Info sheet, persisted in a sidecar next to the edit recipe (recipe.rs) and included in search"
+  },
+  {
+   "feature": "Keyword Manager",
+   "area": "panel",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Window > Keyword Manager; IPXKeywordsManager.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "After keywords exist, add a keyword list panel to create/rename/delete keywords and apply them to the selection"
+  },
+  {
+   "feature": "Adjust Date and Time",
+   "area": "panel",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Adjust Date and Time; IPXAdjustAssetsDateTimeViewController.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a date picker sheet from Info that writes an override capture date to the sidecar and re-sorts (library.rs)"
+  },
+  {
+   "feature": "Assign / hide / copy location",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Location; IPXMetadataPlacesViewController.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "GPS shown only from exif",
+   "wire": "Add a place field and Hide Location toggle to the Info sheet (sidecar); Copy Location to the pasteboard"
+  },
+  {
+   "feature": "Places / map view",
+   "area": "view",
+   "apple": "sidebar Map",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a Places collection grouping photos by exif GPS, drawn on the shell map component"
+  },
+  {
+   "feature": "People & Pets face recognition",
+   "area": "view",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib View > Show Face Names",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "needs an on-device face model service the stack lacks",
+   "wire": ""
+  },
+  {
+   "feature": "Memories and memory movies",
+   "area": "view",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > New Memory Movie; IPXMemoriesBrowserViews.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Build a Memories collection from date clusters (library.rs month grouping) that plays the slideshow with music"
+  },
+  {
+   "feature": "Edit: Adjust sliders",
+   "area": "panel",
+   "apple": "Edit mode Adjust",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/mod.rs:208",
+   "note": "brightness, contrast, exposure, saturation, warmth, blur, vignette",
+   "wire": ""
+  },
+  {
+   "feature": "Edit: Filters",
+   "area": "panel",
+   "apple": "Edit mode Filters",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/edit.rs:69",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Edit: crop, aspect, straighten, rotate, flip",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Rotate Left/Right, Flip Horizontal/Vertical",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1307",
+   "note": "crop/aspect/straighten/rotate exist; no flip, rotate one direction, no menu items",
+   "wire": "Add flip_h/flip_v to Edit in edit.rs with buttons in the Crop pane; add Rotate Left / Rotate Right (cmd+R / cmd+opt+R) shell menu items"
+  },
+  {
+   "feature": "Auto Enhance",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Auto Enhance",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add an auto-levels pass (histogram stretch) in edit.rs and an Auto button in the Adjust pane"
+  },
+  {
+   "feature": "Revert to Original",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Revert to Original",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/mod.rs:2030",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Copy / Paste edits",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Copy Edits / Paste Edits",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Keep the current recipe (recipe.rs) in a Photos clipboard and apply it to the selection"
+  },
+  {
+   "feature": "Duplicate photo",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Duplicate",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Copy the file with a numbered suffix in the library dir and rescan"
+  },
+  {
+   "feature": "Hide photo and Hidden album with password unlock",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Hide Photo; View > Show Hidden Photo Album; IPXGeneralPreferences.nib Use Password to Unlock",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a hidden flag in prefs and a Hidden collection excluded from All Photos, gated by the shell auth sheet"
+  },
+  {
+   "feature": "Star rating",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Star Rating",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a rating to the sidecar, keys 0-5 in the viewer, and a rating row in Info"
+  },
+  {
+   "feature": "Video / Live Photo playback and poster frame",
+   "area": "view",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Turn On Live Photo; Make Poster Frame; Save Video Frame as Photo",
+   "status": "gap",
+   "bifrost": "",
+   "note": "library scans stills only",
+   "wire": "Include video files in library.rs and play them through the shell media player in the viewer"
+  },
+  {
+   "feature": "Duplicates and bursts",
+   "area": "panel",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Merge Duplicates; IPXBurstSecondaryToolbarViewController.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Detect duplicate files by hash in library.rs; add a Duplicates collection with Merge"
+  },
+  {
+   "feature": "Slideshow",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > Play Slideshow; IPXSlideshowSettings*.nib",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/slideshow.rs:1",
+   "note": "plays; no theme, music or timing settings",
+   "wire": "Add a slideshow options sheet (seconds per slide, transition, music) before start at mod.rs:1404"
+  },
+  {
+   "feature": "Export slideshow / memory as a movie",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > Export > Export Slideshow / Memory",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Encode slideshow frames to a movie via the shell media encoder"
+  },
+  {
+   "feature": "Import from folder or card with duplicate review",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > Import; IPXImportDuplicatePanelController.nib",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/import.rs:24",
+   "note": "import() copies new files but nothing in the UI calls it",
+   "wire": "Add File > Import... opening the shell open panel for a folder, calling import::import into the library dir and showing the Report (copied/skipped)"
+  },
+  {
+   "feature": "Export with kind, size and metadata options",
+   "area": "panel",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > Export Photos; IPXExportViewController.nib",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1400",
+   "note": "Save to Files copies the original only",
+   "wire": "Add an export sheet with kind (JPEG/PNG/TIFF), quality, size, include location/metadata and file naming"
+  },
+  {
+   "feature": "Export unmodified original",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > Export > Export Unmodified Original",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1400",
+   "note": "Save to Files writes the original file",
+   "wire": ""
+  },
+  {
+   "feature": "Share (copy, send nearby, set as wallpaper)",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Share",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/mod.rs:2191",
+   "note": "wallpaper at mod.rs:894",
+   "wire": ""
+  },
+  {
+   "feature": "Copy photo to pasteboard",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Edit > Copy",
+   "status": "parity",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1396",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Undo / Redo",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Edit > Undo / Redo",
+   "status": "gap",
+   "bifrost": "",
+   "note": "edits can only cancel or revert",
+   "wire": "Add an undo stack for delete, favourite, album and edit-save; wire the shell Edit menu"
+  },
+  {
+   "feature": "Search",
+   "area": "toolbar",
+   "apple": "sidebar Search",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a toolbar search field matching filename, album, date and keywords, feeding set_filter (mod.rs:570)"
+  },
+  {
+   "feature": "Print",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib File > Print; IPXLocalPrintController.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add File > Print gated on bifrost_app::print::available() (as Books main.rs:68) for the viewed or selected photos"
+  },
+  {
+   "feature": "Sidebar of collections and albums",
+   "area": "view",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib View > Show Sidebar",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1345",
+   "note": "album pop-up menu instead of a desktop sidebar",
+   "wire": "Replace the album menu with an SDK SidebarItem sidebar (as Books books/mod.rs:987)"
+  },
+  {
+   "feature": "Settings: library location, autoplay, memories",
+   "area": "settings",
+   "apple": "IPXGeneralPreferences.nib",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/library.rs:8",
+   "note": "library dir fixed to ~/Pictures; no settings pane",
+   "wire": "Add a Photos settings pane for library folder, autoplay videos, show memories, reset suggestions"
+  },
+  {
+   "feature": "Library chooser / multiple libraries",
+   "area": "panel",
+   "apple": "IPXLibraryChooser*.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Allow choosing a library folder at launch, stored in prefs"
+  },
+  {
+   "feature": "Cloud library, shared albums, shared library",
+   "area": "settings",
+   "apple": "IPXiCloudPreferences.nib, IPXSharedLibraryPreferences.nib",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "vendor cloud service",
+   "wire": ""
+  },
+  {
+   "feature": "Edit With another app",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Edit With",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "List apps registered for image types via the shell launch service and open the file with the chosen one"
+  },
+  {
+   "feature": "Show Histogram",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib View > Show Histogram",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Compute a luminance histogram in edit.rs and draw it in the Adjust pane"
+  },
+  {
+   "feature": "Markup on a photo",
+   "area": "panel",
+   "apple": "IPXAnnotationsOverlayController.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a Markup pane reusing SDK drawing controls (as Freeform ink.rs) baked into the recipe"
+  },
+  {
+   "feature": "RAW: use RAW as original, reprocess",
+   "area": "menu",
+   "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Use RAW as Original",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "no RAW decoder in the stack",
+   "wire": ""
+  },
+  {
+   "feature": "Print projects (books, cards, calendars)",
+   "area": "panel",
+   "apple": "IPXProjectExtension*.nib; Create menu",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "third-party project extensions",
+   "wire": ""
+  },
+  {
+   "feature": "URL scheme handler",
+   "area": "integration",
+   "apple": "Info.plist CFBundleURLSchemes",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Register a URL scheme in the app catalog so links open a photo or album via show() (mod.rs:787)"
+  },
+  {
+   "feature": "Library package document types",
+   "area": "document",
+   "apple": "Info.plist CFBundleDocumentTypes",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "vendor library package formats",
+   "wire": ""
+  },
+  {
+   "feature": "Welcome / tour",
+   "area": "panel",
+   "apple": "IPXWelcomeViewController.nib, IPXTourOverlayViewController.nib",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1773",
+   "note": "empty state only; no tour",
+   "wire": "Add a first-launch tip card using the SDK tips state like Freeform freeform.rs:459"
+  }
+ ]
+}

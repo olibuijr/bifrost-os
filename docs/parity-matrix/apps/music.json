@@ -1,0 +1,243 @@
+{
+ "app": "Music",
+ "bifrost_app": "music-desktop",
+ "evidence": [
+  "reference bundle absent: ~/Projects/macos-ref/extract/ref27/System/Applications has no Music.app and `bifrost pc ref index` lists none, so there are no REA evidence ids; rows come from the shipped app's known menus and settings"
+ ],
+ "features": [
+  {
+   "feature": "Library browse by Artists/Albums/Songs",
+   "area": "view",
+   "apple": "sidebar Library section",
+   "status": "parity",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:115",
+   "note": "Artists, Albums and Songs tabs with an album grid and artist pages",
+   "wire": ""
+  },
+  {
+   "feature": "Play / Shuffle album or playlist",
+   "area": "toolbar",
+   "apple": "album header buttons",
+   "status": "parity",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:1120",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Transport: play/pause, next, previous, seek, volume",
+   "area": "toolbar",
+   "apple": "Controls menu, player bar",
+   "status": "parity",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:1072",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Shuffle and Repeat (off/all/one)",
+   "area": "menu",
+   "apple": "Controls > Shuffle / Repeat",
+   "status": "parity",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:1337",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Up Next queue: play next/last, reorder, remove, clear",
+   "area": "panel",
+   "apple": "Up Next panel, song context menu",
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:1258",
+   "note": "Reorder is move-up only; no drag, no History",
+   "wire": "Add drag reorder and a History list (played ids recorded in Music::sync_now_playing) to draw_queue (music.rs:1821)"
+  },
+  {
+   "feature": "Playlists: new, add to, remove from, rename, delete",
+   "area": "menu",
+   "apple": "File > New > Playlist, song context menu",
+   "status": "parity",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:1371",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Smart Playlists with rules",
+   "area": "menu",
+   "apple": "File > New > Smart Playlist",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a rule model (field/op/value, live update) next to Playlists in music.rs; a New Smart Playlist row in draw_playlists (music.rs:1775); a rules editor sheet"
+  },
+  {
+   "feature": "Playlist folders",
+   "area": "menu",
+   "apple": "File > New > Playlist Folder",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Folder nodes in the Playlists store, nested rows in the Playlists tab"
+  },
+  {
+   "feature": "Search library",
+   "area": "toolbar",
+   "apple": "sidebar search field",
+   "status": "parity",
+   "bifrost": "springboard/apps/music-desktop/src/app.rs:274",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Sort songs by column / column browser",
+   "area": "view",
+   "apple": "View > Sort By, column headers",
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:1472",
+   "note": "The Songs header cycles one sort key; no column table",
+   "wire": "Add a column table (title, artist, album, time, plays) with header-click sort in draw_song_rows"
+  },
+  {
+   "feature": "Get Info editor (tags, artwork, lyrics)",
+   "area": "panel",
+   "apple": "Song > Get Info",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a Get Info item to MenuItem (music.rs:169) opening a sheet that edits tags through the library store and writes them to the file"
+  },
+  {
+   "feature": "Favourite songs",
+   "area": "menu",
+   "apple": "Song > Favorite",
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:1456",
+   "note": "Favourites exist for radio stations only",
+   "wire": "Per-song favourite flag in the library store, a heart in song rows and a Favourite Songs list"
+  },
+  {
+   "feature": "Star ratings",
+   "area": "menu",
+   "apple": "Song > Rating",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Rating field per song set from the song menu, sortable column"
+  },
+  {
+   "feature": "Internet radio stations",
+   "area": "view",
+   "apple": "Radio sidebar item",
+   "status": "parity",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:1295",
+   "note": "Open station catalogue rather than the vendor radio service",
+   "wire": ""
+  },
+  {
+   "feature": "Import files and folders into the library",
+   "area": "menu",
+   "apple": "File > Import",
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/app.rs:425",
+   "note": "Library is a scan of ~/Music; opening a file plays it without adding it",
+   "wire": "Add File > Import that copies files into the library root and calls start_scan (music.rs:1177)"
+  },
+  {
+   "feature": "Full player and MiniPlayer",
+   "area": "view",
+   "apple": "Window > MiniPlayer / Full Screen Player",
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:2026",
+   "note": "Player sheet and mini bar; no separate MiniPlayer window",
+   "wire": "Add a compact MiniPlayer window mode from a Window menu item"
+  },
+  {
+   "feature": "Lyrics view",
+   "area": "panel",
+   "apple": "View > Lyrics",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Read embedded or .lrc lyrics in the library scan; a Lyrics panel in the player sheet with the current line highlighted"
+  },
+  {
+   "feature": "Equalizer",
+   "area": "panel",
+   "apple": "Window > Equalizer",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "EQ presets and a 10-band gain stage in the audio engine; an Equalizer panel from the Window menu"
+  },
+  {
+   "feature": "Playback settings: crossfade, Sound Check",
+   "area": "settings",
+   "apple": "Settings > Playback",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Settings window with crossfade seconds and loudness normalisation wired into the engine"
+  },
+  {
+   "feature": "Recently Added / Recently Played",
+   "area": "view",
+   "apple": "sidebar Recently Added",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Derive from library mtimes and a play history log; add sidebar rows in app.rs chrome"
+  },
+  {
+   "feature": "System Now Playing and media keys",
+   "area": "integration",
+   "apple": "system media controls",
+   "status": "parity",
+   "bifrost": "springboard/apps/music-desktop/src/music.rs:1163",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Output device picker",
+   "area": "integration",
+   "apple": "output route picker",
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/app.rs:139",
+   "note": "Follows route changes; no picker in the app",
+   "wire": "Add an output picker in the player bar that lists the audio devices service and sets the route"
+  },
+  {
+   "feature": "App menus: Song, Controls, View with shortcuts",
+   "area": "menu",
+   "apple": "MainMenu Song/Controls/View",
+   "status": "gap",
+   "bifrost": "",
+   "note": "The app declares no main_menu",
+   "wire": "Implement App::main_menu in app.rs: Controls (Play, Next, Previous, Shuffle, Repeat, Volume Up/Down) and Song (Play Next, Add to Playlist, Get Info), routed to Music actions"
+  },
+  {
+   "feature": "Visualizer",
+   "area": "menu",
+   "apple": "Window > Visualizer",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Full-window visualizer driven by the engine spectrum"
+  },
+  {
+   "feature": "Streaming catalogue, subscription store, cloud library",
+   "area": "integration",
+   "apple": "Store / subscription",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Tied to the vendor streaming service and account",
+   "wire": ""
+  },
+  {
+   "feature": "Disc import and burning",
+   "area": "menu",
+   "apple": "File > Burn Playlist to Disc",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Optical drive hardware",
+   "wire": ""
+  }
+ ]
+}

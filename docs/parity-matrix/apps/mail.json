@@ -1,0 +1,537 @@
+{
+ "app": "Mail",
+ "bifrost_app": "mail-desktop",
+ "evidence": [
+  "ref27 Mail.app/Contents/Info.plist",
+  "Resources/Base.lproj/MainMenu.nib (Mail.menuBar.* identifiers)",
+  "Base.lproj/ViewerPreferences.nib",
+  "Base.lproj/ComposingPreferences.nib",
+  "Base.lproj/RulesPreferences.nib",
+  "Base.lproj/SignaturePreferences.nib",
+  "Base.lproj/PreferencesWindow.storyboardc"
+ ],
+ "features": [
+  {
+   "feature": "New message compose",
+   "area": "menu",
+   "apple": "MainMenu File > New Message",
+   "status": "parity",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:418",
+   "note": "Compose sheet with To, Subject and Message",
+   "wire": ""
+  },
+  {
+   "feature": "Cc, Bcc and Reply-To address fields",
+   "area": "view",
+   "apple": "MainMenu View > Bcc/Cc/Reply-To Address Field",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Compose has To only",
+   "wire": "Add Cc/Bcc/Reply-To fields to open_compose (state.rs:365), carry them in Draft (message.rs) and the RCPT list in submit.rs; add View menu toggles in window.rs menu_items"
+  },
+  {
+   "feature": "Send message",
+   "area": "menu",
+   "apple": "Message > Send",
+   "status": "parity",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:421",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Reply",
+   "area": "menu",
+   "apple": "Message > Reply",
+   "status": "parity",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:419",
+   "note": "Threading headers kept",
+   "wire": ""
+  },
+  {
+   "feature": "Reply All",
+   "area": "menu",
+   "apple": "Message > Reply All",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add message::reply_all_draft that takes every To/Cc address except the user's own; add MENU_REPLY_ALL to window.rs menu_items and a toolbar button in draw.rs toolbar_items"
+  },
+  {
+   "feature": "Forward, Forward as Attachment, Redirect",
+   "area": "menu",
+   "apple": "Message > Forward, Forward as Attachment, Redirect",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add forward_draft that quotes the body under a 'Fwd:' subject and re-attaches the files (multipart in submit.rs); Redirect keeps the original From and adds Resent- headers; add Message menu items and a toolbar Forward button"
+  },
+  {
+   "feature": "Rich text formatting (bold/italic/underline, fonts, colours, alignment, lists, indentation)",
+   "area": "menu",
+   "apple": "Format menu",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Compose is plain text",
+   "wire": "Add a styled-span model to the compose body and a Format menu, and send a text/html alternative from submit.rs"
+  },
+  {
+   "feature": "Attach files to message",
+   "area": "menu",
+   "apple": "File > Attach Files",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Attachments can be saved but not sent",
+   "wire": "Pick files with the SDK open panel, list them in the compose sheet, and build multipart/mixed in submit.rs"
+  },
+  {
+   "feature": "Save attachments",
+   "area": "menu",
+   "apple": "File > Save Attachments",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:428",
+   "note": "Saves every attachment into the app data dir; no save panel and no per-file choice",
+   "wire": "Ask for the destination with the SDK save panel; make each attachment in the view (draw.rs:489) clickable to save it alone"
+  },
+  {
+   "feature": "Open or preview an attachment from the message",
+   "area": "panel",
+   "apple": "ViewAttachmentContextMenu",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Attachments are listed as text only",
+   "wire": "Make attachment names hit targets in draw.rs:489 and open them through the shell's open-file service"
+  },
+  {
+   "feature": "Print message",
+   "area": "menu",
+   "apple": "File > Print",
+   "status": "parity",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:430",
+   "note": "Prints plain text",
+   "wire": ""
+  },
+  {
+   "feature": "Export as PDF, Save As message",
+   "area": "menu",
+   "apple": "File > Export as PDF, Save As",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Render the message to PDF through the print path into a save panel; Save As writes the raw .eml"
+  },
+  {
+   "feature": "Flag message (toggle)",
+   "area": "menu",
+   "apple": "Message > Flag",
+   "status": "parity",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:423",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Coloured flags",
+   "area": "menu",
+   "apple": "Message > Flag > colours",
+   "status": "gap",
+   "bifrost": "",
+   "note": "One flag only",
+   "wire": "Map the colours to the $MailFlagBit0-2 keywords in flags.rs, add a submenu in window.rs and a colour dot to the list row in draw.rs"
+  },
+  {
+   "feature": "Mark as Read/Unread",
+   "area": "menu",
+   "apple": "Message > Mark",
+   "status": "parity",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:424",
+   "note": "Unread dot in the list, draw.rs:397",
+   "wire": ""
+  },
+  {
+   "feature": "Archive",
+   "area": "menu",
+   "apple": "Message > Archive",
+   "status": "parity",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:425",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Delete / Move to Trash",
+   "area": "menu",
+   "apple": "Edit > Delete",
+   "status": "parity",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:426",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Move To / Copy To mailbox, Move Again",
+   "area": "menu",
+   "apple": "Message > Move to, Copy to, Move Again",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Archive and Trash are the only targets",
+   "wire": "Add a submenu over mail.mailboxes that calls move_open with the chosen name (window.rs:607); use IMAP COPY for Copy To; keep the last target for Move Again; let rows be dragged onto sidebar mailboxes"
+  },
+  {
+   "feature": "Move to Junk and junk filtering",
+   "area": "menu",
+   "apple": "Message > Move to Junk; Junk settings",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a Move to Junk item backed by a JUNK_NAMES list like ARCHIVE_NAMES in state.rs, and set the $Junk keyword"
+  },
+  {
+   "feature": "Remind Me, follow-up, Send Later",
+   "area": "menu",
+   "apple": "Message > Remind Me; View > Sort by Send Later",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Keep a local reminder store keyed by Message-ID and a check in tick() that brings the row back; add a Send Later queue in front of submit"
+  },
+  {
+   "feature": "Mute conversation / Ignore follow-up",
+   "area": "menu",
+   "apple": "Message > Mute",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Store muted thread ids and skip notify() (window.rs:524) for them"
+  },
+  {
+   "feature": "Set priority",
+   "area": "menu",
+   "apple": "Message > Set Priority",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add an X-Priority header to the submit draft and a priority choice in compose"
+  },
+  {
+   "feature": "Remove attachments",
+   "area": "menu",
+   "apple": "Message > Remove Attachments",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Rewrite the message without its file parts, APPEND it and delete the original through imap.rs"
+  },
+  {
+   "feature": "Add sender to contacts",
+   "area": "menu",
+   "apple": "Message > Add Sender to Contacts",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Send the sender's name and address from the open Summary to the Contacts service"
+  },
+  {
+   "feature": "Rules and Apply Rules",
+   "area": "settings",
+   "apple": "RulesPreferences; Message > Apply Rules",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a rule model (criteria and actions) saved in the data dir, run it after apply_listing, and add a Rules settings pane"
+  },
+  {
+   "feature": "Conversations (organize by thread, expand/collapse)",
+   "area": "view",
+   "apple": "View > Organize by Conversation, Expand/Collapse All Conversations",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:440",
+   "note": "Threaded view toggle exists; threads cannot be collapsed",
+   "wire": "Make thread groups collapsible in state.visible_lines with a disclosure hit target in draw.rs; add Expand/Collapse All items"
+  },
+  {
+   "feature": "Sort messages by field and order",
+   "area": "view",
+   "apple": "View > Sort By",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Always newest first",
+   "wire": "Keep a sort key and order in Mail, apply them in visible_rows (state.rs:389), and add a View > Sort By submenu"
+  },
+  {
+   "feature": "Filter the message list (unread, flagged, attachments)",
+   "area": "view",
+   "apple": "View > Filter",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a Filter enum to Mail applied in visible_rows, plus a toolbar filter button"
+  },
+  {
+   "feature": "Mailbox search",
+   "area": "menu",
+   "apple": "Edit > Find > Mailbox Search",
+   "status": "parity",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:438",
+   "note": "Local and server search with field syntax",
+   "wire": ""
+  },
+  {
+   "feature": "Find in the message body",
+   "area": "menu",
+   "apple": "Edit > Find > Find, Find Next/Previous",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Find searches the list, not the open message",
+   "wire": "Add a find bar in the view pane that highlights matches in the drawn body"
+  },
+  {
+   "feature": "Sidebar with accounts and mailboxes",
+   "area": "view",
+   "apple": "View > Show Mailbox List",
+   "status": "parity",
+   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:116",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Hide or show sidebar and toolbar, column layout, side preview",
+   "area": "view",
+   "apple": "View > Show Sidebar, Use Column Layout",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Three fixed panes",
+   "wire": "Add View menu toggles that feed layout::panes (layout.rs:11)"
+  },
+  {
+   "feature": "Favorites bar",
+   "area": "view",
+   "apple": "View > Show Favorites Bar; FavoritesBarViewController",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a strip of pinned mailboxes under the toolbar, with the list saved"
+  },
+  {
+   "feature": "New, rename and delete mailbox",
+   "area": "menu",
+   "apple": "Mailbox > New Mailbox, Rename, Delete",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add IMAP CREATE/RENAME/DELETE to imap.rs, Mailbox menu items and a new-mailbox sheet"
+  },
+  {
+   "feature": "Smart mailboxes",
+   "area": "panel",
+   "apple": "Mailbox > New Smart Mailbox; NewSmartMailbox",
+   "status": "gap",
+   "bifrost": "",
+   "note": "search.rs Query could back it",
+   "wire": "Show saved queries in the sidebar, matched with search::Query::matches"
+  },
+  {
+   "feature": "Get new mail / synchronize",
+   "area": "menu",
+   "apple": "Mailbox > Get New Mail, Synchronize",
+   "status": "parity",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:436",
+   "note": "Refresh plus the IDLE watcher in sync.rs:158",
+   "wire": ""
+  },
+  {
+   "feature": "Erase deleted items and junk",
+   "area": "menu",
+   "apple": "Mailbox > Erase Deleted Items, Erase Junk Mail",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Empty Trash or Junk with STORE \\Deleted plus EXPUNGE in imap.rs, from the Mailbox menu"
+  },
+  {
+   "feature": "Import and export mailboxes (mbox)",
+   "area": "menu",
+   "apple": "File > Import Mailboxes; Mailbox > Export",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add an mbox reader and writer; export the selected mailbox to a path from the save panel"
+  },
+  {
+   "feature": "Add account",
+   "area": "menu",
+   "apple": "Mail > Add Account",
+   "status": "parity",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:442",
+   "note": "Manual IMAP/SMTP setup; password kept in Passwords",
+   "wire": ""
+  },
+  {
+   "feature": "Accounts settings (edit, remove, server settings)",
+   "area": "settings",
+   "apple": "PreferencesWindow Accounts, IMAPPOPServerSettings, SMTPSettings",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Accounts cannot be edited or removed",
+   "wire": "Add an Accounts sheet listing the accounts with edit and remove, reusing the setup Form"
+  },
+  {
+   "feature": "Aliases and the send-from address",
+   "area": "settings",
+   "apple": "EditEmailAliases; Composing > Send new messages from",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a From picker to compose and per-account aliases in accounts.rs"
+  },
+  {
+   "feature": "Signatures",
+   "area": "settings",
+   "apple": "SignaturePreferences",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Store a signature per account and append it in open_compose"
+  },
+  {
+   "feature": "Viewing settings (headers shown, remote content, bold unread, dark backgrounds)",
+   "area": "settings",
+   "apple": "ViewerPreferences",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/html.rs:37",
+   "note": "sanitize can block remote images, but there is no settings pane and messages are shown as text",
+   "wire": "Add a Viewing settings pane and wire html::sanitize and HTML rendering into the view"
+  },
+  {
+   "feature": "Composing settings (format, quoting, undo send delay, spelling)",
+   "area": "settings",
+   "apple": "ComposingPreferences",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a Composing settings pane, and an undo-send delay before submit in window.send"
+  },
+  {
+   "feature": "Fonts and colours settings",
+   "area": "settings",
+   "apple": "FontsAndColorsPreferences",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Uses system type by design",
+   "wire": ""
+  },
+  {
+   "feature": "HTML message rendering",
+   "area": "view",
+   "apple": "MessageViewController",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/body.rs:12",
+   "note": "HTML is turned into plain text",
+   "wire": "Render the sanitized HTML (html.rs:37) through the SDK web or rich text view"
+  },
+  {
+   "feature": "All headers and raw source",
+   "area": "view",
+   "apple": "View > Message > All Headers, Raw Source; RawSourceWindow",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a raw source window over the fetched raw text in the body cache"
+  },
+  {
+   "feature": "New mail notifications",
+   "area": "integration",
+   "apple": "notifications",
+   "status": "parity",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:524",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Activity window and Connection Doctor",
+   "area": "panel",
+   "apple": "Window > Activity, Connection Doctor",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:261",
+   "note": "Status line only",
+   "wire": "Add an Activity panel listing the sync jobs from sync.rs events, and a connection test per account"
+  },
+  {
+   "feature": "Paste as Quotation, Paste and Match Style",
+   "area": "menu",
+   "apple": "Edit > Paste as Quotation",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:400",
+   "note": "Plain paste only",
+   "wire": "Add Paste as Quotation that prefixes '> ' before form.type_text"
+  },
+  {
+   "feature": "Spelling and grammar, substitutions, speech",
+   "area": "menu",
+   "apple": "Edit > Spelling and Grammar",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Use the SDK text services in the compose body field"
+  },
+  {
+   "feature": "Categories (primary, transactions, updates, promotions)",
+   "area": "view",
+   "apple": "View > Categories",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a header-based classifier and a category filter in the sidebar or list"
+  },
+  {
+   "feature": "Out-of-office and server quota (Exchange)",
+   "area": "panel",
+   "apple": "OofPanel, EWSQuota",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Exchange-specific",
+   "wire": ""
+  },
+  {
+   "feature": "Insert from a phone camera, photo browser",
+   "area": "integration",
+   "apple": "Insert From iPhone or iPad; Photo Browser",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Needs the vendor's phone continuity",
+   "wire": ""
+  },
+  {
+   "feature": "Mail tracking protection",
+   "area": "settings",
+   "apple": "MailTrackingProtection*",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/html.rs:37",
+   "note": "Remote images blocked; no proxy",
+   "wire": "Route remote content through a privacy proxy and expose the switch in Viewing settings"
+  },
+  {
+   "feature": "Open Quickly mailbox switcher",
+   "area": "panel",
+   "apple": "OpenQuicklyWindowController",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a type-to-filter sheet over mail.mailboxes"
+  },
+  {
+   "feature": "Smart replies and summaries",
+   "area": "integration",
+   "apple": "Composing > Personalize Smart Replies; Summarize Message Previews",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Vendor intelligence service; a local AI could cover it later",
+   "wire": ""
+  },
+  {
+   "feature": "More than one viewer window or tab",
+   "area": "menu",
+   "apple": "File > New Viewer Window/Tab",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Open a second MailWindow through SDK multi-window support"
+  }
+ ]
+}

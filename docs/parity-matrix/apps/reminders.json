@@ -1,0 +1,391 @@
+{
+ "app": "Reminders",
+ "bifrost_app": "reminders-desktop",
+ "evidence": [
+  "~/.local/share/paperclip-ops/ref-extract/notes-reminders/System/Applications/Reminders.app/Contents/Info.plist",
+  "~/.local/share/paperclip-ops/ref-extract/rem2/.../Reminders.app/Contents/Resources/Base.lproj/MainMenu.nib",
+  "~/.local/share/paperclip-ops/ref-extract/notes-reminders/.../Reminders.app/Contents/Resources/en.lproj/AppIntents.strings",
+  "~/.local/share/paperclip-ops/ref-extract/notes-reminders/.../Reminders.app/Contents/Resources/en.lproj/Localizable.strings",
+  "~/.local/share/paperclip-ops/ref-extract/notes-reminders/.../Reminders.app/Contents/Resources/en.lproj/TTRMListDetailFilterEditor.strings"
+ ],
+ "features": [
+  {
+   "feature": "New reminder",
+   "area": "menu",
+   "apple": "MainMenu: File > New Reminder; toolbar add",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:105",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "New list with name, colour, icon",
+   "area": "menu",
+   "apple": "MainMenu: File > New List; badge emblem picker",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:1158",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Delete reminder / list",
+   "area": "menu",
+   "apple": "Edit > Delete",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:108",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Mark as completed",
+   "area": "menu",
+   "apple": "MainMenu: Reminder > Mark as Completed",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:109",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Built-in smart lists: Today, Scheduled, Flagged, All, Completed",
+   "area": "view",
+   "apple": "MainMenu: View > Show Smart List",
+   "status": "partial",
+   "bifrost": "springboard/apps/reminders-desktop/src/model.rs:204",
+   "note": "All five exist; no hide/show of smart lists",
+   "wire": "Add a Show Smart List submenu (main.rs main_menu) toggling each smart list tile in the sidebar, stored in Options."
+  },
+  {
+   "feature": "Custom smart lists with filters (date, time, priority, tags, lists, flag)",
+   "area": "panel",
+   "apple": "ListDetailFilterEditor nib + strings; File > Create Smart List, Convert to Smart List",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add SmartDef { name, rules } to model::Data and a filter editor sheet (due range/relative, time of day, priority, tags any/all, include/exclude lists, flagged); evaluate in model::visible via View::SmartCustom(id); sidebar section and File menu item."
+  },
+  {
+   "feature": "Flag",
+   "area": "menu",
+   "apple": "Reminder > Flag",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:1092",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Priority (none, low, medium, high)",
+   "area": "view",
+   "apple": "Reminder > Priority",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/view.rs:442",
+   "note": "Detail editor and quick entry",
+   "wire": ""
+  },
+  {
+   "feature": "Urgent alarm",
+   "area": "menu",
+   "apple": "Reminder > Mark as Urgent",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add an urgent flag that fires the alert as a persistent alarm via alerts.rs; menu item."
+  },
+  {
+   "feature": "Due date, time, early reminder, alerts",
+   "area": "view",
+   "apple": "Show Info inspector",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/alerts.rs:1",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Repeat",
+   "area": "view",
+   "apple": "Show Info inspector",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/repeat.rs:1",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Subtasks: indent, outdent, show/hide all subtasks",
+   "area": "menu",
+   "apple": "Reminder > Indent/Outdent Reminder; View > Show/Hide All Subtasks",
+   "status": "partial",
+   "bifrost": "springboard/apps/reminders-desktop/src/model.rs:452",
+   "note": "Make Subtask in the editor; no Cmd+]/[ or collapse",
+   "wire": "Add Indent/Outdent menu items (Cmd+] / Cmd+[) calling model::indent and a reverse, and a collapsed set for Show/Hide All Subtasks in view.rs."
+  },
+  {
+   "feature": "Sort by manual, due, priority, title, creation date",
+   "area": "view",
+   "apple": "View > Sort By",
+   "status": "partial",
+   "bifrost": "springboard/apps/reminders-desktop/src/model.rs:257",
+   "note": "No creation-date sort; reachable from View Options only",
+   "wire": "Add Sort::Created (needs a created timestamp on Reminder) and a View > Sort By submenu in main_menu."
+  },
+  {
+   "feature": "Group by (none, due, priority, list, time)",
+   "area": "view",
+   "apple": "View > Group by Time",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/model.rs:277",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Show / clear completed",
+   "area": "view",
+   "apple": "View > Show Completed",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:665",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Sections inside a list",
+   "area": "menu",
+   "apple": "File > New Section, New Section with Selection; Reminder > Move to Section; Edit Sections",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add sections: Vec<Section> to ListDef and a section id on Reminder, section headers in view.rs with drag between them, File menu items."
+  },
+  {
+   "feature": "List groups",
+   "area": "menu",
+   "apple": "File > New Group",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a group id on ListDef and collapsible group rows in the My Lists sidebar; New Group menu item."
+  },
+  {
+   "feature": "Pin list",
+   "area": "menu",
+   "apple": "File > Pin List; AppIntents: Pinned Lists",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Pinned flag on ListDef shown as tiles beside smart lists; menu and list context item."
+  },
+  {
+   "feature": "Tags and tag browser",
+   "area": "view",
+   "apple": "Edit > Add Tag; learn-more tags window",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/model.rs:249",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Search",
+   "area": "toolbar",
+   "apple": "Edit > Search; toolbar search",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:436",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Natural-language quick entry (dates, times)",
+   "area": "view",
+   "apple": "Inline add row",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/quick.rs:271",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Quick Reminder panel",
+   "area": "panel",
+   "apple": "Localizable: Show Quick Reminder intent",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Status/menu bar quick-entry panel (like the Notes status item) that adds through quick::parse to the default list."
+  },
+  {
+   "feature": "Mark due date as Today/Tomorrow/This Weekend/Next Week; all overdue to today",
+   "area": "menu",
+   "apple": "Reminder > Mark Due Date As; Mark All Overdue to Today",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a Mark Due Date As submenu and Mark All Overdue to Today in main_menu acting on the selection / overdue items with one undo step."
+  },
+  {
+   "feature": "Show Info inspector",
+   "area": "panel",
+   "apple": "Reminder > Show Info",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:1146",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Duplicate reminder",
+   "area": "menu",
+   "apple": "Edit > Duplicate",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:1000",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Reorder reminders and lists by drag",
+   "area": "view",
+   "apple": "List and sidebar drag",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:1191",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Export list / open list documents",
+   "area": "document",
+   "apple": "Info.plist CFBundleDocumentTypes (list document)",
+   "status": "partial",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:1259",
+   "note": "Markdown export only; no import or document open",
+   "wire": "Register a document type and import a Markdown checklist file into a new list via the open panel; File > Import."
+  },
+  {
+   "feature": "Templates: save as template, view templates",
+   "area": "menu",
+   "apple": "File > Save as Template, View Templates; templates placeholder nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Save a list (items without dates/completion) as a template in the store and a Templates sheet to create a list from one."
+  },
+  {
+   "feature": "Shared lists and assignment",
+   "area": "integration",
+   "apple": "Share List; Manage Shared List; Assign",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Needs the vendor cloud sharing service",
+   "wire": ""
+  },
+  {
+   "feature": "Location-based reminders",
+   "area": "integration",
+   "apple": "Filter editor Location arriving/leaving",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Needs location hardware and geofencing service",
+   "wire": ""
+  },
+  {
+   "feature": "Print list",
+   "area": "menu",
+   "apple": "File > Print",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Print the export_markdown output through the shell print path, as notes-desktop main.rs:229 does."
+  },
+  {
+   "feature": "Notes and URL fields",
+   "area": "view",
+   "apple": "Show Info inspector",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/view.rs:389",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Shortcuts intents: create reminder, create list, open list, open smart list, search, quick reminder",
+   "area": "intent",
+   "apple": "AppIntents.strings; Localizable.strings intent titles",
+   "status": "partial",
+   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:141",
+   "note": "Add Reminder only",
+   "wire": "Add create-list, open-list, open-smart-list and search-reminders intents in main.rs intents()/perform_intent."
+  },
+  {
+   "feature": "Dock badge of due items",
+   "area": "integration",
+   "apple": "Settings: badge count",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/main.rs:233",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Widget",
+   "area": "integration",
+   "apple": "Widget extension",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/system.rs:28",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Auto-categorize (grocery sections)",
+   "area": "menu",
+   "apple": "Edit > Auto-Categorize",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Keyword table that assigns grocery items to sections (depends on sections)."
+  },
+  {
+   "feature": "Rich text in reminder notes (bold, lists)",
+   "area": "menu",
+   "apple": "Format > Font, Bullets and Numbering",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Markdown rendering of the notes field in view.rs and Format menu items."
+  },
+  {
+   "feature": "Image attachments",
+   "area": "view",
+   "apple": "Show Info inspector",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add images to a reminder via the photo picker, stored beside the store file."
+  },
+  {
+   "feature": "Time zone override",
+   "area": "panel",
+   "apple": "Time zone picker sheet nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Optional per-reminder time zone in the editor, applied in model::due_unix."
+  },
+  {
+   "feature": "Settings: default list, all-day alert time, badge",
+   "area": "settings",
+   "apple": "Settings window",
+   "status": "partial",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:672",
+   "note": "Default list in View Options; no settings window",
+   "wire": "Add a Settings pane with default list, all-day alert time and badge toggle."
+  },
+  {
+   "feature": "Show / hide sidebar",
+   "area": "toolbar",
+   "apple": "View > Show Sidebar",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/chrome.rs:126",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Undo and redo",
+   "area": "menu",
+   "apple": "Edit > Undo/Redo",
+   "status": "parity",
+   "bifrost": "springboard/apps/reminders-desktop/src/app.rs:873",
+   "note": "",
+   "wire": ""
+  }
+ ]
+}

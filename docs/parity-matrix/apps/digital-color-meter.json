@@ -1,0 +1,145 @@
+{
+ "app": "Digital Color Meter",
+ "bifrost_app": "colormeter-desktop",
+ "evidence": [
+  "ref27/System/Applications/Utilities/Digital Color Meter.app/Contents/Info.plist (no document types)",
+  "ref27/System/Applications/Utilities/Digital Color Meter.app/Contents/Resources/Base.lproj/MainMenu.nib"
+ ],
+ "features": [
+  {
+   "feature": "Live readout under the pointer",
+   "area": "view",
+   "apple": "main window value panel",
+   "status": "parity",
+   "bifrost": "springboard/apps/colormeter-desktop/src/window.rs:131",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Loupe / aperture view",
+   "area": "view",
+   "apple": "main window loupe",
+   "status": "parity",
+   "bifrost": "springboard/apps/colormeter-desktop/src/loupe.rs:19",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Aperture size",
+   "area": "settings",
+   "apple": "View > Aperture Size slider",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add an aperture slider (1-31 px) in the window panel; average the pixels in that square in window.rs reading() and outline it in the loupe in draw.rs."
+  },
+  {
+   "feature": "Magnification",
+   "area": "settings",
+   "apple": "View > Magnification",
+   "status": "partial",
+   "bifrost": "springboard/apps/colormeter-desktop/src/window.rs:156",
+   "note": "Toolbar Zoom cycles loupe size; no slider or menu.",
+   "wire": "Add View > Magnification items or a slider bound to the loupe cell count."
+  },
+  {
+   "feature": "Display values in colour space (native, sRGB, P3, Adobe RGB, Generic RGB)",
+   "area": "menu",
+   "apple": "View > Display in sRGB, Display in Adobe RGB, Display native values",
+   "status": "partial",
+   "bifrost": "springboard/apps/colormeter-desktop/src/color.rs:22",
+   "note": "sRGB, Display P3, Generic RGB; no Adobe RGB or native.",
+   "wire": "Add Space::AdobeRgb (gamma 2.2 matrix) to color.rs convert and a View > Display In radio menu in main.rs."
+  },
+  {
+   "feature": "Display Values format (8-bit, 16-bit, hex, percent)",
+   "area": "menu",
+   "apple": "View > Display Values",
+   "status": "partial",
+   "bifrost": "springboard/apps/colormeter-desktop/src/color.rs:130",
+   "note": "Hex, decimal and percent; no 16-bit.",
+   "wire": "Add a 16-bit (0-65535) format to CopyFormat and show the chosen one in the panel."
+  },
+  {
+   "feature": "Lock position, Lock X, Lock Y",
+   "area": "menu",
+   "apple": "View > Lock Position, Lock X, Lock Y",
+   "status": "partial",
+   "bifrost": "springboard/apps/colormeter-desktop/src/loupe.rs:55",
+   "note": "Locks both axes only.",
+   "wire": "Add per-axis lock flags in loupe.rs follow and View menu items with shortcuts (cmd+L, cmd+X, cmd+Y)."
+  },
+  {
+   "feature": "Arrow-key nudge of locked position",
+   "area": "view",
+   "apple": "keyboard",
+   "status": "parity",
+   "bifrost": "springboard/apps/colormeter-desktop/src/window.rs:225",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Show Mouse Location",
+   "area": "menu",
+   "apple": "View > Show Mouse Location",
+   "status": "partial",
+   "bifrost": "springboard/apps/colormeter-desktop/src/window.rs:141",
+   "note": "Always shown; not toggleable.",
+   "wire": "Add a checked View item toggling the Position row."
+  },
+  {
+   "feature": "Copy Color as Text",
+   "area": "menu",
+   "apple": "Color > Copy Color as Text",
+   "status": "partial",
+   "bifrost": "springboard/apps/colormeter-desktop/src/color.rs:148",
+   "note": "Toolbar Copy only; no menu item or shortcut.",
+   "wire": "Wire into the new Color menu with shift+cmd+C."
+  },
+  {
+   "feature": "Copy Color as Image",
+   "area": "menu",
+   "apple": "Color > Copy Color as Image",
+   "status": "partial",
+   "bifrost": "springboard/apps/colormeter-desktop/src/window.rs:246",
+   "note": "Toolbar Copy Swatch only; no menu item or shortcut.",
+   "wire": "Wire into the new Color menu with alt+cmd+C."
+  },
+  {
+   "feature": "Update Continuously",
+   "area": "menu",
+   "apple": "View > Update Continuously",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a toggle that stops refresh() polling when off and only samples on pointer move."
+  },
+  {
+   "feature": "App menus (View and Color)",
+   "area": "menu",
+   "apple": "MainMenu.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "No main_menu implemented in main.rs; all commands only in the toolbar.",
+   "wire": "Implement App::main_menu in main.rs with View (space, values, lock, magnification, mouse location, update continuously) and Color (copy text/image) menus routed to window.rs activate."
+  },
+  {
+   "feature": "EDR native values",
+   "area": "settings",
+   "apple": "Display native values EDR, EDR Linear",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Tied to the platform HDR display pipeline.",
+   "wire": ""
+  },
+  {
+   "feature": "Help book",
+   "area": "menu",
+   "apple": "Help menu",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "No help viewer.",
+   "wire": ""
+  }
+ ]
+}

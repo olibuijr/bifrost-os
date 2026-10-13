@@ -1,0 +1,328 @@
+{
+ "app": "Contacts",
+ "bifrost_app": "contacts-desktop",
+ "evidence": [
+  "ref27 Contacts.app/Contents/Info.plist",
+  "Base.lproj/MainMenu.nib",
+  "Base.lproj ABGeneral/ABVCard/ABTemplate/ABAccounts PreferencesModule nibs",
+  "Base.lproj ABDuplicateReviewSheet, ABImportPanel, ABTextFileImport, ABPrintPanel nibs",
+  "REA open_binary refused (extract has no Contents/MacOS executable), so nibs were read as archive string tables"
+ ],
+ "features": [
+  {
+   "feature": "New contact",
+   "area": "menu",
+   "apple": "MainMenu.nib File > New Card",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:541",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Edit contact (name, company, phone, email, address, notes)",
+   "area": "panel",
+   "apple": "Card > Edit Card; ABCardWindow.nib",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:858",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Several labelled phones, emails, addresses",
+   "area": "panel",
+   "apple": "card editor",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/extras.rs:1",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Add Field (birthday, nickname, job title, department, URL, related names, dates, profiles, pronouns, phonetic)",
+   "area": "menu",
+   "apple": "MainMenu.nib Card > Add Field; ABTemplatePreferencesModule.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Store has fixed fields only",
+   "wire": "Add these fields in a sidecar like extras.rs (or the contact store), an Add Field submenu in main_menu (contacts.rs:1118) and rows in the edit form; read/write them in exchange.rs vCards."
+  },
+  {
+   "feature": "Delete contact with confirm",
+   "area": "menu",
+   "apple": "Edit > Delete",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:663",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Search contacts",
+   "area": "toolbar",
+   "apple": "search field; Edit > Find",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:762",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Groups: new, rename, delete, add/remove members",
+   "area": "menu",
+   "apple": "File > New Group; Edit > Rename List, Remove From List",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:965",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Multi-select and New Group from Selection",
+   "area": "menu",
+   "apple": "File > New Group From Selection",
+   "status": "gap",
+   "bifrost": "",
+   "note": "List is single selection",
+   "wire": "Add Shift/Cmd multi-select to the list and a New Group From Selection command in main_menu."
+  },
+  {
+   "feature": "Smart lists with user rules",
+   "area": "menu",
+   "apple": "File > New Smart List; Edit Smart List",
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/smart.rs:21",
+   "note": "Four fixed built-in smart lists; no user rules",
+   "wire": "Add a New Smart List sheet (field, condition, value; all/any) saved in group_file.rs; evaluate in smart.rs."
+  },
+  {
+   "feature": "Favorites list",
+   "area": "view",
+   "apple": "sidebar",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:937",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Look for duplicates and merge",
+   "area": "menu",
+   "apple": "Card > Look for Duplicates, Merge Selected Cards; ABDuplicateReviewSheet.nib",
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/dupes.rs:1",
+   "note": "Duplicates sidebar list shows matches (contacts.rs:751); no merge",
+   "wire": "Add Merge on the Duplicates list: fold fields into the first card (spare values into extras), delete the rest, record in history."
+  },
+  {
+   "feature": "Import vCard",
+   "area": "document",
+   "apple": "File > Import; ABImportPanel.nib; Info.plist vCard type",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1177",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Export vCard (3.0 / 4.0)",
+   "area": "document",
+   "apple": "File > Export > Export vCard",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1271",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Import LDIF / CSV text files",
+   "area": "document",
+   "apple": "ABTextFileImport.nib; Info.plist LDIF type",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add CSV and LDIF readers in exchange.rs with a column-mapping review sheet, reachable from File > Import."
+  },
+  {
+   "feature": "Print and Export as PDF (list, labels, envelopes)",
+   "area": "menu",
+   "apple": "File > Print, Export as PDF; ABPrintPanel, ABLabelPrinting, ABEnvelopePrinting nibs",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add File > Print with list and label layouts through the shell print service, plus Export as PDF."
+  },
+  {
+   "feature": "Contacts archive backup",
+   "area": "document",
+   "apple": "File > Export > Contacts Archive",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Write one archive of the Contacts folder (contacts, values, groups, display) and import it back."
+  },
+  {
+   "feature": "My Card (make this my card, go to my card)",
+   "area": "menu",
+   "apple": "Card > Make This My Card, Go to My Card",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Store a me-card id in display_file.rs; add both Card menu commands and a marker on that row."
+  },
+  {
+   "feature": "Mark as company",
+   "area": "menu",
+   "apple": "Card > Mark as a Company",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add an is-company flag; display the company as the name with a building avatar."
+  },
+  {
+   "feature": "Contact photo (choose / clear image)",
+   "area": "menu",
+   "apple": "Card > Choose Custom Image, Clear Custom Image",
+   "status": "gap",
+   "bifrost": "",
+   "note": "Initials avatar only",
+   "wire": "Store an image per contact in the Contacts folder, set from an open panel on the edit form avatar; read/write PHOTO in exchange.rs."
+  },
+  {
+   "feature": "Share and copy contact",
+   "area": "menu",
+   "apple": "Share My Card; Edit > Copy",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/services.rs:56",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Next / previous card",
+   "area": "menu",
+   "apple": "Card > Go to Next/Previous Card",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add Card menu commands (cmd+] / cmd+[) moving the list selection."
+  },
+  {
+   "feature": "Open card in separate window",
+   "area": "menu",
+   "apple": "Card > Open in Separate Window; ABContactCardWindowController.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Open a second SDK window showing one card."
+  },
+  {
+   "feature": "Show / hide sidebar",
+   "area": "view",
+   "apple": "View > Hide Groups",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1134",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Settings: name order",
+   "area": "settings",
+   "apple": "ABGeneralPreferencesModule.nib show first name",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1110",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Settings: sort order",
+   "area": "settings",
+   "apple": "ABGeneralPreferencesModule.nib sort by",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1901",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Settings: short name, prefer nicknames, address format, default account",
+   "area": "settings",
+   "apple": "ABGeneralPreferencesModule.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add these rows to draw_settings (contacts.rs:1901), persist in display_file.rs, apply in names.rs."
+  },
+  {
+   "feature": "Settings: vCard options (format, include notes/photos, private card)",
+   "area": "settings",
+   "apple": "ABVCardPreferencesModule.nib",
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1127",
+   "note": "Format picked per export command; no notes/photos/private toggles",
+   "wire": "Add the toggles to Settings and honour them in exchange.rs export."
+  },
+  {
+   "feature": "Settings: card template",
+   "area": "settings",
+   "apple": "ABTemplatePreferencesModule.nib",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add a template pane choosing the fields new cards show; read it in the edit form layout."
+  },
+  {
+   "feature": "CardDAV accounts",
+   "area": "integration",
+   "apple": "ABAccountsPreferencesModule.nib; File > Add Account, Refresh Accounts",
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/main.rs:146",
+   "note": "Reads and merges from Internet Accounts; no write-back, no Refresh command",
+   "wire": "Push edits back via dav_sync and add Refresh Accounts to File."
+  },
+  {
+   "feature": "Directory (LDAP) search",
+   "area": "menu",
+   "apple": "Edit > Find in Directories",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Add LDAP directory accounts and a Directories sidebar section querying them."
+  },
+  {
+   "feature": "Recent changes / last import list",
+   "area": "view",
+   "apple": "Show Last Import Group",
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/history.rs:1",
+   "note": "Session-only Recent list; no Last Import group",
+   "wire": "Keep the last vCard import as a temporary sidebar group."
+  },
+  {
+   "feature": "System search indexing",
+   "area": "integration",
+   "apple": "MainMenu search integration",
+   "status": "parity",
+   "bifrost": "springboard/apps/contacts-desktop/src/services.rs:75",
+   "note": "",
+   "wire": ""
+  },
+  {
+   "feature": "Backup history browse",
+   "area": "menu",
+   "apple": "Edit > Enter Time Machine",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Vendor backup product integration",
+   "wire": ""
+  },
+  {
+   "feature": "User activities / intents (view card, create, search)",
+   "area": "intent",
+   "apple": "Info.plist NSUserActivityTypes",
+   "status": "gap",
+   "bifrost": "",
+   "note": "",
+   "wire": "Expose view-card, create-contact and search methods on the app control socket and the intent registry."
+  },
+  {
+   "feature": "Send card updates",
+   "area": "panel",
+   "apple": "ABSendUpdatesPanel.nib",
+   "status": "n/a",
+   "bifrost": "",
+   "note": "Vendor mail-based card update feature",
+   "wire": ""
+  }
+ ]
+}
