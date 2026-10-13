@@ -1,5 +1,5 @@
-//! Promised pasteboard data: `NSPasteboardItemDataProvider`, `NSPasteboardItem.setDataProvider(_:forTypes:)`,
-//! `NSPasteboard.declareTypes(_:owner:)` with `NSPasteboardTypeOwner`, and `NSFilePromiseProvider`.
+//! Promised pasteboard data: `PasteboardItemDataProvider`, `PasteboardItem.setDataProvider(_:forTypes:)`,
+//! `Pasteboard.declareTypes(_:owner:)` with `PasteboardTypeOwner`, and `FilePromiseProvider`.
 //!
 //! A promised type is listed in `types` without bytes. The first read asks the provider once and caches the answer;
 //! a provider that returns nothing makes the read fail with [`PromiseError::NoData`]. Providers hear
@@ -20,7 +20,7 @@ pub enum PromiseError {
     Write(String),
 }
 
-/// `NSPasteboardItemDataProvider`.
+/// `PasteboardItemDataProvider`.
 pub trait PasteboardItemDataProvider {
     /// `pasteboard(_:item:provideDataForType:)`.
     fn provide_data(&mut self, uti: &str) -> Option<Vec<u8>>;
@@ -28,7 +28,7 @@ pub trait PasteboardItemDataProvider {
     fn finished_with_data_provider(&mut self) {}
 }
 
-/// `NSPasteboardItem` with lazily provided types.
+/// `PasteboardItem` with lazily provided types.
 #[derive(Default)]
 pub struct PasteboardItem {
     data: Vec<(String, Vec<u8>)>,
@@ -92,7 +92,7 @@ impl PasteboardItem {
     }
 }
 
-/// `NSPasteboardTypeOwner`.
+/// `PasteboardTypeOwner`.
 pub trait PasteboardTypeOwner {
     /// `pasteboard(_:provideDataForType:)`.
     fn provide_data(&mut self, uti: &str) -> Option<Vec<u8>>;
@@ -181,7 +181,7 @@ impl PromiseBoard {
     }
 }
 
-/// `NSFilePromiseProviderDelegate`.
+/// `FilePromiseProviderDelegate`.
 pub trait FilePromiseProviderDelegate {
     /// `filePromiseProvider(_:fileNameForType:)`.
     fn file_name_for_type(&self, file_type: &str) -> String;
@@ -189,7 +189,7 @@ pub trait FilePromiseProviderDelegate {
     fn write_promise_to(&mut self, url: &Path) -> Result<(), String>;
 }
 
-/// `NSFilePromiseProvider`.
+/// `FilePromiseProvider`.
 pub struct FilePromiseProvider {
     pub file_type: String,
     delegate: Box<dyn FilePromiseProviderDelegate>,

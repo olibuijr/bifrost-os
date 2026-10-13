@@ -9,7 +9,7 @@ use crate::shell::kb_clicks::RATE;
 /// No cue lasts longer than this.
 pub const MAX_MS: f32 = 400.0;
 
-/// The accessibility notifications that carry a cue (`NSAccessibility.Notification`).
+/// The accessibility notifications that carry a cue (`Accessibility.Notification`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Notification {
     FocusedUIElementChanged,
@@ -37,7 +37,7 @@ pub enum ReaderEvent {
     Failed,
     /// the screen reader (or a reader mode) turned on or off
     ModeToggled(bool),
-    /// a post of `NSAccessibility.post(element:notification:)`
+    /// a post of `Accessibility.post(element:notification:)`
     Posted(Notification),
 }
 

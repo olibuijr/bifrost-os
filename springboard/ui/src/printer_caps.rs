@@ -1,4 +1,4 @@
-//! Printer capabilities from an IPP Get-Printer-Attributes reply (NSPrinter: `pageSize(forPaper:)`,
+//! Printer capabilities from an IPP Get-Printer-Attributes reply (Printer: `pageSize(forPaper:)`,
 //! `statusForTable`, PMPrinterGetPaperList, PMPaperGetPPDPaperName). Pure model, no I/O.
 
 use crate::cups::PrinterState;
@@ -102,7 +102,7 @@ impl ColorMode {
     }
 }
 
-/// NSPrinter `statusForTable`: state, state reasons (without `none`) and the printer's message.
+/// Printer `statusForTable`: state, state reasons (without `none`) and the printer's message.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrinterStatus {
     pub state: PrinterState,
@@ -179,7 +179,7 @@ impl PrinterCapabilities {
         PrinterCapabilities { papers, default_paper, duplex, color_modes, status }
     }
 
-    /// NSPrinter `pageSize(forPaper:)`: finds a paper by PWG name or PPD name.
+    /// Printer `pageSize(forPaper:)`: finds a paper by PWG name or PPD name.
     pub fn page_size_for_paper(&self, name: &str) -> Option<&PaperSize> {
         self.papers.iter().find(|p| p.name == name || p.ppd_name() == name)
     }

@@ -67,7 +67,7 @@ impl SortDescriptor {
     }
 }
 
-/// The `NSPredicate` subset a fetch understands: `mediaType == x` and `creationDate >= from AND creationDate < to`
+/// The `Predicate` subset a fetch understands: `mediaType == x` and `creationDate >= from AND creationDate < to`
 /// (seconds since the epoch).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PHPredicate {

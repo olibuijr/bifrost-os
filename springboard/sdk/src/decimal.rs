@@ -1,20 +1,20 @@
-//! `Decimal` and `NSDecimalNumber.RoundingMode`: exact base-10 numbers for money and other values where `f64`
+//! `Decimal` and `RoundingMode`: exact base-10 numbers for money and other values where `f64`
 //! would drift (0.1 + 0.2 is exactly 0.3).
 //!
 //! A value is `mantissa * 10^exponent` with an `i128` mantissa (about 38 digits). Arithmetic is checked: results that
-//! do not fit give [`DecimalError::Overflow`], and division by zero gives [`DecimalError::DivideByZero`] (Apple's
-//! `NSDecimalNumber` reports the same conditions). `+`, `-` and `*` operators exist and panic on overflow; use
+//! do not fit give [`DecimalError::Overflow`], and division by zero gives [`DecimalError::DivideByZero`] (the reference platform's
+//! the reference number type reports the same conditions). `+`, `-` and `*` operators exist and panic on overflow; use
 //! `adding`, `subtracting`, `multiplying` and `dividing` to handle it. Division keeps up to 18 fractional digits and
 //! truncates. Equality, ordering and hashing compare the numeric value, so 1.0 == 1.
 //!
-//! Gaps: no `NSDecimalNumber` object wrapper, no `power`, no NaN.
+//! Gaps: no object wrapper, no `power`, no NaN.
 use crate::locale::Locale;
 use std::cmp::Ordering;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Mul, Neg, Sub};
 
-/// `NSDecimalNumber.RoundingMode`.
+/// Rounding modes for `rounded`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RoundingMode {
     /// Half away from zero (`.plain`).
@@ -153,7 +153,7 @@ impl Decimal {
         Err(DecimalError::Overflow)
     }
 
-    /// `NSDecimalRound`: rounds to `scale` fractional digits (negative scales round to tens, hundreds, ...).
+    /// Rounds to `scale` fractional digits (negative scales round to tens, hundreds, ...).
     pub fn rounded(&self, scale: i32, mode: RoundingMode) -> Decimal {
         let target = -scale;
         if self.exponent >= target {
