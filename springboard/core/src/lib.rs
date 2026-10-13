@@ -45,6 +45,8 @@ pub mod permission_request;
 pub mod motion_activity;
 pub mod rumble;
 pub mod force_effect;
+pub mod ff_escape;
+pub mod haptic_request;
 pub mod migrate;
 pub mod occlusion;
 pub mod progress;
