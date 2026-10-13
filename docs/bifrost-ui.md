@@ -2765,3 +2765,17 @@ result is unaffected. Access: `AccessLevel::AddOnly` may create but not read or 
 Gaps: not wired to the shell or an app yet, no `requestAVAsset` / `requestPlayerItem`, no editing or project
 extensions, trash is not exposed as a change request. Host tests only; a Midget check is still needed before the
 matrix rows can become parity.
+
+## AppKit user interactions: wheel, tracking, drag sessions (models)
+
+- `ui::wheel` (`NSEvent` scrollWheel): `Sequencer::feed(Raw)` gives a `ScrollEvent` with `scrolling_delta_x/y`,
+  `has_precise_scrolling_deltas`, `phase` and `momentum_phase` (Began, Changed, Ended; momentum follows the lift). A notched
+  wheel is imprecise, `LINE_HEIGHT` points per line, no phases.
+- `ui::tracking` (`NSTrackingArea`): options `ENTERED_EXITED`, `MOVED`, `CURSOR_UPDATE`, `ACTIVE_IN_KEY_WINDOW`,
+  `IN_VISIBLE_RECT`; `Tracker::set_visible_rect`, `set_key_window`, event `CursorUpdate`.
+- `ui::drag_session` (`NSDraggingSession`, source and destination): `Session::begin(mask, items)`, `moved`, `drop_on`,
+  `cancel`; callbacks logged in order Entered, Updated, Exited, Perform, Conclude; one operation chosen from the source mask
+  and the destination answer (copy, then link, then move); `DraggingItem` carries pasteboard types and an
+  `NSFilePromiseProvider`-style `PromisedFile` written on drop.
+- Gaps, recorded: the shell does not yet forward wheel, hover or magnify/rotate events to apps, and the retained view kit is
+  not yet wired to `drag_session`. Magnify and rotate models exist in `ui::gesture`. Needs a Midget check before parity.

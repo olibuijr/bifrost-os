@@ -8,6 +8,12 @@ use crate::Rect;
 pub const ENTERED_EXITED: u32 = 1 << 0;
 /// Report every pointer position inside the area.
 pub const MOVED: u32 = 1 << 1;
+/// `.cursorUpdate`: report cursorUpdate when the pointer enters.
+pub const CURSOR_UPDATE: u32 = 1 << 2;
+/// `.activeInKeyWindow`: only report while the window is key.
+pub const ACTIVE_IN_KEY_WINDOW: u32 = 1 << 3;
+/// `.inVisibleRect`: the area follows the visible part of its view, whatever its rect says.
+pub const IN_VISIBLE_RECT: u32 = 1 << 4;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Area {
@@ -22,6 +28,7 @@ pub enum Event {
     Entered(u64),
     Exited(u64),
     Moved(u64, f32, f32),
+    CursorUpdate(u64),
 }
 
 /// Keeps the set of areas the pointer is inside, so each enter and exit is reported once.
@@ -29,11 +36,42 @@ pub enum Event {
 pub struct Tracker {
     areas: Vec<Area>,
     inside: Vec<u64>,
+    key_window: bool,
+    visible: Option<Rect>,
 }
 
 impl Tracker {
     pub fn new() -> Self {
-        Self::default()
+        Tracker { key_window: true, ..Self::default() }
+    }
+
+    /// The window became or stopped being key. Areas marked `ACTIVE_IN_KEY_WINDOW` exit when it stops.
+    pub fn set_key_window(&mut self, key: bool) -> Vec<Event> {
+        self.key_window = key;
+        if key {
+            return Vec::new();
+        }
+        let gone: Vec<u64> = self.inside.iter().copied().filter(|id| self.reports(*id, ACTIVE_IN_KEY_WINDOW)).collect();
+        let mut events = Vec::new();
+        for id in gone {
+            if self.reports(id, ENTERED_EXITED) {
+                events.push(Event::Exited(id));
+            }
+            self.inside.retain(|i| *i != id);
+        }
+        events
+    }
+
+    /// The visible rectangle of the owning view, used by `IN_VISIBLE_RECT` areas as their rect.
+    pub fn set_visible_rect(&mut self, r: Rect) {
+        self.visible = Some(r);
+    }
+
+    fn rect_of(&self, a: &Area) -> Rect {
+        match (a.options & IN_VISIBLE_RECT != 0, self.visible) {
+            (true, Some(v)) => v,
+            _ => a.rect,
+        }
     }
 
     /// Replaces the areas. An area that disappears while the pointer is in it gets its exit now, so the owner's
@@ -61,7 +99,8 @@ impl Tracker {
         let now: Vec<u64> = self
             .areas
             .iter()
-            .filter(|a| a.rect.contains(x, y))
+            .filter(|a| self.rect_of(a).contains(x, y))
+            .filter(|a| self.key_window || a.options & ACTIVE_IN_KEY_WINDOW == 0)
             .map(|a| a.id)
             .collect();
         let mut events = Vec::new();
@@ -73,6 +112,9 @@ impl Tracker {
         for id in &now {
             if !self.inside.contains(id) && self.reports(*id, ENTERED_EXITED) {
                 events.push(Event::Entered(*id));
+            }
+            if !self.inside.contains(id) && self.reports(*id, CURSOR_UPDATE) {
+                events.push(Event::CursorUpdate(*id));
             }
         }
         for id in &now {
@@ -183,5 +225,19 @@ mod tests {
         t.update(vec![area(1, rect(0., 0., 100., 100.), ENTERED_EXITED)]);
         assert_eq!(t.pointer(100., 50.), vec![], "the rectangle is half-open");
         assert_eq!(t.pointer(99.5, 99.5), vec![Event::Entered(1)]);
+    }
+
+    #[test]
+    fn visible_rect_areas_follow_the_view_and_key_window_gating_applies() {
+        let mut t = Tracker::new();
+        t.update(vec![area(1, rect(0., 0., 1., 1.), ENTERED_EXITED | IN_VISIBLE_RECT | ACTIVE_IN_KEY_WINDOW | CURSOR_UPDATE)]);
+        t.set_visible_rect(rect(0., 0., 50., 50.));
+        assert_eq!(t.pointer(40., 40.), vec![Event::Entered(1), Event::CursorUpdate(1)]);
+        t.set_visible_rect(rect(100., 100., 50., 50.));
+        assert_eq!(t.pointer(40., 40.), vec![Event::Exited(1)], "the view scrolled away");
+        t.set_visible_rect(rect(0., 0., 50., 50.));
+        t.pointer(40., 40.);
+        assert_eq!(t.set_key_window(false), vec![Event::Exited(1)]);
+        assert_eq!(t.pointer(41., 41.), vec![], "inactive window reports nothing");
     }
 }
