@@ -528,12 +528,23 @@ Creating a secure note from an app needs a text editor and is still missing. Mid
   category does not have and only passes `text` to a text-input action. If the app is not running the shell starts it and delivers
   the response as soon as it is up (up to 32 are held).
 - **Dock badge** (`NSDockTile.badgeLabel`): `Request::badge(n)` sets it (0 clears); `Ctx::set_badge` still sets any short label.
+- **Triggers** (`bifrost_app::notification_schedule`, the `notification-schedule` service): `Schedule::interval(id, title, seconds,
+  repeats)` (`UNTimeIntervalNotificationTrigger(timeInterval:repeats:)`) and `Schedule::calendar(id, title, hour, minute,
+  weekdays, repeats)` (`UNCalendarNotificationTrigger(dateMatching:repeats:)`, weekdays 1 = Sunday .. 7 = Saturday, empty = every
+  day). `Schedule::checked_interval` and `Schedule::checked_calendar` return `Result<Schedule, TriggerError>`: a repeating interval
+  under `MIN_REPEAT_SECS` (60), a zero interval, an hour above 23, a minute above 59 or a weekday outside 1..=7 is refused.
+  `Schedule::validate()` checks a built request. `Trigger::next_trigger_date(now_unix, offset_secs)` is
+  `UNCalendarNotificationTrigger.nextTriggerDate()` and `UNTimeIntervalNotificationTrigger.nextTriggerDate()`: an interval
+  answers `now + seconds`; a calendar answers the next local time strictly after `now` on a listed weekday (a time exactly
+  now has passed). `offset_secs` is the zone's offset east of UTC at that moment; `None` for an invalid trigger.
+  Gap: Apple's `nextTriggerDate()` for a non-repeating calendar trigger with a fixed date is `nil` once it has passed; these
+  triggers carry no date, so a one-shot answers its next occurrence, as the shell delivers it.
 
 Gaps (not matched yet): action buttons, the destructive colour and the reply field are not drawn on banners or in Notification Center
 (the model and the response path are done; only the drawing and hit testing remain), so only the default action is reachable by tap;
 `NOTIF_DISMISS_ACTION` is defined but never sent (`customDismissAction`); a tap answers for the app's newest notification, not the one
 tapped (the banner and center rows do not carry the request id); delivered requests and categories are not persisted across a shell
-restart; no `UNNotificationSound`, attachments, `userInfo`, interruption levels, calendar or location triggers, repeating triggers,
+restart; no `UNNotificationSound`, attachments, `userInfo`, interruption levels, location triggers, the `usernotif` (`after_ms`) path's repeating triggers (use `notification_schedule`),
 `willPresent` (foreground presentation options) or authorization prompt (`requestAuthorization`: the manifest permission is the grant).
 
 ## Share sheet (`NSSharingServicePicker`, roadmap item 5b)

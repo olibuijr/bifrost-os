@@ -45,9 +45,9 @@
     {
       "feature": "Notification triggers",
       "apple": "UNTimeIntervalNotificationTrigger, UNCalendarNotificationTrigger, UNLocationNotificationTrigger, UNPushNotificationTrigger",
-      "bifrost": "springboard/sdk/src/usernotif.rs (after_ms), springboard/src/shell/usernotif.rs (Pending.due, due())",
+      "bifrost": "springboard/sdk/src/usernotif.rs (after_ms), springboard/src/shell/usernotif.rs (Pending.due, due()); springboard/sdk/src/notification_schedule.rs (Trigger::Interval and Trigger::Calendar, Trigger::next_trigger_date, Trigger::validate, Schedule::checked_interval, Schedule::checked_calendar); springboard/src/shell/services/notification_schedule.rs (calendar next time)",
       "status": "partial",
-      "note": "Only the time-interval trigger exists (after_ms, a delay in milliseconds). No repeating interval, no calendar components trigger, no location region trigger, no push trigger."
+      "note": "Time-interval trigger: a delay (after_ms) and the scheduled interval with repeats (notification-schedule service); a repeating interval below 60 s is refused by checked_interval. Calendar trigger: local hour and minute on a weekday set, daily or weekly when repeating, with next_trigger_date(now, offset) answering when it fires next (today when still ahead, otherwise the next matching weekday; a non-repeating trigger has no fixed date, so it answers its next occurrence). Not covered: calendar components beyond hour, minute and weekday (no date, month, year or week of year), a next-trigger query for a request already pending in the shell (the app computes it with its own clock and zone offset), location and push triggers."
     },
     {
       "feature": "Notification attachments and rich media",
