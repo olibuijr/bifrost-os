@@ -48,6 +48,10 @@ pub struct Reminder {
     pub created: Option<i64>,
     /// The id of a section of its list (`ListDef::sections`); only a top-level reminder is placed in one.
     pub section: Option<u64>,
+    /// A time zone name or POSIX rule (`zones`): the due time is read on that clock. `None` is the device's zone.
+    pub tz: Option<String>,
+    /// Once the due moment has passed, the alert repeats every minute until the reminder is completed.
+    pub urgent: bool,
 }
 
 impl Reminder {
@@ -68,6 +72,8 @@ impl Reminder {
             early: None,
             created: None,
             section: None,
+            tz: None,
+            urgent: false,
         }
     }
 
@@ -943,8 +949,11 @@ pub fn export_markdown(data: &Data, list: u64) -> String {
 /// `all_day_min` minutes after midnight (the all-day alert time in Settings).
 pub fn due_unix(r: &Reminder, all_day_min: u16, offset_at: OffsetAt) -> Option<i64> {
     let day = r.due?;
-    let min = r.time.unwrap_or(all_day_min) as i64;
-    Some(springboard::shell::clock::alarm::local_to_unix(day, min * 60, offset_at))
+    let secs = r.time.unwrap_or(all_day_min) as i64 * 60;
+    Some(match r.tz.as_deref().and_then(crate::zones::resolve) {
+        Some(zone) => springboard::shell::clock::alarm::local_to_unix(day, secs, &|t| zone.at(t).0),
+        None => springboard::shell::clock::alarm::local_to_unix(day, secs, offset_at),
+    })
 }
 
 /// "9:05 AM" for minute 545.
@@ -959,6 +968,11 @@ pub fn alert_text(r: &Reminder, all_day_min: u16, early: bool) -> String {
         (true, Some(m)) => format!("Due in {}", early_label(m).trim_end_matches(" before")),
         _ => format!("Due {}", clock_label(r.time.unwrap_or(all_day_min))),
     }
+}
+
+/// Notification body of the repeating alarm of an urgent reminder.
+pub fn urgent_text(r: &Reminder, all_day_min: u16) -> String {
+    format!("Urgent: {}", alert_text(r, all_day_min, false))
 }
 
 pub fn early_label(minutes: u32) -> String {
@@ -1383,6 +1397,30 @@ mod tests {
         let zone = |t: i64| if t >= midnight - 86_400 { 3600 } else { 0 };
         assert_eq!(due_unix(&r, DEFAULT_ALERT_MIN, &zone), Some(midnight + 600 * 60 - 3600));
         assert_eq!(due_unix(&r, DEFAULT_ALERT_MIN, &|_| 0), Some(midnight + 600 * 60));
+    }
+    #[test]
+    fn a_reminder_with_a_zone_is_due_on_that_zones_clock() {
+        use springboard::shell::clock::tz::days_from_civil;
+        let ny = "EST5EDT,M3.2.0,M11.1.0";
+        let summer = days_from_civil(2026, 10, 8);
+        let winter = days_from_civil(2026, 1, 15);
+        let mut r = Reminder::new(1, "call".to_string());
+        r.due = Some(summer);
+        r.time = Some(9 * 60);
+        // the device is on UTC+1 all year
+        let device = |_: i64| 3600;
+        assert_eq!(due_unix(&r, DEFAULT_ALERT_MIN, &device), Some(summer * 86_400 + 8 * 3600), "no zone: the device clock");
+        r.tz = Some(ny.to_string());
+        assert_eq!(due_unix(&r, DEFAULT_ALERT_MIN, &device), Some(summer * 86_400 + 13 * 3600), "9:00 in New York in summer is 13:00 UTC");
+        r.due = Some(winter);
+        assert_eq!(due_unix(&r, DEFAULT_ALERT_MIN, &device), Some(winter * 86_400 + 14 * 3600), "and 14:00 UTC in winter");
+        r.time = None;
+        assert_eq!(due_unix(&r, 7 * 60, &device), Some(winter * 86_400 + 12 * 3600), "the all-day time is read there too");
+        r.tz = Some("Not/AZone".to_string());
+        assert_eq!(due_unix(&r, 7 * 60, &device), Some(winter * 86_400 + 6 * 3600), "an unknown zone falls back to the device clock");
+        let mut urgent = r.clone();
+        urgent.urgent = true;
+        assert_eq!(urgent_text(&urgent, 9 * 60), "Urgent: Due 9:00 AM");
     }
     #[test]
     fn date_only_reminders_alert_at_the_all_day_time_from_the_settings() {

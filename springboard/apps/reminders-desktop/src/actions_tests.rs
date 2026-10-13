@@ -887,3 +887,48 @@ fn settings_apply_at_once_are_saved_beside_the_reminders_and_load_again() {
     assert_eq!(app.settings.default_list, Some(2));
     cleanup(&path);
 }
+
+#[test]
+fn urgent_and_time_zone_are_set_in_the_details_form_and_urgent_from_the_menu() {
+    let (mut app, ui, path) = app("urgent-zone");
+    add(&mut app, &ui, "Milk", 0.0);
+    let id = id_of(&app, "Milk");
+    let has = |app: &Reminders, t: Target| app.form_rows().0.iter().any(|(row, _, _)| *row == t);
+    app.open_editor(&ui, Some(id), 10.0);
+    assert!(!has(&app, Target::TimeZone) && !has(&app, Target::Urgent), "both need a date");
+    app.activate(&ui, Target::Due, 11.0);
+    assert!(has(&app, Target::TimeZone) && has(&app, Target::Urgent));
+    app.activate(&ui, Target::TimeZone, 12.0);
+    app.activate(&ui, Target::TimeZone, 13.0);
+    app.activate(&ui, Target::Urgent, 14.0);
+    render(&mut app, &ui);
+    app.activate(&ui, Target::Save, 15.0);
+    let r = app.data.items.iter().find(|r| r.id == id).unwrap();
+    assert_eq!((r.tz.as_deref(), r.urgent), (Some("Atlantic/Reykjavik"), true));
+    app.activate(&ui, Target::Smart(Smart::All), 16.0);
+    render(&mut app, &ui);
+
+    // the zone cycles back to the device, and clearing the date clears both
+    app.open_editor(&ui, Some(id), 20.0);
+    for _ in 0..zones::CHOICES.len() - 1 {
+        app.activate(&ui, Target::TimeZone, 21.0);
+    }
+    assert_eq!(app.editor.as_ref().unwrap().draft.tz, None, "after the last zone comes the device again");
+    app.activate(&ui, Target::TimeZone, 22.0);
+    app.activate(&ui, Target::Due, 23.0);
+    let draft = &app.editor.as_ref().unwrap().draft;
+    assert_eq!((draft.due, draft.tz.clone(), draft.urgent), (None, None, false));
+    app.activate(&ui, Target::Cancel, 24.0);
+
+    // Reminder > Mark as Urgent works on the selection, in one undo step each way
+    app.selected = Some(id);
+    assert!(app.selected_urgent());
+    assert!(app.toggle_urgent_selected(&ui));
+    assert!(!app.selected_urgent());
+    assert_eq!(app.edit_titles().0, "Undo Remove Urgent Mark");
+    assert!(app.toggle_urgent_selected(&ui));
+    assert_eq!(app.edit_titles().0, "Undo Mark as Urgent");
+    app.selected = None;
+    assert!(!app.toggle_urgent_selected(&ui));
+    cleanup(&path);
+}

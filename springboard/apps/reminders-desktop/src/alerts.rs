@@ -10,6 +10,10 @@ use bifrost_app::Ctx;
 
 /// Alerts one app keeps pending at a time (the shell allows 64); the soonest are planned.
 pub const MAX_SCHEDULED: usize = 32;
+/// An urgent reminder's alarm repeats this often once the reminder is due.
+pub const ALARM_REPEAT_SECS: u32 = 60;
+/// The alarm stops on its own this long after the due moment (the reminder stays open).
+pub const ALARM_LASTS_SECS: i64 = 24 * 3600;
 /// Re-plan at least this often, so the window of planned alerts keeps moving forward.
 pub const REFRESH_SECS: i64 = 3600;
 /// Longest trigger delay the shell takes, in whole seconds (`u32` milliseconds, about 49 days).
@@ -25,6 +29,8 @@ pub struct Planned {
     pub delay_ms: u32,
     pub title: String,
     pub body: String,
+    /// The urgent alarm of an overdue reminder: it fires every minute until it is removed.
+    pub repeats: bool,
 }
 
 /// What changed since the last sync. `reset` clears every pending request of the app first (the app has not synced
@@ -67,12 +73,24 @@ pub fn plan(items: &[Reminder], all_day_min: u16, now: i64, offset_at: model::Of
                     delay_ms: ((at - now) * 1000) as u32,
                     title: r.title.clone(),
                     body: model::alert_text(r, all_day_min, early),
+                    repeats: false,
                 });
             }
         };
         push(false, due);
         if let Some(early) = r.early {
             push(true, due - early as i64 * 60);
+        }
+        // an urgent reminder keeps alerting after its due moment until it is completed (or a day has passed)
+        if r.urgent && due <= now && now - due <= ALARM_LASTS_SECS {
+            out.push(Planned {
+                id: format!("reminder-{}-urgent", r.id),
+                at: due,
+                delay_ms: ALARM_REPEAT_SECS * 1000,
+                title: r.title.clone(),
+                body: model::urgent_text(r, all_day_min),
+                repeats: true,
+            });
         }
     }
     out.sort_by(|a, b| a.at.cmp(&b.at).then_with(|| a.id.cmp(&b.id)));
@@ -115,7 +133,8 @@ pub fn step(
         .cloned()
         .collect();
     state.scheduled = planned.iter().map(|p| (p.id.clone(), p.at)).collect();
-    state.next_sync = planned.first().map_or(now + REFRESH_SECS, |p| p.at.min(now + REFRESH_SECS));
+    // the next re-plan is when the soonest alert comes due; a running alarm (due in the past) does not count
+    state.next_sync = planned.iter().map(|p| p.at).filter(|at| *at > now).min().map_or(now + REFRESH_SECS, |at| at.min(now + REFRESH_SECS));
     if first || !remove.is_empty() || !add.is_empty() {
         Some(Change { reset: first, remove: if first { Vec::new() } else { remove }, add })
     } else {
@@ -144,7 +163,7 @@ pub fn apply(ctx: &Ctx, change: &Change, via_service: bool) {
             notification_schedule::remove(ctx, &ids);
         }
         for p in &change.add {
-            let schedule = Schedule::interval(&p.id, &p.title, interval_secs(p.delay_ms), false).body(&p.body);
+            let schedule = Schedule::interval(&p.id, &p.title, interval_secs(p.delay_ms), p.repeats).body(&p.body);
             notification_schedule::add(ctx, &schedule);
         }
         return;
@@ -156,7 +175,7 @@ pub fn apply(ctx: &Ctx, change: &Change, via_service: bool) {
         usernotif::remove_pending(ctx, &ids);
     }
     for p in &change.add {
-        usernotif::add(ctx, Request::new(&p.id, &p.title).body(&p.body).after_ms(p.delay_ms));
+        usernotif::add(ctx, Request::new(&p.id, &p.title).body(&p.body).after_ms(p.delay_ms).repeats(p.repeats));
     }
 }
 
@@ -270,6 +289,41 @@ mod tests {
     }
 
     #[test]
+    fn an_overdue_urgent_reminder_gets_a_repeating_alarm_until_it_is_completed() {
+        let mut urgent = due_at(1, 20_000, 600);
+        urgent.urgent = true;
+        let now = BASE + 605 * 60;
+        let planned = plan(&[urgent.clone()], DAY, now, &|_| 0);
+        assert_eq!(planned.len(), 1, "the one-shot alert is past, only the alarm is left");
+        assert_eq!(planned[0].id, "reminder-1-urgent");
+        assert!(planned[0].repeats);
+        assert_eq!(planned[0].delay_ms, 60_000);
+        assert_eq!(planned[0].at, BASE + 600 * 60, "its time is the due moment, so the request stays the same on later plans");
+        assert_eq!(planned[0].body, "Urgent: Due 10:00 AM");
+        // not before it is due, not for an ordinary or a completed reminder, and not after a day
+        assert!(plan(&[urgent.clone()], DAY, BASE + 590 * 60, &|_| 0).iter().all(|p| !p.repeats), "still ahead: the normal alert only");
+        let mut ordinary = urgent.clone();
+        ordinary.urgent = false;
+        assert!(plan(&[ordinary], DAY, now, &|_| 0).is_empty());
+        let mut done = urgent.clone();
+        done.completed = true;
+        assert!(plan(&[done], DAY, now, &|_| 0).is_empty());
+        assert!(plan(&[urgent.clone()], DAY, BASE + 600 * 60 + ALARM_LASTS_SECS + 1, &|_| 0).is_empty());
+        // the alarm is sent once, left alone on the next plans, and removed when the reminder is completed
+        let mut st = AlertState::default();
+        let first = step(&mut st, now, 0, DAY, || vec![urgent.clone()], &|_| 0).unwrap();
+        assert_eq!(first.add.len(), 1);
+        assert_eq!(st.next_sync, now + REFRESH_SECS, "a running alarm does not make the planner run every tick");
+        assert!(step(&mut st, now + 30, 0, DAY, || vec![urgent.clone()], &|_| 0).is_none());
+        let again = step(&mut st, now + REFRESH_SECS, 0, DAY, || vec![urgent.clone()], &|_| 0);
+        assert!(again.is_none(), "the hourly re-plan finds the alarm already running");
+        let mut done = urgent.clone();
+        done.completed = true;
+        let c = step(&mut st, now + REFRESH_SECS + 60, 1, DAY, || vec![done], &|_| 0).unwrap();
+        assert_eq!(c.remove, vec!["reminder-1-urgent".to_string()]);
+    }
+
+    #[test]
     fn date_only_reminders_alert_at_the_all_day_time_and_a_new_time_forces_a_re_plan() {
         let mut dated = Reminder::new(1, "r1");
         dated.due = Some(20_000);
@@ -308,7 +362,7 @@ mod tests {
     }
 
     fn planned(id: &str, at: i64, delay_ms: u32) -> Planned {
-        Planned { id: id.into(), at, delay_ms, title: "T".into(), body: "B".into() }
+        Planned { id: id.into(), at, delay_ms, title: "T".into(), body: "B".into(), repeats: false }
     }
 
     fn service_calls(ctx: &Ctx) -> Vec<(String, String, bifrost_core::json::Json)> {
@@ -337,6 +391,20 @@ mod tests {
         assert_eq!(trigger.get("kind").and_then(bifrost_core::json::Json::as_str), Some("interval"));
         assert_eq!(trigger.get("seconds").and_then(bifrost_core::json::Json::number), Some(3.0));
         assert_eq!(trigger.get("repeats"), Some(&bifrost_core::json::Json::Bool(false)));
+    }
+
+    #[test]
+    fn an_alarm_repeats_through_the_service_and_the_older_path() {
+        let ctx = crate::system::test_ctx();
+        let alarm = Planned { id: "reminder-1-urgent".into(), at: 0, delay_ms: 60_000, title: "T".into(), body: "B".into(), repeats: true };
+        apply(&ctx, &Change { reset: false, remove: Vec::new(), add: vec![alarm.clone()] }, true);
+        let sent = service_calls(&ctx);
+        assert_eq!(sent.len(), 1);
+        let trigger = sent[0].2.get("trigger").unwrap();
+        assert_eq!(trigger.get("seconds").and_then(bifrost_core::json::Json::number), Some(60.0));
+        assert_eq!(trigger.get("repeats"), Some(&bifrost_core::json::Json::Bool(true)));
+        apply(&ctx, &Change { reset: false, remove: Vec::new(), add: vec![alarm] }, false);
+        assert!(!ctx.take_sent().is_empty());
     }
 
     #[test]

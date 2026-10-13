@@ -170,11 +170,17 @@ impl Reminders {
             if let Some(t) = r.time {
                 sub = format!("{sub}, {}", model::clock_label(t));
             }
+            if let Some(zone) = &r.tz {
+                sub = format!("{sub} {}", zones::short_name(zone));
+            }
             if let Some(rep) = r.repeat {
                 sub = format!("{sub} · {}", rep.label());
             }
         } else if let Some(line) = r.notes.lines().next().filter(|l| !l.is_empty()) {
             sub = line.to_string();
+        }
+        if r.urgent {
+            sub = if sub.is_empty() { "Urgent".to_string() } else { format!("{sub} · Urgent") };
         }
         // right-hand decorations, laid out right to left
         let mut rx = right_edge;
@@ -454,6 +460,16 @@ impl Reminders {
             Target::Early => {
                 let v = draft.as_ref().and_then(|d| d.early).map_or("None".to_string(), model::early_label);
                 self.value_row(c, ui, rect, "Early Reminder", &v, LABEL_2.now());
+            }
+            Target::TimeZone => {
+                let v = draft.as_ref().and_then(|d| d.tz.clone()).map_or("Same as Device".to_string(), |z| zones::short_name(&z));
+                self.value_row(c, ui, rect, "Time Zone", &v, LABEL_2.now());
+            }
+            Target::Urgent => {
+                self.cell(c, ui, rect);
+                self.text(c, ui, "Urgent Alarm", MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
+                let on = draft.as_ref().is_some_and(|d| d.urgent);
+                self.toggle(c, ui, rect, on);
             }
             Target::Flag => {
                 self.cell(c, ui, rect);

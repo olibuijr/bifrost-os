@@ -7,6 +7,7 @@ use crate::model::{
     MAX_ITEMS, MAX_LISTS, MAX_NAME, MAX_NOTES, MAX_SECTIONS, MAX_SMARTS, MAX_TEMPLATES, MAX_TEMPLATE_ITEMS, MAX_TITLE, MAX_URL,
 };
 use crate::repeat::Repeat;
+use crate::zones;
 use springboard::shell::prefs::{escape_field as escaped, unescape_field};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -49,8 +50,8 @@ fn flag(field: &str) -> Option<bool> {
 }
 
 fn parse_item(fields: &[&str]) -> Option<Reminder> {
-    // R id list parent due time done flag prio repeat early title notes url [created [section]]
-    if !(14..=16).contains(&fields.len()) {
+    // R id list parent due time done flag prio repeat early title notes url [created [section [zone [urgent]]]]
+    if !(14..=18).contains(&fields.len()) {
         return None;
     }
     let due: Option<i64> = opt_num(fields[4]).ok()?;
@@ -84,6 +85,14 @@ fn parse_item(fields: &[&str]) -> Option<Reminder> {
         section: match fields.get(15) {
             Some(f) => opt_num(f).ok()?,
             None => None,
+        },
+        tz: match fields.get(16) {
+            None | Some(&"-") => None,
+            Some(f) => Some(unescape(f, zones::MAX_NAME, false).filter(|n| zones::valid_name(n))?),
+        },
+        urgent: match fields.get(17) {
+            Some(f) => flag(f)?,
+            None => false,
         },
     })
 }
@@ -357,6 +366,7 @@ fn valid(data: &Data) -> bool {
                 && unescape(&escaped(&r.title), MAX_TITLE, false).is_some()
                 && unescape(&escaped(&r.notes), MAX_NOTES, true).is_some()
                 && unescape(&escaped(&r.url), MAX_URL, true).is_some()
+                && r.tz.as_deref().is_none_or(zones::valid_name)
                 && r.due.is_none_or(|d| DAY_RANGE.contains(&d))
                 && r.section.is_none_or(|s| data.lists.iter().any(|l| l.id == r.list && l.sections.iter().any(|x| x.id == s)))
         })
@@ -423,7 +433,7 @@ pub fn save(path: &Path, data: &Data) -> std::io::Result<()> {
     }
     for r in &data.items {
         out.push_str(&format!(
-            "R\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            "R\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
             r.id,
             r.list,
             num(r.parent.map(|p| p.to_string())),
@@ -439,6 +449,8 @@ pub fn save(path: &Path, data: &Data) -> std::io::Result<()> {
             escaped(&r.url),
             num(r.created.map(|c| c.to_string())),
             num(r.section.map(|s| s.to_string())),
+            r.tz.as_deref().map_or_else(|| "-".to_string(), escaped),
+            u8::from(r.urgent),
         ));
         if out.len() > MAX_BYTES {
             return Err(invalid("Reminders file too large"));
@@ -502,6 +514,8 @@ mod tests {
         a.early = Some(60);
         a.created = Some(1_791_000_000);
         a.section = Some(9);
+        a.tz = Some("America/New_York".into());
+        a.urgent = true;
         let mut b = Reminder::new(2, "Sub");
         b.list = 2;
         b.parent = Some(1);
@@ -523,6 +537,23 @@ mod tests {
         assert_eq!((data.items[0].created, data.items[0].section), (None, None));
         assert_eq!((data.items[1].created, data.items[1].section), (Some(500), None));
         assert!(data.groups.is_empty() && data.templates.is_empty());
+    }
+    #[test]
+    fn a_zone_that_is_not_zone_shaped_drops_the_reminder_and_the_flag_must_be_a_flag() {
+        let ok = "R\t1\t1\t-\t-\t-\t0\t0\t0\t-\t-\tOk\t\t\t-\t-\tEurope/Paris\t1";
+        let spaced = "R\t2\t1\t-\t-\t-\t0\t0\t0\t-\t-\tBad zone\t\t\t-\t-\tnot a zone\t0";
+        let flag = "R\t3\t1\t-\t-\t-\t0\t0\t0\t-\t-\tBad flag\t\t\t-\t-\t-\t2";
+        let device = "R\t4\t1\t-\t-\t-\t0\t0\t0\t-\t-\tDevice\t\t\t-\t-\t-\t0";
+        let data = parse(&format!("{HEADER}\nL\t1\t0\t0\tOne\n{ok}\n{spaced}\n{flag}\n{device}\n"));
+        let ids: Vec<u64> = data.items.iter().map(|r| r.id).collect();
+        assert_eq!(ids, [1, 4]);
+        assert_eq!((data.items[0].tz.as_deref(), data.items[0].urgent), (Some("Europe/Paris"), true));
+        assert_eq!((data.items[1].tz.as_deref(), data.items[1].urgent), (None, false));
+        let mut r = Reminder::new(1, "x");
+        r.tz = Some("bad zone".into());
+        let mut d = Data::default();
+        d.items = vec![r];
+        assert!(save(&scratch("zone"), &d).is_err(), "save refuses a zone name that load would drop");
     }
     #[test]
     fn broken_references_in_the_new_fields_are_repaired() {

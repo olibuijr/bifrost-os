@@ -14,7 +14,7 @@ use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_M, SPACE_S, SPACE_XL};
 use springboard::layout::in_rect as within;
 use bifrost_app::kit::ui::{home_zone, Ui};
 use bifrost_app::kit::{Event, TextCache};
-use crate::{model, organize, quick, repeat, settings, store};
+use crate::{model, organize, quick, repeat, settings, store, zones};
 use springboard::deildu::scroll::Scroller;
 use springboard::shell::clock::{
     tz::{civil_from_days, days_from_civil},
@@ -87,6 +87,9 @@ enum Target {
     Rule(RuleRow),
     /// A row of the Settings form.
     Setting(SettingRow),
+    /// The reminder form's Time Zone and Urgent rows.
+    TimeZone,
+    Urgent,
     /// A section header row of the open list (its row index); choosing it edits the section.
     Section(usize),
     /// A list group's disclosure in the sidebar, by group id.
@@ -634,6 +637,26 @@ impl Reminders {
         organize::has_overdue(&self.data.items, self.today)
     }
 
+    /// Whether the selected reminder is marked urgent.
+    pub fn selected_urgent(&self) -> bool {
+        self.selected_item().is_some_and(|id| self.data.items.iter().any(|r| r.id == id && r.urgent))
+    }
+
+    /// Reminders > Mark as Urgent / Remove Urgent Mark: once an urgent reminder is due, its alert repeats every minute
+    /// until it is completed (see `alerts`).
+    pub fn toggle_urgent_selected(&mut self, ui: &Ui) -> bool {
+        let Some(id) = self.selected_item().filter(|_| self.on_items()) else { return false };
+        let mut next = self.data.clone();
+        let Some(r) = next.items.iter_mut().find(|r| r.id == id) else { return false };
+        r.urgent = !r.urgent;
+        let name = if r.urgent { "Mark as Urgent" } else { "Remove Urgent Mark" };
+        let saved = self.commit_named(next, name);
+        if saved {
+            self.rebuild(ui);
+        }
+        saved
+    }
+
     /// Reminders > Mark All Overdue as Today: one undo step for every reminder moved.
     pub fn mark_overdue_today(&mut self, ui: &Ui) -> bool {
         let mut next = self.data.clone();
@@ -1050,7 +1073,9 @@ impl Reminders {
                         add(&mut v, &mut y, Target::TimeStep, 52.0, 8.0);
                     }
                     add(&mut v, &mut y, Target::Repeat, 52.0, 8.0);
-                    add(&mut v, &mut y, Target::Early, 52.0, 20.0);
+                    add(&mut v, &mut y, Target::Early, 52.0, 8.0);
+                    add(&mut v, &mut y, Target::TimeZone, 52.0, 8.0);
+                    add(&mut v, &mut y, Target::Urgent, 52.0, 20.0);
                 }
                 add(&mut v, &mut y, Target::Flag, 52.0, 8.0);
                 add(&mut v, &mut y, Target::Priority, 52.0, 8.0);
@@ -2107,6 +2132,8 @@ impl Reminders {
                         e.draft.time = None;
                         e.draft.repeat = None;
                         e.draft.early = None;
+                        e.draft.tz = None;
+                        e.draft.urgent = false;
                     } else {
                         e.draft.due = Some(today);
                     }
@@ -2150,6 +2177,16 @@ impl Reminders {
             Target::Early => {
                 if let Some(e) = &mut self.editor {
                     e.draft.early = model::cycle_early(e.draft.early);
+                }
+            }
+            Target::TimeZone => {
+                if let Some(e) = &mut self.editor {
+                    e.draft.tz = zones::next_choice(e.draft.tz.as_deref());
+                }
+            }
+            Target::Urgent => {
+                if let Some(e) = &mut self.editor {
+                    e.draft.urgent = !e.draft.urgent;
                 }
             }
             Target::Flag => {

@@ -10,6 +10,7 @@ mod repeat;
 mod settings;
 mod store;
 mod system;
+mod zones;
 
 use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
@@ -43,6 +44,7 @@ const MENU_SUBTASKS: u32 = 16;
 const MENU_NO_SECTION: u32 = 17;
 const MENU_NEW_SMART: u32 = 18;
 const MENU_SETTINGS: u32 = 19;
+const MENU_URGENT: u32 = 24;
 /// Item ids of the menus that list things: the base plus the position in the list.
 const MENU_MARK_BASE: u32 = 20;
 const MENU_SORT_BASE: u32 = 30;
@@ -163,6 +165,7 @@ impl App for RemindersApp {
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_DELETE, "Delete Reminder").key("cmd+backspace").enabled(selected),
             AppMenuItem::new(MENU_COMPLETE, "Mark as Completed").enabled(selected),
+            AppMenuItem::new(MENU_URGENT, if a.selected_urgent() { "Remove Urgent Mark" } else { "Mark as Urgent" }).enabled(selected),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_INDENT, "Indent").key("cmd+]").enabled(a.can_indent()),
             AppMenuItem::new(MENU_OUTDENT, "Outdent").key("cmd+[").enabled(a.can_outdent()),
@@ -295,6 +298,7 @@ impl App for RemindersApp {
             MENU_SAVE_TEMPLATE => a.save_as_template(),
             MENU_NEW_SMART => a.new_smart_list(ui, t),
             MENU_SETTINGS => a.open_settings(t),
+            MENU_URGENT => a.toggle_urgent_selected(ui),
             MENU_SUBTASKS => {
                 a.toggle_all_subtasks(ui);
                 true
