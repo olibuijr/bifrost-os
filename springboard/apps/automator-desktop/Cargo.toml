@@ -1,0 +1,9 @@
+[package]
+name = "bifrost-automator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bifrost-app = { path = "../../sdk" }
+bifrost-core = { path = "../../core" }
+png = "0.18"
