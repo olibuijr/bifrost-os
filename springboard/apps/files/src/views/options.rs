@@ -275,7 +275,7 @@ impl Files {
     /// A picture's thumbnail fitted into the box (x, y, w, h in pt) and centred in it; false when the file is not a
     /// decodable picture or is bigger than `max_bytes`.
     pub(crate) fn blit_thumb(&self, s: &mut Surface, ui: &Ui, e: &Entry, b: (f32, f32, f32, f32), max_bytes: u64) -> bool {
-        if e.is_dir || e.size > max_bytes || !springboard::imgdec::is_image_name(&e.name) {
+        if e.is_dir || e.size > max_bytes || !springboard::cg::imageio::is_image_name(&e.name) {
             return false;
         }
         let (pw, ph) = (ui.pt(b.2) as usize, ui.pt(b.3) as usize);

@@ -21,7 +21,7 @@ pub fn load(fetcher: &dyn Fetch, image: &str, link: &str, w: usize, h: usize, r:
     };
     let url = ruv_jpeg(&url, w, h).unwrap_or(url);
     let bytes = fetcher.get(&url, IMAGE_LIMIT).ok()?;
-    let img = springboard::imgdec::decode(&bytes)?;
+    let img = springboard::cg::imageio::decode(&bytes)?;
     let mut out = springboard::imgdec::cover(&img, w, h);
     round(&mut out, r, bg);
     Some(out)

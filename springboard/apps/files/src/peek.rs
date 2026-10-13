@@ -23,7 +23,7 @@ impl PreviewProvider for PictureFile {
     fn provide(&self, _file_name: &str) -> Result<Reply, ModelError> {
         // no size to report when the file cannot be read or decoded
         let bytes = std::fs::read(&self.path).map_err(|_| ModelError::BadSize)?;
-        let img = springboard::imgdec::decode(&bytes).ok_or(ModelError::BadSize)?;
+        let img = springboard::cg::imageio::decode(&bytes).ok_or(ModelError::BadSize)?;
         let reply = Reply::new(Content::Bitmap { width: img.w as u32, height: img.h as u32 })?;
         *self.image.borrow_mut() = Some(img);
         Ok(reply)

@@ -1,5 +1,6 @@
 //! Shared BifrOSt rendering foundation; independent of shell, installer and device services.
 pub mod cff;
+pub mod cg;
 pub mod font;
 pub mod gfx;
 pub mod canvas;
@@ -81,5 +82,4 @@ pub mod imgtile;
 pub mod hdr_transfer;
 pub mod hdr_metadata;
 pub mod bayer;
-pub mod reusable_layer;
 pub mod lazy_image;

@@ -1,22 +1,16 @@
 //! Image sources for apps: read a picture's format and pixel size from its header, decode it,
 //! or make a thumbnail that fits a box. The header is read before any pixel is decoded, so an
 //! oversized picture is refused without allocating its pixels, and a layout can ask for the
-//! thumbnail size before the decode. PNG and JPEG are the formats the renderer decodes; other
-//! data is reported as `NotImage`.
+//! thumbnail size before the decode. Every format of `cg::imageio` is read; other data is `NotImage`.
 use bifrost_render::gfx::Image;
-use bifrost_render::imgdec::{self, MAX_SIDE};
-
-/// Container formats an `ImageSource` reads.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Format {
-    Png,
-    Jpeg,
-}
+use bifrost_render::cg::imageio::{self, MAX_SIDE};
+use bifrost_render::imgdec;
+pub use bifrost_render::cg::imageio::Format;
 
 /// Why a picture could not be read, decoded or made into a thumbnail.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SourceError {
-    /// The bytes do not start like a PNG or a JPEG.
+    /// The bytes do not start like a supported picture format.
     NotImage,
     /// The data ends before the size fields of the header.
     Truncated,
@@ -41,12 +35,11 @@ impl<'a> ImageSource<'a> {
     /// Reads the format and size from the header. Pictures wider or taller than `MAX_SIDE`
     /// are refused here, before decoding.
     pub fn new(bytes: &'a [u8]) -> Result<Self, SourceError> {
-        let (format, (width, height)) = if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
-            (Format::Png, png_size(bytes)?)
-        } else if bytes.starts_with(&[0xFF, 0xD8]) {
-            (Format::Jpeg, jpeg_size(bytes)?)
-        } else {
-            return Err(SourceError::NotImage);
+        let format = Format::detect(bytes).ok_or(SourceError::NotImage)?;
+        let (width, height) = match imageio::pixel_size(bytes) {
+            Some(s) if s.0 > 0 && s.1 > 0 => s,
+            _ if bytes.len() < 64 => return Err(SourceError::Truncated),
+            _ => return Err(SourceError::Undecodable),
         };
         if width > MAX_SIDE || height > MAX_SIDE {
             return Err(SourceError::TooLarge { width, height });
@@ -75,7 +68,7 @@ impl<'a> ImageSource<'a> {
 
     /// Decodes the whole picture into premultiplied RGBA.
     pub fn decode(&self) -> Result<Image, SourceError> {
-        imgdec::decode(self.bytes).ok_or(SourceError::Undecodable)
+        imageio::decode(self.bytes).ok_or(SourceError::Undecodable)
     }
 
     /// Decodes the picture scaled to fit `max_w` x `max_h`, keeping the aspect. Never enlarged.
@@ -83,70 +76,6 @@ impl<'a> ImageSource<'a> {
         self.thumbnail_size(max_w, max_h)?;
         Ok(imgdec::contain(&self.decode()?, max_w, max_h))
     }
-}
-
-fn nonzero(width: usize, height: usize) -> Result<(usize, usize), SourceError> {
-    if width == 0 || height == 0 {
-        Err(SourceError::Undecodable)
-    } else {
-        Ok((width, height))
-    }
-}
-
-/// The IHDR chunk follows the 8-byte signature: length (4), type (4), then width and height
-/// as big-endian u32 values.
-fn png_size(b: &[u8]) -> Result<(usize, usize), SourceError> {
-    if b.len() < 24 {
-        return Err(SourceError::Truncated);
-    }
-    if &b[12..16] != &b"IHDR"[..] {
-        return Err(SourceError::Undecodable);
-    }
-    let width = u32::from_be_bytes([b[16], b[17], b[18], b[19]]) as usize;
-    let height = u32::from_be_bytes([b[20], b[21], b[22], b[23]]) as usize;
-    nonzero(width, height)
-}
-
-/// Walks the JPEG segments after the SOI marker until a frame header (SOF0 to SOF15). Each
-/// segment is FF, a marker byte and a 2-byte length that counts itself. The frame header holds
-/// the precision (1 byte), the height (2 bytes) and the width (2 bytes).
-fn jpeg_size(b: &[u8]) -> Result<(usize, usize), SourceError> {
-    let mut i = 2;
-    while i + 1 < b.len() {
-        if b[i] != 0xFF {
-            return Err(SourceError::Undecodable);
-        }
-        let m = b[i + 1];
-        if m == 0xFF {
-            i += 1;
-            continue;
-        }
-        if m == 0x01 || m == 0xD8 || (0xD0..=0xD7).contains(&m) {
-            i += 2;
-            continue;
-        }
-        if m == 0xD9 || m == 0xDA {
-            return Err(SourceError::Undecodable);
-        }
-        if i + 4 > b.len() {
-            return Err(SourceError::Truncated);
-        }
-        let len = u16::from_be_bytes([b[i + 2], b[i + 3]]) as usize;
-        // 0xC4 (DHT), 0xC8 (JPG) and 0xCC (DAC) sit inside the SOF range but are not frames.
-        if (0xC0..=0xCF).contains(&m) && !matches!(m, 0xC4 | 0xC8 | 0xCC) {
-            if i + 9 > b.len() {
-                return Err(SourceError::Truncated);
-            }
-            let height = u16::from_be_bytes([b[i + 5], b[i + 6]]) as usize;
-            let width = u16::from_be_bytes([b[i + 7], b[i + 8]]) as usize;
-            return nonzero(width, height);
-        }
-        if len < 2 {
-            return Err(SourceError::Undecodable);
-        }
-        i += 2 + len;
-    }
-    Err(SourceError::Truncated)
 }
 
 #[cfg(test)]
@@ -169,7 +98,7 @@ mod tests {
         let mut v = vec![0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x04, 0xAA, 0xBB, 0xFF, 0xC0, 0x00, 0x11, 0x08];
         v.extend_from_slice(&h.to_be_bytes());
         v.extend_from_slice(&w.to_be_bytes());
-        v.extend_from_slice(&[0x03, 0x01, 0x22, 0x00]);
+        v.extend_from_slice(&[0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01]);
         v
     }
 
@@ -193,7 +122,7 @@ mod tests {
 
     #[test]
     fn data_that_is_not_png_or_jpeg_is_refused() {
-        assert_eq!(ImageSource::new(b"GIF89a------").unwrap_err(), SourceError::NotImage);
+        assert_eq!(ImageSource::new(b"hello world--").unwrap_err(), SourceError::NotImage);
     }
 
     #[test]

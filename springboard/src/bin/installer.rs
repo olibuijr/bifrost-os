@@ -117,7 +117,7 @@ fn run() -> std::io::Result<()> {
     let preset = find_preset();
     let ui = Ui::new(font, (h as f32 / 720.0).clamp(1.0, 4.0));
     let mut inputs = if wayland { input::InputSet::none() } else { input::InputSet::desktop(w as f32, h as f32, unsafe { geteuid() } == 0) };
-    let image = |name: &str| std::fs::read(format!("{branding}/{name}")).ok().and_then(|b| springboard::imgdec::decode(&b));
+    let image = |name: &str| std::fs::read(format!("{branding}/{name}")).ok().and_then(|b| springboard::cg::imageio::decode(&b));
     let mut app = App::new(ui, w, h, disks::probe(), image("logo.png"), image("bg.jpg").or_else(|| image("bg.png")));
     app.set_wallpapers(springboard::installer::app::load_wallpapers(&assets));
     if let Ok(id) = std::env::var("BIFROST_LAYOUT") {

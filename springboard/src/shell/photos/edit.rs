@@ -624,7 +624,7 @@ mod tests {
         assert_eq!(first, dir.join("a edited.png"));
         assert_eq!(second, dir.join("a edited 2.png"));
         assert_eq!(std::fs::read(&orig).unwrap(), b"x");
-        let back = crate::imgdec::decode(&std::fs::read(&first).unwrap()).unwrap();
+        let back = crate::cg::imageio::decode(&std::fs::read(&first).unwrap()).unwrap();
         assert_eq!((back.w, back.h), (4, 2));
         assert_eq!(back.px[5], img.px[5]);
         let _ = std::fs::remove_dir_all(&dir);

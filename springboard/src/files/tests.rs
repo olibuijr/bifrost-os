@@ -24,7 +24,7 @@ fn tree(tag: &str) -> (PathBuf, Vec<Location>) {
     std::fs::create_dir_all(home.join("Clips")).unwrap();
     std::fs::write(home.join("Notes.txt"), "hello\nworld\n").unwrap();
     std::fs::write(home.join("data.bin"), [0u8, 1, 2, 3]).unwrap();
-    std::fs::write(home.join("pic.png"), crate::imgdec::tests::png_bytes(4, 4, [255, 0, 0, 255])).unwrap();
+    std::fs::write(home.join("pic.png"), crate::cg::imageio::tests::png_bytes(4, 4, [255, 0, 0, 255])).unwrap();
     std::fs::write(home.join("Clips/video.mp4"), b"not really").unwrap();
     let other = dir.join("other");
     std::fs::create_dir_all(&other).unwrap();

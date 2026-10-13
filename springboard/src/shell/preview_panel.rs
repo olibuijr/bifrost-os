@@ -105,7 +105,7 @@ pub fn load_body(item: Option<&PreviewItem>) -> Body {
         Kind::Audio => Body::Info("Audio file. Open it in Music to play it.".into()),
         Kind::Image => {
             let small = std::fs::metadata(p).is_ok_and(|m| m.is_file() && m.len() <= MAX_IMAGE_BYTES);
-            match small.then(|| std::fs::read(p).ok()).flatten().and_then(|b| crate::imgdec::decode(&b)) {
+            match small.then(|| std::fs::read(p).ok()).flatten().and_then(|b| crate::cg::imageio::decode(&b)) {
                 Some(im) => Body::Image(im),
                 None => Body::Info("This picture cannot be shown.".into()),
             }

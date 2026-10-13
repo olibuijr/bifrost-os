@@ -4020,7 +4020,7 @@ impl Shell {
     /// Preview's Markup button: opens a picture in the editor; Done saves
     /// a PNG (a copy named "... Markup.png" unless it already is a PNG).
     fn markup_file(&mut self, path: &Path) {
-        let Some(img) = std::fs::read(path).ok().and_then(|b| crate::imgdec::decode(&b)) else { return };
+        let Some(img) = std::fs::read(path).ok().and_then(|b| crate::cg::imageio::decode(&b)) else { return };
         let target = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) {
             path.to_path_buf()
         } else {

@@ -1015,7 +1015,7 @@ pub const CALCULATOR: &str = "is.olibuijr.calculator";
 pub fn icon_image(id: &str, size: usize) -> Option<crate::gfx::Image> {
     let registered = installed();
     let app = registered.iter().find(|a| a.manifest.id == id)?;
-    let img = crate::imgdec::decode(&std::fs::read(app.icon_path()).ok()?)?;
+    let img = crate::cg::imageio::decode(&std::fs::read(app.icon_path()).ok()?)?;
     Some(if img.w == size { img } else { img.resized(size, size) })
 }
 

@@ -441,5 +441,5 @@ fn artwork(icon: Icon, px: usize) -> Option<std::sync::Arc<crate::gfx::Image>> {
     };
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let mut c = cache.lock().ok()?;
-    c.entry((icon, px)).or_insert_with(|| crate::imgdec::decode(bytes).map(|i| Arc::new(i.resized(px, px)))).clone()
+    c.entry((icon, px)).or_insert_with(|| crate::cg::imageio::decode(bytes).map(|i| Arc::new(i.resized(px, px)))).clone()
 }

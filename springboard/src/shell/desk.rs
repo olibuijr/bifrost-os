@@ -2277,7 +2277,7 @@ fn linux_icon(app_id:&str) -> Image {
         for size in [128,256,64,48,32] {paths.push(format!("/usr/share/icons/hicolor/{size}x{size}/apps/{name}.png"));}
         paths.push(format!("/usr/share/pixmaps/{name}.png"));
     }
-    for path in paths {if let Ok(bytes)=std::fs::read(path) {if let Some(img)=crate::imgdec::decode(&bytes) {return img;}}}
+    for path in paths {if let Ok(bytes)=std::fs::read(path) {if let Some(img)=crate::cg::imageio::decode(&bytes) {return img;}}}
     let mut img=Image::new(64,64);
     let mut surface=Surface {w:64,h:64,stride:64,px:&mut img.px,y0:0};
     surface.fill_rrect(0.0,0.0,64.0,64.0,12.0,super::ui::CELL);

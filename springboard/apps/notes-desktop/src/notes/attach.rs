@@ -73,7 +73,7 @@ pub fn decode_fitted(bytes: &[u8], max_w: usize) -> Option<Image> {
     if !acceptable(bytes) {
         return None;
     }
-    let img = springboard::imgdec::decode(bytes)?;
+    let img = springboard::cg::imageio::decode(bytes)?;
     let (w, h) = fit(img.w, img.h, max_w);
     Some(img.resized(w, h))
 }
@@ -119,7 +119,7 @@ pub fn latest_image<P: AsRef<std::path::Path>>(dirs: &[P]) -> Option<PathBuf> {
         let Ok(entries) = std::fs::read_dir(dir.as_ref()) else { continue };
         for e in entries.flatten() {
             let path = e.path();
-            if !springboard::imgdec::is_image_name(&e.file_name().to_string_lossy()) {
+            if !springboard::cg::imageio::is_image_name(&e.file_name().to_string_lossy()) {
                 continue;
             }
             let Ok(modified) = e.metadata().and_then(|m| m.modified()) else { continue };

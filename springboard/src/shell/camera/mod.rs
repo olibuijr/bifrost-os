@@ -493,7 +493,7 @@ impl Camera {
 
     fn newest_thumb(dir: &PathBuf, n: usize) -> Option<(PathBuf, Image)> {
         let newest = library::scan(std::slice::from_ref(dir)).pop()?;
-        let img = crate::imgdec::decode(&std::fs::read(&newest.path).ok()?)?;
+        let img = crate::cg::imageio::decode(&std::fs::read(&newest.path).ok()?)?;
         Some((newest.path, square_thumb(&img, n)))
     }
 
@@ -1033,7 +1033,7 @@ mod tests {
         let path = saved.path.expect("written");
         let bytes = std::fs::read(&path).unwrap();
         assert_eq!(&bytes[..2], &[0xFF, 0xD8]);
-        let img = crate::imgdec::decode(&bytes).expect("decodes");
+        let img = crate::cg::imageio::decode(&bytes).expect("decodes");
         assert_eq!((img.w, img.h), (16, 16), "square crop of the short side");
         assert_eq!(saved.thumb.map(|t| (t.w, t.h)), Some((8, 8)));
         std::fs::remove_dir_all(&dir).unwrap();

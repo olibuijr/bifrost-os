@@ -159,7 +159,7 @@ pub fn import_files(sources: &[PathBuf], dir: &Path) -> usize {
     let mut copied = 0;
     for src in sources {
         let Some(name) = src.file_name().map(|n| n.to_string_lossy().into_owned()) else { continue };
-        if !crate::imgdec::is_image_name(&name) {
+        if !crate::cg::imageio::is_image_name(&name) {
             continue;
         }
         let Ok(meta) = std::fs::metadata(src) else { continue };

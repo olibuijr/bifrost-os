@@ -1345,7 +1345,7 @@ mod bench {
         let Some(dir) = std::env::var_os("PREVIEW_DIR") else { return };
         let root = env!("CARGO_MANIFEST_DIR");
         let branding = format!("{root}/../packaging/archiso/airootfs/usr/share/bifrost/installer");
-        let image = |n: &str| std::fs::read(format!("{branding}/{n}")).ok().and_then(|b| crate::imgdec::decode(&b));
+        let image = |n: &str| std::fs::read(format!("{branding}/{n}")).ok().and_then(|b| crate::cg::imageio::decode(&b));
         for (name, mode) in [("dark", ap::Mode::Dark), ("light", ap::Mode::Light)] {
             let d = parse_parted("BYT;\n/dev/vda:17179869184B:virtio:512:512:unknown:Virtio Block Device:;\n").unwrap();
             let (w, h) = (1920usize, 1080usize);

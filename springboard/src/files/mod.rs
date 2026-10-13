@@ -420,7 +420,7 @@ impl Files {
                         Err(e) => Loaded::Error(e.to_string()),
                     },
                     Kind::Image => match std::fs::read(&path) {
-                        Ok(bytes) => match crate::imgdec::decode(&bytes) {
+                        Ok(bytes) => match crate::cg::imageio::decode(&bytes) {
                             Some(img) => Loaded::Image(crate::imgdec::fit(&img, w, h)),
                             None => Loaded::Error("The image could not be decoded.".into()),
                         },

@@ -1439,7 +1439,7 @@
         while !path.exists() && start.elapsed().as_secs() < 5 {
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
-        let saved = crate::imgdec::decode(&std::fs::read(&path).unwrap()).unwrap();
+        let saved = crate::cg::imageio::decode(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!((saved.w, saved.h), (1200, 1920));
         assert_eq!(saved.px[0], frame_pixel(&mut sh), "the file holds the home screen, not the flash");
         // resting thumbnail: a tap opens the capture in Markup
