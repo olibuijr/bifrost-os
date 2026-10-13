@@ -364,6 +364,22 @@ impl Font {
     }
 }
 
+/// The font a page resource names (`/Font` entry `name` of `res`). Font objects are loaded once per object number
+/// into `cache`, so a font used on many pages or in many forms is parsed once.
+pub fn from_resources(doc: &Doc, res: &Dict, name: &str, cache: &mut HashMap<u32, Rc<Font>>) -> Option<Rc<Font>> {
+    let fonts = doc.field(res, "Font");
+    let entry = fonts.dict()?.get(name)?.clone();
+    if let Obj::Ref(n, _) = entry {
+        if let Some(f) = cache.get(&n) {
+            return Some(f.clone());
+        }
+        let f = Rc::new(Font::load(doc, doc.load(n).dict()?));
+        cache.insert(n, f.clone());
+        return Some(f);
+    }
+    Some(Rc::new(Font::load(doc, entry.dict()?)))
+}
+
 fn load_program(doc: &Doc, desc: &Dict) -> Option<Program> {
     let mut data = None;
     let mut len1 = None;

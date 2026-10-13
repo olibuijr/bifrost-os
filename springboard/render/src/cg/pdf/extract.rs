@@ -2,7 +2,7 @@
 //! (with baseline and size) and images in drawing order, for reflowed reading.
 
 use super::doc::Doc;
-use super::font::Font;
+use super::font::{self, Font};
 use super::image;
 use super::obj::{Dict, Obj, Parser};
 use super::page::Page;
@@ -69,17 +69,7 @@ impl<'a> Extractor<'a> {
     }
 
     fn font(&mut self, res: &Dict, name: &str) -> Option<Rc<Font>> {
-        let fonts = self.doc.field(res, "Font");
-        let entry = fonts.dict()?.get(name)?.clone();
-        if let Obj::Ref(n, _) = entry {
-            if let Some(f) = self.fonts.get(&n) {
-                return Some(f.clone());
-            }
-            let f = Rc::new(Font::load(self.doc, self.doc.load(n).dict()?));
-            self.fonts.insert(n, f.clone());
-            return Some(f);
-        }
-        Some(Rc::new(Font::load(self.doc, entry.dict()?)))
+        font::from_resources(self.doc, res, name, &mut self.fonts)
     }
 
     fn flush(&mut self, st: &mut Ts) {

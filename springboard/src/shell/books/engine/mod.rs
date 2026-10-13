@@ -1,9 +1,8 @@
 //! The Books reader engine: format loaders (PDF, EPUB) that flow a file into
-//! one `Book` page model, and the small codecs they need (DEFLATE, ZIP).
-//! Nothing here touches the UI.
+//! one `Book` page model, and the ZIP reader EPUB uses. The PDF file reader and
+//! the DEFLATE codec live in `bifrost_render::cg::pdf`. Nothing here touches the UI.
 
 pub mod epub;
-pub mod inflate;
 pub mod markup;
 pub mod model;
 pub mod pdf;

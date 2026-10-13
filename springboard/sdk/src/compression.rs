@@ -13,7 +13,7 @@
 
 use springboard::files::zip::deflate as raw_deflate;
 use springboard::pngenc::adler32;
-use springboard::shell::books::engine::inflate;
+use bifrost_render::cg::pdf::inflate;
 use std::fmt;
 
 /// The compression algorithms, named after the reference API's cases.

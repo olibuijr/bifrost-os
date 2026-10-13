@@ -1,181 +1,17 @@
-//! PDF loading: file structure, page tree, text and images extracted in
-//! reading order, then reflowed into the shared page model.
-
-pub mod content;
-pub mod doc;
-pub mod font;
-pub mod image;
-pub mod obj;
-mod tables;
+//! PDF loading for the Books reader. `bifrost_render::cg::pdf` reads the file (structure, page tree, text and
+//! pictures in drawing order, outline); this module reflows those pieces into the shared page model.
 
 use super::model::{Block, Book, TocEntry};
-use content::{Extractor, Piece};
-use doc::Doc;
-use obj::{Dict, Obj};
-use std::collections::{HashMap, HashSet};
-
-/// Pages read before giving up, so a huge file cannot stall the app forever.
-const MAX_PAGES: usize = 3000;
-
-struct PageNode {
-    num: Option<u32>,
-    dict: Dict,
-    resources: Dict,
-}
-
-fn walk(doc: &Doc, node: &Obj, inherited: &Dict, out: &mut Vec<PageNode>, seen: &mut HashSet<u32>, depth: u8) {
-    if depth > 24 || out.len() >= MAX_PAGES {
-        return;
-    }
-    let num = if let Obj::Ref(n, _) = node { Some(*n) } else { None };
-    if let Some(n) = num {
-        if !seen.insert(n) {
-            return;
-        }
-    }
-    let Obj::Dict(d) = doc.get(node) else { return };
-    let resources = match doc.field(&d, "Resources") {
-        Obj::Dict(r) => r,
-        _ => inherited.clone(),
-    };
-    match doc.field(&d, "Kids") {
-        Obj::Array(kids) => {
-            for k in &kids {
-                walk(doc, k, &resources, out, seen, depth + 1);
-            }
-        }
-        _ => out.push(PageNode { num, dict: d, resources }),
-    }
-}
-
-fn pages(doc: &Doc) -> Vec<PageNode> {
-    let mut out = vec![];
-    if let Some(cat) = doc.catalog() {
-        if let Some(root) = cat.get("Pages") {
-            walk(doc, root, &Dict::new(), &mut out, &mut HashSet::new(), 0);
-        }
-    }
-    out
-}
-
-/// A PDF text string (UTF-16BE with BOM, else PDFDocEncoding ~ Latin-1).
-pub fn text_string(b: &[u8]) -> String {
-    if b.starts_with(&[0xfe, 0xff]) {
-        let units: Vec<u16> = b[2..].chunks(2).filter(|c| c.len() == 2).map(|c| (c[0] as u16) << 8 | c[1] as u16).collect();
-        String::from_utf16_lossy(&units)
-    } else if b.starts_with(&[0xef, 0xbb, 0xbf]) {
-        String::from_utf8_lossy(&b[3..]).into_owned()
-    } else {
-        b.iter().map(|&c| c as char).collect()
-    }
-}
-
-fn info(doc: &Doc) -> (String, String) {
-    let get = |k: &str| match doc.trailer.get("Info").map(|o| doc.get(o)) {
-        Some(Obj::Dict(d)) => match doc.field(&d, k) {
-            Obj::Str(s) => text_string(&s).trim().to_string(),
-            _ => String::new(),
-        },
-        _ => String::new(),
-    };
-    (get("Title"), get("Author"))
-}
+use bifrost_render::cg::pdf::doc::Doc;
+use bifrost_render::cg::pdf::extract::{Extractor, Piece};
+use bifrost_render::cg::pdf::page;
+use std::collections::HashMap;
 
 /// Title and author without reading the pages (for the library).
 pub fn probe(data: Vec<u8>) -> Option<(String, String)> {
     let doc = Doc::open(data).ok()?;
-    Some(info(&doc))
-}
-
-/// Resolves a destination (array, or a name looked up in the catalog) to a page object number.
-fn dest_page(doc: &Doc, cat: &Dict, dest: &Obj, depth: u8) -> Option<u32> {
-    match doc.get(dest) {
-        Obj::Array(a) => match a.first()? {
-            Obj::Ref(n, _) => Some(*n),
-            _ => None,
-        },
-        Obj::Dict(d) => dest_page(doc, cat, d.get("D")?, depth + 1),
-        Obj::Name(n) if depth < 3 => named_dest(doc, cat, n.as_bytes()).and_then(|o| dest_page(doc, cat, &o, depth + 1)),
-        Obj::Str(s) if depth < 3 => named_dest(doc, cat, &s).and_then(|o| dest_page(doc, cat, &o, depth + 1)),
-        _ => None,
-    }
-}
-
-fn named_dest(doc: &Doc, cat: &Dict, name: &[u8]) -> Option<Obj> {
-    if let Obj::Dict(d) = doc.field(cat, "Dests") {
-        if let Some(o) = d.get(&String::from_utf8_lossy(name).into_owned()) {
-            return Some(o.clone());
-        }
-    }
-    let names = doc.field(cat, "Names");
-    let tree = doc.field(names.dict()?, "Dests");
-    name_tree(doc, &tree, name, 0)
-}
-
-fn name_tree(doc: &Doc, node: &Obj, name: &[u8], depth: u8) -> Option<Obj> {
-    if depth > 8 {
-        return None;
-    }
-    let d = node.dict()?;
-    if let Obj::Array(pairs) = doc.field(d, "Names") {
-        for kv in pairs.chunks(2) {
-            if let (Obj::Str(k), Some(v)) = (doc.get(&kv[0]), kv.get(1)) {
-                if k == name {
-                    return Some(v.clone());
-                }
-            }
-        }
-    }
-    if let Obj::Array(kids) = doc.field(d, "Kids") {
-        for k in &kids {
-            if let Some(o) = name_tree(doc, &doc.get(k), name, depth + 1) {
-                return Some(o);
-            }
-        }
-    }
-    None
-}
-
-/// Outline entries as `(title, page object number, level)`.
-fn outline(doc: &Doc, cat: &Dict) -> Vec<(String, u32, u8)> {
-    let mut out = vec![];
-    let Obj::Dict(root) = doc.field(cat, "Outlines") else { return out };
-    let mut seen = HashSet::new();
-    fn level(doc: &Doc, cat: &Dict, first: &Obj, lvl: u8, out: &mut Vec<(String, u32, u8)>, seen: &mut HashSet<u32>) {
-        let mut cur = first.clone();
-        while out.len() < 3000 {
-            if let Obj::Ref(n, _) = &cur {
-                if !seen.insert(*n) {
-                    return;
-                }
-            }
-            let Obj::Dict(item) = doc.get(&cur) else { return };
-            let title = match doc.field(&item, "Title") {
-                Obj::Str(s) => text_string(&s).trim().to_string(),
-                _ => String::new(),
-            };
-            let dest = match item.get("Dest") {
-                Some(d) => Some(d.clone()),
-                None => doc.field(&item, "A").dict().and_then(|a| a.get("D").cloned()),
-            };
-            if let (false, Some(page)) = (title.is_empty(), dest.and_then(|d| dest_page(doc, cat, &d, 0))) {
-                out.push((title, page, lvl));
-            }
-            if let Some(child) = item.get("First") {
-                if lvl < 6 {
-                    level(doc, cat, child, lvl + 1, out, seen);
-                }
-            }
-            match item.get("Next") {
-                Some(n) => cur = n.clone(),
-                None => return,
-            }
-        }
-    }
-    if let Some(first) = root.get("First") {
-        level(doc, cat, first, 0, &mut out, &mut seen);
-    }
-    out
+    let info = page::info(&doc);
+    Some((info.title, info.author))
 }
 
 /// Reflows the extracted pieces into blocks; returns them with the index of
@@ -296,31 +132,30 @@ pub fn assemble(pieces: Vec<Piece>) -> (Vec<Block>, Vec<usize>) {
     (blocks, starts)
 }
 
+
 /// Loads a whole PDF.
 pub fn load(data: Vec<u8>) -> Result<Book, String> {
     let doc = Doc::open(data)?;
-    let nodes = pages(&doc);
+    let nodes = page::pages(&doc);
     if nodes.is_empty() {
         return Err("the PDF has no pages".into());
     }
     let mut ex = Extractor::new(&doc);
-    for n in &nodes {
-        ex.page(&n.dict, &n.resources);
+    for p in &nodes {
+        ex.page(p);
     }
     let (blocks, mut starts) = assemble(std::mem::take(&mut ex.pieces));
     if blocks.is_empty() {
         return Err("no readable text in this PDF (a scan without text?)".into());
     }
     starts.resize(nodes.len(), blocks.len().saturating_sub(1));
-    let (title, author) = info(&doc);
-    let mut book = Book { title, author, blocks, ..Default::default() };
+    let info = page::info(&doc);
+    let mut book = Book { title: info.title, author: info.author, blocks, ..Default::default() };
     let last = book.blocks.len() - 1;
-    let page_of: HashMap<u32, usize> = nodes.iter().enumerate().filter_map(|(i, n)| n.num.map(|num| (num, i))).collect();
-    if let Some(cat) = doc.catalog() {
-        for (t, page, level) in outline(&doc, &cat) {
-            if let Some(&pi) = page_of.get(&page) {
-                book.toc.push(TocEntry { title: t, block: starts[pi].min(last), level });
-            }
+    let page_of: HashMap<u32, usize> = nodes.iter().enumerate().filter_map(|(i, p)| p.num.map(|num| (num, i))).collect();
+    for item in page::outline(&doc) {
+        if let Some(&pi) = page_of.get(&item.dest.page) {
+            book.toc.push(TocEntry { title: item.title, block: starts[pi].min(last), level: item.level });
         }
     }
     if book.toc.is_empty() {
@@ -333,7 +168,8 @@ pub fn load(data: Vec<u8>) -> Result<Book, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use doc::tests::tiny_pdf;
+    use bifrost_render::cg::pdf::doc::tests::tiny_pdf;
+    use bifrost_render::cg::pdf::page::text_string;
 
     fn line(y: f32, size: f32, t: &str) -> Piece {
         Piece::Line { y, size, text: t.into() }

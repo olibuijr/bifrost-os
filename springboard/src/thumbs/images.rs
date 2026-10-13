@@ -27,7 +27,7 @@ pub fn decode_fitted(bytes: &[u8], px: u32) -> Option<Pixels> {
             return None;
         }
     }
-    let img = crate::imgdec::decode(bytes)?;
+    let img = crate::cg::imageio::decode(bytes)?;
     let side = px as usize;
     pixels_of(&crate::imgdec::contain(&img, side, side))
 }

@@ -4,7 +4,7 @@
 //! No zip64. Progress callbacks return `false` to cancel.
 
 use super::fs;
-use crate::shell::books::engine::inflate;
+use bifrost_render::cg::pdf::inflate;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
 

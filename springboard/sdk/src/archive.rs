@@ -21,7 +21,7 @@
 //! ```
 
 use springboard::files::zip;
-use springboard::shell::books::engine::inflate;
+use bifrost_render::cg::pdf::inflate;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 

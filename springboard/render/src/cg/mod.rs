@@ -7,7 +7,7 @@ pub mod image;
 pub mod imageio;
 pub mod paint;
 pub mod path;
-// pub mod pdf; (re-enabled by the PDF slice once cg/pdf/mod.rs exists)
+pub mod pdf;
 pub mod raster;
 pub mod reusable_layer;
 pub mod surface;
