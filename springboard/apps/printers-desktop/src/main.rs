@@ -1,18 +1,22 @@
 //! Print Center as an installed BifrOSt app: the printers the scheduler knows, the queue of the selected printer, and the
 //! actions that pause and resume a printer, set the default, and hold, release or cancel a job. `model.rs` holds the
 //! state and the rules, `worker.rs` talks to the scheduler on its own thread, `window.rs` lays the window out and
-//! `draw.rs` paints it.
+//! `draw.rs` paints it. `discover.rs` finds printers on the network, `widget.rs` feeds the printers widget and
+//! `app_intents.rs` serves the Shortcuts actions.
 
+mod app_intents;
+mod discover;
 mod draw;
 mod model;
 mod rpc;
+mod widget;
 mod window;
 mod worker;
 
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::control::RpcError;
-use bifrost_app::{App, AppMenu, Ctx, DocumentEvent, Input, KeyInput, OpenOptions};
+use bifrost_app::{dock_tile, App, AppMenu, Ctx, DocumentEvent, Input, KeyInput, OpenOptions};
 use bifrost_core::json::Json;
 use window::{PrintCenter, Target, B_PRINT_FILE};
 
@@ -91,16 +95,56 @@ impl App for PrintCenter {
     }
 
     /// The refresh loop: takes the replies the worker sent and lists the printers on a timer. A change in the number of
-    /// waiting jobs moves the Dock badge, and a printer that needs attention is announced once.
+    /// waiting jobs moves the Dock badge, a printer that needs attention is announced once with a notification and a
+    /// bounce of the Dock icon, and a change in the state of the printers goes to the widget.
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {
         let changed = self.step(t);
         if let Some(label) = self.badge_change() {
             ctx.set_badge(&label);
         }
-        for (title, body) in self.take_alerts() {
+        let alerts = self.take_alerts();
+        if !alerts.is_empty() {
+            dock_tile::bounce(ctx, true);
+        }
+        for (title, body) in alerts {
             ctx.notify(&title, &body);
         }
+        if let Some((title, text)) = self.widget_change() {
+            let request = widget::send(ctx, &title, &text, widget::now_unix());
+            self.widget_requested(request);
+        }
         changed
+    }
+
+    /// The shell's answer to the widget text: a shell without the service stops the window sending to it.
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        self.widget_reply(request, result)
+    }
+
+    /// The shell asks for the widget's timeline again: it is sent at the next turn of the loop.
+    fn service_event(&mut self, _ctx: &Ctx, service: &str, event: &str, body: &Json) -> bool {
+        if widget::reload_requested(service, event, body) {
+            self.widget_reload();
+        }
+        false
+    }
+
+    fn intents(&self) -> Vec<bifrost_app::intents::Intent> {
+        app_intents::declared()
+    }
+
+    fn perform_intent(
+        &mut self,
+        _ctx: Option<&Ctx>,
+        _data_dir: &std::path::Path,
+        id: &str,
+        params: &Json,
+    ) -> Result<bifrost_app::intents::IntentResult, RpcError> {
+        app_intents::perform(self, id, params)
+    }
+
+    fn entities(&mut self, _data_dir: &std::path::Path, ty: &str, query: &bifrost_app::intents::EntityQuery) -> Result<Vec<bifrost_app::intents::Entity>, RpcError> {
+        app_intents::entities(self, ty, query)
     }
 
     fn rpc_methods(&self) -> Vec<&'static str> {

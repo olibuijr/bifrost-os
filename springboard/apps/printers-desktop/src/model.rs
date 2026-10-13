@@ -58,6 +58,19 @@ pub enum Reply {
     Failed(String),
 }
 
+/// What the detail area (right of the printer list) shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pane {
+    /// The queue of the selected printer.
+    Queue,
+    /// The selected printer's details, supplies and sharing.
+    Info,
+    /// The printers found on the network, and the clipboard fallback.
+    Discover,
+    /// The help topics.
+    Help,
+}
+
 /// The window's data: the printers, the selected printer and its queue, and the selected jobs.
 #[derive(Default, Debug)]
 pub struct Model {
@@ -74,6 +87,12 @@ pub struct Model {
     pub offline: BTreeSet<String>,
     /// The info pane replaces the queue.
     pub show_info: bool,
+    /// The Add Printer pane (printers found on the network) replaces the queue.
+    pub show_discover: bool,
+    /// The Help pane replaces the queue.
+    pub show_help: bool,
+    /// A listing has arrived, so what the window knows is the scheduler's answer and not the empty start.
+    pub listed: bool,
     /// `printer|problem` pairs already announced, so a problem is announced once until it clears.
     alerted: BTreeSet<String>,
     /// Announcements not yet posted: (printer, problem).
@@ -86,6 +105,7 @@ impl Model {
     pub fn apply(&mut self, reply: Reply) {
         match reply {
             Reply::Listed { printers, printer, jobs, offline } => {
+                self.listed = true;
                 self.printers = printers;
                 self.offline = offline.into_iter().collect();
                 self.collect_alerts();
@@ -127,6 +147,27 @@ impl Model {
     /// The announcements to post now: a printer name and what is wrong. Each is returned once.
     pub fn take_alerts(&mut self) -> Vec<(String, String)> {
         std::mem::take(&mut self.alerts)
+    }
+
+    /// The pane the detail area shows now.
+    pub fn pane(&self) -> Pane {
+        if self.show_discover {
+            Pane::Discover
+        } else if self.show_help {
+            Pane::Help
+        } else if self.show_info {
+            Pane::Info
+        } else {
+            Pane::Queue
+        }
+    }
+
+    /// Shows `pane`, or the queue when it is the one showing. Only one pane is shown at a time.
+    pub fn toggle_pane(&mut self, pane: Pane) {
+        let next = if self.pane() == pane { Pane::Queue } else { pane };
+        self.show_info = next == Pane::Info;
+        self.show_discover = next == Pane::Discover;
+        self.show_help = next == Pane::Help;
     }
 
     /// Selects a printer. Its queue is empty until the next listing.
@@ -525,6 +566,150 @@ pub fn mime_for(name: &str) -> &'static str {
     }
 }
 
+/// Milliseconds between two listings while nothing is waiting or printing.
+pub const IDLE_POLL_MS: f64 = 5000.0;
+/// Milliseconds between two listings while a job is waiting or printing, so a change shows within about a second.
+pub const ACTIVE_POLL_MS: f64 = 1000.0;
+
+/// How long to wait before listing again: short while any printer has a job queued or is printing.
+pub fn poll_interval_ms(printers: &[Printer]) -> f64 {
+    let busy = printers.iter().any(|p| p.queued_jobs > 0 || p.state == PrinterState::Processing);
+    if busy {
+        ACTIVE_POLL_MS
+    } else {
+        IDLE_POLL_MS
+    }
+}
+
+/// "1 job", "3 jobs".
+fn count_word(n: i32, one: &str, many: &str) -> String {
+    format!("{n} {}", if n == 1 { one } else { many })
+}
+
+/// The title and the text of the printers widget: the most important thing first. A printer error, then a printer
+/// that does not answer, then a paused printer, then the jobs waiting, else that the printers are ready.
+pub fn widget_text(printers: &[Printer], offline: &BTreeSet<String>) -> (String, String) {
+    if printers.is_empty() {
+        return ("Printers".into(), "No printers are set up".into());
+    }
+    let error = printers.iter().find_map(|p| printer_problems(p).into_iter().find(|x| x.level == Level::Error).map(|x| (p, x.text)));
+    if let Some((p, text)) = error {
+        return (format!("{} needs attention", p.name), text);
+    }
+    if let Some(name) = printers.iter().find(|p| offline.contains(&p.name)).map(|p| &p.name) {
+        return (name.clone(), "Printer is offline".into());
+    }
+    let waiting: i32 = printers.iter().filter(|p| !p.is_class).map(|p| p.queued_jobs.max(0)).sum();
+    if let Some(p) = printers.iter().find(|p| p.state == PrinterState::Stopped) {
+        let text = if waiting > 0 { format!("Paused, {} waiting", count_word(waiting, "job", "jobs")) } else { "Paused".to_string() };
+        return (p.name.clone(), text);
+    }
+    if waiting > 0 {
+        let printing = printers.iter().filter(|p| !p.is_class && p.state == PrinterState::Processing).count();
+        let text = if printing > 0 { format!("{} in the queue, printing", count_word(waiting, "job", "jobs")) } else { format!("{} waiting", count_word(waiting, "job", "jobs")) };
+        return ("Printers".into(), text);
+    }
+    let text = match printers {
+        [only] => format!("{} is ready", only.name),
+        many => format!("All {} printers are ready", many.len()),
+    };
+    ("Printers".into(), text)
+}
+
+/// The sentence the List Printers action says: how many printers there are and how many jobs wait.
+pub fn list_dialog(printers: &[Printer]) -> String {
+    if printers.is_empty() {
+        return "No printers are set up".into();
+    }
+    let waiting: i32 = printers.iter().filter(|p| !p.is_class).map(|p| p.queued_jobs.max(0)).sum();
+    let count = count_word(printers.len() as i32, "printer", "printers");
+    if waiting > 0 {
+        format!("{count}, {} waiting", count_word(waiting, "job", "jobs"))
+    } else {
+        format!("{count}, no jobs waiting")
+    }
+}
+
+/// The short label of a document's tile in the queue: its extension in capitals, else "DOC".
+pub fn document_tag(name: &str) -> String {
+    match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() && (1..=4).contains(&ext.len()) && ext.chars().all(|c| c.is_ascii_alphanumeric()) => ext.to_ascii_uppercase(),
+        _ => "DOC".to_string(),
+    }
+}
+
+/// A queue name from a printer's advertised label: spaces become underscores, characters the scheduler does not take
+/// are dropped, and a name already in `taken` gets `-2`, `-3`. "Printer" when nothing is left.
+pub fn queue_name_for(label: &str, taken: &[String]) -> String {
+    let mut base = String::new();
+    for c in label.trim().chars() {
+        if c.is_ascii_alphanumeric() || c == '-' || c == '.' {
+            base.push(c);
+        } else if (c == ' ' || c == '_') && !base.ends_with('_') {
+            base.push('_');
+        }
+    }
+    let base: String = base.trim_matches(|c| c == '_' || c == '-' || c == '.').chars().take(60).collect();
+    let base = if base.is_empty() { "Printer".to_string() } else { base };
+    let mut name = base.clone();
+    let mut n = 2;
+    while taken.iter().any(|t| t == &name) {
+        name = format!("{base}-{n}");
+        n += 1;
+    }
+    name
+}
+
+/// The help topics: a heading and the text under it.
+pub const HELP: [(&str, &str); 6] = [
+    (
+        "Add a printer",
+        "Choose Add Printer to list the printers on this network, then click one to add it with its name and location. For a printer that is not listed, copy its address, such as ipp://printer.local/ipp/print, and choose Use Address from Clipboard.",
+    ),
+    (
+        "Print a document",
+        "Select a printer, then choose Print Document in the Printer menu, or drop files on the window or on the Dock icon.",
+    ),
+    (
+        "Manage jobs",
+        "Drag over the rows, or choose Select All Jobs, to pick several jobs. Hold, Release and Cancel apply to every chosen job, and a secondary click on a job offers the same actions.",
+    ),
+    (
+        "Printer problems",
+        "A warning mark under a printer's name says what needs attention, such as a paper jam. A printer that stops answering is dimmed and marked Offline. Errors are announced as a notification and the Dock icon bounces.",
+    ),
+    (
+        "Details, sharing and removal",
+        "Printer Info edits the description and location, lists the supply levels and turns sharing on or off. Remove Printer asks for a second press.",
+    ),
+    (
+        "Shortcuts and the widget",
+        "List Printers, Pause Printer, Resume Printer, Set Default Printer, Cancel Print Job and Print File are Shortcuts actions. The printers widget in Notification Centre shows what needs attention first.",
+    ),
+];
+
+/// Breaks `text` into lines of at most `max_chars` characters at word boundaries. A word longer than a line gets a line
+/// of its own.
+pub fn wrap_words(text: &str, max_chars: usize) -> Vec<String> {
+    let max_chars = max_chars.max(1);
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        let joined = if line.is_empty() { word.chars().count() } else { line.chars().count() + 1 + word.chars().count() };
+        if joined > max_chars && !line.is_empty() {
+            lines.push(std::mem::take(&mut line));
+        }
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        line.push_str(word);
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -822,5 +1007,99 @@ mod tests {
         assert_eq!(mime_for("photo.jpeg"), "image/jpeg");
         assert_eq!(mime_for("archive.xyz"), "application/octet-stream");
         assert_eq!(mime_for("noext"), "application/octet-stream");
+    }
+
+    #[test]
+    fn the_listing_is_quick_while_a_job_waits_or_prints() {
+        assert_eq!(poll_interval_ms(&[]), IDLE_POLL_MS);
+        assert_eq!(poll_interval_ms(&[printer("a", false, PrinterState::Idle, 0)]), IDLE_POLL_MS);
+        assert_eq!(poll_interval_ms(&[printer("a", false, PrinterState::Idle, 0), printer("b", false, PrinterState::Idle, 1)]), ACTIVE_POLL_MS);
+        assert_eq!(poll_interval_ms(&[printer("a", false, PrinterState::Processing, 0)]), ACTIVE_POLL_MS);
+    }
+
+    #[test]
+    fn the_widget_leads_with_the_most_important_thing() {
+        let none = BTreeSet::new();
+        assert_eq!(widget_text(&[], &none), ("Printers".to_string(), "No printers are set up".to_string()));
+        let ready = printer("Office", true, PrinterState::Idle, 0);
+        assert_eq!(widget_text(std::slice::from_ref(&ready), &none).1, "Office is ready");
+        assert_eq!(widget_text(&[ready.clone(), printer("Lab", false, PrinterState::Idle, 0)], &none).1, "All 2 printers are ready");
+        let waiting = printer("Office", true, PrinterState::Idle, 1);
+        assert_eq!(widget_text(&[waiting], &none).1, "1 job waiting");
+        let printing = printer("Office", true, PrinterState::Processing, 3);
+        assert_eq!(widget_text(&[printing], &none).1, "3 jobs in the queue, printing");
+        let paused = printer("Lab", false, PrinterState::Stopped, 2);
+        assert_eq!(widget_text(&[ready.clone(), paused], &none), ("Lab".to_string(), "Paused, 2 jobs waiting".to_string()));
+        let offline: BTreeSet<String> = ["Office".to_string()].into();
+        assert_eq!(widget_text(std::slice::from_ref(&ready), &offline), ("Office".to_string(), "Printer is offline".to_string()));
+        let mut jam = printer("Lab", false, PrinterState::Stopped, 0);
+        jam.state_reasons = vec!["media-jam-error".into()];
+        assert_eq!(widget_text(&[ready, jam], &offline), ("Lab needs attention".to_string(), "Paper jam".to_string()), "an error outranks an offline printer");
+    }
+
+    #[test]
+    fn the_list_dialog_counts_printers_and_waiting_jobs() {
+        assert_eq!(list_dialog(&[]), "No printers are set up");
+        assert_eq!(list_dialog(&[printer("a", true, PrinterState::Idle, 0)]), "1 printer, no jobs waiting");
+        assert_eq!(list_dialog(&[printer("a", true, PrinterState::Idle, 2), printer("b", false, PrinterState::Idle, 1)]), "2 printers, 3 jobs waiting");
+    }
+
+    #[test]
+    fn a_document_tile_shows_the_extension() {
+        assert_eq!(document_tag("report.pdf"), "PDF");
+        assert_eq!(document_tag("photo.jpeg"), "JPEG");
+        assert_eq!(document_tag("archive.tar.gz"), "GZ");
+        assert_eq!(document_tag("notes"), "DOC");
+        assert_eq!(document_tag(".hidden"), "DOC");
+        assert_eq!(document_tag("long.extension"), "DOC");
+        assert_eq!(document_tag("trailing."), "DOC");
+    }
+
+    #[test]
+    fn a_queue_name_from_a_label_is_valid_and_never_replaces_a_queue() {
+        assert_eq!(queue_name_for("HP LaserJet 400", &[]), "HP_LaserJet_400");
+        assert_eq!(queue_name_for("  Front  desk (2) ", &[]), "Front_desk_2");
+        assert_eq!(queue_name_for("Brother HL", &["Brother_HL".to_string()]), "Brother_HL-2");
+        assert_eq!(queue_name_for("Brother HL", &["Brother_HL".to_string(), "Brother_HL-2".to_string()]), "Brother_HL-3");
+        assert_eq!(queue_name_for("\u{1F5A8}", &[]), "Printer");
+        assert!(bifrost_app::controls::cups::valid_printer_name(&queue_name_for("Büro Drucker #1", &[])));
+        assert!(queue_name_for(&"x".repeat(200), &[]).len() <= 60);
+    }
+
+    #[test]
+    fn one_pane_shows_at_a_time_and_a_second_choice_returns_to_the_queue() {
+        let mut m = Model::default();
+        assert_eq!(m.pane(), Pane::Queue);
+        m.toggle_pane(Pane::Info);
+        assert!(m.show_info && !m.show_discover && !m.show_help);
+        m.toggle_pane(Pane::Discover);
+        assert_eq!(m.pane(), Pane::Discover);
+        assert!(!m.show_info, "the info pane gave way");
+        m.toggle_pane(Pane::Help);
+        assert_eq!(m.pane(), Pane::Help);
+        m.toggle_pane(Pane::Help);
+        assert_eq!(m.pane(), Pane::Queue);
+    }
+
+    #[test]
+    fn help_topics_wrap_at_word_boundaries() {
+        assert!(HELP.iter().all(|(heading, body)| !heading.is_empty() && !body.is_empty()));
+        let lines = wrap_words("one two three four", 9);
+        assert_eq!(lines, vec!["one two", "three", "four"]);
+        assert_eq!(wrap_words("extraordinarily long", 5), vec!["extraordinarily", "long"]);
+        assert!(wrap_words("   ", 10).is_empty());
+        for (_, body) in HELP {
+            assert!(wrap_words(body, 60).iter().all(|l| l.chars().count() <= 60), "no help line is wider than the limit");
+        }
+    }
+
+    #[test]
+    fn the_listing_flag_marks_the_first_answer() {
+        let mut m = Model::default();
+        assert!(!m.listed);
+        m.apply(Reply::Failed("no scheduler".into()));
+        assert!(!m.listed, "an error is not a listing");
+        m.apply(listed(vec![], None, vec![]));
+        assert!(m.listed);
     }
 }

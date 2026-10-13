@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0
+
+- New: Add Printer lists the printers on the network that announce themselves; click one to add it under its own name with its model and location. The clipboard address stays as "Use Address from Clipboard" in the pane and the Printer menu.
+- New: Print Center Help in the Help menu shows the topics in the window.
+- New: a printers widget for Notification Centre that leads with a printer error, an offline or paused printer, or the jobs waiting.
+- New: the Dock icon bounces when a printer gains an error, besides the notification.
+- New: a document tile with the file type sits left of each job's name.
+- New: Shortcuts actions List Printers, Pause Printer, Resume Printer, Set Default Printer, Cancel Print Job and Print File, with printers as choices.
+- The queue is listed every second while a job waits or prints (every five seconds otherwise), so a change shows sooner.
+
 ## 0.3.0
 
 - New: the queue shows Pages and Created columns, a progress bar under a printing job, and reasons in the Status column ("Printing 2 of 5", "Canceled on server", "Held for authentication").

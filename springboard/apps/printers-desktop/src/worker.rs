@@ -19,8 +19,9 @@ pub enum Request {
     List { printer: Option<String> },
     /// Perform `action` on `printer` (or on one of its jobs).
     Act { printer: String, action: Action },
-    /// Add a queue for the device at this address (driverless).
-    Add { device: String },
+    /// Add a queue for the device at this address (driverless). A non-empty `label` names the queue after the printer's
+    /// advertised name and `info` and `location` are saved with it; an empty label names it from the address.
+    Add { device: String, label: String, info: String, location: String },
     /// Print a document on `printer`: `name` is the job name, `mime` the document type.
     Print { printer: String, name: String, mime: String, data: Vec<u8> },
 }
@@ -103,7 +104,7 @@ pub fn handle<T: Transport>(client: &mut Client<T>, request: Request) -> Reply {
                 Err(e) => Reply::Failed(e.to_string()),
             }
         }
-        Request::Add { device } => match cups::add_device(client, &device) {
+        Request::Add { device, label, info, location } => match add_printer(client, &device, &label, &info, &location) {
             Ok(name) => Reply::Added(name),
             Err(e) => Reply::Failed(e.to_string()),
         },
@@ -115,6 +116,26 @@ pub fn handle<T: Transport>(client: &mut Client<T>, request: Request) -> Reply {
             }
         }
     }
+}
+
+/// Adds the queue and returns its name. Without a label the queue is named from the address (as Settings does); with one
+/// it is named from the label and the description and location are saved, which a failed save leaves unsaved but does
+/// not undo the queue.
+fn add_printer<T: Transport>(client: &mut Client<T>, device: &str, label: &str, info: &str, location: &str) -> Result<String, cups::CupsError> {
+    if label.trim().is_empty() {
+        return cups::add_device(client, device);
+    }
+    let device = device.trim();
+    if !cups::valid_device_uri(device) {
+        return Err(cups::CupsError::BadDeviceUri(device.to_string()));
+    }
+    let taken: Vec<String> = client.printers()?.into_iter().map(|p| p.name).collect();
+    let name = model::queue_name_for(label, &taken);
+    client.add_driverless_printer(&name, device)?;
+    if !info.is_empty() || !location.is_empty() {
+        let _ = client.set_printer_details(&name, info, location);
+    }
+    Ok(name)
 }
 
 /// What the probes found, by device address, and the addresses being probed now.
@@ -161,4 +182,84 @@ fn offline_names(printers: &[Printer]) -> Vec<String> {
         }
     }
     offline
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bifrost_app::controls::cups::CupsError;
+    use bifrost_app::ipp::{self, group, Attribute, Group, Request as IppMessage, Value};
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
+    use std::rc::Rc;
+
+    /// Replies in order and keeps what was sent where the test can read it. Nothing touches the network.
+    struct Canned {
+        replies: VecDeque<Vec<u8>>,
+        sent: Rc<RefCell<Vec<Vec<u8>>>>,
+    }
+
+    impl Transport for Canned {
+        fn send(&mut self, body: &[u8]) -> Result<Vec<u8>, CupsError> {
+            self.sent.borrow_mut().push(body.to_vec());
+            self.replies.pop_front().ok_or(CupsError::Io("no canned reply".into()))
+        }
+    }
+
+    fn reply(status: u16, id: u32, groups: Vec<Group>) -> Vec<u8> {
+        let mut r = IppMessage::new(status);
+        r.request_id = id;
+        r.groups = groups;
+        r.encode()
+    }
+
+    fn printer_group(name: &str) -> Group {
+        Group { tag: group::PRINTER, attributes: vec![Attribute { name: "printer-name".into(), values: vec![Value::name(name)] }] }
+    }
+
+    fn contains(body: &[u8], needle: &str) -> bool {
+        body.windows(needle.len()).any(|w| w == needle.as_bytes())
+    }
+
+    /// A client whose scheduler already has a queue named Office, and the bodies it was sent.
+    fn client_with_office(extra: Vec<Vec<u8>>) -> (Client<Canned>, Rc<RefCell<Vec<Vec<u8>>>>) {
+        let sent = Rc::new(RefCell::new(Vec::new()));
+        let mut replies = vec![reply(0, 1, vec![printer_group("Office")]), reply(0, 2, vec![printer_group("Office")]), reply(ipp::STATUS_NOT_FOUND, 3, vec![])];
+        replies.extend(extra);
+        (Client::new(Canned { replies: replies.into(), sent: sent.clone() }), sent)
+    }
+
+    #[test]
+    fn a_found_printer_is_added_under_its_own_name_with_its_description_and_location() {
+        let (mut client, sent) = client_with_office(vec![reply(0, 4, vec![]), reply(0, 5, vec![])]);
+        let name = add_printer(&mut client, " ipps://10.0.0.7:631/ipp/print ", "Office", "Acme Laser 5", "Floor 2").unwrap();
+        assert_eq!(name, "Office-2", "a name in use is never replaced");
+        let sent = sent.borrow();
+        assert_eq!(sent.len(), 5);
+        assert!(contains(&sent[3], "Office-2") && contains(&sent[3], "ipps://10.0.0.7:631/ipp/print"));
+        assert!(contains(&sent[4], "Acme Laser 5") && contains(&sent[4], "Floor 2"));
+    }
+
+    #[test]
+    fn an_added_printer_without_details_saves_none_and_a_failed_save_keeps_the_queue() {
+        let (mut client, sent) = client_with_office(vec![reply(0, 4, vec![])]);
+        assert_eq!(add_printer(&mut client, "ipp://10.0.0.7:631/ipp/print", "Lab", "", "").unwrap(), "Lab");
+        assert_eq!(sent.borrow().len(), 4, "no details, so no save request");
+        let (mut client, _) = client_with_office(vec![reply(0, 4, vec![]), reply(0x0500, 5, vec![])]);
+        assert_eq!(add_printer(&mut client, "ipp://10.0.0.7:631/ipp/print", "Lab", "Acme", ""), Ok("Lab".to_string()));
+    }
+
+    #[test]
+    fn without_a_label_the_queue_is_named_from_the_address() {
+        let (mut client, _) = client_with_office(vec![reply(0, 4, vec![])]);
+        assert_eq!(add_printer(&mut client, "ipp://10.0.0.7:631/ipp/print", "  ", "", "").unwrap(), "10-0-0-7");
+    }
+
+    #[test]
+    fn an_address_the_scheduler_does_not_take_is_refused_before_any_request() {
+        let sent = Rc::new(RefCell::new(Vec::new()));
+        let mut client = Client::new(Canned { replies: VecDeque::new(), sent: sent.clone() });
+        assert_eq!(add_printer(&mut client, "ftp://x", "Lab", "", ""), Err(cups::CupsError::BadDeviceUri("ftp://x".into())));
+        assert!(sent.borrow().is_empty());
+    }
 }

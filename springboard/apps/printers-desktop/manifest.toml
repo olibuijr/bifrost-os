@@ -1,12 +1,54 @@
 id = "is.olibuijr.printers.desktop"
 name = "Print Center"
-version = "0.3.0"
+version = "0.4.0"
 exec = "bifrost-printers"
 icon = "icon.png"
 min_shell = "0.6.5"
-summary = "Lists the printers, pools and their queues with state, supplies and problems, pauses and resumes a printer, holds, releases or cancels several jobs at once, prints dropped documents, edits a printer's details and shares or removes it."
+summary = "Lists the printers, pools and their queues with state, supplies and problems, adds printers found on the network, pauses and resumes a printer, holds, releases or cancels several jobs at once, prints dropped documents, edits a printer's details, shares or removes it, and offers Shortcuts actions and a widget."
 category = "Utilities"
 architecture = "x86_64-linux"
 kind = "system-app"
 permissions = ["notifications", "documents"]
 window = "full-size"
+
+[[intent]]
+id = "list-printers"
+title = "List Printers"
+description = "Lists the printers with their state and the jobs waiting."
+shortcut = true
+params = []
+
+[[intent]]
+id = "pause-printer"
+title = "Pause Printer"
+description = "Stops a printer from printing its queue."
+shortcut = false
+params = ["printer:entity(Printer)?"]
+
+[[intent]]
+id = "resume-printer"
+title = "Resume Printer"
+description = "Lets a paused printer print its queue again."
+shortcut = false
+params = ["printer:entity(Printer)?"]
+
+[[intent]]
+id = "set-default-printer"
+title = "Set Default Printer"
+description = "Makes a printer the one documents print on by default."
+shortcut = false
+params = ["printer:entity(Printer)"]
+
+[[intent]]
+id = "cancel-job"
+title = "Cancel Print Job"
+description = "Cancels a job in the queue of a printer."
+shortcut = false
+params = ["printer:entity(Printer)?", "job:int"]
+
+[[intent]]
+id = "print-file"
+title = "Print File"
+description = "Sends a document to a printer."
+shortcut = false
+params = ["path:string", "printer:entity(Printer)?"]
