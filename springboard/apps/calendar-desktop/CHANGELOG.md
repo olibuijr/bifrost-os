@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.14.0 — 2026-10-13
+
+- File > Settings... (Command-comma): week start, day start hour, default event length and default alerts for timed and
+  all-day events. The settings are kept beside the events; the month grid, the week view, the scroll position of Day and
+  Week and new events follow them. The Day and Week zoom level is saved too.
+- Go > Search Events... (Command-F) and a toolbar button: a search screen with a query field and a scrolling result
+  list. Return or a click opens the event.
+- Day and Week: dragging empty hour-grid space sizes a new event and opens its editor; dragging a timed event moves it
+  to another time or day.
+- Edit > Cut, Copy and Paste work on events (Event > Cut Event, Shift-Command-X, deletes after copying; Undo restores it).
+- File > Export Calendar Archive and Import Calendar Archive...: the events and their rich data in one backup file; a
+  restore keeps the previous events as events.tsv.bak.
+- Calendar files (.ics) opened from Files are imported.
+- Intents create-event and show-date, and the control methods calendar.state, calendar.show_date and calendar.create_event.
+
 ## 1.13.0 — 2026-10-13
 
 - Go > Go to Date... (Shift-Command-T): a sheet with year, month and day steppers; Return shows the date, Escape cancels.

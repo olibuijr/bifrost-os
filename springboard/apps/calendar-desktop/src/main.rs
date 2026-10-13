@@ -5,7 +5,10 @@ use bifrost_app::kit::{Damage, Event, Surface};
 use bifrost_app::controls::internet_accounts::Service;
 use bifrost_app::widgets_timeline;
 use bifrost_app::proto::DocMode;
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Command as EditCommand, Commands, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
+use bifrost_app::control::{RpcError, INVALID_PARAMS};
+use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
+use bifrost_calendar::calendar::{archive, intent as cal_intent, prefs};
 use bifrost_calendar::calendar::connect::{self, Connect, Snap};
 use bifrost_calendar::calendar::{self, Command};
 use bifrost_core::json::Json;
@@ -23,6 +26,61 @@ struct CalendarApp {
     connect: Connect,
     /// Internet Accounts: the CalDAV calendars switched on for Calendars are read in the background.
     dav: bifrost_app::dav_sync::Sync,
+}
+
+/// Hands a calendar file's bytes to the calendar: an archive restores the whole calendar, anything else is imported.
+fn load_document(c: &mut calendar::Calendar, name: &str, bytes: &[u8]) {
+    let text = String::from_utf8_lossy(bytes);
+    if name.ends_with(&format!(".{}", archive::EXTENSION)) {
+        c.restore_archive(name, &text);
+    } else {
+        c.import_report(name, &text);
+    }
+}
+
+/// The largest file the calendar reads for `name`.
+fn read_limit(name: &str) -> u64 {
+    if name.ends_with(&format!(".{}", archive::EXTENSION)) {
+        archive::MAX_BYTES
+    } else {
+        MAX_IMPORT
+    }
+}
+
+/// A calendar file opened from Files (or another app): `url` is a path or a `file://` URL.
+fn open_path(c: &mut calendar::Calendar, url: &str) -> bool {
+    let path = std::path::Path::new(url.strip_prefix("file://").unwrap_or(url));
+    let name = path.file_name().map_or_else(|| url.to_string(), |n| n.to_string_lossy().into_owned());
+    let mut bytes = Vec::new();
+    match std::fs::File::open(path).and_then(|f| f.take(read_limit(&name)).read_to_end(&mut bytes)) {
+        Ok(_) => load_document(c, &name, &bytes),
+        Err(e) => c.show_error(format!("Could not read {name}: {e}")),
+    }
+    true
+}
+
+/// The event an intent or control call creates: `title`, `date` and an optional `time` (`HH:MM`; none makes it all-day).
+fn create_from(data_dir: &std::path::Path, params: &Json) -> Result<calendar_event::Created, RpcError> {
+    let invalid = |m: &str| RpcError::new(INVALID_PARAMS, m.to_string());
+    let title = intents::str_param(params, "title")?;
+    let date = cal_intent::parse_date(intents::str_param(params, "date")?).ok_or_else(|| invalid("date must be YYYY-MM-DD"))?;
+    let minute = match params.get("time").and_then(Json::as_str).filter(|t| !t.is_empty()) {
+        Some(t) => Some(cal_intent::parse_time(t).ok_or_else(|| invalid("time must be HH:MM"))?),
+        None => None,
+    };
+    let events = data_dir.join("events.tsv");
+    let duration = prefs::load(&events).duration;
+    let event = cal_intent::create_event(&events, title, date, minute, duration).map_err(intents::failed)?;
+    Ok(calendar_event::Created { id: event.id, title: event.title, date })
+}
+
+mod calendar_event {
+    /// What `create_from` made.
+    pub struct Created {
+        pub id: u64,
+        pub title: String,
+        pub date: bifrost_calendar::calendar::Date,
+    }
 }
 
 /// Writes a phone number the editor asked to copy to the pasteboard.
@@ -71,7 +129,15 @@ impl App for CalendarApp {
         vec![
             AppMenu {
                 title: "File".into(),
-                items: vec![item(Command::NewEventFromText), item(Command::ImportCalendar)],
+                items: vec![
+                    item(Command::NewEventFromText),
+                    AppMenuItem::separator(),
+                    item(Command::ImportCalendar),
+                    item(Command::ImportArchive),
+                    item(Command::ExportArchive),
+                    AppMenuItem::separator(),
+                    item(Command::Settings),
+                ],
             },
             AppMenu {
                 title: "Event".into(),
@@ -79,6 +145,7 @@ impl App for CalendarApp {
                     item(Command::NewEvent),
                     item(Command::Save),
                     item(Command::Duplicate),
+                    item(Command::CutEvent),
                     item(Command::CopyEvent),
                     item(Command::PasteEvent),
                     item(Command::ExportEvent),
@@ -94,6 +161,7 @@ impl App for CalendarApp {
                     item(Command::Previous),
                     item(Command::Next),
                     item(Command::GoToDate),
+                    item(Command::Find),
                     AppMenuItem::separator(),
                     item(Command::ShowDay),
                     item(Command::ShowWeek),
@@ -138,6 +206,14 @@ impl App for CalendarApp {
                 ctx.open_panel(&options);
                 true
             }
+            Some(c) if cmd == Command::ImportArchive => {
+                if !c.enabled(cmd) {
+                    return false;
+                }
+                let options = OpenOptions { mode: DocMode::Read, title: "Import Calendar Archive".into(), filters: vec![archive::EXTENSION.into()], ..Default::default() };
+                ctx.open_panel(&options);
+                true
+            }
             Some(c) => c.perform(&ctx.ui, cmd, t),
             None => false,
         };
@@ -147,7 +223,7 @@ impl App for CalendarApp {
         done
     }
 
-    /// The file chosen in File > Import...: read and added to the calendar.
+    /// The file chosen in File > Import... (added to the calendar) or Import Calendar Archive... (restores it).
     fn document(&mut self, _ctx: &Ctx, ev: DocumentEvent) -> bool {
         let docs = match ev {
             DocumentEvent::Opened(doc) => vec![doc],
@@ -157,15 +233,45 @@ impl App for CalendarApp {
         let Some(c) = &mut self.cal else { return false };
         for doc in docs {
             let mut bytes = Vec::new();
-            match (&doc.file).take(MAX_IMPORT).read_to_end(&mut bytes) {
-                Ok(_) => c.import_report(&doc.name, &String::from_utf8_lossy(&bytes)),
+            match (&doc.file).take(read_limit(&doc.name)).read_to_end(&mut bytes) {
+                Ok(_) => load_document(c, &doc.name, &bytes),
                 Err(e) => c.show_error(format!("Could not read {}: {e}", doc.name)),
             }
         }
         true
     }
 
+    /// Edit > Cut, Copy and Paste act on events: the saved event being edited, and the pasteboard's event.
+    fn commands(&self, _ctx: &Ctx) -> Commands {
+        let Some(c) = &self.cal else { return Commands::default() };
+        Commands::default()
+            .with(EditCommand::Cut, c.can_copy_event())
+            .with(EditCommand::Copy, c.can_copy_event())
+            .with(EditCommand::Paste, c.can_paste_event())
+    }
+
     fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        if let (Some(c), Input::Open(url)) = (&mut self.cal, &ev) {
+            return open_path(c, url);
+        }
+        if let Input::Command(command) = &ev {
+            let Some(c) = &mut self.cal else { return false };
+            let t = bifrost_app::proto::sys::now_ms();
+            let done = match command {
+                EditCommand::Cut => c.perform(&ctx.ui, Command::CutEvent, t),
+                EditCommand::Copy => c.perform(&ctx.ui, Command::CopyEvent, t),
+                EditCommand::Paste if c.can_paste_event() => {
+                    let text = ctx.pasteboard_string().unwrap_or_default();
+                    if let Err(e) = c.paste_event(&text) {
+                        c.show_error(e);
+                    }
+                    true
+                }
+                _ => false,
+            };
+            share_copy(c, ctx);
+            return done;
+        }
         // a published toolbar control (accessibility, `bifrost pc midget tap-window`): a click at its centre
         if let (Some(c), Input::Activate(id)) = (&mut self.cal, &ev) {
             let Some(node) = c.controls(&ctx.ui).into_iter().find(|n| n.id == *id && n.enabled) else { return false };
@@ -274,6 +380,49 @@ impl App for CalendarApp {
 
     fn next_wake(&self, t: f64) -> Option<f64> {
         self.cal.as_ref().and_then(|c| c.next_wake(t))
+    }
+
+    fn intents(&self) -> Vec<Intent> {
+        vec![
+            Intent::new("create-event", "Create Event", "Adds an event to the calendar.")
+                .param(Param::new("title", "Title", ParamType::String))
+                .param(Param::new("date", "Date", ParamType::Date))
+                .param(Param::new("time", "Start time (HH:MM, empty for all-day)", ParamType::String).optional()),
+            Intent::new("show-date", "Show Date", "Shows a day in the calendar.").foreground().param(Param::new("date", "Date", ParamType::Date)),
+        ]
+    }
+
+    fn perform_intent(&mut self, _ctx: Option<&Ctx>, data_dir: &std::path::Path, id: &str, params: &Json) -> Result<IntentResult, RpcError> {
+        match id {
+            "create-event" => {
+                let made = create_from(data_dir, params)?;
+                if let Some(c) = &mut self.cal {
+                    c.reload();
+                }
+                Ok(IntentResult::value(Json::Num(made.id as f64)).with_dialog(&format!("Added {} on {}", made.title, made.date.iso())))
+            }
+            "show-date" => {
+                let date = cal_intent::parse_date(intents::str_param(params, "date")?).ok_or_else(|| RpcError::new(INVALID_PARAMS, "date must be YYYY-MM-DD".to_string()))?;
+                if let Some(c) = &mut self.cal {
+                    c.go_to(date);
+                }
+                Ok(IntentResult::dialog(&format!("Showing {}", date.iso())).continue_in_foreground())
+            }
+            other => Err(RpcError::new(INVALID_PARAMS, format!("no intent {other}"))),
+        }
+    }
+
+    fn rpc_methods(&self) -> Vec<&'static str> {
+        vec!["calendar.state", "calendar.show_date", "calendar.create_event"]
+    }
+
+    fn rpc(&mut self, _ctx: Option<&Ctx>, data_dir: &std::path::Path, method: &str, params: &Json) -> Result<Json, RpcError> {
+        match method {
+            "calendar.state" => Ok(Json::Str(self.cal.as_ref().map_or_else(String::new, |c| c.describe()))),
+            "calendar.show_date" => self.perform_intent(None, data_dir, "show-date", params).map(|r| r.value),
+            "calendar.create_event" => self.perform_intent(None, data_dir, "create-event", params).map(|r| r.value),
+            other => Err(RpcError::new(bifrost_app::control::METHOD_NOT_FOUND, format!("no method {other}"))),
+        }
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, t: f64) -> Damage {
