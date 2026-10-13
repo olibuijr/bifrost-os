@@ -16,6 +16,7 @@ pub mod plutil;
 pub mod pasteboard;
 pub mod pmset;
 pub mod say;
+pub mod shortcuts;
 pub mod screencapture;
 pub mod profile;
 pub mod scutil;
