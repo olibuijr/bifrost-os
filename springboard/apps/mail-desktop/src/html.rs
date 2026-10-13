@@ -129,7 +129,11 @@ pub fn to_text(html: &str) -> String {
             continue;
         }
         if BLOCK.contains(&name) {
-            out.push('\n');
+            // A block edge is one line break: `</div><p>` must not add a second one. Blank lines come from the
+            // source's own blank runs, which `tidy` keeps to one.
+            if !out.ends_with('\n') {
+                out.push('\n');
+            }
         } else if name == "td" || name == "th" {
             out.push('\t');
         }

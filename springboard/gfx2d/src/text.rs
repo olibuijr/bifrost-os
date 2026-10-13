@@ -3,9 +3,9 @@
 //! subpixel offset), and the layout of a `TextRun` into glyph quads (`shapes::Kind::Mask` instances) with advances
 //! from `bifrost_render::font`.
 //!
-//! Matching the CPU path: `Font::render` puts the pen at column `PAD` of its image, advances each glyph by
-//! `Font::measure_var` and applies no kerning (the font API exposes no kern table, and the CPU path does not use
-//! one), so the layout does the same. A glyph's bitmap is its CPU image; the quarter-pixel offset is applied to the
+//! Matching the CPU path: `Font::render` puts the pen at column `PAD` of its image and shapes the run (kerning and
+//! ligatures included), so the layout takes each glyph's pen from the shaped width of the text before it
+//! (`Font::measure_var` of the prefix), not from a per-character sum that would drop the kerning. A glyph's bitmap is its CPU image; the quarter-pixel offset is applied to the
 //! 1x bitmap by linear interpolation, because the font API has no pen offset.
 //!
 //! Atlas encoding for `shapes::Instance` (Mask): `rect` = quad x, y, w, h in the run's device pixels;
@@ -223,22 +223,22 @@ pub struct Placement {
 }
 
 /// Lays out `run` as the CPU path does: the origin is (`run.x`, `run.y`) rounded to whole pixels (the CPU image is
-/// blitted at a whole origin), the pen starts at `PAD` inside it and advances by each character's
-/// `Font::measure_var`. No kerning.
+/// blitted at a whole origin), the pen starts at `PAD` inside it. Each glyph's pen is the shaped width of the text
+/// before it (`Font::measure_var` of the prefix), so kerning matches the CPU path. The prefix measure is quadratic in
+/// the run length, which is fine for the labels and lines this layout draws.
 pub fn placements(font: &Font<'_>, run: &TextRun) -> Vec<Placement> {
     let ox = run.x.round() as i32;
     let oy = run.y.round() as i32;
-    let mut pen = ox as f32 + PAD as f32;
+    let base = ox as f32 + PAD as f32;
     let mut out = Vec::with_capacity(run.text.len());
-    let mut buf = [0u8; 4];
-    for ch in run.text.chars() {
+    for (i, ch) in run.text.char_indices() {
         let gid = font.glyph(ch);
+        let pen = base + font.measure_var(&run.text[..i], run.px, &run.vars);
         let (whole, q) = split_pen(pen);
         // The quarter-pixel phase is part of the key: each phase is its own bitmap (GFX-3).
         let mut key = glyph_key(run.face, gid, ch, run.px, &run.vars);
         key.subpixel = q;
         out.push(Placement { ch, key, pen, subpixel: q, x: whole - PAD as i32, y: oy });
-        pen += font.measure_var(ch.encode_utf8(&mut buf), run.px, &run.vars);
     }
     out
 }

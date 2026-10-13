@@ -317,8 +317,8 @@ mod tests {
         let mut s = service(&dir);
         let file = png_file(&dir, "q.png");
         for i in 0..MAX_QUEUE {
-            // different sizes make different keys
-            let r = ThumbRequest::new(&file, 16 + i as u32 % 400, 1.0 + (i / 400) as f32 * 0.5, ThumbKind::Thumbnail).unwrap();
+            // a distinct pixel edge per request makes a distinct key (scale changes can land on an edge already used)
+            let r = ThumbRequest::new(&file, 16 + i as u32, 1.0, ThumbKind::Thumbnail).unwrap();
             s.request("app", r).unwrap();
         }
         let extra = ThumbRequest::new(&file, 1000, 1.0, ThumbKind::Thumbnail).unwrap();

@@ -46,18 +46,18 @@ impl TextCache {
     /// Returns the width in px.
     #[allow(clippy::too_many_arguments)]
     pub fn draw_chars(&mut self, s: &mut Surface, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32, x: f32, y: f32) -> f32 {
-        let mut pen = x;
         let mut buf = [0u8; 4];
-        for c in text.chars() {
+        for (i, c) in text.char_indices() {
             let glyph: &str = c.encode_utf8(&mut buf);
             let advance = ui.measure(glyph, pt, weight);
             let img = self.get(ui, glyph, pt, weight, color);
+            // the pen is the shaped width of the text before this glyph, so kerning matches the whole-string measure
+            let pen = x + ui.measure(&text[..i], pt, weight);
             // the glyph image is padded equally on both sides of its advance
             let pad = (img.w as f32 - advance.ceil()) / 2.0;
             s.blit(img, (pen - pad).round() as i32, y as i32, 255, 255);
-            pen += advance;
         }
-        pen - x
+        ui.measure(text, pt, weight)
     }
 
     /// Height of a line at `pt`, as `draw_chars` lays it out.

@@ -727,14 +727,16 @@ mod tests {
     fn from_path_makes_one_stroke_per_subpath() {
         let mut p = crate::cg::path::Path::new();
         p.move_to((0.0, 0.0));
-        p.cubic_to((10.0, 0.0), (20.0, 0.0), (30.0, 0.0));
+        // The control points bow off the line: a straight cubic is exact as one chord, so it would not be split.
+        p.cubic_to((10.0, 20.0), (20.0, -20.0), (30.0, 0.0));
         p.move_to((5.0, 5.0));
         let d = Drawing::from_path(&p, 1.0, ink());
         assert_eq!(d.strokes().len(), 1, "a lone move draws nothing");
         let pts = &d.strokes()[0].points;
         assert!(pts.len() > 2, "the curve is split into several points");
+        assert_eq!(pts.first().map(|q| (q.x, q.y)), Some((0.0, 0.0)));
         assert_eq!(pts.last().map(|q| (q.x, q.y)), Some((30.0, 0.0)));
-        assert!(pts.iter().all(|q| q.y.abs() < 1e-4));
+        assert!(pts.iter().any(|q| q.y.abs() > 1.0), "the curve leaves the chord");
         assert_eq!(d.strokes()[0].ink, ink());
     }
 }

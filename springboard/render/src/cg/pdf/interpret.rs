@@ -794,7 +794,8 @@ mod tests {
                 assert_eq!(s.dash, vec![3.0, 2.0]);
                 assert_eq!(s.phase, 1.0);
                 assert_eq!(s.cap, LineCap::Round);
-                assert_eq!(s.join, LineJoin::Round);
+                // `2 j` is a bevel join in PDF (0 miter, 1 round, 2 bevel); the cap is the round one.
+                assert_eq!(s.join, LineJoin::Bevel);
                 assert_eq!(*color, [1.0, 0.0, 0.0]);
             }
             other => panic!("unexpected calls {other:?}"),

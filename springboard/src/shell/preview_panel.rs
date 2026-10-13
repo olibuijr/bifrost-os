@@ -521,8 +521,10 @@ mod tests {
         assert!(matches!(p.body, Body::Image(_)));
         assert!(!p.thumbnail("/a.png", None), "the body no longer waits");
         p.step(1);
-        assert_eq!(p.take_wanted().as_deref(), Some("/b.zip"), "every kind but text is asked for a thumbnail");
-        assert!(p.thumbnail("/b.zip", None), "an icon answer shows the kind's line");
+        // A type with no preview of its own (not an image, PDF or audio file) is not asked for a thumbnail: its
+        // line is shown at once, so nothing is waited for.
+        assert_eq!(p.take_wanted(), None, "an archive is not asked for a thumbnail");
+        assert!(!p.thumbnail("/b.zip", None), "no picture is waited for");
         assert!(matches!(p.body, Body::Info(t) if t == "No preview for .zip files."));
     }
 
