@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- Menus: File (Get Info, Mount, Unmount, Eject with shortcuts), View (Show Only Volumes, Show All Devices) and Disk (Erase, Run First Aid, the erase format, Partition into 2 to 4 equal parts) join the Image menu.
+- Show Only Volumes lists the volumes without their disks; Show All Devices is the previous disk tree.
+- Get Info opens a sheet with every fact about the disk or volume, including model, parent disk and image file.
+- Erase writes the format chosen in the Disk menu (ext4, exFAT or FAT32) and keeps a volume name the format accepts.
+- Partition replaces a disk's partitions with equal parts in the chosen format, behind a confirmation sheet, through the disk helper.
+
 ## 0.3.0
 
 - Erase and First Aid. Erase formats the selected disk (whole disk) or volume as FAT32 and First Aid checks a volume (Check Only, or Repair), each behind a confirmation sheet. A request the disks already refuse (a mounted volume, a partition where a disk is needed) shows its reason in the footer and opens no sheet.
