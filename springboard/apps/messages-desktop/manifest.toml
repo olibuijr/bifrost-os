@@ -1,0 +1,12 @@
+id = "is.olibuijr.messages.desktop"
+name = "Messages"
+version = "0.1.0"
+exec = "bifrost-messages"
+icon = "icon.svg"
+min_shell = "0.4.84"
+summary = "Matrix chat: conversations, messages and pictures on your own homeserver."
+category = "Productivity"
+architecture = "x86_64-linux"
+permissions = ["storage", "network", "keychain", "notifications", "documents"]
+keychain_groups = ["is.bifrost.passwords"]
+window = "full-size"

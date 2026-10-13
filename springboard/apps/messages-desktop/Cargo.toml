@@ -1,0 +1,18 @@
+[package]
+name = "bifrost-messages"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "bifrost_messages"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bifrost-messages"
+path = "src/main.rs"
+
+[dependencies]
+bifrost-app = { path = "../../sdk" }
+bifrost-core = { path = "../../core" }
+# the shell's TLS transport (rustls, webpki roots) and its HTTPS client: every Matrix call goes through it
+springboard = { path = "../.." }
