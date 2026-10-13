@@ -6,7 +6,7 @@ deildu, gpu, net, term). A shell update restarts the whole session.
 
 ## What a restart costs today
 
-- A shell exit ends the session: `packaging/arch/wayland/session` waits on the shell and labwc together (`wait -n`) and
+- A shell exit ends the session: `packaging/arch/wayland/session` waits on the shell and the window server together (`wait -n`) and
   its cleanup stops the compositor, so every Wayland client goes down with it.
 - Apps are children of the shell under `bwrap --die-with-parent` (`src/bare/app_policy.rs`). SDK app windows are shell surfaces
   fed over an inherited socketpair (`shell/apphost.rs`), so they cannot outlive the shell.

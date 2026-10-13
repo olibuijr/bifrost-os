@@ -88,7 +88,7 @@ fix (copy assets before pacman) is in `plan.rs` but not yet verified on hardware
 6. `springboard.service` (after `plymouth-start`, `seatd`, `systemd-user-sessions`; `Conflicts=getty@tty1`)
    runs `/usr/lib/bifrost/session`:
    - reads the account from `/var/lib/springboard/account`, cleans `/run/bifrost/user/{wayland-*,session.json,shell-ready}`;
-   - starts `seatd`; starts `labwc --config-dir /usr/share/bifrost/wayland` as the account;
+   - starts `seatd`; starts `bifrost-wm` as the account (the only window server; after three quick exits it restarts in safe mode: GLES, no direct apps, no chrome clients, then the recovery flow);
    - waits up to 10 s for `wayland-0` and `session.json`; then starts `/usr/bin/springboard`.
 7. The shell writes `shell-ready` after its first committed Wayland frame (`springboard/src/bare/wayland.rs`,
    `mark_first_frame`).
@@ -100,8 +100,7 @@ Boot timing: `session` and the handoff append `<uptime-seconds> <mark>` lines to
 `splash-already-gone`). Measured on Midget (0.4.37): firmware 9.4 s, loader 0.6 s, kernel 0.9 s, initrd 3.3 s,
 userspace 5.0 s, `graphical.target` at 4.98 s. The tty/serial/tpm device units at the top of `systemd-analyze blame`
 (~4 s) are not on the critical chain to `graphical.target` (`NetworkManager` -> `systemd-user-sessions` ->
-`springboard.service`), so masking them gains nothing. labwc has no start-up mode option; a `<mode>` element in `rc.xml`
-stops it launching.
+`springboard.service`), so masking them gains nothing. The window server picks the mode itself; it needs no mode config.
 
 Crash-loop guard: the shell (`springboard/src/bare/takeover.rs`) counts starts that do not stay up for 60 s in
 `/var/lib/springboard/boot_attempts`. After three it exits 70 and stays down. The session clears the counter whenever the
@@ -163,9 +162,9 @@ Coordinates are original panel pixels. `tools/midget.py` sends each line over SS
 
 ## 8. Procedures
 
-**Known failure chain (2026-10-08):** a shell start that fails for any reason (missing assets, labwc swapchain
+**Known failure chain (2026-10-08):** a shell start that fails for any reason (missing assets, window-server swapchain
 rejected on DP-2, a stale DRM holder) counts toward the crash guard. Three of them latch the desktop off until the counter
-is cleared. Diagnose with `journalctl -b -u springboard`, then run the shell as root against a live labwc, since the
+is cleared. Diagnose with `journalctl -b -u springboard`, then run the shell as root against a live `bifrost-wm`, since the
 session starts it as root and its data lives in `/var/lib/springboard`. Running it as the account reads the wrong data dir.
 Intel Skylake stripes on the splash came from i915 framebuffer compression. The installed kernel command line now sets
 `i915.enable_fbc=0 i915.enable_psr=0 plymouth.use-simpledrm`.
@@ -186,4 +185,4 @@ Review `out/lab/wipes/<stamp>/log.txt` and `report.json`.
 
 **Diagnose a Midget that does not show the desktop:** `pacman -Q springboard-shell`, `systemctl status springboard`,
 `journalctl -b -u springboard`, then run `/usr/bin/springboard` by hand as the account with
-`XDG_RUNTIME_DIR=/run/bifrost/user WAYLAND_DISPLAY=wayland-0` (labwc must be up).
+`XDG_RUNTIME_DIR=/run/bifrost/user WAYLAND_DISPLAY=wayland-0` (`bifrost-wm` must be up).

@@ -38,7 +38,7 @@ in `/usr/local/bin`. In a session in this repo the tools appear as `mcp__bifrost
 
 | Layer | Path | Used by |
 |---|---|---|
-| Compositor (labwc) | one persistent Wayland connection: `wlr-screencopy` (screen, regions), `ext-image-copy-capture` + `ext-foreign-toplevel-image-capture-source` (one window, even covered), `wlr-foreign-toplevel` (window list, activate, close, minimize, maximize, fullscreen), `wlr-virtual-pointer` (exact compositor pixels), `zwp-virtual-keyboard` (text, with a keymap generated per call, so any Unicode is typed whatever the layout) | `observe`, `screenshot`, `click`, `pointer`, `scroll`, `type`, `window` |
+| Compositor (`bifrost-wm`) | one persistent Wayland connection: `wlr-screencopy` (screen, regions), `ext-image-copy-capture` + `ext-foreign-toplevel-image-capture-source` (one window, even covered), `wlr-foreign-toplevel` (window list, activate, close, minimize, maximize, fullscreen), `wlr-virtual-pointer` (exact compositor pixels), `zwp-virtual-keyboard` (text, with a keymap generated per call, so any Unicode is typed whatever the layout) | `observe`, `screenshot`, `click`, `pointer`, `scroll`, `type`, `window` |
 | Kernel | one persistent uinput keyboard, created on first use (400 ms once) | `key`: the shell's evdev shortcuts and every client see it like a real keyboard |
 | Shell | control port `127.0.0.1:7777` (`src/bare/control.rs`) | `observe` (state), `ui` (accessibility map, `ax list/press`), `open`, `wait`, `shell` |
 | Apps | each app's JSON-RPC control socket (`/var/lib/springboard/appdata/<id>/control.sock`), connected as the account's uid (SO_PEERCRED) | `app` (methods, `intent.*`, app state) |

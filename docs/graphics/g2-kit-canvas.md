@@ -98,7 +98,7 @@ the full `widgets::tests` and `glyphs::tests`, which must pass unchanged.
 Host preview of a kit app (CPU path, compare with `main`): `bifrost pc smoke APP` and `bifrost pc smoke APP --light`.
 Compare the PNG against the same preview from `main`; the expected differences are the ones listed above.
 
-Midget (Intel HD 530, Mesa ANV, Vulkan 1.4): the session runs labwc unless `/etc/bifrost/compositor` names
+Midget (Intel HD 530, Mesa ANV, Vulkan 1.4): the session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` names
 `bifrost-wm`. For the kit's Canvas path on the GPU, the window server must be bifrost-wm with the Vulkan renderer:
 
 1. `bifrost pc midget ota` to ship the build, then `bifrost pc midget update --restart` if the session changed.

@@ -9,7 +9,7 @@ Task file: `tasks/boot/12-symmetric-shutdown.md`. Branch `boot/12-symmetric-shut
   `ExecStop=` of `springboard.service`, before systemd stops the session. It writes
   `/run/bifrost/bootweave/shutdown`, then waits at most 1.2 s for `/run/bifrost/user/shutdown-faded`. It always exits 0.
   It does nothing unless `/etc/bifrost/compositor` says `bifrost-wm` and `/usr/bin/bifrost-wm` exists, which is the same
-  choice the session script makes. A labwc or missing window server returns at once.
+  choice the session script makes. A missing window server returns at once.
 - **Fade (window server side).** `springboard/wm/src/drm.rs` (`Drm::shutdown_overlay`) checks for the request file on
   every frame. When it appears the boot frame is drawn over the desktop, with the opacity from
   `boot::shutdown_alpha` (smoothstep over `SHUTDOWN_FADE_MS` = 450 ms, then held at 1.0). Once the fade is done the
@@ -57,7 +57,7 @@ Task file: `tasks/boot/12-symmetric-shutdown.md`. Branch `boot/12-symmetric-shut
 ## Midget verification (lead)
 
 Run on Midget (192.168.20.140), not in the VM. Use the bifrost-wm window server (`cat /etc/bifrost/compositor` prints
-`bifrost-wm`); with labwc there is no fade and the test does not apply.
+`bifrost-wm`); without `bifrost-wm` there is no fade and the test does not apply.
 
 1. Install the build and start a desktop: `bifrost pc midget update --restart`, then `bifrost pc midget key enter`.
    Check `bifrost pc midget state` shows the desktop.

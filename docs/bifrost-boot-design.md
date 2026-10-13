@@ -31,7 +31,7 @@ stable BifrOSt namespace.
 - Rollback: the loader boots `EFI/BIFROST/rollback.txt` once `pending` is set and unaccepted
   (`springboard/bootweave/efi/src/boot_policy.rs`, `packaging/arch/recovery/system.rs`).
 - Splash: Plymouth is gone; Bootweave supervises the session behind the EFI/simpledrm frame.
-- Still Linux/labwc: the installed compositor remains labwc until the native compositor exists.
+- Done: the installed compositor is `bifrost-wm`; labwc is removed.
 
 ## Migration order
 

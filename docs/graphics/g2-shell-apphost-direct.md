@@ -84,7 +84,7 @@ equals the manifest id (item 4 of todo_left).
 
 ## How to verify on Midget
 
-Midget: Intel HD 530, Mesa ANV, Vulkan 1.4, the session runs labwc unless `/etc/bifrost/compositor` says
+Midget: Intel HD 530, Mesa ANV, Vulkan 1.4, the session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` says
 `bifrost-wm`.
 
 1. Build the fast profile on the host: `cargo build --offline --profile fast --bin shell --features desktop-wayland`

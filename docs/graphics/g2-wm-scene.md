@@ -74,7 +74,7 @@ lead's test pass runs `cargo test -p bifrost-wm scene_build`.
 
 ## How to verify on Midget
 
-Midget: Intel HD 530, Mesa ANV, Vulkan 1.4. The session runs labwc unless `/etc/bifrost/compositor` says
+Midget: Intel HD 530, Mesa ANV, Vulkan 1.4. The session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` says
 `bifrost-wm`.
 
 This branch alone cannot be run on Midget: item 1 above is not done. Once a backend calls `build`:

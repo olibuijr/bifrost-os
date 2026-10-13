@@ -89,7 +89,7 @@ forgotten buffers, steady triple buffering, forget_all). `drm.rs` keeps its mode
 
 ## How to verify on Midget (Intel HD 530, Mesa ANV, Vulkan 1.4)
 
-The session runs labwc unless `/etc/bifrost/compositor` says `bifrost-wm`.
+The session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` says `bifrost-wm`.
 
 1. Ship the build: `bifrost pc publish`, then `bifrost pc midget update --restart`. Check
    `python3 tools/midget.py recovery` says `phase=accepted`, then `bifrost pc midget key enter` to unlock.

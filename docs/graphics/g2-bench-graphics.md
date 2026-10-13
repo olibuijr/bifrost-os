@@ -77,7 +77,7 @@ graphics breaches to the exit-3 list. Without `--graphics` the bench is unchange
 
 ## How to verify on Midget (Intel HD 530, Mesa ANV, Vulkan 1.4)
 
-The session runs labwc unless `/etc/bifrost/compositor` says `bifrost-wm`. Then:
+The session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` says `bifrost-wm`. Then:
 
 1. Test the helper on the host: `python3 -I -m unittest discover -s tools -p 'test_graphics_bench.py'` (24 tests, all pass).
 2. Confirm Midget is reachable: `python3 tools/midget.py state`, then `ssh midget`.

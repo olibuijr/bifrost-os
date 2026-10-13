@@ -157,13 +157,6 @@ only an external app open, 9.2 ms with Settings open (`tools/bench.py --midget`,
 - Tests: `gfx::tests::changed_in_*`, `shell::idle_tests::ambient_fields_alone_are_not_a_visible_change`.
 
 
-## Live blur by compositor (2026-10-12)
-
-The presenter's live backdrop (`Presenter::set_window_stack`, `under`, `Backdrop::*`) serves the labwc path only and
-sees wallpaper plus the shell's own windows; other clients' toplevels are neither sampled nor drawn by the shell.
-Under bifrost-wm the shell sends ext-background-effect blur regions and the window server blurs the real scene
-(`docs/window-server.md`, "Live blur per compositor path"). Switch: `BIFROST_WM_MATERIALS=0`.
-
 ## Presenter pacing, buffer reuse and fallback (round 75)
 
 **Pacing.** Desktop frames are paced by the compositor: each commit requests a `wl_surface.frame` callback and the

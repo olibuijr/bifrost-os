@@ -71,7 +71,7 @@ corner edges moving two sides, no opposite sides moving together, `display()` un
 
 ## How to verify on Midget
 
-Midget: Intel HD 530, Mesa ANV, Vulkan 1.4. The session runs labwc unless `/etc/bifrost/compositor` says `bifrost-wm`.
+Midget: Intel HD 530, Mesa ANV, Vulkan 1.4. The session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` says `bifrost-wm`.
 
 1. Build the fast profile: `cargo build --offline --profile fast --bin bifrost-wm` in `springboard/` (the nested backend
    is on by default). Push it with `tools/midget-push-shell.sh --no-build shot.png` or the usual push.

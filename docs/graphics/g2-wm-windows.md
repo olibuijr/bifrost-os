@@ -67,7 +67,7 @@ Host (after the build rules allow tests):
 Expected: all tests pass. The snap and centre tests are in `wm.rs`; the titlebar hit tests in `decorations.rs`; the
 timing and pose tests in `window_anim.rs`.
 
-Midget (Intel HD 530, Mesa ANV, Vulkan 1.4): the session runs labwc unless `/etc/bifrost/compositor` says
+Midget (Intel HD 530, Mesa ANV, Vulkan 1.4): the session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` says
 `bifrost-wm`. After the wiring above lands, select the new path with `BIFROST_WM_RENDERER=vulkan` and
 `/etc/bifrost/compositor`, then check snap with Ctrl+Super+Left and Right, maximize with Ctrl+Super+Up, and
 centre with Ctrl+Super+Down. Check the open and close animations and that the minimize lands on the Dock icon.

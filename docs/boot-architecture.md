@@ -76,7 +76,7 @@ package build (`packaging/arch/PKGBUILD`, which `package-files.sh` guards), `too
 | S1 loader | `springboard/bootweave/efi` | frame 0 at the native mode: background, logo, progress bar from 0 to the S1 checkpoint | the framebuffer contents and mode; the boot timing record in memory (`boot-progress` EFI variable or a config table) |
 | S2 kernel and initramfs | the unified kernel image (UKI) | nothing new: deferred framebuffer-console takeover keeps frame 0; the bar holds | the inherited CRTC mode; the `BifrostBootProgress` EFI variable (efivarfs) from the loader; the supervisor republishes the bar at `/run/bifrost/bootweave/progress` |
 | S3 early userspace | `bifrost-bootweave` | the same frame, redrawn into the inherited KMS framebuffer, the bar continuing | the session and the display to the window server |
-| S4 window server | `bifrost-wm` (`labwc` until the switch) | the same frame until desktop-ready, then one fade | the desktop |
+| S4 window server | `bifrost-wm` (the only window server) | the same frame until desktop-ready, then one fade | the desktop |
 | S5 session | the shell and the chrome clients | the desktop | |
 
 ### One frame
@@ -87,7 +87,7 @@ the background and the BifrOSt mark with its orange arch, and **no progress bar*
 height)` in panel pixels, independent of any compositor scale. The loader (GOP blit, `efi/src/screen.rs`), Bootweave
 (`/dev/fb0`, `Bar::draw_frame`, and the failure screens through `present`), the installer and `bifrost-wm` all call
 `render`, so the pixels are identical at every handover. `render_bar` remains only as a no-op for old callers. Under
-labwc the shell draws no copy of the frame (its surface can be scaled): Bootweave's frame stays up until the desktop's
+the window server the shell draws no copy of the frame (its surface can be scaled): Bootweave's frame stays up until the desktop's
 first present, and the shell only writes the `desktop-*` marks.
 
 **Appearance source.** The user's Settings choice (`appearance_mode=`), else the boot timing record's appearance, else
@@ -215,7 +215,7 @@ Owner report: boot blinked and was not smooth. Midget's journal (2560x1440 DP mo
 
 - 4.35 s `fbcon: Taking over console` right after `Deferring console take-over`. Deferred take-over only ends when something writes to the console. The writer is not visible in the code (the cmdline is already `quiet loglevel=3`, getty@tty1 is masked, no script writes to tty1; `springboard.service` only attaches tty1 as stdin with `TTYReset`/`TTYVHangup`, which run after this point). So the cmdline now adds `fbcon=map:9`: fbcon maps to a framebuffer that does not exist and never binds to the display, whoever writes. The cost is that tty1 shows nothing on a recovery boot; use ssh or serial, or drop the token from the boot line. Unverified on hardware.
 - 5.5 s Bootweave chose the fastest refresh (165 Hz) and modeset away from the firmware's 60 Hz mode. `select_mode` now picks the preferred mode (the firmware's), so `keeps_inherited` keeps it and no modeset happens. `refresh=max` in `/etc/bifrost/display.conf` restores the fastest refresh (the session script reads the same switch). Inherited and selected modes count as equal when their timings match, since `vrefresh` rounds 59.951 to 60.
-- 6.9 s labwc/wlroots takes the connector's preferred mode. Bootweave now ends on that same mode, so the compositor's first commit is not a modeset. wlroots has no setting to keep the current mode; it always applies the preferred one unless an output configuration says otherwise, which is why both stages must agree on the preferred mode.
+- 6.9 s the compositor (then labwc/wlroots, now removed) took the connector's preferred mode. Bootweave now ends on that same mode, so the compositor's first commit is not a modeset. wlroots has no setting to keep the current mode; it always applies the preferred one unless an output configuration says otherwise, which is why both stages must agree on the preferred mode.
 
 ### Symmetric shutdown
 
@@ -257,8 +257,8 @@ from it.
 
 ## Session restart after a shell stall (0.6.2 incident)
 
-After the shell stalled (heartbeat exit 5) four times in a row, every new session ended about a second after labwc's
-autostart, with no shell error in the journal, and only a reboot recovered. The chain:
+After the shell stalled (heartbeat exit 5) four times in a row, every new session ended about a second after the window server's
+autostart (labwc at the time), with no shell error in the journal, and only a reboot recovered. The chain:
 
 1. Each shell start adds one to `/var/lib/springboard/boot_attempts` (`bare/takeover.rs`) and clears it after 60 s
    healthy. A stall exits after 20 s, so four stalls in a row left the counter at 3.

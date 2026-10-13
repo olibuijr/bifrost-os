@@ -13,17 +13,17 @@ switch, the shell-side chrome start and the Midget run are not done (see "Left")
   by `packaging/arch/package-files.sh`). Two pure bash functions with no side effects:
   - `session_compositor_flags <compositor> <renderer> <chrome>` prints the environment words for the new stack:
     `BIFROST_DIRECT=1` whenever `bifrost-wm` is selected, `BIFROST_WM_RENDERER=vulkan` when the renderer is `vulkan`,
-    `BIFROST_CHROME=1` when the chrome switch is `1`. For labwc it prints nothing.
+    `BIFROST_CHROME=1` when the chrome switch is `1`. For safe mode it prints nothing.
   - `wm_exit_action <now> <exits_file>` records one unplanned `bifrost-wm` exit, drops exits older than 60 s, and
     prints `fallback` when three exits remain, otherwise `restart`.
 - **Session script** (`packaging/arch/wayland/session`):
   - Reads `/etc/bifrost/compositor` (as before), `/etc/bifrost/renderer` and `/etc/bifrost/chrome` (new, plain words).
-  - Falls back to labwc when `/run/bifrost/compositor-fallback` exists (set for the rest of the boot).
+  - Falls back to `bifrost-wm` safe mode (GLES, no direct apps, no chrome clients) when `/run/bifrost/compositor-fallback` exists (set for the rest of the boot).
   - Passes the flags to `bifrost-wm` and to the shell.
   - With `chrome = 1`, starts `bifrost-menubar`, `bifrost-dock` and `bifrost-panels` when they are installed.
   - When `bifrost-wm` exits on its own, `wm_exit_action` counts it in `/run/bifrost/wm-exits`. At three exits within
     60 s the script creates the fallback marker and exits with status 1, so systemd (`Restart=on-failure`) restarts
-    the session, which now starts labwc. The counter and the marker live under `/run`, so they survive session
+    the session, which now starts `bifrost-wm` in safe mode; the recovery flow follows if that fails too. The counter and the marker live under `/run`, so they survive session
     restarts and clear at boot.
 - **Tests** (`tools/test_session_policy.py`, 13 tests, all passing with `python3 -I tools/test_session_policy.py`):
   flag assembly for each switch combination, and the 60 s window at the boundary (exactly 60 s old is dropped), the
@@ -33,9 +33,8 @@ switch, the shell-side chrome start and the Midget run are not done (see "Left")
 ## How it maps to the contract
 
 - `docs/graphics-architecture.md`: the switch is still behind `/etc/bifrost/compositor = bifrost-wm`, with
-  `BIFROST_WM_RENDERER=vulkan`, `BIFROST_DIRECT=1` and `BIFROST_CHROME=1` as the environment names. The old path
-  (labwc, GLES) is unchanged when the switch is off.
-- `docs/window-server.md` phase 5 ("Switch"): the session script starts `bifrost-wm` with labwc as the fallback.
+  `BIFROST_WM_RENDERER=vulkan`, `BIFROST_DIRECT=1` and `BIFROST_CHROME=1` as the environment names. labwc is removed; `bifrost-wm` is the only window server.
+- `docs/window-server.md` phase 5 ("Switch"): the session script starts `bifrost-wm` with safe mode as the fallback.
 
 ## Deviations and decisions
 
@@ -63,8 +62,8 @@ switch, the shell-side chrome start and the Midget run are not done (see "Left")
 
 Midget is `ssh midget` (192.168.20.140). The Intel HD 530 runs Mesa ANV, Vulkan 1.4.
 
-1. Confirm the baseline: `bifrost pc midget state` shows the desktop running labwc. `cat /etc/bifrost/compositor`
-   prints nothing or `labwc`.
+1. Confirm the baseline: `bifrost pc midget state` shows the desktop running `bifrost-wm`. `cat /etc/bifrost/compositor`
+   prints nothing or `bifrost-wm`.
 2. Deploy the build: `bifrost pc publish`, then `bifrost pc midget ota` until `phase=accepted`.
    `python3 tools/midget.py recovery` must say `phase=accepted` before the next step.
 3. Select the new stack (as root on Midget):
@@ -73,7 +72,6 @@ Midget is `ssh midget` (192.168.20.140). The Intel HD 530 runs Mesa ANV, Vulkan 
 4. Check the session: `ls /run/bifrost/`, `cat /run/bifrost/compositor-fallback` (must be absent),
    `pgrep -a bifrost-wm`, `pgrep -a bifrost-menubar`. Take a screenshot with `bifrost pc midget screen /tmp/g2.png`.
 5. Crash-loop test: `pkill -9 bifrost-wm` three times within 60 s (restart the session between kills if needed). After
-   the third, `/run/bifrost/compositor-fallback` exists, and `pgrep labwc` must find labwc.
-6. Clean up: remove `/etc/bifrost/compositor` and `/etc/bifrost/renderer` (or set them to labwc and gles) and reboot,
-   or `rm -f /run/bifrost/compositor-fallback /run/bifrost/wm-exits`, to return to labwc. The GLES and labwc paths must
-   still start with the switch off.
+   the third, `/run/bifrost/compositor-fallback` exists, and `bifrost-wm` must be running in safe mode (GLES, no chrome clients).
+6. Clean up: remove `/etc/bifrost/compositor` and `/etc/bifrost/renderer` (or set the renderer to gles) and reboot,
+   or `rm -f /run/bifrost/compositor-fallback /run/bifrost/wm-exits`, to leave safe mode. The GLES path must still start.
