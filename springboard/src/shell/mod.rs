@@ -643,6 +643,10 @@ pub struct Shell {
     hw_keyboard: bool,
     /// the touchscreen fingers that are down, so the pointer stream does not report them twice (`touch_frames`)
     touch_contacts: touch_frames::Contacts,
+    /// the focused text field of a Wayland client (the window server's input method), and the requests the keyboard
+    /// made for it since the last `take_input_method_out`
+    im: textinput::ImField,
+    im_out: Vec<textinput::ImOut>,
     /// the device has a vibrator (`bare::vibrator::vibrator_available`)
     haptics: bool,
     /// a touch that started on the keyboard
@@ -942,6 +946,8 @@ impl Shell {
             form: bifrost_ui::form_factor::FormFactor::current(),
             hw_keyboard: false,
             touch_contacts: touch_frames::Contacts::default(),
+            im: Default::default(),
+            im_out: Vec::new(),
             haptics: false,
             kb_touch: false,
             desk_kb_lift: None,
@@ -4114,6 +4120,24 @@ impl Shell {
         }
     }
 
+    /// An input-method batch from the window server. Focus on a Wayland client's text field raises the on-screen
+    /// keyboard (the form policy decides whether it shows), and losing focus lowers it. The field's text and purpose
+    /// are kept for the keyboard's requests (`type_out`, `ext_forward_composition`).
+    pub fn input_method_batch(&mut self, batch: textinput::ImBatch, t: f64) {
+        match self.im.apply(batch) {
+            Some(true) => self.set_keyboard(true, t),
+            Some(false) => self.set_keyboard(false, t),
+            None => {}
+        }
+        self.dirty = true;
+    }
+
+    /// The requests the keyboard made for a Wayland client's field since the last call; the window server's input
+    /// method sends them (`bare::kms`).
+    pub fn take_input_method_out(&mut self) -> Vec<textinput::ImOut> {
+        std::mem::take(&mut self.im_out)
+    }
+
     /// Whether the on-screen keyboard may be raised now: the form factor, the UI in front and any attached
     /// hardware keyboard decide.
     pub(super) fn keyboard_allowed(&self) -> bool {
@@ -4203,6 +4227,16 @@ impl Shell {
     }
 
     fn type_out(&mut self, out: Out, t: f64) {
+        // a Wayland client's text field has focus: the keyboard types into it through the window server's input method
+        if self.im.active {
+            if out == Out::Hide {
+                self.set_keyboard(false, t);
+            } else {
+                let requests = textinput::outs_for(&self.im, &out);
+                self.im_out.extend(requests);
+            }
+            return;
+        }
         if matches!(self.screen, Screen::App(AppId::External(_))) {
             self.ext_type_out(out, t);
             return;

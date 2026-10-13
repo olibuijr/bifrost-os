@@ -14,7 +14,7 @@ shadow-auth = []
 testkit = ["bifrost-render/testkit"]
 # AT-SPI2 accessibility bridge (Orca): exports app semantic trees on the a11y bus; needs zbus, inert without org.a11y.Bus
 atspi = ["dep:zbus"]
-desktop-wayland = ["dep:wayland-client", "dep:wayland-scanner", "dep:wayland-protocols-wlr", "dep:wayland-protocols", "dep:memmap2", "dep:tempfile", "dep:zbus"]
+desktop-wayland = ["dep:wayland-client", "dep:wayland-scanner", "dep:wayland-protocols-wlr", "dep:wayland-protocols", "dep:wayland-protocols-misc", "dep:memmap2", "dep:tempfile", "dep:zbus"]
 
 [dependencies]
 # The browser also uses the row-streaming codec APIs directly.
@@ -31,6 +31,8 @@ wayland-protocols = { version = "0.32", features = ["client", "staging", "unstab
 wayland-client = { version = "0.31", optional = true }
 wayland-scanner = { version = "0.31", optional = true }
 wayland-protocols-wlr = { version = "0.3", features = ["client"], optional = true }
+# zwp_input_method_v2 and zwp_virtual_keyboard_v1: the on-screen keyboard types into Wayland clients
+wayland-protocols-misc = { version = "0.3", features = ["client"], optional = true }
 memmap2 = { version = "0.9", optional = true }
 tempfile = { version = "3", optional = true }
 # bifrost-portal: org.freedesktop.portal.Settings on the session bus (blocking API).
