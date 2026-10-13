@@ -2024,6 +2024,18 @@ shell or the video path, and not yet run on the VM or Midget, so the matrix rows
   or tone mapping; there is no user setting that turns mode switching off; route selection still lacks an AirPlay and nearby
   receiver source on the shell side.
 
+## AVKit: player view (`AVPlayerView`, `VideoPlayer`)
+
+Pure model in `springboard/ui/src/player_view.rs` (re-exported through `bifrost_app::controls`). Host unit tests only, unrun and
+not checked on Midget, so the matrix row stays `partial`.
+
+- `PlayerView`: `controls_style` (`ControlsStyle::{None, Inline, Floating, Minimal}`), `shows_full_screen_toggle_button`,
+  `allows_picture_in_picture_playback`, `updates_now_playing_info_center`. `visible_chrome()`, `layout(bounds)` and
+  `hit_test(bounds, x, y, duration)` give the chrome; `tap(...)` drives any `PlayerHandle` (play, pause, seek).
+- `VideoPlayer<O>`: SwiftUI `VideoPlayer(player:videoOverlay:)` as a player view with inline controls plus an optional overlay.
+- Helpers: `scrub_time` (x to `MediaTime`), `format_time` (`m:ss`, `h:mm:ss`), `format_remaining`.
+- Gaps: nothing is drawn or decoded here; Picture in Picture is a flag only (see `pip_window.rs`); no delegate.
+
 ## StoreKit parity round (product kinds and promoted purchases)
 
 Built as pure models in `springboard/ui/src/` (shared by the shell and the SDK through `bifrost_app::controls`). Not run or

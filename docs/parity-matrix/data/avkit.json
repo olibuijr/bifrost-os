@@ -10,9 +10,9 @@
     {
       "feature": "Standard player (AVPlayerViewController, VideoPlayer)",
       "apple": "AVPlayerViewController, AVPlayerView, VideoPlayer, AVPlayerViewControllerDelegate",
-      "bifrost": "springboard/src/deildu/player_view.rs (fullscreen player HUD), springboard/src/media/mod.rs, springboard/src/media/stream.rs",
+      "bifrost": "springboard/ui/src/player_view.rs:62 (PlayerView, ControlsStyle, VideoPlayer model), springboard/src/deildu/player_view.rs (fullscreen player HUD), springboard/src/media/mod.rs, springboard/src/media/stream.rs",
       "status": "partial",
-      "note": "Fullscreen video with transport HUD is used by Deildu and Files, but there is no app-facing SDK player view controller; the SDK player() widget in springboard/sdk/src/widgets.rs:900 is an audio capsule, not a video view."
+      "note": "Fullscreen video with transport HUD is used by Deildu and Files, and springboard/ui/src/player_view.rs now models AVPlayerView (controls style, full-screen toggle, scrubber hit-test, play/pause, time labels) and VideoPlayer(player:videoOverlay:) as host-tested state with no drawing or decoding, not yet on Midget; AVPlayerViewController and its delegate have no counterpart; the SDK player() widget in springboard/sdk/src/widgets.rs:900 is an audio capsule, not a video view."
     },
     {
       "feature": "Transport controls and audio mini player",
