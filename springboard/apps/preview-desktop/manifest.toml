@@ -1,6 +1,6 @@
 id = "is.olibuijr.preview.desktop"
 name = "Viewer"
-version = "0.5.0"
+version = "0.5.1"
 exec = "bifrost-viewer"
 icon = "icon.png"
 min_shell = "0.4.84"

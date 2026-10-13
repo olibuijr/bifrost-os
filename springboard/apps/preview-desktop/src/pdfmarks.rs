@@ -7,7 +7,7 @@ use crate::pdfjob::{self, Job, Pdf, Reply};
 use springboard::cg::pdf::obj::{fmt_num, Dict, Obj};
 use springboard::cg::pdf::page::Page as PdfPage;
 use springboard::cg::pdf::writer::{self, Annotation, Edits};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// A note's marker in default user space, in points.
 const NOTE_PT: f64 = 14.0;
@@ -39,19 +39,19 @@ pub fn edits(pages: &[PdfPage], order: &[usize], turns: &[u8], marks: &[Mark]) -
     Ok(out)
 }
 
-/// A job that writes the edited PDF to `target`: the file at `source` with the edits appended. The worker holds the
-/// parsed file, so the edits are made there.
+/// Writes the edited PDF to `target`: the file at `source` with the edits appended. Runs on the worker, which holds
+/// the parsed file, so the edits are made there. Returns `target`.
+pub fn write_edited(pdf: &Pdf, source: &Path, target: &Path, order: &[usize], turns: &[u8], marks: &[Mark]) -> Result<PathBuf, String> {
+    let base = std::fs::read(source).map_err(|e| e.to_string())?;
+    let plan = edits(&pdf.pages, order, turns, marks)?;
+    let bytes = writer::save(&base, &pdf.doc, &plan)?;
+    std::fs::write(target, bytes).map_err(|e| e.to_string())?;
+    Ok(target.to_path_buf())
+}
+
+/// A job that writes the edited PDF to `target` (see `write_edited`) and replies with the file written.
 pub fn save_job(source: PathBuf, target: PathBuf, order: Vec<usize>, turns: Vec<u8>, marks: Vec<Mark>) -> Job {
-    pdfjob::run(move |pdf: &Pdf| {
-        let result = (|| -> Result<PathBuf, String> {
-            let base = std::fs::read(&source).map_err(|e| e.to_string())?;
-            let plan = edits(&pdf.pages, &order, &turns, &marks)?;
-            let bytes = writer::save(&base, &pdf.doc, &plan)?;
-            std::fs::write(&target, bytes).map_err(|e| e.to_string())?;
-            Ok(target.clone())
-        })();
-        Reply::Written(result)
-    })
+    pdfjob::run(move |pdf: &Pdf| Reply::Written(write_edited(pdf, &source, &target, &order, &turns, &marks)))
 }
 
 /// The annotation for one mark, or None when the mark cannot be placed on its page.

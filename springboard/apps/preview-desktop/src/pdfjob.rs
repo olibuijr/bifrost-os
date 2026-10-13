@@ -49,6 +49,8 @@ pub enum Reply {
     Rendered(Key, Option<Image>),
     /// A save or an export: the file written, or why it was not.
     Written(Result<PathBuf, String>),
+    /// A print: the status line to show, which says whether the job was sent.
+    Printed(String),
 }
 
 /// A job for the worker: it runs on the worker thread with the parsed file and returns its reply.
