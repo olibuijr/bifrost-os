@@ -84,6 +84,10 @@ pub struct WmState {
     pub seat: Seat<WmState>,
     /// Pointer gestures that are running (begin and end paired per kind; see `input.rs`).
     pub gestures: crate::input::GestureGate,
+    /// The fingers on the touchscreen and the one that drives an emulated pointer (`touch.rs`).
+    pub contacts: crate::touch::Contacts,
+    /// Touchscreens present; the seat has the touch capability while there is one.
+    pub touch_devices: usize,
     /// XWayland, its X11 window manager and the xwayland-shell global (`xwayland.rs`).
     #[cfg(feature = "xwayland")]
     pub xwayland: crate::xwayland::XWaylandState,
@@ -164,6 +168,8 @@ impl WmState {
             seat_state,
             seat,
             gestures: Default::default(),
+            contacts: Default::default(),
+            touch_devices: 0,
             #[cfg(feature = "xwayland")]
             xwayland: crate::xwayland::XWaylandState::new(&dh),
             session,
