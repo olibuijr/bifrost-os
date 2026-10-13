@@ -5,7 +5,7 @@
 //! window drives its links from `Window::tick` and asks for wake-ups at the fastest link's interval. A link's
 //! [`FrameRateRange`] says the rate it wants; the window resolves it against its display rate.
 
-use bifrost_ui::frame_rate::FrameRateRange;
+use crate::frame_rate::FrameRateRange;
 use std::sync::OnceLock;
 use std::time::Instant;
 

@@ -3486,7 +3486,10 @@ impl Shell {
         if !accessibility::reduce_motion() {
             return 255;
         }
-        (if opening { k } else { 1.0 - k } * 255.0) as u32
+        // the shared fade: the card is the incoming content when opening, the outgoing one when closing
+        let fade = bifrost_ui::transition::Transition::fade().ease(bifrost_ui::transition::Ease::Linear);
+        let fade = if opening { fade } else { fade.reversed() };
+        (fade.placement(k, 0.0, 0.0).over_alpha * 255.0) as u32
     }
 
     /// The home screen in full (used by overlays that composite over it).
