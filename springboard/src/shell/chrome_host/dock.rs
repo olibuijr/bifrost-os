@@ -62,7 +62,7 @@ impl Shell {
         let prefs = self.dock_preferences();
         let items = list
             .iter()
-            .filter(|&&entry| entry != super::super::desk::DOCK_TRASH && super::super::desktop_dock::dock_min_index(entry).is_none())
+            .filter(|&&entry| entry != super::super::desk::DOCK_TRASH && entry != super::super::dock_stack::DOCK_STACK && super::super::desktop_dock::dock_min_index(entry).is_none())
             .filter_map(|&entry| {
                 let app_id = self.dock_app_key(entry)?;
                 let title = match apps().get(entry) {

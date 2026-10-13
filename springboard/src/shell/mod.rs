@@ -24,6 +24,7 @@ pub mod focus;
 pub mod fsutil;
 pub mod homeconf;
 mod folders;
+mod dock_stack;
 mod homeedit;
 mod jiggle;
 pub mod camera;
