@@ -968,6 +968,7 @@ pub mod mapshape;
 pub mod reverse_lookup;
 pub mod map_item;
 pub mod maps_link;
+pub mod map_geojson;
 pub mod location_reminder;
 pub mod switch_scan;
 pub mod ax_audit;
