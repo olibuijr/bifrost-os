@@ -2658,3 +2658,17 @@ extension or MIME type; only the first MIME type of a declaration is indexed.
 the tag; it conforms to the requested type or `public.data`) and `is_public` (system-declared). `UtTagClass` takes
 the two Apple classes or any declared class string. Not done: the shell does not call `register_manifest` at app
 launch yet, and nothing is checked on Midget (row stays `partial`).
+
+## CryptoKit signatures (`Curve25519.Signing`, `bifrost_ui::ed25519`)
+
+Ed25519 (RFC 8032) public-key signatures, a pure model with host unit tests. Field
+arithmetic is shared with `x25519`; the hash is `bifrost_core::sha512`.
+
+- `PrivateKey::generate()` (`init()`), `from_raw_representation` (32-byte seed),
+  `raw_representation`, `public_key`, `signature_for(data)` (64 bytes).
+- `PublicKey::from_raw_representation`, `raw_representation`,
+  `is_valid_signature(signature, data)`; it rejects bad lengths, non-canonical S and
+  keys that are not curve points.
+- `CryptoKitError::IncorrectKeySize` for keys that are not 32 bytes.
+
+Still missing: P256, P384, P521. Status is partial until checked on Midget.

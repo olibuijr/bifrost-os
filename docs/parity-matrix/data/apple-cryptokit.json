@@ -52,9 +52,9 @@
     {
       "feature": "Public-key signatures (Curve25519 Ed25519, P256, P384, P521)",
       "apple": "Curve25519, P256, P384, P521",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no asymmetric primitives in springboard/"
+      "bifrost": "springboard/ui/src/ed25519.rs",
+      "status": "partial",
+      "note": "Curve25519.Signing (Ed25519, RFC 8032) done as a pure model with host unit tests: PrivateKey, PublicKey, CryptoKitError; not yet tested on Midget. P256, P384 and P521 are still missing"
     },
     {
       "feature": "Key agreement (X25519, SharedSecret)",

@@ -12,16 +12,16 @@ const MASK51: u64 = (1 << 51) - 1;
 
 /// A field element in radix 2^51. Limbs are at most about 2^52 between operations.
 #[derive(Clone, Copy)]
-struct Fe([u64; 5]);
+pub(crate) struct Fe(pub(crate) [u64; 5]);
 
 /// Coefficient (A - 2) / 4 for A = 486662.
 const A24: Fe = Fe([121665, 0, 0, 0, 0]);
 
-fn fe_zero() -> Fe {
+pub(crate) fn fe_zero() -> Fe {
     Fe([0; 5])
 }
 
-fn fe_one() -> Fe {
+pub(crate) fn fe_one() -> Fe {
     Fe([1, 0, 0, 0, 0])
 }
 
@@ -42,7 +42,7 @@ fn reduce(mut t: [u128; 5]) -> Fe {
     Fe([t[0] as u64, t[1] as u64, t[2] as u64, t[3] as u64, t[4] as u64])
 }
 
-fn fe_add(a: &Fe, b: &Fe) -> Fe {
+pub(crate) fn fe_add(a: &Fe, b: &Fe) -> Fe {
     let mut t = [0u128; 5];
     for i in 0..5 {
         t[i] = a.0[i] as u128 + b.0[i] as u128;
@@ -51,7 +51,7 @@ fn fe_add(a: &Fe, b: &Fe) -> Fe {
 }
 
 /// `a - b` computed as `a + 2p - b`, so every limb stays non-negative.
-fn fe_sub(a: &Fe, b: &Fe) -> Fe {
+pub(crate) fn fe_sub(a: &Fe, b: &Fe) -> Fe {
     const TWO_P0: u128 = 0xf_ffff_ffff_ffda; // 2 * (2^51 - 19)
     const TWO_PN: u128 = 0xf_ffff_ffff_fffe; // 2 * (2^51 - 1)
     let mut t = [0u128; 5];
@@ -62,7 +62,7 @@ fn fe_sub(a: &Fe, b: &Fe) -> Fe {
     reduce(t)
 }
 
-fn fe_mul(a: &Fe, b: &Fe) -> Fe {
+pub(crate) fn fe_mul(a: &Fe, b: &Fe) -> Fe {
     let [a0, a1, a2, a3, a4] = a.0.map(|x| x as u128);
     let [b0, b1, b2, b3, b4] = b.0.map(|x| x as u128);
     let (b1_19, b2_19, b3_19, b4_19) = (b1 * 19, b2 * 19, b3 * 19, b4 * 19);
@@ -74,12 +74,12 @@ fn fe_mul(a: &Fe, b: &Fe) -> Fe {
     reduce([t0, t1, t2, t3, t4])
 }
 
-fn fe_sq(a: &Fe) -> Fe {
+pub(crate) fn fe_sq(a: &Fe) -> Fe {
     fe_mul(a, a)
 }
 
 /// Swap `a` and `b` when `swap` is 1, leave them alone when it is 0.
-fn fe_cswap(swap: u64, a: &mut Fe, b: &mut Fe) {
+pub(crate) fn fe_cswap(swap: u64, a: &mut Fe, b: &mut Fe) {
     let mask = 0u64.wrapping_sub(swap);
     for i in 0..5 {
         let x = mask & (a.0[i] ^ b.0[i]);
@@ -89,7 +89,7 @@ fn fe_cswap(swap: u64, a: &mut Fe, b: &mut Fe) {
 }
 
 /// `a^(p-2)`, the inverse by Fermat. The exponent bytes are `eb ff .. ff 7f`.
-fn fe_invert(a: &Fe) -> Fe {
+pub(crate) fn fe_invert(a: &Fe) -> Fe {
     let mut e = [0xffu8; 32];
     e[0] = 0xeb;
     e[31] = 0x7f;
@@ -112,7 +112,7 @@ fn le64(s: &[u8]) -> u64 {
 }
 
 /// Decode 32 little-endian bytes. Bit 255 is ignored, as RFC 7748 requires.
-fn fe_from_bytes(b: &[u8; 32]) -> Fe {
+pub(crate) fn fe_from_bytes(b: &[u8; 32]) -> Fe {
     Fe([
         le64(&b[0..8]) & MASK51,
         (le64(&b[6..14]) >> 3) & MASK51,
@@ -123,7 +123,7 @@ fn fe_from_bytes(b: &[u8; 32]) -> Fe {
 }
 
 /// Encode canonically (fully reduced modulo p) as 32 little-endian bytes.
-fn fe_to_bytes(a: &Fe) -> [u8; 32] {
+pub(crate) fn fe_to_bytes(a: &Fe) -> [u8; 32] {
     let mut h = reduce(a.0.map(|x| x as u128)).0;
     // q is 1 when h >= p, else 0.
     let mut q = (h[0] + 19) >> 51;
