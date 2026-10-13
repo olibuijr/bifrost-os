@@ -1,6 +1,6 @@
 //! Contract tests for `app.rs` (NativeApplication / NativeViewController glue) and `scroll.rs` (NativeScrollView).
 use super::*;
-use crate::kit::Font;
+use crate::kit::{Font, Surface};
 use crate::proto::AxAction;
 use crate::view::app::{action_for, ControllerHost, MenuEntry, ViewApp, ViewController};
 use crate::view::scroll::ScrollView;
@@ -294,10 +294,75 @@ fn scroll_to_marks_the_view_dirty_and_shifts_the_children_by_the_offset() {
 }
 
 #[test]
-fn a_scroll_view_clips_its_children_and_repaints_as_one() {
-    let sv = scroller(300.0, 100.0);
+fn a_scroll_view_clips_its_children_and_repaints_as_one_only_with_a_backdrop() {
+    let mut sv = scroller(300.0, 100.0);
     assert!(sv.clips_children());
+    assert!(!sv.opaque_backdrop());
+    sv.base_mut().background = Some(0xff10_2030);
     assert!(sv.opaque_backdrop());
+}
+
+/// A document of fixed 50 pt rows that paint their frame solid red.
+struct Row {
+    base: ViewBase,
+}
+impl View for Row {
+    crate::view_base!();
+    fn draw(&mut self, s: &mut dyn Canvas, ui: &Ui) {
+        s.fill_rect(px_rf(ui, self.frame()), 0xff00_00ff);
+    }
+}
+struct Doc {
+    base: ViewBase,
+    kids: Vec<Box<dyn View>>,
+}
+impl View for Doc {
+    crate::view_base!();
+    fn children(&self) -> &[Box<dyn View>] {
+        &self.kids
+    }
+    fn children_mut(&mut self) -> &mut [Box<dyn View>] {
+        &mut self.kids
+    }
+    fn intrinsic(&self, _ui: &Ui) -> (f32, f32) {
+        (0.0, 50.0 * self.kids.len() as f32)
+    }
+    fn layout(&mut self, _ui: &Ui, b: Rect) {
+        self.set_frame(b);
+        for (i, k) in self.kids.iter_mut().enumerate() {
+            k.set_frame(rect(b.x, b.y + 50.0 * i as f32, b.w, 50.0));
+        }
+    }
+}
+
+#[test]
+fn a_dirty_row_in_a_scroll_view_repaints_only_that_row_inside_the_clip() {
+    let kids: Vec<Box<dyn View>> = (0..6).map(|_| Box::new(Row { base: ViewBase::default() }) as Box<dyn View>).collect();
+    let mut sv = ScrollView::new(Box::new(Doc { base: ViewBase::default(), kids }));
+    let ui = ui();
+    sv.layout(&ui, rect(0.0, 0.0, 200.0, 100.0));
+    sv.scroll_to(50.0);
+    let mut px = vec![0u32; 200 * 300];
+    let mut surf = Surface { w: 200, h: 300, stride: 200, px: &mut px, y0: 0 };
+    draw_subtree(&mut sv, &mut surf, &ui);
+    assert!(!any_dirty(&sv));
+    surf.px.iter_mut().for_each(|p| *p = 0);
+    // document row 2 sits at 100..150 and is scrolled to rows 50..100 of the window
+    sv.document_view_mut::<Doc>().unwrap().kids[2].base_mut().dirty = true;
+    let mut d = Damage::new(200, 300);
+    draw_dirty(&mut sv, &mut surf, &ui, &mut d);
+    assert_eq!(d.areas().len(), 1);
+    let a = d.areas()[0];
+    assert_eq!((a.y0, a.y1), (50, 100), "damage is the one row, not the scroll view");
+    assert_eq!(surf.px[75 * 200 + 10], 0xff00_00ff);
+    assert_eq!(surf.px[25 * 200 + 10], 0, "rows above the dirty one are not repainted");
+    // a row scrolled out of view paints nothing outside the clip
+    surf.px.iter_mut().for_each(|p| *p = 0);
+    sv.document_view_mut::<Doc>().unwrap().kids[5].base_mut().dirty = true;
+    let mut d = Damage::new(200, 300);
+    draw_dirty(&mut sv, &mut surf, &ui, &mut d);
+    assert!(d.is_empty(), "the damage is cut to the scroll view's rows");
+    assert!(surf.px.iter().all(|p| *p == 0), "nothing is drawn below the frame");
 }
 
 #[test]

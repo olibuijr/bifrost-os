@@ -691,7 +691,6 @@ pub mod transform3d;
 pub mod scene3d;
 pub mod path;
 pub mod gradient;
-pub mod clip;
 pub mod render_loop;
 pub mod drawable;
 pub mod workflow;

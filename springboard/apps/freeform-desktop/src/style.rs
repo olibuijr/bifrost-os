@@ -1,6 +1,6 @@
 //! The look of each stroke for Freeform's shape inspector: a fill (solid, or a two-colour gradient, for rectangles
 //! and ovals), a dashed outline, a drop shadow and opacity. The look lives beside the drawing model, one `Style` per
-//! stroke at the same index, so the shared model crate keeps its own shape. Painting builds on the discs and trails of
+//! stroke at the same index, so the shared model crate keeps its own shape. Painting builds on the stroker of
 //! `ink`, and on the models `gradient` (the ramp), `layer_style` (the shadow) and `stroke_style` (the dash pieces).
 //! `Bitmap` is the bitmap drawing context a picture is exported through: a pixel buffer that is painted and then
 //! written as a PNG.
@@ -9,7 +9,6 @@ use crate::ink;
 use bifrost_app::controls::drawing::{InkKind, Stroke};
 use bifrost_app::controls::gradient::{Gradient, Stop};
 use bifrost_app::controls::layer_style::Shadow;
-use bifrost_app::controls::stroke_style::dash_polyline;
 
 /// The opacity steps the inspector offers, as fractions of full opacity.
 pub const OPACITY_STEPS: [f32; 3] = [1.0, 0.5, 0.25];
@@ -83,22 +82,12 @@ fn blur_taps(radius_px: f32) -> Vec<(f32, f32)> {
     taps
 }
 
-/// Paints the outline of a polyline: a disc at each point and along each segment, or, when dashed, only along the
-/// dash pieces. `width` is in points, `scale` converts points to pixels, `alpha` covers at most that fraction.
+/// Paints the outline of a polyline with round caps and joins, or, when dashed, as dashes. `width` is in points,
+/// `scale` converts points to pixels, `alpha` covers at most that fraction.
 #[allow(clippy::too_many_arguments)]
 fn outline(px: &mut [u32], cw: usize, ch: usize, pts: &[(f32, f32)], width: f32, dashed: bool, scale: f32, color: u32, alpha: f32) {
-    let r = width / 2.0 * scale;
-    let dashed = dashed && pts.len() >= 2;
-    let pieces: Vec<Vec<(f32, f32)>> = if dashed { dash_polyline(pts, &[DASH_PT[0] * scale, DASH_PT[1] * scale], 0.0) } else { vec![pts.to_vec()] };
-    for piece in &pieces {
-        let Some(first) = piece.first() else { continue };
-        ink::paint_disc(px, cw, ch, first.0, first.1, r, color, alpha);
-        for w in piece.windows(2) {
-            for (x, y) in ink::trail(w[0], w[1], r) {
-                ink::paint_disc(px, cw, ch, x, y, r, color, alpha);
-            }
-        }
-    }
+    let dash = (dashed && pts.len() >= 2).then(|| [DASH_PT[0] * scale, DASH_PT[1] * scale]);
+    ink::stroke_polyline(px, cw, ch, pts, width * scale, dash, color, alpha);
 }
 
 /// Fills the polygon through `pts` (closed back to its first point) with the even-odd rule, one scanline per pixel

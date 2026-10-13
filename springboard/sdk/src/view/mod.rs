@@ -43,6 +43,7 @@ macro_rules! view_base {
 mod animation;
 mod app;
 mod autolayout;
+mod context;
 mod controls;
 mod forms;
 mod scroll;
@@ -53,6 +54,7 @@ pub use autolayout::{anchors, solve as solve_constraints, Anchor, Anchors, Attr,
 pub use bifrost_ui::constraint::Rel;
 pub use bifrost_ui::stack::Distribution;
 pub use scroll::ScrollView;
+pub use context::with_context;
 pub use controls::{Align, Button, Label, Segmented, Slider, Stack, Switch};
 
 /// What a text-editing view tells the shell about itself while it is first responder (`NativeTextInputClient`,
@@ -540,6 +542,22 @@ fn draw_dirty(v: &mut dyn View, c: &mut dyn Canvas, ui: &Ui, d: &mut Damage) {
         c.fill_rect(px_rf(ui, v.frame()), DETAIL_BG.now());
         d.add(x as i32, y as i32, w as i32, h as i32);
         draw_subtree(v, c, ui);
+    } else if v.clips_children() {
+        // A dirty descendant of a clipping view (a scroll view) repaints alone, confined to the view's rows by the
+        // clip, instead of the whole view: its damage is cut to the same rows.
+        let (w, h) = c.size();
+        let f = px_rf(ui, v.frame());
+        let (_, fy, _, fh) = px_rect(ui, v.frame());
+        let mut inner = Damage::new(w as usize, h as usize);
+        c.push_clip(RectF::new(0.0, f.y, w as f32, f.h), 0.0);
+        scrolled(v, |v| v.children_mut().iter_mut().for_each(|ch| draw_dirty(ch.as_mut(), c, ui, &mut inner)));
+        c.pop_clip();
+        for a in inner.areas() {
+            let (y0, y1) = (a.y0.max(fy), a.y1.min(fy + fh));
+            if y0 < y1 {
+                d.add(a.x0 as i32, y0 as i32, (a.x1 - a.x0) as i32, (y1 - y0) as i32);
+            }
+        }
     } else {
         v.children_mut().iter_mut().for_each(|ch| draw_dirty(ch.as_mut(), c, ui, d));
     }

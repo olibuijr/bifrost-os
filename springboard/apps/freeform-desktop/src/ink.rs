@@ -4,6 +4,9 @@
 use bifrost_app::controls::affine::AffineTransform;
 use bifrost_app::controls::drawing::{Drawing, Ink, InkKind, Stroke};
 use bifrost_app::controls::path::Path;
+use bifrost_app::kit::cg::color::Color;
+use bifrost_app::kit::cg::context::{DrawContext, LineCap, LineJoin, Rect as CgRect};
+use bifrost_app::kit::cg::path::Path as CgPath;
 use bifrost_app::controls::Rect;
 
 /// Marker ink covers at most this alpha (96 of 255), as the live marker does.
@@ -20,27 +23,37 @@ pub fn mix(dst: u32, src: u32, a: u32) -> u32 {
     out
 }
 
-/// Paints one disc of radius `r` (canvas pixels) centred on (`x`, `y`) into `px`, a `cw` x `ch` canvas, with
-/// `color` covering at most `alpha` (0..=1) of each pixel.
+/// Strokes the polyline `pts` (canvas pixels) into `px`, a `cw` x `ch` canvas, with round caps and joins: `width` is the
+/// line width in pixels, `dash` the on and off lengths in pixels (solid when `None`), `color` the opaque canvas pixel
+/// and `alpha` (0..=1) the most it covers of each pixel. A single point, or points that all coincide, paints a disc.
 #[allow(clippy::too_many_arguments)]
-pub fn paint_disc(px: &mut [u32], cw: usize, ch: usize, x: f32, y: f32, r: f32, color: u32, alpha: f32) {
-    let x0 = ((x - r).floor() as i32).max(0);
-    let x1 = ((x + r).ceil() as i32).min(cw as i32 - 1);
-    let y0 = ((y - r).floor() as i32).max(0);
-    let y1 = ((y + r).ceil() as i32).min(ch as i32 - 1);
-    for py in y0..=y1 {
-        for qx in x0..=x1 {
-            let d = ((qx as f32 + 0.5 - x).powi(2) + (py as f32 + 0.5 - y).powi(2)).sqrt();
-            let cover = (r + 0.5 - d).clamp(0.0, 1.0);
-            if cover <= 0.0 {
-                continue;
-            }
-            let i = py as usize * cw + qx as usize;
-            if let Some(p) = px.get_mut(i) {
-                *p = mix(*p, color, (255.0 * alpha * cover) as u32);
-            }
-        }
+pub fn stroke_polyline(px: &mut [u32], cw: usize, ch: usize, pts: &[(f32, f32)], width: f32, dash: Option<[f32; 2]>, color: u32, alpha: f32) {
+    let Some(&(x0, y0)) = pts.first() else { return };
+    if cw == 0 || ch == 0 {
+        return;
     }
+    let mut cx = DrawContext::over_pixels(cw, ch, cw, px, 0);
+    cx.set_alpha(alpha.clamp(0.0, 1.0));
+    let paint = Color::from_packed(color);
+    if pts.iter().all(|&p| p == (x0, y0)) {
+        let r = width / 2.0;
+        cx.set_fill_color(paint);
+        cx.fill_ellipse_in_rect(CgRect::new(x0 - r, y0 - r, width, width));
+        return;
+    }
+    cx.set_stroke_color(paint);
+    cx.set_line_width(width);
+    cx.set_line_cap(LineCap::Round);
+    cx.set_line_join(LineJoin::Round);
+    if let Some(d) = dash {
+        cx.set_line_dash(0.0, &d);
+    }
+    let mut path = CgPath::new();
+    path.move_to(x0, y0);
+    for &(x, y) in &pts[1..] {
+        path.line_to(x, y);
+    }
+    cx.stroke(&path);
 }
 
 /// The disc centres that paint the segment from `a` to `b` at radius `r`, spaced like the live pen (the last one is
@@ -59,16 +72,9 @@ pub fn trail(a: (f32, f32), b: (f32, f32), r: f32) -> Vec<(f32, f32)> {
 /// Paints a whole stroke into `px`. `scale` converts the ink width (points) to canvas pixels. Marker ink is
 /// translucent; eraser strokes are paper-coloured pen strokes, so they paint like the live eraser.
 pub fn paint_stroke(px: &mut [u32], cw: usize, ch: usize, s: &Stroke, scale: f32) {
-    let r = s.ink.width / 2.0 * scale;
     let alpha = if s.ink.kind == InkKind::Marker { MARKER_ALPHA } else { 1.0 };
-    let color = s.ink.color;
-    let Some(first) = s.points.first() else { return };
-    paint_disc(px, cw, ch, first.x, first.y, r, color, alpha);
-    for w in s.points.windows(2) {
-        for (x, y) in trail((w[0].x, w[0].y), (w[1].x, w[1].y), r) {
-            paint_disc(px, cw, ch, x, y, r, color, alpha);
-        }
-    }
+    let pts: Vec<(f32, f32)> = s.points.iter().map(|p| (p.x, p.y)).collect();
+    stroke_polyline(px, cw, ch, &pts, s.ink.width * scale, None, s.ink.color, alpha);
 }
 
 /// The box between two drag points, whichever corners they are.
@@ -160,23 +166,6 @@ mod tests {
     }
 
     #[test]
-    fn a_disc_paints_its_centre_and_not_far_pixels() {
-        let (cw, ch) = (10usize, 10usize);
-        let mut px = vec![PAPER; cw * ch];
-        paint_disc(&mut px, cw, ch, 5.0, 5.0, 2.0, BLACK, 1.0);
-        assert!(dark(px[5 * cw + 5]));
-        assert_eq!(px[0], PAPER);
-    }
-
-    #[test]
-    fn a_disc_off_the_canvas_paints_nothing_and_does_not_panic() {
-        let mut px = vec![PAPER; 4];
-        paint_disc(&mut px, 2, 2, -50.0, -50.0, 1.0, BLACK, 1.0);
-        assert!(px.iter().all(|&p| p == PAPER));
-        paint_disc(&mut [], 0, 0, 1.0, 1.0, 1.0, BLACK, 1.0);
-    }
-
-    #[test]
     fn trail_spacing_ends_on_the_target_point() {
         // radius 1 gives a step of max(0.4, 1) = 1 px, so 10 px is 10 centres.
         let t = trail((0.0, 0.0), (10.0, 0.0), 1.0);
@@ -208,6 +197,19 @@ mod tests {
         let mut e = vec![BLACK; cw * ch];
         paint_stroke(&mut e, cw, ch, &stroke(InkKind::Pen, PAPER, 6.0, &[(3.0, 3.0)]), 1.0);
         assert_eq!(e[3 * cw + 3], PAPER, "an eraser stroke paints paper");
+    }
+
+    #[test]
+    fn a_dashed_polyline_leaves_gaps_and_a_dot_is_a_disc() {
+        let (cw, ch) = (40usize, 5usize);
+        let mut px = vec![PAPER; cw * ch];
+        stroke_polyline(&mut px, cw, ch, &[(0.0, 2.5), (40.0, 2.5)], 2.0, Some([6.0, 6.0]), BLACK, 1.0);
+        assert!(dark(px[2 * cw + 3]), "inside the first dash");
+        assert!(!dark(px[2 * cw + 9]), "inside the first gap");
+        let mut dot = vec![PAPER; 25];
+        stroke_polyline(&mut dot, 5, 5, &[(2.5, 2.5)], 3.0, None, BLACK, 1.0);
+        assert!(dark(dot[2 * 5 + 2]));
+        assert_eq!(dot[0], PAPER);
     }
 
     #[test]

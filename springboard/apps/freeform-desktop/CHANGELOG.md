@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.4 — 2026-10-13
+
+- Strokes, dashes and the shape outline are painted by the shared drawing context (round caps and joins, real dashes) instead of stamped discs; the hand-made disc painter is gone.
+
 ## 1.6.3 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
