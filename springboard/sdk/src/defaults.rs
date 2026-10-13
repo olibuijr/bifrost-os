@@ -6,20 +6,16 @@
 //! consistent state. The file is one `kind<TAB>key<TAB>value` line per key; tabs, newlines and
 //! backslashes in keys and strings are escaped, and data is hex.
 
+use bifrost_core::defaults_file::{parse, serialise};
+use bifrost_core::plist::Plist;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// The file name inside the app's data directory.
-pub const FILE: &str = "defaults.txt";
+pub const FILE: &str = bifrost_core::defaults_file::FILE;
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum Value {
-    Str(String),
-    Bool(bool),
-    Int(i64),
-    Double(f64),
-    Data(Vec<u8>),
-}
+/// A stored value. The file format and its codec live in `bifrost_core::defaults_file`, shared with the `defaults` tool.
+pub use bifrost_core::defaults_file::Value;
 
 /// The defaults of one app. Built by `Ctx::defaults`; `open` is also usable on its own.
 #[derive(Debug)]
@@ -85,6 +81,13 @@ impl UserDefaults {
             _ => 0.0,
         }
     }
+    /// Any stored value as a property list: arrays and dictionaries as well as the scalars.
+    pub fn plist(&self, key: &str) -> Option<Plist> {
+        self.get(key).map(Value::to_plist)
+    }
+    pub fn set_plist(&mut self, key: &str, v: Plist) {
+        self.set(key, Value::from_plist(v));
+    }
     pub fn data(&self, key: &str) -> Option<Vec<u8>> {
         match self.get(key)? {
             Value::Data(d) => Some(d.clone()),
@@ -132,93 +135,6 @@ impl UserDefaults {
         // a failed write keeps the value in memory; the next change tries again
         let _ = bifrost_core::fsutil::write_atomic(path, text);
     }
-}
-
-fn escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '\t' => out.push_str("\\t"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            c => out.push(c),
-        }
-    }
-    out
-}
-
-fn unescape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut it = s.chars();
-    while let Some(c) = it.next() {
-        if c != '\\' {
-            out.push(c);
-            continue;
-        }
-        match it.next() {
-            Some('t') => out.push('\t'),
-            Some('n') => out.push('\n'),
-            Some('r') => out.push('\r'),
-            Some(other) => out.push(other),
-            None => {}
-        }
-    }
-    out
-}
-
-fn serialise(values: &BTreeMap<String, Value>) -> String {
-    let mut out = String::new();
-    for (key, v) in values {
-        let (kind, value) = match v {
-            Value::Str(s) => ("s", escape(s)),
-            Value::Bool(b) => ("b", if *b { "1" } else { "0" }.to_string()),
-            Value::Int(n) => ("i", n.to_string()),
-            Value::Double(d) => ("d", format!("{:016x}", d.to_bits())),
-            Value::Data(d) => ("x", d.iter().map(|b| format!("{b:02x}")).collect()),
-        };
-        out.push_str(&format!("{kind}\t{}\t{value}\n", escape(key)));
-    }
-    out
-}
-
-fn parse(text: &str) -> BTreeMap<String, Value> {
-    let mut values = BTreeMap::new();
-    for line in text.lines() {
-        let mut parts = line.splitn(3, '\t');
-        let (Some(kind), Some(key), Some(raw)) = (parts.next(), parts.next(), parts.next()) else { continue };
-        let key = unescape(key);
-        let value = match kind {
-            "s" => Value::Str(unescape(raw)),
-            "b" => match raw {
-                "1" => Value::Bool(true),
-                "0" => Value::Bool(false),
-                _ => continue,
-            },
-            "i" => match raw.parse() {
-                Ok(n) => Value::Int(n),
-                Err(_) => continue,
-            },
-            "d" => match u64::from_str_radix(raw, 16) {
-                Ok(bits) => Value::Double(f64::from_bits(bits)),
-                Err(_) => continue,
-            },
-            "x" => match unhex(raw) {
-                Some(d) => Value::Data(d),
-                None => continue,
-            },
-            _ => continue,
-        };
-        values.insert(key, value);
-    }
-    values
-}
-
-fn unhex(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 {
-        return None;
-    }
-    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok()).collect()
 }
 
 #[cfg(test)]
