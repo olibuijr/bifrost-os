@@ -16,7 +16,7 @@ use bifrost_app::kit::{Scroller, TextCache, Ui, Weight};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets::{CAPSULE_PT, TOOLBAR_GAP_PT};
 use bifrost_app::TouchKind;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 /// Sidebar width (points) and the inset of the content from it and from the window edge.
@@ -58,6 +58,7 @@ const ROW_ACTIVE: u32 = 5;
 const ROW_INACTIVE: u32 = 6;
 const ROW_SELECTED: u32 = 7;
 const ROW_GPU: u32 = 8;
+const ROW_WINDOWED: u32 = 9;
 /// Menu item ids for the app's own menu.
 pub const MENU_QUIT: u32 = 1;
 pub const MENU_FIND: u32 = 2;
@@ -225,6 +226,10 @@ pub struct Monitor {
     pub request: Option<Request>,
     /// The signal sheet, with the index of the chosen signal in `model::SIGNALS`.
     pub signal_sheet: Option<usize>,
+    /// The pids that own a window on the desktop, as the shell last listed them (for Windowed Processes).
+    pub window_owners: HashSet<u32>,
+    /// The window list should be asked for again; taken with `take_window_poll`.
+    pub window_poll: bool,
     /// The app's storage folder, where the diagnostics archive is prepared.
     pub data_dir: PathBuf,
 }
@@ -260,6 +265,8 @@ impl Monitor {
             report: None,
             request: None,
             signal_sheet: None,
+            window_owners: HashSet::new(),
+            window_poll: false,
             data_dir: PathBuf::new(),
         }
     }
@@ -288,6 +295,7 @@ impl Monitor {
             p.energy_avg = self.averages.mean(&p.name);
         }
         self.history.record(&snap);
+        self.window_poll = self.filter == Filter::Windowed;
         self.snapshot = Some(snap);
         self.rebuild();
         self.refresh_inspector();
@@ -432,6 +440,7 @@ impl Monitor {
         }
         let only = match (self.filter, self.scope, &self.snapshot) {
             (Filter::Selected, Some(root), Some(s)) => Some(model::descendants(&s.procs, root)),
+            (Filter::Windowed, _, _) => Some(self.window_owners.clone()),
             _ => None,
         };
         self.rows = match &self.snapshot {
@@ -465,8 +474,20 @@ impl Monitor {
             self.scope = None;
         }
         self.filter = filter;
+        self.window_poll = filter == Filter::Windowed;
         self.scroll.jump_top();
         self.sync_scans();
+        self.rebuild();
+    }
+
+    /// Hands the app layer the request for a fresh window list, once.
+    pub fn take_window_poll(&mut self) -> bool {
+        std::mem::take(&mut self.window_poll)
+    }
+
+    /// The pids that own a window now, from the shell's list.
+    pub fn set_window_owners(&mut self, owners: HashSet<u32>) {
+        self.window_owners = owners;
         self.rebuild();
     }
 
@@ -713,6 +734,7 @@ impl Monitor {
             SidebarItem::row(ROW_SYSTEM, Filter::System.label()).with_symbol("gearshape"),
             SidebarItem::row(ROW_ACTIVE, Filter::Active.label()).with_symbol("bolt"),
             SidebarItem::row(ROW_INACTIVE, Filter::Inactive.label()).with_symbol("moon"),
+            SidebarItem::row(ROW_WINDOWED, Filter::Windowed.label()).with_symbol("rectangle.grid.1x2"),
             SidebarItem::row(ROW_SELECTED, Filter::Selected.label()).with_symbol("checkmark.circle"),
             SidebarItem::row(ROW_GPU, Filter::Gpu.label()).with_symbol("desktopcomputer"),
         ];
@@ -724,6 +746,7 @@ impl Monitor {
             Filter::System => ROW_SYSTEM,
             Filter::Active => ROW_ACTIVE,
             Filter::Inactive => ROW_INACTIVE,
+            Filter::Windowed => ROW_WINDOWED,
             Filter::Selected => ROW_SELECTED,
             Filter::Gpu => ROW_GPU,
         }));
@@ -745,6 +768,7 @@ impl Monitor {
             ROW_SYSTEM => Filter::System,
             ROW_ACTIVE => Filter::Active,
             ROW_INACTIVE => Filter::Inactive,
+            ROW_WINDOWED => Filter::Windowed,
             ROW_SELECTED => Filter::Selected,
             ROW_GPU => Filter::Gpu,
             _ => Filter::All,
@@ -1100,6 +1124,22 @@ mod tests {
         with_rows(&mut m, vec![proc(1, 0, "init"), proc(12, 1, "other")]);
         assert_eq!(m.filter, Filter::All);
         assert_eq!(m.rows.len(), 2);
+    }
+
+    #[test]
+    fn windowed_processes_follow_the_window_list() {
+        let mut m = Monitor::new(800.0, 600.0);
+        with_rows(&mut m, vec![proc(1, 0, "init"), proc(2, 1, "editor"), proc(3, 1, "daemon")]);
+        assert!(!m.take_window_poll());
+        m.set_filter(Filter::Windowed);
+        assert!(m.rows.is_empty(), "no window owners are known yet");
+        assert!(m.take_window_poll(), "choosing the filter asks for the list");
+        assert!(!m.take_window_poll(), "once");
+        m.set_window_owners(HashSet::from([2]));
+        assert_eq!(m.rows.iter().map(|p| p.pid).collect::<Vec<_>>(), vec![2]);
+        m.set_filter(Filter::All);
+        assert_eq!(m.rows.len(), 3);
+        assert!(!m.take_window_poll());
     }
 
     #[test]

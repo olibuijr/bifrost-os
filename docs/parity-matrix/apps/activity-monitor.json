@@ -33,9 +33,9 @@
    "area": "view",
    "apple": "View menu process filters",
    "status": "partial",
-   "bifrost": "springboard/apps/activity-desktop/src/model.rs:254",
-   "note": "Sidebar and View > Filter Processes now also offer Selected Processes (the selection and everything it started, via ppid) and GPU Processes (GPU share above 0). Windowed Processes remains: it needs the shell window list over the app SDK. built on parity/team-d-activity-monitor; not yet verified on Midget.",
-   "wire": "Add Windowed Processes once the SDK exposes the shell window list (owner pids) to apps; filter on that set in model::visible_within."
+   "bifrost": "springboard/apps/activity-desktop/src/model.rs:256",
+   "note": "All nine filters are in the sidebar and View > Filter Processes: Windowed Processes (owners of an on-screen window from the shell window list, polled each reading; native clients without an owner pid are not matched), Selected Processes (the selection and everything it started, via ppid) and GPU Processes (GPU share above 0) join the existing six. built on parity/team-d-activity-monitor; not yet verified on Midget.",
+   "wire": "Check Windowed Processes on the lab machine, and add the Application in the last 8 hours filter (needs a process start-time history)."
   },
   {
    "feature": "Search / filter processes by name",

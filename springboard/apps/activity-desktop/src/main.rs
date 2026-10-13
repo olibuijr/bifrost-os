@@ -22,6 +22,8 @@ mod window;
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::proto::DocErrorCode;
+use bifrost_app::windows::{self, WindowListOptions};
+use bifrost_core::json::Json;
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, TouchKind};
 use model::{ColumnSet, Filter, Tab, UpdateFrequency, SIGNALS};
 use std::io::Write;
@@ -50,11 +52,16 @@ struct ActivityApp {
     monitor: Option<Monitor>,
     /// The save panel asked for, by request id.
     export: Option<(u32, Export)>,
+    /// The window list asked for, by request id.
+    window_request: Option<u32>,
 }
 
 impl ActivityApp {
     /// Asks the shell for the save panel the window wants, if it wants one.
     fn serve(&mut self, ctx: &Ctx) {
+        if self.monitor.as_mut().map_or(false, Monitor::take_window_poll) {
+            self.window_request = Some(windows::list(ctx, WindowListOptions::all()));
+        }
         let Some(request) = self.monitor.as_mut().and_then(Monitor::take_request) else { return };
         // a save still waiting is dropped, and an archive it held is cleaned up
         if let Some((_, Export::File(path))) = self.export.take() {
@@ -254,6 +261,20 @@ impl App for ActivityApp {
         }
     }
 
+    fn service_reply(&mut self, _ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        if self.window_request != Some(request) {
+            return false;
+        }
+        self.window_request = None;
+        let Some(m) = &mut self.monitor else { return true };
+        match windows::decode_list(result) {
+            // a window with no owner process (a native client) cannot be matched to a row
+            Ok(list) => m.set_window_owners(list.iter().filter(|w| w.on_screen && w.owner_pid != 0).map(|w| w.owner_pid).collect()),
+            Err(_) => m.status = "Could not read the window list".into(),
+        }
+        true
+    }
+
     fn next_wake(&self, t: f64) -> Option<f64> {
         self.monitor.as_ref().map(|m| m.next_wake(t))
     }
@@ -328,5 +349,5 @@ impl App for ActivityApp {
 }
 
 fn main() {
-    bifrost_app::run(ActivityApp { monitor: None, export: None });
+    bifrost_app::run(ActivityApp { monitor: None, export: None, window_request: None });
 }

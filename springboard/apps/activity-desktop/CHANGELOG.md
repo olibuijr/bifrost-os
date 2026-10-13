@@ -8,6 +8,7 @@
 - View > CPU History replaces the CPU graph with one strip per core.
 - The Memory tab splits used memory into App, Kernel, Shared, Cached Files, Compressed and Swap.
 - The Energy tab shows which processes keep the computer awake (a blocking sleep or idle lock held with the login manager) and a 12 hour average per process name.
+- The sidebar and View > Filter Processes add Windowed Processes, the ones that own a window on the desktop.
 - The Network tab adds packet counts.
 - The process inspector shows the parent process, page faults and context switches.
 - Process > Sample Process watches every thread of the selected process for ten seconds and reports where each one waited, in a report you can copy or save.

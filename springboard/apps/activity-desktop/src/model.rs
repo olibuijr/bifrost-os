@@ -240,6 +240,9 @@ pub enum Filter {
     System,
     Active,
     Inactive,
+    /// The processes that own a window on the desktop. The owners come from the shell's window list, so the filter
+    /// keeps every row it is given and the caller scopes the rows (`visible_within`), as for Selected.
+    Windowed,
     /// The process selected when the filter was chosen, and everything it started. The scope is the caller's
     /// (`visible_within`); the filter itself keeps every row it is given.
     Selected,
@@ -250,8 +253,8 @@ pub enum Filter {
 pub const FIRST_PERSON_UID: u32 = 1000;
 
 impl Filter {
-    pub const ALL: [Filter; 8] =
-        [Filter::All, Filter::Mine, Filter::Others, Filter::System, Filter::Active, Filter::Inactive, Filter::Selected, Filter::Gpu];
+    pub const ALL: [Filter; 9] =
+        [Filter::All, Filter::Mine, Filter::Others, Filter::System, Filter::Active, Filter::Inactive, Filter::Windowed, Filter::Selected, Filter::Gpu];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -261,6 +264,7 @@ impl Filter {
             Filter::System => "System Processes",
             Filter::Active => "Active Processes",
             Filter::Inactive => "Inactive Processes",
+            Filter::Windowed => "Windowed Processes",
             Filter::Selected => "Selected Processes",
             Filter::Gpu => "GPU Processes",
         }
@@ -274,7 +278,7 @@ impl Filter {
             Filter::System => p.uid < FIRST_PERSON_UID,
             Filter::Active => p.cpu > 0.0,
             Filter::Inactive => p.cpu <= 0.0,
-            Filter::Selected => true,
+            Filter::Windowed | Filter::Selected => true,
             Filter::Gpu => p.gpu > 0.0,
         }
     }
@@ -799,6 +803,17 @@ mod tests {
         assert_eq!(descendants(&procs, 99), HashSet::from([99]));
         let rows = visible_within(&procs, Filter::Selected, 1000, "", Sort { key: SortKey::Pid, descending: false }, Some(&family));
         assert_eq!(rows.iter().map(|p| p.pid).collect::<Vec<_>>(), vec![10, 11, 12]);
+    }
+
+    #[test]
+    fn the_windowed_filter_is_scoped_to_the_window_owners() {
+        let procs = vec![proc(1, "init", 0, 0.0, 0), proc(2, "editor", 1000, 0.0, 0), proc(3, "daemon", 1000, 0.0, 0)];
+        let owners = HashSet::from([2]);
+        let sort = Sort { key: SortKey::Pid, descending: false };
+        let rows = visible_within(&procs, Filter::Windowed, 1000, "", sort, Some(&owners));
+        assert_eq!(rows.iter().map(|p| p.pid).collect::<Vec<_>>(), vec![2]);
+        assert_eq!(Filter::Windowed.label(), "Windowed Processes");
+        assert!(Filter::ALL.contains(&Filter::Windowed));
     }
 
     #[test]
