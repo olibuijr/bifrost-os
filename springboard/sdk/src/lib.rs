@@ -303,6 +303,7 @@ pub mod power_service;
 pub mod process_events;
 pub mod event_client;
 pub mod file_metadata;
+pub mod quarantine;
 pub mod binary_plist;
 pub mod file_wrapper;
 pub mod bookmark;
