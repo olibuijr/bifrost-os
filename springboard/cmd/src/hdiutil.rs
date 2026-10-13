@@ -195,7 +195,7 @@ fn read_head(path: &str) -> Result<(Vec<u8>, u64), String> {
     let mut f = File::open(path).map_err(|e| format!("{path}: {e}"))?;
     let len = f.metadata().map_err(|e| format!("{path}: {e}"))?.len();
     let mut head = Vec::new();
-    f.by_ref().take(HEAD_BYTES).read_to_end(&mut head).map_err(|e| format!("{path}: {e}"))?;
+    std::io::Read::by_ref(&mut f).take(HEAD_BYTES).read_to_end(&mut head).map_err(|e| format!("{path}: {e}"))?;
     Ok((head, len))
 }
 

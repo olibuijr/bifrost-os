@@ -1976,11 +1976,11 @@ impl Shell {
         }
         if app == AppId::Settings {
             let muted = apps().iter().map(|a| a.id).filter(|&a| self.notify.store().is_muted(a)).collect();
-            let apps = apps().iter().filter_map(|a| self.prefs.get(&notify_page::pref_key(a.id)).map(|v| (a.id, notify_page::AppNotif::decode(v)))).collect();
+            let app_notifs: Vec<(AppId, notify_page::AppNotif)> = apps().iter().filter_map(|a| self.prefs.get(&notify_page::pref_key(a.id)).map(|v| (a.id, notify_page::AppNotif::decode(v)))).collect();
             let focus_allowed = apps().iter().map(|a| a.id).filter(|&a| self.notify.store().is_focus_allowed(a)).collect();
             let schedule = self.notify.store().schedule();
             if let Some(st) = &mut self.settings {
-                st.set_notify(&self.ui, schedule, muted, apps, focus_allowed);
+                st.set_notify(&self.ui, schedule, muted, app_notifs, focus_allowed);
             }
         }
         if app == AppId::Terminal {

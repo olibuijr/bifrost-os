@@ -204,7 +204,7 @@ mod tests {
     fn parses_and_answers_versions() {
         assert_eq!(parse_version(b"RFB 003.008\n").unwrap(), Version { major: 3, minor: 8 });
         assert!(parse_version(b"HTTP/1.1 200").is_err());
-        assert_eq!(answer_version(Version { major: 3, minor: 889 }).unwrap(), Version { major: 3, minor: 8 });
+        assert_eq!(answer_version(Version { major: 3, minor: 89 }).unwrap(), Version { major: 3, minor: 8 });
         assert_eq!(answer_version(Version { major: 3, minor: 7 }).unwrap(), Version { major: 3, minor: 7 });
         assert_eq!(answer_version(Version { major: 3, minor: 5 }).unwrap(), Version { major: 3, minor: 3 });
         assert!(answer_version(Version { major: 4, minor: 0 }).is_err());
