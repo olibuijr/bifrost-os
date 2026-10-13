@@ -1697,3 +1697,29 @@
         sh.desk_open(AppId::Settings, 20.0);
         assert!(sh.recent_apps.is_empty());
     }
+
+    #[cfg(feature = "desktop-wayland")]
+    #[test]
+    fn bluetooth_menu_lists_paired_devices_and_connects_or_disconnects_them() {
+        use crate::bare::bluetooth::{Cmd as BtCmd, Device, State, Status};
+        let dev = |addr: &str, name: &str, paired: bool, connected: bool| Device { addr: addr.into(), kind: 0, name: name.into(), paired, connected, audio: false, rssi: None, class: None };
+        let mut sh = shell();
+        // without a controller the extra is not on the bar at all
+        assert!(!sh.menu_buttons().iter().any(|b| b.0 == desktop_bar::Menu::Bluetooth));
+        sh.info.bt = Status {
+            state: State::On,
+            devices: vec![dev("AA:BB:CC:DD:EE:01", "Buds", true, true), dev("AA:BB:CC:DD:EE:02", "Mouse", true, false), dev("AA:BB:CC:DD:EE:03", "Found", false, false)],
+            ..Status::default()
+        };
+        assert!(sh.menu_buttons().iter().any(|b| b.0 == desktop_bar::Menu::Bluetooth), "the extra shows once the radio exists");
+        let rows = sh.menu_row_texts(desktop_bar::Menu::Bluetooth);
+        assert_eq!(rows[0], "Turn Bluetooth Off");
+        assert!(rows.iter().any(|t| t == "\u{2713} Buds"), "connected device checked: {rows:?}");
+        assert!(rows.iter().any(|t| t == "  Mouse"), "paired device listed: {rows:?}");
+        assert!(!rows.iter().any(|t| t.contains("Found")), "a scanned, unpaired device stays out of the menu: {rows:?}");
+        let action_of = |sh: &Shell, text: &str| sh.menu_rows(desktop_bar::Menu::Bluetooth).into_iter().find(|r| r.text == text).and_then(|r| r.action);
+        let mouse = action_of(&sh, "  Mouse").expect("paired device row acts");
+        assert_eq!(sh.run_menu_action(mouse, 0.0), vec![Effect::Bluetooth(BtCmd::Connect("AA:BB:CC:DD:EE:02".into()))]);
+        let buds = action_of(&sh, "\u{2713} Buds").expect("connected device row acts");
+        assert_eq!(sh.run_menu_action(buds, 0.0), vec![Effect::Bluetooth(BtCmd::Disconnect("AA:BB:CC:DD:EE:01".into()))]);
+    }

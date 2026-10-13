@@ -182,6 +182,8 @@ fn run() -> std::io::Result<()> {
     use springboard::net::wifi::Cmd;
     let wifi = springboard::net::wifi::Wifi::start(&dir);
     let bluetooth = springboard::bare::bluetooth::Bluetooth::start(&dir);
+    // the captive network assistant: probed per joined network, shared with the probe thread
+    let captive = std::sync::Arc::new(std::sync::Mutex::new(springboard::net::captive::Assistant::default()));
     // time zone and network time: the saved choices, then the sync task
     {
         let saved = springboard::shell::prefs::Prefs::load(format!("{dir}/settings.ini"));
@@ -294,6 +296,7 @@ fn run() -> std::io::Result<()> {
             battery_health,
             power_profile: String::new(),
             bt: bluetooth.snapshot(),
+            captive_portal: None,
         }
     };
     springboard::bare::timezone::persist_to_system(true);
@@ -935,7 +938,28 @@ fn run() -> std::io::Result<()> {
                 info.wifi_adapter=network.wifi_available;
                 info.desktop_network=Some(network);
             }
+            // a new joined link is probed once on its own thread; a sign-in page is opened in the browser once
+            let link = (info.online && info.ip != "—").then(|| format!("{}|{}", info.current_ssid.clone().unwrap_or_default(), info.ip));
+            let open = match captive.lock() {
+                Ok(mut cap) => {
+                    if let Some(key) = cap.begin(link) {
+                        let shared = captive.clone();
+                        springboard::bare::sys::spawn_named("captive", move || {
+                            let verdict = springboard::net::captive::probe(springboard::net::captive::PROBE_URL, springboard::net::captive::TIMEOUT);
+                            if let Ok(mut c) = shared.lock() {
+                                c.finish(&key, verdict);
+                            }
+                        });
+                    }
+                    info.captive_portal = cap.portal().map(str::to_string);
+                    cap.take_open()
+                }
+                Err(_) => None,
+            };
             shell.set_info(info);
+            if let Some(url) = open {
+                let _ = shell.desktop_open_url(&url, t);
+            }
             let (unix, offset) = sys::wall_time();
             shell.set_wall(unix, offset, sys::now_ms());
             // Night Shift multipliers change by the minute or by a settings flip: once per info tick
