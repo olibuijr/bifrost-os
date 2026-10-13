@@ -2529,6 +2529,10 @@ impl Shell {
                     c.touch(&self.ui, ev, t);
                     c.take_launch()
                 });
+                // a tap on the Search field raises the on-screen keyboard (desktops have a hardware one)
+                if self.store.as_mut().is_some_and(|c| c.take_keyboard_request()) {
+                    self.set_keyboard(true, t);
+                }
                 if let Some(l) = launch {
                     // OPEN: an app the shell registered at start-up opens at once; one installed
                     // since then is registered by restarting the shell (apphost reads once)
@@ -3962,6 +3966,13 @@ impl Shell {
         }
         if out == Out::Hide {
             self.set_keyboard(false, t);
+            return;
+        }
+        // the App Store's Search field takes the typing; nothing else on that screen does
+        if self.screen == Screen::App(AppId::AppStore) {
+            if let Some(c) = self.store.as_mut() {
+                c.key(out);
+            }
             return;
         }
         if self.terminal_panel_input(&out, t) { return; }

@@ -483,6 +483,11 @@ impl Shell {
                     d.hw_text(&self.ui, out);
                 }
             }
+            AppId::AppStore => {
+                if let Some(c) = self.store.as_mut() {
+                    c.key(out);
+                }
+            }
             _ => {}
         }
         vec![]

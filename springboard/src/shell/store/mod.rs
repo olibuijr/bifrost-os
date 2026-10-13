@@ -1,6 +1,6 @@
 //! The App Store: browse, product pages, GET -> progress ring -> OPEN, and an
 //! Updates tab, laid out like the bifrost 14 App Store (Today / Apps / Games /
-//! Updates / Search tab bar, large titles, rows with icon, name, summary and a
+//! Updates / Search tab bar (Search has a query field), large titles, rows with icon, name, summary and a
 //! capsule button in the tint colour). The catalogue comes from
 //! `bifrost.olibuijr.com` on worker threads (cached for offline); downloads
 //! are verified and installed by `install`. The UI thread only reads memory.
@@ -15,6 +15,7 @@ use super::cache::TextCache;
 use super::glyphs::{arc, disc, paint, ring, segment};
 use super::ui::{home_zone, Ui, Weight, CARD_RADIUS_PT, CAPSULE_RADIUS, SECONDARY, STORY_HUES, TINT, WHITE};
 use super::ui::{CONTENT_BG, CARD_BG, SEPARATOR_C, LABEL, FIELD_BG, MATERIAL_HUD_SOLID, MATERIAL_TITLEBAR_SOLID};
+use super::keyboard::Out;
 use super::Event;
 use crate::deildu::jobs::Pool;
 use crate::deildu::scroll::Scroller;
@@ -43,6 +44,9 @@ const RETRY_MS: f64 = 30_000.0;
 const ICON_RETRY_MS: f64 = 60_000.0;
 /// Download progress rings redraw at most this often (4 Hz).
 const PROGRESS_MS: f64 = 250.0;
+/// A product page's screenshot strip: the picture height, and the strip with its gaps (pt).
+const SHOT_H: f32 = 260.0;
+const SHOTS_PT: f32 = 276.0;
 
 /// True when an icon that failed at `failed_at` (None: never) may be fetched at `t`.
 fn icon_due(failed_at: Option<f64>, t: f64) -> bool {
@@ -90,6 +94,10 @@ enum Target {
     Rollback(String),
     /// "Restore Purchases" at the foot of the Updates tab
     Restore,
+    /// the Search tab's query field: tapping it raises the keyboard
+    SearchField,
+    /// "Remove" on an installed app's page: the first tap asks, the second removes
+    Remove(String),
 }
 
 /// A Today card built from the catalogue.
@@ -122,6 +130,8 @@ enum Row {
     /// a pending update: catalogue index, note lines shown, "more" link offered
     Update(usize, usize, bool),
     Chips,
+    /// the query field of the Search tab
+    Search,
     Note(String),
     /// "Restore Purchases" at the foot of the Updates tab
     Restore,
@@ -137,6 +147,7 @@ impl Row {
             Row::App(_) | Row::Local(_) => ROW,
             Row::Update(_, n, _) => ROW + if *n > 0 { NOTE_LINE * *n as f32 + 6.0 } else { 0.0 },
             Row::Chips => 52.0,
+            Row::Search => 52.0,
             Row::Note(_) => 64.0,
             Row::Restore => 52.0,
         }
@@ -156,6 +167,7 @@ pub enum Btn {
 enum Done {
     Catalog(Result<Vec<StoreApp>, String>),
     Icon { id: String, image: Option<Image> },
+    Shot { url: String, image: Option<Image> },
     Installed { id: String, result: Result<InstalledApp, String> },
 }
 
@@ -223,6 +235,18 @@ pub struct AppStore {
     sheet: Option<Sheet>,
     /// the result line under Restore Purchases
     restored: Option<String>,
+    /// the Search tab's query, typed from the on-screen or a hardware keyboard
+    query: String,
+    /// set by a tap on the query field, read once by the shell (it raises the keyboard)
+    keyboard_wanted: bool,
+    /// the app whose Remove was tapped once: the next tap removes it
+    confirm_remove: Option<String>,
+    /// decoded screenshots by URL, and each one resized to the strip height in px
+    shots: HashMap<String, Image>,
+    shot_px: HashMap<(String, usize), Image>,
+    shot_pending: HashSet<String>,
+    /// when each screenshot that would not load failed (retried like icons)
+    shot_failed: HashMap<String, f64>,
 }
 
 /// What the product page and rows call a system package's category.
@@ -234,6 +258,23 @@ fn category_label(a: &StoreApp) -> &str {
 
 fn is_game(a: &StoreApp) -> bool {
     a.category.eq_ignore_ascii_case("games")
+}
+
+/// Whether an entry matches a search: every word of the query appears in its name, summary, category or id (any case).
+fn matches_query(a: &StoreApp, query: &str) -> bool {
+    let hay = format!("{} {} {} {}", a.name, a.summary, a.category, a.id).to_lowercase();
+    query.split_whitespace().all(|w| hay.contains(&w.to_lowercase()))
+}
+
+/// Remove in two taps: the first asks (the button reads "Confirm"), the second removes. True on the second tap.
+fn remove_step(confirm: &mut Option<String>, id: &str) -> bool {
+    if confirm.as_deref() == Some(id) {
+        *confirm = None;
+        true
+    } else {
+        *confirm = Some(id.to_string());
+        false
+    }
 }
 
 impl AppStore {
@@ -279,6 +320,13 @@ impl AppStore {
             bought: Ledger::new(),
             sheet: None,
             restored: None,
+            query: String::new(),
+            keyboard_wanted: false,
+            confirm_remove: None,
+            shots: HashMap::new(),
+            shot_px: HashMap::new(),
+            shot_pending: HashSet::new(),
+            shot_failed: HashMap::new(),
         }
     }
 
@@ -464,9 +512,14 @@ impl AppStore {
             }
             Tab::Search => {
                 r.push(Row::Title("Search"));
+                r.push(Row::Search);
                 r.push(Row::Chips);
                 let cats = self.categories();
-                let list: Vec<usize> = all.into_iter().filter(|&i| self.category.is_none_or(|c| cats.get(c) == Some(&self.catalog[i].category))).collect();
+                let q = self.query.trim();
+                let list: Vec<usize> = all.into_iter().filter(|&i| self.category.is_none_or(|c| cats.get(c) == Some(&self.catalog[i].category)) && matches_query(&self.catalog[i], q)).collect();
+                if list.is_empty() && !q.is_empty() && !self.catalog.is_empty() {
+                    r.push(Row::Note(format!("No results for \u{201c}{q}\u{201d}.")));
+                }
                 r.extend(by_name(list, &self.catalog).into_iter().map(Row::App));
             }
         }
@@ -496,6 +549,19 @@ impl AppStore {
                 Done::Catalog(Err(e)) => {
                     self.fetching = false;
                     self.error = Some(e);
+                }
+                Done::Shot { url, image } => {
+                    self.shot_pending.remove(&url);
+                    match image {
+                        Some(img) => {
+                            self.shot_failed.remove(&url);
+                            self.shot_px.retain(|(u, _), _| *u != url);
+                            self.shots.insert(url, img);
+                        }
+                        None => {
+                            self.shot_failed.insert(url, self.clock);
+                        }
+                    }
                 }
                 Done::Icon { id, image } => {
                     self.icon_pending.remove(&id);
@@ -563,6 +629,7 @@ impl AppStore {
             }
         }
         self.clock = t;
+        self.fetch_shots(t);
         // only the icons still to fetch are copied out of the lists
         let wanted: Vec<(String, String)> = self
             .catalog
@@ -587,6 +654,25 @@ impl AppStore {
                         None => None,
                     };
                     Done::Icon { id, image: bytes.and_then(|b| crate::cg::imageio::decode(&b)) }
+                });
+            }
+        }
+    }
+
+    /// The open product page's screenshots, each fetched once (a failed one is retried like an icon).
+    fn fetch_shots(&mut self, t: f64) {
+        let urls: Vec<String> = self.page.as_ref().filter(|p| !p.history).and_then(|p| self.find(&p.id)).map(|a| a.screenshots.clone()).unwrap_or_default();
+        for url in urls {
+            if self.shots.contains_key(&url) || self.shot_pending.contains(&url) || !icon_due(self.shot_failed.get(&url).copied(), t) {
+                continue;
+            }
+            self.shot_pending.insert(url.clone());
+            if let Some(p) = &self.pool {
+                let abs = net::absolute(&url);
+                p.spawn(move || {
+                    crate::gfx::affinity::background_thread();
+                    let bytes = net::get(&abs, 4_000_000).ok();
+                    Done::Shot { url, image: bytes.and_then(|b| crate::cg::imageio::decode(&b)) }
                 });
             }
         }
@@ -675,6 +761,49 @@ impl AppStore {
         self.dirty = true;
     }
 
+    /// Whether the page offers Remove: an installed app the customer chose, not a system part, a service or a
+    /// preinstalled package, and not being downloaded now.
+    fn can_remove(&self, id: &str) -> bool {
+        !self.jobs.contains_key(id) && self.installed.iter().any(|i| i.id == id && !i.is_system() && !i.is_preinstalled() && !i.is_service())
+    }
+
+    /// Uninstalls an app and refreshes the Installed list and the home screen.
+    fn remove(&mut self, id: &str) {
+        let root = self.root.clone();
+        match install::uninstall(&root, id) {
+            Ok(()) => {
+                self.registry_changed = true;
+                self.installed = install::installed_in(&root);
+                self.failed.remove(id);
+                self.expanded.remove(id);
+            }
+            Err(e) => {
+                self.failed.insert(id.to_string(), e);
+            }
+        }
+    }
+
+    /// Typed text for the Search tab (from the on-screen keyboard or a hardware keyboard); other keys are ignored.
+    pub fn key(&mut self, out: Out) {
+        if self.tab != Tab::Search || self.page.is_some() || self.sheet.is_some() {
+            return;
+        }
+        match out {
+            Out::Text(s) => self.query.push_str(&s),
+            Out::Backspace => {
+                self.query.pop();
+            }
+            _ => return,
+        }
+        self.scroll.jump_top();
+        self.dirty = true;
+    }
+
+    /// True once after a tap on the query field: the shell raises the on-screen keyboard for it.
+    pub fn take_keyboard_request(&mut self) -> bool {
+        std::mem::take(&mut self.keyboard_wanted)
+    }
+
     fn press_button(&mut self, id: &str) {
         match self.find(id).map(|a| self.button(a)) {
             Some(Btn::None) => {}
@@ -714,7 +843,7 @@ impl AppStore {
         if p.history {
             return ui.pt(24.0 + p.hist.iter().map(|(_, _, l)| 40.0 + 22.0 * l.len() as f32 + 16.0).sum::<f32>() + 60.0);
         }
-        ui.pt(150.0 + 84.0 + 40.0 + 22.0 * p.desc.len() as f32 + self.rollback_height(&p.id) + self.whatsnew_height() + 60.0)
+        ui.pt(150.0 + 84.0 + 40.0 + 22.0 * p.desc.len() as f32 + self.rollback_height(&p.id) + self.whatsnew_height() + 60.0) + ui.pt(self.shots_pt())
     }
 
     /// Height (pt) of the What's New block on the product page; 0 without release notes.
@@ -730,8 +859,22 @@ impl AppStore {
 
     /// Rect (px) of the "Roll Back" row: below the description, above What's New.
     fn rollback_rect(&self, ui: &Ui, n_desc: usize) -> (f32, f32, f32, f32) {
-        let y = self.top(ui) - self.scroll.offset() + ui.pt(150.0 + 84.0 + 40.0 + 22.0 * n_desc as f32 + 8.0);
+        let y = self.top(ui) - self.scroll.offset() + ui.pt(150.0 + 84.0 + 40.0 + self.shots_pt() + 22.0 * n_desc as f32 + 8.0);
         (ui.pt(MARGIN), y, self.card_w(ui), ui.pt(44.0))
+    }
+
+    /// Height (pt) of the screenshot strip on the open product page; 0 without screenshots.
+    fn shots_pt(&self) -> f32 {
+        match self.page.as_ref().and_then(|p| self.find(&p.id)) {
+            Some(a) if !a.screenshots.is_empty() => SHOTS_PT,
+            _ => 0.0,
+        }
+    }
+
+    /// Rect (px) of the Remove button: right-hand side of the product page's button row.
+    fn remove_btn_rect(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let (bw, bh) = (ui.pt(BTN_W + 8.0), ui.pt(BTN_H + 2.0));
+        (self.w as f32 - ui.pt(MARGIN) - bw, self.top(ui) - self.scroll.offset() + ui.pt(100.0), bw, bh)
     }
 
     fn whatsnew_height(&self) -> f32 {
@@ -745,7 +888,7 @@ impl AppStore {
     fn history_row(&self, ui: &Ui) -> (f32, f32) {
         let n = self.page.as_ref().map_or(0, |p| p.desc.len());
         let nl = self.page.as_ref().map_or(0, |p| p.whatsnew.len());
-        (self.top(ui) - self.scroll.offset() + ui.pt(150.0 + 84.0 + 40.0 + 22.0 * n as f32 + 16.0 + 78.0 + 22.0 * nl as f32 + 8.0), ui.pt(44.0))
+        (self.top(ui) - self.scroll.offset() + ui.pt(150.0 + 84.0 + 40.0 + self.shots_pt() + 22.0 * n as f32 + 16.0 + 78.0 + 22.0 * nl as f32 + 8.0), ui.pt(44.0))
     }
 
     fn content_height(&self, ui: &Ui) -> f32 {
@@ -807,6 +950,12 @@ impl AppStore {
                     return Some(Target::Rollback(p.id.clone()));
                 }
             }
+            if self.can_remove(&p.id) {
+                let (rx, ry, rw, rh) = self.remove_btn_rect(ui);
+                if x >= rx && x < rx + rw && y >= ry && y < ry + rh {
+                    return Some(Target::Remove(p.id.clone()));
+                }
+            }
             let (bx, by, bw, bh) = self.page_btn_rect(ui);
             return (x >= bx && x < bx + bw && y >= by && y < by + bh).then(|| Target::Button(p.id.clone()));
         }
@@ -846,6 +995,7 @@ impl AppStore {
                 }
                 Row::Header(_, true) if x > self.w as f32 - ui.pt(130.0) => found = Some(Target::UpdateAll),
                 Row::Restore => found = Some(Target::Restore),
+                Row::Search => found = Some(Target::SearchField),
                 Row::Chips => {
                     let n = self.categories().len() + 1;
                     let cw = self.card_w(ui) / n as f32;
@@ -931,6 +1081,7 @@ impl AppStore {
                 self.scroll.jump_top();
             }
             Target::Back => {
+                self.confirm_remove = None;
                 if let Some(p) = self.page.take() {
                     self.tab = p.back;
                     self.fit_scroll(ui);
@@ -950,6 +1101,12 @@ impl AppStore {
             Target::Button(id) => self.press_button(&id),
             Target::Rollback(id) => self.rollback(&id),
             Target::Restore => self.restore_purchases(),
+            Target::SearchField => self.keyboard_wanted = true,
+            Target::Remove(id) => {
+                if remove_step(&mut self.confirm_remove, &id) {
+                    self.remove(&id);
+                }
+            }
             Target::UpdateAll => {
                 for i in self.update_list() {
                     let id = self.catalog[i].id.clone();
@@ -1162,6 +1319,13 @@ impl AppStore {
                     let tw = ui.measure(text, 17.0, Weight::Regular);
                     self.put(&mut c, ui, text, 17.0, Weight::Regular, TINT, false, (self.w as f32 - tw) / 2.0, y + h / 2.0);
                 }
+                Row::Search => {
+                    let fy = y + ui.pt(6.0);
+                    c.fill_rrect(x, fy, w, ui.pt(40.0), CAPSULE_RADIUS, fill());
+                    let (text, ink) = if self.query.is_empty() { ("Search apps and games".to_string(), SECONDARY) } else { (self.query.clone(), label()) };
+                    let text = ui.fit(&text, 17.0, w - ui.pt(32.0));
+                    self.put(&mut c, ui, &text, 17.0, Weight::Regular, ink, false, x + ui.pt(16.0), fy + ui.pt(20.0));
+                }
                 Row::Chips => {
                     let mut names = vec!["All".to_string()];
                     names.extend(self.categories());
@@ -1327,6 +1491,13 @@ impl AppStore {
         let b = self.button(&a);
         let r = self.page_btn_rect(ui);
         self.draw_button(&mut c, ui, r, b);
+        if self.can_remove(&a.id) {
+            let (rx, ry, rw, rh) = self.remove_btn_rect(ui);
+            let text = if self.confirm_remove.as_deref() == Some(a.id.as_str()) { "Confirm" } else { "Remove" };
+            c.fill_rrect(rx, ry, rw, rh, CAPSULE_RADIUS, fill());
+            let lw = ui.measure(text, 15.0, Weight::Bold);
+            self.put(&mut c, ui, text, 15.0, Weight::Bold, super::ui::SYSTEM_RED, false, rx + (rw - lw) / 2.0, ry + rh / 2.0);
+        }
         let mut y = y0 + ui.pt(150.0);
         let w = self.card_w(&*ui);
         c.fill_rect(x as usize, y as usize, w as usize, 1, sep());
@@ -1342,6 +1513,10 @@ impl AppStore {
         }
         y += ui.pt(84.0);
         c.fill_rect(x as usize, y as usize, w as usize, 1, sep());
+        if self.shots_pt() > 0.0 {
+            self.draw_shots(&mut c, ui, &a.id, x, y + ui.pt(16.0));
+        }
+        y += ui.pt(self.shots_pt());
         y += ui.pt(40.0);
         for line in &desc {
             self.put(&mut c, ui, line, 17.0, Weight::Regular, label(), false, x, y);
@@ -1373,6 +1548,41 @@ impl AppStore {
         if let Some(e) = self.failed.get(&a.id).cloned() {
             let e = ui.fit(&format!("Install failed: {e}"), 13.0, w);
             self.put(&mut c, ui, &e, 13.0, Weight::Regular, super::ui::SYSTEM_RED, false, x, y + ui.pt(24.0));
+        }
+    }
+
+    /// The screenshot strip: each picture scaled to `SHOT_H` tall, a tinted placeholder until it arrives.
+    fn draw_shots(&mut self, s: &mut Surface, ui: &Ui, id: &str, x: f32, y: f32) {
+        let urls = match self.find(id) {
+            Some(a) => a.screenshots.clone(),
+            None => return,
+        };
+        let h = ui.pt(SHOT_H) as usize;
+        let gap = ui.pt(12.0);
+        let mut cx = x;
+        for url in urls {
+            let key = (url.clone(), h);
+            if !self.shot_px.contains_key(&key) {
+                if let Some(src) = self.shots.get(&url) {
+                    let w = ((h as f32 * src.w as f32 / src.h.max(1) as f32).round() as usize).max(1);
+                    let img = src.resized(w, h);
+                    self.shot_px.insert(key.clone(), img);
+                }
+            }
+            match self.shot_px.get(&key) {
+                Some(img) => {
+                    s.blit(img, cx.round() as i32, y.round() as i32, 255, 255);
+                    cx += img.w as f32 + gap;
+                }
+                None => {
+                    let w = ui.pt(SHOT_H * 9.0 / 16.0);
+                    s.fill_rrect(cx, y, w, h as f32, ui.pt(12.0), fill());
+                    cx += w + gap;
+                }
+            }
+            if cx > self.w as f32 {
+                break;
+            }
         }
     }
 
@@ -1832,5 +2042,95 @@ mod tests {
         s.activate(&ui, Target::Restore);
         assert_eq!(s.restored.as_deref(), Some("No purchases to restore."));
         assert!(s.rows().iter().any(|r| *r == Row::Note("No purchases to restore.".into())));
+    }
+
+    #[test]
+    fn a_search_matches_every_word_across_name_summary_category_and_id() {
+        let mut calc = StoreApp { id: "is.o.calc".into(), name: "Calc".into(), summary: "Adds numbers quickly".into(), category: "Utilities".into(), ..Default::default() };
+        assert!(matches_query(&calc, ""), "an empty query matches everything");
+        assert!(matches_query(&calc, "CALC") && matches_query(&calc, "numbers utilities"));
+        assert!(matches_query(&calc, "o.calc"), "the id is searched too");
+        assert!(!matches_query(&calc, "calc chess"), "every word must match");
+        calc.summary.clear();
+        assert!(!matches_query(&calc, "numbers"));
+    }
+
+    #[test]
+    fn typing_filters_the_search_tab_and_says_when_nothing_matches() {
+        let mut s = store();
+        s.tab = Tab::Search;
+        assert!(s.rows().contains(&Row::Search), "the query field is the first row under the title");
+        s.key(Out::Text("chess".into()));
+        assert_eq!(s.query, "chess");
+        assert_eq!(listed(&s), vec!["is.o.chess".to_string()]);
+        s.key(Out::Backspace);
+        s.key(Out::Backspace);
+        s.key(Out::Backspace);
+        s.key(Out::Backspace);
+        s.key(Out::Backspace);
+        assert_eq!(listed(&s).len(), 2, "an empty query lists every app again");
+        s.key(Out::Text("zzz".into()));
+        assert!(s.rows().iter().any(|r| matches!(r, Row::Note(n) if n.starts_with("No results"))));
+        s.key(Out::Enter);
+        s.key(Out::Named("Up"));
+        assert_eq!(s.query, "zzz", "keys other than text and backspace are ignored");
+    }
+
+    #[test]
+    fn typing_goes_nowhere_off_the_search_tab_or_on_a_product_page() {
+        let mut s = store();
+        s.tab = Tab::Apps;
+        s.key(Out::Text("x".into()));
+        assert!(s.query.is_empty(), "the Apps tab has no query field");
+        s.tab = Tab::Search;
+        s.page = Some(Page { id: "is.o.calc".into(), back: Tab::Search, desc: vec![], list_scroll: 0.0, whatsnew: vec![], history: false, hist: vec![] });
+        s.key(Out::Text("x".into()));
+        assert!(s.query.is_empty(), "a product page is open");
+    }
+
+    #[test]
+    fn tapping_the_query_field_asks_for_the_keyboard_once() {
+        let ui = crate::shell::tests::ui();
+        let mut s = store();
+        s.tab = Tab::Search;
+        let mut field_row_y = None;
+        s.each_row(&ui, |r, ry, _| {
+            if *r == Row::Search {
+                field_row_y = Some(ry);
+            }
+        });
+        assert!(field_row_y.is_some(), "the Search row is laid out");
+        s.activate(&ui, Target::SearchField);
+        assert!(s.take_keyboard_request());
+        assert!(!s.take_keyboard_request(), "the request is read once");
+    }
+
+    #[test]
+    fn remove_takes_two_taps_and_only_for_an_app_the_customer_chose() {
+        let mut confirm = None;
+        assert!(!remove_step(&mut confirm, "is.o.calc"), "the first tap only asks");
+        assert_eq!(confirm.as_deref(), Some("is.o.calc"));
+        assert!(remove_step(&mut confirm, "is.o.calc"), "the second tap removes");
+        assert!(confirm.is_none());
+
+        let mut s = with_system();
+        s.installed = vec![local("is.o.calc", "1.0.0"), InstalledApp { kind: "system".into(), ..local("is.o.kb", "1.0.0") }];
+        assert!(s.can_remove("is.o.calc"));
+        assert!(!s.can_remove("is.o.kb"), "a system component is never removed here");
+        assert!(!s.can_remove("is.o.chess"), "an app that is not installed has nothing to remove");
+        s.jobs.insert("is.o.calc".into(), Job { done: Arc::new(AtomicU64::new(0)), size: 1, cancel: Arc::new(AtomicBool::new(false)) });
+        assert!(!s.can_remove("is.o.calc"), "not while it is being downloaded");
+    }
+
+    #[test]
+    fn the_product_page_reserves_a_strip_only_for_apps_with_screenshots() {
+        let ui = crate::shell::tests::ui();
+        let mut s = store();
+        s.catalog[0].screenshots = vec!["/s/1.png".into()];
+        s.page = Some(Page { id: "is.o.calc".into(), back: Tab::Today, desc: vec![], list_scroll: 0.0, whatsnew: vec![], history: false, hist: vec![] });
+        assert_eq!(s.shots_pt(), SHOTS_PT);
+        s.page = Some(Page { id: "is.o.chess".into(), back: Tab::Today, desc: vec![], list_scroll: 0.0, whatsnew: vec![], history: false, hist: vec![] });
+        assert_eq!(s.shots_pt(), 0.0);
+        assert!(s.page_height(&ui) > 0.0);
     }
 }
