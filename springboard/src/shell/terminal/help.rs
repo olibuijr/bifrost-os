@@ -49,6 +49,8 @@ pub fn lines() -> Vec<(bool, String)> {
         (false, "Paste escaped text puts a backslash before"),
         (false, "spaces and shell symbols."),
         (false, "Login shell sets the shell new tabs run."),
+        (false, "Text and background colors sets your own,"),
+        (false, "the last stop of the Color theme row."),
     ];
     out.extend(rest.iter().map(|&(heading, text)| (heading, text.to_string())));
     out

@@ -451,10 +451,11 @@ fn the_added_menu_rows_sit_where_the_actions_expect_them() {
         (item::LOGIN_SHELL, "Login shell"),
         (item::GROUP_LAUNCH, "Open window group at launch"),
         (item::HELP, "Terminal help"),
+        (item::COLORS, "Text and background colors"),
     ] {
         assert_eq!(MENU[index], label);
     }
-    assert_eq!(item::HELP, MENU.len() - 1, "the last row is the help");
+    assert_eq!(item::COLORS, MENU.len() - 1, "the last row is the colors");
     assert_eq!(menu_key(item::MARK), Some("\u{2318}U"));
 }
 
@@ -634,6 +635,35 @@ fn the_colour_theme_cycles_into_the_profiles_and_persists() {
     let mut again = TerminalUi::default();
     again.load(&sh.prefs);
     assert_eq!(again.profile, None);
+}
+
+#[test]
+fn custom_colors_become_the_last_entry_of_the_theme_cycle() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(item::COLORS, 2000.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Colors);
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "zzz");
+    sh.terminal_panel_input(&Out::Enter, 2100.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::Colors, "colors that do not parse keep the panel open");
+    assert!(sh.terminal_ui.message.starts_with("Type the text color"), "{}", sh.terminal_ui.message);
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "ffffff 102030");
+    sh.terminal_panel_input(&Out::Enter, 2200.0);
+    assert_eq!(sh.terminal_ui.panel, Panel::None);
+    assert_eq!(sh.terminal_ui.profile, Some(profile_table::PROFILES.len()), "the custom colors are in use");
+    assert_eq!(sh.term.as_ref().unwrap().background(), pack(16, 32, 48, 255));
+    assert_eq!(sh.terminal_background(), pack(16, 32, 48, 255));
+    let mut reloaded = TerminalUi::default();
+    reloaded.load(&sh.prefs);
+    assert_eq!(reloaded.custom_colors, Some(((255, 255, 255), (16, 32, 48))));
+    assert_eq!(reloaded.profile, sh.terminal_ui.profile);
+    sh.terminal_action(4, 2300.0);
+    assert_eq!((sh.terminal_ui.settings.theme, sh.terminal_ui.profile), (0, None), "Custom is the last stop of the cycle");
+    assert!(sh.terminal_ui.custom_colors.is_some(), "and the colors wait for the next time round");
+    sh.terminal_menu_action(item::COLORS, 2400.0);
+    sh.terminal_ui.entry.as_mut().unwrap().set_text(&sh.ui, "");
+    sh.terminal_panel_input(&Out::Enter, 2500.0);
+    assert_eq!(sh.terminal_ui.custom_colors, None, "an empty line gives them up");
+    assert_eq!(sh.terminal_ui.message, "Custom colors removed");
 }
 
 #[test]

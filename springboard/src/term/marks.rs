@@ -75,15 +75,23 @@ impl Marks {
 /// Offsets into `chunk` where a prompt report begins. `carry` is the tail of the bytes before it (see `tail`), so a
 /// report split between two reads is found once, at offset 0 of the chunk that completes it.
 pub fn prompt_starts(carry: &[u8], chunk: &[u8]) -> Vec<usize> {
-    let joined: Vec<u8> = carry.iter().chain(chunk).copied().collect();
-    let mut out: Vec<usize> = Vec::new();
-    for (i, w) in joined.windows(PROMPT.len()).enumerate() {
-        if w == PROMPT {
-            let at = i.saturating_sub(carry.len());
-            if out.last() != Some(&at) {
-                out.push(at);
-            }
+    let mut out = Vec::new();
+    // a report that began in the carry and ends in this chunk (the carry is too short to hold a whole one)
+    if !carry.is_empty() {
+        let mut head = carry.to_vec();
+        head.extend_from_slice(&chunk[..chunk.len().min(PROMPT.len() - 1)]);
+        if (0..carry.len()).any(|i| head[i..].starts_with(PROMPT)) {
+            out.push(0);
         }
+    }
+    // reports inside the chunk: only the bytes that open an escape sequence are looked at
+    let mut from = 0;
+    while let Some(found) = chunk[from..].iter().position(|&b| b == 0x1b) {
+        let at = from + found;
+        if chunk[at..].starts_with(PROMPT) {
+            out.push(at);
+        }
+        from = at + 1;
     }
     out
 }
@@ -91,8 +99,13 @@ pub fn prompt_starts(carry: &[u8], chunk: &[u8]) -> Vec<usize> {
 /// The bytes to carry into the next read: the last few of `carry` and `chunk`, too short to hold a whole report.
 pub fn tail(carry: &[u8], chunk: &[u8]) -> Vec<u8> {
     let keep = PROMPT.len() - 1;
-    let joined: Vec<u8> = carry.iter().chain(chunk).copied().collect();
-    joined[joined.len().saturating_sub(keep)..].to_vec()
+    if chunk.len() >= keep {
+        return chunk[chunk.len() - keep..].to_vec();
+    }
+    let from_carry = (keep - chunk.len()).min(carry.len());
+    let mut out = carry[carry.len() - from_carry..].to_vec();
+    out.extend_from_slice(chunk);
+    out
 }
 
 #[cfg(test)]

@@ -1,15 +1,21 @@
 //! Profiles: the colour theme and text size (Term Basic, Pro, Homebrew ... seam).
 use super::profile_table::PROFILES;
 use super::*;
-use termcore::palette::Theme;
+use termcore::palette::{Rgb, Theme};
 
 /// The colours of profile `i` as a theme: its text and background over the dark or the light set of ANSI colours,
-/// by how light the background is. The profile's opacity is not drawn (the grid is opaque).
-pub fn profile_theme(i: usize) -> Theme {
-    let p = &PROFILES[i.min(PROFILES.len() - 1)];
-    let (r, g, b) = p.bg;
-    let light = (299 * u32::from(r) + 587 * u32::from(g) + 114 * u32::from(b)) / 1000 >= 128;
-    Theme { name: p.name, fg: p.fg, bg: p.bg, ansi: THEMES[usize::from(light)].ansi }
+/// by how light the background is. The profile's opacity is not drawn (the grid is opaque). An index past the profiles
+/// is the user's own `custom` colours.
+pub fn profile_theme(i: usize, custom: Option<(Rgb, Rgb)>) -> Theme {
+    let (name, fg, bg) = match PROFILES.get(i) {
+        Some(p) => (p.name, p.fg, p.bg),
+        None => {
+            let (fg, bg) = custom.unwrap_or((THEMES[0].fg, THEMES[0].bg));
+            ("Custom", fg, bg)
+        }
+    };
+    let light = (299 * u32::from(bg.0) + 587 * u32::from(bg.1) + 114 * u32::from(bg.2)) / 1000 >= 128;
+    Theme { name, fg, bg, ansi: THEMES[usize::from(light)].ansi }
 }
 
 /// The step after the current colours in the Color theme cycle: the `themes` themes in order, then the profiles after
@@ -26,7 +32,7 @@ pub fn next_scheme(theme: usize, profile: Option<usize>, themes: usize, profiles
 /// The name shown for the current colours: the profile's, else the theme's.
 pub fn scheme_name(theme: usize, profile: Option<usize>) -> &'static str {
     match profile {
-        Some(p) => PROFILES[p.min(PROFILES.len() - 1)].name,
+        Some(p) => PROFILES.get(p).map_or("Custom", |profile| profile.name),
         None => THEMES[theme.min(THEMES.len() - 1)].name,
     }
 }
@@ -34,13 +40,25 @@ pub fn scheme_name(theme: usize, profile: Option<usize>) -> &'static str {
 impl Shell {
     /// The colours the tabs draw with when a profile is chosen; None draws the numbered theme.
     pub(crate) fn terminal_scheme(&self) -> Option<Theme> {
-        self.terminal_ui.profile.map(profile_theme)
+        let custom = self.terminal_ui.custom_colors;
+        self.terminal_ui.profile.map(|p| profile_theme(p, custom))
+    }
+
+    /// The text and background colours the tabs draw with now.
+    pub(crate) fn terminal_colors(&self) -> (Rgb, Rgb) {
+        match self.terminal_scheme() {
+            Some(theme) => (theme.fg, theme.bg),
+            None => {
+                let base = &THEMES[self.terminal_ui.settings.theme.min(THEMES.len() - 1)];
+                (base.fg, base.bg)
+            }
+        }
     }
 
     /// The pixel behind and around the grid, for the strips the canvas does not cover.
     pub(crate) fn terminal_background(&self) -> u32 {
         match self.terminal_ui.profile {
-            Some(p) => crate::term::color_pixel(profile_theme(p).bg),
+            Some(p) => crate::term::color_pixel(profile_theme(p, self.terminal_ui.custom_colors).bg),
             None => crate::term::theme_background(self.terminal_ui.settings.theme),
         }
     }
@@ -106,10 +124,11 @@ impl Shell {
     pub(super) fn terminal_appearance(&mut self) {
         let settings = self.terminal_ui.settings;
         let scheme = self.terminal_ui.profile;
+        let custom = self.terminal_ui.custom_colors;
         for term in self.term.iter_mut() {
             term.appearance_with(
                 settings.theme,
-                scheme.map(profile_theme),
+                scheme.map(|p| profile_theme(p, custom)),
                 self.ui.pt(termcore::zoom::SIZES[settings.zoom] as f32),
             );
         }
@@ -147,12 +166,16 @@ mod tests {
 
     #[test]
     fn a_profile_brings_its_colours_over_the_ansi_set_that_suits_its_background() {
-        let pro = profile_theme(1);
+        let pro = profile_theme(1, None);
         assert_eq!((pro.name, pro.fg, pro.bg), ("Pro", (242, 242, 242), (0, 0, 0)));
         assert_eq!(pro.ansi, THEMES[0].ansi, "dark background, dark set");
-        assert_eq!(profile_theme(4).ansi, THEMES[1].ansi, "a light background gets the light set");
-        assert_eq!(profile_theme(99).name, "Red Sands", "past the end is the last profile");
+        assert_eq!(profile_theme(4, None).ansi, THEMES[1].ansi, "a light background gets the light set");
+        let own = profile_theme(PROFILES.len(), Some(((250, 250, 250), (20, 20, 20))));
+        assert_eq!((own.name, own.fg, own.bg), ("Custom", (250, 250, 250), (20, 20, 20)));
+        assert_eq!(own.ansi, THEMES[0].ansi);
+        assert_eq!(profile_theme(PROFILES.len(), None).bg, THEMES[0].bg, "no custom colours: the first theme's");
         assert_eq!(scheme_name(2, None), "Solarized Dark");
         assert_eq!(scheme_name(0, Some(3)), "Ocean");
+        assert_eq!(scheme_name(0, Some(PROFILES.len())), "Custom");
     }
 }

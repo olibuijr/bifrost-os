@@ -115,6 +115,7 @@ impl Shell {
                 | Panel::Command
                 | Panel::Title
                 | Panel::Shell
+                | Panel::Colors
                 | Panel::Help
         );
         match ev {

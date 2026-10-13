@@ -11,10 +11,10 @@
  "summary": {
   "features": 37,
   "parity": 10,
-  "partial": 21,
-  "gap": 5,
+  "partial": 22,
+  "gap": 4,
   "n/a": 1,
-  "coverage_pct": 56.9
+  "coverage_pct": 58.3
  },
  "features": [
   {
@@ -139,18 +139,18 @@
    "area": "settings",
    "apple": "Settings > Profiles: Basic, Pro, Homebrew, Ocean, Novel, Red Sands, Silver Aerogel, Clear Dark/Light",
    "status": "partial",
-   "bifrost": "springboard/src/shell/terminal/profile_table.rs:84",
-   "note": "The iosterm core has three themes cycled from the More menu; the nine-profile table is defined but not wired to the menu or sessions.",
-   "wire": "Wire PROFILES into profiles.rs (terminal_appearance) replacing palette::THEMES in the state and More menu, with a profile picker panel."
+   "bifrost": "springboard/src/shell/terminal/profiles.rs:9",
+   "note": "More > Color theme cycles the three themes and then the eight profiles after Basic (Pro, Homebrew, Ocean, Novel, Silver Aerogel, Clear Dark, Clear Light, Red Sands), in every tab, the strip around the grid and new tabs, kept in terminal.profile. The Clear profiles are opaque. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Add a profile picker panel and apply each profile's text size, caret and opacity (see Window background image and translucency)."
   },
   {
    "feature": "Profile editor: ANSI colours, bold, blink, text",
    "area": "settings",
    "apple": "Profiles > Text: font, character and line spacing, ANSI colours, bright for bold, antialias, blinking text",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Colour, font and spacing are fixed per theme; only cursor style, blink and zoom change.",
-   "wire": "Add a settings panel (Panel::Profile) with font picker, character/line spacing steppers, ANSI palette wells and bold/bright/blink toggles stored per profile."
+   "status": "partial",
+   "bifrost": "springboard/src/shell/terminal/colors.rs:47",
+   "note": "More > Text and background colors takes the text and background colour in hex and keeps them as the Custom entry at the end of the Color theme cycle (kept in terminal.colors). Font, spacing, the ANSI palette and the bold and blink options are not editable. Built on parity/team-d-terminal; not yet verified on Midget.",
+   "wire": "Add a font picker, character and line spacing steppers, ANSI palette wells and bold, bright and blink toggles stored per profile."
   },
   {
    "feature": "Cursor style and blink",

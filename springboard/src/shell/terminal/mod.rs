@@ -26,6 +26,7 @@ use termcore::{
 use std::{fs, path::PathBuf};
 
 pub mod layout;
+mod colors;
 mod command;
 mod split;
 mod control;
@@ -61,7 +62,7 @@ const ACCENT: u32 = pack(42, 166, 106, 255);
 const ROW: f32 = 40.0;
 /// Height of one line of the help page.
 const HELP_PITCH: f32 = 30.0;
-const MENU: [&str; 41] = [
+const MENU: [&str; 42] = [
     "Find in scrollback",
     "Smaller text",
     "Larger text",
@@ -103,6 +104,7 @@ const MENU: [&str; 41] = [
     "Login shell",
     "Open window group at launch",
     "Terminal help",
+    "Text and background colors",
 ];
 /// More-menu rows added after the first 24; `terminal_menu_action` and the row details match on these.
 pub(crate) mod item {
@@ -123,6 +125,7 @@ pub(crate) mod item {
     pub const LOGIN_SHELL: usize = 38;
     pub const GROUP_LAUNCH: usize = 39;
     pub const HELP: usize = 40;
+    pub const COLORS: usize = 41;
 }
 /// True for the Find line's "n of m" match count (secondary), false for "No matches" and warnings (red).
 fn find_count(message: &str) -> bool {
@@ -161,6 +164,8 @@ pub enum Panel {
     Shell,
     /// Terminal help: the keys and gestures
     Help,
+    /// Text and background colors: the Custom entry of the Color theme cycle
+    Colors,
 }
 pub struct TerminalUi {
     pub settings: Settings,
@@ -204,8 +209,11 @@ pub struct TerminalUi {
     pub login_shell: Option<String>,
     /// the saved window group opens when the Terminal starts
     pub group_launch: bool,
-    /// the colour profile after Basic in use (an index into `profile_table::PROFILES`); None draws the numbered theme
+    /// the colour profile after Basic in use (an index into `profile_table::PROFILES`, or past them the custom colours);
+    /// None draws the numbered theme
     pub profile: Option<usize>,
+    /// the user's own text and background colours (the Custom entry of the Color theme cycle)
+    pub custom_colors: Option<(termcore::palette::Rgb, termcore::palette::Rgb)>,
     /// Close other tabs named running programs and waits for a second choice
     confirm_others: bool,
 }
@@ -246,6 +254,7 @@ impl Default for TerminalUi {
             login_shell: None,
             group_launch: false,
             profile: None,
+            custom_colors: None,
             confirm_others: false,
         }
     }
@@ -270,10 +279,12 @@ impl TerminalUi {
         self.mouse_reporting = prefs.get("terminal.mouse") != Some("0");
         self.login_shell = prefs.get(startup::SHELL_KEY).filter(|path| !path.is_empty()).map(str::to_string);
         self.group_launch = prefs.get(startup::LAUNCH_KEY) == Some("1");
+        self.custom_colors = prefs.get(colors::KEY).and_then(|value| colors::parse_colors(value).ok().flatten());
+        let known = profile_table::PROFILES.len() + usize::from(self.custom_colors.is_some());
         self.profile = prefs
             .get("terminal.profile")
             .and_then(|value| value.parse::<usize>().ok())
-            .filter(|p| (1..profile_table::PROFILES.len()).contains(p));
+            .filter(|p| (1..known).contains(p));
     }
     pub fn next_wake(&self) -> Option<f64> {
         Some(if self.panel == Panel::Processes {

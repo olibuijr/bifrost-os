@@ -220,15 +220,15 @@ impl Shell {
                     self.set_keyboard(true, t);
                 }
             }
-            Panel::Title | Panel::Shell => {
+            Panel::Title | Panel::Shell | Panel::Colors => {
                 if ly < 44.0 && lx >= w - 44.0 {
                     self.terminal_ui.entry = None;
                     self.terminal_close_panel(t);
                 } else if ly >= h - 56.0 && lx >= w - 120.0 {
-                    if panel == Panel::Title {
-                        self.terminal_apply_title(t);
-                    } else {
-                        self.terminal_apply_shell(t);
+                    match panel {
+                        Panel::Title => self.terminal_apply_title(t),
+                        Panel::Shell => self.terminal_apply_shell(t),
+                        _ => self.terminal_apply_colors(t),
                     }
                 } else if ly >= 44.0 && ly < h - 56.0 {
                     self.set_keyboard(true, t);

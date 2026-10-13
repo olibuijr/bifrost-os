@@ -42,12 +42,12 @@ impl Shell {
                 }
                 true
             }
-            Panel::Title | Panel::Shell => {
+            Panel::Title | Panel::Shell | Panel::Colors => {
                 if matches!(out, Out::Enter) {
-                    if self.terminal_ui.panel == Panel::Title {
-                        self.terminal_apply_title(t);
-                    } else {
-                        self.terminal_apply_shell(t);
+                    match self.terminal_ui.panel {
+                        Panel::Title => self.terminal_apply_title(t),
+                        Panel::Shell => self.terminal_apply_shell(t),
+                        _ => self.terminal_apply_colors(t),
                     }
                 } else if let Some(field) = &mut self.terminal_ui.entry {
                     field.edit(&self.ui, out, t);
@@ -137,7 +137,7 @@ impl Shell {
                     self.terminal_ui.settings.theme,
                     self.terminal_ui.profile,
                     THEMES.len(),
-                    profile_table::PROFILES.len(),
+                    profile_table::PROFILES.len() + usize::from(self.terminal_ui.custom_colors.is_some()),
                 );
                 self.terminal_ui.settings.theme = theme;
                 self.terminal_ui.profile = profile;
@@ -267,6 +267,7 @@ impl Shell {
             item::LOGIN_SHELL => self.terminal_open_shell_panel(t),
             item::GROUP_LAUNCH => self.terminal_toggle_group_launch(),
             item::HELP => self.terminal_open_help(t),
+            item::COLORS => self.terminal_open_colors(t),
             // The first web link in the selection opens in the browser.
             15 => {
                 let link = self

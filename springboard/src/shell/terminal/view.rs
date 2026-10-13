@@ -236,6 +236,7 @@ impl Shell {
             Panel::Command => "New Command",
             Panel::Title => "Tab Title",
             Panel::Shell => "Login Shell",
+            Panel::Colors => "Colors",
             Panel::Help => "Terminal Help",
             _ => "Terminal",
         };
@@ -298,7 +299,7 @@ impl Shell {
                     field.draw(s, ui, (px + ui.pt(16.0), content_top + ui.pt(16.0), pw - ui.pt(32.0), ui.pt(36.0)), t);
                 }
             }
-            Panel::Title | Panel::Shell => {
+            Panel::Title | Panel::Shell | Panel::Colors => {
                 if let Some(field) = &self.terminal_ui.entry {
                     field.draw(s, ui, (px + ui.pt(16.0), content_top + ui.pt(16.0), pw - ui.pt(32.0), ui.pt(36.0)), t);
                 }
@@ -696,8 +697,12 @@ impl Shell {
         if panel == Panel::Command {
             button(s, ui, "Run", (px + pw - ui.pt(120.0), bottom - ui.pt(44.0), ui.pt(104.0), ui.pt(32.0)), true);
         }
-        if matches!(panel, Panel::Title | Panel::Shell) {
-            let label = if panel == Panel::Title { "Set" } else { "Save" };
+        if matches!(panel, Panel::Title | Panel::Shell | Panel::Colors) {
+            let label = match panel {
+                Panel::Title => "Set",
+                Panel::Shell => "Save",
+                _ => "Apply",
+            };
             button(s, ui, label, (px + pw - ui.pt(120.0), bottom - ui.pt(44.0), ui.pt(104.0), ui.pt(32.0)), true);
         }
         let message = if !self.terminal_ui.message.is_empty() {
@@ -710,6 +715,7 @@ impl Shell {
                 Panel::Command => "The command runs in a new tab that closes when it ends.",
                 Panel::Title => "Leave it empty to use the automatic title.",
                 Panel::Shell => "New tabs run this shell. Empty: the account shell.",
+                Panel::Colors => "Text then background, in hex. Empty: no custom colors.",
                 Panel::Help => "Touch Done to go back to the terminal.",
                 _ => "Changes to text size and theme are saved automatically.",
             }
@@ -717,7 +723,7 @@ impl Shell {
         let reserved = match panel {
             Panel::Connections => 236.0,
             Panel::Processes => 264.0,
-            Panel::Command | Panel::Title | Panel::Shell => 136.0,
+            Panel::Command | Panel::Title | Panel::Shell | Panel::Colors => 136.0,
             _ => 32.0,
         };
         text(
