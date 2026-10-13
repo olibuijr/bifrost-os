@@ -11,6 +11,7 @@
 pub mod batch;
 pub mod damage;
 pub mod error;
+pub mod filter_kernels;
 pub mod health;
 pub mod nv12;
 pub mod occlusion;

@@ -1,182 +1,182 @@
 {
-  "framework": "Core Image",
-  "doc": "https://developer.apple.com/documentation/coreimage",
-  "macos_since": "10.11",
-  "status": "partial",
-  "bifrost": "springboard/render/src/gfx.rs (CPU Image, blur), springboard/render/src/imgdec.rs (PNG/JPEG decode), springboard/render/src/glass.rs (material blur and saturation), springboard/src/shell/photos/edit.rs (photo filters, app-private), springboard/src/gpu/shaders.rs (GPU presenter shaders, not app-facing)",
-  "summary": "Core Image's filter graph (CIContext, CIImage, CIFilter chains, CIKernel) has no app-facing counterpart. BifrOSt has a few fixed image operations inside the renderer and the Photos app (blur, brightness and contrast, four photo looks, rotate and crop, PNG and JPEG decode), but apps get no SDK API for them. The new GPU stack (bifrost-gpu, bifrost-2d) can run filters as shaders, but no Core Image style filter catalogue exists yet; per-filter rows wait for the macOS 27 shader inventory.",
-  "rea_evidence": "ev_b4d9b04a75a2641b4207d1e0bc824e085bdf4d1e6ec35ad1f1d6733fbb5e7f0d",
-  "features": [
-    {
-      "feature": "Image and context objects (CIImage, CIContext)",
-      "apple": "CIImage, CIContext",
-      "bifrost": "springboard/render/src/lazy_image.rs",
-      "status": "partial",
-      "note": "Wave 6 (b09, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The renderer's Image is CPU pixels only; no SDK type wraps it as a lazily evaluated image with a render context"
-    },
-    {
-      "feature": "Filter objects and chaining (CIFilter)",
-      "apple": "CIFilter, CIFilterGenerator, CIVector, CIColor",
-      "bifrost": "springboard/render/src/effect_chain.rs; wired: springboard/render/src/effect_chain.rs (chain run by springboard/src/shell/photos/edit.rs Edit::apply; still not an app API)",
-      "status": "partial",
-      "note": "Wave 4 (w4-core-image, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Photos runs a fixed sequence (crop, straighten, filter, brightness, contrast). Apps cannot build or chain filters by name Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
-    },
-    {
-      "feature": "Blur filters (gaussianBlur, boxBlur, motionBlur, zoomBlur, discBlur)",
-      "apple": "CIGaussianBlur, CIBoxBlur, CIMotionBlur, CIZoomBlur, CIDiscBlur, CIBokehBlur",
-      "bifrost": "springboard/render/src/gfx.rs (blur at :476, blur_material at :423); wired: springboard/src/shell/photos/edit.rs (Blur slider on the Effects tab, disc blur from springboard/render/src/blur_kernels.rs)",
-      "status": "partial",
-      "note": "Only a CPU blur of repeated box passes, plus the GPU backdrop blur for materials (springboard/render/src/glass.rs). No motion, zoom, disc or bokeh blur, and no radius or sigma API Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
-    },
-    {
-      "feature": "Colour adjustment (exposure, brightness, contrast, saturation, hue, temperature, tone curve)",
-      "apple": "CIColorControls, CIExposureAdjust, CIHueAdjust, CITemperatureAndTint, CIToneCurve, CIVibrance, CIGammaAdjust",
-      "bifrost": "springboard/src/shell/photos/edit.rs (adjust at :300, brightness and contrast only); springboard/render/src/glass.rs (saturation at :74); wired: springboard/src/shell/photos/edit.rs (Adjust tab: Exposure, Saturation, Warmth via springboard/render/src/effect_chain.rs)",
-      "status": "partial",
-      "note": "Brightness and contrast exist inside Photos. Saturation is only applied to material backdrops. No hue, exposure, temperature, tint, vibrance or tone curve Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
-    },
-    {
-      "feature": "Photo and colour effects (sepia, mono, noir, vignette, false colour, posterize)",
-      "apple": "CIPhotoEffect* (chrome, fade, instant, mono, noir, process, tonal, transfer), CISepiaTone, CIVignette, CIFalseColor, CIColorPosterize, CIColorInvert",
-      "bifrost": "springboard/src/shell/photos/edit.rs (Filter enum: Original, Vivid, Mono, Noir, Warm; apply at :98); wired: springboard/src/shell/photos/edit.rs (Sepia filter chip; Vignette slider on the Effects tab, via effect_chain sepia and vignette)",
-      "status": "partial",
-      "note": "Four looks in Photos only, not exposed as SDK filters. No sepia, vignette, chrome, fade, false colour or posterize Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
-    },
-    {
-      "feature": "Colour lookup and conversion (colour cube, colour map, Lab, palettize)",
-      "apple": "CIColorCube, CIColorMap, CIPalettize, CIConvertLab, CIConvertRGBtoLab, CIColorCubeWithColorSpace",
-      "bifrost": "springboard/render/src/colorcube.rs, springboard/render/src/colorfx.rs, springboard/render/src/gradient.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only YUV to RGB conversion for video frames. No colour cube, colour map, palette or Lab conversion"
-    },
-    {
-      "feature": "Geometry adjustment (affine transform, crop, rotate, scale)",
-      "apple": "perspectiveTransform(), perspectiveCorrection(), lanczosScaleTransform(), bicubicScaleTransform(), straighten(), keystoneCorrectionCombined()",
-      "bifrost": "springboard/render/src/gfx/rotate.rs (rotated at :157, bilinear), springboard/src/shell/photos/edit.rs (Edit: turns, crop_zoom, straighten)",
-      "status": "partial",
-      "note": "Quarter-turn and bilinear rotation exist, and Photos applies crop and straighten. No general affine or perspective transform for apps"
-    },
-    {
-      "feature": "Composite operations and blend modes",
-      "apple": "CISourceOverCompositing, CIMultiplyBlendMode, CIScreenBlendMode, CIOverlayBlendMode and the other composite and blend filters",
-      "bifrost": "docs/bifrost-ui.md (blit_vibrant: plus-lighter in Dark, plus-darker in Light); springboard/src/gpu/batch.rs (push_shadow)",
-      "status": "partial",
-      "note": "Blend is fixed to the vibrancy label case and shadows. No general blend mode or composite operator selection"
-    },
-    {
-      "feature": "Image decoding into the filter input (CIImage from data or file)",
-      "apple": "CIImage(data:), CIImage(contentsOf:), CIRAWFilter",
-      "bifrost": "springboard/render/src/imgdec.rs (decode at :12: JPEG and PNG to premultiplied RGBA, MAX_SIDE 8192)",
-      "status": "partial",
-      "note": "JPEG and PNG only. No RAW decode (CIRAWFilter), no HEIF, and no colour-managed input"
-    },
-    {
-      "feature": "Custom kernels (CIKernel, CIColorKernel, CIWarpKernel, CIBlendKernel)",
-      "apple": "CIKernel, CIColorKernel, CIWarpKernel, CIBlendKernel, CISampler, Core Image Kernel Language and Metal kernels",
-      "bifrost": "springboard/render/src/kernel.rs",
-      "status": "partial",
-      "note": "Wave 4 (theme-04, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The GPU shaders serve the compositor only. Apps cannot supply a kernel or a custom filter"
-    },
-    {
-      "feature": "Feature detection (CIDetector: faces, rectangles, text, QR and barcodes)",
-      "apple": "CIDetector, CIFaceFeature, CIRectangleFeature, CITextFeature, CIQRCodeFeature, CIQRCodeDescriptor and the other barcode descriptors",
-      "bifrost": "springboard/ui/src/detect.rs (data detectors for text, not image detection)",
-      "status": "gap",
-      "note": "No face, rectangle, text or barcode detection on images. The data detector works on text only Sprint 3: left gap. The only QR decoder is springboard/src/shell/camera/qr.rs (shell crate, not reachable from render); no face, rectangle or text detection exists."
-    },
-    {
-      "feature": "Generators and gradients (checkerboard, stripes, linear and radial gradient, QR and barcode generators)",
-      "apple": "CILinearGradient, CIRadialGradient, CICheckerboardGenerator, CIStripesGenerator, CIQRCodeGenerator, CIRoundedQRCodeGenerator and the other generator filters",
-      "bifrost": "springboard/render/src/colorcube.rs, springboard/render/src/colorfx.rs, springboard/render/src/gradient.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No image generators for apps. Shell draws its own gradients inside the renderer, not as filter outputs"
-    },
-    {
-      "feature": "Render destinations and video filtering (CIRenderDestination, CIImageAccumulator)",
-      "apple": "CIRenderDestination, CIRenderTask, CIRenderInfo, CIImageAccumulator",
-      "bifrost": "springboard/src/gpu/mod.rs (presenter for shell frames)",
-      "status": "gap",
-      "note": "Frames reach the screen through the shell presenter. No app API for rendering filtered frames to a destination Sprint 3: left gap; needs the CIImage/CIContext model (lazy_image.rs) wired to a destination, not CPU filter math."
-    },
-    {
-      "feature": "Distortion effects (twirl, pinch, bump, vortex, glass distortion, displacement, circle splash, torus lens)",
-      "apple": "CITwirlDistortion, CIPinchDistortion, CIBumpDistortion, CIVortexDistortion, CIGlassDistortion, CIDisplacementDistortion, CICircleSplashDistortion, CITorusLensDistortion, CIHoleDistortion, CILightTunnel",
-      "bifrost": "springboard/render/src/distortion_filters.rs",
-      "status": "partial",
-      "note": "CPU twirl, vortex, pinch, bump and glass distortion built with host unit tests (sprint 3); displacement, circle splash and torus lens are still missing. Not yet tested on Midget."
-    },
-    {
-      "feature": "Sharpen filters (sharpen luminance, unsharp mask)",
-      "apple": "CISharpenLuminance, CIUnsharpMask",
-      "bifrost": "springboard/render/src/stylize_filters.rs",
-      "status": "partial",
-      "note": "CPU sharpen luminance and unsharp mask built with host unit tests; not yet tested on Midget."
-    },
-    {
-      "feature": "Stylize filters (bloom, gloom, crystallize, pixellate, pointillize, edges, comic, highlight and shadow, spot light, depth of field)",
-      "apple": "CIBloom, CIGloom, CICrystallize, CIPixellate, CIPointillize, CIEdges, CIEdgeWork, CIComicEffect, CIHighlightShadowAdjust, CISpotLight, CIDepthOfField, CILineOverlay",
-      "bifrost": "springboard/render/src/stylize_filters.rs",
-      "status": "partial",
-      "note": "CPU bloom, gloom, crystallize, pixellate and pointillize built with host unit tests; edges, comic, highlight and shadow, spot light and depth of field are still missing. Not yet tested on Midget."
-    },
-    {
-      "feature": "Halftone effects (dot, line, circular and hatched screens, CMYK halftone)",
-      "apple": "CIDotScreen, CILineScreen, CICircularScreen, CIHatchedScreen, CICMYKHalftone",
-      "bifrost": "springboard/render/src/halftone_tile_filters.rs",
-      "status": "partial",
-      "note": "CPU dot, line, circular and hatched screens and CMYK halftone built with host unit tests; not yet tested on Midget."
-    },
-    {
-      "feature": "Tile effects (kaleidoscope, op tile, affine, perspective, triangle and parallelogram tiles)",
-      "apple": "CIKaleidoscope, CIOpTile, CIAffineTile, CIPerspectiveTile, CITriangleTile, CIParallelogramTile, CIFourfoldReflectedTile, CISixfoldRotatedTile",
-      "bifrost": "springboard/render/src/halftone_tile_filters.rs",
-      "status": "partial",
-      "note": "CPU kaleidoscope, op tile and affine tile built with host unit tests; perspective, triangle and parallelogram tiles are still missing. Not yet tested on Midget."
-    },
-    {
-      "feature": "Transition filters (dissolve, swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold)",
-      "apple": "CIDissolveTransition, CISwipeTransition, CIBarsSwipeTransition, CICopyMachineTransition, CIFlashTransition, CIModTransition, CIPageCurlTransition, CIRippleTransition, CIAccordionFoldTransition, CIDisintegrateWithMaskTransition",
-      "bifrost": "springboard/ui/src/video_transition.rs (cross-dissolve timing model)",
-      "status": "partial",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
-    },
-    {
-      "feature": "Reduction filters (area average, histogram, min and max, row and column average, k-means)",
-      "apple": "CIAreaAverage, CIAreaHistogram, CIAreaMaximum, CIAreaMinimum, CIAreaMinMax, CIRowAverage, CIColumnAverage, CIKMeans",
-      "bifrost": "springboard/render/src/plane_stats.rs (row and column reductions, statistics)",
-      "status": "partial",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
-    },
-    {
-      "feature": "Convolution filters (3x3 to 9x9, horizontal and vertical, RGB variants)",
-      "apple": "CIConvolution3X3, CIConvolution5X5, CIConvolution7X7, CIConvolution9X9Horizontal, CIConvolution9X9Vertical, CIConvolutionRGB3X3",
-      "bifrost": "springboard/render/src/filter.rs (generic convolution)",
-      "status": "partial",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
-    },
-    {
-      "feature": "Depth and portrait effects (depth blur, disparity, masked variable blur)",
-      "apple": "CIDepthBlurEffect, CIDepthToDisparity, CIDisparityToDepth, CIMaskedVariableBlur",
-      "bifrost": "springboard/render/src/gfx.rs (uniform blur only)",
-      "status": "gap",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
-    },
-    {
-      "feature": "Built-in filter catalogue (every filter by name, category and input keys)",
-      "apple": "CIFilter.filterNames(inCategory:), CIFilter.attributes, CIFilterBuiltins",
-      "bifrost": "springboard/render/src/filter_catalogue.rs",
-      "status": "partial",
-      "note": "Registry of the 28 built filters by reference name with category and input keys, filter_names(category) and attributes. Covers only filters that exist; not wired to a CIFilter object. Not yet tested on Midget."
-    }
-  ],
-  "gaps": [
-    "No app-facing filter API: no CIFilter-style object, no chaining, and no SDK type for a lazily rendered image (CIImage/CIContext equivalent).",
-    "Colour adjustment limited to brightness and contrast (Photos only). Missing: exposure, hue, saturation for app content, temperature and tint, vibrance, tone curve.",
-    "Blur limited to one CPU box-blur path and the GPU material blur. Missing: motion, zoom, disc, bokeh, masked variable blur, and a radius or sigma API for apps.",
-    "No feature detection (faces, rectangles, text, barcodes) and no barcode or QR generation.",
-    "No custom kernel or custom filter extension point for apps (Core Image Kernel Language or Metal).",
-    "Image input limited to JPEG and PNG. No RAW (CIRAWFilter), no HEIF, no colour-managed decoding path for apps.",
-    "Photo effects (sepia, vignette, chrome, fade, false colour, posterize) and colour lookup (colour cube, colour map, palettize) are absent.",
-    "No built-in filter catalogue: distortion, sharpen, stylize, halftone, tile, depth and most transition filters are missing."
-  ]
+ "framework": "Core Image",
+ "doc": "https://developer.apple.com/documentation/coreimage",
+ "macos_since": "10.11",
+ "status": "partial",
+ "bifrost": "springboard/render/src/gfx.rs (CPU Image, blur), springboard/render/src/imgdec.rs (PNG/JPEG decode), springboard/render/src/glass.rs (material blur and saturation), springboard/src/shell/photos/edit.rs (photo filters, app-private), springboard/src/gpu/shaders.rs (GPU presenter shaders, not app-facing)",
+ "summary": "Core Image's filter graph (CIContext, CIImage, CIFilter chains, CIKernel) has no app-facing counterpart. BifrOSt has a few fixed image operations inside the renderer and the Photos app (blur, brightness and contrast, four photo looks, rotate and crop, PNG and JPEG decode), but apps get no SDK API for them. The new GPU stack (bifrost-gpu, bifrost-2d) can run filters as shaders, but no Core Image style filter catalogue exists yet; per-filter rows wait for the macOS 27 shader inventory.",
+ "rea_evidence": "ev_b4d9b04a75a2641b4207d1e0bc824e085bdf4d1e6ec35ad1f1d6733fbb5e7f0d",
+ "features": [
+  {
+   "feature": "Image and context objects (CIImage, CIContext)",
+   "apple": "CIImage, CIContext",
+   "bifrost": "springboard/render/src/lazy_image.rs",
+   "status": "partial",
+   "note": "Wave 6 (b09, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. The renderer's Image is CPU pixels only; no SDK type wraps it as a lazily evaluated image with a render context"
+  },
+  {
+   "feature": "Filter objects and chaining (CIFilter)",
+   "apple": "CIFilter, CIFilterGenerator, CIVector, CIColor",
+   "bifrost": "springboard/render/src/effect_chain.rs; wired: springboard/render/src/effect_chain.rs (chain run by springboard/src/shell/photos/edit.rs Edit::apply; still not an app API)",
+   "status": "partial",
+   "note": "Wave 4 (w4-core-image, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Photos runs a fixed sequence (crop, straighten, filter, brightness, contrast). Apps cannot build or chain filters by name Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+  },
+  {
+   "feature": "Blur filters (gaussianBlur, boxBlur, motionBlur, zoomBlur, discBlur)",
+   "apple": "CIGaussianBlur, CIBoxBlur, CIMotionBlur, CIZoomBlur, CIDiscBlur, CIBokehBlur",
+   "bifrost": "springboard/render/src/gfx.rs (blur at :476, blur_material at :423); wired: springboard/src/shell/photos/edit.rs (Blur slider on the Effects tab, disc blur from springboard/render/src/blur_kernels.rs)",
+   "status": "partial",
+   "note": "Only a CPU blur of repeated box passes, plus the GPU backdrop blur for materials (springboard/render/src/glass.rs). No motion, zoom, disc or bokeh blur, and no radius or sigma API Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+  },
+  {
+   "feature": "Colour adjustment (exposure, brightness, contrast, saturation, hue, temperature, tone curve)",
+   "apple": "CIColorControls, CIExposureAdjust, CIHueAdjust, CITemperatureAndTint, CIToneCurve, CIVibrance, CIGammaAdjust",
+   "bifrost": "springboard/src/shell/photos/edit.rs (adjust at :300, brightness and contrast only); springboard/render/src/glass.rs (saturation at :74); wired: springboard/src/shell/photos/edit.rs (Adjust tab: Exposure, Saturation, Warmth via springboard/render/src/effect_chain.rs)",
+   "status": "partial",
+   "note": "Brightness and contrast exist inside Photos. Saturation is only applied to material backdrops. No hue, exposure, temperature, tint, vibrance or tone curve Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+  },
+  {
+   "feature": "Photo and colour effects (sepia, mono, noir, vignette, false colour, posterize)",
+   "apple": "CIPhotoEffect* (chrome, fade, instant, mono, noir, process, tonal, transfer), CISepiaTone, CIVignette, CIFalseColor, CIColorPosterize, CIColorInvert",
+   "bifrost": "springboard/src/shell/photos/edit.rs (Filter enum: Original, Vivid, Mono, Noir, Warm; apply at :98); wired: springboard/src/shell/photos/edit.rs (Sepia filter chip; Vignette slider on the Effects tab, via effect_chain sepia and vignette)",
+   "status": "partial",
+   "note": "Four looks in Photos only, not exposed as SDK filters. No sepia, vignette, chrome, fade, false colour or posterize Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+  },
+  {
+   "feature": "Colour lookup and conversion (colour cube, colour map, Lab, palettize)",
+   "apple": "CIColorCube, CIColorMap, CIPalettize, CIConvertLab, CIConvertRGBtoLab, CIColorCubeWithColorSpace",
+   "bifrost": "springboard/render/src/colorcube.rs, springboard/render/src/colorfx.rs, springboard/render/src/gradient.rs",
+   "status": "partial",
+   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Only YUV to RGB conversion for video frames. No colour cube, colour map, palette or Lab conversion"
+  },
+  {
+   "feature": "Geometry adjustment (affine transform, crop, rotate, scale)",
+   "apple": "perspectiveTransform(), perspectiveCorrection(), lanczosScaleTransform(), bicubicScaleTransform(), straighten(), keystoneCorrectionCombined()",
+   "bifrost": "springboard/render/src/gfx/rotate.rs (rotated at :157, bilinear), springboard/src/shell/photos/edit.rs (Edit: turns, crop_zoom, straighten)",
+   "status": "partial",
+   "note": "Quarter-turn and bilinear rotation exist, and Photos applies crop and straighten. No general affine or perspective transform for apps"
+  },
+  {
+   "feature": "Composite operations and blend modes",
+   "apple": "CISourceOverCompositing, CIMultiplyBlendMode, CIScreenBlendMode, CIOverlayBlendMode and the other composite and blend filters",
+   "bifrost": "docs/bifrost-ui.md (blit_vibrant: plus-lighter in Dark, plus-darker in Light); springboard/src/gpu/batch.rs (push_shadow)",
+   "status": "partial",
+   "note": "Blend is fixed to the vibrancy label case and shadows. No general blend mode or composite operator selection"
+  },
+  {
+   "feature": "Image decoding into the filter input (CIImage from data or file)",
+   "apple": "CIImage(data:), CIImage(contentsOf:), CIRAWFilter",
+   "bifrost": "springboard/render/src/imgdec.rs (decode at :12: JPEG and PNG to premultiplied RGBA, MAX_SIDE 8192)",
+   "status": "partial",
+   "note": "JPEG and PNG only. No RAW decode (CIRAWFilter), no HEIF, and no colour-managed input"
+  },
+  {
+   "feature": "Custom kernels (CIKernel, CIColorKernel, CIWarpKernel, CIBlendKernel)",
+   "apple": "CIKernel, CIColorKernel, CIWarpKernel, CIBlendKernel, CISampler, Core Image Kernel Language and Metal kernels",
+   "bifrost": "springboard/render/src/kernel.rs",
+   "status": "partial",
+   "note": "Wave 4 (theme-04, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The GPU shaders serve the compositor only. Apps cannot supply a kernel or a custom filter"
+  },
+  {
+   "feature": "Feature detection (CIDetector: faces, rectangles, text, QR and barcodes)",
+   "apple": "CIDetector, CIFaceFeature, CIRectangleFeature, CITextFeature, CIQRCodeFeature, CIQRCodeDescriptor and the other barcode descriptors",
+   "bifrost": "springboard/ui/src/detect.rs (data detectors for text, not image detection)",
+   "status": "gap",
+   "note": "No face, rectangle, text or barcode detection on images. The data detector works on text only Sprint 3: left gap. The only QR decoder is springboard/src/shell/camera/qr.rs (shell crate, not reachable from render); no face, rectangle or text detection exists."
+  },
+  {
+   "feature": "Generators and gradients (checkerboard, stripes, linear and radial gradient, QR and barcode generators)",
+   "apple": "CILinearGradient, CIRadialGradient, CICheckerboardGenerator, CIStripesGenerator, CIQRCodeGenerator, CIRoundedQRCodeGenerator and the other generator filters",
+   "bifrost": "springboard/render/src/colorcube.rs, springboard/render/src/colorfx.rs, springboard/render/src/gradient.rs",
+   "status": "partial",
+   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No image generators for apps. Shell draws its own gradients inside the renderer, not as filter outputs"
+  },
+  {
+   "feature": "Render destinations and video filtering (CIRenderDestination, CIImageAccumulator)",
+   "apple": "CIRenderDestination, CIRenderTask, CIRenderInfo, CIImageAccumulator",
+   "bifrost": "springboard/src/gpu/mod.rs (presenter for shell frames); springboard/src/gpu/filter_kernels.rs (GLSL generation, backend choice)",
+   "status": "partial",
+   "note": "GPU path for the colour filters: CIColorMatrix, CIGammaAdjust and CISourceOverCompositing generate GLSL ES 3.00 with packed uniforms, a CPU reference evaluator and a Backend choice (CIContext useSoftwareRenderer). Pure model with host unit tests (written, not run); the GL dispatch and CIContext.render(_:to:) are not wired yet; not tested on Midget. No app API for rendering filtered frames to a destination"
+  },
+  {
+   "feature": "Distortion effects (twirl, pinch, bump, vortex, glass distortion, displacement, circle splash, torus lens)",
+   "apple": "CITwirlDistortion, CIPinchDistortion, CIBumpDistortion, CIVortexDistortion, CIGlassDistortion, CIDisplacementDistortion, CICircleSplashDistortion, CITorusLensDistortion, CIHoleDistortion, CILightTunnel",
+   "bifrost": "springboard/render/src/distortion_filters.rs",
+   "status": "partial",
+   "note": "CPU twirl, vortex, pinch, bump and glass distortion built with host unit tests (sprint 3); displacement, circle splash and torus lens are still missing. Not yet tested on Midget."
+  },
+  {
+   "feature": "Sharpen filters (sharpen luminance, unsharp mask)",
+   "apple": "CISharpenLuminance, CIUnsharpMask",
+   "bifrost": "springboard/render/src/stylize_filters.rs",
+   "status": "partial",
+   "note": "CPU sharpen luminance and unsharp mask built with host unit tests; not yet tested on Midget."
+  },
+  {
+   "feature": "Stylize filters (bloom, gloom, crystallize, pixellate, pointillize, edges, comic, highlight and shadow, spot light, depth of field)",
+   "apple": "CIBloom, CIGloom, CICrystallize, CIPixellate, CIPointillize, CIEdges, CIEdgeWork, CIComicEffect, CIHighlightShadowAdjust, CISpotLight, CIDepthOfField, CILineOverlay",
+   "bifrost": "springboard/render/src/stylize_filters.rs",
+   "status": "partial",
+   "note": "CPU bloom, gloom, crystallize, pixellate and pointillize built with host unit tests; edges, comic, highlight and shadow, spot light and depth of field are still missing. Not yet tested on Midget."
+  },
+  {
+   "feature": "Halftone effects (dot, line, circular and hatched screens, CMYK halftone)",
+   "apple": "CIDotScreen, CILineScreen, CICircularScreen, CIHatchedScreen, CICMYKHalftone",
+   "bifrost": "springboard/render/src/halftone_tile_filters.rs",
+   "status": "partial",
+   "note": "CPU dot, line, circular and hatched screens and CMYK halftone built with host unit tests; not yet tested on Midget."
+  },
+  {
+   "feature": "Tile effects (kaleidoscope, op tile, affine, perspective, triangle and parallelogram tiles)",
+   "apple": "CIKaleidoscope, CIOpTile, CIAffineTile, CIPerspectiveTile, CITriangleTile, CIParallelogramTile, CIFourfoldReflectedTile, CISixfoldRotatedTile",
+   "bifrost": "springboard/render/src/halftone_tile_filters.rs",
+   "status": "partial",
+   "note": "CPU kaleidoscope, op tile and affine tile built with host unit tests; perspective, triangle and parallelogram tiles are still missing. Not yet tested on Midget."
+  },
+  {
+   "feature": "Transition filters (dissolve, swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold)",
+   "apple": "CIDissolveTransition, CISwipeTransition, CIBarsSwipeTransition, CICopyMachineTransition, CIFlashTransition, CIModTransition, CIPageCurlTransition, CIRippleTransition, CIAccordionFoldTransition, CIDisintegrateWithMaskTransition",
+   "bifrost": "springboard/ui/src/video_transition.rs (cross-dissolve timing model)",
+   "status": "partial",
+   "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+  },
+  {
+   "feature": "Reduction filters (area average, histogram, min and max, row and column average, k-means)",
+   "apple": "CIAreaAverage, CIAreaHistogram, CIAreaMaximum, CIAreaMinimum, CIAreaMinMax, CIRowAverage, CIColumnAverage, CIKMeans",
+   "bifrost": "springboard/render/src/plane_stats.rs (row and column reductions, statistics)",
+   "status": "partial",
+   "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+  },
+  {
+   "feature": "Convolution filters (3x3 to 9x9, horizontal and vertical, RGB variants)",
+   "apple": "CIConvolution3X3, CIConvolution5X5, CIConvolution7X7, CIConvolution9X9Horizontal, CIConvolution9X9Vertical, CIConvolutionRGB3X3",
+   "bifrost": "springboard/render/src/filter.rs (generic convolution)",
+   "status": "partial",
+   "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+  },
+  {
+   "feature": "Depth and portrait effects (depth blur, disparity, masked variable blur)",
+   "apple": "CIDepthBlurEffect, CIDepthToDisparity, CIDisparityToDepth, CIMaskedVariableBlur",
+   "bifrost": "springboard/render/src/gfx.rs (uniform blur only)",
+   "status": "gap",
+   "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+  },
+  {
+   "feature": "Built-in filter catalogue (every filter by name, category and input keys)",
+   "apple": "CIFilter.filterNames(inCategory:), CIFilter.attributes, CIFilterBuiltins",
+   "bifrost": "springboard/render/src/filter_catalogue.rs",
+   "status": "partial",
+   "note": "Registry of the 28 built filters by reference name with category and input keys, filter_names(category) and attributes. Covers only filters that exist; not wired to a CIFilter object. Not yet tested on Midget."
+  }
+ ],
+ "gaps": [
+  "No app-facing filter API: no CIFilter-style object, no chaining, and no SDK type for a lazily rendered image (CIImage/CIContext equivalent).",
+  "Colour adjustment limited to brightness and contrast (Photos only). Missing: exposure, hue, saturation for app content, temperature and tint, vibrance, tone curve.",
+  "Blur limited to one CPU box-blur path and the GPU material blur. Missing: motion, zoom, disc, bokeh, masked variable blur, and a radius or sigma API for apps.",
+  "No feature detection (faces, rectangles, text, barcodes) and no barcode or QR generation.",
+  "No custom kernel or custom filter extension point for apps (Core Image Kernel Language or Metal).",
+  "Image input limited to JPEG and PNG. No RAW (CIRAWFilter), no HEIF, no colour-managed decoding path for apps.",
+  "Photo effects (sepia, vignette, chrome, fade, false colour, posterize) and colour lookup (colour cube, colour map, palettize) are absent.",
+  "No built-in filter catalogue: distortion, sharpen, stylize, halftone, tile, depth and most transition filters are missing."
+ ]
 }
