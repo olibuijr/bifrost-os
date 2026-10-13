@@ -67,6 +67,8 @@ pub mod spotindex;
 pub mod sharing;
 pub mod forms;
 pub mod users_page;
+pub mod sharing_page;
+pub mod print_scan_page;
 pub mod workspace;
 pub mod services;
 pub mod chrome_host;

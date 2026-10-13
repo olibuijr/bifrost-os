@@ -19,6 +19,8 @@ pub enum Purpose {
     /// `old` is the current password when the account is the installed one
     ChangePassword { name: String, old: Option<String> },
     NewGroup,
+    /// Print & Scan: the device address of a printer to add (`ipp://`, `socket://`, `usb://`)
+    PrinterAddress,
 }
 
 /// What the sheet shows.
@@ -60,6 +62,10 @@ impl Prompt {
         Prompt { secure: true, max: 128, ..Prompt::new(Purpose::CurrentPassword { name: name.into() }, "Current Password", &format!("Enter the current password for “{name}”."), "Password", "Next") }
     }
 
+    pub fn printer_address() -> Prompt {
+        Prompt { max: 255, ..Prompt::new(Purpose::PrinterAddress, "Add Printer", "Enter the address of the printer, such as ipp://printer.local/ipp/print or socket://192.168.1.20.", "Address", "Add") }
+    }
+
     pub fn new_group() -> Prompt {
         Prompt { max: 32, ..Prompt::new(Purpose::NewGroup, "New Group", "Lowercase letters, digits, hyphens and underscores.", "Name", "Add") }
     }
@@ -99,6 +105,7 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
         Purpose::LocalHostname => accounts::valid_hostname(text),
         Purpose::NewUserFull { .. } => accounts::valid_full_name(text),
         Purpose::NewUserName { .. } | Purpose::NewGroup => accounts::valid_user(text),
+        Purpose::PrinterAddress => bifrost_ui::cups::valid_device_uri(text.trim()),
         Purpose::NewUserPassword { .. } | Purpose::ChangePassword { .. } | Purpose::CurrentPassword { .. } => accounts::valid_password(text),
     }
 }
