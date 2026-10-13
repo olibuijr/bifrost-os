@@ -33,8 +33,8 @@
       "area": "menu",
       "apple": "MainMenu.nib File > Save, Revert to Saved",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:364",
-      "note": "Edited PDF copy saved; markup kept in a sidecar; no save-in-place or revert",
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:509",
+      "note": "Revert to Original added (undoable); edited PDF copy saved via Export; no save-in-place",
       "wire": "Add Save (cmd+s) writing the edited PDF/image over the original with a backup, and Revert that discards sidecar marks; add to File menu main.rs:618"
     },
     {
@@ -104,9 +104,9 @@
       "feature": "Undo / Redo of edits",
       "area": "menu",
       "apple": "MainMenu.nib Edit > Undo, Redo",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No undo stack for marks, page moves or adjustments",
+      "status": "partial",
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:374",
+      "note": "Edit > Undo/Redo over marks, page order/deletes, turns and colour (model.rs History); view zoom not covered",
       "wire": "Keep an undo stack of model edits (marks, order, turns, adjust) in model.rs; expose Edit > Undo/Redo cmd+z / cmd+shift+z in main_menu"
     },
     {
@@ -302,9 +302,9 @@
       "feature": "Sidebar: highlights and notes, bookmarks",
       "area": "view",
       "apple": "MainMenu.nib View > Highlights and Notes, Bookmarks; PVSidebarHighlightsAndNotes.nib, PVSidebarBookmarks.nib",
-      "status": "gap",
-      "bifrost": "",
-      "note": "",
+      "status": "partial",
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:331",
+      "note": "Bookmarks (Go > Add/Next/Previous Bookmark, saved beside markup); no highlights/notes list in the sidebar yet",
       "wire": "Add Side::Notes listing marks per page and Side::Bookmarks with Add Bookmark (cmd+d) persisted in the sidecar"
     },
     {
@@ -320,9 +320,9 @@
       "feature": "Hide/Show Sidebar and Toolbar",
       "area": "menu",
       "apple": "MainMenu.nib View > Hide Sidebar, Hide Toolbar",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Sidebar always shown",
+      "status": "partial",
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:95",
+      "note": "View > Hide/Show Sidebar (Cmd+Option+S); toolbar hide/show not done",
       "wire": "Add a sidebar-hidden flag to Layout (canvas.rs:210) and a View menu toggle"
     },
     {
@@ -348,17 +348,17 @@
       "area": "menu",
       "apple": "MainMenu.nib Go > Next/Previous, Go to Page; PVPDFPageNumberPanel.nib",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:637",
-      "note": "Next/Previous only",
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:295",
+      "note": "Go menu: First/Last Page, Go to Page (typed in status line); no sheet",
       "wire": "Add a Go to Page sheet calling go_page (main.rs:390)"
     },
     {
       "feature": "Back / Forward history",
       "area": "menu",
       "apple": "MainMenu.nib Go > Back, Forward",
-      "status": "gap",
-      "bifrost": "",
-      "note": "",
+      "status": "partial",
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:374",
+      "note": "Go > Back/Forward over visited pages (model.rs Trail)",
       "wire": "Keep a page history in the view and add Go > Back/Forward"
     },
     {
