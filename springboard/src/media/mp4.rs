@@ -253,6 +253,11 @@ impl Demuxer {
         self.tracks.iter().find(|t| t.kind == kind)
     }
 
+    /// Every track in file order.
+    pub fn tracks(&self) -> &[Track] {
+        &self.tracks
+    }
+
     fn track_mut(&mut self, kind: Kind) -> Option<&mut Track> {
         self.tracks.iter_mut().find(|t| t.kind == kind)
     }

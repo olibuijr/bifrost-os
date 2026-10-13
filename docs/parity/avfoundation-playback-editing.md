@@ -50,3 +50,13 @@ Names are not used in the code (owner rule). `tools/check-names.py` passes.
 
 `docs/parity-matrix/data/avfoundation-playback-editing.json`: "Composite assets" gap to partial; "Audio mixing" os to
 partial; top-level status stays partial; summary, gaps and the top-level REA evidence updated.
+
+## Movie summary (team A, parity/team-a-10)
+
+`springboard/src/media/movie.rs` summarizes a parsed file for app code: `Movie::from_demuxer` gives the
+movie duration and one `TrackSummary` per track (id, kind, codec name `h264`, `hevc` or `aac`, and duration).
+`Movie::track(kind)` finds the first track of a kind, and `is_audio_only` reports a file with no video track. The
+module reads the existing `Demuxer::tracks` accessor added to `springboard/src/media/mp4.rs`.
+
+This is a read-only view of an `AVMovie`. It does not edit or write movies; `AVMutableMovie` still has no
+counterpart, because a writer and an export path do not exist. Built on parity/team-a-10; not yet verified on Midget.

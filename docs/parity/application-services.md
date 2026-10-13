@@ -62,3 +62,12 @@ Owner-rule check: `python3 tools/check-names.py --summary` reports 0 hits after 
 
 No builds, tests or cargo runs were made in this round, as the task required. The new tests are listed above and must be run by the
 build stage (`cargo test` for `bifrost-ui`).
+
+## ColorSync Manager row (team A review, parity/team-a-10)
+
+The row "ColorSync Manager (profiles, transforms, CMM)" moves from gap to partial. It points at code that already
+exists: `ColorSpace::from_icc` and `ColorConversionInfo` in `springboard/render/src/cg/color.rs`, with the profile header
+and tag reader in `springboard/render/src/icc.rs`. An earlier draft on this branch added a second ICC reader in
+`springboard/ui/src/colour_profile.rs`; it was removed because the render crate already covers it (and also handles
+parametric curve types 0 to 4, the white point tag and rendering intents). There is still no SDK profile API for apps, no
+LUT-based profile support and no CMM. Not yet verified on Midget.
