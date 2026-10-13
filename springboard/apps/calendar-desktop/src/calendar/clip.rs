@@ -106,11 +106,11 @@ impl Calendar {
                 .with(Edit::Paste, pasteboard.is_some())
                 .with(Edit::SelectAll, !field.is_empty());
         }
-        let have = self.copy_target().is_some();
+        let have = self.goto.is_none() && self.copy_target().is_some();
         Commands::default()
             .with(Edit::Cut, have)
             .with(Edit::Copy, have)
-            .with(Edit::Paste, pasteboard.is_some_and(pasteable))
+            .with(Edit::Paste, self.goto.is_none() && pasteboard.is_some_and(pasteable))
     }
 
     /// Runs an Edit menu command. `pasteboard` is read by the app when the command arrives. True when it did something.

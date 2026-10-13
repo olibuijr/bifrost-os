@@ -49,10 +49,10 @@
    "feature": "Go to Date sheet",
    "area": "panel",
    "apple": "GoToDay.nib; View > Go to Date",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add Command::GoToDate (cmd+shift+t) in calendar.rs:1295 with a date-picker sheet that sets the shown date; list it under Go in main.rs main_menu."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/goto.rs:34",
+   "note": "Go > Go to Date... (Cmd+Shift+T): a sheet with day, month and year steppers, a Today shortcut and Go/Cancel; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Replace the steppers with a month-grid date picker when the kit has one."
   },
   {
    "feature": "Event editor: title, location, notes, all-day, start/end",

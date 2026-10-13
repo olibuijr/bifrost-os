@@ -42,6 +42,7 @@ const DAY_NODE: u64 = 100;
 const UNDO_NODE: u64 = 300;
 const EVENT_NODE: u64 = 1 << 32;
 pub(super) const B_SAVE: u32 = 14;
+pub(super) const B_GO: u32 = 15;
 
 /// The width the kit's `toolbar` gives each button (glyph buttons are a capsule, titled ones their label).
 fn item_w(ui: &Ui) -> impl Fn(&ToolbarItem) -> f32 + '_ {
@@ -91,6 +92,20 @@ impl Calendar {
                     ToolbarItem::custom(B_TITLE, title, (ui.measure(title, MAC_BODY_PT, Weight::Bold) / k).ceil()),
                     ToolbarItem::flexible_space(),
                     ToolbarItem::button(B_SAVE, "Save"),
+                ]),
+                band(start, end - start),
+            ));
+            return bars;
+        }
+        if self.goto.is_some() {
+            let title = "Go to Date";
+            bars.push((
+                Toolbar::new(vec![
+                    ToolbarItem::button(B_CANCEL, "Cancel"),
+                    ToolbarItem::flexible_space(),
+                    ToolbarItem::custom(B_TITLE, title, (ui.measure(title, MAC_BODY_PT, Weight::Bold) / k).ceil()),
+                    ToolbarItem::flexible_space(),
+                    ToolbarItem::button(B_GO, "Go"),
                 ]),
                 band(start, end - start),
             ));
@@ -157,6 +172,7 @@ impl Calendar {
             B_TODAY => Target::Today,
             B_NEXT => Target::Next,
             B_CANCEL => Target::Cancel,
+            B_GO => Target::GoConfirm,
             _ => Target::Save,
         })
     }
@@ -172,6 +188,8 @@ impl Calendar {
         }
         if self.editor.is_some() {
             nodes.extend(self.editor_nodes(ui));
+        } else if self.goto.is_some() {
+            nodes.extend(self.goto_nodes(ui));
         } else {
             if self.view == View::Month {
                 nodes.extend(self.grid_nodes(ui));

@@ -105,6 +105,7 @@ impl App for CalendarApp {
                     item(Command::Today),
                     item(Command::Previous),
                     item(Command::Next),
+                    item(Command::GoToDate),
                     AppMenuItem::separator(),
                     item(Command::ShowDay),
                     item(Command::ShowWeek),

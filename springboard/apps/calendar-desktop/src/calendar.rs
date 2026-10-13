@@ -5,6 +5,7 @@ mod chrome;
 pub mod clip;
 pub mod connect;
 pub mod exchange;
+mod goto;
 pub mod ics;
 pub mod invitees;
 pub mod layout;
@@ -129,6 +130,13 @@ enum Target {
     AllDay,
     /// show or hide the calendar list
     Sidebar,
+    /// Go > Go to Date: open the sheet, step its day, month or year, jump to today in it, and accept it.
+    GoOpen,
+    GoDay(i32),
+    GoMonth(i32),
+    GoYear(i32),
+    GoToday,
+    GoConfirm,
 }
 
 /// Which of the Starts / Ends rows has its picker expanded.
@@ -164,6 +172,8 @@ pub struct Calendar {
     changes: StoreChangeHub,
     alerts: alerts::AlertState,
     editor: Option<Draft>,
+    /// Go to Date: the date the sheet shows while it is open (`goto.rs`).
+    goto: Option<Date>,
     /// The event last opened or saved: what Copy and Cut act on while it is on the shown day (`clip.rs`).
     picked: Option<u64>,
     /// Title, Location, Notes.
@@ -256,6 +266,7 @@ impl Calendar {
             storage_blocked,
             text_style: (ui.text_scale, ui.bold),
             editor: None,
+            goto: None,
             picked: None,
             fields,
             labels: TextCache::default(),
@@ -451,6 +462,9 @@ impl Calendar {
         let xp = x / ui.s;
         let yp = y / ui.s;
         let wp = self.w as f32 / ui.s;
+        if self.goto.is_some() {
+            return self.hit_goto(ui, x, y);
+        }
         if self.editor.is_some() {
             for (t, top, h) in self.rows() {
                 if (top..top + h).contains(&yp) {
@@ -749,7 +763,7 @@ impl Calendar {
     /// Month and Year. Not while an event is open. False when unused here.
     pub fn chord(&mut self, ui: &Ui, key: u32, mods: u32, t: f64) -> bool {
         use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META};
-        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.editor.is_some() {
+        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.editor.is_some() || self.goto.is_some() {
             return false;
         }
         let target = match key {
@@ -771,7 +785,7 @@ impl Calendar {
 
     /// Escape closes the open event editor without saving.
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
-        if self.editor.is_none() {
+        if self.editor.is_none() && self.goto.is_none() {
             return false;
         }
         self.activate(ui, Target::Cancel, t);
@@ -813,7 +827,14 @@ impl Calendar {
             }
             Target::Add => self.open(ui, None),
             Target::Row(id) => self.open(ui, Some(id)),
-            Target::Cancel => self.close(),
+            Target::Cancel => {
+                self.goto = None;
+                self.close();
+            }
+            Target::GoOpen => self.open_goto(),
+            Target::GoDay(_) | Target::GoMonth(_) | Target::GoYear(_) => self.goto_step(target),
+            Target::GoToday => self.goto = Some(today(self.wall, t)),
+            Target::GoConfirm => self.goto_confirm(ui),
             Target::Save => self.commit(ui, false, t),
             Target::Delete => self.commit(ui, true, t),
             Target::Duplicate => self.duplicate(),
@@ -890,6 +911,23 @@ impl Calendar {
     }
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
+        if self.goto.is_some() {
+            // Return accepts the date; the arrow keys step it by a day (Left, Right) or a week (Up, Down)
+            let step = match out {
+                Out::Enter => {
+                    self.activate(ui, Target::GoConfirm, t);
+                    return;
+                }
+                Out::Named("Left") => -1,
+                Out::Named("Right") => 1,
+                Out::Named("Up") => -7,
+                Out::Named("Down") => 7,
+                _ => return,
+            };
+            self.goto_step(Target::GoDay(step));
+            self.dirty = true;
+            return;
+        }
         if self.editor.is_none() {
             if out == Out::Enter {
                 self.open(ui, None);
@@ -1070,6 +1108,8 @@ impl Calendar {
             let mut c = self.column(s);
             if self.editor.is_some() {
                 self.draw_editor(&mut c, ui, t);
+            } else if self.goto.is_some() {
+                self.draw_goto(&mut c, ui);
             } else {
                 match self.view {
                     View::Month => self.draw_month(&mut c, ui),
@@ -1321,10 +1361,12 @@ pub enum Command {
     /// View > Zoom In / Zoom Out: the hour height of the Day and Week grids.
     ZoomIn,
     ZoomOut,
+    /// Go > Go to Date...
+    GoToDate,
 }
 
 impl Command {
-    pub const ALL: [Command; 18] = [
+    pub const ALL: [Command; 19] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1343,6 +1385,7 @@ impl Command {
         Command::NewEventFromText,
         Command::ZoomIn,
         Command::ZoomOut,
+        Command::GoToDate,
     ];
 
     pub fn id(self) -> u32 {
@@ -1373,6 +1416,7 @@ impl Command {
             Command::NewEventFromText => "New Event from Text",
             Command::ZoomIn => "Zoom In",
             Command::ZoomOut => "Zoom Out",
+            Command::GoToDate => "Go to Date...",
         }
     }
 
@@ -1388,6 +1432,7 @@ impl Command {
             Command::ShowYear => "cmd+4",
             Command::ZoomIn => "cmd+=",
             Command::ZoomOut => "cmd+-",
+            Command::GoToDate => "cmd+shift+t",
             _ => "",
         }
     }
@@ -1397,15 +1442,17 @@ impl Calendar {
     /// Whether menu command `cmd` is enabled now. While an event is open only the editor's commands are.
     pub fn enabled(&self, cmd: Command) -> bool {
         let editing = self.editor.is_some();
+        // the Go to Date sheet is modal too
+        let busy = editing || self.goto.is_some();
         let saved = self.editor.as_ref().is_some_and(|d| d.existing);
         match cmd {
             Command::Save | Command::Duplicate => editing,
             Command::ExportEvent => editing && saved && self.file_export,
             Command::Delete => editing && saved,
-            Command::WeekNumbers | Command::ExportCalendar => !editing && self.file_export,
-            Command::ZoomIn => !editing && self.time_view() && self.prefs.hour_h < prefs::HOUR_H_MAX,
-            Command::ZoomOut => !editing && self.time_view() && self.prefs.hour_h > prefs::HOUR_H_MIN,
-            _ => !editing,
+            Command::WeekNumbers | Command::ExportCalendar => !busy && self.file_export,
+            Command::ZoomIn => !busy && self.time_view() && self.prefs.hour_h < prefs::HOUR_H_MAX,
+            Command::ZoomOut => !busy && self.time_view() && self.prefs.hour_h > prefs::HOUR_H_MIN,
+            _ => !busy,
         }
     }
 
@@ -1459,6 +1506,7 @@ impl Calendar {
             Command::CalendarList => Target::Sidebar,
             // the app reads the pasteboard and calls `new_event_from_text`; this path is only a plain New Event
             Command::NewEventFromText => Target::Add,
+            Command::GoToDate => Target::GoOpen,
             Command::ZoomIn | Command::ZoomOut => return false,
         };
         self.activate(ui, target, t);
@@ -1467,7 +1515,7 @@ impl Calendar {
 
     /// Whether the Settings menu can be used now (not while an event is open).
     pub fn settings_enabled(&self) -> bool {
-        self.editor.is_none()
+        self.editor.is_none() && self.goto.is_none()
     }
 
     /// Whether Settings menu choice `setting` is the current one (its check mark).
@@ -1478,7 +1526,7 @@ impl Calendar {
     /// Settings menu: picks `setting`, saves the settings beside the events and redraws. The settings change the
     /// grids and the defaults of new events only; saved events are never touched. False while an event is open.
     pub fn change_setting(&mut self, ui: &Ui, setting: prefs::Setting) -> bool {
-        if self.editor.is_some() {
+        if !self.settings_enabled() {
             return false;
         }
         self.prefs.apply(setting);

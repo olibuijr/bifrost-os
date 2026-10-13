@@ -826,3 +826,72 @@ fn copy_in_the_editor_takes_the_open_event_and_text_commands_go_to_the_field() {
     assert_eq!(c.fields[2].text(), "");
     assert!(c.take_copied().is_none(), "the field's text is not an event");
 }
+
+#[test]
+fn go_to_date_steps_and_accepts_the_chosen_day() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.perform(&ui, Command::GoToDate, 0.0));
+    assert_eq!(c.goto, Some(date(2026, 10, 4)));
+    assert!(!c.enabled(Command::NewEvent) && !c.enabled(Command::GoToDate), "the sheet is modal");
+    // the Month row's plus, the Year row's plus, the Day row's minus (window points)
+    tap(&mut c, &ui, 713.0, 174.0, 10.0);
+    tap(&mut c, &ui, 713.0, 218.0, 50.0);
+    tap(&mut c, &ui, 250.0, 130.0, 100.0);
+    assert_eq!(c.goto, Some(date(2027, 11, 3)));
+    assert_eq!(c.selected, date(2026, 10, 4), "nothing moves until Go");
+    tap_bar(&mut c, &ui, chrome::B_GO, 200.0);
+    assert!(c.goto.is_none());
+    assert_eq!(c.selected, date(2027, 11, 3));
+    assert!(c.enabled(Command::NewEvent), "the sheet is closed");
+}
+
+#[test]
+fn cancel_and_escape_leave_the_shown_date_alone() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::GoToDate, 0.0);
+    c.activate(&ui, Target::GoYear(3), 1.0);
+    tap_bar(&mut c, &ui, chrome::B_CANCEL, 2.0);
+    assert!(c.goto.is_none());
+    assert_eq!(c.selected, date(2026, 10, 4));
+    c.perform(&ui, Command::GoToDate, 3.0);
+    c.activate(&ui, Target::GoDay(9), 4.0);
+    assert!(c.escape(&ui, 5.0));
+    assert!(c.goto.is_none());
+    assert_eq!(c.selected, date(2026, 10, 4));
+    assert!(!c.escape(&ui, 6.0), "nothing left to close");
+}
+
+#[test]
+fn the_sheet_has_a_today_shortcut_and_keys() {
+    use bifrost_app::proto::CHORD_META;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::GoToDate, 0.0);
+    c.activate(&ui, Target::GoYear(2), 1.0);
+    tap(&mut c, &ui, 400.0, 282.0, 10.0);
+    assert_eq!(c.goto, Some(date(2026, 10, 4)), "Today puts the sheet back on today");
+    c.key(&ui, Out::Named("Right"), 20.0);
+    c.key(&ui, Out::Named("Down"), 21.0);
+    assert_eq!(c.goto, Some(date(2026, 10, 12)));
+    assert!(!c.chord(&ui, 3, CHORD_META, 22.0), "no view change behind the sheet");
+    c.key(&ui, Out::Enter, 30.0);
+    assert!(c.goto.is_none());
+    assert_eq!(c.selected, date(2026, 10, 12));
+}
+
+#[test]
+fn the_sheet_publishes_its_controls() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::GoToDate, 0.0);
+    let labels: Vec<String> = c.controls(&ui).into_iter().map(|n| n.label).collect();
+    for want in ["Cancel", "Go", "Previous Day", "Next Day", "Previous Month", "Next Year", "Today"] {
+        assert!(labels.iter().any(|l| l == want), "{want} in {labels:?}");
+    }
+}
