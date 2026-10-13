@@ -3,7 +3,8 @@
 //! text extraction for reflowed reading, outlines and links, and page drawing through a drawing context.
 //!
 //! The file reader hands out [`doc::Doc`] and [`page::Page`]s; [`extract::Extractor`] turns a page into text lines
-//! and images, and [`draw`] rasterises it through `cg::context`.
+//! and images, and [`draw`] rasterises it through `cg::context`. [`writer`] goes the other way: it writes pages with
+//! standard-font text and raster images, which the print pipeline sends to a queue or saves as PDF.
 
 pub mod color;
 pub mod crypt;
@@ -22,3 +23,4 @@ pub mod shading;
 pub mod sink;
 mod tables;
 pub mod type1;
+pub mod writer;
