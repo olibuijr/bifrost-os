@@ -3250,13 +3250,13 @@
     "size": 3798
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, makeAlias shape, bottom layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::DragLink) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/makeAlias-top.pdf",
@@ -3271,13 +3271,13 @@
     "size": 3877
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, makeAlias shape, top layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::DragLink) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/move-bottom.pdf",
@@ -3292,13 +3292,13 @@
     "size": 38496
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, move shape, bottom layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape \"move\" is not in springboard/ui/src/cursor.rs Kind (it has 19 shapes: arrow, i-beam, crosshair, hands, not-allowed, copy, link, zoom, 6 resize); needs a new Kind plus cursor art with outline/fill layers for pointer colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/move-top.pdf",
@@ -3313,13 +3313,13 @@
     "size": 38503
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, move shape, top layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape \"move\" is not in springboard/ui/src/cursor.rs Kind (it has 19 shapes: arrow, i-beam, crosshair, hands, not-allowed, copy, link, zoom, 6 resize); needs a new Kind plus cursor art with outline/fill layers for pointer colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/notAllowed-bottom.pdf",
@@ -3334,13 +3334,13 @@
     "size": 35020
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, notAllowed shape, bottom layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::OperationNotAllowed) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/notAllowed-overlay.pdf",
@@ -3355,13 +3355,13 @@
     "size": 58822
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, notAllowed shape, overlay layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::OperationNotAllowed) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/notAllowed-top.pdf",
@@ -3376,13 +3376,13 @@
     "size": 37683
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, notAllowed shape, top layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::OperationNotAllowed) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeEastWest-bottom.pdf",
@@ -3397,13 +3397,13 @@
     "size": 38487
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, objectResizeEastWest shape, bottom layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape \"objectResizeEastWest\" is not in springboard/ui/src/cursor.rs Kind (it has 19 shapes: arrow, i-beam, crosshair, hands, not-allowed, copy, link, zoom, 6 resize); needs a new Kind plus cursor art with outline/fill layers for pointer colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeEastWest-top.pdf",
@@ -3418,13 +3418,13 @@
     "size": 38587
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, objectResizeEastWest shape, top layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape \"objectResizeEastWest\" is not in springboard/ui/src/cursor.rs Kind (it has 19 shapes: arrow, i-beam, crosshair, hands, not-allowed, copy, link, zoom, 6 resize); needs a new Kind plus cursor art with outline/fill layers for pointer colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeNorthEastSouthWest-bottom.pdf",
@@ -3439,13 +3439,13 @@
     "size": 3810
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, objectResizeNorthEastSouthWest shape, bottom layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape \"objectResizeNorthEastSouthWest\" is not in springboard/ui/src/cursor.rs Kind (it has 19 shapes: arrow, i-beam, crosshair, hands, not-allowed, copy, link, zoom, 6 resize); needs a new Kind plus cursor art with outline/fill layers for pointer colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeNorthEastSouthWest-top.pdf",
@@ -3460,13 +3460,13 @@
     "size": 3812
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, objectResizeNorthEastSouthWest shape, top layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape \"objectResizeNorthEastSouthWest\" is not in springboard/ui/src/cursor.rs Kind (it has 19 shapes: arrow, i-beam, crosshair, hands, not-allowed, copy, link, zoom, 6 resize); needs a new Kind plus cursor art with outline/fill layers for pointer colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeNorthSouth-bottom.pdf",
@@ -3481,13 +3481,13 @@
     "size": 38489
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, objectResizeNorthSouth shape, bottom layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape \"objectResizeNorthSouth\" is not in springboard/ui/src/cursor.rs Kind (it has 19 shapes: arrow, i-beam, crosshair, hands, not-allowed, copy, link, zoom, 6 resize); needs a new Kind plus cursor art with outline/fill layers for pointer colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeNorthSouth-top.pdf",
@@ -3502,13 +3502,13 @@
     "size": 38591
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, objectResizeNorthSouth shape, top layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape \"objectResizeNorthSouth\" is not in springboard/ui/src/cursor.rs Kind (it has 19 shapes: arrow, i-beam, crosshair, hands, not-allowed, copy, link, zoom, 6 resize); needs a new Kind plus cursor art with outline/fill layers for pointer colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeNorthWestSouthEast-bottom.pdf",
@@ -3523,13 +3523,13 @@
     "size": 3816
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, objectResizeNorthWestSouthEast shape, bottom layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape \"objectResizeNorthWestSouthEast\" is not in springboard/ui/src/cursor.rs Kind (it has 19 shapes: arrow, i-beam, crosshair, hands, not-allowed, copy, link, zoom, 6 resize); needs a new Kind plus cursor art with outline/fill layers for pointer colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/objectResizeNorthWestSouthEast-top.pdf",
@@ -3544,13 +3544,13 @@
     "size": 3818
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, objectResizeNorthWestSouthEast shape, top layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape \"objectResizeNorthWestSouthEast\" is not in springboard/ui/src/cursor.rs Kind (it has 19 shapes: arrow, i-beam, crosshair, hands, not-allowed, copy, link, zoom, 6 resize); needs a new Kind plus cursor art with outline/fill layers for pointer colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FontServices.framework/Versions/A/Resources/Fonts/ApplicationSupport/Mona Lisa Solid ITC TT.ttf",

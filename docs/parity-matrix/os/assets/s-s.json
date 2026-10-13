@@ -1927,13 +1927,13 @@
     "size": 35366
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, screenshotWindow shape, bottom layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape \"screenshotWindow\" is not in springboard/ui/src/cursor.rs Kind (it has 19 shapes: arrow, i-beam, crosshair, hands, not-allowed, copy, link, zoom, 6 resize); needs a new Kind plus cursor art with outline/fill layers for pointer colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/screenshotWindow-top.pdf",
@@ -1948,13 +1948,13 @@
     "size": 42111
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, screenshotWindow shape, top layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape \"screenshotWindow\" is not in springboard/ui/src/cursor.rs Kind (it has 19 shapes: arrow, i-beam, crosshair, hands, not-allowed, copy, link, zoom, 6 resize); needs a new Kind plus cursor art with outline/fill layers for pointer colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRecognition.framework/Versions/A/Resources/Fonts/Scancardium_2.0.ttf",

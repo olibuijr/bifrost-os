@@ -2011,13 +2011,13 @@
     "size": 38407
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, arrow shape, bottom layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::Arrow) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/arrow-top.pdf",
@@ -2032,13 +2032,13 @@
     "size": 38422
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, arrow shape, top layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::Arrow) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/copy-bottom.pdf",
@@ -2053,13 +2053,13 @@
     "size": 38399
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, copy shape, bottom layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::DragCopy) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/copy-overlay.pdf",
@@ -2074,13 +2074,13 @@
     "size": 38997
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, copy shape, overlay layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::DragCopy) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/copy-top.pdf",
@@ -2095,13 +2095,13 @@
     "size": 38420
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, copy shape, top layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::DragCopy) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/cross-bottom.pdf",
@@ -2116,13 +2116,13 @@
     "size": 38420
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, cross shape, bottom layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::Crosshair) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/cross-top.pdf",
@@ -2137,13 +2137,13 @@
     "size": 38430
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, cross shape, top layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::Crosshair) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySupport.framework/Versions/A/Frameworks/AccessibilityFoundation.framework/Versions/A/Resources/Cursors/crossTop.pdf",
@@ -2158,13 +2158,13 @@
     "size": 38428
    },
    "description": "",
-   "role": "",
+   "role": "Accessibility cursor art, crossTop shape,  layer",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "cursor shape exists in the model (springboard/ui/src/cursor.rs Kind::Crosshair) but BifrOSt ships no cursor art: the pointer is a plain translucent circle (springboard/render/src/gfx/cursor.rs) or the compositor theme cursor, and there are no separate outline/fill layers; needed for Accessibility > Display > Pointer outline and fill colour",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AgentCanvasUICore.framework/Versions/A/Resources/ADTGaramond.ttf",
