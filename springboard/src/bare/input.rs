@@ -16,6 +16,20 @@ pub enum Event {
     Key { code: u16, down: bool },
     /// A switch (jack insert and the like): the code and whether it is on.
     Switch { code: u16, on: bool },
+    /// One finger of a multi-touch screen: the contact's id (unique among the fingers down), its phase and its
+    /// position in panel pixels. Every finger produces these. The first finger of a touch sequence also produces
+    /// the single-pointer `Down` / `Move` / `Up` events above, so the shell's pointer-style handling keeps working.
+    Contact { id: i32, phase: TouchPhase, x: f32, y: f32, t: f64 },
+}
+
+/// Where a touch contact is in its life.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TouchPhase {
+    Down,
+    Move,
+    Up,
+    /// The system took the contact over (a system gesture, a lost grab): no tap or fling should follow.
+    Cancel,
 }
 
 pub const KEY_VOLUMEDOWN: u16 = 114;
