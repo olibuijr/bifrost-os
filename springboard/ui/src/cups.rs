@@ -498,13 +498,29 @@ impl<T: Transport> Client<T> {
         mime: &str,
         data: Vec<u8>,
     ) -> Result<i32, CupsError> {
-        let req = base(op::PRINT_JOB)
+        self.print_document_with(printer, job_name, user, mime, data, Vec::new())
+    }
+
+    /// Submits a document with job-template attributes (copies, media, orientation, page ranges, plug-in options). Each
+    /// `(name, value)` pair is one attribute of the job group. Returns the new job id.
+    pub fn print_document_with(
+        &mut self,
+        printer: &str,
+        job_name: &str,
+        user: &str,
+        mime: &str,
+        data: Vec<u8>,
+        template: Vec<(String, Value)>,
+    ) -> Result<i32, CupsError> {
+        let mut req = base(op::PRINT_JOB)
             .with(group::OPERATION, "printer-uri", vec![Value::uri(&target(printer)?)])
             .with(group::OPERATION, "requesting-user-name", vec![Value::name(user)])
             .with(group::OPERATION, "job-name", vec![Value::name(job_name)])
-            .with(group::OPERATION, "document-format", vec![Value::mime(mime)])
-            .document(data);
-        let resp = self.exchange(req)?;
+            .with(group::OPERATION, "document-format", vec![Value::mime(mime)]);
+        for (name, value) in template {
+            req = req.with(group::JOB, &name, vec![value]);
+        }
+        let resp = self.exchange(req.document(data))?;
         // bind the id first: the iterator borrows `resp`, which a tail expression would outlive
         let id = resp.groups_with(group::JOB).find_map(|g| g.int("job-id"));
         id.ok_or(CupsError::Missing("job-id"))
@@ -655,6 +671,19 @@ mod tests {
         assert!(sent.ends_with(b"%PDF-1.4"));
         assert!(find(sent, b"application/pdf").is_some());
         assert!(find(sent, b"ipp://localhost/printers/Lab").is_some());
+    }
+
+    #[test]
+    fn print_document_with_sends_the_job_template_in_the_job_group() {
+        let job = Group { tag: group::JOB, attributes: vec![attr("job-id", Value::Integer(4))] };
+        let mut client = Client::new(Canned::new(vec![reply(0, 1, vec![job])]));
+        let template = vec![("copies".to_string(), Value::Integer(2)), ("orientation-requested".to_string(), Value::Enum(4))];
+        let id = client.print_document_with("Lab", "a.pdf", "olibuijr", "application/pdf", b"%PDF".to_vec(), template);
+        assert_eq!(id, Ok(4));
+        let sent = &client.transport.sent[0];
+        assert!(find(sent, b"copies").is_some());
+        assert!(find(sent, b"orientation-requested").is_some());
+        assert!(sent.ends_with(b"%PDF"));
     }
 
     #[test]
