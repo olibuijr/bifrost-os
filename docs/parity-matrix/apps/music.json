@@ -109,18 +109,18 @@
    "area": "menu",
    "apple": "Song > Favorite",
    "status": "partial",
-   "bifrost": "springboard/apps/music-desktop/src/music.rs:1456",
-   "note": "Favourites exist for radio stations only",
-   "wire": "Per-song favourite flag in the library store, a heart in song rows and a Favourite Songs list"
+   "bifrost": "springboard/apps/music-desktop/src/music/marks.rs:75",
+   "note": "Song menu and Song > Favourite flag a song (kept by path); heart in song rows; Favourite Songs sidebar list. Not yet written into file tags.",
+   "wire": ""
   },
   {
    "feature": "Star ratings",
    "area": "menu",
    "apple": "Song > Rating",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Rating field per song set from the song menu, sortable column"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/marks.rs:90",
+   "note": "Song > Rating 1-5 for the playing song and a Top Rated list (4+ stars). No rating from the song menu, no sortable column.",
+   "wire": ""
   },
   {
    "feature": "Internet radio stations",
@@ -180,10 +180,10 @@
    "feature": "Recently Added / Recently Played",
    "area": "view",
    "apple": "sidebar Recently Added",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Derive from library mtimes and a play history log; add sidebar rows in app.rs chrome"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/music/marks.rs:150",
+   "note": "Recently Added (date added) and Recently Played (play log) sidebar lists.",
+   "wire": ""
   },
   {
    "feature": "System Now Playing and media keys",
@@ -207,10 +207,10 @@
    "feature": "App menus: Song, Controls, View with shortcuts",
    "area": "menu",
    "apple": "MainMenu Song/Controls/View",
-   "status": "gap",
-   "bifrost": "",
-   "note": "The app declares no main_menu",
-   "wire": "Implement App::main_menu in app.rs: Controls (Play, Next, Previous, Shuffle, Repeat, Volume Up/Down) and Song (Play Next, Add to Playlist, Get Info), routed to Music actions"
+   "status": "partial",
+   "bifrost": "springboard/apps/music-desktop/src/app.rs:main_menu",
+   "note": "Song (Favourite, Rating) and Controls (Play/Pause, Next, Previous, Shuffle, Repeat, Volume) menus with shortcuts. No Get Info or Add to Playlist items, no View menu.",
+   "wire": ""
   },
   {
    "feature": "Visualizer",

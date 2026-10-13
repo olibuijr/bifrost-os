@@ -2,6 +2,7 @@
 //! (back, title, sort, search, playlist actions, Up Next). The window draws them with the SDK kit
 //! (`widgets::source_list`, `widgets::toolbar`) beside and above the content pane `Music` draws.
 
+use super::marks::Shelf;
 use super::{Music, Page, Tab, Target};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
@@ -17,6 +18,8 @@ pub const BAR_QUEUE: u32 = 7;
 
 /// Sidebar row ids: the Library tabs, then one row per playlist.
 pub const SIDE_TAB: u32 = 100;
+/// Smart list rows (Recently Added, Recently Played, Favourite Songs, Top Rated), in `Shelf::LISTED` order.
+pub const SIDE_SHELF: u32 = 150;
 pub const SIDE_PLAYLIST: u32 = 200;
 
 const TABS: [(Tab, &str, &str); 5] = [
@@ -34,6 +37,7 @@ impl Music {
             Page::Root => match self.tab {
                 Tab::Radio if self.radio.error.is_some() && !self.radio.stations().is_empty() => "Radio (Offline)".into(),
                 Tab::Playlists => "Playlists".into(),
+                Tab::Songs if self.shelf != Shelf::All => self.shelf.label().into(),
                 t => TABS.iter().find(|e| e.0 == t).map_or("", |e| e.1).into(),
             },
             Page::Artist(a) => self.library.artists[a].name.clone(),
@@ -131,6 +135,9 @@ impl Music {
         let mut items = vec![SidebarItem::header("Library")];
         for (i, (tab, label, symbol)) in TABS.iter().enumerate() {
             if *tab == Tab::Radio {
+                for (k, shelf) in Shelf::LISTED.iter().enumerate() {
+                    items.push(SidebarItem::row(SIDE_SHELF + k as u32, shelf.label()).with_symbol(shelf.symbol()));
+                }
                 items.push(SidebarItem::header("Radio"));
             }
             if *tab == Tab::Playlists {
@@ -145,6 +152,7 @@ impl Music {
         let selected = match self.page() {
             Page::Queue => None,
             Page::Playlist(p) => Some(SIDE_PLAYLIST + p as u32),
+            _ if self.tab == Tab::Songs && self.shelf != Shelf::All => Shelf::LISTED.iter().position(|s| *s == self.shelf).map(|k| SIDE_SHELF + k as u32),
             _ => TABS.iter().position(|e| e.0 == self.tab).map(|i| SIDE_TAB + i as u32),
         };
         list.set_selected(selected);
@@ -155,6 +163,8 @@ impl Music {
     pub fn pick_sidebar(&mut self, id: u32, t: f64) {
         if (SIDE_TAB..SIDE_TAB + TABS.len() as u32).contains(&id) {
             self.activate(Target::Seg((id - SIDE_TAB) as usize), t);
+        } else if let Some(shelf) = id.checked_sub(SIDE_SHELF).and_then(|k| Shelf::LISTED.get(k as usize)).filter(|_| id < SIDE_PLAYLIST) {
+            self.show_shelf(*shelf, t);
         } else if let Some(p) = id.checked_sub(SIDE_PLAYLIST).map(|p| p as usize).filter(|&p| p < self.playlists.lists().len()) {
             self.activate(Target::Seg(4), t);
             self.pages.push(Page::Playlist(p));
