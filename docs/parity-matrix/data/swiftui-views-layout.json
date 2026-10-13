@@ -17,9 +17,9 @@
     {
       "feature": "View configuration (environment, modifiers, state)",
       "apple": "https://developer.apple.com/documentation/swiftui/view-configuration",
-      "bifrost": "springboard/sdk/src/view/app.rs",
-      "status": "gap",
-      "note": "no environment values or generic modifiers; properties are set on each view"
+      "bifrost": "springboard/ui/src/environment.rs (Environment, EnvValue); springboard/sdk/src/view/app.rs",
+      "status": "partial",
+      "note": "built on parity/team-a-08; not yet verified on Midget. Environment values set by a node and read by its descendants, with nested scopes that end when the node is left. The model has no caller yet: no view reads it. No generic view modifiers or state-driven bindings yet; properties are set on each view."
     },
     {
       "feature": "View styles",
@@ -150,7 +150,7 @@
   ],
   "gaps": [
     "Declarative View protocol with body, modifiers and state/binding updates",
-    "Environment values and style protocols",
+    "Style protocols",
     "Layout protocol and ZStack, lazy grids, ViewThatFits",
     "Shape, Path and Canvas drawing API for apps",
     "Generic List with swipe actions, TabView, GroupBox, ControlGroup",

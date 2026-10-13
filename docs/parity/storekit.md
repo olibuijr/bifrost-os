@@ -64,6 +64,19 @@ Verified against the official documentation pages (rendered through `docc.py`):
 6. No purchase-aware test harness in `springboard/sdk/src/testing.rs`.
 7. Apple-service items (storefront, App Store messages, ad attribution, external purchase, payment method binding) stay n/a.
 
+## Team A8 round: promotions and transaction sync
+
+- Promoted purchases (`PurchaseIntent`, `Product.PromotionInfo`): `springboard/ui/src/promotion.rs`. The app keeps a
+  queue of purchase intents sent from a store promotion (first in, first out, no duplicates, at most 16 waiting) and
+  the order in which the store lists its promoted products. The store page that sends intents is not built.
+- App Store transaction sync (`AppStore.sync`): `Ledger::sync` in `springboard/ui/src/entitlement.rs` takes
+  `RemoteRecord` values from the store and returns a `SyncReport`. A record matches a local purchase by product and
+  purchase day. Unknown records are added, renewal facts are refreshed, and a revocation day is taken only when it is
+  earlier. Each local purchase matches at most one record per sync, so two same-day purchases of a product stay two.
+  Local purchases the store does not list are kept. Nothing calls `Ledger::sync` yet: no code fetches the store records.
+- Still missing from the App Store interactions row: manage subscriptions, device verification and an SDK query
+  for the store environment (`AppTransaction` holds the environment, but apps have no call for it).
+
 ## Verification
 
 Per the task, nothing was built or tested in this round. The modules carry unit tests (7 in `subscription.rs`, 7 in

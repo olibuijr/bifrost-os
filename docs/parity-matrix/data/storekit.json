@@ -4,7 +4,7 @@
   "macos_since": "10.7",
   "status": "partial",
   "bifrost": "springboard/src/shell/store/ (api.rs StoreApp catalogue, mod.rs browse/GET/OPEN/Updates, install.rs sha256-checked installs); no commerce API in springboard/sdk/src or springboard/ui/src",
-  "summary": "BifrOSt has a free app catalogue and installer (browse, install, update, changelog, sha256 check), which covers only the product-page and download side of the App Store. Purchases, transactions, entitlements, subscriptions, offers, signed JWS verification, reviews prompts and StoreKit testing have no counterpart.",
+  "summary": "BifrOSt has a free app catalogue and installer (browse, install, update, changelog, sha256 check), which covers only the product-page and download side of the App Store. Purchase intents from promotions are queued, and store transactions can be synced into an entitlement ledger. Purchases, signed JWS verification, subscriptions, offers, review prompts and StoreKit testing have no counterpart.",
   "rea_evidence": "ev_ec765369e0094fb5383feea4b83916e0db64930fc6191bd855930ed9c90f5f46",
   "features": [
     {
@@ -52,9 +52,9 @@
     {
       "feature": "Promoted purchases",
       "apple": "PurchaseIntent, Product.PromotionInfo",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "tied to the App Store product page; BifrOSt would need a store-side promotion model first"
+      "bifrost": "springboard/ui/src/promotion.rs",
+      "status": "partial",
+      "note": "built on parity/team-a-08; not yet verified on Midget. App-side queue of purchase intents (first in, first out, no duplicates, bounded) and the store-side order of promoted products. The model has no caller yet: nothing shows a promotion and the store page does not send intents."
     },
     {
       "feature": "App Store product page and overlay",
@@ -80,9 +80,9 @@
     {
       "feature": "App Store interactions",
       "apple": "AppStore: manage subscriptions, sync transactions, environment, device verification",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "no account-level store service in the SDK; cloud accounts are in ~/Projects/bifrost-cloud, not exposed to apps through an SDK API"
+      "bifrost": "springboard/ui/src/entitlement.rs (Ledger::sync); springboard/sdk/src/app_transaction.rs",
+      "status": "partial",
+      "note": "built on parity/team-a-08; not yet verified on Midget. Ledger::sync merges store records into the entitlement ledger (sync transactions), but it has no caller: nothing fetches the records from the store and no SDK call exposes it. Manage subscriptions, the store environment as a query and device verification have no SDK API."
     },
     {
       "feature": "Storefront information",
