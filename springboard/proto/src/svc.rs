@@ -715,6 +715,8 @@ pub mod update {
         Check,
         /// download the offered OS update
         Download,
+        /// the background check schedule (Automatic Updates' checks): off keeps the checks, not the manual Check
+        Schedule { automatic: bool },
     }
 
     /// updated -> client.
@@ -732,6 +734,7 @@ pub mod update {
         pub const CONDITIONS: u32 = 4;
         pub const CHECK: u32 = 5;
         pub const DOWNLOAD: u32 = 6;
+        pub const SCHEDULE: u32 = 7;
         pub const STATE: u32 = 0x102;
         pub const SYSTEM_INSTALLED: u32 = 0x103;
     }
@@ -758,6 +761,7 @@ pub mod update {
                 Cmd::Conditions { wifi, low_power, charging } => Enc::tag(t::CONDITIONS).bool(*wifi).bool(*low_power).bool(*charging),
                 Cmd::Check => Enc::tag(t::CHECK),
                 Cmd::Download => Enc::tag(t::DOWNLOAD),
+                Cmd::Schedule { automatic } => Enc::tag(t::SCHEDULE).bool(*automatic),
             }
             .done()
         }
@@ -771,6 +775,7 @@ pub mod update {
                 t::CONDITIONS => Cmd::Conditions { wifi: d.bool()?, low_power: d.bool()?, charging: d.bool()? },
                 t::CHECK => Cmd::Check,
                 t::DOWNLOAD => Cmd::Download,
+                t::SCHEDULE => Cmd::Schedule { automatic: d.bool()? },
                 other => return Err(DecodeError::UnknownTag(other)),
             })
         }
@@ -850,6 +855,8 @@ pub mod update {
                 Cmd::Conditions { wifi: true, low_power: false, charging: true },
                 Cmd::Check,
                 Cmd::Download,
+                Cmd::Schedule { automatic: false },
+                Cmd::Schedule { automatic: true },
             ];
             for c in cmds {
                 assert_eq!(Cmd::decode(&c.encode()), Ok(c));
