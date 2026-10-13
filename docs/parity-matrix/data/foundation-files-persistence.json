@@ -10,9 +10,9 @@
     {
       "feature": "File System (create, read, write, examine files)",
       "apple": "FileManager, FileHandle, URL file APIs, FileWrapper, bookmarks",
-      "bifrost": "springboard/src/bare/docbroker.rs; docs/file-portal-design.md; springboard/sdk/src/document.rs; wired: springboard/apps/files/src/info.rs (get_info reads the item status for the panel)",
+      "bifrost": "springboard/src/bare/docbroker.rs; docs/file-portal-design.md; springboard/sdk/src/document.rs; wired: springboard/apps/files/src/info.rs (get_info reads the item status for the panel); springboard/sdk/src/bookmark.rs; springboard/sdk/src/file_wrapper.rs",
       "status": "partial",
-      "note": "Apps use Rust std fs in their data dir; user files go through the file portal grants and document grants. No FileManager-like SDK type, no FileWrapper. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity."
+      "note": "Apps use Rust std fs in their data dir; user files go through the file portal grants and document grants. No FileManager-like SDK type, no FileWrapper. Wired into the UI in wiring wave 4 (0.5.41); verify on Midget for parity. URL bookmarks (sdk/src/bookmark.rs: inode+device resolve, stale flag, relativeTo, no security scope) and FileWrapper (sdk/src/file_wrapper.rs: tree read, add, atomic write, matchesContents) added; parity needs a Midget check."
     },
     {
       "feature": "File coordination and presenters",
