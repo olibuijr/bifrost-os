@@ -10,23 +10,23 @@
     {
       "feature": "Event store and access",
       "apple": "EKEventStore, access requests",
-      "bifrost": "springboard/ui/src/calendar_access.rs",
+      "bifrost": "springboard/ui/src/calendar_access.rs, springboard/ui/src/calendar_store.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-eventkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. shared file store for shell, lock widgets and Today; no SDK store object, no permission prompt"
+      "note": "Wave 5 (w5-eventkit, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. shared file store for shell, lock widgets and Today; no SDK store object, no permission prompt Sprint 4: write API model in springboard/ui/src/calendar_store.rs (EventStore save/remove/commit/reset, EKSpan, access-gated); host unit tests only, not wired to the shell store, not run on Midget. Saving replaces the whole item whatever the span; no attendees or recurrence editing."
     },
     {
       "feature": "Events",
       "apple": "EKEvent",
-      "bifrost": "springboard/src/shell/calendar/store.rs (CalendarEvent)",
-      "status": "os",
-      "note": "title, location, notes, date, duration, all-day; titles capped at 160 chars; no URL, availability or structured attendees"
+      "bifrost": "springboard/src/shell/calendar/store.rs (CalendarEvent), springboard/ui/src/calendar_store.rs (Event, Span)",
+      "status": "partial",
+      "note": "title, location, notes, date, duration, all-day; titles capped at 160 chars; no URL, availability or structured attendees. Sprint 4: calendarItemIdentifier, isAllDay, save/remove with .thisEvent/.futureEvents on repeat-every-N-days events (model only)."
     },
     {
       "feature": "Reminders",
       "apple": "EKReminder",
-      "bifrost": "springboard/apps/reminders-desktop/src/model.rs; wired: springboard/apps/reminders-desktop/src/model.rs (tags_in, tag_counts, View::Tag); src/chrome.rs (Tags section in lists_source, sidebar_target); src/app.rs (Target::Tag); src/view.rs (list title)",
-      "status": "os",
-      "note": "app-internal file store (store.rs); no SDK access Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+      "bifrost": "springboard/apps/reminders-desktop/src/model.rs; wired: springboard/apps/reminders-desktop/src/model.rs (tags_in, tag_counts, View::Tag); src/chrome.rs (Tags section in lists_source, sidebar_target); src/app.rs (Target::Tag); src/view.rs (list title), springboard/ui/src/calendar_store.rs (Reminder)",
+      "status": "partial",
+      "note": "app-internal file store (store.rs); no SDK access Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Sprint 4: model with title, dueDateComponents, isCompleted, identifier, save/remove; not wired to the Reminders app, not run on Midget."
     },
     {
       "feature": "Calendars and sources",
@@ -80,9 +80,9 @@
     {
       "feature": "Fetch by predicate",
       "apple": "events(matching:), reminders(matching:)",
-      "bifrost": "springboard/apps/calendar-desktop/src/calendar/search.rs",
-      "status": "os",
-      "note": "in-app search only"
+      "bifrost": "springboard/apps/calendar-desktop/src/calendar/search.rs, springboard/ui/src/calendar_store.rs (fetch_reminders, events_between)",
+      "status": "partial",
+      "note": "in-app search only. Sprint 4: reminders All/Incomplete/Completed and events by date range, gated by full access; no calendar filter."
     },
     {
       "feature": "Calendar UI components",
