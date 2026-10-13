@@ -283,6 +283,8 @@ pub struct Settings {
     gpus: Vec<super::gpu_page::Gpu>,
     /// the adapter read in flight for Display > Graphics (sysfs and the PCI id list are read off the UI thread)
     gpus_rx: Option<std::sync::mpsc::Receiver<Vec<super::gpu_page::Gpu>>>,
+    /// the Back Up Now copy in flight; its result sets the backup note
+    backup_rx: Option<std::sync::mpsc::Receiver<Result<usize, String>>>,
     /// the font library read in flight for Settings > Fonts
     fonts_rx: Option<std::sync::mpsc::Receiver<super::pages::FontsView>>,
     /// Developer switches as read from the Android properties
@@ -481,6 +483,7 @@ impl Settings {
             scan: Scanner::default(),
             gpus: Vec::new(),
             gpus_rx: None,
+            backup_rx: None,
             fonts_rx: None,
             dev: DevState { perf_hud: prefs.get(PERF_HUD_PREF) == Some("1"), gpu_scanout: crate::bare::scanout::pref_on(prefs.get(GPU_SCANOUT_PREF)), ..DevState::read() },
             updater: Updater::new(super::apphost::root(), prefs.get(update::URL_PREF)),
@@ -1166,6 +1169,15 @@ impl Settings {
             self.rebuild(ui);
             frame = true;
         }
+        if let Some(res) = self.backup_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            self.backup_rx = None;
+            self.backup_note = match res {
+                Ok(n) => format!("Backed up {n} files."),
+                Err(e) => format!("Backup failed: {e}"),
+            };
+            self.rebuild(ui);
+            frame = true;
+        }
         if let Some(fonts) = self.fonts_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.fonts_rx = None;
             self.fonts = fonts;
@@ -1228,7 +1240,7 @@ impl Settings {
         if self.transition.is_some() || self.list().is_some_and(|p| p.animating(t)) || self.sidebar.as_ref().is_some_and(|p| p.animating(t)) || self.passcode.as_ref().is_some_and(|o| o.animating(t)) || self.st_gate.as_ref().is_some_and(|(l, _)| l.animating(t)) {
             return Some(t);
         }
-        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() || self.gpus_rx.is_some() || self.fonts_rx.is_some() {
+        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() || self.gpus_rx.is_some() || self.backup_rx.is_some() || self.fonts_rx.is_some() {
             return Some(t + 100.0);
         }
         self.search.next_wake(t).or_else(|| self.zone_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.time_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.sheet.as_ref().and_then(|sh| sh.next_wake(t)))
@@ -2539,10 +2551,10 @@ impl Settings {
                 vec![]
             }
             Command::BackUpNow => {
-                self.backup_note = match backup::back_up_now(&self.data_dir) {
-                    Ok((_, n)) => format!("Backed up {n} files."),
-                    Err(e) => format!("Backup failed: {e}"),
-                };
+                // the copy of every data file runs on a worker; the note reports the result when it lands
+                let dir = self.data_dir.clone();
+                self.backup_rx = Some(read_on_worker("backup-now", move || backup::back_up_now(&dir).map(|(_, n)| n).map_err(|e| e.to_string())));
+                self.backup_note = "Backing up…".into();
                 self.rebuild(ui);
                 vec![]
             }
@@ -2592,10 +2604,12 @@ impl Settings {
             Command::ShareDiagnostics => {
                 let (unix, _) = crate::bare::sys::wall_time();
                 let name = format!("diag-{}-{unix}.txt", self.info.serial.chars().filter(|c| c.is_ascii_alphanumeric()).collect::<String>());
-                let body = diag::bundle(&self.data_dir, &format!("{} {}", super::pages::BUILD.version, super::pages::BUILD.git), unix);
                 let url = diag::upload_url(self.updater.url(), &name);
+                let (dir, build) = (self.data_dir.clone(), format!("{} {}", super::pages::BUILD.version, super::pages::BUILD.git));
                 let (tx, rx) = std::sync::mpsc::channel();
+                // the bundle reads the logs and heartbeat, so it is built on the worker with the upload
                 std::thread::spawn(move || {
+                    let body = diag::bundle(&dir, &build, unix);
                     let _ = tx.send(diag::post(&url, body.as_bytes()).map_err(|e| e.to_string()));
                 });
                 self.diag_rx = Some(rx);
