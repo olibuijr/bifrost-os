@@ -4,7 +4,7 @@
   "macos_since": "10.5",
   "status": "partial",
   "bifrost": "bifrost_app::peek (springboard/sdk/src/peek.rs), springboard/proto/src/peek.rs, springboard/apps/files/src/peek.rs, springboard/src/files/preview.rs",
-  "summary": "The SDK has a Quick Look panel model (items, clamped index, Space toggle, arrow stepping) and a thumbnail path and cache, but the shell does not draw the floating panel and no app uses the SDK panel yet. The Files app has its own in-app preview for images, text, PDFs, audio, video and file info. Preview and thumbnail extensions, which are how Apple lets third-party file types supply previews, have no counterpart.",
+  "summary": "The SDK has a Quick Look panel model (items, clamped index, Space toggle, arrow stepping) and a thumbnail path and cache, but the shell does not draw the floating panel and no app uses the SDK panel yet. The Files app has its own in-app preview for images, text, PDFs, audio, video and file info. Preview and thumbnail extensions, which are how Apple lets third-party file types supply previews, have no counterpart. The PDF page context and fit scale are a pure model in springboard/ui/src/pdf_pages.rs; the preview view does not draw pages yet.",
   "rea_evidence": "ev_8f8e5e93fdbdd4c20445855d1b664ab16b942f834b9fc8f25ec0ddcada546ba3",
   "features": [
     {
@@ -52,9 +52,9 @@
     {
       "feature": "PDF multi-page preview context",
       "apple": "QLPreviewRequestCreatePDFContext, QLPreviewPDFStyle (https://developer.apple.com/documentation/quicklook/qlpreviewrequestcreatepdfcontext(_:_:_:_:))",
-      "bifrost": "springboard/src/files/preview.rs (is_pdf) and springboard/src/files/mod.rs (PDF text through springboard/src/shell/books/engine)",
-      "status": "gap",
-      "note": "PDFs show extracted text, not a rendered page view with a PDF style option."
+      "bifrost": "springboard/ui/src/pdf_pages.rs; springboard/src/files/preview.rs (is_pdf) and springboard/src/files/mod.rs (PDF text through springboard/src/shell/books/engine)",
+      "status": "partial",
+      "note": "Pure page context: page count, current page, next, previous and goto with range checks, page label, and the fit scale for a page size. Host unit tests (4). Built on parity/team-a-03; not yet verified on Midget. The renderer does not draw the pages yet."
     },
     {
       "feature": "Preview of USDZ in augmented reality",
@@ -71,6 +71,7 @@
     "No QLThumbnailGenerator equivalent: no generator for a file type, no icon-mode badge, no async update, and no drawing of the thumbnail in the panel.",
     "No QLPreviewView, previewItemDisplayState, transition source frames or full-screen mode.",
     "Doc error in docs/bifrost-ui.md:1420: names springboard/sdk/src/quicklook.rs and springboard/proto/src/quicklook.rs, which do not exist. The files are springboard/sdk/src/peek.rs and springboard/proto/src/peek.rs.",
-    "Doc error in docs/bifrost-ui.md:1423: says the cache is under $XDG_CACHE_HOME/bifrost-quicklook, but springboard/sdk/src/peek.rs uses bifrost-peek."
+    "Doc error in docs/bifrost-ui.md:1423: says the cache is under $XDG_CACHE_HOME/bifrost-quicklook, but springboard/sdk/src/peek.rs uses bifrost-peek.",
+    "Rendered multi-page PDF view with page navigation (state model in springboard/ui/src/pdf_pages.rs)"
   ]
 }

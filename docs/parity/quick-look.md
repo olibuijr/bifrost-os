@@ -72,3 +72,14 @@ Existing code kept and extended, not duplicated: `springboard/sdk/src/peek.rs` (
   page did not load, so the exact Apple case names are not confirmed.
 - Doc errors in `docs/bifrost-ui.md` lines 1420 and 1423 (file names and cache directory) remain; this round did not
   edit shared docs.
+
+## PDF page context (parity/team-a-03)
+
+`springboard/ui/src/pdf_pages.rs` adds `PdfPreview`, the page state of a multi-page PDF preview. It holds the page
+count, the page size in points and the current page (zero based). `next_page` and `previous_page` return false at
+the ends instead of wrapping. `goto` refuses a page outside the document. `page_label` gives "3 of 12".
+`fit_scale(view_width, view_height, allow_enlarge)` returns the scale that fits one page in a view, keeping the
+aspect ratio, and caps it at 1.0 when enlargement is off.
+
+Four host unit tests cover the stepping limits, range checks, size validation and the fit scale. The preview view
+does not draw pages yet, and the row is not verified on Midget.

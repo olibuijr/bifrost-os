@@ -4,7 +4,7 @@
   "macos_since": "10.13",
   "status": "partial",
   "bifrost": "springboard/apps/music-desktop/src/music/library.rs, springboard/apps/music-desktop/src/music/playlists.rs (Music app internals only; no SDK module)",
-  "summary": "Apple's framework is a read-only, legacy window onto the iTunes library (library, albums, playlists, media items, artwork, change notification). BifrOSt has no app-facing media library API; the Music app scans its own folders and keeps its own library and playlists internally, so the data exists but other apps cannot read it.",
+  "summary": "Apple's framework is a read-only, legacy window onto the iTunes library (library, albums, playlists, media items, artwork, change notification). BifrOSt has no app-facing media library API; the Music app scans its own folders and keeps its own library and playlists internally, so the data exists but other apps cannot read it. The video track model is a pure model in springboard/ui/src/video_info.rs; no library holds video items yet.",
   "rea_evidence": "ev_1dbdc7e0189d11cf547a0d566aac0b24245c29394b21d4ab380d2c50eb2afe8c",
   "features": [
     {
@@ -52,9 +52,9 @@
     {
       "feature": "Video media info (ITLibMediaItemVideoInfo)",
       "apple": "ITLibMediaItemVideoInfo",
-      "bifrost": "springboard/src/media/ (decoders only, no library)",
-      "status": "gap",
-      "note": "The Music library is audio-only. Video decode exists in the system media layer but has no library or metadata API."
+      "bifrost": "springboard/ui/src/video_info.rs",
+      "status": "partial",
+      "note": "Pure video track model: frame size, duration, frame rate and codec, validated, with the resolution label, aspect ratio and duration text. Host unit tests (5). Built on parity/team-a-03; not yet verified on Midget. No library holds video items yet."
     },
     {
       "feature": "Access rules (code signing, read-only, iTunes version gate)",
@@ -69,6 +69,7 @@
     "Playlists are .m3u files readable only by the Music app; no read API, no distinguished playlists.",
     "No library change notification; Music polls its folders instead of using fswatch.",
     "Per-track play statistics (playCount, lastPlayedDate, rating) are not stored in the library model.",
-    "No artwork accessor for an arbitrary media file."
+    "No artwork accessor for an arbitrary media file.",
+    "Video library items with metadata (track model in springboard/ui/src/video_info.rs; no library yet)"
   ]
 }
