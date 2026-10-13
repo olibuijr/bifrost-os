@@ -498,6 +498,7 @@ name = "bifrost-cmd"
 version = "0.1.0"
 dependencies = [
  "bifrost-core",
+ "bifrost-proto",
  "bifrost-ui",
 ]
 
