@@ -32,6 +32,8 @@ use url::Url;
 const USER_AGENT: &str = "SpringBoard/1.0 (radio)";
 const MAX_REDIRECTS: usize = 5;
 const HEADER_LIMIT: usize = 16 * 1024;
+/// Longest chunk-size line we accept, extensions included.
+const CHUNK_LINE_MAX: usize = 1024;
 /// the newest this many bytes are kept (about 30 s of a 128 kbit/s stream)
 const RING_MAX: usize = 512 * 1024;
 const POLL: Duration = Duration::from_millis(50);
@@ -359,15 +361,26 @@ fn request(u: &Url, host: &str) -> String {
     format!("GET {}{query} HTTP/1.0\r\nHost: {host}{port}\r\nUser-Agent: {USER_AGENT}\r\nAccept: */*\r\nIcy-MetaData: 1\r\nConnection: close\r\n\r\n", u.path())
 }
 
+/// Reads one line, but never buffers more than `max` bytes of it: a line that
+/// runs past `max` without a newline is an error, so an endless line from a
+/// hostile or broken server cannot grow the buffer without limit.
+fn read_capped_line(r: &mut impl BufRead, line: &mut String, max: usize) -> io::Result<usize> {
+    let n = r.by_ref().take(max as u64 + 1).read_line(line)?;
+    if line.len() > max && !line.ends_with('\n') {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "line too long"));
+    }
+    Ok(n)
+}
+
 /// The status and headers of a response; Shoutcast says `ICY 200 OK`.
 fn read_head(r: &mut impl BufRead) -> io::Result<(u16, Vec<(String, String)>)> {
     let mut line = String::new();
-    r.read_line(&mut line)?;
+    read_capped_line(r, &mut line, HEADER_LIMIT)?;
     let status = line.split_whitespace().nth(1).and_then(|s| s.parse::<u16>().ok()).filter(|_| line.starts_with("HTTP/") || line.starts_with("ICY")).ok_or_else(|| io::Error::other("not an http response"))?;
     let (mut headers, mut total) = (Vec::new(), line.len());
     loop {
         line.clear();
-        if r.read_line(&mut line)? == 0 {
+        if read_capped_line(r, &mut line, HEADER_LIMIT.saturating_sub(total))? == 0 {
             return Err(io::Error::other("the station hung up in the headers"));
         }
         total += line.len();
@@ -394,7 +407,7 @@ impl<R: BufRead> Read for Chunked<R> {
     fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
         if self.left == 0 {
             let mut line = String::new();
-            self.r.read_line(&mut line)?;
+            read_capped_line(&mut self.r, &mut line, CHUNK_LINE_MAX)?;
             let size = line.trim().split(';').next().unwrap_or("");
             self.left = usize::from_str_radix(size, 16).map_err(|_| io::Error::other("bad chunk size"))?;
             if self.left == 0 {
@@ -685,6 +698,25 @@ mod tests {
             let (port, _) = icecast(head, vec![0; 10], 0, &[], None);
             assert!(connect(&Local::on(port), "http://radio.test/x", &|_| {}).is_err(), "{head}");
         }
+    }
+
+    #[test]
+    fn a_header_line_without_a_newline_is_cut_off_early() {
+        // A station that never sends a newline must not make the pump buffer the whole stream.
+        let mut data = b"HTTP/1.1 200 OK\r\nX: ".to_vec();
+        data.resize(1 << 20, b'a');
+        let mut r = std::io::BufReader::new(Cursor::new(data));
+        let err = read_head(&mut r).err().expect("an endless header line must fail");
+        assert!(err.to_string().contains("too long"), "{err}");
+        assert!(r.get_ref().position() < 64 * 1024, "read {} bytes", r.get_ref().position());
+    }
+
+    #[test]
+    fn a_chunk_size_line_without_a_newline_is_cut_off_early() {
+        let mut c = Chunked { r: std::io::BufReader::new(Cursor::new(vec![b'f'; 1 << 20])), left: 0 };
+        let err = c.read(&mut [0u8; 16]).err().expect("an endless chunk-size line must fail");
+        assert!(err.to_string().contains("too long"), "{err}");
+        assert!(c.r.get_ref().position() < 64 * 1024, "read {} bytes", c.r.get_ref().position());
     }
 
     #[test]
