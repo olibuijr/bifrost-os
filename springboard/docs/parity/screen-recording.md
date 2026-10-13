@@ -28,7 +28,8 @@ Default file: `~/Desktop/Screen Recording YYYY-MM-DD at HH.MM.SS.mov` (`.avi` wh
 - PipeWire screencast is not used. The shell's own frame is the source, so there is no portal frontend and no
   compositor-side capture for recording.
 - gstreamer is not a second encoder. Without ffmpeg the built-in AVI writer is used (Motion JPEG, no audio).
-- No audio is recorded. `-g` and `-k` remain refused.
+- Audio: with ffmpeg and the Options menu's Microphone on, the audio service's take is muxed in (see `recording-polish.md`).
+  `-g` and `-k` remain refused.
 - Window recording (the toolbar's Window pick) is not offered as a recording target.
 - `screencapture -v` without `-V` returns when the recording ends. Ctrl-C ends the client only; the recording continues
   until stopped from the menu bar or with `rec stop`.

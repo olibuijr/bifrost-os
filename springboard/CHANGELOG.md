@@ -2,11 +2,18 @@
 
 ## Unreleased
 
+- Screen recording polish: a recording runs at the display's refresh rate (up to 60 frames a second) while the GPU path is
+  up, and at 10 frames a second otherwise. The ffmpeg H.264 path and the built-in Motion JPEG AVI writer both stay. With
+  ffmpeg, the Options menu's Microphone takes the audio service's microphone into the movie as AAC (the first time, Allow
+  is asked for). A finished recording opens in the Video Player (`open-movie` intent). Stop Recording is in the menu bar's
+  red item, as before.
+- Screenshot toolbar Options menu: Save To (Desktop or Documents, for recordings), Timer (Off, 5 s, 10 s), Show Pointer
+  (pictures) and Microphone (recordings). The choices last across sessions. Timer and Pointer buttons moved into the menu.
 - Screen recording: the screenshot toolbar (Shift-Cmd-5) has Record Selection and Record Screen buttons. A recording is
-  made of the frames the shell draws at 10 frames a second, encoded by the system `ffmpeg` (H.264 in a `.mov`) when it is
-  on the PATH, else by a built-in Motion JPEG AVI writer. It is saved to a dated file on the Desktop. The menu bar shows a
-  red stop item beside Control Center while it runs, with Stop Recording. The control port takes `rec start [screen|x,y,w,h]
-  [file]`, `rec stop` and `rec status`, and `screencapture -v` records until stopped (or `-V seconds` for a set length).
+  made of the frames the shell draws, encoded by the system `ffmpeg` (H.264 in a `.mov`) when it is on the PATH, else by a
+  built-in Motion JPEG AVI writer. It is saved to a dated file on the Desktop. The menu bar shows a red stop item beside
+  Control Center while it runs, with Stop Recording. The control port takes `rec start [screen|x,y,w,h] [file]`, `rec stop`
+  and `rec status`, and `screencapture -v` records until stopped (or `-V seconds` for a set length).
 - Services menu: the App menu lists the services that take the current selection (the pasteboard's text or files):
   Look Up in Dictionary, New Note With Selection, Make New Sticky Note, Open URL, Search With Quick Search and Show in Files.
   `bifrost_ui::services_menu` models which service takes what and where it goes; `shell/services_route.rs` carries it out
