@@ -28,6 +28,16 @@ pub fn copy(ctx: &Ctx, markdown: &str) -> u32 {
     Board::general().write(ctx, &copy_items(markdown))
 }
 
+/// Edit > Copy as Markdown: the selection's Markdown source as plain text, with no rich text beside it.
+pub fn copy_markdown_items(markdown: &str) -> Vec<Item> {
+    vec![Item::default().with(pb::STRING, markdown.as_bytes())]
+}
+
+/// Puts the selection's Markdown source on the general pasteboard. Returns the request id of the service call.
+pub fn copy_markdown(ctx: &Ctx, markdown: &str) -> u32 {
+    Board::general().write(ctx, &copy_markdown_items(markdown))
+}
+
 /// The RTF document of a Markdown text: one paragraph per line, with the same block and inline styles as the editor.
 pub fn rtf(markdown: &str) -> String {
     let mut out = String::from("{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Helvetica;}{\\f1 Menlo;}}\\fs24 ");
@@ -47,6 +57,7 @@ fn line_rtf(line: &str) -> String {
         md::Block::Bullet => out.push_str(&escape("\u{2022} ")),
         md::Block::Numbered(n) => out.push_str(&escape(&format!("{n}. "))),
         md::Block::Check(done) => out.push_str(&escape(if done { "[x] " } else { "[ ] " })),
+        md::Block::Dashed => out.push_str(&escape("\u{2013} ")),
         _ => {}
     }
     for span in md::spans(&content, 0) {
@@ -64,9 +75,15 @@ fn line_rtf(line: &str) -> String {
         if span.style == md::Style::Code {
             out.push_str("\\f1 ");
         }
+        if span.style == md::Style::Strike {
+            out.push_str("\\strike ");
+        }
+        if span.style == md::Style::Underline {
+            out.push_str("\\ul ");
+        }
         out.push_str(&escape(&text));
         // close only what this run opened; the space ends the last control word
-        let close = [(bold, "\\b0"), (span.style == md::Style::Italic, "\\i0"), (span.style == md::Style::Code, "\\f0")];
+        let close = [(bold, "\\b0"), (span.style == md::Style::Italic, "\\i0"), (span.style == md::Style::Code, "\\f0"), (span.style == md::Style::Strike, "\\strike0"), (span.style == md::Style::Underline, "\\ulnone")];
         let closers: String = close.iter().filter(|(on, _)| *on).map(|(_, w)| *w).collect();
         if !closers.is_empty() {
             out.push_str(&closers);
@@ -157,6 +174,23 @@ mod tests {
         assert!(r.contains("\\u8226? item"), "bullet marker: {r}");
         assert!(r.contains("\\b Head"), "titles are bold: {r}");
         assert!(r.contains("\\par\n"), "one paragraph per line");
+    }
+
+    #[test]
+    fn rtf_carries_strike_through_and_underline() {
+        let r = rtf("~~gone~~ and ++under++");
+        assert!(r.contains("\\strike gone\\strike0"), "{r}");
+        assert!(r.contains("\\ul under\\ulnone"), "{r}");
+        assert!(rtf("\u{2013} item").contains("\\u8211? item"), "dashed marker");
+    }
+
+    #[test]
+    fn copy_as_markdown_keeps_the_source_and_adds_no_rich_text() {
+        let items = copy_markdown_items("**bold** ~~x~~");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].data(pb::STRING), Some("**bold** ~~x~~".as_bytes()));
+        assert_eq!(items[0].data(pb::RTF), None);
+        assert!(copy_items("**bold** ~~x~~")[0].data(pb::RTF).is_some(), "the ordinary copy still carries rich text");
     }
 
     #[test]
