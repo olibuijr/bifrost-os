@@ -370,7 +370,7 @@ fn dragging_scrolls_instead_of_following_a_link() {
 #[test]
 fn pictures_load_and_appear_in_the_layout() {
     let ui = ui();
-    let png = crate::imgdec::tests::png_bytes(4, 2, [255, 0, 0, 255]);
+    let png = crate::cg::imageio::tests::png_bytes(4, 2, [255, 0, 0, 255]);
     let page = "<title>Pic</title><p>before</p><img src=\"/p.png\" width=40 height=20><p>after</p>";
     let sites: Vec<(&str, &str, &[u8])> = vec![html_site("x.test/", page), ("x.test/p.png", "image/png", png.as_slice())];
     let mut b = browser(&ui, &scratch("images"), &sites);

@@ -1554,7 +1554,7 @@ fn photo_wallpapers(dir: &str) -> Vec<springboard::shell::wallpaper_page::Wallpa
             let id = format!("photo_{stem}");
             let (raw, thumb_path) = (format!("{dir}/wallpapers/{id}.raw"), format!("{dir}/wallpapers/{id}.thumb.raw"));
             if !std::path::Path::new(&raw).exists() || !std::path::Path::new(&thumb_path).exists() {
-                let img = springboard::imgdec::decode(&fs::read(&path).ok()?)?;
+                let img = springboard::cg::imageio::decode(&fs::read(&path).ok()?)?;
                 let scale = (tw as f32 / img.w as f32).max(th as f32 / img.h as f32);
                 let (cw, ch) = (((tw as f32 / scale) as usize).clamp(1, img.w), ((th as f32 / scale) as usize).clamp(1, img.h));
                 let full = img.crop((img.w - cw) / 2, (img.h - ch) / 2, cw, ch).resized(tw, th);

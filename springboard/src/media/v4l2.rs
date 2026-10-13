@@ -397,7 +397,7 @@ pub fn to_pixels_region(frame: &Frame, (rx, ry, rw, rh): (usize, usize, usize, u
             }
         }
         MJPG => {
-            let img = crate::imgdec::decode(&frame.data)?;
+            let img = crate::cg::imageio::decode(&frame.data)?;
             if img.w == 0 || img.h == 0 {
                 return None;
             }

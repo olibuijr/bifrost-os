@@ -150,6 +150,11 @@ pub fn is_image_name(name: &str) -> bool {
     name.rsplit_once('.').is_some_and(|(_, e)| Format::from_extension(e).is_some())
 }
 
+/// The pixel size of the first image, from the header alone.
+pub fn pixel_size(bytes: &[u8]) -> Option<(usize, usize)> {
+    probe_first(Format::detect(bytes)?, bytes).map(|p| (p.pixel_width, p.pixel_height))
+}
+
 /// Reads the first image of `bytes` as premultiplied pixels (animations: the first frame).
 pub fn decode(bytes: &[u8]) -> Option<Image> {
     ImageSource::new(bytes.to_vec()).image_premultiplied(0)

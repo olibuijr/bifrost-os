@@ -95,7 +95,7 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<Photo>, offset: i32) {
             if depth + 1 < MAX_DEPTH {
                 walk(&path, depth + 1, out, offset);
             }
-        } else if crate::imgdec::is_image_name(&name) {
+        } else if crate::cg::imageio::is_image_name(&name) {
             out.extend(Photo::from_path_at(path, offset));
         }
     }
@@ -209,7 +209,7 @@ pub(crate) mod tests {
     /// Writes a tiny PNG at `path` dated `unix`.
     pub fn picture(path: &Path, unix: i64) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(path, crate::imgdec::tests::png_bytes(4, 4, [10, 20, 30, 255])).unwrap();
+        std::fs::write(path, crate::cg::imageio::tests::png_bytes(4, 4, [10, 20, 30, 255])).unwrap();
         let f = std::fs::File::options().write(true).open(path).unwrap();
         f.set_modified(UNIX_EPOCH + Duration::from_secs(unix as u64)).unwrap();
     }

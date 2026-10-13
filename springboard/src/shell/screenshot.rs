@@ -176,7 +176,7 @@ mod tests {
         let bytes = encode(&img);
         let path = write(&dir, &file_name(&d), &bytes, 1_791_073_395).unwrap();
         assert!(path.ends_with("Screenshot-20261004-002315.png"));
-        let back = crate::imgdec::decode(&std::fs::read(&path).unwrap()).unwrap();
+        let back = crate::cg::imageio::decode(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!((back.w, back.h, back.px[7]), (5, 3, pack(9, 8, 7, 255)));
         let photo = crate::shell::photos::library::Photo::from_path(path).unwrap();
         assert_eq!(photo.mtime, 1_791_073_395);

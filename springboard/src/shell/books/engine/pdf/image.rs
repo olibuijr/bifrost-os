@@ -117,7 +117,7 @@ pub fn load(doc: &Doc, s: &Stream) -> Option<Image> {
     let (data, left) = doc.decode(s);
     if let Some(f) = left {
         if f == "DCTDecode" {
-            return crate::imgdec::decode(&data).map(super::super::epub::shrink);
+            return crate::cg::imageio::decode(&data).map(super::super::epub::shrink);
         }
         return None;
     }

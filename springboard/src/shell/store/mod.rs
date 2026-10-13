@@ -586,7 +586,7 @@ impl AppStore {
                         None if !icon.is_empty() => net::get(&net::absolute(&icon), 1_000_000).ok(),
                         None => None,
                     };
-                    Done::Icon { id, image: bytes.and_then(|b| crate::imgdec::decode(&b)) }
+                    Done::Icon { id, image: bytes.and_then(|b| crate::cg::imageio::decode(&b)) }
                 });
             }
         }

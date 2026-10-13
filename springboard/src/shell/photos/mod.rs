@@ -2274,7 +2274,7 @@ fn trash_icon(s: &mut Surface, cx: f32, cy: f32, size: f32, t: f32, color: u32) 
 
 /// Decodes a picture and turns it upright by its EXIF orientation.
 fn decode_upright(bytes: &[u8]) -> Option<Image> {
-    imgdec::decode(bytes).map(|img| edit::orient(img, exif::orientation(bytes)))
+    crate::cg::imageio::decode(bytes).map(|img| edit::orient(img, exif::orientation(bytes)))
 }
 
 /// The first bytes of a file (where a JPEG keeps its EXIF).
@@ -2309,7 +2309,7 @@ mod tests {
 
     #[test]
     fn decoding_applies_the_exif_orientation() {
-        let plain = imgdec::decode(include_bytes!("../../deildu/fixtures/dot.jpg")).unwrap();
+        let plain = crate::cg::imageio::decode(include_bytes!("../../deildu/fixtures/dot.jpg")).unwrap();
         assert_eq!(decode_upright(&oriented_jpeg(1)).unwrap(), plain);
         assert_eq!(decode_upright(&oriented_jpeg(3)).unwrap(), edit::rotate(&plain, 2));
         assert_eq!(decode_upright(&oriented_jpeg(6)).unwrap(), edit::rotate(&plain, 1));

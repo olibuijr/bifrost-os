@@ -11,6 +11,7 @@ pub mod font;
 pub mod gfx;
 pub mod gpu;
 pub mod gvar;
+pub mod cg;
 pub mod imgdec;
 pub mod keychain;
 pub mod installer;

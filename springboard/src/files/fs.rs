@@ -79,7 +79,7 @@ pub fn kind_description(name: &str, is_dir: bool, kind: Kind) -> &'static str {
 /// Refines a file of unknown kind from its first bytes: an image by its
 /// magic, text when it is valid UTF-8 without NULs, otherwise still Other.
 pub fn sniff(head: &[u8]) -> Kind {
-    if crate::imgdec::is_image(head) {
+    if crate::cg::imageio::is_image(head) {
         return Kind::Image;
     }
     if head.is_empty() || head.contains(&0) {

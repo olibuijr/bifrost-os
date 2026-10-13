@@ -421,7 +421,7 @@ fn load_icon(item: &DockItem) -> Option<Image> {
         return None;
     }
     let bytes = std::fs::read(&item.icon_path).ok()?;
-    bifrost_render::imgdec::decode(&bytes)
+    bifrost_render::cg::imageio::decode(&bytes)
 }
 
 /// The face the Dock draws its text with (badges and menus), registered once per process.

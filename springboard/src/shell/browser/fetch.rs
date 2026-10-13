@@ -99,8 +99,8 @@ pub fn error_page(url: &str, message: &str) -> Fetched {
 fn page_from(resp: crate::deildu::http::Response) -> Result<Fetched, String> {
     let ct = resp.header("Content-Type").unwrap_or("").to_ascii_lowercase();
     let url = resp.url.clone();
-    if crate::imgdec::is_image(&resp.body) || ct.starts_with("image/") {
-        let img = crate::imgdec::decode(&resp.body).ok_or("This picture format is not supported.")?;
+    if crate::cg::imageio::is_image(&resp.body) || ct.starts_with("image/") {
+        let img = crate::cg::imageio::decode(&resp.body).ok_or("This picture format is not supported.")?;
         let name = url.rsplit('/').next().unwrap_or("Image").to_string();
         let dom = html::parse(&format!("<html><head><title>{}</title></head><body style=\"background:#000\"><img src=\"{}\"></body></html>", nav::esc(&name), nav::esc(&url)));
         let mut f = fetched(&url, dom);
@@ -142,7 +142,7 @@ fn run(client: &Client, job: Job) -> Msg {
             Msg::Sheet { tab, nav, slot, rules }
         }
         Job::Image { tab, nav, src, url } => {
-            let image = client.get(&url, None, IMAGE_LIMIT).ok().filter(|r| r.status < 400).and_then(|r| crate::imgdec::decode(&r.body)).map(|i| crate::imgdec::contain(&i, IMAGE_SIDE, IMAGE_SIDE * 3));
+            let image = client.get(&url, None, IMAGE_LIMIT).ok().filter(|r| r.status < 400).and_then(|r| crate::cg::imageio::decode(&r.body)).map(|i| crate::imgdec::contain(&i, IMAGE_SIDE, IMAGE_SIDE * 3));
             Msg::Image { tab, nav, src, image }
         }
     }
@@ -351,7 +351,7 @@ pub mod tests {
 
     #[test]
     fn sheets_and_images_load_and_failures_are_empty() {
-        let png = crate::imgdec::tests::png_bytes(4, 2, [255, 0, 0, 255]);
+        let png = crate::cg::imageio::tests::png_bytes(4, 2, [255, 0, 0, 255]);
         let t = Fake::new(&[("c.test", "text/css", b"p { color: red }"), ("i.test", "image/png", &png)]);
         let mut l = Loader::new(t);
         l.sheet(1, 1, 3, "http://c.test/a.css");

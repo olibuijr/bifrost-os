@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 /// Decoded artwork budget: 40 MB keeps memory use modest.
 pub const BUDGET: usize = 40 * 1024 * 1024;
 
-pub use crate::imgdec::{cover, decode};
+pub use crate::cg::imageio::decode;
+pub use crate::imgdec::cover;
 
 fn bytes_of(img: &Image) -> usize {
     img.px.len() * 4

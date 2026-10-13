@@ -233,7 +233,7 @@ fn load_image(zip: &Zip, path: &str) -> Option<Image> {
     if bytes.len() > MAX_IMAGE_BYTES {
         return None;
     }
-    let img = crate::imgdec::decode(&bytes)?;
+    let img = crate::cg::imageio::decode(&bytes)?;
     Some(shrink(img))
 }
 
