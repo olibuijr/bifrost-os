@@ -2,7 +2,7 @@
 //! window: requests go in on one channel and replies come back on another, which the window drains on each tick.
 
 use crate::model::{Action, Reply};
-use bifrost_app::controls::cups::{Client, Transport};
+use bifrost_app::controls::cups::{self, Client, Transport};
 use std::sync::mpsc::{self, Receiver, Sender};
 
 /// A request for the worker.
@@ -12,6 +12,8 @@ pub enum Request {
     List { printer: Option<String> },
     /// Perform `action` on `printer` (or on one of its jobs).
     Act { printer: String, action: Action },
+    /// Add a queue for the device at this address (driverless).
+    Add { device: String },
 }
 
 /// The window's end of the channels. Dropping it ends the worker thread.
@@ -78,6 +80,7 @@ pub fn handle<T: Transport>(client: &mut Client<T>, request: Request) -> Reply {
                 Action::Pause => client.pause_printer(&printer),
                 Action::Resume => client.resume_printer(&printer),
                 Action::SetDefault => client.set_default(&printer),
+                Action::Delete => client.delete_printer(&printer),
                 Action::CancelJob(id) => client.cancel_job(&printer, *id),
                 Action::HoldJob(id) => client.hold_job(&printer, *id),
                 Action::ReleaseJob(id) => client.release_job(&printer, *id),
@@ -87,5 +90,9 @@ pub fn handle<T: Transport>(client: &mut Client<T>, request: Request) -> Reply {
                 Err(e) => Reply::Failed(e.to_string()),
             }
         }
+        Request::Add { device } => match cups::add_device(client, &device) {
+            Ok(name) => Reply::Added(name),
+            Err(e) => Reply::Failed(e.to_string()),
+        },
     }
 }

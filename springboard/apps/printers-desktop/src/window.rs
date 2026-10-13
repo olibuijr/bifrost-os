@@ -37,6 +37,8 @@ pub const B_HOLD: u32 = 3;
 pub const B_RELEASE: u32 = 4;
 pub const B_CANCEL: u32 = 5;
 pub const B_REFRESH: u32 = 6;
+pub const B_ADD: u32 = 7;
+pub const B_DELETE: u32 = 8;
 
 /// What a press or a tap landed on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -102,6 +104,30 @@ impl PrintCenter {
         }
     }
 
+    /// Add Printer: the address on the clipboard is added; anything else leaves the footer saying how to add one.
+    fn add_from_clipboard(&mut self) {
+        let text = bifrost_app::kit::clipboard::text();
+        match model::device_from_clipboard(text.as_deref()) {
+            Ok(device) => {
+                self.model.status = "Adding printer…".into();
+                self.send(Request::Add { device });
+            }
+            Err(message) => self.model.status = message.into(),
+        }
+    }
+
+    /// Delete Printer takes two requests: the first asks the person to press again, the second removes the queue.
+    fn delete_selected(&mut self) {
+        let Some(name) = self.model.selected.clone() else { return };
+        if self.model.confirm_delete.as_deref() == Some(name.as_str()) {
+            self.model.confirm_delete = None;
+            self.act(Action::Delete);
+        } else {
+            self.model.status = format!("Press Delete Printer again to remove \"{name}\"");
+            self.model.confirm_delete = Some(name);
+        }
+    }
+
     /// Takes the replies that arrived. A finished action lists again so the window shows the result. True when a frame
     /// is needed.
     fn poll(&mut self) -> bool {
@@ -111,7 +137,7 @@ impl PrintCenter {
         }
         self.in_flight = self.in_flight.saturating_sub(replies.len());
         for reply in replies {
-            let done = matches!(reply, Reply::Done(_));
+            let done = matches!(reply, Reply::Done(_) | Reply::Added(_));
             self.model.apply(reply);
             if done {
                 self.list();
@@ -196,12 +222,16 @@ impl PrintCenter {
         let printer = self.model.selected_printer();
         let job = self.model.selected_job();
         let pause_label = printer.map_or("Pause", |p| model::toggle(p).1);
+        let confirming = printer.is_some_and(|p| self.model.confirm_delete.as_deref() == Some(p.name.as_str()));
+        let delete_label = if confirming { "Confirm Delete" } else { "Delete Printer" };
         Toolbar::new(vec![
             ToolbarItem::button(B_PAUSE, pause_label).enabled(printer.is_some()),
             ToolbarItem::button(B_DEFAULT, "Set Default").enabled(printer.is_some_and(|p| !p.is_default)),
             ToolbarItem::button(B_HOLD, "Hold").enabled(job.is_some_and(model::can_hold)),
             ToolbarItem::button(B_RELEASE, "Release").enabled(job.is_some_and(model::can_release)),
             ToolbarItem::button(B_CANCEL, "Cancel Job").enabled(job.is_some_and(model::can_cancel)),
+            ToolbarItem::button(B_DELETE, delete_label).enabled(printer.is_some()),
+            ToolbarItem::button(B_ADD, "Add Printer"),
             ToolbarItem::button(B_REFRESH, "Refresh"),
         ])
     }
@@ -317,6 +347,14 @@ impl PrintCenter {
                 self.list();
                 None
             }
+            B_ADD => {
+                self.add_from_clipboard();
+                None
+            }
+            B_DELETE => {
+                self.delete_selected();
+                None
+            }
             _ => None,
         };
         if let Some(action) = action {
@@ -414,6 +452,34 @@ mod tests {
         assert_eq!(w.footer_text(), "2 printers");
         w.model.status = "Printer paused".into();
         assert_eq!(w.footer_text(), "Printer paused");
+    }
+
+    #[test]
+    fn delete_printer_asks_once_more_before_it_removes_the_queue() {
+        let mut w = window();
+        w.toolbar_action(B_DELETE);
+        assert_eq!(w.in_flight, 0, "the first press only asks");
+        assert_eq!(w.model.confirm_delete.as_deref(), Some("Office"));
+        assert!(w.model.status.contains("Office"));
+        w.toolbar_action(B_DELETE);
+        assert_eq!(w.in_flight, 1, "the second press removes it");
+        assert_eq!(w.model.confirm_delete, None);
+    }
+
+    #[test]
+    fn choosing_another_printer_drops_the_pending_delete() {
+        let mut w = window();
+        w.toolbar_action(B_DELETE);
+        assert!(w.activate(Target::Printer(1)));
+        assert_eq!(w.model.confirm_delete, None);
+    }
+
+    #[test]
+    fn add_printer_without_an_address_on_the_clipboard_says_how() {
+        let mut w = window();
+        w.toolbar_action(B_ADD);
+        assert_eq!(w.in_flight, 0);
+        assert!(w.model.status.starts_with("Copy a printer address"));
     }
 
     #[test]
