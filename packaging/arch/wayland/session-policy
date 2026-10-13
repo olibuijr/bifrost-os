@@ -1,13 +1,14 @@
 # Pure session policy, sourced by /usr/lib/bifrost/session (tested by tools/test_session_policy.py).
 # No side effects here: the caller passes paths and the time, and acts on the printed answer.
 
-# session_compositor_flags <compositor> <renderer> <chrome>
-# Prints the environment words the window server and the shell get when bifrost-wm is selected. labwc gets none.
+# session_compositor_flags <renderer> <chrome> [mode]
+# Prints the environment words the window server and the shell get. mode is "normal" (default) or "safe".
 #   renderer: contents of /etc/bifrost/renderer (vulkan selects the Vulkan render server)
 #   chrome:   contents of the chrome switch (1 starts the separate chrome clients)
+#   mode:     safe prints nothing: no direct apps, the default GLES renderer, no chrome clients
 session_compositor_flags() {
-    local compositor=$1 renderer=$2 chrome=$3
-    [[ "$compositor" == bifrost-wm ]] || return 0
+    local renderer=${1:-} chrome=${2:-} mode=${3:-normal}
+    [[ "$mode" == safe ]] && return 0
     printf '%s\n' BIFROST_DIRECT=1
     [[ "$renderer" == vulkan ]] && printf '%s\n' BIFROST_WM_RENDERER=vulkan
     [[ "$chrome" == 1 ]] && printf '%s\n' BIFROST_CHROME=1
