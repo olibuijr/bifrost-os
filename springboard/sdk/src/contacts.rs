@@ -170,6 +170,53 @@ fn decode_date(v: &Json) -> Option<DateComponents> {
     DateComponents::new(part("year").map(|y| y as i32), u8::try_from(part("month")?).ok()?, u8::try_from(part("day")?).ok()?)
 }
 
+/// Why a contacts call failed. The shell sends the reason as the error message; this maps the reasons it has a name for
+/// and keeps any other message in `Other`. The variants are not `CNErrorCode` raw values: the raw numbers are not
+/// verified yet, so apps match on the variant.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ContactsError {
+    /// The app holds no grant, or no write access (`CNError` authorization denied).
+    NotGranted,
+    /// A limited grant reads only; a save needs full access.
+    ReadOnly,
+    /// Access is restricted on this device and cannot be granted.
+    Restricted,
+    /// A limited grant was chosen with no contact picked.
+    NothingPicked,
+    /// The person already answered the access prompt.
+    AlreadyDecided,
+    /// Any other failure, with the shell's message.
+    Other(String),
+}
+
+impl ContactsError {
+    /// The variant for a shell error message.
+    pub fn from_message(message: &str) -> Self {
+        match message {
+            "contacts access is not granted" => ContactsError::NotGranted,
+            "a limited contacts grant only reads; saving needs full access" => ContactsError::ReadOnly,
+            other => ContactsError::Other(other.to_string()),
+        }
+    }
+}
+
+impl From<Error> for ContactsError {
+    fn from(error: Error) -> Self {
+        match error {
+            Error::Restricted => ContactsError::Restricted,
+            Error::AlreadyDecided => ContactsError::AlreadyDecided,
+            Error::NothingPicked => ContactsError::NothingPicked,
+            Error::ReadOnly => ContactsError::ReadOnly,
+            Error::NotAuthorized => ContactsError::NotGranted,
+        }
+    }
+}
+
+/// The typed error in a failed reply, or `None` for a reply that succeeded.
+pub fn decode_error(reply: &Result<Json, String>) -> Option<ContactsError> {
+    reply.as_ref().err().map(|message| ContactsError::from_message(message))
+}
+
 /// The access an app would hold after a choice, for a test or a preview of the sheet. The shell applies the same rules.
 pub fn preview(choice: Choice) -> Result<Status, Error> {
     Access::new().request(choice)
@@ -297,6 +344,22 @@ mod tests {
         let Some(Value::Labeled(emails)) = people[0].get(Key::Emails) else { panic!("emails") };
         assert_eq!(emails.len(), 1);
         assert_eq!(emails[0].value, "old@x.is");
+    }
+
+    #[test]
+    fn a_service_error_message_maps_to_a_typed_error() {
+        assert_eq!(ContactsError::from_message("contacts access is not granted"), ContactsError::NotGranted);
+        assert_eq!(
+            ContactsError::from_message("a limited contacts grant only reads; saving needs full access"),
+            ContactsError::ReadOnly
+        );
+        assert_eq!(ContactsError::from_message("fetch needs keys"), ContactsError::Other("fetch needs keys".into()));
+    }
+
+    #[test]
+    fn a_failed_reply_decodes_to_its_typed_error() {
+        assert_eq!(decode_error(&Err("contacts access is not granted".into())), Some(ContactsError::NotGranted));
+        assert_eq!(decode_error(&Ok(Json::Null)), None);
     }
 
     #[test]

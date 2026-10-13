@@ -2571,6 +2571,11 @@ The first phone and email come from the contacts file, the rest from the sidecar
 (`springboard/src/shell/contactextras.rs`). Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
 
+Errors: `contacts::ContactsError` is the typed failure of a contacts call (`NotGranted`, `ReadOnly`, `Restricted`,
+`NothingPicked`, `AlreadyDecided`, or `Other` with the shell's message). `decode_error(&reply)` returns it for a failed
+reply, and `ContactsError::from(contact_access::Error)` maps the access model's errors. The variants are matched by
+name; Apple's `CNErrorCode` raw values are not mapped yet because they are not verified against the reference.
+
 ## InputMethodKit: composing input methods (`springboard/src/shell/input_methods`)
 
 Provider side of text input, pure Rust, no fcitx. `InputController` mirrors the reference controller:
