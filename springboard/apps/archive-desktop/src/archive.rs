@@ -1,10 +1,10 @@
 //! Archive service: what a file is, where its contents go, and how tar streams are read.
 //! Expand unpacks zip, tar and gzipped tar beside the archive; compress zips a folder beside it. Member paths
 //! that would leave the output folder are skipped, and output names never overwrite what is already there.
-//! Progress is `(done, total)` bytes; the callback returns false to cancel. No xz or bzip2 decoder exists yet.
+//! Progress is `(done, total)` bytes; the callback returns false to cancel. xz, bzip2 and zstd go through the shared module `springboard::files::archive`.
 
 use flate2::read::GzDecoder;
-use springboard::files::zip;
+use springboard::files::{archive as shared, zip};
 use std::cell::Cell;
 use std::fs::File;
 use std::io::{self, BufReader, Read, Write};
@@ -36,7 +36,8 @@ pub struct Outcome {
     pub skipped: usize,
 }
 
-/// The format a file name declares (case ignored), or `None` for a file that is not an archive.
+/// The format a file name declares for the built-in readers (case ignored); other archives are `None` here and
+/// are handled by the shared module.
 pub fn kind_of(name: &str) -> Option<Kind> {
     let n = name.to_ascii_lowercase();
     if n.ends_with(".tar.gz") || n.ends_with(".tgz") {
@@ -341,8 +342,13 @@ pub fn run(op: Op, path: &Path, progress: &mut dyn FnMut(u64, u64) -> bool) -> i
                     Ok(Outcome { path: done.dir, files: done.files, skipped: done.skipped.len() })
                 }
                 Some(k @ (Kind::Tar | Kind::TarGz)) => expand_tar(path, k, progress),
-                Some(Kind::TarXz) => Err(io::Error::new(io::ErrorKind::Unsupported, "XZ archives are not supported yet")),
-                None => Err(io::Error::new(io::ErrorKind::InvalidInput, "Not an archive")),
+                // xz, bzip2, zstd and single compressed files go through the shared archive module (system tools)
+                Some(Kind::TarXz) | None if shared::is_archive(&name) => {
+                    let parent = path.parent().unwrap_or(Path::new("."));
+                    let done = shared::extract(path, parent, progress)?;
+                    Ok(Outcome { path: done.dir, files: done.files, skipped: done.skipped.len() })
+                }
+                _ => Err(io::Error::new(io::ErrorKind::InvalidInput, "Not an archive")),
             }
         }
     }
@@ -527,12 +533,13 @@ mod tests {
     }
 
     #[test]
-    fn xz_and_plain_files_are_refused_with_a_reason() {
+    fn damaged_xz_and_plain_files_are_refused_with_a_reason() {
         let dir = scratch("refuse");
         let xz = dir.join("a.tar.xz");
         std::fs::write(&xz, b"junk").unwrap();
         let e = run(Op::Expand, &xz, &mut |_, _| true).unwrap_err();
-        assert_eq!(e.kind(), io::ErrorKind::Unsupported);
+        assert_ne!(e.kind(), io::ErrorKind::Unsupported); // the shared module tries it, and the tool reports the damage
+        assert!(!dir.join("a").exists(), "no partial folder is left");
         let txt = dir.join("a.txt");
         std::fs::write(&txt, b"x").unwrap();
         assert_eq!(run(Op::Expand, &txt, &mut |_, _| true).unwrap_err().kind(), io::ErrorKind::InvalidInput);
