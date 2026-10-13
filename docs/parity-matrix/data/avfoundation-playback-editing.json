@@ -4,7 +4,7 @@
  "macos_since": "10.7",
  "status": "partial",
  "bifrost": "springboard/src/media/ (shell-internal player, demux, decoders, mixer), springboard/audiod/src/main.rs, springboard/src/shell/audiosvc.rs",
- "summary": "BifrOSt has a working media stack (MP4/WebM demux, VA-API/ffmpeg video decode, AAC/MP3 audio, ALSA output, A/V sync, ID3/ilst tags), but it is inside the shell and Music app, not an SDK API. Nothing exists for compositions, video effects, export or writing media.",
+ "summary": "BifrOSt has a working media stack (MP4/WebM demux, VA-API/ffmpeg video decode, AAC/MP3 audio, ALSA output, A/V sync, ID3/ilst tags), but it is inside the shell and Music app, not an SDK API. Nothing exists for compositions, video effects, export or writing media. A read-only movie summary (springboard/src/media/movie.rs) lists duration and tracks for a file.",
  "rea_evidence": "ev_0a8eac4fffbfe8853cb7941e11e3a35275f22d910252c983eb422fcb5cc92d68",
  "features": [
   {
@@ -108,9 +108,9 @@
   {
    "feature": "QuickTime movies",
    "apple": "AVMovie, AVMutableMovie",
-   "bifrost": "springboard/src/media/mp4.rs",
-   "status": "gap",
-   "note": "MP4 parsing only, no movie editing"
+   "bifrost": "springboard/src/media/movie.rs (read-only summary over springboard/src/media/mp4.rs)",
+   "status": "partial",
+   "note": "built on parity/team-a-10; not yet verified on Midget. Read-only movie summary: duration, and each track with id, kind, codec and duration, built from the demuxer. No movie editing and no writer; editing needs the composition model and an export path."
   },
   {
    "feature": "Video effects and compositing",
@@ -136,7 +136,7 @@
  ],
  "gaps": [
   "No SDK media player for apps (everything is in the shell crate)",
-  "No asset/track model or sample reader for apps",
+  "No SDK asset model for apps: springboard/src/media/movie.rs summarizes a movie inside the shell crate only, and there is no sample reader for apps.",
   "No composition, video composition or audio mix editing",
   "No writer or export session; no encoder",
   "No HLS, offline download management, AirPlay or FairPlay",
