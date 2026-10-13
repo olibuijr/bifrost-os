@@ -919,6 +919,26 @@ mod tests {
         assert!(!files.sidebar_hidden, "the chord shows it again");
     }
     #[test]
+    fn emptying_the_trash_deletes_every_item_for_good() {
+        let dir = temp("empty-trash");
+        let bin = dir.join(".RecentlyDeleted");
+        std::fs::create_dir_all(bin.join("sub")).unwrap();
+        std::fs::write(bin.join("1__a.txt"), "x").unwrap();
+        std::fs::write(bin.join("2__b.txt"), "y").unwrap();
+        let items = vec![bin.join("1__a.txt"), bin.join("2__b.txt"), bin.join("sub")];
+        let (tx, _rx) = feed();
+        let report = empty_now(&items, &bin, &AtomicBool::new(false), &tx);
+        assert_eq!(report.done.len(), 3);
+        assert!(report.failed.is_empty() && !report.cancelled);
+        assert_eq!(std::fs::read_dir(&bin).unwrap().count(), 0);
+    }
+    #[test]
+    fn empty_trash_says_so_when_the_bin_has_nothing_to_delete() {
+        let mut files = fixture(vec![]);
+        files.empty_trash();
+        assert_eq!(files.notice.as_deref(), Some("The Trash is already empty"));
+    }
+    #[test]
     fn the_tab_strip_shows_with_two_tabs_and_moves_the_content_under_it() {
         let mut files = fixture(vec![]);
         assert_eq!(files.body_top(), HEADER_H, "one tab: no strip");

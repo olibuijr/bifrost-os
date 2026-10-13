@@ -56,6 +56,8 @@ pub(crate) const MENU_COMPRESS_TGZ: u32 = 26;
 
 pub(crate) const MENU_COMPRESS_TXZ: u32 = 27;
 
+pub(crate) const MENU_EMPTY_TRASH: u32 = 28;
+
 impl Files {
     /// Right-click: selects the item under the pointer and opens the item or folder menu.
     pub(crate) fn context_menu_at(&mut self, ctx: &Ctx, x: f32, y: f32) {
@@ -95,7 +97,7 @@ impl Files {
                 },
             ]
         } else {
-            vec![
+            let mut items = vec![
                 ContextItem { id: MENU_NEW_FOLDER, label: "New Folder".into(), enabled: !self.in_bin() },
                 ContextItem { id: MENU_PASTE, label: "Paste".into(), enabled: self.clip.is_some() },
                 ContextItem { id: MENU_HIDDEN, label: if self.show_hidden { "Hide Hidden Files".into() } else { "Show Hidden Files".into() }, enabled: true },
@@ -107,7 +109,11 @@ impl Files {
                 ContextItem { id: MENU_GROUP_KIND, label: if self.vo.group == Group::Kind { "✓ Group By Kind".into() } else { "Group By Kind".into() }, enabled: true },
                 ContextItem { id: MENU_GROUP_DATE, label: if self.vo.group == Group::Date { "✓ Group By Date".into() } else { "Group By Date".into() }, enabled: true },
                 ContextItem { id: MENU_STATUS_BAR, label: if self.status_bar { "Hide Status Bar".into() } else { "Show Status Bar".into() }, enabled: true },
-            ]
+            ];
+            if self.in_bin() {
+                items.push(ContextItem { id: MENU_EMPTY_TRASH, label: "Empty Trash".into(), enabled: true });
+            }
+            items
         };
         ctx.context_menu(x, y, items);
     }
@@ -131,6 +137,7 @@ impl Files {
             MENU_PASTE => self.paste(),
             MENU_DUPLICATE => self.duplicate(),
             MENU_TRASH => self.trash_selected(),
+            MENU_EMPTY_TRASH => self.empty_trash(),
             MENU_NEW_FOLDER => self.new_folder(),
             MENU_HIDDEN => self.toggle_hidden(),
             MENU_PUT_BACK => self.put_back(),
