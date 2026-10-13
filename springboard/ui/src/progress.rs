@@ -6,17 +6,39 @@
 //! of zero or less is indeterminate: its fraction is 0 until `finish` is called. `finish` is a BifrOSt addition for
 //! work whose size is never known; Foundation completes work by setting the completed count to the total.
 //!
-//! Not modelled here: publishing progress to other processes, the shared progress manager, value observation, time
+//! Cancel, pause and resume reach all descendants and fire each one's handler once. Not modelled here: publishing progress to other processes, the shared progress manager, value observation, time
 //! estimates and throughput. The shell reads a tree through `fraction_completed` and `is_finished`.
 
+use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::fmt;
+use std::rc::Rc;
 
 /// Identifies a progress object. Ids are only meaningful for the [`ProgressTree`] that issued them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ProgressId(usize);
 
+/// A stored handler (`cancellationHandler`, `pausingHandler`, `resumingHandler`). Handlers are never compared.
+#[derive(Clone, Default)]
+struct Handler(Option<Rc<RefCell<dyn FnMut()>>>);
+
+impl fmt::Debug for Handler {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(if self.0.is_some() { "Handler(set)" } else { "Handler(none)" })
+    }
+}
+
+impl PartialEq for Handler {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 struct Entry {
+    on_cancel: Handler,
+    on_pause: Handler,
+    on_resume: Handler,
     total: i64,
     completed: i64,
     parent: Option<usize>,
@@ -35,6 +57,8 @@ struct Entry {
 #[derive(Clone, Debug, Default)]
 pub struct ProgressTree {
     entries: Vec<Entry>,
+    /// `becomeCurrent` stack: the object, its pending units, and whether an implicit child took them.
+    current: Vec<(usize, i64, bool)>,
 }
 
 impl ProgressTree {
@@ -143,14 +167,109 @@ impl ProgressTree {
     }
 
     /// `cancel()`. True when this call cancelled the work. Only cancellable work that is neither cancelled nor
-    /// finished can be cancelled. Cancelling does not reach the children (a gap; see the feature note).
+    /// finished can be cancelled. Cancelling reaches every descendant, cancellable or not; each one that was not
+    /// cancelled yet is flagged and its cancellation handler fires once, the parent first.
     pub fn cancel(&mut self, id: ProgressId) -> bool {
         let e = &self.entries[id.0];
         if !e.cancellable || e.cancelled || self.is_finished(id) {
             return false;
         }
-        self.entries[id.0].cancelled = true;
+        let mut fired = Vec::new();
+        for n in self.subtree(id.0) {
+            let e = &mut self.entries[n];
+            if !e.cancelled {
+                e.cancelled = true;
+                fired.extend(e.on_cancel.0.clone());
+            }
+        }
+        Self::fire(fired);
         true
+    }
+
+    /// `cancellationHandler`: runs once when this object is cancelled, directly or through an ancestor.
+    pub fn set_cancellation_handler(&mut self, id: ProgressId, f: impl FnMut() + 'static) {
+        self.entries[id.0].on_cancel = Handler(Some(Rc::new(RefCell::new(f))));
+    }
+
+    /// `pausingHandler`: runs when this object is paused, directly or through an ancestor.
+    pub fn set_pausing_handler(&mut self, id: ProgressId, f: impl FnMut() + 'static) {
+        self.entries[id.0].on_pause = Handler(Some(Rc::new(RefCell::new(f))));
+    }
+
+    /// `resumingHandler`: runs when this object is resumed, directly or through an ancestor.
+    pub fn set_resuming_handler(&mut self, id: ProgressId, f: impl FnMut() + 'static) {
+        self.entries[id.0].on_resume = Handler(Some(Rc::new(RefCell::new(f))));
+    }
+
+    /// `id` and all its descendants, parents before children.
+    fn subtree(&self, id: usize) -> Vec<usize> {
+        let mut out = Vec::new();
+        let mut stack = vec![id];
+        while let Some(n) = stack.pop() {
+            out.push(n);
+            stack.extend(self.entries[n].children.iter().rev());
+        }
+        out
+    }
+
+    fn fire(handlers: Vec<Rc<RefCell<dyn FnMut()>>>) {
+        for h in handlers {
+            (h.borrow_mut())();
+        }
+    }
+
+    /// `addChild(_:withPendingUnitCount:)`: attaches a root object as a child standing for `pending` units. Ignored
+    /// (false) when `child` already has a parent or attaching would make a cycle.
+    pub fn add_child(&mut self, parent: ProgressId, child: ProgressId, pending: i64) -> bool {
+        if self.entries[child.0].parent.is_some() {
+            return false;
+        }
+        let mut up = Some(parent.0);
+        while let Some(n) = up {
+            if n == child.0 {
+                return false;
+            }
+            up = self.entries[n].parent;
+        }
+        self.entries[child.0].parent = Some(parent.0);
+        self.entries[child.0].pending = pending.max(0);
+        self.entries[parent.0].children.push(child.0);
+        true
+    }
+
+    /// `Progress.current()`: the object most recently made current.
+    pub fn current(&self) -> Option<ProgressId> {
+        self.current.last().map(|&(n, _, _)| ProgressId(n))
+    }
+
+    /// `becomeCurrent(withPendingUnitCount:)`.
+    pub fn become_current(&mut self, id: ProgressId, pending: i64) {
+        self.current.push((id.0, pending.max(0), false));
+    }
+
+    /// `Progress(totalUnitCount:)` created while an object is current: the first one under a `become_current`
+    /// attaches to it with the pending units; any other is a free root.
+    pub fn implicit_child(&mut self, total: i64) -> ProgressId {
+        let id = self.root(total);
+        if let Some(&(parent, pending, false)) = self.current.last() {
+            self.add_child(ProgressId(parent), id, pending);
+            if let Some(top) = self.current.last_mut() {
+                top.2 = true;
+            }
+        }
+        id
+    }
+
+    /// `resignCurrent()`. When no implicit child took the pending units, the object completes them itself.
+    pub fn resign_current(&mut self, id: ProgressId) {
+        if self.current.last().map(|c| c.0) != Some(id.0) {
+            return;
+        }
+        if let Some((n, pending, taken)) = self.current.pop() {
+            if !taken {
+                self.add_completed_units(ProgressId(n), pending);
+            }
+        }
     }
 
     pub fn set_pausable(&mut self, id: ProgressId, on: bool) {
@@ -168,19 +287,38 @@ impl ProgressTree {
     }
 
     /// `pause()`. True when this call paused pausable work that is running (not cancelled and not finished).
+    /// Descendants are paused too, pausable or not, each firing its pausing handler once.
     pub fn pause(&mut self, id: ProgressId) -> bool {
         let e = &self.entries[id.0];
         if !e.pausable || e.paused || e.cancelled || self.is_finished(id) {
             return false;
         }
-        self.entries[id.0].paused = true;
+        let mut fired = Vec::new();
+        for n in self.subtree(id.0) {
+            let e = &mut self.entries[n];
+            if !e.paused {
+                e.paused = true;
+                fired.extend(e.on_pause.0.clone());
+            }
+        }
+        Self::fire(fired);
         true
     }
 
-    /// `resume()`. True when this call resumed paused work.
+    /// `resume()`. True when this call resumed paused work; descendants resume with it.
     pub fn resume(&mut self, id: ProgressId) -> bool {
-        let e = &mut self.entries[id.0];
-        std::mem::replace(&mut e.paused, false)
+        if !self.entries[id.0].paused {
+            return false;
+        }
+        let mut fired = Vec::new();
+        for n in self.subtree(id.0) {
+            let e = &mut self.entries[n];
+            if std::mem::replace(&mut e.paused, false) {
+                fired.extend(e.on_resume.0.clone());
+            }
+        }
+        Self::fire(fired);
+        true
     }
 
     /// `setUserInfoObject(_:forKey:)`, for text values.
@@ -299,5 +437,80 @@ mod tests {
         t.set_user_info(p, "file", "b.txt");
         assert_eq!(t.user_info(p, "file"), Some("b.txt"));
         assert_eq!(t.user_info(p, "other"), None);
+    }
+
+    fn counter() -> (Rc<RefCell<u32>>, impl FnMut() + 'static) {
+        let n = Rc::new(RefCell::new(0));
+        let n2 = n.clone();
+        (n, move || *n2.borrow_mut() += 1)
+    }
+
+    #[test]
+    fn cancel_reaches_descendants_and_fires_each_handler_once() {
+        let mut t = ProgressTree::new();
+        let root = t.root(10);
+        let a = t.child(root, 2, 5);
+        let b = t.child(a, 2, 1); // not cancellable, still flagged
+        t.set_cancellable(root, true);
+        let (ca, fa) = counter();
+        let (cb, fb) = counter();
+        t.set_cancellation_handler(a, fa);
+        t.set_cancellation_handler(b, fb);
+        assert!(t.cancel(root));
+        assert!(t.is_cancelled(a) && t.is_cancelled(b));
+        assert!(!t.cancel(root));
+        assert_eq!((*ca.borrow(), *cb.borrow()), (1, 1));
+    }
+
+    #[test]
+    fn pause_and_resume_propagate_with_handlers() {
+        let mut t = ProgressTree::new();
+        let root = t.root(4);
+        let kid = t.child(root, 2, 2);
+        t.set_pausable(root, true);
+        let (cp, fp) = counter();
+        let (cr, fr) = counter();
+        t.set_pausing_handler(kid, fp);
+        t.set_resuming_handler(kid, fr);
+        assert!(t.pause(root) && t.is_paused(kid));
+        assert!(t.resume(root) && !t.is_paused(kid));
+        assert_eq!((*cp.borrow(), *cr.borrow()), (1, 1));
+    }
+
+    #[test]
+    fn become_current_attaches_the_implicit_child_with_pending_units() {
+        let mut t = ProgressTree::new();
+        let root = t.root(10);
+        assert_eq!(t.current(), None);
+        t.become_current(root, 4);
+        assert_eq!(t.current(), Some(root));
+        let kid = t.implicit_child(2);
+        let free = t.implicit_child(2);
+        t.resign_current(root);
+        assert_eq!(t.current(), None);
+        assert_eq!((t.parent(kid), t.pending_units(kid)), (Some(root), 4));
+        assert_eq!(t.parent(free), None);
+        assert_eq!(t.completed_units(root), 0);
+    }
+
+    #[test]
+    fn resigning_without_a_child_completes_the_pending_units() {
+        let mut t = ProgressTree::new();
+        let root = t.root(10);
+        t.become_current(root, 3);
+        t.resign_current(root);
+        assert_eq!(t.completed_units(root), 3);
+    }
+
+    #[test]
+    fn add_child_attaches_roots_only_and_refuses_cycles() {
+        let mut t = ProgressTree::new();
+        let p = t.root(10);
+        let c = t.root(2);
+        assert!(t.add_child(p, c, 5));
+        assert!(!t.add_child(p, c, 5), "already has a parent");
+        assert!(!t.add_child(c, p, 1), "would loop");
+        t.set_completed_units(c, 1);
+        assert!((t.fraction_completed(p) - 0.25).abs() < 1e-9);
     }
 }
