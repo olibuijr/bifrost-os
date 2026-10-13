@@ -400,6 +400,34 @@ impl PropertyListDecoder {
         let mut p = Plist { s: body, pos: 0 };
         T::decode(&p.value()?)
     }
+
+    /// Decodes binary (`bplist00`) or text (XML or ASCII) property-list bytes. Binary dates decode like XML dates;
+    /// data values have no [`Value`] form yet, so a binary file holding one is refused.
+    pub fn decode_bytes<T: Decodable>(&self, bytes: &[u8]) -> Result<T, CodingError> {
+        if bytes.starts_with(b"bplist") {
+            let p = bifrost_core::plist::parse_bytes(bytes).map_err(CodingError)?;
+            return T::decode(&plist_value(p)?);
+        }
+        let text = std::str::from_utf8(bytes).map_err(|_| CodingError("the property list is not text".into()))?;
+        self.decode(text)
+    }
+}
+
+/// Maps a parsed property list onto the Codable value tree (binary reads).
+fn plist_value(p: bifrost_core::plist::Plist) -> Result<Value, CodingError> {
+    use bifrost_core::plist::Plist as P;
+    Ok(match p {
+        P::Bool(b) => Value::Bool(b),
+        P::Int(i) => Value::Int(i),
+        P::Real(r) => Value::Num(r),
+        P::Str(s) => Value::Str(s),
+        P::Date(text) => Value::Date(parse_iso8601(&text).ok_or_else(|| CodingError("bad date".into()))?),
+        P::Data(_) => return err("data values are not decoded through Codable yet"),
+        P::Array(a) => Value::Arr(a.into_iter().map(plist_value).collect::<Result<Vec<_>, _>>()?),
+        P::Dict(d) => Value::Dict(
+            d.into_iter().map(|(k, v)| plist_value(v).map(|v| (k, v))).collect::<Result<Vec<_>, _>>()?,
+        ),
+    })
 }
 
 struct Plist<'a> {
@@ -476,5 +504,48 @@ impl Plist<'_> {
             }
             (n, _) => return err(format!("unsupported plist element <{n}>")),
         })
+    }
+}
+
+#[cfg(test)]
+mod binary_tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    /// `{ a = b; }` as a binary property list.
+    fn dict_of_strings() -> Vec<u8> {
+        let mut b = b"bplist00".to_vec();
+        b.extend([0xD1, 1, 2, 0x51, b'a', 0x51, b'b']); // dict at 8, then "a" at 11 and "b" at 13
+        b.extend([8, 11, 13]); // offset table at 15
+        b.extend([0, 0, 0, 0, 0, 0, 1, 1]);
+        b.extend(3u64.to_be_bytes());
+        b.extend(0u64.to_be_bytes());
+        b.extend(15u64.to_be_bytes());
+        b
+    }
+
+    #[test]
+    fn decodes_binary_dictionary_into_a_map() {
+        let m: HashMap<String, String> = PropertyListDecoder::new().decode_bytes(&dict_of_strings()).unwrap();
+        assert_eq!(m.get("a").map(String::as_str), Some("b"));
+    }
+
+    #[test]
+    fn text_bytes_still_decode() {
+        let text = b"<plist version=\"1.0\"><dict><key>a</key><string>b</string></dict></plist>";
+        let m: HashMap<String, String> = PropertyListDecoder::new().decode_bytes(text).unwrap();
+        assert_eq!(m.get("a").map(String::as_str), Some("b"));
+    }
+
+    #[test]
+    fn binary_data_values_are_refused_until_codable_has_data() {
+        let mut b = b"bplist00".to_vec();
+        b.extend([0xD1, 1, 2, 0x51, b'a', 0x41, 1]); // "a" maps to one data byte
+        b.extend([8, 11, 13]);
+        b.extend([0, 0, 0, 0, 0, 0, 1, 1]);
+        b.extend(3u64.to_be_bytes());
+        b.extend(0u64.to_be_bytes());
+        b.extend(15u64.to_be_bytes());
+        assert!(PropertyListDecoder::new().decode_bytes::<HashMap<String, String>>(&b).is_err());
     }
 }

@@ -5,7 +5,7 @@
 //! - Dictionaries keep their key order as read. Only the human-readable and JSON pretty forms sort keys.
 //! - A key path is dot-separated. A component names a dictionary key, or a whole number that indexes an array.
 //! - Dates are kept as their text (for example `2026-10-13T08:00:00Z`) and are not checked as calendar values.
-//! - Binary property lists are not read or written yet. [`parse_bytes`] refuses them with a message.
+//! - Binary property lists are read by [`crate::plist_binary`] through [`parse_bytes`]. They are not written yet.
 
 use std::fmt::Write as _;
 
@@ -38,10 +38,10 @@ impl Plist {
     }
 }
 
-/// Reads a property list from bytes: XML or the ASCII form, detected from the first character. Binary is refused.
+/// Reads a property list from bytes: binary (`bplist00`), XML or the ASCII form, detected from the first bytes.
 pub fn parse_bytes(bytes: &[u8]) -> Result<Plist, String> {
     if bytes.starts_with(b"bplist") {
-        return Err("binary property lists are not read yet".into());
+        return crate::plist_binary::parse(bytes);
     }
     let text = std::str::from_utf8(bytes).map_err(|_| "the file is not text".to_string())?;
     parse_any(text)
@@ -940,7 +940,7 @@ mod tests {
 
     #[test]
     fn binary_input_is_refused_by_name() {
-        assert_eq!(parse_bytes(b"bplist00xxxx"), Err("binary property lists are not read yet".into()));
+        assert!(parse_bytes(b"bplist00xxxx").is_err());
         assert_eq!(parse_bytes(&[0xff, 0xfe]), Err("the file is not text".into()));
         assert_eq!(parse_bytes(b"  <integer>1</integer>"), Ok(Plist::Int(1)));
         assert_eq!(parse_bytes(b"{ k = v; }"), Ok(Plist::Dict(vec![("k".into(), Plist::Str("v".into()))])));

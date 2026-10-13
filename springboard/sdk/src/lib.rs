@@ -214,6 +214,7 @@ pub mod system_prefs;
 pub mod wifi_secrets;
 pub mod net_totals;
 pub mod notification;
+pub mod notification_queue;
 pub mod post_delivery;
 pub mod system_sound;
 pub mod workspace;
