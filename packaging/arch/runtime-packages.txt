@@ -30,7 +30,9 @@ ttf-liberation
 ttf-croscore
 gsfonts
 systemd-ukify
+acct
 alsa-utils
+apache
 at
 avahi
 bc
@@ -54,6 +56,7 @@ iotop
 iperf3
 ipp-usb
 iproute2
+jdk-openjdk
 jq
 ksh
 less
@@ -68,6 +71,7 @@ nano
 ncompress
 nethogs
 openbsd-netcat
+openldap
 patch
 perl
 picocom
