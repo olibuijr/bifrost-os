@@ -417,7 +417,7 @@ impl WmState {
     }
 
     /// Applies (or, with `test_only`, only checks) a configuration. Disabling heads is accepted; enabling one needs a
-    /// mode the output has, and a mode change needs the `set_mode` hook.
+    /// mode the output has, and a mode change needs the `set_mode` hook (the DRM backend sets it in `drm::run`).
     pub fn apply_outputs(&mut self, entries: &[(String, bool, Option<Want>)], test_only: bool) -> bool {
         let mut plan: Vec<(Output, String, ModeInfo, bool)> = Vec::new();
         for (name, enabled, want) in entries {
@@ -449,6 +449,8 @@ impl WmState {
             let mode = Mode { size: (chosen.w, chosen.h).into(), refresh: chosen.refresh };
             out.change_current_state(Some(mode), None, None, None);
             self.refresh_area();
+            // the next frame is composed at the new size (the backend's swapchain was resized by the hook)
+            self.dirty = true;
         }
         true
     }

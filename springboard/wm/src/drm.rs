@@ -39,7 +39,7 @@ use smithay::{
     utils::{DeviceFd, Transform},
 };
 
-use crate::{scene::SceneElement, state::WmState};
+use crate::{scene::SceneElement, session_protocols::ModeInfo, state::WmState};
 
 pub(crate) const CLEAR: [f32; 4] = [0.06, 0.06, 0.08, 1.0];
 const SUPPORTED: &[Fourcc] = &[Fourcc::Argb8888, Fourcc::Xrgb8888, Fourcc::Abgr8888, Fourcc::Xbgr8888];
@@ -51,6 +51,8 @@ struct Drm {
     renderer: GlesRenderer,
     compositor: Compositor,
     output: Output,
+    /// The connector's modes, for a mode request from the shell (`set_mode`).
+    modes: Vec<DrmMode>,
     pointer: MemoryRenderBuffer,
     /// A frame is queued and its vblank has not arrived yet.
     pending: bool,
@@ -130,7 +132,11 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
             Err(e) => eprintln!("bifrost-wm: vulkan scanout unavailable, GLES: {e}"),
         }
     }
-    let backend = Rc::new(std::cell::RefCell::new(drm));
+    // the shell's output mode requests (zwlr output management, `apply_outputs`) reach the scanout through this hook
+    let b = Rc::new(std::cell::RefCell::new(drm));
+    let hook = b.clone();
+    state.session.hooks.set_mode = Some(Box::new(move |name: &str, mode: ModeInfo| hook.borrow_mut().set_mode(name, mode)));
+    let backend = b;
 
     // input
     let mut libinput = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(session.clone().into());
@@ -261,6 +267,11 @@ fn open_gpu(
     let wl_mode = WlMode::from(mode);
     let _global = output.create_global::<WmState>(&state.dh);
     output.change_current_state(Some(wl_mode), Some(Transform::Normal), None, Some((0, 0).into()));
+    // every mode the connector lists is announced, so a mode request can name any of them
+    let modes = conn.modes().to_vec();
+    for m in &modes {
+        output.add_mode(WlMode::from(*m));
+    }
     output.set_preferred(wl_mode);
     state.add_output(&output);
 
@@ -297,7 +308,7 @@ fn open_gpu(
     let boot = std::env::var_os("BIFROST_BOOT_FADE").map(|_| Boot::new(w as i32, h as i32));
     let mut renderer = renderer;
     let glass = crate::glass::Glass::new(&mut renderer)?;
-    Ok(Drm { renderer, compositor, output, pointer, pending: false, boot, glass, vulkan: None, shutdown: Shutdown::default(), paused: false })
+    Ok(Drm { renderer, compositor, output, modes, pointer, pending: false, boot, glass, vulkan: None, shutdown: Shutdown::default(), paused: false })
 }
 
 /// The shutdown fade (`crate::boot::shutdown_alpha`): once `SHUTDOWN_REQUEST` exists the boot frame comes back over the
@@ -314,6 +325,34 @@ struct Shutdown {
 }
 
 impl Drm {
+    /// Switches the scanout of output `name` to the connector mode `want` (size and refresh in millihertz). The mode is
+    /// one of the connector's own, matched exactly; smithay's DRM compositor takes the atomic or the legacy commit the
+    /// driver supports and resizes the swapchain. The vblank that follows the commit shows the new mode.
+    fn set_mode(&mut self, name: &str, want: ModeInfo) -> bool {
+        if name != self.output.name().as_str() {
+            return false;
+        }
+        if self.vulkan.is_some() {
+            eprintln!("bifrost-wm: mode change refused: the Vulkan scanout keeps its swapchain");
+            return false;
+        }
+        let wanted = WlMode { size: (want.w, want.h).into(), refresh: want.refresh };
+        let Some(mode) = self.modes.iter().copied().find(|m| WlMode::from(*m) == wanted) else {
+            eprintln!("bifrost-wm: mode change refused: {name} has no {}x{}@{}", want.w, want.h, want.refresh);
+            return false;
+        };
+        match self.compositor.use_mode(mode) {
+            Ok(()) => {
+                eprintln!("bifrost-wm: modeset {name} {}x{}@{}", want.w, want.h, want.refresh);
+                true
+            }
+            Err(e) => {
+                eprintln!("bifrost-wm: modeset {name} failed: {e}");
+                false
+            }
+        }
+    }
+
     /// The boot frame over the desktop for the shutdown fade, with its opacity; None before a request.
     fn shutdown_overlay(&mut self) -> Option<(MemoryRenderBuffer, f32)> {
         self.poll_shutdown();
