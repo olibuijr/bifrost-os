@@ -19,7 +19,7 @@ Matrix entries (not edited here, the lead closes them): `path:/usr/bin/open` (cl
 |---|---|---|
 | `-a application`, `-b bundle_identifier` | done, no operands only: `open-app <id>` | shell control socket, `src/bin/shell.rs` `OpenApp` |
 | `-e`, `-t` (text editor) | done, no operands: `open-app is.olibuijr.textedit.desktop` | same |
-| `-R` (reveal in Finder) | done for files and folders: `open-folder is.olibuijr.files.desktop <folder>` (the holding folder for a file) | `OpenFolder`, `desk.rs` `desktop_open_folder` |
+| `-R` (reveal in Files) | done for files and folders: `open-folder is.olibuijr.files.desktop <folder>` (the holding folder for a file) | `OpenFolder`, `desk.rs` `desktop_open_folder` |
 | `-u URL` | done: `open-url <url>` | `OpenUrl`, `defaultapps.rs` `desktop_open_link` |
 | URL operand, `file://` URL | done (`file://` becomes a path) | as above |
 | folder operand | done: shown in Files | `OpenFolder` |
