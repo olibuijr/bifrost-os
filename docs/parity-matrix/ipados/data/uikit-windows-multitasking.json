@@ -66,9 +66,9 @@
   {
    "feature": "Screen rotation",
    "apple": "device orientation, rotation lock",
-   "bifrost": "springboard/src/shell/rotate.rs, springboard/render/src/gfx/rotate.rs",
-   "status": "os",
-   "note": "the handheld shell turns and letterboxes portrait-only apps; the compositor has no output rotation (area B7)"
+   "bifrost": "springboard/src/shell/rotate.rs, springboard/render/src/gfx/rotate.rs, springboard/wm/src/transform.rs",
+   "status": "partial",
+   "note": "Output transform from BIFROST_ROTATION or /etc/bifrost/rotation; the shell's rotate code stays for the orientation switch. Not yet verified on the tablet."
   },
   {
    "feature": "Popovers and transient windows",
