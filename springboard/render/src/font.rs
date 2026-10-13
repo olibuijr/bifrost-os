@@ -43,6 +43,8 @@ pub struct Font<'a> {
     underline_position: f32,
     underline_thickness: f32,
     cache: GlyphCache,
+    /// shaped runs by (text, variation coordinates, features): measuring and drawing a string shape it once
+    runs: RunCache,
     ot: std::sync::OnceLock<crate::shape_ot::OtLayout<'a>>,
 }
 
@@ -185,6 +187,7 @@ impl<'a> Font<'a> {
             ascent: i16_at(data, hhea + 4)? as f32,
             descent: i16_at(data, hhea + 6)? as f32,
             cache: GlyphCache::new(0, CACHE_BYTES),
+            runs: RunCache::new(RUN_CAPACITY, 0),
             ot: std::sync::OnceLock::new(),
         })
     }
@@ -706,6 +709,20 @@ struct MaskKey {
 /// Glyph coverage cache: LRU, at most `CACHE_BYTES` of coverage, halved under memory pressure.
 type GlyphCache = crate::purgeable::Cache<MaskKey, std::sync::Arc<Mask>>;
 
+/// Shaped runs kept per face before the least recently used is dropped.
+const RUN_CAPACITY: usize = 1024;
+
+#[derive(Hash, PartialEq, Eq, Clone)]
+struct RunKey {
+    text: String,
+    /// variation coordinates as bits, so the same instance always keys the same
+    norm: Vec<u32>,
+    features: crate::shape_ot::Features,
+}
+
+/// Shaped runs: LRU, at most `RUN_CAPACITY` entries, halved under memory pressure like the glyph coverage.
+type RunCache = crate::purgeable::Cache<RunKey, std::sync::Arc<Vec<PlacedGlyph>>>;
+
 pub struct Style {
     pub px: f32,
     /// extra horizontal stroke in px, a stand-in for heavier weights
@@ -753,8 +770,18 @@ impl Font<'_> {
     }
 
     /// The glyph ids with advances (font units) and offsets for `text`: shaped when the font has layout tables,
-    /// one glyph per character otherwise.
-    fn shaped(&self, text: &str, norm: &[f32], features: &Features) -> Vec<PlacedGlyph> {
+    /// one glyph per character otherwise. A string is shaped once per instance and feature set (`runs`).
+    fn shaped(&self, text: &str, norm: &[f32], features: &Features) -> std::sync::Arc<Vec<PlacedGlyph>> {
+        let key = RunKey { text: text.to_string(), norm: norm.iter().map(|v| v.to_bits()).collect(), features: features.clone() };
+        if let Some(run) = self.runs.get(&key) {
+            return run;
+        }
+        let run = std::sync::Arc::new(self.shape_run(text, norm, features));
+        self.runs.set(key, run.clone(), text.len() * std::mem::size_of::<PlacedGlyph>() + 64);
+        run
+    }
+
+    fn shape_run(&self, text: &str, norm: &[f32], features: &Features) -> Vec<PlacedGlyph> {
         let layout = self.ot.get_or_init(|| OtLayout::from_sfnt(self.data));
         if layout.is_trivial() {
             return text.chars().map(|c| { let gid = self.glyph(c); PlacedGlyph { gid, advance: self.advance_at(gid, norm), dx: 0.0, dy: 0.0 } }).collect();
@@ -863,7 +890,7 @@ impl Font<'_> {
     fn render_shaped(&self, text: &str, st: &Style, vars: &[Var], features: &Features) -> Image {
         let norm = self.normalized(vars);
         let placed = self.shaped(text, &norm, features);
-        self.render_placed(&placed, st, &norm, true)
+        self.render_placed(&placed[..], st, &norm, true)
     }
 
     /// Text whose runs come from different faces, laid on one baseline.
@@ -1238,5 +1265,39 @@ mod tests {
         assert!((double.ascent - 2.0 * m.ascent).abs() < 1e-3, "linear in size");
         assert!((double.underline_position - 2.0 * m.underline_position).abs() < 1e-3);
         assert!((m.ascent - f.ascent * 20.0 / f.upem).abs() < 1e-3);
+    }
+}
+
+#[cfg(test)]
+mod run_cache_tests {
+    use super::*;
+    use crate::shape_ot::tag;
+
+    fn sf() -> Vec<u8> {
+        std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).expect("assets/SFUI.ttf (run tools/pack.py)")
+    }
+
+    #[test]
+    fn a_shaped_run_is_reused_per_string_and_features() {
+        let data = sf();
+        let f = Font::parse(&data).unwrap();
+        let first = f.shaped("Hello", &[], &Features::new());
+        let again = f.shaped("Hello", &[], &Features::new());
+        assert!(std::sync::Arc::ptr_eq(&first, &again), "the second call hit the run cache");
+        assert!(!first.is_empty());
+        let mut off = Features::new();
+        off.set(tag("liga"), 0);
+        assert!(!std::sync::Arc::ptr_eq(&first, &f.shaped("Hello", &[], &off)), "features are part of the key");
+        assert!(!std::sync::Arc::ptr_eq(&first, &f.shaped("World", &[], &Features::new())), "the text is part of the key");
+    }
+
+    #[test]
+    fn measuring_is_stable_through_the_run_cache() {
+        let data = sf();
+        let f = Font::parse(&data).unwrap();
+        let vars = [(*b"wght", 400.0)];
+        let w = f.measure_var("Settings", 20.0, &vars);
+        assert_eq!(f.measure_var("Settings", 20.0, &vars), w);
+        assert!(w > 0.0);
     }
 }
