@@ -430,3 +430,27 @@ fn cursor_style_and_blink_persist_and_reload() {
     assert_eq!(reloaded.cursor, profile_table::CursorStyle::Bar);
     assert!(reloaded.blink);
 }
+
+#[test]
+fn close_other_tabs_keeps_only_the_active_tab() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(6, 2000.0);
+    sh.terminal_menu_action(6, 2100.0);
+    assert_eq!(sh.term.len(), 3);
+    sh.term.select(1);
+    assert_eq!(MENU[24], "Close other tabs");
+    sh.terminal_menu_action(24, 2200.0);
+    assert_eq!(sh.term.len(), 1);
+    assert_eq!(sh.term.active_index(), 0);
+}
+
+#[test]
+fn paste_selection_and_help_report_through_the_menu() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    assert_eq!(MENU[26], "Paste selection");
+    sh.terminal_menu_action(26, 2000.0);
+    assert_eq!(sh.terminal_ui.message, "Select terminal text first");
+    assert_eq!(MENU[27], "Terminal help");
+    sh.terminal_menu_action(27, 2100.0);
+    assert_eq!(sh.terminal_ui.message, extras::HELP);
+}

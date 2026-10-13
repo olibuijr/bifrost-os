@@ -27,6 +27,7 @@ use std::{fs, path::PathBuf};
 
 pub mod layout;
 mod command;
+mod extras;
 mod split;
 mod control;
 mod find;
@@ -53,7 +54,7 @@ const BADGE: u32 = pack(38, 38, 38, 255);
 const RED: u32 = pack(224, 90, 79, 255);
 const ACCENT: u32 = pack(42, 166, 106, 255);
 const ROW: f32 = 40.0;
-const MENU: [&str; 24] = [
+const MENU: [&str; 28] = [
     "Find in scrollback",
     "Smaller text",
     "Larger text",
@@ -78,6 +79,10 @@ const MENU: [&str; 24] = [
     "Close split pane",
     "Save window group",
     "Open window group",
+    "Close other tabs",
+    "Paste escaped text",
+    "Paste selection",
+    "Terminal help",
 ];
 /// True for the Find line's "n of m" match count (secondary), false for "No matches" and warnings (red).
 fn find_count(message: &str) -> bool {
