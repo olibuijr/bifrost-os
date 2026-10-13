@@ -2053,13 +2053,13 @@
     "size": 48436
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Gaze Entered Scene",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"GazeEnteredScene\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/GazeLeftScene.aiff",
@@ -2074,13 +2074,13 @@
     "size": 35792
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Gaze Left Scene",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"GazeLeftScene\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/GuideProgress.aiff",
@@ -2095,13 +2095,13 @@
     "size": 37468
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Guide Progress",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"GuideProgress\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/GuideSuccess.aiff",
@@ -2116,13 +2116,13 @@
     "size": 224876
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Guide Success",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"GuideSuccess\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Hit.aiff",
@@ -2137,13 +2137,13 @@
     "size": 31590
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Hit",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"Hit\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Indentation.caf",
@@ -2158,13 +2158,13 @@
     "size": 150848
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Indentation",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"Indentation\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Interactable.aiff",
@@ -2179,13 +2179,13 @@
     "size": 16952
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Interactable",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"Interactable\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Slideshows.framework/Versions/A/Resources/Content/Fonts/HopperScript.ttf",
@@ -2242,13 +2242,13 @@
     "size": 475278
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/src/shell/alert_sound.rs; springboard/src/shell/options.rs",
+   "status": "partial",
+   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Chime tone covers this alert's role. The Apple tone itself is not reproduced",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Sounds/Hero.aiff",
@@ -2263,13 +2263,13 @@
     "size": 304344
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/src/shell/alert_sound.rs; springboard/src/shell/options.rs",
+   "status": "partial",
+   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Chime tone covers this alert's role. The Apple tone itself is not reproduced",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }

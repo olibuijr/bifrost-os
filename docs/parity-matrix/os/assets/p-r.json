@@ -1843,13 +1843,13 @@
     "size": 50978
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Popup Appeared",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"PopupAppeared\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Reorder.aiff",
@@ -1864,13 +1864,13 @@
     "size": 13064
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Reorder",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"Reorder\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Ring.aiff",
@@ -1885,13 +1885,13 @@
     "size": 54318
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Ring",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"Ring\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/RotorLeft.aiff",
@@ -1906,13 +1906,13 @@
     "size": 26484
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Rotor Left",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"RotorLeft\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/RotorRight.aiff",
@@ -1927,13 +1927,13 @@
     "size": 25858
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Rotor Right",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"RotorRight\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Slideshows.framework/Versions/A/Resources/Content/Fonts/Proxima Nova Bold.ttf",
@@ -1969,13 +1969,13 @@
     "size": 432492
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/src/shell/alert_sound.rs; springboard/src/shell/options.rs",
+   "status": "partial",
+   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Bell tone covers this alert's role. The Apple tone itself is not reproduced",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Sounds/Pop.aiff",
@@ -1990,13 +1990,13 @@
     "size": 468762
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/src/shell/alert_sound.rs; springboard/src/shell/options.rs",
+   "status": "partial",
+   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Tick tone covers this alert's role. The Apple tone itself is not reproduced",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Sounds/Purr.aiff",
@@ -2011,13 +2011,13 @@
     "size": 218274
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "alert \"Purr\": no equivalent tone, BifrOSt offers only 4 alert tones (Bell, Chime, Pulse, Tick in springboard/src/shell/alert_sound.rs); add more tones or an alert-sound import",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }

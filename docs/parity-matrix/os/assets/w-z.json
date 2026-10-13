@@ -436,13 +436,13 @@
     "size": 52906
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Web Area Loaded",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"WebAreaLoaded\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WebPageLoaded.aiff",
@@ -457,13 +457,13 @@
     "size": 52118
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Web Page Loaded",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"WebPageLoaded\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WindowActivated.aiff",
@@ -478,13 +478,13 @@
     "size": 37160
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Window Activated",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"WindowActivated\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WrapBack.aiff",
@@ -499,13 +499,13 @@
     "size": 31232
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Wrap Back",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"WrapBack\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WrapBackHard.aiff",
@@ -520,13 +520,13 @@
     "size": 45728
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Wrap Back Hard",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"WrapBackHard\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WrapBoundary.aiff",
@@ -541,13 +541,13 @@
     "size": 62704
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Wrap Boundary",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"WrapBoundary\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WrapForward.aiff",
@@ -562,13 +562,13 @@
     "size": 31308
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Wrap Forward",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"WrapForward\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/WrapForwardHard.aiff",
@@ -583,13 +583,13 @@
     "size": 45820
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Wrap Forward Hard",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"WrapForwardHard\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/XcodeLineBreakpoint.aiff",
@@ -604,13 +604,13 @@
     "size": 12062
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Xcode Line Breakpoint",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"XcodeLineBreakpoint\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/XcodeLineError.aiff",
@@ -625,13 +625,13 @@
     "size": 46330
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Xcode Line Error",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"XcodeLineError\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/XcodeLineWarning.aiff",
@@ -646,13 +646,13 @@
     "size": 22854
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Xcode Line Warning",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"XcodeLineWarning\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/Versions/A/Resources/WorkflowGlyphs.ttf",

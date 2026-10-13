@@ -3523,13 +3523,13 @@
     "size": 66654
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Actions Available",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"ActionsAvailable\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Alert.aiff",
@@ -3544,13 +3544,13 @@
     "size": 44740
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Alert",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"Alert\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/AlertRepeat.aiff",
@@ -3565,13 +3565,13 @@
     "size": 28246
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Alert Repeat",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"AlertRepeat\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/AnimationFlyToDownloads.aiff",
@@ -3586,13 +3586,13 @@
     "size": 1305160
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Animation Fly To Downloads",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"AnimationFlyToDownloads\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/AnimationShake.aiff",
@@ -3607,13 +3607,13 @@
     "size": 31888
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Animation Shake",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"AnimationShake\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Announcement.aiff",
@@ -3628,13 +3628,13 @@
     "size": 65728
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Announcement",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"Announcement\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/AttachmentBegin.aiff",
@@ -3649,13 +3649,13 @@
     "size": 24392
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Attachment Begin",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"AttachmentBegin\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/AttachmentEnd.aiff",
@@ -3670,13 +3670,13 @@
     "size": 52268
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Attachment End",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"AttachmentEnd\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Back.aiff",
@@ -3691,13 +3691,13 @@
     "size": 29118
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Back",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"Back\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BackThrough.aiff",
@@ -3712,13 +3712,13 @@
     "size": 47216
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Back Through",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"BackThrough\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BrailleChordClockTick.aiff",
@@ -3733,13 +3733,13 @@
     "size": 73074
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Braille Chord Clock Tick",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"BrailleChordClockTick\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BrailleChordFailed.aiff",
@@ -3754,13 +3754,13 @@
     "size": 30712
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Braille Chord Failed",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"BrailleChordFailed\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BrailleChordMemorize.aiff",
@@ -3775,13 +3775,13 @@
     "size": 66784
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Braille Chord Memorize",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"BrailleChordMemorize\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BrailleDisplayConnected.aiff",
@@ -3796,13 +3796,13 @@
     "size": 98090
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Braille Display Connected",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"BrailleDisplayConnected\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BrailleDisplayDisconnected.aiff",
@@ -3817,13 +3817,13 @@
     "size": 70944
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Braille Display Disconnected",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"BrailleDisplayDisconnected\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BubbleAppear.aiff",
@@ -3838,13 +3838,13 @@
     "size": 49734
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Bubble Appear",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"BubbleAppear\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/BubbleDisappear.aiff",
@@ -3859,13 +3859,13 @@
     "size": 28880
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Bubble Disappear",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"BubbleDisappear\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/CallOut.aiff",
@@ -3880,13 +3880,13 @@
     "size": 7866
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Call Out",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"CallOut\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Capitals.aiff",
@@ -3901,13 +3901,13 @@
     "size": 28182
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Capitals",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"Capitals\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/ClickFast.aiff",
@@ -3922,13 +3922,13 @@
     "size": 17334
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Click Fast",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"ClickFast\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Slideshows.framework/Versions/A/Resources/Content/Fonts/Coolvetica.ttf",
@@ -3964,13 +3964,13 @@
     "size": 221376
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "alert \"Basso\": no equivalent tone, BifrOSt offers only 4 alert tones (Bell, Chime, Pulse, Tick in springboard/src/shell/alert_sound.rs); add more tones or an alert-sound import",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Sounds/Blow.aiff",
@@ -3985,13 +3985,13 @@
     "size": 403782
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "alert \"Blow\": no equivalent tone, BifrOSt offers only 4 alert tones (Bell, Chime, Pulse, Tick in springboard/src/shell/alert_sound.rs); add more tones or an alert-sound import",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Sounds/Bottle.aiff",
@@ -4006,13 +4006,13 @@
     "size": 222744
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "alert \"Bottle\": no equivalent tone, BifrOSt offers only 4 alert tones (Bell, Chime, Pulse, Tick in springboard/src/shell/alert_sound.rs); add more tones or an alert-sound import",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/AppleMediaServicesUI.framework/Versions/A/Resources/AGC.otf",

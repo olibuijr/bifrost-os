@@ -2536,13 +2536,13 @@
     "size": 12652
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Scroll Page",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"ScrollPage\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SearchRangeWithinSameElement.aiff",
@@ -2557,13 +2557,13 @@
     "size": 28412
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Search Range Within Same Element",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"SearchRangeWithinSameElement\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SecureCharacter.aiff",
@@ -2578,13 +2578,13 @@
     "size": 46460
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Secure Character",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"SecureCharacter\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SecureCharacter.caf",
@@ -2599,13 +2599,13 @@
     "size": 9400
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Secure Character",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"SecureCharacter\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/Select.aiff",
@@ -2620,13 +2620,13 @@
     "size": 31044
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Select",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"Select\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SingleClick.aiff",
@@ -2641,13 +2641,13 @@
     "size": 56708
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Single Click",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"SingleClick\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SpringBack.aiff",
@@ -2662,13 +2662,13 @@
     "size": 31968
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Spring Back",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"SpringBack\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/SpringForward.aiff",
@@ -2683,13 +2683,13 @@
     "size": 31830
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Spring Forward",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"SpringForward\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/StyleChangeDouble.aiff",
@@ -2704,13 +2704,13 @@
     "size": 29230
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Style Change Double",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"StyleChangeDouble\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/StyleChangeMultiple.aiff",
@@ -2725,13 +2725,13 @@
     "size": 36992
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Style Change Multiple",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"StyleChangeMultiple\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/StyleChangeSingle.aiff",
@@ -2746,13 +2746,13 @@
     "size": 31554
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Style Change Single",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"StyleChangeSingle\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Sounds/Sosumi.aiff",
@@ -2767,13 +2767,13 @@
     "size": 443352
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/src/shell/alert_sound.rs; springboard/src/shell/options.rs",
+   "status": "partial",
+   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Bell tone covers this alert's role. The Apple tone itself is not reproduced",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Sounds/Submarine.aiff",
@@ -2788,13 +2788,13 @@
     "size": 429882
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/src/shell/alert_sound.rs; springboard/src/shell/options.rs",
+   "status": "partial",
+   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Pulse tone covers this alert's role. The Apple tone itself is not reproduced",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/UIKitCore.framework/Versions/A/Resources/SFProRoundedStatusBar.ttf",

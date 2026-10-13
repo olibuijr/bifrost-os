@@ -1360,13 +1360,13 @@
     "size": 75092
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Tracking Off",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"TrackingOff\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/TrackingOn.aiff",
@@ -1381,13 +1381,13 @@
     "size": 75886
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Tracking On",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"TrackingOn\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ScreenReader.framework/Versions/A/Resources/Sounds/TrackingSystemElement.aiff",
@@ -1402,13 +1402,13 @@
     "size": 36084
    },
    "description": "",
-   "role": "",
+   "role": "Screen reader earcon: Tracking System Element",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "note": "VoiceOver earcon \"TrackingSystemElement\": BifrOSt has speech output (springboard/src/shell/accessibility/speech.rs, espeak-ng) but no earcon set; needed for a screen reader that signals focus, boundaries, wrap, links, errors and mouse tracking with sounds",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Sounds/Tink.aiff",
@@ -1423,13 +1423,13 @@
     "size": 162516
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound (Settings > Sound > Alert Sound)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/src/shell/alert_sound.rs; springboard/src/shell/options.rs",
+   "status": "partial",
+   "note": "BifrOSt has its own synthesised alert set (Bell, Chime, Pulse, Tick); its Tick tone covers this alert's role. The Apple tone itself is not reproduced",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }
