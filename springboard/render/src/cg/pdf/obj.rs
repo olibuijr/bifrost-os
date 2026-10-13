@@ -339,6 +339,90 @@ impl<'a> Parser<'a> {
     }
 }
 
+/// A number the way PDF writes it: no exponent, trimmed zeros.
+pub fn fmt_num(v: f64) -> String {
+    if !v.is_finite() {
+        return "0".into();
+    }
+    if v == v.trunc() && v.abs() < 1e15 {
+        return format!("{}", v as i64);
+    }
+    let s = format!("{:.4}", v);
+    let s = s.trim_end_matches('0').trim_end_matches('.');
+    if s.is_empty() || s == "-" || s == "-0" {
+        "0".into()
+    } else {
+        s.to_string()
+    }
+}
+
+/// Writes a name with `#xx` escapes for bytes a name cannot hold raw.
+pub fn write_name(name: &str, out: &mut Vec<u8>) {
+    out.push(b'/');
+    for &b in name.as_bytes() {
+        if b <= 32 || b >= 127 || is_delim(b) || b == b'#' {
+            out.extend_from_slice(format!("#{b:02X}").as_bytes());
+        } else {
+            out.push(b);
+        }
+    }
+}
+
+impl Obj {
+    /// Serialises the object as PDF syntax. Streams write their dictionary,
+    /// then `stream`, the bytes and `endstream`, with `/Length` set.
+    pub fn write(&self, out: &mut Vec<u8>) {
+        match self {
+            Obj::Null => out.extend_from_slice(b"null"),
+            Obj::Bool(b) => out.extend_from_slice(if *b { b"true" } else { b"false" }),
+            Obj::Int(i) => out.extend_from_slice(i.to_string().as_bytes()),
+            Obj::Real(r) => out.extend_from_slice(fmt_num(*r).as_bytes()),
+            Obj::Str(s) => {
+                out.push(b'<');
+                for b in s {
+                    out.extend_from_slice(format!("{b:02X}").as_bytes());
+                }
+                out.push(b'>');
+            }
+            Obj::Name(n) => write_name(n, out),
+            Obj::Array(a) => {
+                out.push(b'[');
+                for (i, o) in a.iter().enumerate() {
+                    if i > 0 {
+                        out.push(b' ');
+                    }
+                    o.write(out);
+                }
+                out.push(b']');
+            }
+            Obj::Dict(d) => write_dict(d, out),
+            Obj::Stream(s) => {
+                let mut d = s.dict.clone();
+                d.insert("Length".into(), Obj::Int(s.data.len() as i64));
+                write_dict(&d, out);
+                out.extend_from_slice(b"\nstream\n");
+                out.extend_from_slice(&s.data);
+                out.extend_from_slice(b"\nendstream");
+            }
+            Obj::Ref(n, g) => out.extend_from_slice(format!("{n} {g} R").as_bytes()),
+            Obj::Op(o) => out.extend_from_slice(o.as_bytes()),
+        }
+    }
+}
+
+fn write_dict(d: &Dict, out: &mut Vec<u8>) {
+    out.extend_from_slice(b"<<");
+    let mut keys: Vec<&String> = d.keys().collect();
+    keys.sort();
+    for k in keys {
+        write_name(k, out);
+        out.push(b' ');
+        d[k].write(out);
+        out.push(b' ');
+    }
+    out.extend_from_slice(b">>");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -382,5 +466,20 @@ mod tests {
         assert_eq!(parse("% comment\n 5", false), Obj::Int(5));
         assert!(matches!(parse("<< /A [1 2", true), Obj::Dict(_)));
         assert!(Parser::new(b"   ", 0).parse(false).is_none());
+    }
+
+    #[test]
+    fn written_objects_parse_back() {
+        let mut d = Dict::new();
+        d.insert("Kids".into(), Obj::Array(vec![Obj::Ref(3, 0), Obj::Real(1.5), Obj::Int(-2)]));
+        d.insert("T".into(), Obj::Name("A B".into()));
+        d.insert("S".into(), Obj::Str(b"hi (there)".to_vec()));
+        let o = Obj::Dict(d);
+        let mut out = vec![];
+        o.write(&mut out);
+        assert_eq!(Parser::new(&out, 0).parse(true).unwrap(), o);
+        assert_eq!(fmt_num(2.0), "2");
+        assert_eq!(fmt_num(0.25), "0.25");
+        assert_eq!(fmt_num(-0.00001), "0");
     }
 }

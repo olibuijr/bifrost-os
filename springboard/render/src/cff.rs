@@ -144,6 +144,8 @@ pub struct Cff<'a> {
     charset: usize,
     nominal_width: f32,
     default_width: f32,
+    /// CID-keyed (the charset maps glyphs to CIDs)
+    is_cid: bool,
 }
 
 impl<'a> Cff<'a> {
@@ -171,7 +173,19 @@ impl<'a> Cff<'a> {
                 }
             }
         }
-        Some(Cff { data, char_strings, global_subrs, local_subrs, strings, charset, nominal_width, default_width })
+        Some(Cff { data, char_strings, global_subrs, local_subrs, strings, charset, nominal_width, default_width, is_cid: find(1230).is_some() })
+    }
+
+    pub fn is_cid(&self) -> bool {
+        self.is_cid
+    }
+
+    /// The glyph for a CID in a CID-keyed font (the glyph id itself otherwise).
+    pub fn cid_to_gid(&self, cid: u16) -> Option<u16> {
+        if !self.is_cid {
+            return ((cid as usize) < self.num_glyphs()).then_some(cid);
+        }
+        (0..self.num_glyphs()).find(|&g| self.sid(g) == Some(cid)).map(|g| g as u16)
     }
 
     pub fn num_glyphs(&self) -> usize {
