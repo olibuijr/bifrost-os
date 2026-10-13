@@ -127,7 +127,7 @@ pub fn parse(text: &str) -> Result<Vec<Card>, Error> {
 }
 
 /// Joins continuation lines (starting with a space or a tab) to the line before them.
-fn unfold(text: &str) -> Vec<String> {
+pub(crate) fn unfold(text: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for line in text.lines() {
         let continued = line.strip_prefix(' ').or_else(|| line.strip_prefix('\t'));
@@ -189,7 +189,7 @@ fn text(raw: &str) -> String {
 }
 
 /// The `;`-separated components of a structured value, each unescaped.
-fn fields(raw: &str) -> Vec<String> {
+pub(crate) fn fields(raw: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
     let mut chars = raw.chars();
@@ -212,7 +212,7 @@ fn field(parts: &[String], index: usize) -> String {
     parts.get(index).map(|part| part.trim().to_string()).unwrap_or_default()
 }
 
-fn escape(s: &str) -> String {
+pub(crate) fn escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         match c {
@@ -242,7 +242,7 @@ fn type_param(label: &str) -> String {
 }
 
 /// Appends `line` as CRLF-terminated physical lines of at most 75 bytes; continuation lines start with a space.
-fn fold(line: &str, out: &mut String) {
+pub(crate) fn fold(line: &str, out: &mut String) {
     let mut used = 0;
     for c in line.chars() {
         let width = c.len_utf8();
