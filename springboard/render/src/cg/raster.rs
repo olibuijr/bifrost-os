@@ -217,7 +217,8 @@ impl Coverage {
 pub fn fill(path: &Path, rule: FillRule, t: &Affine, clip: Option<&Coverage>, w: usize, h: usize) -> Coverage {
     let polys: Vec<Vec<Pt>> = path
         .transformed(t)
-        .flatten_subpaths(0.1)
+        // 0.05 px: a 0.1 px flattening leaves a 20 px circle about 1% short of its area
+        .flatten_subpaths(0.05)
         .into_iter()
         .filter(|s| s.points.len() >= 3)
         .map(|s| s.points)
