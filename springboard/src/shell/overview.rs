@@ -822,6 +822,13 @@ impl Shell {
         self.dirty = true;
     }
 
+    /// Opens the launcher when it is closed (the game controller's Home button); unlike `appgrid_toggle` it never closes it.
+    pub fn appgrid_show(&mut self, t: f64) {
+        if !self.overview.grid.visible() {
+            self.appgrid_toggle(t);
+        }
+    }
+
     /// Ctrl+Left / Ctrl+Right: the neighbouring desktop, with a slide.
     pub fn switch_desktop(&mut self, delta: i32, t: f64) {
         if !self.desk_active() || self.is_locked() {
