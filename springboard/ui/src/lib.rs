@@ -690,6 +690,7 @@ pub mod racing_wheel;
 pub mod virtual_controller;
 pub mod input_method;
 pub mod compose_method;
+pub mod kana_method;
 pub mod vertical_text;
 pub mod ruby;
 pub use bifrost_render::cg;
