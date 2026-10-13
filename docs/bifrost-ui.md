@@ -1699,7 +1699,9 @@ start and after each call); the call results also arrive in `App::login_item_sta
 Apple parity decisions: the status enum has all four cases (`NotRegistered`, `Enabled`, `RequiresApproval`, `NotFound`).
 Gaps that cannot be matched yet: `SMAppService.loginItem(identifier:)`, `.agent(plistName:)` and `.daemon(plistName:)` do
 not exist (BifrOSt apps have no embedded helpers, launch agents or daemons), `RequiresApproval` is never produced
-(there is no approval step), and `openSystemSettingsLoginItems()` is not provided (the shell page opens from Settings).
+(there is no approval step).
+
+**Errors, unregister completion and the settings link.** `ServiceError` carries the `kSMError*` values of macOS 27 (`InternalFailure` 1, `InvalidSignature` 2, `AuthorizationFailure` 3, `ToolNotValid` 4, `JobNotFound` 5, `ServiceUnavailable` 6, `JobPlistNotFound` 7, `JobMustBeEnabled` 8, `InvalidPlist` 9, `LaunchDeniedByUser` 10, `AlreadyRegistered` 11) in `ERROR_DOMAIN` (`SMAppServiceErrorDomain`); `to_error()` gives the `AppError`. `try_register` returns `AlreadyRegistered` when the last status is `Enabled` or `RequiresApproval`; `try_unregister` returns `JobNotFound` when the item is not registered; an agent or daemon name that is not a `.plist` name is `InvalidPlist`. `unregister_with(ctx, done)` is `unregister(completionHandler:)`: `done(None)` once the shell reports `NotRegistered`, `done(Some(error))` otherwise, called at once when the call fails before reaching the shell. `error_for_reply(LoginOp::Register, status)` maps a refused request (`NotRegistered` after register) to `LaunchDeniedByUser`. `service_management::open_system_settings_login_items(ctx)` sends `LoginOp::OpenSettings` (wire value 3) and the shell opens Settings on Login Items & Extensions. The `login-items` system service adds `error` and `code` to a failed reply and has an `open_settings` method.
 
 **NSStatusItem.** `StatusBar::system().status_item(StatusItemLength::Variable)` returns a `StatusItem` with
 `set_title`, `set_symbol`, `set_menu(&[MenuItem])`, `set_visible` and `remove`; every setter sends the whole item. A

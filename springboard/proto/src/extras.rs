@@ -12,6 +12,8 @@ pub enum LoginOp {
     Register,
     Unregister,
     Query,
+    /// `openSystemSettingsLoginItems()`: the shell opens Settings on the Login Items page
+    OpenSettings,
 }
 
 impl LoginOp {
@@ -20,6 +22,7 @@ impl LoginOp {
             0 => Self::Register,
             1 => Self::Unregister,
             2 => Self::Query,
+            3 => Self::OpenSettings,
             _ => return None,
         })
     }
@@ -174,7 +177,7 @@ mod tests {
 
     #[test]
     fn login_and_status_item_messages_round_trip() {
-        for op in [LoginOp::Register, LoginOp::Unregister, LoginOp::Query] {
+        for op in [LoginOp::Register, LoginOp::Unregister, LoginOp::Query, LoginOp::OpenSettings] {
             let m = ToShell::LoginItem { request: 3, op };
             assert_eq!(ToShell::decode(&m.encode()), Ok(m));
         }

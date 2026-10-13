@@ -23,6 +23,9 @@ pub struct StatusEntry {
     pub menu: Vec<StatusMenuItem>,
 }
 
+/// The Settings page `SMAppService.openSystemSettingsLoginItems()` opens.
+const LOGIN_ITEMS_PAGE: &str = "Login Items & Extensions";
+
 #[derive(Default)]
 pub struct Registry {
     login: Vec<String>,
@@ -117,7 +120,7 @@ impl Registry {
         let changed = match op {
             LoginOp::Register => self.request(app),
             LoginOp::Unregister => self.unregister(app),
-            LoginOp::Query => false,
+            LoginOp::Query | LoginOp::OpenSettings => false,
         };
         (self.login_status(app), changed)
     }
@@ -170,6 +173,10 @@ impl super::Shell {
         match msg {
             ToShell::LoginItem { request, op } => {
                 let Some(app) = Self::extras_app_id(slot) else { return };
+                if op == LoginOp::OpenSettings {
+                    let _ = self.open_settings_page(LOGIN_ITEMS_PAGE, 0.0);
+                    self.dirty = true;
+                }
                 let (status, changed) = self.extras.login_op(&app, op);
                 if changed {
                     self.login_save();
