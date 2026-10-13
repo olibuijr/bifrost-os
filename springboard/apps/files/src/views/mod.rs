@@ -13,6 +13,14 @@ pub(crate) fn text(s: &mut Surface, ui: &Ui, label: &str, pt: f32, color: u32, x
     s.blit(&im, ui.pt(x) as i32, ui.pt(y) as i32, 255, 255);
 }
 
+/// `text` through a shared rendered-text cache: a string drawn again (a row repainted on scroll) is not rasterised again.
+pub(crate) fn cached_text(s: &mut Surface, ui: &Ui, cache: &std::cell::RefCell<bifrost_app::kit::TextCache>, label: &str, pt: f32, color: u32, x: f32, y: f32, max: f32) {
+    let label = ui.fit(label, pt, ui.pt(max.max(0.)));
+    let mut cache = cache.borrow_mut();
+    let im = cache.get(ui, &label, pt, Weight::Regular, color);
+    s.blit(im, ui.pt(x) as i32, ui.pt(y) as i32, 255, 255);
+}
+
 pub(crate) fn rect(s: &mut Surface, ui: &Ui, x: f32, y: f32, w: f32, h: f32, color: u32) {
     s.fill_rrect(
         ui.pt(x),

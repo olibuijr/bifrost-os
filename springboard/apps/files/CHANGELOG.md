@@ -3,6 +3,10 @@
 - Drag and drop with other windows and apps: a drag of items starts a session with read grants for them, so a file dropped on another window or app arrives there as a copy. Files is a drop target too: files from other apps are copied into the folder under the pointer (or the folder shown), a folder hovered during a drag opens after the spring-loaded delay, and a drag inside Files still moves the items (Option copies).
 - Files now asks for the `documents` permission, which lets it hold read grants for the items it drags out.
 
+## 1.27.0 — 2026-10-13
+
+- Smoother scrolling in the list view: each row's name, date, size and kind are rendered once through the shared text cache, so scrolling back over rows no longer rasterises their text again.
+
 ## 1.26.0 — 2026-10-13
 
 - Tab strip: with two or more tabs a strip runs under the toolbar. Each tab shows its folder's name, the open tab is raised, a click selects a tab, and its close box closes it (the open tab closes the same way as ⌘W). The strip is hidden while there is one tab, and the content moves below it.

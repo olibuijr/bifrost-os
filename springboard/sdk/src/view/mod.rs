@@ -488,6 +488,27 @@ fn path_offset(root: &dyn View, path: &[usize]) -> (f32, f32) {
     sum
 }
 
+/// Whether no part of `p` (the area a view paints) lies inside the rows `rows` of its clipping parent.
+fn reaches_rows(p: Rect, rows: Rect) -> bool {
+    p.y < rows.bottom() && p.bottom() > rows.y
+}
+
+/// Whether child `ch` of a clipping view (a scroll view) can paint at all: the clip keeps only its rows, so a child
+/// wholly outside them is skipped, and its dirty flags are cleared (the view repaints as a whole when its offset
+/// moves, so the child is drawn again once it scrolls into view). A child with a layer in its subtree is always
+/// drawn, since its layer tree has to stay in step.
+fn in_rows(ch: &mut dyn View, rows: Rect) -> bool {
+    if reaches_rows(ch.dirty_rect(), rows) || has_layer(ch) {
+        return true;
+    }
+    clear_dirty(ch);
+    false
+}
+
+fn has_layer(v: &dyn View) -> bool {
+    v.base().layer.is_some() || v.children().iter().any(|c| has_layer(c.as_ref()))
+}
+
 fn clear_dirty(v: &mut dyn View) {
     v.base_mut().dirty = false;
     v.children_mut().iter_mut().for_each(|c| clear_dirty(c.as_mut()));
@@ -541,7 +562,12 @@ fn draw_subtree(v: &mut dyn View, c: &mut dyn Canvas, ui: &Ui) {
             let full = c.size().0 as f32;
             let (cx, cw) = if v.clips_horizontally() { (f.x, f.w) } else { (0.0, full) };
             c.push_clip(RectF::new(cx, f.y, cw, f.h), 0.0);
-            v.children_mut().iter_mut().for_each(|ch| draw_subtree(ch.as_mut(), c, ui));
+            let rows = v.frame();
+            for ch in v.children_mut().iter_mut() {
+                if in_rows(ch.as_mut(), rows) {
+                    draw_subtree(ch.as_mut(), c, ui);
+                }
+            }
             c.pop_clip();
         } else {
             v.children_mut().iter_mut().for_each(|ch| draw_subtree(ch.as_mut(), c, ui));
@@ -571,7 +597,14 @@ fn draw_dirty(v: &mut dyn View, c: &mut dyn Canvas, ui: &Ui, d: &mut Damage) {
         let (_, fy, _, fh) = px_rect(ui, v.frame());
         let mut inner = Damage::new(w as usize, h as usize);
         c.push_clip(RectF::new(0.0, f.y, w as f32, f.h), 0.0);
-        scrolled(v, |v| v.children_mut().iter_mut().for_each(|ch| draw_dirty(ch.as_mut(), c, ui, &mut inner)));
+        scrolled(v, |v| {
+            let rows = v.frame();
+            for ch in v.children_mut().iter_mut() {
+                if in_rows(ch.as_mut(), rows) {
+                    draw_dirty(ch.as_mut(), c, ui, &mut inner);
+                }
+            }
+        });
         c.pop_clip();
         for a in inner.areas() {
             let (y0, y1) = (a.y0.max(fy), a.y1.min(fy + fh));
@@ -1224,5 +1257,24 @@ mod canvas_tests {
         let mut replayed = surface(&mut replayed_px, width, height, 0xff00_0000);
         list.replay(&mut replayed);
         assert_eq!(direct.px, replayed.px);
+    }
+}
+
+#[cfg(test)]
+mod rows_tests {
+    use super::*;
+
+    #[test]
+    fn a_child_is_in_the_rows_when_its_area_overlaps_them() {
+        let rows = Rect { x: 0.0, y: 100.0, w: 200.0, h: 300.0 };
+        // above, below and beside the rows
+        assert!(!reaches_rows(Rect { x: 0.0, y: 0.0, w: 200.0, h: 100.0 }, rows));
+        assert!(!reaches_rows(Rect { x: 0.0, y: 400.0, w: 200.0, h: 20.0 }, rows));
+        // a row straddling the top or bottom edge, and one inside
+        assert!(reaches_rows(Rect { x: 0.0, y: 90.0, w: 200.0, h: 20.0 }, rows));
+        assert!(reaches_rows(Rect { x: 0.0, y: 390.0, w: 200.0, h: 20.0 }, rows));
+        assert!(reaches_rows(Rect { x: 0.0, y: 150.0, w: 200.0, h: 32.0 }, rows));
+        // touching the edge only is outside: nothing is painted in the clip
+        assert!(!reaches_rows(Rect { x: 0.0, y: 60.0, w: 200.0, h: 40.0 }, rows));
     }
 }

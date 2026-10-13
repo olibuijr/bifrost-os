@@ -72,12 +72,13 @@ impl Files {
         if let Some(field) = name_field {
             bifrost_app::widgets::text_field(s, ui, field, Rect { x: (self.side() + 46. + indent), y: y + 3., w: name_w + 10., h: 26. }, "", true);
         } else {
-            text(s, ui, &e.name, self.vo.text + 1., ink(selected), self.side() + 48. + indent, y + name_dy, name_w);
+            cached_text(s, ui, &self.row_text, &e.name, self.vo.text + 1., ink(selected), self.side() + 48. + indent, y + name_dy, name_w);
         }
         let small = (self.vo.text).max(10.);
         let secondary = if selected { WHITE } else { LABEL_2.now() };
-        text(s, ui, &date_text(e.mtime), small, secondary, w - 430., y + 8., 135.);
-        text(s, ui, &if e.is_dir { "—".into() } else { fs::size_text(e.size) }, small, secondary, w - 290., y + 8., 105.);
-        text(s, ui, e.kind.label(), small, secondary, w - 165., y + 8., 145.);
+        let row_text = &self.row_text;
+        cached_text(s, ui, row_text, &date_text(e.mtime), small, secondary, w - 430., y + 8., 135.);
+        cached_text(s, ui, row_text, &if e.is_dir { "—".into() } else { fs::size_text(e.size) }, small, secondary, w - 290., y + 8., 105.);
+        cached_text(s, ui, row_text, e.kind.label(), small, secondary, w - 165., y + 8., 145.);
     }
 }
