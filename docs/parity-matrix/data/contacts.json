@@ -10,16 +10,16 @@
     {
       "feature": "Contact store access (CNContactStore)",
       "apple": "CNContactStore",
-      "bifrost": "springboard/src/shell/contactstore.rs (load, load_checked, save)",
-      "status": "os",
-      "note": "Store is a shell module. The Contacts app reaches it by crate path (springboard/apps/contacts-desktop/src/contacts.rs:20). Apps reach it only through the contacts service and springboard/sdk/src/contacts.rs (access, fetch, save)."
+      "bifrost": "springboard/src/shell/contactstore.rs (load, load_checked, save), springboard/src/shell/services/contacts.rs (contacts service), springboard/sdk/src/contacts.rs (access, request, fetch, save)",
+      "status": "partial",
+      "note": "The store is a shell module (the Contacts app reaches it by crate path, springboard/apps/contacts-desktop/src/contacts.rs:20). Apps reach it only through the contacts service and the SDK contacts module, behind a per-app grant. The store file itself is not visible to apps."
     },
     {
       "feature": "Authorization and privacy",
       "apple": "Accessing the contact store; NSContactsUsageDescription; contact access button and picker",
-      "bifrost": "springboard/ui/src/contact_access.rs, springboard/src/shell/services/contacts.rs",
+      "bifrost": "springboard/ui/src/contact_access.rs, springboard/src/shell/services/contacts.rs (access, request), springboard/sdk/src/contacts.rs (access, request, decode_status, decode_picked)",
       "status": "partial",
-      "note": "Per-app access model (every contact, a picked set read-only, or none) is enforced by the contacts service. The access sheet and Settings row are not built yet, so a grant is set by the shell only. Grants reset on restart."
+      "note": "Four-state model per app: not determined, denied, authorized (every contact) and limited (a picked set, read-only), plus restricted. An app reads its status with access and asks with request, but request never grants. The shell sets grants; the access sheet and Settings row are not built yet. Grants reset on restart."
     },
     {
       "feature": "Contact data model (CNContact, CNMutableContact)",
@@ -38,9 +38,9 @@
     {
       "feature": "Fetch with key-based property selection",
       "apple": "CNContactFetchRequest, CNContactPropertyNotFetchedExceptionName, Contact Keys",
-      "bifrost": "springboard/ui/src/contact_fetch.rs",
+      "bifrost": "springboard/ui/src/contact_fetch.rs (project, Keys), springboard/src/shell/services/contacts.rs (fetch), springboard/sdk/src/contacts.rs (fetch, decode_contacts)",
       "status": "partial",
-      "note": "Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Every fetch loads all fields. No key list and no partial contacts. Search covers name, phone, email, notes, company and address."
+      "note": "The contacts service returns each record with only the keys the app asked for, and fetch takes an optional query over any text of the contact. Not yet: a partial-contact error when a key was not fetched, and Midget testing. Search covers name, phone, email, notes, company and address."
     },
     {
       "feature": "Save requests (CNSaveRequest)",
@@ -94,9 +94,9 @@
     {
       "feature": "Contact picker and access UI (ContactsUI)",
       "apple": "Contact access button, Contact access picker (sample code)",
-      "bifrost": "springboard/ui/src/contact_access.rs (model only; wired: springboard/ui/src/contact_picker.rs (Add People picker in springboard/apps/contacts-desktop/src/contacts.rs)",
+      "bifrost": "springboard/ui/src/contact_access.rs (access model, wired in springboard/src/shell/services/contacts.rs); springboard/ui/src/contact_picker.rs (wired: Add People picker in springboard/apps/contacts-desktop/src/contacts.rs, Picker at line 1063)",
       "status": "partial",
-      "note": "Wave 2 (theme-30, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No picker that lets an app receive one chosen contact without seeing the whole store. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "The Contacts app uses the picker model for its Add People flow. No SDK picker lets an app ask the user to choose a contact and receive the result, so that part is still missing. Not yet tested on the VM or Midget."
     },
     {
       "feature": "Errors and validation",
@@ -114,11 +114,11 @@
     }
   ],
   "gaps": [
-    "No permission model for contact access (NSContactsUsageDescription equivalent, per-app grant, contact access picker).",
     "No groups, containers or subgroups.",
     "No change history and no contacts-changed notification to apps.",
     "Single-valued fields only: one phone, one email, one address. No birthday, dates, relations, social profiles, instant messages, URLs or photos.",
-    "No vCard import and no vCard-to-contact parse.",
-    "No key-based partial fetch; every read loads the whole store (cap 10,000 contacts, 8 MiB file)."
+    "No access sheet or Settings row for contact access; the shell sets grants, and they reset on restart.",
+    "No vCard in the SDK: apps cannot parse or build vCards. Import and export live in the Contacts app (springboard/apps/contacts-desktop/src/exchange.rs).",
+    "Every fetch reads the whole store file (cap 10,000 contacts, 8 MiB file) before the service filters it."
   ]
 }
