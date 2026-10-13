@@ -7,6 +7,12 @@
   on the PATH, else by a built-in Motion JPEG AVI writer. It is saved to a dated file on the Desktop. The menu bar shows a
   red stop item beside Control Center while it runs, with Stop Recording. The control port takes `rec start [screen|x,y,w,h]
   [file]`, `rec stop` and `rec status`, and `screencapture -v` records until stopped (or `-V seconds` for a set length).
+- Services menu: the App menu lists the services that take the current selection (the pasteboard's text or files):
+  Look Up in Dictionary, New Note With Selection, Make New Sticky Note, Open URL, Search With Quick Search and Show in Files.
+  `bifrost_ui::services_menu` models which service takes what and where it goes; `shell/services_route.rs` carries it out
+  (Dictionary's `look-up` and Notes' `create-note` intents over their control sockets, links in the browser, Files, Search).
+  Ctrl+Cmd+D runs Look Up on the selection. `bifrost_ui::look_up` is the Look Up popover model; its drawing is not built yet.
+  Intents can take string parameters: `intents::run_with` and `request_line_with`.
 - Software Update: `softwareupdate --schedule` prints whether the background checks run; `--schedule on|off` switches them.
   Manual checks (`softwareupdate -l`, Settings > Check) still run. The switch is one file in the shell data folder that the
   update agent and the shell's own checker both read.

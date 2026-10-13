@@ -19,6 +19,7 @@ const KEY_F: u16 = 33;
 const KEY_8: u16 = 9;
 const KEY_MINUS: u16 = 12;
 const KEY_EQUAL: u16 = 13;
+const KEY_D: u16 = 32;
 const KEY_GRAVE: u16 = 41;
 const KEY_5: u16 = 6;
 const KEY_UP: u16 = 103;
@@ -125,6 +126,8 @@ pub enum Shortcut {
     ReaderActivate,
     /// Option+Cmd+F5: switches the features chosen for the Accessibility Shortcut (`accessibility::shortcut`)
     AccessibilityShortcut,
+    /// Ctrl+Cmd+D: Look Up the selection in Dictionary (the Services menu's Look Up in Dictionary)
+    LookUp,
     /// Shift+Cmd+5: the screenshot toolbar, a capture session over the screen
     Capture,
     /// Option+Cmd+8: Screen Zoom on or off (`accessibility::zoom`)
@@ -143,7 +146,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture | Shortcut::ZoomToggle | Shortcut::ZoomStep(_) | Shortcut::LookUp => return None,
         }))
     }
 }
@@ -243,6 +246,7 @@ impl HwKeys {
             // Option+Cmd+8 turns Screen Zoom on and off; Option+Cmd+= and Option+Cmd+- zoom in and out
             KEY_8 if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::ZoomToggle),
             KEY_EQUAL | KEY_MINUS if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::ZoomStep(code == KEY_EQUAL)),
+            KEY_D if meta && ctrl && !alt && self.shift == 0 => Some(Shortcut::LookUp),
             KEY_LEFT | KEY_RIGHT | KEY_UP | KEY_DOWN if meta && ctrl && !alt && self.shift == 0 => Some(Shortcut::Tile(match code {
                 KEY_LEFT => Tile::Left,
                 KEY_RIGHT => Tile::Right,
@@ -664,6 +668,7 @@ impl Shell {
                 self.capture = None;
                 vec![]
             }
+            Shortcut::LookUp if self.desk_active() && !self.is_locked() => self.run_service(bifrost_ui::services_menu::Service::LookUp, t),
             // Escape hides the character viewer first, before it goes Back
             Shortcut::Back if self.char_viewer_escape() => vec![],
             Shortcut::Back => self.hw_back(t),
@@ -796,6 +801,8 @@ mod tests {
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_DOWN), Some(Shortcut::ReaderRotor(true)));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_UP), Some(Shortcut::ReaderRotor(false)));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_SPACE), Some(Shortcut::ReaderActivate));
+        // Look Up: Ctrl+Cmd+D (Services > Look Up in Dictionary on the selection)
+        assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTMETA], KEY_D), Some(Shortcut::LookUp));
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTALT], KEY_F5), Some(Shortcut::AccessibilityShortcut), "Option+Cmd+F5");
         // Screen Zoom: Option+Cmd+8 toggles, Option+Cmd+= zooms in, Option+Cmd+- zooms out
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTALT], KEY_8), Some(Shortcut::ZoomToggle));

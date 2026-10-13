@@ -29,7 +29,31 @@ impl ManifestIntent {
 
 /// The JSON-RPC request line that runs intent `id` with no parameters.
 pub fn request_line(id: &str) -> String {
-    format!("{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"intent.{id}\",\"params\":{{}}}}\n")
+    request_line_with(id, &[])
+}
+
+/// The JSON-RPC request line that runs intent `id` with string parameters, `(name, value)` pairs.
+pub fn request_line_with(id: &str, params: &[(&str, &str)]) -> String {
+    let body: Vec<String> = params.iter().map(|(name, value)| format!("{}:{}", json_string(name), json_string(value))).collect();
+    format!("{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"intent.{id}\",\"params\":{{{}}}}}\n", body.join(","))
+}
+
+/// A JSON string literal for `s`.
+fn json_string(s: &str) -> String {
+    let mut out = String::from("\"");
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
 }
 
 /// The control socket of a running app.
@@ -53,10 +77,15 @@ pub fn parse_reply(reply: &str) -> Result<Option<String>, String> {
 
 /// Calls the intent, retrying while the app starts (up to `wait`). Blocking: run it off the UI thread.
 pub fn run(app_id: &str, intent_id: &str, wait: Duration) -> Result<Option<String>, String> {
-    run_at(&socket_path(app_id), intent_id, wait)
+    run_at(&socket_path(app_id), &request_line(intent_id), wait)
 }
 
-fn run_at(path: &std::path::Path, intent_id: &str, wait: Duration) -> Result<Option<String>, String> {
+/// Runs intent `intent_id` of a running app with string parameters (see [`request_line_with`]).
+pub fn run_with(app_id: &str, intent_id: &str, params: &[(&str, &str)], wait: Duration) -> Result<Option<String>, String> {
+    run_at(&socket_path(app_id), &request_line_with(intent_id, params), wait)
+}
+
+fn run_at(path: &std::path::Path, line: &str, wait: Duration) -> Result<Option<String>, String> {
     let deadline = Instant::now() + wait;
     let mut stream = loop {
         match UnixStream::connect(path) {
@@ -66,7 +95,7 @@ fn run_at(path: &std::path::Path, intent_id: &str, wait: Duration) -> Result<Opt
         }
     };
     let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-    stream.write_all(request_line(intent_id).as_bytes()).map_err(|e| e.to_string())?;
+    stream.write_all(line.as_bytes()).map_err(|e| e.to_string())?;
     let _ = stream.shutdown(std::net::Shutdown::Write);
     let mut reply = String::new();
     stream.read_to_string(&mut reply).map_err(|e| e.to_string())?;
@@ -102,6 +131,16 @@ mod tests {
     }
 
     #[test]
+    fn request_lines_carry_string_parameters_escaped() {
+        assert_eq!(
+            request_line_with("create-note", &[("text", "a \"quote\"\nline\\")]),
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"intent.create-note\",\"params\":{\"text\":\"a \\\"quote\\\"\\nline\\\\\"}}\n"
+        );
+        assert_eq!(request_line_with("look-up", &[("word", "cat")]), "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"intent.look-up\",\"params\":{\"word\":\"cat\"}}\n");
+        assert_eq!(json_string("\u{1}"), "\"\\u0001\"");
+    }
+
+    #[test]
     fn run_talks_to_a_socket() {
         let dir = std::env::temp_dir().join(format!("bifrost-intents-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -115,7 +154,7 @@ mod tests {
             assert!(req.contains("\"intent.go\""));
             s.write_all(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"value\":null,\"dialog\":\"Went\"}}\n").unwrap();
         });
-        assert_eq!(run_at(&sock, "go", Duration::from_secs(1)), Ok(Some("Went".into())));
+        assert_eq!(run_at(&sock, &request_line("go"), Duration::from_secs(1)), Ok(Some("Went".into())));
         h.join().unwrap();
         let _ = std::fs::remove_dir_all(&dir);
     }
