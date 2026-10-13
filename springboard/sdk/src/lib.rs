@@ -552,3 +552,4 @@ pub mod graphics_stroke;
 pub mod graphics_gradient;
 pub mod graphics_color;
 pub mod graphics_pdf;
+pub mod graphics_imageio;
