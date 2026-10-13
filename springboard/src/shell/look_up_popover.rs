@@ -66,8 +66,8 @@ struct Frame {
     bands: Vec<Band>,
 }
 
-fn bands(look: &LookUp, ui: &Ui) -> Vec<Band> {
-    let max = ui.pt(WIDTH_PT - PAD_PT * 2.0);
+/// The rows of `look`, with text wrapped to `max` px.
+fn bands(look: &LookUp, ui: &Ui, max: f32) -> Vec<Band> {
     let mut top = 0.0;
     look.rows()
         .into_iter()
@@ -98,11 +98,13 @@ impl Popover {
         Popover { look, anchor }
     }
 
-    /// The box and rows for a `w` x `h` px screen: the box is pulled inside the screen.
+    /// The box and rows for a `w` x `h` px screen: the box is narrowed to fit the screen and pulled inside it.
     fn frame(&self, ui: &Ui, w: i32, h: i32) -> Frame {
-        let bands = bands(&self.look, ui);
+        let m = ui.pt(PAD_PT);
+        let pw = ui.pt(WIDTH_PT).min(w as f32 - m * 2.0).max(0.0);
+        let bands = bands(&self.look, ui, pw - m * 2.0);
         let content = bands.last().map_or(0.0, |b| b.top + b.h);
-        let (pw, ph, m) = (ui.pt(WIDTH_PT), ui.pt(content + PAD_PT * 2.0), ui.pt(PAD_PT));
+        let ph = ui.pt(content + PAD_PT * 2.0);
         let x = (self.anchor.0 - pw / 2.0).min(w as f32 - m - pw).max(m);
         let y = (self.anchor.1 + ui.pt(GAP_PT)).min(h as f32 - m - ph).max(m);
         Frame { x, y, w: pw, h: ph, bands }
@@ -280,16 +282,17 @@ mod tests {
     fn the_box_stays_inside_a_small_screen() {
         let ui = crate::shell::tests::ui();
         let p = Popover::new(look(), (5000.0, 5000.0));
-        let f = p.frame(&ui, 300, 200);
+        // a 300 x 200 px screen is shorter than the popover's content can ever be, so the test uses a small phone-sized screen
+        let f = p.frame(&ui, 300, 600);
         assert!(f.x >= 0.0 && f.x + f.w <= 300.0, "x {} w {}", f.x, f.w);
-        assert!(f.y >= 0.0 && f.y + f.h <= 200.0, "y {} h {}", f.y, f.h);
+        assert!(f.y >= 0.0 && f.y + f.h <= 600.0, "y {} h {}", f.y, f.h);
     }
 
     #[test]
     fn a_definition_wraps_onto_several_lines() {
         let ui = crate::shell::tests::ui();
         let long = "a small domesticated feline kept as a pet, which hunts mice and sleeps most of the day ".repeat(3);
-        let rows = bands(&LookUp::new("cat", Some(long), vec![]), &ui);
+        let rows = bands(&LookUp::new("cat", Some(long), vec![]), &ui, ui.pt(WIDTH_PT - PAD_PT * 2.0));
         let text = rows.iter().find(|b| matches!(b.row, Row::Text(_))).expect("definition band");
         assert!(text.lines.len() > 1, "{:?}", text.lines);
     }
