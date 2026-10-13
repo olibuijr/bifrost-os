@@ -1,5 +1,10 @@
 # BifrOSt changelog
 
+## 0.7.8 — 2026-10-13
+
+- Idle: the SIGTERM watcher blocks on a self-pipe instead of polling every 100 ms (10 of the shell's 15 idle wake-ups a second on the lab PC).
+- `tools/bench.py --midget`: unlocks with the account password (the login window ignores a bare Enter) and closes a window the session restored before timing that app's launch.
+
 ## 0.7.7 — 2026-10-13
 
 - Displays: the fastest refresh at the native size is the default from the first frame (`display-refresh` runs in the session's autostart before the shell connects; a 2560x1440 panel that offers 165 Hz no longer starts at 60 Hz). Settings > Displays > Refresh Rate picks Highest Available or any rate the panel offers, applied live and kept across restarts (`/var/lib/springboard/display-refresh`). `refresh=firmware` in `/etc/bifrost/display.conf` still keeps the firmware mode.

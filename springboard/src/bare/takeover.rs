@@ -105,8 +105,16 @@ pub fn clean_stop(dir: &str, status: i32, reason: &str) {
 
 static TERM: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// The write end of the self-pipe `on_term` wakes the watcher through (-1 until it exists).
+static TERM_FD: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
+
 extern "C" fn on_term(_sig: i32) {
     TERM.store(true, std::sync::atomic::Ordering::SeqCst);
+    let fd = TERM_FD.load(std::sync::atomic::Ordering::SeqCst);
+    if fd >= 0 {
+        // SAFETY: write(2) is async-signal-safe; one byte wakes the watcher's blocking read.
+        unsafe { crate::bare::sys::write(fd, b"t".as_ptr().cast(), 1) };
+    }
 }
 
 extern "C" {
@@ -116,15 +124,30 @@ extern "C" {
 /// SIGTERM (systemd stopping the unit on reboot or shutdown) is a clean stop: a watcher thread, so a hung UI loop
 /// cannot hold it, writes `last_exit`, clears the counter and exits 0.
 fn watch_term(dir: &str) {
+    use std::io::Read;
+    use std::os::fd::AsRawFd;
     const SIGTERM: i32 = 15;
-    // SAFETY: the handler only stores an atomic flag, which is async-signal-safe.
+    // a self-pipe: the watcher blocks on it instead of polling a flag every 100 ms (10 idle wake-ups a second, the
+    // largest share of the shell's idle wake-ups on the lab PC, round 75)
+    let (mut rx, tx) = match std::os::unix::net::UnixStream::pair() {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    TERM_FD.store(tx.as_raw_fd(), std::sync::atomic::Ordering::SeqCst);
+    std::mem::forget(tx); // the handler writes to it for the life of the process
+    // SAFETY: the handler only stores an atomic flag and writes one byte, both async-signal-safe.
     unsafe { signal(SIGTERM, on_term as *const () as usize) };
     let dir = dir.to_string();
     crate::bare::sys::spawn_named("term-watch", move || loop {
-        std::thread::sleep(Duration::from_millis(100));
+        let mut byte = [0u8; 1];
+        let woke = rx.read(&mut byte);
         if TERM.load(std::sync::atomic::Ordering::SeqCst) {
             clean_stop(&dir, 0, "SIGTERM from the service manager");
             std::process::exit(0);
+        }
+        if matches!(woke, Ok(0) | Err(_)) {
+            // the pipe is gone (never, the write end is leaked on purpose): keep the old poll as a fallback
+            std::thread::sleep(Duration::from_millis(500));
         }
     });
 }

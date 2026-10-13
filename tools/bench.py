@@ -107,12 +107,12 @@ def midget_footprint():
     # lock, wait, unlock, settle, then the same PSS reading (~20 s)
     midget.cmd_control(["lock"])
     time.sleep(8)
-    midget.cmd_key(["enter"])  # the first key can only wake the display; press again while still locked
+    # the login window wants the account password (round 74+); `unlock` types it, Enter alone no longer unlocks
     for _ in range(3):
-        time.sleep(3)
+        midget.cmd_unlock()
+        time.sleep(2)
         if "screen=lock" not in (midget.control_text("state", 15) or ""):
             break
-        midget.cmd_key(["enter"])
     if "screen=lock" in (midget.control_text("state", 15) or ""):
         # opening apps on the lock screen restarts the session (0.5.18, HANDOFF round 51): stop here
         print("midget still locked after the lock cycle; unlock failed", file=sys.stderr)
@@ -182,6 +182,14 @@ res = {}
 for app_id in APPS:
     if time.time() > DEADLINE - 8: break
     a = app_id.removeprefix("is.olibuijr.").removesuffix(".desktop").replace(".", "_")
+    # the session restores last boot's windows (round 75): a launch is only measured from a closed app
+    for pid in procs(app_id):
+        try: os.kill(pid, 15)
+        except OSError: pass
+    for _ in range(40):
+        if not procs(app_id): break
+        time.sleep(0.05)
+    time.sleep(0.5)
     before, t0 = windows(), time.time()
     ctl("open-app " + app_id)
     # ready = a process runs from the app's directory AND the shell maps one more external window
