@@ -1293,8 +1293,11 @@ impl Shell {
     /// Drains every running app's socket; sends Suspend/Resume when the foreground changes
     /// and Configure when the screen size changed.
     pub(super) fn ext_tick(&mut self, t: f64) {
-        self.login_items_launch();
-        self.session_restore(t);
+        // the first frame goes first: login items and the restored windows start once it is on screen (or the ceiling)
+        if self.desktop_gate.is_open(t, crate::bootsplash::first_desktop_frame_presented()) {
+            self.login_items_launch();
+            self.session_restore(t);
+        }
         self.session_tick(t);
         let now = bifrost_proto::sys::now_ms();
         self.dying.retain_mut(|h| !h.quit_poll(now));

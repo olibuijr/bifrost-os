@@ -65,6 +65,7 @@ pub mod ota;
 pub mod notify;
 pub mod usernotif;
 pub mod extras;
+pub mod desktop_gate;
 pub mod spotindex;
 pub mod sharing;
 pub mod forms;
@@ -678,6 +679,8 @@ pub struct Shell {
     /// the second app of a Split View / Slide Over, its menu and the pane scratch pixels
     /// desktop mode: floating windows and a dock (None on the bifrost)
     desk: Option<desk::Desk>,
+    /// opens once the first desktop frame is on screen: login items and restored windows start after it
+    desktop_gate: desktop_gate::DesktopGate,
     multi: Option<splitview::Multi>,
     multi_menu: Option<splitview::Menu>,
     multi_buf: Vec<u32>,
@@ -897,6 +900,7 @@ impl Shell {
             bar_backdrop:std::cell::RefCell::new(None),chrome_text:Default::default(),bar_shadows:Default::default(),desk_regions:None,desk_clear:None,desk_drawn:false,
             desktop_metrics:Default::default(),desktop_metrics_at:0.,metrics_sampler:Default::default(),metrics_running:false,
             desk: Some(desk::Desk::new()),
+            desktop_gate: Default::default(),
             multi: None,
             multi_menu: None,
             multi_buf: Vec::new(),
