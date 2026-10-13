@@ -176,9 +176,9 @@
    "area": "toolbar",
    "apple": "MainMenu.nib Edit > Search; toolbar search field",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/exchange.rs:131",
-   "note": "search() model exists and is tested; no search field or results list",
-   "wire": "Add a toolbar search field in calendar/chrome.rs bars(); show exchange.rs search hits as a list replacing the grid; clicking a hit jumps to its day and opens the editor."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/lookup.rs:33",
+   "note": "Toolbar search field (Cmd+F, Event > Search Events): a results list replaces the grid, a result opens its event on its day; hidden below 560 pt of toolbar width; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Match locations and notes of saved events (the store keeps them, search.rs reads only titles for them), search by date range, and move the caret by click. The compliance snapshot needs a re-bless on Midget for the new toolbar field."
   },
   {
    "feature": "Drag to create / move events in Day and Week",

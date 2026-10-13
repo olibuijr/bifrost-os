@@ -1113,3 +1113,191 @@ fn nothing_drags_in_the_month_grid_or_the_hour_labels() {
     w.touch(&ui, Event::Down(w.x0 + gut / 2.0, y), 0.0);
     assert!(w.press.is_none(), "the hour labels scroll, they do not draw events");
 }
+
+/// A calendar with three saved events in a window wide enough for the toolbar's search field.
+fn searchable(ui: &Ui, file: PathBuf) -> Calendar {
+    let mut lunch = event(2, "Lunch with Ana");
+    lunch.date = date(2026, 10, 6);
+    lunch.minute = 750;
+    let mut dentist = event(3, "Dentist");
+    dentist.date = date(2026, 10, 8);
+    store::save(&file, &[event(1, "Standup"), lunch, dentist]).unwrap();
+    let mut c = new(ui, file);
+    c.set_size(2400, 1920);
+    c.layout_columns(ui);
+    c
+}
+
+fn type_text(c: &mut Calendar, ui: &Ui, text: &str) {
+    for ch in text.chars() {
+        c.key(ui, Out::Text(ch.to_string()), 0.0);
+    }
+}
+
+fn draw_once(c: &mut Calendar, ui: &Ui) {
+    let (w, h) = (c.full_w as usize, c.h as usize);
+    let mut px = vec![0u32; w * h];
+    let mut s = Surface { w, h, stride: w, px: &mut px, y0: 0 };
+    c.draw(&mut s, ui, 0.0);
+}
+
+#[test]
+fn typing_in_the_search_field_lists_matching_events() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    let field = c.search_rect(&ui).expect("a wide window has the search field");
+    tap(&mut c, &ui, field.x + field.w / 2.0, field.y + field.h / 2.0, 0.0);
+    assert!(c.search_focused && !c.searching());
+    type_text(&mut c, &ui, "lun");
+    assert!(c.searching());
+    assert_eq!(c.search_query(), "lun");
+    let titles: Vec<&str> = c.search_hits().iter().map(|h| h.title.as_str()).collect();
+    assert_eq!(titles, vec!["Lunch with Ana"]);
+    type_text(&mut c, &ui, "x");
+    assert!(c.searching() && c.search_hits().is_empty(), "no match, and the list says so");
+    c.key(&ui, Out::Backspace, 0.0);
+    assert_eq!(c.search_hits().len(), 1);
+    c.key(&ui, Out::Enter, 0.0);
+    assert!(!c.search_focused && c.searching(), "Return leaves the field and keeps the results");
+}
+
+#[test]
+fn a_result_opens_its_event_on_its_day() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    c.activate(&ui, Target::SearchField, 0.0);
+    type_text(&mut c, &ui, "d");
+    // "Standup", "Lunch with Ana" has no d, "Dentist": the rows are in date order
+    let titles: Vec<&str> = c.search_hits().iter().map(|h| h.title.as_str()).collect();
+    assert_eq!(titles, vec!["Standup", "Dentist"]);
+    // the second row (window points: below the large title, 52 pt rows)
+    tap(&mut c, &ui, 400.0, GRID_TOP + 52.0 + 26.0, 10.0);
+    assert!(!c.searching() && c.search_query().is_empty(), "the search ends");
+    assert_eq!(c.selected, date(2026, 10, 8));
+    assert!(c.editor.as_ref().is_some_and(|d| d.existing && d.event.id == 3));
+}
+
+#[test]
+fn the_clear_button_and_escape_end_the_search() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    let field = c.search_rect(&ui).unwrap();
+    c.activate(&ui, Target::SearchField, 0.0);
+    type_text(&mut c, &ui, "den");
+    // the clear button is at the trailing edge once there is text
+    tap(&mut c, &ui, field.x + field.w - 10.0, field.y + field.h / 2.0, 10.0);
+    assert!(c.search_query().is_empty() && c.search_focused, "cleared, and the cursor stays");
+    type_text(&mut c, &ui, "den");
+    assert!(c.escape(&ui, 20.0));
+    assert!(!c.searching() && !c.search_focused);
+    assert!(!c.escape(&ui, 30.0), "nothing left to close");
+}
+
+#[test]
+fn choosing_a_view_or_a_new_event_ends_the_search() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    c.activate(&ui, Target::SearchField, 0.0);
+    type_text(&mut c, &ui, "den");
+    c.activate(&ui, Target::View(View::Week), 1.0);
+    assert!(!c.searching() && c.search_query().is_empty());
+    c.activate(&ui, Target::SearchField, 2.0);
+    type_text(&mut c, &ui, "den");
+    c.activate(&ui, Target::Add, 3.0);
+    assert!(c.search_query().is_empty() && c.editor.is_some());
+}
+
+#[test]
+fn a_press_elsewhere_takes_the_cursor_out_of_the_field() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    c.activate(&ui, Target::SearchField, 0.0);
+    tap(&mut c, &ui, 500.0, 600.0, 10.0);
+    assert!(!c.search_focused);
+    // keys then move the shown day again
+    let day = c.selected;
+    c.key(&ui, Out::Named("Right"), 20.0);
+    assert_eq!(c.selected, day.shift_days(1));
+}
+
+#[test]
+fn cmd_f_and_the_menu_item_focus_the_field_and_paste_goes_into_it() {
+    use bifrost_app::proto::CHORD_META;
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    assert!(c.chord(&ui, 33, CHORD_META, 0.0));
+    assert!(c.search_focused);
+    c.escape(&ui, 1.0);
+    assert!(c.enabled(Command::Search) && c.perform(&ui, Command::Search, 2.0));
+    assert!(c.search_focused);
+    assert!(c.edit_commands(Some("dent")).supports(Edit::Paste));
+    assert!(!c.edit_commands(Some("dent")).supports(Edit::Copy));
+    assert!(c.edit_command(&ui, Edit::Paste, Some("dent\nsecond line"), 3.0));
+    assert_eq!(c.search_query(), "dent");
+    assert_eq!(c.search_hits().len(), 1);
+}
+
+#[test]
+fn the_field_is_published_for_assistive_technology() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    let has_field = |c: &Calendar| c.controls(&ui).iter().any(|n| n.role == bifrost_app::controls::Role::TextField && n.label == "Search");
+    assert!(has_field(&c));
+    c.activate(&ui, Target::SearchField, 0.0);
+    type_text(&mut c, &ui, "den");
+    let rows: Vec<String> = c.controls(&ui).into_iter().filter(|n| n.id >= 400 && n.id < 500).map(|n| n.label).collect();
+    assert_eq!(rows, vec!["Dentist".to_string()]);
+    c.activate(&ui, Target::Add, 1.0);
+    assert!(!has_field(&c), "no field while the event form is open");
+}
+
+#[test]
+fn a_narrow_window_has_no_search_field_but_still_searches() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    store::save(&temp.file(), &[event(1, "Standup")]).unwrap();
+    let mut c = new(&ui, temp.file());
+    assert!(c.search_rect(&ui).is_none());
+    c.perform(&ui, Command::Search, 0.0);
+    type_text(&mut c, &ui, "stand");
+    assert_eq!(c.search_hits().len(), 1);
+}
+
+#[test]
+fn every_screen_draws() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = searchable(&ui, temp.file());
+    draw_once(&mut c, &ui);
+    for view in [View::Day, View::Week, View::Year, View::Month] {
+        c.activate(&ui, Target::View(view), 0.0);
+        draw_once(&mut c, &ui);
+    }
+    // results, with matches and without
+    c.activate(&ui, Target::SearchField, 0.0);
+    type_text(&mut c, &ui, "d");
+    draw_once(&mut c, &ui);
+    type_text(&mut c, &ui, "zzz");
+    draw_once(&mut c, &ui);
+    c.escape(&ui, 1.0);
+    // the Go to Date sheet
+    c.perform(&ui, Command::GoToDate, 2.0);
+    draw_once(&mut c, &ui);
+    c.activate(&ui, Target::Cancel, 3.0);
+    // a block being dragged out in the Week view
+    c.activate(&ui, Target::View(View::Week), 4.0);
+    let (x, y) = grid_xy(&c, &ui, 2, 600);
+    let (_, y2) = grid_xy(&c, &ui, 2, 700);
+    c.touch(&ui, Event::Down(x, y), 10.0);
+    c.touch(&ui, Event::Move(x, y2), 400.0);
+    assert!(c.drag.is_some());
+    draw_once(&mut c, &ui);
+}

@@ -18,6 +18,9 @@ const SIDE_SCROLL: f32 = -(UNIFIED_BAR_PT + 4.0);
 /// The header row under the band: the title's centre line and the navigation capsules' width (points).
 pub(super) const HEADER_MID_PT: f32 = 115.0;
 const NAV_W_PT: f32 = 170.0;
+/// The search field's width at the right end of the band, and the band width below which it is left out (points).
+const SEARCH_W_PT: f32 = 170.0;
+const SEARCH_ROOM_PT: f32 = 560.0;
 /// The one local calendar's colour (its sidebar dot and its events).
 /// The calendar's colour: the event dots and blocks (the accent, as the list glyph).
 pub(super) fn cal_colour() -> u32 {
@@ -125,7 +128,9 @@ impl Calendar {
             items.push(ToolbarItem::button(B_WEEKNO, "Week Numbers").selected(self.prefs.week_numbers));
             items.push(ToolbarItem::icon(B_EXPORT, "Export Calendar", "square.and.arrow.up"));
         }
-        bars.push((Toolbar::new(items), band(start, end - start)));
+        // the search field takes the right end of the band
+        let items_end = self.search_rect(ui).map_or(end, |r| r.x - TOOLBAR_GAP_PT);
+        bars.push((Toolbar::new(items), band(start, items_end - start)));
         bars.push((
             Toolbar::new(vec![
                 ToolbarItem::flexible_space(),
@@ -136,6 +141,19 @@ impl Calendar {
             Rect { x: x0 + w - SPACE_XL - NAV_W_PT, y: HEADER_MID_PT - CAPSULE_PT / 2.0, w: NAV_W_PT, h: CAPSULE_PT },
         ));
         bars
+    }
+
+    /// The search field at the right end of the band over the content (points, window coordinates). None while a sheet
+    /// or the event form is open, and when the window is too narrow to fit it beside the toolbar.
+    pub(super) fn search_rect(&self, ui: &Ui) -> Option<Rect> {
+        if self.editor.is_some() || self.goto.is_some() {
+            return None;
+        }
+        let k = Self::k(ui);
+        let (x0, w) = (self.x0 / k, self.w as f32 / k);
+        let start = if x0 > 0.0 { x0 + 12.0 } else { traffic_lights_trailing() + TOOLBAR_GAP_PT };
+        let end = x0 + w - 12.0;
+        (end - start >= SEARCH_ROOM_PT).then(|| Rect { x: end - SEARCH_W_PT, y: (UNIFIED_BAR_PT - CAPSULE_PT) / 2.0, w: SEARCH_W_PT, h: CAPSULE_PT })
     }
 
     fn layouts(&self, ui: &Ui) -> Vec<(Toolbar, ToolbarLayout)> {
@@ -186,10 +204,13 @@ impl Calendar {
                 nodes.push(Node { id: id as u64, role: Role::Button, label: item.label.clone(), value: if item.selected { "selected".into() } else { String::new() }, bounds: r, enabled: item.enabled });
             }
         }
+        nodes.extend(self.search_nodes(ui));
         if self.editor.is_some() {
             nodes.extend(self.editor_nodes(ui));
         } else if self.goto.is_some() {
             nodes.extend(self.goto_nodes(ui));
+        } else if self.searching() {
+            // the results are listed by `search_nodes`
         } else {
             if self.view == View::Month {
                 nodes.extend(self.grid_nodes(ui));
@@ -322,6 +343,7 @@ impl Calendar {
             s.fill_rect(self.x0 as usize - 1, 0, 1, self.h as usize, SEPARATOR_C.now());
         }
         widgets::toolbar_band(s, ui, Rect { x: self.x0 / k, y: 0.0, w: self.w as f32 / k, h: UNIFIED_BAR_PT });
+        self.draw_search(s, ui);
         for (bar, r) in self.bars(ui) {
             let placed = widgets::toolbar(s, ui, r, &bar, None);
             if let Some(t) = placed.rect_of(B_TITLE) {
@@ -330,6 +352,12 @@ impl Calendar {
                 s.blit(img, ui.pt(t.x) as i32, (ui.pt(t.y + t.h / 2.0) - img.h as f32 / 2.0) as i32, 255, 255);
             }
         }
+    }
+
+    /// The search field over the toolbar band, drawn with the kit's `search_field`.
+    pub(super) fn draw_search(&self, s: &mut Surface, ui: &Ui) {
+        let Some(r) = self.search_rect(ui) else { return };
+        widgets::search_field(s, ui, &self.search_box, r, "Search", self.search_focused);
     }
 
     /// The content column of `s`: the same pixels, starting `x0` px from the left.

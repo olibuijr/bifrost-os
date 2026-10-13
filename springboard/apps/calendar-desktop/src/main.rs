@@ -117,6 +117,8 @@ impl App for CalendarApp {
                     item(Command::Delete),
                     AppMenuItem::separator(),
                     item(Command::ExportCalendar),
+                    AppMenuItem::separator(),
+                    item(Command::Search),
                 ],
             },
             AppMenu {

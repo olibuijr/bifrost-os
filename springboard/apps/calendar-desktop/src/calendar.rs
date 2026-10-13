@@ -7,6 +7,7 @@ pub mod clip;
 pub mod connect;
 mod drag;
 pub mod exchange;
+mod lookup;
 mod goto;
 pub mod ics;
 pub mod invitees;
@@ -139,6 +140,10 @@ enum Target {
     GoYear(i32),
     GoToday,
     GoConfirm,
+    /// The toolbar's search field, its clear button and a result row (`lookup.rs`).
+    SearchField,
+    SearchClear,
+    SearchHit(usize),
 }
 
 /// Which of the Starts / Ends rows has its picker expanded.
@@ -179,6 +184,10 @@ pub struct Calendar {
     /// A press in the Day or Week grid that becomes a drag if it is held, and the drag itself (`drag.rs`).
     press: Option<drag::Press>,
     drag: Option<drag::Drag>,
+    /// The toolbar's search field, whether it has the cursor, and the events it matches (`lookup.rs`).
+    search_box: bifrost_app::controls::TextField,
+    search_focused: bool,
+    search_hits: Vec<search::Hit>,
     /// The event last opened or saved: what Copy and Cut act on while it is on the shown day (`clip.rs`).
     picked: Option<u64>,
     /// Title, Location, Notes.
@@ -274,6 +283,9 @@ impl Calendar {
             goto: None,
             press: None,
             drag: None,
+            search_box: bifrost_app::controls::TextField::new(),
+            search_focused: false,
+            search_hits: vec![],
             picked: None,
             fields,
             labels: TextCache::default(),
@@ -422,6 +434,10 @@ impl Calendar {
         self.fields.iter().position(|f| f.focused)
     }
     fn fit_scroll(&mut self, ui: &Ui) {
+        if self.searching() {
+            self.scroll.set_max(self.results_scroll_max(ui));
+            return;
+        }
         if self.time_view() {
             self.scroll.set_max(self.time_scroll_max(ui));
             return;
@@ -457,6 +473,13 @@ impl Calendar {
     }
 
     fn hit(&self, ui: &Ui, x: f32, y: f32) -> Option<Target> {
+        if let Some(r) = self.search_rect(ui) {
+            let k = ui.pt(1.0);
+            if within(x + self.x0, y, (ui.pt(r.x), ui.pt(r.y), ui.pt(r.w), ui.pt(r.h))) {
+                let clear = bifrost_app::controls::search::hits_clear(r, !self.search_box.is_empty(), (x + self.x0) / k, y / k);
+                return Some(if clear { Target::SearchClear } else { Target::SearchField });
+            }
+        }
         if let Some(t) = self.bar_target(ui, x + self.x0, y) {
             return Some(t);
         }
@@ -471,6 +494,9 @@ impl Calendar {
         let wp = self.w as f32 / ui.s;
         if self.goto.is_some() {
             return self.hit_goto(ui, x, y);
+        }
+        if self.searching() {
+            return self.hit_results(ui, x, y);
         }
         if self.editor.is_some() {
             for (t, top, h) in self.rows() {
@@ -780,6 +806,7 @@ impl Calendar {
                 return true;
             }
             20 => Target::Today,
+            33 => Target::SearchField,
             2 => Target::View(View::Day),
             3 => Target::View(View::Week),
             4 => Target::View(View::Month),
@@ -792,6 +819,11 @@ impl Calendar {
 
     /// Escape closes the open event editor without saving.
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
+        if self.editor.is_none() && self.goto.is_none() && (self.search_focused || !self.search_box.is_empty()) {
+            self.end_search(ui);
+            self.dirty = true;
+            return true;
+        }
         if self.editor.is_none() && self.goto.is_none() {
             return false;
         }
@@ -803,7 +835,14 @@ impl Calendar {
         self.error = None;
         self.notice = None;
         self.dirty = true;
+        // choosing another view or day, or a new event, ends a search
+        if matches!(target, Target::Today | Target::Prev | Target::Next | Target::View(_) | Target::Add) {
+            self.end_search(ui);
+        }
         match target {
+            Target::SearchField => self.focus_search(),
+            Target::SearchClear => self.clear_search(ui),
+            Target::SearchHit(i) => self.open_hit(ui, i),
             Target::Today => {
                 self.selected = today(self.wall, t);
                 self.scroll.jump_top();
@@ -935,6 +974,10 @@ impl Calendar {
             self.dirty = true;
             return;
         }
+        if self.search_focused && self.editor.is_none() {
+            self.search_key(ui, out);
+            return;
+        }
         if self.editor.is_none() {
             if out == Out::Enter {
                 self.open(ui, None);
@@ -999,9 +1042,13 @@ impl Calendar {
             Event::Down(..) => {
                 self.pressed = self.hit(ui, x, y);
                 self.start = Some((x, y));
-                self.scrolling = matches!(self.pressed, Some(Target::Row(_) | Target::Agenda));
+                self.scrolling = matches!(self.pressed, Some(Target::Row(_) | Target::Agenda | Target::SearchHit(_)));
                 if self.scrolling {
                     self.scroll.down(y, t);
+                }
+                // a press anywhere but the search field takes the cursor out of it
+                if !matches!(self.pressed, Some(Target::SearchField | Target::SearchClear)) {
+                    self.search_focused = false;
                 }
                 self.begin_press(ui, x, y, t);
             }
@@ -1128,6 +1175,9 @@ impl Calendar {
                 self.draw_editor(&mut c, ui, t);
             } else if self.goto.is_some() {
                 self.draw_goto(&mut c, ui);
+            } else if self.searching() {
+                self.draw_results(&mut c, ui);
+                self.draw_undo(&mut c, ui);
             } else {
                 match self.view {
                     View::Month => self.draw_month(&mut c, ui),
@@ -1386,10 +1436,12 @@ pub enum Command {
     Import,
     ExportArchive,
     ImportArchive,
+    /// Event > Search Events (Cmd+F): the cursor goes to the search field.
+    Search,
 }
 
 impl Command {
-    pub const ALL: [Command; 22] = [
+    pub const ALL: [Command; 23] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1412,6 +1464,7 @@ impl Command {
         Command::Import,
         Command::ExportArchive,
         Command::ImportArchive,
+        Command::Search,
     ];
 
     pub fn id(self) -> u32 {
@@ -1446,6 +1499,7 @@ impl Command {
             Command::Import => "Import...",
             Command::ExportArchive => "Export Archive...",
             Command::ImportArchive => "Import Archive...",
+            Command::Search => "Search Events",
         }
     }
 
@@ -1462,6 +1516,7 @@ impl Command {
             Command::ZoomIn => "cmd+=",
             Command::ZoomOut => "cmd+-",
             Command::GoToDate => "cmd+shift+t",
+            Command::Search => "cmd+f",
             _ => "",
         }
     }
@@ -1536,6 +1591,7 @@ impl Calendar {
             // the app reads the pasteboard and calls `new_event_from_text`; this path is only a plain New Event
             Command::NewEventFromText => Target::Add,
             Command::GoToDate => Target::GoOpen,
+            Command::Search => Target::SearchField,
             // the app shows the panels and passes the file's text to `import_file` / reads `archive_text`
             Command::ZoomIn | Command::ZoomOut | Command::Import | Command::ExportArchive | Command::ImportArchive => return false,
         };
