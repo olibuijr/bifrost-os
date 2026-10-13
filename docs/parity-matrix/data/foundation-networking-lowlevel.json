@@ -1,104 +1,111 @@
 {
-  "framework": "Foundation (Networking, Low-Level Utilities)",
-  "doc": "https://developer.apple.com/documentation/foundation",
-  "macos_since": "10.0",
-  "status": "partial",
-  "bifrost": "bifrost_app::url, bifrost_app::dispatch, bifrost_app::process_info, bifrost_app::control, springboard/src/bare/app_policy.rs",
-  "summary": "URLSession-style HTTP(S) with redirects, download and a memory cache exists, and GCD and ProcessInfo have SDK counterparts. Bonjour, XPC, streams/sockets/ports and Process/NSTask have no app-facing API.",
-  "rea_evidence": "ev_98ed7160e01d4c40fc46c574153ffb427038db487d9965adae2ca830bc3ac639",
-  "features": [
-    {
-      "feature": "URL Loading: sessions, requests, data and download tasks",
-      "apple": "URLSession, URLRequest, URLSessionDataTask, URLSessionDownloadTask",
-      "bifrost": "springboard/sdk/src/url.rs; springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section)",
-      "status": "partial",
-      "note": "shared session, data_task, download_task with progress, upload_task (from data) and upload_task_from_file (streamed) with didSendBodyData progress, countOfBytesSent and countOfBytesExpectedToSend, streaming bytes, redirects up to 5; no background sessions, delegates or configurations"
-    },
-    {
-      "feature": "URL Loading: caching",
-      "apple": "URLCache, CachePolicy",
-      "bifrost": "springboard/sdk/src/url.rs (URLCache); wired: springboard/apps/news-desktop/src/feed_cache.rs (plan, stored_from, max_age_of, validators_of, Conditional)",
-      "status": "partial",
-      "note": "memory cache honouring Cache-Control and ETag; no disk cache or per-request cache policies Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
-    },
-    {
-      "feature": "URL Loading: cookies, credentials, authentication challenges",
-      "apple": "HTTPCookieStorage, URLCredentialStorage, URLAuthenticationChallenge",
-      "bifrost": "springboard/sdk/src/http_auth.rs (AuthChallenge",
-      "status": "partial",
-      "note": "Wave 5 (theme-06, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. cookie jar is internal to the shell HTTP client, not exposed through URLSession"
-    },
-    {
-      "feature": "URL Loading: WebSocket and streaming tasks",
-      "apple": "URLSessionWebSocketTask, URLSessionStreamTask",
-      "bifrost": "springboard/core/src/websocket.rs (re-exported by springboard/sdk/src/websocket.rs)",
-      "status": "partial",
-      "note": "Wave 5 (w5-foundation-networking-lowlevel, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no WebSocket client in the SDK"
-    },
-    {
-      "feature": "URL Loading: custom protocols and proxies, URL components",
-      "apple": "URLProtocol, URLComponents",
-      "bifrost": "springboard/sdk/src/stream.rs, springboard/sdk/src/url_components.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. transport is swappable internally for tests only"
-    },
-    {
-      "feature": "Bonjour: advertise and browse services",
-      "apple": "NetService, NetServiceBrowser",
-      "bifrost": "springboard/sdk/src/service_discovery.rs, springboard/core/src/dnssd.rs; wired: springboard/core/src/dns_browse.rs via springboard/src/shell/services/network_path.rs (browse only; no advertise)",
-      "status": "partial",
-      "note": "Wave 5 (w5-foundation-networking-lowlevel, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mDNS/DNS-SD code in springboard or the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
-    },
-    {
-      "feature": "XPC: interprocess communication",
-      "apple": "XPC connections, NSXPCConnection",
-      "bifrost": "springboard/sdk/src/control.rs (JSON-RPC over owner-only Unix socket); docs/app-isolation.md",
-      "status": "partial",
-      "note": "control socket serves RPC to an app with SO_PEERCRED check; no general app-to-service connection API or XPC services"
-    },
-    {
-      "feature": "Object Runtime: exceptions, invocation, KVO, proxies",
-      "apple": "NSException, NSInvocation, NSProxy, key-value coding",
-      "bifrost": "springboard/sdk/src/observable.rs",
-      "status": "n/a",
-      "note": "Objective-C runtime concepts; Rust has no counterpart. Observation covered by observable.rs"
-    },
-    {
-      "feature": "Processes and Threads: queues and concurrency",
-      "apple": "Thread, OperationQueue, Timer, RunLoop",
-      "bifrost": "springboard/sdk/src/dispatch.rs",
-      "status": "partial",
-      "note": "GCD-style DispatchQueue, group, work item, QoS and a main queue; no OperationQueue or RunLoop"
-    },
-    {
-      "feature": "Processes and Threads: process information and activity",
-      "apple": "ProcessInfo",
-      "bifrost": "springboard/sdk/src/process_info.rs",
-      "status": "parity",
-      "note": "memory, cores, uptime, thermal state, low power mode, beginActivity, sudden termination"
-    },
-    {
-      "feature": "Processes and Threads: launching child processes",
-      "apple": "Process, Pipe",
-      "bifrost": "springboard/src/bare/app_policy.rs; springboard/src/bare/app_manager.rs",
-      "status": "os",
-      "note": "shell launches sandboxed apps under bubblewrap and cgroups; apps get no Process/Pipe wrapper (Rust std::process is available)"
-    },
-    {
-      "feature": "Streams, Sockets, Ports",
-      "apple": "InputStream, OutputStream, Port, SocketPort, FileHandle",
-      "bifrost": "springboard/sdk/src/stream.rs, springboard/sdk/src/url_components.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. std::net and std::io are usable directly; no stream or port abstractions with run-loop scheduling"
-    }
-  ],
-  "gaps": [
-    "Bonjour/mDNS discovery and advertising",
-    "WebSocket and stream tasks",
-    "Cookie storage, credentials and auth challenges in URLSession",
-    "Background URLSession sessions, disk URLCache",
-    "General XPC-style service connections",
-    "OperationQueue, RunLoop and Timer-style scheduling",
-    "Stream and Port abstractions"
-  ]
+ "framework": "Foundation (Networking, Low-Level Utilities)",
+ "doc": "https://developer.apple.com/documentation/foundation",
+ "macos_since": "10.0",
+ "status": "partial",
+ "bifrost": "bifrost_app::url, bifrost_app::dispatch, bifrost_app::process_info, bifrost_app::control, springboard/src/bare/app_policy.rs",
+ "summary": "URLSession-style HTTP(S) with redirects, download and a memory cache exists, and GCD and ProcessInfo have SDK counterparts. Bonjour, XPC, streams/sockets/ports and Process/NSTask have no app-facing API.",
+ "rea_evidence": "ev_98ed7160e01d4c40fc46c574153ffb427038db487d9965adae2ca830bc3ac639",
+ "features": [
+  {
+   "feature": "URL Loading: sessions, requests, data and download tasks",
+   "apple": "URLSession, URLRequest, URLSessionDataTask, URLSessionDownloadTask",
+   "bifrost": "springboard/sdk/src/url.rs; springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section)",
+   "status": "partial",
+   "note": "shared session, data_task, download_task with progress, upload_task (from data) and upload_task_from_file (streamed) with didSendBodyData progress, countOfBytesSent and countOfBytesExpectedToSend, streaming bytes, redirects up to 5; no background sessions, delegates or configurations"
+  },
+  {
+   "feature": "URL Loading: caching",
+   "apple": "URLCache, CachePolicy",
+   "bifrost": "springboard/sdk/src/url.rs (URLCache); wired: springboard/apps/news-desktop/src/feed_cache.rs (plan, stored_from, max_age_of, validators_of, Conditional)",
+   "status": "partial",
+   "note": "memory cache honouring Cache-Control and ETag; no disk cache or per-request cache policies Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+  },
+  {
+   "feature": "URL Loading: cookies, credentials, authentication challenges",
+   "apple": "HTTPCookieStorage, URLCredentialStorage, URLAuthenticationChallenge",
+   "bifrost": "springboard/sdk/src/http_auth.rs (AuthChallenge",
+   "status": "partial",
+   "note": "Wave 5 (theme-06, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. cookie jar is internal to the shell HTTP client, not exposed through URLSession"
+  },
+  {
+   "feature": "URL Loading: WebSocket and streaming tasks",
+   "apple": "URLSessionWebSocketTask, URLSessionStreamTask",
+   "bifrost": "springboard/core/src/websocket.rs (re-exported by springboard/sdk/src/websocket.rs)",
+   "status": "partial",
+   "note": "Wave 5 (w5-foundation-networking-lowlevel, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no WebSocket client in the SDK"
+  },
+  {
+   "feature": "URL Loading: custom protocols and proxies, URL components",
+   "apple": "URLProtocol, URLComponents",
+   "bifrost": "springboard/sdk/src/stream.rs, springboard/sdk/src/url_components.rs",
+   "status": "partial",
+   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. transport is swappable internally for tests only"
+  },
+  {
+   "feature": "Bonjour: advertise and browse services",
+   "apple": "NetService, NetServiceBrowser",
+   "bifrost": "springboard/sdk/src/service_discovery.rs, springboard/core/src/dnssd.rs; wired: springboard/core/src/dns_browse.rs via springboard/src/shell/services/network_path.rs (browse only; no advertise)",
+   "status": "partial",
+   "note": "Wave 5 (w5-foundation-networking-lowlevel, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mDNS/DNS-SD code in springboard or the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+  },
+  {
+   "feature": "XPC: interprocess communication",
+   "apple": "XPC connections, NSXPCConnection",
+   "bifrost": "springboard/sdk/src/control.rs (JSON-RPC over owner-only Unix socket); docs/app-isolation.md",
+   "status": "partial",
+   "note": "control socket serves RPC to an app with SO_PEERCRED check; no general app-to-service connection API or XPC services"
+  },
+  {
+   "feature": "Object Runtime: exceptions, invocation, KVO, proxies",
+   "apple": "NSException, NSInvocation, NSProxy, key-value coding",
+   "bifrost": "springboard/sdk/src/observable.rs",
+   "status": "n/a",
+   "note": "Objective-C runtime concepts; Rust has no counterpart. Observation covered by observable.rs"
+  },
+  {
+   "feature": "Processes and Threads: queues and concurrency",
+   "apple": "Thread, OperationQueue, Timer, RunLoop",
+   "bifrost": "springboard/sdk/src/dispatch.rs",
+   "status": "partial",
+   "note": "GCD-style DispatchQueue, group, work item, QoS and a main queue; no OperationQueue or RunLoop"
+  },
+  {
+   "feature": "Processes and Threads: process information and activity",
+   "apple": "ProcessInfo",
+   "bifrost": "springboard/sdk/src/process_info.rs",
+   "status": "parity",
+   "note": "memory, cores, uptime, thermal state, low power mode, beginActivity, sudden termination"
+  },
+  {
+   "feature": "Processes and Threads: launching child processes",
+   "apple": "Process, Pipe",
+   "bifrost": "springboard/src/bare/app_policy.rs; springboard/src/bare/app_manager.rs",
+   "status": "os",
+   "note": "shell launches sandboxed apps under bubblewrap and cgroups; apps get no Process/Pipe wrapper (Rust std::process is available)"
+  },
+  {
+   "feature": "Streams, Sockets, Ports",
+   "apple": "InputStream, OutputStream, Port, SocketPort, FileHandle",
+   "bifrost": "springboard/sdk/src/stream.rs, springboard/sdk/src/url_components.rs",
+   "status": "partial",
+   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. std::net and std::io are usable directly; no stream or port abstractions with run-loop scheduling"
+  },
+  {
+   "feature": "URL Loading: background sessions and download resume data",
+   "apple": "URLSessionConfiguration.background(withIdentifier:), isDiscretionary, sessionSendsLaunchEvents, URLSessionDownloadTask.cancel(byProducingResumeData:), URLSession.downloadTask(withResumeData:), URLSessionDownloadDelegate, NSURLSessionDownloadTaskResumeData",
+   "bifrost": "springboard/sdk/src/url_background.rs (BackgroundConfiguration, ResumeData, BackgroundSession, DownloadDelegate)",
+   "status": "partial",
+   "note": "persisted task table per session identifier, Range/If-Range resume, 200 restarts from zero, didWriteData/didFinishDownloadingTo; host unit tests only, not wired into apps, no relaunch events; verify on Midget for parity."
+  }
+ ],
+ "gaps": [
+  "Bonjour/mDNS discovery and advertising",
+  "WebSocket and stream tasks",
+  "Cookie storage, credentials and auth challenges in URLSession",
+  "Background URLSession sessions, disk URLCache",
+  "General XPC-style service connections",
+  "OperationQueue, RunLoop and Timer-style scheduling",
+  "Stream and Port abstractions"
+ ]
 }

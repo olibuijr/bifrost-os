@@ -1250,6 +1250,23 @@ its own jar); no `Vary`, `Expires` or `Age` handling; one connection per request
 the few codes used here. Upload progress is the same `didSendBodyData` shape as the delegate. A 307/308 redirect of an
 upload re-sends the body, so its counts keep growing past the expected length: a known limit. The assistant app moved
 onto `URLSession::bytes`.
+### Background sessions and download resume (`bifrost_app::url_background`)
+
+Code `springboard/sdk/src/url_background.rs`. Downloads that survive app quit; tasks are saved to `<dir>/<identifier>.tasks`.
+
+| Apple | Here |
+|---|---|
+| `URLSessionConfiguration.background(withIdentifier:)`, `isDiscretionary`, `sessionSendsLaunchEvents` | `BackgroundConfiguration::background(id)` and its fields |
+| `NSURLSessionDownloadTaskResumeData` | `URL_SESSION_DOWNLOAD_TASK_RESUME_DATA`, `ResumeData { url, etag, bytes_received }` `encode`/`decode` |
+| `downloadTask(with:)` / `downloadTask(withResumeData:)` | `BackgroundSession::download_task`, `download_task_with_resume_data` (a resumed run sends `Range` and `If-Range`; a `200` restarts from zero) |
+| `cancel(byProducingResumeData:)` / `cancel()` | `cancel_by_producing_resume_data(id)` / `cancel(id)` |
+| `getTasksWithCompletionHandler` | `BackgroundSession::open` restores by identifier; `pending_tasks()` |
+| `URLSessionDownloadDelegate` | `DownloadDelegate::{did_write_data, did_finish_downloading_to, did_complete}`, driven by `run(id, delegate)` |
+
+Gaps, decided here: no `URLSessionConfiguration` (other than background), delegates (other than downloads), app relaunch events, upload tasks or HTTP/2; no disk cache
+(`URLCache` is memory only); no cookie storage or `URLCredential`s (the Deildu `Client` keeps its own jar); no
+`Vary`, `Expires` or `Age` handling; one connection per request (`Connection: close`); `URLError` has the few codes
+used here. The assistant app moved onto `URLSession::bytes`.
 
 ## Unified Logging (`os.Logger`, `OSLogStore`, `log` CLI; milestone `docs/milestone-unified-logging.md`, Phase 1)
 
