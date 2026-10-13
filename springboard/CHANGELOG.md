@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.21 — 2026-10-13
+
+- Suspend attempts run on a short-lived thread each, so an idle shell holds no suspend thread (17 threads at idle).
+
 ## 0.7.20 — 2026-10-13
 
 - An app launch no longer starts the app-resources writer; only the Cpu/Memory readout does (nothing else reads the file).

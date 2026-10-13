@@ -357,12 +357,12 @@ impl Policy {
 }
 
 /// Holds the wake lock while the screen is on and suspends on a worker
-/// thread once `Policy` says so.
+/// thread once `Policy` says so (one short-lived thread per attempt: an idle shell holds none).
 pub struct Sleeper<P: PowerSys> {
     sys: P,
     policy: Policy,
     armed: Arc<AtomicBool>,
-    requests: Sender<()>,
+    done: Sender<Outcome>,
     results: Receiver<Outcome>,
     busy: bool,
 }
@@ -371,21 +371,8 @@ impl<P: PowerSys + Clone + Send + 'static> Sleeper<P> {
     /// Starts with the screen on, taking the wake lock.
     pub fn new(sys: P, after_ms: Option<f64>) -> Self {
         let armed = Arc::new(AtomicBool::new(false));
-        let (requests, rx) = channel::<()>();
-        let (tx, results) = channel();
-        let (mut worker, flag) = (sys.clone(), armed.clone());
-        crate::bare::sys::spawn_named("suspend", move || {
-            for () in rx {
-                let outcome = try_suspend(&mut worker, || flag.load(Ordering::SeqCst));
-                if outcome == Outcome::Resumed {
-                    worker.resumed();
-                }
-                if tx.send(outcome).is_err() {
-                    break;
-                }
-            }
-        });
-        let mut s = Sleeper { sys, policy: Policy::new(after_ms), armed, requests, results, busy: false };
+        let (done, results) = channel();
+        let mut s = Sleeper { sys, policy: Policy::new(after_ms), armed, done, results, busy: false };
         s.sys.arm_wake_sources();
         s.wake_lock(true);
         s
@@ -447,7 +434,15 @@ impl<P: PowerSys + Clone + Send + 'static> Sleeper<P> {
         }
         if self.policy.tick(now) == Some(Action::Suspend) {
             self.armed.store(true, Ordering::SeqCst);
-            if self.requests.send(()).is_err() {
+            let (mut worker, flag, tx) = (self.sys.clone(), self.armed.clone(), self.done.clone());
+            let spawned = std::thread::Builder::new().name("suspend".into()).spawn(move || {
+                let outcome = try_suspend(&mut worker, || flag.load(Ordering::SeqCst));
+                if outcome == Outcome::Resumed {
+                    worker.resumed();
+                }
+                let _ = tx.send(outcome);
+            });
+            if spawned.is_err() {
                 self.policy.done(now, Outcome::Failed);
             }
         }
