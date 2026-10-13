@@ -188,6 +188,13 @@ pub fn parse_search(untagged: &str) -> Option<Vec<u32>> {
     rest.split_whitespace().map(|n| n.parse().ok()).collect()
 }
 
+/// True for an untagged `n EXISTS` (the mailbox holds a message it did not hold before): the signal IDLE waits for.
+pub fn is_new_message(untagged: &str) -> bool {
+    let mut parts = untagged.split_whitespace();
+    let count = parts.next().and_then(|n| n.parse::<u32>().ok());
+    count.is_some() && parts.next() == Some("EXISTS")
+}
+
 /// Quotes an IMAP string argument. Line breaks are dropped so a value cannot inject a second command.
 pub fn quote(text: &str) -> String {
     let mut out = String::from("\"");
@@ -244,6 +251,18 @@ pub fn store_flags(uid: u32, op: char, flags: Flags) -> String {
 pub fn logout() -> String {
     "LOGOUT".to_string()
 }
+
+pub fn capability() -> String {
+    "CAPABILITY".to_string()
+}
+
+/// Starts IDLE (RFC 2177). The server answers with a continuation until the client sends `DONE`.
+pub fn idle() -> String {
+    "IDLE".to_string()
+}
+
+/// The line that ends IDLE. It is not a command, so it has no tag.
+pub const IDLE_DONE: &str = "DONE\r\n";
 
 #[cfg(test)]
 mod tests {
@@ -303,5 +322,15 @@ mod tests {
         assert_eq!(login("me", "pa ss"), "LOGIN \"me\" \"pa ss\"");
         assert_eq!(command(&tag(7), &select("INBOX")), "A007 SELECT \"INBOX\"\r\n");
         assert_eq!(store_flags(5, '+', Flags::empty().with(Flag::Seen, true)), "UID STORE 5 +FLAGS.SILENT (\\Seen)");
+    }
+
+    #[test]
+    fn new_messages_are_the_exists_lines() {
+        assert!(is_new_message("5 EXISTS"));
+        assert!(!is_new_message("5 EXPUNGE"));
+        assert!(!is_new_message("EXISTS"));
+        assert!(!is_new_message("OK still here"));
+        assert_eq!(idle(), "IDLE");
+        assert_eq!(IDLE_DONE, "DONE\r\n");
     }
 }

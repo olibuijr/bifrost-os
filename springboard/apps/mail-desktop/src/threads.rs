@@ -2,7 +2,7 @@
 //! and In-Reply-To. A message with no threading headers joins the thread of an earlier message with the same
 //! normalised subject that also has no threading headers, the usual fallback for mail that lost its References.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// The threading data of one message. `index` is the caller's position for the message.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -98,9 +98,85 @@ pub fn group(nodes: &[Node]) -> Vec<Vec<usize>> {
     groups
 }
 
+/// The members of one group in tree order, each with its depth (0 for a conversation's first message). A member's parent
+/// is the nearest message it replies to that is in the group (In-Reply-To first, then References from the end). Roots
+/// keep the group's order (the newest first in the list); the replies under a parent come oldest first, so a
+/// conversation reads from its start down. A member caught in a reference cycle is placed as a root.
+pub fn arrange(nodes: &[Node], group: &[usize]) -> Vec<(usize, usize)> {
+    let mut by_id: HashMap<&str, usize> = HashMap::new();
+    for &i in group {
+        if let Some(id) = nodes[i].message_id.as_deref() {
+            by_id.entry(id).or_insert(i);
+        }
+    }
+    let parent_of = |i: usize| -> Option<usize> {
+        let node = &nodes[i];
+        node.in_reply_to
+            .iter()
+            .chain(node.references.iter().rev())
+            .filter_map(|id| by_id.get(id.as_str()).copied())
+            .find(|&p| p != i)
+    };
+    let mut children: HashMap<usize, Vec<usize>> = HashMap::new();
+    let mut roots = Vec::new();
+    for &i in group {
+        match parent_of(i) {
+            Some(p) => children.entry(p).or_default().push(i),
+            None => roots.push(i),
+        }
+    }
+    let mut seen: HashSet<usize> = HashSet::new();
+    let mut out = Vec::with_capacity(group.len());
+    for &root in &roots {
+        visit(root, 0, &children, &mut seen, &mut out);
+    }
+    for &i in group {
+        visit(i, 0, &children, &mut seen, &mut out);
+    }
+    out
+}
+
+fn visit(i: usize, depth: usize, children: &HashMap<usize, Vec<usize>>, seen: &mut HashSet<usize>, out: &mut Vec<(usize, usize)>) {
+    if !seen.insert(i) {
+        return;
+    }
+    out.push((i, depth));
+    if let Some(kids) = children.get(&i) {
+        // the group lists the newest first, so the reverse puts the oldest reply first
+        for &kid in kids.iter().rev() {
+            visit(kid, depth + 1, children, seen, out);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn replies_sit_under_their_parent_with_a_depth() {
+        let nodes = vec![
+            node("<a>", None, &[], "Plan"),
+            node("<b>", Some("<a>"), &["<a>"], "Re: Plan"),
+            node("<e>", Some("<b>"), &["<a>", "<b>"], "Re: Plan"),
+            node("<f>", Some("<a>"), &["<a>"], "Re: Plan"),
+        ];
+        assert_eq!(arrange(&nodes, &[0, 1, 2, 3]), vec![(0, 0), (3, 1), (1, 1), (2, 2)]);
+    }
+
+    #[test]
+    fn a_reply_whose_parent_is_missing_is_a_root() {
+        let nodes = vec![node("<b>", Some("<gone>"), &["<gone>"], "Re: Plan"), node("<c>", None, &[], "Other")];
+        assert_eq!(arrange(&nodes, &[0, 1]), vec![(0, 0), (1, 0)]);
+    }
+
+    #[test]
+    fn a_reference_cycle_still_lists_every_member_once() {
+        let nodes = vec![node("<a>", Some("<b>"), &["<b>"], "x"), node("<b>", Some("<a>"), &["<a>"], "x")];
+        let mut seen: Vec<usize> = arrange(&nodes, &[0, 1]).into_iter().map(|(i, _)| i).collect();
+        seen.sort();
+        assert_eq!(seen, vec![0, 1]);
+    }
 
     fn node(id: &str, parent: Option<&str>, refs: &[&str], subject: &str) -> Node {
         Node {

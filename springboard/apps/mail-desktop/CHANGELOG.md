@@ -1,7 +1,18 @@
 # Changelog
 
-## 0.5.1
+## 0.6.0 — 2026-10-13
 
+- Find (Cmd+F) searches the server: the shown mailbox is searched with IMAP `UID SEARCH` (from:, to:, subject:, body:
+  terms, or any field for a plain word, every term ANDed; non-ASCII under CHARSET UTF-8), and the newest 50 matches'
+  headers replace the list when they arrive. Until then the loaded rows that match are shown.
+- New mail arrives over IDLE (RFC 2177): one watcher per account keeps a connection on the inbox and lists it when the
+  server reports a message. A server without IDLE, or a refused password, leaves the account on the 60 s poll; a lost
+  connection is opened again after a minute, and a watched account is checked by the poll every 10 minutes.
+- Threads: a reply sits under the message it answers, indented by its depth (up to six levels), oldest reply first.
+- Accounts saved by 0.3.0 move to the shared Internet Accounts list on the first run, once: the account and its
+  password (from the old keychain item, saved in Passwords under the IMAP host and user name, then the old item is
+  deleted). The old `accounts.ini` is renamed `accounts.ini.migrated`. An account already in the list (same address) is
+  not added again. Nobody re-enters an account.
 - Mail keeps at most 64 message texts in memory. The oldest are dropped first, and a dropped message is loaded again when it is opened, so a long session in one mailbox no longer grows without bound. The open message is never dropped.
 
 ## 0.5.0 — 2026-10-13
