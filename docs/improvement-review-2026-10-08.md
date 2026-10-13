@@ -10,7 +10,7 @@
 > - Rank 7: `shell/mod.rs` is 4,610 lines, `settings.rs` 3,774 and `desk.rs` 2,599 (2026-10-13), so the files grew. The
 >   plan to split the shell is `docs/shell-decomposition.md`.
 > - Rank 8: Browser 0.2.1 moved the font out of the HTML and replaced Stop with Reload; later versions made the reload
->   button a Stop button while a page loads (Browser changelog 0.13.x). The app is at 0.14.1.
+>   button a Stop button while a page loads (Browser 0.8.0). The app is at 0.14.1.
 > - File names such as `bin/shell.rs` and `shell/desk.rs` are relative to `springboard/src/`.
 
 Read-only code/runtime review on Midget, shell 0.4.13. No release or runtime configuration change performed for this review.
