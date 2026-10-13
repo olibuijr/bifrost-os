@@ -16,13 +16,13 @@
     "size": 3659
    },
    "description": "",
-   "role": "",
+   "role": "Ink stroke rendering (pen, marker, watercolour textures)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt stores strokes (springboard/ui/src/markup_drawing.rs, apps/freeform-desktop/src/ink.rs) and draws plain strokes; no textured ink shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DesignLibrary.framework/SiriWaveArchive.metallib",
@@ -37,13 +37,13 @@
     "size": 3347824
    },
    "description": "",
-   "role": "",
+   "role": "Siri wave and design library effects",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "Siri wave animation archive shader; BifrOSt has no Siri wave visual. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SMCT.framework/Versions/A/Resources/smct.metallib",
@@ -58,13 +58,13 @@
     "size": 20668
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of SMCT (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "SMCT UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SkyLight.framework/Versions/A/Resources/SkyLightShaders.air64.metallib",
@@ -79,13 +79,13 @@
     "size": 571552
    },
    "description": "",
-   "role": "",
+   "role": "Window server compositing: blending, backdrop blur, shadows, colour management",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/shaders/compose.frag; springboard/gpu/shaders/shadow.frag; springboard/gpu/shaders/kawase_down.comp; springboard/gpu/shaders/kawase_up.comp; springboard/render/src/glass.rs",
+   "status": "partial",
+   "note": "BifrOSt composites on the GPU with its own compose, shadow and Kawase blur shaders when a GPU presenter owns the backdrop; no layer effects such as masks, filters on layers or EDR tone mapping on the GPU. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }

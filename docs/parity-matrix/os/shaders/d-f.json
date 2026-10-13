@@ -16,13 +16,13 @@
     "size": 80272
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of Chess (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "Chess UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Freeform.app/Contents/Extensions/USDRendererExtension.appex/Contents/Resources/default.metallib",
@@ -37,13 +37,13 @@
     "size": 5432
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of Freeform (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "Freeform UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Freeform.app/Contents/Frameworks/AppsGenUI.framework/Versions/A/Resources/default.metallib",
@@ -58,13 +58,13 @@
     "size": 7220
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of Freeform (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "Freeform UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Freeform.app/Contents/Resources/default.metallib",
@@ -79,13 +79,13 @@
     "size": 38008
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of Freeform (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "Freeform UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Applications/Music.app/Contents/Resources/default.metallib",
@@ -100,13 +100,13 @@
     "size": 296308
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of Music (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "Music UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/AccessibilityBundles/AXMotionCuesServer.axuiservice/Contents/Resources/default.metallib",
@@ -121,13 +121,13 @@
     "size": 30904
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of AXMotionCuesServer (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "AXMotionCuesServer UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreImage/PortraitFilters.cifilter/Contents/Resources/default.metallib",
@@ -142,13 +142,13 @@
     "size": 232856
    },
    "description": "",
-   "role": "",
+   "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
+   "status": "partial",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/GameOverlayUI.app/Contents/Resources/default.metallib",
@@ -163,13 +163,13 @@
     "size": 10164
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of GameOverlayUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "GameOverlayUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/MTLReplayer.app/Contents/Resources/default.metallib",
@@ -184,13 +184,13 @@
     "size": 9836
    },
    "description": "",
-   "role": "",
+   "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/RawCamera.bundle/Contents/Resources/default.metallib",
@@ -205,13 +205,13 @@
     "size": 54956
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/CoreServices/default.metallib",
@@ -226,13 +226,13 @@
     "size": 20588
    },
    "description": "",
-   "role": "",
+   "role": "Metal runtime helper shaders (blit, clear, resolve, indirect command support)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/shaders",
+   "status": "partial",
+   "note": "BifrOSt's Vulkan layer ships its own GLSL pipelines (compose, shape, shadow, kawase blur) and a shader library model (springboard/ui/src/shader_library.rs); no general blit/resolve helper set. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Drift.appex/Contents/Resources/default.metallib",
@@ -247,13 +247,13 @@
     "size": 89940
    },
    "description": "",
-   "role": "",
+   "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/DynamicBackgroundPosterExtension.appex/Contents/Resources/default.metallib",
@@ -268,13 +268,13 @@
     "size": 425200
    },
    "description": "",
-   "role": "",
+   "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/GradientBackgroundPosterExtension.appex/Contents/Resources/default.metallib",
@@ -289,13 +289,13 @@
     "size": 7424
    },
    "description": "",
-   "role": "",
+   "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/Monterey.appex/Contents/Resources/default.metallib",
@@ -310,13 +310,13 @@
     "size": 19104
    },
    "description": "",
-   "role": "",
+   "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperMacintoshExtension.appex/Contents/Resources/default.metallib",
@@ -331,13 +331,13 @@
     "size": 26128
    },
    "description": "",
-   "role": "",
+   "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/ExtensionKit/Extensions/WallpaperSequoiaExtension.appex/Contents/Resources/default.metallib",
@@ -352,13 +352,13 @@
     "size": 44172
    },
    "description": "",
-   "role": "",
+   "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetal13_3.bundle/Contents/Resources/ei_rt_g13.metallib",
@@ -373,13 +373,13 @@
     "size": 232356
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG13X.bundle/Contents/Resources/ei_rt_g13x.metallib",
@@ -394,13 +394,13 @@
     "size": 232356
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG14G.bundle/Contents/Resources/ei_rt_g14.metallib",
@@ -415,13 +415,13 @@
     "size": 232548
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG14X.bundle/Contents/Resources/ei_rt_g14d.metallib",
@@ -436,13 +436,13 @@
     "size": 232596
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG14X.bundle/Contents/Resources/ei_rt_g14sc.metallib",
@@ -457,13 +457,13 @@
     "size": 232596
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG15G_B0.bundle/Contents/Resources/ei_rt_g15g_b0.metallib",
@@ -478,13 +478,13 @@
     "size": 340533
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG15X_M1.bundle/Contents/Resources/ei_rt_g15d_a0.metallib",
@@ -499,13 +499,13 @@
     "size": 340533
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG17G.bundle/Contents/Resources/ei_rt_hal300.metallib",
@@ -520,13 +520,13 @@
     "size": 704756
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG17X.bundle/Contents/Resources/ei_rt_g17d.metallib",
@@ -541,13 +541,13 @@
     "size": 704756
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AGXMetalG18G.bundle/Contents/Resources/ei_rt_hal400.metallib",
@@ -562,13 +562,13 @@
     "size": 453908
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Extensions/AppleMetalOpenGLRenderer.bundle/Contents/Resources/default.metallib",
@@ -583,13 +583,13 @@
     "size": 360360
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Charts.framework/Versions/A/Resources/default.metallib",
@@ -604,13 +604,13 @@
     "size": 35476
    },
    "description": "",
-   "role": "",
+   "role": "Charts framework rendering (gradients, glow)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt charts compute mark geometry (springboard/ui/src/chart_marks.rs) and draw on the CPU; no chart-specific shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/CompositorServices.framework/Versions/A/Resources/default.metallib",
@@ -625,13 +625,13 @@
     "size": 3916
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/CompositorServices.framework/Versions/A/XPCServices/CompositorServicesPostProcess.xpc/Contents/Resources/default.binary.metallib",
@@ -646,13 +646,13 @@
     "size": 19995072
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/CompositorServices.framework/Versions/A/XPCServices/CompositorServicesPostProcess.xpc/Contents/Resources/default.metallib",
@@ -667,13 +667,13 @@
     "size": 34576
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ComputeGraph.framework/Versions/A/Resources/default.metallib",
@@ -688,13 +688,13 @@
     "size": 4512332
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Contacts.framework/Versions/A/Resources/default.metallib",
@@ -709,13 +709,13 @@
     "size": 5056
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of Contacts (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "Contacts UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreDisplay.framework/Versions/A/Resources/default.metallib",
@@ -730,13 +730,13 @@
     "size": 24144
    },
    "description": "",
-   "role": "",
+   "role": "Window server compositing: blending, backdrop blur, shadows, colour management",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/shaders/compose.frag; springboard/gpu/shaders/shadow.frag; springboard/gpu/shaders/kawase_down.comp; springboard/gpu/shaders/kawase_up.comp; springboard/render/src/glass.rs",
+   "status": "partial",
+   "note": "BifrOSt composites on the GPU with its own compose, shadow and Kawase blur shaders when a GPU presenter owns the backdrop; no layer effects such as masks, filters on layers or EDR tone mapping on the GPU. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreImage.framework/Versions/A/Resources/default.metallib",
@@ -751,13 +751,13 @@
     "size": 389132
    },
    "description": "",
-   "role": "",
+   "role": "Core Image filter kernels (colour, blur, composite, generators, distortion)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/render/src/filter.rs; springboard/render/src/colorfx.rs; springboard/render/src/composite_filters.rs; springboard/render/src/blur_filters.rs; springboard/render/src/colorcube.rs",
+   "status": "partial",
+   "note": "BifrOSt implements the Core Image filter categories as CPU pixel code with the reference parameters; no GPU filter kernels and no CIKernel language, so large images are slower. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreMediaIO.framework/Versions/A/Resources/ACD.plugin/Contents/Resources/default.metallib",
@@ -772,13 +772,13 @@
     "size": 9464
    },
    "description": "",
-   "role": "",
+   "role": "Video decode, capture pixel conversion shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt converts NV12 to RGBA on the CPU (springboard/render/src/video_transfer.rs); no GPU conversion or capture shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ImageIO.framework/Versions/A/Resources/default.metallib",
@@ -793,13 +793,13 @@
     "size": 1122636
    },
    "description": "",
-   "role": "",
+   "role": "GPU image decoding/format conversion",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt decodes images on the CPU (springboard/render/src/imgdec.rs); no GPU decode path. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ImmersiveMediaSupport.framework/Versions/A/Resources/default.metallib",
@@ -814,13 +814,13 @@
     "size": 130980
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MLCompute.framework/Versions/A/Resources/default.metallib",
@@ -835,13 +835,13 @@
     "size": 655696
    },
    "description": "",
-   "role": "",
+   "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
+   "status": "partial",
+   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Metal.framework/Versions/A/Resources/default.metallib",
@@ -856,13 +856,13 @@
     "size": 28508
    },
    "description": "",
-   "role": "",
+   "role": "Metal runtime helper shaders (blit, clear, resolve, indirect command support)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/src/shader.rs; springboard/gpu/src/pipeline.rs; springboard/gpu/shaders",
+   "status": "partial",
+   "note": "BifrOSt's Vulkan layer ships its own GLSL pipelines (compose, shape, shadow, kawase blur) and a shader library model (springboard/ui/src/shader_library.rs); no general blit/resolve helper set. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalFX.framework/Versions/A/Resources/default.metallib",
@@ -877,13 +877,13 @@
     "size": 1314644
    },
    "description": "",
-   "role": "",
+   "role": "Spatial and temporal upscaling",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/render/src/upscale.rs; springboard/render/src/temporal_upscale.rs",
+   "status": "partial",
+   "note": "BifrOSt has CPU spatial (bicubic) and temporal (jittered history) upscalers; no GPU or ML-based path. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSCore.framework/Versions/A/Resources/default.metallib",
@@ -898,13 +898,13 @@
     "size": 35277696
    },
    "description": "",
-   "role": "",
+   "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
+   "status": "partial",
+   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSFunctions.framework/Versions/A/Resources/default.metallib",
@@ -919,13 +919,13 @@
     "size": 239468
    },
    "description": "",
-   "role": "",
+   "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
+   "status": "partial",
+   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSImage.framework/Versions/A/Resources/default.metallib",
@@ -940,13 +940,13 @@
     "size": 18298452
    },
    "description": "",
-   "role": "",
+   "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
+   "status": "partial",
+   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSMatrix.framework/Versions/A/Resources/default.metallib",
@@ -961,13 +961,13 @@
     "size": 3727352
    },
    "description": "",
-   "role": "",
+   "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
+   "status": "partial",
+   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSNDArray.framework/Versions/A/Resources/default.metallib",
@@ -982,13 +982,13 @@
     "size": 86172312
    },
    "description": "",
-   "role": "",
+   "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
+   "status": "partial",
+   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSNeuralNetwork.framework/Versions/A/Resources/default.metallib",
@@ -1003,13 +1003,13 @@
     "size": 27857476
    },
    "description": "",
-   "role": "",
+   "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
+   "status": "partial",
+   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShaders.framework/Versions/A/Frameworks/MPSRayIntersector.framework/Versions/A/Resources/default.metallib",
@@ -1024,13 +1024,13 @@
     "size": 999360
    },
    "description": "",
-   "role": "",
+   "role": "GPU neural-network and matrix kernels (convolution, pooling, RNN, matrix multiply)",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/cnn_layers.rs; springboard/ui/src/nn.rs; springboard/ui/src/ml_tensor.rs",
+   "status": "partial",
+   "note": "BifrOSt has eager CPU layers (conv, pool, dense, LSTM/GRU) and tensor types; no GPU compute path (springboard/ui/src/compute.rs only decides placement). role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ParavirtualizedGraphics.framework/Versions/A/Resources/default.metallib",
@@ -1045,13 +1045,13 @@
     "size": 24596
    },
    "description": "",
-   "role": "",
+   "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/PencilKit.framework/Versions/A/Resources/default.metallib",
@@ -1066,13 +1066,13 @@
     "size": 213152
    },
    "description": "",
-   "role": "",
+   "role": "Ink stroke rendering (pen, marker, watercolour textures)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt stores strokes (springboard/ui/src/markup_drawing.rs, apps/freeform-desktop/src/ink.rs) and draws plain strokes; no textured ink shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/QuartzCore.framework/Versions/A/Resources/default.metallib",
@@ -1087,13 +1087,13 @@
     "size": 187612000
    },
    "description": "",
-   "role": "",
+   "role": "Window server compositing: blending, backdrop blur, shadows, colour management",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/shaders/compose.frag; springboard/gpu/shaders/shadow.frag; springboard/gpu/shaders/kawase_down.comp; springboard/gpu/shaders/kawase_up.comp; springboard/render/src/glass.rs",
+   "status": "partial",
+   "note": "BifrOSt composites on the GPU with its own compose, shadow and Kawase blur shaders when a GPU presenter owns the backdrop; no layer effects such as masks, filters on layers or EDR tone mapping on the GPU. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/SceneKit.framework/Versions/A/Resources/default.metallib",
@@ -1108,13 +1108,13 @@
     "size": 2403572
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/SpriteKit.framework/Versions/A/Resources/default.metallib",
@@ -1129,13 +1129,13 @@
     "size": 93268
    },
    "description": "",
-   "role": "",
+   "role": "2D scene renderer shaders (sprites, particles, warp, lighting)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has particle (render/src/emitter.rs) and warp (ui/src/warp.rs) models but no 2D scene renderer shader; role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/StickerKit.framework/Versions/A/Resources/default.metallib",
@@ -1150,13 +1150,13 @@
     "size": 128880
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of StickerKit (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "StickerKit UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/VideoToolbox.framework/Versions/A/Resources/default.metallib",
@@ -1171,13 +1171,13 @@
     "size": 3057664
    },
    "description": "",
-   "role": "",
+   "role": "Video decode, capture pixel conversion shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt converts NV12 to RGBA on the CPU (springboard/render/src/video_transfer.rs); no GPU conversion or capture shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Vision.framework/Versions/A/Resources/default.metallib",
@@ -1192,13 +1192,13 @@
     "size": 98268
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_CompositorServices_SwiftUI.framework/Versions/A/Resources/default.metallib",
@@ -1213,13 +1213,13 @@
     "size": 23580
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccelerateGPU.framework/Versions/A/Resources/default.metallib",
@@ -1234,13 +1234,13 @@
     "size": 360236
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AccessibilitySharedUISupport.framework/Versions/A/Resources/default.metallib",
@@ -1255,13 +1255,13 @@
     "size": 11584
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of AccessibilitySharedUISupport (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "AccessibilitySharedUISupport UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AdaptiveMesh.framework/Versions/A/Resources/default.metallib",
@@ -1276,13 +1276,13 @@
     "size": 11072
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AgentCanvasUI.framework/Versions/A/Resources/default.metallib",
@@ -1297,13 +1297,13 @@
     "size": 11356
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of AgentCanvasUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "AgentCanvasUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AgentCanvasUICore.framework/Versions/A/Resources/default.metallib",
@@ -1318,13 +1318,13 @@
     "size": 104772
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of AgentCanvasUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "AgentCanvasUICore UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AlchemistBase.framework/Versions/A/Resources/default.metallib",
@@ -1339,13 +1339,13 @@
     "size": 60868
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AltruisticBodyPoseKit.framework/Versions/A/Resources/default.metallib",
@@ -1360,13 +1360,13 @@
     "size": 23004
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppleDepth.framework/Versions/A/Resources/default.metallib",
@@ -1381,13 +1381,13 @@
     "size": 118436
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppleISPEmulator.framework/Versions/A/Resources/default.metallib",
@@ -1402,13 +1402,13 @@
     "size": 21392
    },
    "description": "",
-   "role": "",
+   "role": "Apple image signal processor service/emulator",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple camera ISP hardware helper; no BifrOSt role",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AppleMediaServicesUIPaymentSheets.framework/Versions/A/Resources/default.metallib",
@@ -1423,13 +1423,13 @@
     "size": 10616
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of AppleMediaServicesUIPaymentSheets (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "AppleMediaServicesUIPaymentSheets UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/AvatarKit.framework/Versions/A/Resources/default.metallib",
@@ -1444,13 +1444,13 @@
     "size": 9597520
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of AvatarKit (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "AvatarKit UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CMCapture.framework/Versions/A/Resources/default.metallib",
@@ -1465,13 +1465,13 @@
     "size": 29748
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CMImaging.framework/Versions/A/Resources/default.metallib",
@@ -1486,13 +1486,13 @@
     "size": 2749068
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CMPhoto.framework/Versions/A/Resources/default.metallib",
@@ -1507,13 +1507,13 @@
     "size": 31920
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CampoUIInternal.framework/Versions/A/Resources/default.metallib",
@@ -1528,13 +1528,13 @@
     "size": 39680
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of CampoUIInternal (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "CampoUIInternal UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CinematicCommunication.framework/Versions/A/Resources/default.metallib",
@@ -1549,13 +1549,13 @@
     "size": 792208
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CinematicFraming.framework/Versions/A/Resources/default.metallib",
@@ -1570,13 +1570,13 @@
     "size": 135536
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CinematicUtil.framework/Versions/A/Resources/default.metallib",
@@ -1591,13 +1591,13 @@
     "size": 279208
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ContactsUICore.framework/Versions/A/Resources/default.metallib",
@@ -1612,13 +1612,13 @@
     "size": 13824
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of ContactsUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "ContactsUICore UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreComposite.framework/Versions/A/Resources/default-cc.metallib",
@@ -1633,13 +1633,13 @@
     "size": 1309752
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of CoreComposite (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "CoreComposite UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreIMS.framework/Versions/A/Resources/default.metallib",
@@ -1654,13 +1654,13 @@
     "size": 95668
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of CoreIMS (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "CoreIMS UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreMaterial3D.framework/Versions/A/Resources/default.metallib",
@@ -1675,13 +1675,13 @@
     "size": 2592980
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreOCModules.framework/Versions/A/Resources/default.metallib",
@@ -1696,13 +1696,13 @@
     "size": 432584
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of CoreOCModules (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "CoreOCModules UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/default-binaryarchive.metallib",
@@ -1717,13 +1717,13 @@
     "size": 439625424
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/default.metallib",
@@ -1738,13 +1738,13 @@
     "size": 9684900
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreRE3DGSFoundation.framework/Versions/A/Resources/default.metallib",
@@ -1759,13 +1759,13 @@
     "size": 550996
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreUI.framework/Versions/A/Resources/default.metallib",
@@ -1780,13 +1780,13 @@
     "size": 25459
    },
    "description": "",
-   "role": "",
+   "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "status": "partial",
+   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/CoreUSDEdit.framework/Versions/A/Resources/Metal/DispEval.metallib",
@@ -1801,13 +1801,13 @@
     "size": 176989
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DeepVideoProcessingCore.framework/frameRateConversionMetalLib.metallib",
@@ -1822,13 +1822,13 @@
     "size": 68656
    },
    "description": "",
-   "role": "",
+   "role": "Video frame rate conversion and optical flow",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/render/src/frame_interp.rs; springboard/render/src/block_motion.rs",
+   "status": "partial",
+   "note": "BifrOSt has a CPU frame interpolator with a motion field and block motion estimation; no dense optical flow or GPU path. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/DesignLibrary.framework/Versions/A/Resources/default.metallib",
@@ -1843,13 +1843,13 @@
     "size": 32600
    },
    "description": "",
-   "role": "",
+   "role": "Siri wave and design library effects",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "Siri wave animation archive shader; BifrOSt has no Siri wave visual. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Eryx.framework/Versions/A/Resources/default.metallib",
@@ -1864,13 +1864,13 @@
     "size": 712756
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Espresso.framework/Versions/A/Resources/default.metallib",
@@ -1885,13 +1885,13 @@
     "size": 29028572
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/FRC.framework/Versions/A/Resources/default.metallib",
@@ -1906,13 +1906,13 @@
     "size": 762828
    },
    "description": "",
-   "role": "",
+   "role": "Video frame rate conversion and optical flow",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/render/src/frame_interp.rs; springboard/render/src/block_motion.rs",
+   "status": "partial",
+   "note": "BifrOSt has a CPU frame interpolator with a motion field and block motion estimation; no dense optical flow or GPU path. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GESS.framework/Versions/A/Resources/default.metallib",
@@ -1927,13 +1927,13 @@
     "size": 129456
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GPUToolsCapture.framework/Versions/A/Resources/default.metallib",
@@ -1948,13 +1948,13 @@
     "size": 50508
    },
    "description": "",
-   "role": "",
+   "role": "GPU developer tooling or paravirtual GPU support",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "GPU debugger/replay/compiler or VM paravirtual graphics; BifrOSt has no GPU capture/replay tool; not needed for users, build only if GPU debugging is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GPUToolsReplay.framework/Versions/A/Resources/default.metallib",
@@ -1969,13 +1969,13 @@
     "size": 15482484
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/GameStoreKit.framework/Versions/A/Resources/default.metallib",
@@ -1990,13 +1990,13 @@
     "size": 20128
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of GameStoreKit (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "GameStoreKit UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/HDRProcessing.framework/Versions/A/Resources/default.metallib",
@@ -2011,13 +2011,13 @@
     "size": 3909460
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Hydra.framework/Plugins/HydraQLPreviewExtension.appex/Contents/Resources/default.metallib",
@@ -2032,13 +2032,13 @@
     "size": 23972
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/IconRendering.framework/Versions/A/Resources/default.metallib",
@@ -2053,13 +2053,13 @@
     "size": 96032
    },
    "description": "",
-   "role": "",
+   "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "status": "partial",
+   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ImageHarmonizationKit.framework/Versions/A/Resources/default.metallib",
@@ -2074,13 +2074,13 @@
     "size": 9248
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ImagePlaygroundInternal.framework/Versions/A/Resources/default.metallib",
@@ -2095,13 +2095,13 @@
     "size": 71180
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Leonardo.framework/Versions/A/Resources/default.metallib",
@@ -2116,13 +2116,13 @@
     "size": 179416
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MXI.framework/Versions/A/Resources/default.metallib",
@@ -2137,13 +2137,13 @@
     "size": 1332524
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MagnifierSupport.framework/Versions/A/Resources/default.metallib",
@@ -2158,13 +2158,13 @@
     "size": 60984
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of MagnifierSupport (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "MagnifierSupport UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaAnalysis.framework/Versions/A/Resources/default.metallib",
@@ -2179,13 +2179,13 @@
     "size": 11652
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaCoreUI.framework/Versions/A/Resources/default.metallib",
@@ -2200,13 +2200,13 @@
     "size": 76760
    },
    "description": "",
-   "role": "",
+   "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "status": "partial",
+   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Morpheus.framework/Versions/A/Resources/default.metallib",
@@ -2221,13 +2221,13 @@
     "size": 34282252
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MusicUI.framework/Versions/A/Resources/default.metallib",
@@ -2242,13 +2242,13 @@
     "size": 18984
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of MusicUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "MusicUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NeutrinoCore.framework/Versions/A/Resources/default.metallib",
@@ -2263,13 +2263,13 @@
     "size": 10532
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NodesUI.framework/Versions/A/Resources/default.metallib",
@@ -2284,13 +2284,13 @@
     "size": 28336
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of NodesUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "NodesUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PassKitUIFoundation.framework/Versions/A/Resources/default.metallib",
@@ -2305,13 +2305,13 @@
     "size": 70300
    },
    "description": "",
-   "role": "",
+   "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "status": "partial",
+   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotoImaging.framework/Versions/A/Resources/default.metallib",
@@ -2326,13 +2326,13 @@
     "size": 15196
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosGenerativeServices.framework/Versions/A/Resources/default.metallib",
@@ -2347,13 +2347,13 @@
     "size": 20780
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosSpatialMediaCore.framework/Versions/A/Resources/default.metallib",
@@ -2368,13 +2368,13 @@
     "size": 15412
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosSpatialMediaEditing.framework/Versions/A/Resources/default.metallib",
@@ -2389,13 +2389,13 @@
     "size": 34032
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosSwiftUICore.framework/Versions/A/Resources/default.metallib",
@@ -2410,13 +2410,13 @@
     "size": 71724
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of PhotosSwiftUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "PhotosSwiftUICore UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosUICore.framework/Versions/A/Resources/default.metallib",
@@ -2431,13 +2431,13 @@
     "size": 8204
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of PhotosUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "PhotosUICore UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosUIPrivate.framework/Versions/A/Resources/default.metallib",
@@ -2452,13 +2452,13 @@
     "size": 167
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of PhotosUIPrivate (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "PhotosUIPrivate UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/PhotosensitivityProcessing.framework/Versions/A/Resources/default.metallib",
@@ -2473,13 +2473,13 @@
     "size": 44416
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Portrait.framework/Versions/A/Resources/default.metallib",
@@ -2494,13 +2494,13 @@
     "size": 1081192
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Quagga.framework/Versions/A/Resources/default.metallib",
@@ -2515,13 +2515,13 @@
     "size": 15128
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RealityCoreTextureImport.framework/Versions/A/Resources/default.metallib",
@@ -2536,13 +2536,13 @@
     "size": 50536
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RemoteCompositorServices.framework/Versions/A/Resources/default.binary.metallib",
@@ -2557,13 +2557,13 @@
     "size": 37124336
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RemoteCompositorServices.framework/Versions/A/Resources/default.metallib",
@@ -2578,13 +2578,13 @@
     "size": 102992
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/RenderBox.framework/Versions/A/Resources/default.metallib",
@@ -2599,13 +2599,13 @@
     "size": 2009912
    },
    "description": "",
-   "role": "",
+   "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "status": "partial",
+   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SetupAssistantSupportUI.framework/Versions/A/Resources/default.metallib",
@@ -2620,13 +2620,13 @@
     "size": 98512
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of SetupAssistantSupportUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "SetupAssistantSupportUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SiriSetup.framework/Versions/A/Resources/default.metallib",
@@ -2641,13 +2641,13 @@
     "size": 23360
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of SiriSetup (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "SiriSetup UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SiriSharedUI.framework/Versions/A/Resources/default.metallib",
@@ -2662,13 +2662,13 @@
     "size": 29928
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of SiriSharedUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "SiriSharedUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SiriUI.framework/Versions/A/Resources/default.metallib",
@@ -2683,13 +2683,13 @@
     "size": 74224
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of SiriUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "SiriUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SiriUICore.framework/Versions/A/Resources/default.metallib",
@@ -2704,13 +2704,13 @@
     "size": 216640
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of SiriUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "SiriUICore UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/SpatialConnect.framework/Versions/A/Resources/default.metallib",
@@ -2725,13 +2725,13 @@
     "size": 81420
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextAnimationSupport.framework/Versions/A/Resources/default.metallib",
@@ -2746,13 +2746,13 @@
     "size": 9924
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of TextAnimationSupport (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "TextAnimationSupport UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/TextRecognition.framework/Versions/A/Resources/default.metallib",
@@ -2767,13 +2767,13 @@
     "size": 9308
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Tungsten.framework/Versions/A/Resources/default.metallib",
@@ -2788,13 +2788,13 @@
     "size": 99540
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VFX.framework/Versions/A/Resources/default.metallib",
@@ -2809,13 +2809,13 @@
     "size": 9148456
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VectorKit.framework/Versions/A/Resources/default.metallib",
@@ -2830,13 +2830,13 @@
     "size": 2991304
    },
    "description": "",
-   "role": "",
+   "role": "Maps vector tile rendering (roads, labels, buildings)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt Maps has map view models (springboard/ui/src/mapview.rs, mapshape.rs) but no vector-tile GPU renderer. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VideoProcessing.framework/Versions/A/Resources/default.metallib",
@@ -2851,13 +2851,13 @@
     "size": 88064
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisionCore.framework/Versions/A/Resources/default.metallib",
@@ -2872,13 +2872,13 @@
     "size": 40112
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceCore.framework/Versions/A/Resources/default.metallib",
@@ -2893,13 +2893,13 @@
     "size": 7972
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/VisualIntelligenceUI.framework/Versions/A/Resources/default.metallib",
@@ -2914,13 +2914,13 @@
     "size": 100344
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperExtensionKit.framework/Versions/A/Resources/default.metallib",
@@ -2935,13 +2935,13 @@
     "size": 4528
    },
    "description": "",
-   "role": "",
+   "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowEditor.framework/Versions/A/Resources/default.metallib",
@@ -2956,13 +2956,13 @@
     "size": 34744
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of WorkflowEditor (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "WorkflowEditor UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/ScreenCaptureKitMetal/ScreenCaptureKitMetal.bundle/Contents/Resources/default.metallib",
@@ -2977,13 +2977,13 @@
     "size": 90720
    },
    "description": "",
-   "role": "",
+   "role": "Video decode, capture pixel conversion shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt converts NV12 to RGBA on the CPU (springboard/render/src/video_transfer.rs); no GPU conversion or capture shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/SubFrameworks/RealityCoreDeformation.framework/Versions/A/Resources/default.metallib",
@@ -2998,13 +2998,13 @@
     "size": 34736
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/SubFrameworks/RealityCoreRenderer.framework/Versions/A/Resources/default.metallib",
@@ -3019,13 +3019,13 @@
     "size": 422440
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/SubFrameworks/RealityCoreTextureProcessing.framework/Versions/A/Resources/default.metallib",
@@ -3040,13 +3040,13 @@
     "size": 70916
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Video/Plug-Ins/AV1DecoderSW.bundle/Contents/Resources/default.metallib",
@@ -3061,13 +3061,13 @@
     "size": 89012
    },
    "description": "",
-   "role": "",
+   "role": "Video decode, capture pixel conversion shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt converts NV12 to RGBA on the CPU (springboard/render/src/video_transfer.rs); no GPU conversion or capture shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Video/Plug-Ins/AppleAVEEncoder.bundle/Contents/Resources/default.metallib",
@@ -3082,13 +3082,13 @@
     "size": 18496
    },
    "description": "",
-   "role": "",
+   "role": "Apple silicon hardware codec helper",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "tied to Apple silicon video codec hardware; BifrOSt decodes/encodes through its own media stack, no equivalent shader role",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/VideoProcessors/CCPortrait.bundle/Contents/Resources/default.metallib",
@@ -3103,13 +3103,13 @@
     "size": 719744
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/VideoProcessors/RTSCV1.bundle/Contents/Resources/default.metallib",
@@ -3124,13 +3124,13 @@
     "size": 20104
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/Extensions/AppleMetalGLRenderer.bundle/Contents/Resources/default.metallib",
@@ -3145,13 +3145,13 @@
     "size": 1194596
    },
    "description": "",
-   "role": "",
+   "role": "GPU driver support shaders for Apple silicon / Apple GL-over-Metal",
    "doc": "",
    "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "status": "n/a",
+   "note": "Apple GPU driver internals (AGX family, GL shim); BifrOSt gets GPU drivers from Mesa/Vulkan (springboard/gpu) so there is no equivalent and no app depends on it",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/Frameworks/ARKit.framework/Versions/A/Resources/default.metallib",
@@ -3166,13 +3166,13 @@
     "size": 111292
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/Frameworks/ContactsUI.framework/PlugIns/MonogramPosterExtension.appex/Contents/Resources/default.metallib",
@@ -3187,13 +3187,13 @@
     "size": 31956
    },
    "description": "",
-   "role": "",
+   "role": "Dynamic/animated wallpaper or poster rendering",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt wallpapers are static JPEGs (springboard/wallpapers) and screen savers are models (springboard/ui/src/screensaver.rs); no animated wallpaper shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/Frameworks/PencilKit.framework/Versions/A/Resources/default.metallib",
@@ -3208,13 +3208,13 @@
     "size": 263120
    },
    "description": "",
-   "role": "",
+   "role": "Ink stroke rendering (pen, marker, watercolour textures)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt stores strokes (springboard/ui/src/markup_drawing.rs, apps/freeform-desktop/src/ink.rs) and draws plain strokes; no textured ink shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/Frameworks/SceneKit.framework/Versions/A/Resources/default.metallib",
@@ -3229,13 +3229,13 @@
     "size": 2407316
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/Frameworks/SpriteKit.framework/Versions/A/Resources/default.metallib",
@@ -3250,13 +3250,13 @@
     "size": 93476
    },
    "description": "",
-   "role": "",
+   "role": "2D scene renderer shaders (sprites, particles, warp, lighting)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has particle (render/src/emitter.rs) and warp (ui/src/warp.rs) models but no 2D scene renderer shader; role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/Frameworks/TouchController.framework/Versions/A/Resources/default.metallib",
@@ -3271,13 +3271,13 @@
     "size": 11332
    },
    "description": "",
-   "role": "",
+   "role": "Spatial computing / XR compositor and spatial media shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "visionOS-style immersive rendering; BifrOSt has no XR compositor; low priority unless spatial media is wanted. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/ActivityRingsUI.framework/Versions/A/Resources/default.metallib",
@@ -3292,13 +3292,13 @@
     "size": 55752
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of ActivityRingsUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "ActivityRingsUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/AppleMediaServicesUI.framework/Versions/A/Resources/default.metallib",
@@ -3313,13 +3313,13 @@
     "size": 15048
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of AppleMediaServicesUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "AppleMediaServicesUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/AvatarKit.framework/Versions/A/Resources/default.metallib",
@@ -3334,13 +3334,13 @@
     "size": 9603728
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of AvatarKit (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "AvatarKit UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/ChatKit.framework/Versions/A/Resources/default.metallib",
@@ -3355,13 +3355,13 @@
     "size": 31916
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of ChatKit (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "ChatKit UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/CinematicCommunication.framework/Versions/A/Resources/default.metallib",
@@ -3376,13 +3376,13 @@
     "size": 792640
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/CinematicUtil.framework/Versions/A/Resources/default.metallib",
@@ -3397,13 +3397,13 @@
     "size": 279624
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/CommunicationsUI.framework/Versions/A/Resources/default.metallib",
@@ -3418,13 +3418,13 @@
     "size": 10884
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of CommunicationsUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "CommunicationsUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/ContactsUICore.framework/Versions/A/Resources/default.metallib",
@@ -3439,13 +3439,13 @@
     "size": 13840
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of ContactsUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "ContactsUICore UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/CookingKit.framework/Versions/A/Resources/default.metallib",
@@ -3460,13 +3460,13 @@
     "size": 9980
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of CookingKit (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "CookingKit UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/HomeAccessoryControlUI.framework/Versions/A/Resources/default.metallib",
@@ -3481,13 +3481,13 @@
     "size": 10396
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of HomeAccessoryControlUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "HomeAccessoryControlUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/ImagePlaygroundInternal.framework/Versions/A/Resources/default.metallib",
@@ -3502,13 +3502,13 @@
     "size": 71196
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/MediaCoreUI.framework/Versions/A/Resources/default.metallib",
@@ -3523,13 +3523,13 @@
     "size": 76904
    },
    "description": "",
-   "role": "",
+   "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "status": "partial",
+   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/PassKitUIFoundation.framework/Versions/A/Resources/default.metallib",
@@ -3544,13 +3544,13 @@
     "size": 70444
    },
    "description": "",
-   "role": "",
+   "role": "UI framework effects: materials, vibrancy, shapes, gradients, icon rendering",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/gpu/shaders/shape.frag; springboard/render/src/glass.rs; springboard/render/src/vibrancy.rs; springboard/render/src/gradient.rs",
+   "status": "partial",
+   "note": "BifrOSt draws rounded shapes, gradients and glass/vibrant materials with its own shape.frag and glass path; no icon-layer (Liquid Glass lensing, specular) shaders. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/PhotosSwiftUICore.framework/Versions/A/Resources/default.metallib",
@@ -3565,13 +3565,13 @@
     "size": 71852
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of PhotosSwiftUICore (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "PhotosSwiftUICore UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/Portrait.framework/Versions/A/Resources/default.metallib",
@@ -3586,13 +3586,13 @@
     "size": 1082552
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/TextInputUI.framework/Versions/A/Resources/default.metallib",
@@ -3607,13 +3607,13 @@
     "size": 8344
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of TextInputUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "TextInputUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/Tungsten.framework/Versions/A/Resources/default.metallib",
@@ -3628,13 +3628,13 @@
     "size": 99588
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/VFX.framework/Versions/A/Resources/default.metallib",
@@ -3649,13 +3649,13 @@
     "size": 9164776
    },
    "description": "",
-   "role": "",
+   "role": "3D scene / RealityKit / USD rendering and geometry processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has 3D models (springboard/ui/src/scene3d.rs, scene_material.rs, mesh.rs, particle_system3d.rs) that draw nothing, and no 3D rasteriser or PBR shader; needed for 3D previews (Quick Look USD) and any 3D app. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/VisionKitCore.framework/Versions/A/Resources/default.metallib",
@@ -3670,13 +3670,13 @@
     "size": 129040
    },
    "description": "",
-   "role": "",
+   "role": "Computer-vision, computational photography or ML image processing shaders",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "BifrOSt has no on-device vision/ML image pipeline (only CPU guided filter, histogram and subject-lift models); needed for Photos edits, portrait/depth effects and image analysis. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/WeatherUI.framework/Versions/A/Resources/ForegroundEffectShaders.metallib",
@@ -3691,13 +3691,13 @@
     "size": 56536
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of WeatherUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "WeatherUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/WeatherUI.framework/Versions/A/Resources/default.metallib",
@@ -3712,13 +3712,13 @@
     "size": 262324
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of WeatherUI (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "WeatherUI UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/WorkflowEditor.framework/Versions/A/Resources/default.metallib",
@@ -3733,13 +3733,13 @@
     "size": 34808
    },
    "description": "",
-   "role": "",
+   "role": "Effects shader of WorkflowEditor (app or system UI animation)",
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "note": "WorkflowEditor UI effect shader (animations, gradients, glows); BifrOSt apps draw their own UI with the shape/glass pipeline and have no equivalent per-effect shader. role inferred from the owning framework path; the metallib was not disassembled",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }
