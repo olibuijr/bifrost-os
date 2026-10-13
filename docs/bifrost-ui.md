@@ -1710,7 +1710,20 @@ Decisions, recorded for the disk-arbitration matrix rows (`docs/parity-matrix/da
 - Gap, decided: the peek callback (`DARegisterDiskPeekCallback`) is not implemented.
 - Approvals and claims live on the session. `unmount` and `eject` plan commands through `disk_commands`, which checks
   the claim, then the approval chain, then the device state. An unknown device name returns `Refusal::NoDisk`.
-- Status stays `partial` until the session is wired into the shell or the SDK and tested on Midget.
+- Sprint 3, wired: the shell service `disks` (`springboard/src/shell/services/disks.rs`) scans `/sys/block` and
+  `/proc/mounts` every 2 s (`disk_scan`), keeps a `Session`, and pushes `disk_appeared`, `disk_disappeared` and
+  `disk_description_changed` to every app (the wire shape is `bifrost_core::disk_wire`). The first scan is silent.
+  Calls: `list`, `describe`, `plan_unmount`, `plan_eject`, `claim`, `unclaim`. The plans are validated and returned,
+  not run: running them needs the privileged helper, to be tried with a real USB disk on Midget.
+- SDK client `bifrost_app::disk_arbitration::DiskSession`: `create` (`DASessionCreate`), `set_dispatch_queue`
+  (`DASessionSetDispatchQueue`), `schedule_with_run_loop` (the main queue; there is no run loop object),
+  `register_disk_appeared_callback`, `register_disk_disappeared_callback`,
+  `register_disk_description_changed_callback`, `list` + `on_list_reply` (disks already connected are reported as
+  appeared, as in the native framework), `handle_event`, `disk_from_bsd_name`, `disk_from_volume_path`,
+  `description` with the `DESCRIPTION_*_KEY` names (volume path, media size, removable, writable, model, BSD name),
+  and `plan_unmount` / `plan_eject` with `plan_from_reply`. Gaps: no volume name or UUID key (the scan does not read
+  labels yet), events are service events rather than notify-bus names, and the Files sidebar does not show volumes yet.
+- Status stays `partial` until tested on Midget with a real USB disk.
 
 ## Workspace (NSWorkspace parity, `bifrost_app::workspace`)
 
