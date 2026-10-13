@@ -1,0 +1,8 @@
+# Changelog
+
+## 0.1.0 — 2026-10-13
+
+- New app: Video Player plays a movie file in the shell's fullscreen player view over the shared media stack. Movies open from Movie > Open (the document panel), from a file handed to the app, or from the command line.
+- Captions: a sidecar `.srt` or `.vtt` next to the movie shows as subtitles (Movie > Subtitles), parsed by `springboard::media::subtitles`.
+- Trim: Set Trim Start and Set Trim End at the playhead (shared `Trim` model); playback loops inside the trim.
+- Recording: New Audio Recording writes a WAV take through the audio service into the app's data folder (shared `Recorder` model). New Screen Recording is listed and stays off until the shell has a screen capture service.
