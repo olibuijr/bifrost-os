@@ -9,6 +9,9 @@ use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Se
 use std::collections::HashMap;
 
 pub const INBOX: &str = "INBOX";
+/// The mailbox names Archive and Trash are looked up under, in order (providers name them differently).
+pub const ARCHIVE_NAMES: [&str; 4] = ["Archive", "Archives", "All Mail", "[Gmail]/All Mail"];
+pub const TRASH_NAMES: [&str; 4] = ["Trash", "Deleted Items", "Deleted Messages", "[Gmail]/Trash"];
 /// The IMAP ports that start TLS at once; the other standard ports start with STARTTLS.
 const IMAP_TLS_PORT: u16 = 993;
 const SMTP_TLS_PORT: u16 = 465;
@@ -211,9 +214,33 @@ impl Mail {
     }
 
     pub fn mark_seen_locally(&mut self, uid: u32) {
+        self.set_flag_locally(uid, Flag::Seen, true);
+    }
+
+    /// Sets a flag on a row at once, before the server answers.
+    pub fn set_flag_locally(&mut self, uid: u32, flag: Flag, on: bool) {
         if let Some(row) = self.rows.iter_mut().find(|r| r.uid == uid) {
-            row.flags = row.flags.with(Flag::Seen, true);
+            row.flags = row.flags.with(flag, on);
         }
+    }
+
+    /// The flags of a row in the shown mailbox, when it is listed.
+    pub fn flags_of(&self, uid: u32) -> Option<Flags> {
+        self.rows.iter().find(|r| r.uid == uid).map(|r| r.flags)
+    }
+
+    /// Takes a message out of the shown list, because it moved to another mailbox. An open message is closed.
+    pub fn remove_row(&mut self, uid: u32) {
+        self.rows.retain(|r| r.uid != uid);
+        self.bodies.remove(&uid);
+        if self.open == Some(uid) {
+            self.open = None;
+        }
+    }
+
+    /// The first of `candidates` the account has as a mailbox (names match without case), for Archive and Trash.
+    pub fn find_mailbox(&self, candidates: &[&str]) -> Option<String> {
+        candidates.iter().find_map(|c| self.mailboxes.iter().find(|m| m.eq_ignore_ascii_case(c)).cloned())
     }
 
     /// The text of a message arrived. It is kept only when it belongs to the shown account and mailbox.
@@ -440,6 +467,31 @@ mod tests {
         assert!(!mail.open_message(3));
         mail.body_arrived("other", INBOX, 4, "not shown".into());
         assert!(!mail.bodies.contains_key(&4));
+    }
+
+    #[test]
+    fn flags_change_at_once_and_a_moved_message_leaves_the_list() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(3, "a"), listed(4, "b")]);
+        mail.open_message(3);
+        mail.set_flag_locally(3, Flag::Flagged, true);
+        assert!(mail.flags_of(3).is_some_and(|f| f.contains(Flag::Flagged)));
+        mail.remove_row(3);
+        assert_eq!(mail.open, None, "the open message closes when it moves");
+        assert_eq!(mail.rows.iter().map(|r| r.uid).collect::<Vec<_>>(), vec![4]);
+        assert_eq!(mail.flags_of(3), None);
+    }
+
+    #[test]
+    fn archive_and_trash_are_found_under_the_names_providers_use() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.mailboxes = vec!["INBOX".into(), "[Gmail]/All Mail".into(), "Trash".into()];
+        assert_eq!(mail.find_mailbox(&ARCHIVE_NAMES).as_deref(), Some("[Gmail]/All Mail"));
+        assert_eq!(mail.find_mailbox(&TRASH_NAMES).as_deref(), Some("Trash"));
+        mail.mailboxes = vec!["INBOX".into()];
+        assert_eq!(mail.find_mailbox(&ARCHIVE_NAMES), None);
+        mail.mailboxes = vec!["archive".into()];
+        assert_eq!(mail.find_mailbox(&ARCHIVE_NAMES).as_deref(), Some("archive"));
     }
 
     #[test]

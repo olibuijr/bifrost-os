@@ -3,9 +3,10 @@
 //! input; drawing and hit-testing are in [`crate::draw`].
 
 use crate::accounts;
+use crate::flags::Flag;
 use crate::message;
-use crate::state::{Mail, Notice, Sheet, INBOX};
-use crate::sync::{self, Event};
+use crate::state::{Mail, Notice, Sheet, ARCHIVE_NAMES, INBOX, TRASH_NAMES};
+use crate::sync::{self, Change, Event};
 use crate::transport;
 use bifrost_app::controls::internet_accounts::Account;
 use bifrost_app::kit::{clipboard, Scroller, TextCache, Ui};
@@ -27,6 +28,10 @@ pub const MENU_REPLY: u32 = 2;
 pub const MENU_SEND: u32 = 3;
 pub const MENU_REFRESH: u32 = 4;
 pub const MENU_ADD: u32 = 5;
+pub const MENU_FLAG: u32 = 6;
+pub const MENU_UNREAD: u32 = 7;
+pub const MENU_ARCHIVE: u32 = 8;
+pub const MENU_TRASH: u32 = 9;
 
 /// How often the inbox of every account is checked for new mail, in milliseconds.
 pub const POLL_MS: f64 = 60_000.0;
@@ -314,6 +319,11 @@ impl MailWindow {
                     AppMenuItem::new(MENU_REPLY, "Reply").key("cmd+shift+r").enabled(self.mail.open.is_some()),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_SEND, "Send").key("cmd+shift+d").enabled(compose_open),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_FLAG, "Flag").key("cmd+shift+l").enabled(self.mail.open.is_some()),
+                    AppMenuItem::new(MENU_UNREAD, "Mark as Unread").enabled(self.mail.open.is_some()),
+                    AppMenuItem::new(MENU_ARCHIVE, "Archive").key("cmd+shift+a").enabled(self.mail.open.is_some()),
+                    AppMenuItem::new(MENU_TRASH, "Move to Trash").enabled(self.mail.open.is_some()),
                 ],
             },
             AppMenu {
@@ -330,6 +340,10 @@ impl MailWindow {
             MENU_SEND => self.submit(ctx),
             MENU_REFRESH => self.refresh_selected(),
             MENU_ADD => self.mail.open_setup(),
+            MENU_FLAG => self.toggle_flag(Flag::Flagged),
+            MENU_UNREAD => self.toggle_flag(Flag::Seen),
+            MENU_ARCHIVE => self.move_open(&ARCHIVE_NAMES, "Archive"),
+            MENU_TRASH => self.move_open(&TRASH_NAMES, "Trash"),
             _ => return false,
         }
         self.dirty = true;
@@ -352,6 +366,13 @@ impl MailWindow {
                 }
                 Err(e) => self.mail.status = format!("{}: {e}", self.account_name(&account)),
             },
+            Event::Changed { account, result, .. } => {
+                // the change is shown at once; a refusal brings the listing back from the server
+                if let Err(e) = result {
+                    self.mail.status = format!("{}: {e}", self.account_name(&account));
+                    self.refresh_account(&account);
+                }
+            }
             Event::Body { account, mailbox, uid, result } => match result {
                 Ok(text) => self.mail.body_arrived(&account, &mailbox, uid, text),
                 Err(e) => self.mail.status = format!("The message could not be loaded: {e}"),
@@ -430,6 +451,39 @@ impl MailWindow {
             let index = self.mail.account;
             self.refresh(index, &mailbox);
         }
+    }
+
+    /// Sets or clears a flag on the open message. The row changes at once; the server is told in the background.
+    fn toggle_flag(&mut self, flag: Flag) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(flags) = self.mail.flags_of(uid) else { return };
+        let on = !flags.contains(flag);
+        self.mail.set_flag_locally(uid, flag, on);
+        self.change_message(uid, Change::Flag { flag, on });
+    }
+
+    /// Moves the open message to the account's Archive or Trash mailbox. The message leaves the list at once.
+    fn move_open(&mut self, candidates: &[&str], label: &str) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(to) = self.mail.find_mailbox(candidates) else {
+            self.mail.status = format!("This account has no {label} mailbox");
+            return;
+        };
+        self.mail.remove_row(uid);
+        self.change_message(uid, Change::Move { to });
+    }
+
+    /// Runs one change to a message of the shown mailbox on the server.
+    fn change_message(&mut self, uid: u32, action: Change) {
+        let Some(account) = self.mail.current().cloned() else { return };
+        let Some(password) = self.mail.password(&account).map(str::to_string) else {
+            self.mail.status = format!("No password is saved for {}", account.name);
+            return;
+        };
+        let mailbox = self.mail.mailbox.clone();
+        let transport = self.transport.clone();
+        self.jobs += 1;
+        sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::change(transport.as_ref(), &account, &password, &mailbox, uid, &action));
     }
 
     fn open_message(&mut self, uid: u32) {
@@ -563,6 +617,8 @@ impl MailWindow {
                 crate::draw::Button::Refresh => self.refresh_selected(),
                 crate::draw::Button::Compose => self.compose(),
                 crate::draw::Button::Reply => self.reply(),
+                crate::draw::Button::Archive => self.move_open(&ARCHIVE_NAMES, "Archive"),
+                crate::draw::Button::Trash => self.move_open(&TRASH_NAMES, "Trash"),
             },
             crate::draw::Hit::Side(side) => match side {
                 crate::draw::Side::Account(index) => {

@@ -2,6 +2,7 @@
 //! back. A byte written to the wake pipe tells the window's loop to read the channel, so nothing waits on a network call.
 
 use crate::accounts;
+use crate::flags::Flag;
 use crate::message::Draft;
 use bifrost_app::controls::internet_accounts::Account;
 use crate::session::{self, Listed, LIST_LIMIT};
@@ -19,12 +20,22 @@ pub struct Listing {
     pub messages: Vec<Listed>,
 }
 
+/// A change to one message on the server, made from the reader or the toolbar.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Change {
+    /// Sets or clears one flag (Seen, Flagged, ...).
+    Flag { flag: Flag, on: bool },
+    /// Moves the message to another mailbox of the account (Archive, Trash).
+    Move { to: String },
+}
+
 /// The answer of one job. Each carries the account id so the window can tell which account it belongs to.
 #[derive(Debug)]
 pub enum Event {
     Listed { account: String, mailbox: String, result: Result<Listing, String> },
     Body { account: String, mailbox: String, uid: u32, result: Result<String, String> },
     Sent { account: String, result: Result<(), String> },
+    Changed { account: String, mailbox: String, uid: u32, result: Result<(), String> },
 }
 
 /// Runs `work` on a new thread and sends its event. The wake pipe, when there is one, is written after the event is
@@ -72,6 +83,24 @@ fn fetch_body(transport: &dyn Transport, account: &Account, password: &str, mail
     let _ = session.mark_seen(uid);
     session.logout();
     Ok(text)
+}
+
+/// Applies `action` to one message of `mailbox` on the server.
+pub fn change(transport: &dyn Transport, account: &Account, password: &str, mailbox: &str, uid: u32, action: &Change) -> Event {
+    let result = apply_change(transport, account, password, mailbox, uid, action);
+    Event::Changed { account: account.id.clone(), mailbox: mailbox.to_string(), uid, result }
+}
+
+fn apply_change(transport: &dyn Transport, account: &Account, password: &str, mailbox: &str, uid: u32, action: &Change) -> Result<(), String> {
+    let mut session = session::connect(transport, accounts::incoming(account)?)?;
+    session.login(&account.username, password)?;
+    session.select(mailbox)?;
+    match action {
+        Change::Flag { flag, on } => session.set_flag(uid, *flag, *on)?,
+        Change::Move { to } => session.move_to(uid, to)?,
+    }
+    session.logout();
+    Ok(())
 }
 
 /// Sends a rendered message (`text`, from [`Draft::render`]) to every recipient of `draft`.

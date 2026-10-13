@@ -62,6 +62,8 @@ pub enum Button {
     Refresh,
     Compose,
     Reply,
+    Archive,
+    Trash,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,8 +84,8 @@ pub enum Hit {
     None,
 }
 
-/// The toolbar buttons and their rectangles, from the right edge inwards: Compose, then Reply when a message is open,
-/// then Refresh.
+/// The toolbar buttons and their rectangles, from the right edge inwards: Compose, then Reply, Archive and Trash when a
+/// message is open, then Refresh.
 fn toolbar_items(ui: &Ui, w: f32, open: bool) -> Vec<(Button, &'static str, Rect)> {
     let h = ui.pt(BUTTON_H_PT);
     let y = (ui.pt(TOOLBAR_PT) - h) / 2.0;
@@ -91,6 +93,8 @@ fn toolbar_items(ui: &Ui, w: f32, open: bool) -> Vec<(Button, &'static str, Rect
     let mut order: Vec<(Button, &'static str)> = vec![(Button::Compose, "Compose")];
     if open {
         order.push((Button::Reply, "Reply"));
+        order.push((Button::Archive, "Archive"));
+        order.push((Button::Trash, "Trash"));
     }
     order.push((Button::Refresh, "Refresh"));
     let mut right = w - pad;
