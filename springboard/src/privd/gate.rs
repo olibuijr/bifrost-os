@@ -62,6 +62,7 @@ fn info_json(i: AccountInfo) -> Json {
         ("uid", Json::Num(i.uid as f64)),
         ("has_password", Json::Bool(i.has_password)),
         ("locked_out_secs", Json::Num(i.locked_out_secs as f64)),
+        ("password_hint", s(i.password_hint)),
     ])
 }
 
