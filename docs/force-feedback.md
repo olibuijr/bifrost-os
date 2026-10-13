@@ -25,7 +25,7 @@ Reference framework: Apple's Force Feedback (legacy C API for wheels and joystic
 
 ## Still open
 
-- The shell does not yet hold a `Device` or upload effects with `EVIOCSFF`. The `ToShell::Haptic` message is dropped
-  in `springboard/src/shell/apphost.rs`. Wiring needs the shell to own a device per controller and write the
+- The shell does not yet hold a `Device` or upload effects with `EVIOCSFF`. `SDK Runtime::haptic()` (`sdk/src/runtime.rs`) sends `ToShell::Haptic`, and the shell
+  has no handler for it, so it is dropped (checked 2026-10-13). Wiring needs the shell to own a device per controller and write the
   kernel effect structs; that is a follow-up.
 - Nothing is tested on the VM or on Midget. Until it is, the rows stay `partial`.

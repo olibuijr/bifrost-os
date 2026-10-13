@@ -22,5 +22,7 @@ test runs on Midget; nothing here is `parity` yet.
     key is a BifrOSt convention.
   - The profile holds no secrets. Credentials stay with the caller (keychain).
 - Not built yet: saving and loading the configuration to disk, the system layer that writes the keyfile and brings the
-  tunnel up, and the VPN settings page (`PageId::Vpn`) that still shows a static placeholder.
+  tunnel up, and the VPN settings page. `PageId::Vpn` (`desktop_vpn_page` in `src/shell/pages.rs`) now lists profiles from
+  `desktop_network::vpn_profiles()` with `vpn_summary`, but that function returns an empty list because nothing stores
+  profiles yet, and the page says the tunnel client is not built. Nothing in the shell uses `VpnManager` (2026-10-13).
 - Tests: unit tests in `vpn_manager.rs`. They run on the host and change no network state.

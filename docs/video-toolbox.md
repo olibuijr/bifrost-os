@@ -24,6 +24,14 @@ Shape (follows the reference names and behaviour):
   with `None`), with the `asynchronous` info flag set. Later packets stay in the backend.
 - `invalidate` ends the session; every later call returns `InvalidSession`.
 
+### Decoding
+
+There is no app-facing decompression session. Decoding lives in the media stack: `springboard/src/media/hwdec/`
+(`ffmpeg.rs` loads libavcodec with `dlopen` and implements the `VideoDecoder` trait; `vaapi.rs` probes libva on the DRM
+render node for hardware decode and falls back to software; `nal.rs` handles NAL units), `media/convert.rs`
+(NV12 to RGBA) and `gpu/nv12.rs` (NV12 dma-buf import). H.264 and HEVC are the supported codecs. The shell video
+surface and the video player app are the only consumers.
+
 ### Decisions
 
 - The session encodes nothing. Codec output comes only from a `Backend`, so no new codec is added here.
