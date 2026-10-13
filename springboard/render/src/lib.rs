@@ -47,6 +47,7 @@ pub mod plane_arith;
 pub mod distance;
 pub mod guided;
 pub mod blend;
+pub mod cg;
 pub mod blur_kernels;
 pub mod effect_chain;
 pub mod gamma_fade;
