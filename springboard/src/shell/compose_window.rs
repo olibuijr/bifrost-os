@@ -192,6 +192,9 @@ mod tests {
     #[test]
     fn a_held_letter_opens_its_accents_and_a_digit_picks_one() {
         let mut sh = crate::shell::tests::shell();
+        // a held letter only opens accents over a shown Search field (or a focused app field, see `accent_popup_ready`)
+        sh.open_quicksearch_hw(0.0);
+        assert!(sh.quicksearch.is_shown());
         assert!(sh.compose_search_key(Out::Text("e".into()), 0.0).is_empty());
         sh.accent_hold('e', 0.0);
         assert!(sh.compose_ime.is_open());

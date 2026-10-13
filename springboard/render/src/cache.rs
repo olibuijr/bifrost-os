@@ -291,7 +291,8 @@ mod tests {
         let fit = c.fit(&ui, "a very long network name indeed", 13.0, 40.0);
         assert_eq!(fit, ui.fit("a very long network name indeed", 13.0, 40.0));
         assert_eq!(c.fit(&ui, "a very long network name indeed", 13.0, 40.0), fit);
-        assert_eq!(c.metrics, 3);
+        // one width and one fit are held; the repeated fit is a hit, so it adds nothing
+        assert_eq!(c.metrics, 2);
         assert_eq!(c.len(), 0, "widths and fits leave the images alone");
     }
 

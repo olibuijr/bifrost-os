@@ -3,7 +3,7 @@
 //! and the pointer. The shell owns the session and does the saving (`Shell::finish_capture`); this module holds the rules,
 //! the toolbar layout and the drawing, and has no state of its own outside a `Session`.
 
-use super::ui::{Ui, Weight, CELL, SECONDARY, TINT, WHITE};
+use super::ui::{Ui, Weight, CARD_BG, SECONDARY, TINT, WHITE};
 use crate::gfx::{pack, Image, Surface};
 use crate::layout::Rect;
 
@@ -415,7 +415,7 @@ impl Session {
             if self.pick == Pick::Region {
                 let size = ui.text(&format!("{} × {}", r.w, r.h), 13.0, Weight::Medium, WHITE);
                 let (lx, ly) = (r.x, (r.y - size.h as i32 - (6.0 * k) as i32).max(0));
-                s.fill_rrect(lx as f32, ly as f32, (size.w as f32) + 10.0 * k, size.h as f32 + 4.0 * k, 4.0 * k, CELL);
+                s.fill_rrect(lx as f32, ly as f32, (size.w as f32) + 10.0 * k, size.h as f32 + 4.0 * k, 4.0 * k, CARD_BG.now());
                 s.blit(&size, lx + (5.0 * k) as i32, ly + (2.0 * k) as i32, 255, 255);
             }
         }
@@ -424,7 +424,7 @@ impl Session {
             s.blit(&n, (w - n.w as i32) / 2, (h - n.h as i32) / 2, 255, 255);
         }
         let (bar, buttons) = self.toolbar(ui, w, h);
-        s.fill_rrect(bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, bar.h as f32 / 2.0, CELL);
+        s.fill_rrect(bar.x as f32, bar.y as f32, bar.w as f32, bar.h as f32, bar.h as f32 / 2.0, CARD_BG.now());
         for (tool, r, img) in buttons {
             let on = match tool {
                 Tool::Pick(p) => self.pick == p && !self.record,
@@ -438,7 +438,7 @@ impl Session {
             s.blit(&img, r.x + (r.w - img.w as i32) / 2, r.y + (r.h - img.h as i32) / 2, 255, 255);
         }
         if let Some((card, rows)) = self.menu_rows(ui, w, h) {
-            s.fill_rrect(card.x as f32, card.y as f32, card.w as f32, card.h as f32, 10.0 * k, CELL);
+            s.fill_rrect(card.x as f32, card.y as f32, card.w as f32, card.h as f32, 10.0 * k, CARD_BG.now());
             for (_, r, img) in rows {
                 s.blit(&img, r.x + (16.0 * k).round() as i32, r.y + (r.h - img.h as i32) / 2, 255, 255);
             }
