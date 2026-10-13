@@ -1,4 +1,4 @@
-//! One long-lived Wayland connection to the compositor (labwc): screen and window capture,
+//! One long-lived Wayland connection to the compositor (bifrost-wm): screen and window capture,
 //! the window list, virtual pointer and keyboard. Everything is synchronous; each call
 //! dispatches until its reply arrives or a deadline passes.
 
