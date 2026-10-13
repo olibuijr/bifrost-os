@@ -4,7 +4,7 @@
   "macos_since": "13.0",
   "status": "partial",
   "bifrost": "No call framework. Adjacent: springboard/sdk/src/usernotif.rs, springboard/audiod/src/",
-  "summary": "BifrOSt has no VoIP, telephony or call-UI code. Only notifications and audio exist as building blocks; a calling feature would need its own API. The incoming call prompt is a pure model in springboard/ui/src/call.rs; the shell does not draw it yet.",
+  "summary": "BifrOSt has no VoIP, telephony or call-UI code. Only notifications and audio exist as building blocks; a calling feature would need its own API.",
   "rea_evidence": "ev_c384112764dab667ab3b20bceceb0c43a831cada06b9a38eabf6e189b83c4dc9",
   "features": [
     {
@@ -17,9 +17,9 @@
     {
       "feature": "Incoming call UI",
       "apple": "CXCallUpdate, CXAnswerCallAction, PushKit VoIP pushes",
-      "bifrost": "springboard/ui/src/call.rs (incoming_prompt, CallCenter::respond_incoming); springboard/sdk/src/usernotif.rs (generic notifications only)",
+      "bifrost": "springboard/ui/src/call_ui.rs (CallUpdate, IncomingCard); springboard/sdk/src/usernotif.rs (generic notifications only)",
       "status": "partial",
-      "note": "Pure prompt model: a ringing incoming call gets a banner or, while the device is locked, a full-screen prompt with answer and decline actions. Host unit tests (3 new). Built on parity/team-a-03; not yet verified on Midget. The shell does not draw the prompt yet."
+      "note": "Pure model with host unit tests: the card for a ringing call is a banner while the screen is in use and full screen while it is locked, with answer and decline requests. Not wired into the shell, which draws no call card, and not yet verified on Midget. No VoIP push wake-up."
     },
     {
       "feature": "Outgoing calls",
@@ -59,7 +59,7 @@
   ],
   "gaps": [
     "Call provider and call-state model in the SDK",
-    "Shell drawing of the incoming call banner and full-screen prompt (model in springboard/ui/src/call.rs)",
+    "Incoming and outgoing call UI in the shell",
     "Active-call observation for apps",
     "Caller ID/blocking directory",
     "Default calling app setting"

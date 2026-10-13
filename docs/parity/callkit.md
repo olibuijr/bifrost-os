@@ -50,15 +50,9 @@ actions, observation). Caller ID and blocking and the default calling app stay `
 
 Not built or run in this stage, per the stage rules. The name guard `python3 tools/check-names.py` passes.
 
-## Incoming call prompt (parity/team-a-03)
+## Incoming call UI row (review of parity/team-a-03)
 
-`springboard/ui/src/call.rs` adds `incoming_prompt(call, device_locked)`. It returns an `IncomingPrompt` for a
-ringing incoming call: the caller text, the style (`PromptStyle::Banner` normally, `PromptStyle::FullScreen` while
-the device is locked), and the answer and decline actions (`CallAction::Answer` and `CallAction::End`). Outgoing and
-already answered calls get no prompt.
-
-`CallCenter::respond_incoming(id, answer)` applies the choice. Declining ends the call and sends `Ended`; a refused
-answer changes nothing. `Handle::display()` returns the value shown to the caller.
-
-Three host unit tests cover the prompt rules, the locked style and the answer and decline paths. The shell does not
-draw the prompt yet, and the row is not verified on Midget.
+The branch first added a second incoming-call prompt to `call.rs`. It duplicated `springboard/ui/src/call_ui.rs`
+(`CallUpdate`, `IncomingCard`, `presentation`), which already holds the banner and full-screen card with answer and
+decline requests, so the duplicate was removed. The "Incoming call UI" row now cites `call_ui.rs` and is `partial`: the
+shell draws no call card and the row is not verified on Midget.

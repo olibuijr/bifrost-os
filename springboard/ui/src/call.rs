@@ -12,13 +12,6 @@ pub enum Handle {
 }
 
 impl Handle {
-    /// The value as the caller is shown on a prompt.
-    pub fn display(&self) -> &str {
-        match self {
-            Handle::Phone(value) | Handle::Email(value) | Handle::Generic(value) => value,
-        }
-    }
-
     /// Checks the value for its kind. A phone number is an optional leading `+` and 3 to 20 digits. An email needs
     /// text on both sides of one `@`. A generic handle only has to be non-empty.
     pub fn validate(&self) -> Result<(), CallError> {
@@ -110,39 +103,6 @@ pub enum CallEvent {
     Ended(u64),
 }
 
-/// How an incoming call is shown. A banner sits over the desktop; a full-screen prompt is used while the device is locked.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum PromptStyle {
-    Banner,
-    FullScreen,
-}
-
-/// The prompt for a ringing incoming call: who is calling, how it is shown, and the two buttons. Answering uses
-/// `CallAction::Answer`; declining uses `CallAction::End`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct IncomingPrompt {
-    pub call_id: u64,
-    pub style: PromptStyle,
-    pub caller: String,
-    pub answer: CallAction,
-    pub decline: CallAction,
-}
-
-/// Builds the prompt for a call. Only a ringing incoming call gets one; outgoing calls and calls already answered
-/// or on hold return `None`.
-pub fn incoming_prompt(call: &Call, device_locked: bool) -> Option<IncomingPrompt> {
-    if call.outgoing || call.state != CallState::Ringing {
-        return None;
-    }
-    Some(IncomingPrompt {
-        call_id: call.id,
-        style: if device_locked { PromptStyle::FullScreen } else { PromptStyle::Banner },
-        caller: call.handle.display().to_string(),
-        answer: CallAction::Answer,
-        decline: CallAction::End,
-    })
-}
-
 fn valid_dtmf(digits: &str) -> bool {
     !digits.is_empty() && digits.chars().all(|c| matches!(c, '0'..='9' | '*' | '#' | 'A'..='D'))
 }
@@ -195,12 +155,6 @@ impl CallCenter {
         self.calls[index].state = CallState::Connected;
         self.events.push(CallEvent::Changed(id));
         Ok(())
-    }
-
-    /// Answers or declines a ringing call from its prompt. Declining ends the call. A refused answer changes nothing.
-    pub fn respond_incoming(&mut self, id: u64, answer: bool) -> Result<(), CallError> {
-        let action = if answer { CallAction::Answer } else { CallAction::End };
-        self.perform(id, action)
     }
 
     /// Applies one action to one call. Same as a transaction with one action.
@@ -429,48 +383,5 @@ mod tests {
         assert_eq!(remaining, vec![second]);
         assert_eq!(center.take_events(), vec![CallEvent::Ended(first)]);
         assert_eq!(center.perform(99, CallAction::End), Err(CallError::UnknownCall(99)));
-    }
-
-    #[test]
-    fn incoming_prompt_only_for_a_ringing_incoming_call() {
-        let mut center = CallCenter::new();
-        let incoming = center.report_incoming(phone("5551111")).unwrap();
-        let outgoing = center.start_outgoing(phone("5552222")).unwrap();
-
-        let prompt = incoming_prompt(center.call(incoming).unwrap(), false).unwrap();
-        assert_eq!(prompt.caller, "5551111");
-        assert_eq!(prompt.style, PromptStyle::Banner);
-        assert_eq!(prompt.answer, CallAction::Answer);
-        assert_eq!(prompt.decline, CallAction::End);
-        assert!(incoming_prompt(center.call(outgoing).unwrap(), false).is_none());
-
-        center.respond_incoming(incoming, true).unwrap();
-        assert!(incoming_prompt(center.call(incoming).unwrap(), false).is_none());
-    }
-
-    #[test]
-    fn locked_device_gets_a_full_screen_prompt() {
-        let mut center = CallCenter::new();
-        let id = center.report_incoming(Handle::Email("ada@example.com".into())).unwrap();
-        let prompt = incoming_prompt(center.call(id).unwrap(), true).unwrap();
-        assert_eq!(prompt.style, PromptStyle::FullScreen);
-        assert_eq!(prompt.caller, "ada@example.com");
-    }
-
-    #[test]
-    fn declining_ends_the_call_and_answering_connects_it() {
-        let mut center = CallCenter::new();
-        let declined = center.report_incoming(phone("5551111")).unwrap();
-        let answered = center.report_incoming(phone("5552222")).unwrap();
-        center.take_events();
-
-        center.respond_incoming(declined, false).unwrap();
-        assert!(center.call(declined).is_none());
-        assert_eq!(center.take_events(), vec![CallEvent::Ended(declined)]);
-
-        center.respond_incoming(answered, true).unwrap();
-        assert_eq!(center.call(answered).unwrap().state, CallState::Connected);
-        assert!(center.respond_incoming(answered, true).is_err());
-        assert_eq!(center.respond_incoming(99, true), Err(CallError::UnknownCall(99)));
     }
 }

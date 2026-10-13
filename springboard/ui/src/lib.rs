@@ -1124,5 +1124,4 @@ pub mod scanner;
 pub mod material_style;
 pub mod thumb_service;
 pub mod auth_prompt;
-pub mod pdf_pages;
 pub mod video_info;
