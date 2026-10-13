@@ -163,6 +163,25 @@ pub fn parse_fetch(untagged: &str) -> Option<Fetch> {
     Some(fetch)
 }
 
+/// Every key and value of an untagged `n FETCH (...)` response, in order, with the message number. Keys are kept as the
+/// server writes them (`BODY[HEADER]`); values are whatever [`parse_value`] reads, so a literal the connection folded
+/// into a quoted string comes back as [`Value::Quoted`].
+pub fn fetch_pairs(untagged: &str) -> Option<(u32, Vec<(String, Value)>)> {
+    let (seq, rest) = untagged.split_once(' ')?;
+    let seq: u32 = seq.parse().ok()?;
+    let rest = rest.strip_prefix("FETCH ")?;
+    let (list, _) = parse_value(rest)?;
+    let Value::List(items) = list else { return None };
+    let mut pairs = Vec::new();
+    let mut i = 0;
+    while i + 1 < items.len() {
+        let key = items[i].text()?.to_string();
+        pairs.push((key, items[i + 1].clone()));
+        i += 2;
+    }
+    Some((seq, pairs))
+}
+
 /// Parses untagged `SEARCH n n n` into message numbers (UIDs when the search was a `UID SEARCH`).
 pub fn parse_search(untagged: &str) -> Option<Vec<u32>> {
     let rest = untagged.strip_prefix("SEARCH")?;
@@ -265,6 +284,16 @@ mod tests {
         assert_eq!(parse_search("SEARCH 4 9 12"), Some(vec![4, 9, 12]));
         assert_eq!(parse_search("SEARCH"), Some(vec![]));
         assert_eq!(parse_search("SEARCH x"), None);
+    }
+
+    #[test]
+    fn fetch_pairs_keep_keys_and_quoted_values() {
+        let (seq, pairs) = fetch_pairs("4 FETCH (UID 9 FLAGS (\\Seen) BODY[HEADER] \"Subject: a b\")").unwrap();
+        assert_eq!(seq, 4);
+        let keys: Vec<&str> = pairs.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, vec!["UID", "FLAGS", "BODY[HEADER]"]);
+        assert_eq!(pairs[2].1, Value::Quoted("Subject: a b".into()));
+        assert!(fetch_pairs("4 STORE (UID 9)").is_none());
     }
 
     #[test]

@@ -1,4 +1,9 @@
 # Changelog
+## 0.3.0 — 2026-10-13
+
+- Live Mail: account setup sheet (password in the keychain), IMAP over TLS or STARTTLS for mailboxes, the newest
+  headers and message bodies, SMTP submission with AUTH PLAIN, compose and reply sheets, and new-mail notifications
+  from a 60 s inbox poll. The window is the three-pane layout over the existing model.
 ## 0.2.0 — 2026-10-13
 
 - Safe HTML mail: `html` sanitizes bodies (scripts, styles, frames, event handlers and script or relative URLs removed,

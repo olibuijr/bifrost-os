@@ -22,6 +22,11 @@ impl<T: Read + Write + Send> Stream for T {}
 /// Opens connections; the real one does DNS + TCP + TLS.
 pub trait Transport: Send + Sync {
     fn connect(&self, host: &str, port: u16, tls: bool) -> io::Result<Box<dyn Stream>>;
+    /// Wraps an open plain connection in TLS for `host` (STARTTLS). Transports without TLS refuse.
+    fn upgrade(&self, host: &str, stream: Box<dyn Stream>) -> io::Result<Box<dyn Stream>> {
+        let _ = (host, stream);
+        Err(io::Error::other("this transport cannot upgrade to TLS"))
+    }
 }
 
 /// TCP with rustls (graviola provider, webpki roots) through the UDP resolver.
@@ -68,6 +73,12 @@ impl Transport for Tls {
             }
         }
         Err(err)
+    }
+
+    fn upgrade(&self, host: &str, stream: Box<dyn Stream>) -> io::Result<Box<dyn Stream>> {
+        let name = rustls::pki_types::ServerName::try_from(host.to_string()).map_err(|_| io::Error::other("bad host name"))?;
+        let conn = rustls::ClientConnection::new(self.config.clone(), name).map_err(io::Error::other)?;
+        Ok(Box::new(rustls::StreamOwned::new(conn, stream)))
     }
 }
 
