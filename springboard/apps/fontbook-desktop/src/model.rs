@@ -31,6 +31,217 @@ pub enum Source {
     All,
     Disabled,
     Collection(String),
+    /// a rule-based collection
+    Smart(String),
+}
+
+/// File in the app's data dir holding smart collections, one per line: `name<TAB>rule`.
+pub const SMART_FILE: &str = "smart.tsv";
+/// File in the app's data dir holding the settings and preview choices, one `key<TAB>value` per line.
+pub const PREFS_FILE: &str = "settings.tsv";
+
+/// The rule of a smart collection: a family belongs to it while the rule holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Rule {
+    /// fixed pitch families
+    Fixed,
+    /// families with a variation axis
+    Variable,
+    /// families without a variation axis
+    Static,
+    /// the file is `.ttf`
+    TrueType,
+    /// the file is `.otf`
+    OpenType,
+    /// the family or file name contains the text (ignoring case)
+    NameContains(String),
+}
+
+impl Rule {
+    /// The rule on one line of the smart file: `fixed`, `variable`, `static`, `ttf`, `otf` or `name:<text>`.
+    pub fn to_text(&self) -> String {
+        match self {
+            Rule::Fixed => "fixed".to_string(),
+            Rule::Variable => "variable".to_string(),
+            Rule::Static => "static".to_string(),
+            Rule::TrueType => "ttf".to_string(),
+            Rule::OpenType => "otf".to_string(),
+            Rule::NameContains(t) => format!("name:{}", clean(t)),
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Rule> {
+        let text = text.trim();
+        match text {
+            "fixed" => Some(Rule::Fixed),
+            "variable" => Some(Rule::Variable),
+            "static" => Some(Rule::Static),
+            "ttf" => Some(Rule::TrueType),
+            "otf" => Some(Rule::OpenType),
+            _ => text.strip_prefix("name:").map(clean).filter(|t| !t.is_empty()).map(Rule::NameContains),
+        }
+    }
+
+    /// A short title for the menu and for naming a new smart collection.
+    pub fn title(&self) -> String {
+        match self {
+            Rule::Fixed => "Fixed Width".to_string(),
+            Rule::Variable => "Variable".to_string(),
+            Rule::Static => "Static".to_string(),
+            Rule::TrueType => "TrueType".to_string(),
+            Rule::OpenType => "OpenType".to_string(),
+            Rule::NameContains(t) => format!("Name Contains {t}"),
+        }
+    }
+
+    pub fn matches(&self, f: &Installed) -> bool {
+        match self {
+            Rule::Fixed => f.mono,
+            Rule::Variable => f.variable,
+            Rule::Static => !f.variable,
+            Rule::TrueType => f.path.to_lowercase().ends_with(".ttf"),
+            Rule::OpenType => f.path.to_lowercase().ends_with(".otf"),
+            Rule::NameContains(t) => matches_query(f, t),
+        }
+    }
+}
+
+/// The settings and preview choices (Settings, View).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Prefs {
+    /// check a file before it can be installed (the Install button is offered only for a file that passes)
+    pub validate_before_install: bool,
+    /// the sample line; empty means `PREVIEW_TEXT`
+    pub sample_text: String,
+    /// the sample size in points
+    pub sample_size: f32,
+}
+
+pub const SIZE_MIN: f32 = 8.0;
+pub const SIZE_MAX: f32 = 96.0;
+pub const SIZE_DEFAULT: f32 = 32.0;
+
+impl Default for Prefs {
+    fn default() -> Self {
+        Prefs { validate_before_install: true, sample_text: String::new(), sample_size: SIZE_DEFAULT }
+    }
+}
+
+impl Prefs {
+    /// The text the sample draws: the custom line, or the default pangram.
+    pub fn sample(&self) -> &str {
+        if self.sample_text.trim().is_empty() {
+            PREVIEW_TEXT
+        } else {
+            &self.sample_text
+        }
+    }
+
+    /// Sets the size, kept between `SIZE_MIN` and `SIZE_MAX`.
+    pub fn set_size(&mut self, size: f32) {
+        self.sample_size = size.clamp(SIZE_MIN, SIZE_MAX);
+    }
+
+    pub fn to_text(&self) -> String {
+        format!("validate\t{}\nsample\t{}\nsize\t{}\n", self.validate_before_install, clean(&self.sample_text), self.sample_size)
+    }
+
+    pub fn parse(text: &str) -> Prefs {
+        let mut p = Prefs::default();
+        for line in text.lines() {
+            let Some((k, v)) = line.split_once('\t') else { continue };
+            match k {
+                "validate" => p.validate_before_install = v.trim() != "false",
+                "sample" => p.sample_text = v.trim().to_string(),
+                "size" => {
+                    if let Ok(n) = v.trim().parse::<f32>() {
+                        p.set_size(n);
+                    }
+                }
+                _ => {}
+            }
+        }
+        p
+    }
+}
+
+/// A font file found on disk, for duplicate detection.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FontFile {
+    pub family: String,
+    pub path: PathBuf,
+    /// modification time, seconds since the epoch
+    pub modified: u64,
+}
+
+/// A family with several files: the newest is kept, the others can go (Resolve Duplicates).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Duplicate {
+    pub family: String,
+    pub keep: PathBuf,
+    pub remove: Vec<PathBuf>,
+}
+
+/// Families that have more than one file among `files`. The newest file wins; ties go to the later path.
+pub fn find_duplicates(files: &[FontFile]) -> Vec<Duplicate> {
+    let mut groups: BTreeMap<String, Vec<&FontFile>> = BTreeMap::new();
+    for f in files {
+        groups.entry(key(&f.family)).or_default().push(f);
+    }
+    let mut out = Vec::new();
+    for (_, mut group) in groups {
+        if group.len() < 2 {
+            continue;
+        }
+        group.sort_by(|a, b| b.modified.cmp(&a.modified).then(b.path.cmp(&a.path)));
+        out.push(Duplicate { family: group[0].family.clone(), keep: group[0].path.clone(), remove: group[1..].iter().map(|f| f.path.clone()).collect() });
+    }
+    out
+}
+
+/// The `.ttf` and `.otf` files under `dir` (two levels deep) with their family and modification time.
+pub fn scan_files(dir: &Path) -> Vec<FontFile> {
+    fn walk(dir: &Path, depth: usize, out: &mut Vec<FontFile>) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return };
+        for e in entries.flatten() {
+            let path = e.path();
+            if path.is_dir() {
+                if depth < 2 {
+                    walk(&path, depth + 1, out);
+                }
+                continue;
+            }
+            let ext = path.extension().and_then(|x| x.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
+            if ext != "ttf" && ext != "otf" {
+                continue;
+            }
+            let Some(family) = fontprefs::family(&path.to_string_lossy()) else { continue };
+            let modified = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0);
+            out.push(FontFile { family, path, modified });
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, 0, &mut out);
+    out
+}
+
+/// Removes the older files of each duplicate, only inside `user_dir`. Returns how many files went.
+pub fn resolve_duplicates(dups: &[Duplicate], user_dir: &Path) -> usize {
+    dups.iter().flat_map(|d| d.remove.iter()).filter(|p| uninstall(p, user_dir).is_ok()).count()
+}
+
+/// Parses the smart file: `name<TAB>rule` per line; lines with an unknown rule are skipped.
+pub fn parse_smart(text: &str) -> BTreeMap<String, Rule> {
+    text.lines()
+        .filter_map(|line| {
+            let (name, rule) = line.split_once('\t')?;
+            let name = name.trim();
+            if name.is_empty() {
+                return None;
+            }
+            Some((name.to_string(), Rule::parse(rule)?))
+        })
+        .collect()
 }
 
 /// Everything the window shows: the families found on disk plus the user's settings about them.
@@ -41,6 +252,8 @@ pub struct Library {
     disabled: BTreeSet<String>,
     /// collection name -> member family names, as the user spelled them
     collections: BTreeMap<String, Vec<String>>,
+    /// smart collection name -> its rule
+    smart: BTreeMap<String, Rule>,
 }
 
 fn key(name: &str) -> String {
@@ -55,7 +268,65 @@ fn clean(name: &str) -> String {
 impl Library {
     /// A library over the families `families` (sorted by family name, as `fontprefs::installed` returns them).
     pub fn new(families: Vec<Installed>, disabled: BTreeSet<String>, collections: BTreeMap<String, Vec<String>>) -> Self {
-        Library { families, disabled, collections }
+        Library { families, disabled, collections, smart: BTreeMap::new() }
+    }
+
+    /// The same library with smart collections `smart` (from `parse_smart`).
+    pub fn with_smart(mut self, smart: BTreeMap<String, Rule>) -> Self {
+        self.smart = smart;
+        self
+    }
+
+    pub fn smart_names(&self) -> Vec<String> {
+        self.smart.keys().cloned().collect()
+    }
+
+    pub fn rule(&self, name: &str) -> Option<&Rule> {
+        self.smart.get(name)
+    }
+
+    /// Adds a smart collection. False when the name is empty or already used by any collection.
+    pub fn create_smart(&mut self, name: &str, rule: Rule) -> bool {
+        let name = clean(name);
+        if name.is_empty() || self.collections.keys().chain(self.smart.keys()).any(|k| key(k) == key(&name)) {
+            return false;
+        }
+        self.smart.insert(name, rule);
+        true
+    }
+
+    pub fn delete_smart(&mut self, name: &str) -> bool {
+        let found = self.smart.keys().find(|k| key(k) == key(name)).cloned();
+        found.is_some_and(|k| self.smart.remove(&k).is_some())
+    }
+
+    /// Renames a collection, plain or smart. False when `new` is empty, taken by another collection, or `old` is missing.
+    pub fn rename_collection(&mut self, old: &str, new: &str) -> bool {
+        let new = clean(new);
+        if new.is_empty() {
+            return false;
+        }
+        let taken = self.collections.keys().chain(self.smart.keys()).any(|k| key(k) == key(&new) && key(k) != key(old));
+        if taken {
+            return false;
+        }
+        if let Some(k) = self.collections.keys().find(|k| key(k) == key(old)).cloned() {
+            let members = self.collections.remove(&k).unwrap_or_default();
+            self.collections.insert(new, members);
+            return true;
+        }
+        if let Some(k) = self.smart.keys().find(|k| key(k) == key(old)).cloned() {
+            if let Some(rule) = self.smart.remove(&k) {
+                self.smart.insert(new, rule);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// The text to write to the smart file.
+    pub fn smart_file(&self) -> String {
+        self.smart.iter().map(|(n, r)| format!("{n}\t{}\n", r.to_text())).collect()
     }
 
     pub fn is_enabled(&self, family: &str) -> bool {
@@ -94,7 +365,6 @@ impl Library {
         true
     }
 
-    #[cfg(test)]
     pub fn delete_collection(&mut self, name: &str) -> bool {
         let found = self.collections.keys().find(|k| key(k) == key(name)).cloned();
         found.is_some_and(|k| self.collections.remove(&k).is_some())
@@ -134,6 +404,7 @@ impl Library {
                 Source::All => true,
                 Source::Disabled => !self.is_enabled(&f.family),
                 Source::Collection(_) => members.as_ref().is_some_and(|m| m.contains(&key(&f.family))),
+                Source::Smart(name) => self.smart.get(name).is_some_and(|r| r.matches(f)),
             })
             .filter(|f| matches_query(f, query))
             .collect()
@@ -231,13 +502,15 @@ pub fn repertoire_rows(r: &validate::Report) -> Vec<(String, String)> {
 /// Installs the font file `src` into `user_dir` (created if needed). Only TrueType and OpenType files the
 /// renderer can draw are accepted, and a file that fails validation is refused with its first problem. Returns the
 /// new path and the family name. An existing file is not overwritten.
-pub fn install(src: &Path, user_dir: &Path) -> Result<(PathBuf, String), String> {
+pub fn install(src: &Path, user_dir: &Path, validate: bool) -> Result<(PathBuf, String), String> {
     let ext = src.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
     if ext != "ttf" && ext != "otf" {
         return Err("Only .ttf and .otf fonts can be installed.".to_string());
     }
-    if let Some(problem) = validate::check_file(src).problems.first() {
-        return Err(problem.clone());
+    if validate {
+        if let Some(problem) = validate::check_file(src).problems.first() {
+            return Err(problem.clone());
+        }
     }
     let src_text = src.to_string_lossy();
     let family = fontprefs::family(&src_text).ok_or_else(|| "That file is not a font this desktop can draw.".to_string())?;
@@ -249,6 +522,16 @@ pub fn install(src: &Path, user_dir: &Path) -> Result<(PathBuf, String), String>
     }
     std::fs::copy(src, &dest).map_err(|e| format!("Cannot copy the font: {e}"))?;
     Ok((dest, family))
+}
+
+/// Writes `bytes` under `dir` as a staging copy (for the install preview of a file the app only holds as a stream) and
+/// returns its path.
+pub fn stage(bytes: &[u8], file_name: &str, dir: &Path) -> std::io::Result<PathBuf> {
+    let dir = dir.join("staging");
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join(safe_file_name(file_name));
+    std::fs::write(&path, bytes)?;
+    Ok(path)
 }
 
 /// Removes a font the user installed. Only files inside `user_dir` can be removed; system and library fonts stay.
@@ -345,8 +628,124 @@ mod tests {
     #[test]
     fn install_rejects_non_fonts_before_touching_disk() {
         let dir = std::env::temp_dir().join("fontbook-model-reject");
-        assert!(install(Path::new("/tmp/nope.txt"), &dir).is_err());
+        assert!(install(Path::new("/tmp/nope.txt"), &dir, true).is_err());
         assert!(!dir.exists());
+    }
+
+    #[test]
+    fn install_without_validation_still_needs_a_drawable_font() {
+        let dir = std::env::temp_dir().join(format!("fontbook-model-novalidate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("Broken.ttf");
+        std::fs::write(&src, b"not a font at all").unwrap();
+        let err = install(&src, &dir.join("user"), false).unwrap_err();
+        assert_eq!(err, "That file is not a font this desktop can draw.");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn stage_writes_a_safe_copy_under_staging() {
+        let dir = std::env::temp_dir().join(format!("fontbook-model-stage-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let p = stage(b"abc", "../My Font.ttf", &dir).unwrap();
+        assert!(p.starts_with(dir.join("staging")));
+        assert_eq!(std::fs::read(&p).unwrap(), b"abc");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rename_collection_keeps_members_and_rejects_clashes() {
+        let mut lib = sample();
+        assert!(lib.create_collection("Play"));
+        assert!(!lib.rename_collection("Work", "play"), "taken by another");
+        assert!(!lib.rename_collection("Work", "  "));
+        assert!(!lib.rename_collection("Nope", "X"));
+        assert!(lib.rename_collection("Work", "Office"));
+        assert_eq!(lib.members("Office").unwrap(), ["Inter"]);
+        assert!(lib.members("Work").is_none());
+        assert!(lib.rename_collection("Office", "OFFICE"), "case-only change is allowed");
+        assert_eq!(lib.collection_names(), ["OFFICE", "Play"]);
+    }
+
+    #[test]
+    fn smart_collections_follow_their_rule() {
+        let mut lib = sample();
+        assert!(lib.create_smart("Code fonts", Rule::Fixed));
+        assert!(!lib.create_smart("work", Rule::Static), "name used by a collection");
+        assert!(!lib.create_smart("", Rule::Static));
+        let names = |v: Vec<&Installed>| v.iter().map(|f| f.family.clone()).collect::<Vec<_>>();
+        assert_eq!(names(lib.visible(&Source::Smart("Code fonts".into()), "")), ["Code"]);
+        assert!(lib.create_smart("Var", Rule::Variable));
+        assert_eq!(names(lib.visible(&Source::Smart("Var".into()), "")), ["Inter"]);
+        assert!(lib.create_smart("OTF", Rule::OpenType));
+        assert_eq!(names(lib.visible(&Source::Smart("OTF".into()), "")), ["Code"]);
+        assert!(lib.create_smart("Named", Rule::NameContains("int".into())));
+        assert_eq!(names(lib.visible(&Source::Smart("Named".into()), "")), ["Inter"]);
+        assert!(lib.rename_collection("Named", "Interish"));
+        assert!(lib.rule("Interish").is_some());
+        assert!(lib.delete_smart("interish"));
+        assert!(!lib.delete_smart("interish"));
+        assert_eq!(names(lib.visible(&Source::Smart("Missing".into()), "")), Vec::<String>::new());
+    }
+
+    #[test]
+    fn smart_rules_round_trip_through_text() {
+        let mut lib = sample();
+        lib.create_smart("A", Rule::Fixed);
+        lib.create_smart("B", Rule::NameContains("sans".into()));
+        let parsed = parse_smart(&lib.smart_file());
+        assert_eq!(parsed.get("A"), Some(&Rule::Fixed));
+        assert_eq!(parsed.get("B"), Some(&Rule::NameContains("sans".into())));
+        assert_eq!(parse_smart("X\tbogus\n\tfixed\nnotab\n").len(), 0);
+        assert_eq!(Rule::Static.title(), "Static");
+    }
+
+    #[test]
+    fn prefs_round_trip_clamp_and_default() {
+        let mut p = Prefs::default();
+        assert!(p.validate_before_install);
+        assert_eq!(p.sample(), PREVIEW_TEXT);
+        p.validate_before_install = false;
+        p.sample_text = "Hello\tworld".into();
+        p.set_size(500.0);
+        assert_eq!(p.sample_size, SIZE_MAX);
+        p.set_size(1.0);
+        assert_eq!(p.sample_size, SIZE_MIN);
+        p.set_size(40.0);
+        let back = Prefs::parse(&p.to_text());
+        assert!(!back.validate_before_install);
+        assert_eq!(back.sample(), "Hello world");
+        assert_eq!(back.sample_size, 40.0);
+        assert_eq!(Prefs::parse("size\tabc\njunk\n"), Prefs::default());
+    }
+
+    #[test]
+    fn duplicates_keep_the_newest_file() {
+        let f = |fam: &str, p: &str, m: u64| FontFile { family: fam.into(), path: PathBuf::from(p), modified: m };
+        let files = vec![f("Inter", "/u/a.ttf", 10), f("inter", "/u/b.ttf", 30), f("Inter", "/u/c.ttf", 20), f("Code", "/u/code.otf", 5)];
+        let d = find_duplicates(&files);
+        assert_eq!(d.len(), 1);
+        assert_eq!(d[0].keep, PathBuf::from("/u/b.ttf"));
+        assert_eq!(d[0].remove, vec![PathBuf::from("/u/c.ttf"), PathBuf::from("/u/a.ttf")]);
+        assert!(find_duplicates(&files[3..]).is_empty());
+    }
+
+    #[test]
+    fn resolving_duplicates_removes_only_user_files() {
+        let dir = std::env::temp_dir().join(format!("fontbook-model-dups-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let user = dir.join("user");
+        std::fs::create_dir_all(&user).unwrap();
+        let old = user.join("old.ttf");
+        std::fs::write(&old, b"x").unwrap();
+        let system = dir.join("system.ttf");
+        std::fs::write(&system, b"x").unwrap();
+        let dup = Duplicate { family: "F".into(), keep: user.join("new.ttf"), remove: vec![old.clone(), system.clone()] };
+        assert_eq!(resolve_duplicates(&[dup], &user), 1);
+        assert!(!old.exists());
+        assert!(system.exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -364,7 +763,7 @@ mod tests {
         let src = dir.join("Broken.ttf");
         std::fs::write(&src, b"not a font at all").unwrap();
         let user = dir.join("user");
-        let err = install(&src, &user).unwrap_err();
+        let err = install(&src, &user, true).unwrap_err();
         assert_eq!(err, "The file has no TrueType or OpenType header.");
         assert!(!user.exists());
         let _ = std::fs::remove_dir_all(&dir);
