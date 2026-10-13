@@ -3,7 +3,7 @@
 //! login toggle; this module makes the calls. They happen on a real change (a list edit, a tap, a status report), never
 //! per frame, and a missing service only logs.
 
-use crate::model::{Daily, Shortcut};
+use springboard::shortcuts::{Daily, Shortcut};
 use bifrost_app::login_items_approval as login;
 use bifrost_app::notification_schedule::{self as reminder, Schedule};
 use bifrost_app::Ctx;

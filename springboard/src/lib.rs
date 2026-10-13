@@ -28,6 +28,7 @@ pub mod privd_client;
 pub mod setup;
 pub mod scene;
 pub mod shell;
+pub mod shortcuts;
 pub mod status;
 pub mod svc;
 pub mod symbols;

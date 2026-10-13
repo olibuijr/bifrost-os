@@ -12,7 +12,7 @@
 //!   object with `name` (read-write), `color` (read-write, a palette index) and `actions` (read-only count).
 //!   Shortcuts are found by name; the first one with a name wins.
 
-use crate::model::{self, Shortcut, MAX_NAME};
+use springboard::shortcuts::{self as model, Shortcut, MAX_NAME};
 use crate::widget::PALETTE;
 use bifrost_app::actor::Actor;
 use bifrost_app::control::{RpcError, INVALID_PARAMS, METHOD_NOT_FOUND};
@@ -25,8 +25,6 @@ use bifrost_app::intents::{self, Entity, EntityQuery, Intent, IntentResult, Para
 use bifrost_core::json::Json;
 use std::path::Path;
 
-/// The file the window saves the list to, inside the app's data directory.
-pub const FILE: &str = "shortcuts.tsv";
 /// The entity type a shortcut parameter refers to.
 pub const SHORTCUT: &str = "Shortcut";
 pub const RUN: &str = "run-shortcut";
@@ -99,16 +97,6 @@ pub fn frontmost(ctx: &OnscreenContext) -> Option<usize> {
         .find(|a| a.is_selected && a.entity.type_name == SHORTCUT)
         .and_then(|a| a.entity.id.parse::<usize>().ok());
     found
-}
-
-/// The list as the app should see it when no window is open: the saved file, or the first-launch shortcuts.
-pub fn stored(data_dir: &Path) -> Vec<Shortcut> {
-    let path = data_dir.join(FILE);
-    if path.exists() {
-        model::load(&path)
-    } else {
-        model::defaults()
-    }
 }
 
 /// Performs one of the declared intents on `list`.
@@ -185,10 +173,7 @@ fn name_at(list: &[Shortcut], id: &str) -> String {
 pub fn plan_text(s: &Shortcut) -> Result<String, String> {
     let mut wf = Workflow::new();
     for a in &s.actions {
-        let line = match a.value() {
-            v if v.is_empty() => a.title().to_string(),
-            v => format!("{}: {v}", a.title()),
-        };
+        let line = a.line();
         wf.add(Step::new(a.title(), move |input: &str| {
             Ok(if input.is_empty() { line.clone() } else { format!("{input}\n{line}") })
         }));
@@ -340,8 +325,8 @@ pub fn script_set(list: &mut Vec<Shortcut>, params: &Json) -> Result<Json, RpcEr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Action;
     use crate::ShortcutsApp;
+    use springboard::shortcuts::Action;
     use bifrost_app::App;
     use std::path::PathBuf;
 
@@ -353,7 +338,7 @@ mod tests {
     }
 
     fn save(d: &Path, list: &[Shortcut]) {
-        model::save(&d.join(FILE), list).expect("save the fixture list");
+        model::save(&d.join(model::FILE), list).expect("save the fixture list");
     }
 
     fn app() -> ShortcutsApp {
@@ -536,14 +521,14 @@ mod tests {
         assert_eq!(get(&mut a, "Night", "name"), Ok(Json::Str("Night".into())));
         assert_eq!(set(&mut a, "Night", "color", Json::Num(6.0)), Ok(Json::Num(6.0)));
         // the change reached the saved file, so the next launch shows it
-        let saved = model::load(&d.join(FILE));
+        let saved = model::load(&d.join(model::FILE));
         assert_eq!((saved[0].name.as_str(), saved[0].color), ("Night", 6));
         // read-only, out of range and empty values are refused and change nothing
         assert_eq!(set(&mut a, "Night", "actions", Json::Num(1.0)).unwrap_err().code, INVALID_PARAMS);
         assert_eq!(set(&mut a, "Night", "color", Json::Num(9.0)).unwrap_err().code, INVALID_PARAMS);
         assert_eq!(set(&mut a, "Night", "name", Json::Str("  ".into())).unwrap_err().code, INVALID_PARAMS);
         assert_eq!(set(&mut a, "Night", "color", Json::Str("red".into())).unwrap_err().code, INVALID_PARAMS);
-        assert_eq!(model::load(&d.join(FILE))[0].name, "Night");
+        assert_eq!(model::load(&d.join(model::FILE))[0].name, "Night");
         let xml = a.rpc(None, &d, "script.dictionary", &Json::Obj(Vec::new()));
         assert!(matches!(xml, Ok(Json::Str(ref x)) if x.contains("shortcut")));
         let unknown = a.rpc(None, &d, "script.run", &Json::Obj(Vec::new()));
