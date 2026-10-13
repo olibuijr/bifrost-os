@@ -91,7 +91,7 @@ fn unpackbits(src: &[u8], want: usize) -> Vec<u8> {
         } else if n != -128 {
             let c = 1 - n as isize;
             if let Some(&v) = src.get(i) {
-                out.extend(std::iter::repeat(v).take(c as usize));
+                out.extend(std::iter::repeat_n(v, c as usize));
             }
             i += 1;
         }
@@ -375,7 +375,7 @@ pub fn encode(pages: &[Page], compression: Compression) -> Option<Vec<u8>> {
         if pg.w == 0 || pg.h == 0 || pg.rgba.len() < pg.w * pg.h * 4 {
             return None;
         }
-        let alpha = pg.rgba.chunks_exact(4).any(|p| p[3] != 255);
+        let alpha = pg.rgba.as_chunks::<4>().0.iter().any(|p| p[3] != 255);
         let spp = if alpha { 4 } else { 3 };
         let mut raw = Vec::with_capacity(pg.w * pg.h * spp);
         let mut row_bufs: Vec<u8> = Vec::new();

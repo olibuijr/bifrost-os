@@ -67,11 +67,13 @@ pub fn upscale_rgb8(
         return Err(UpscaleError::HdrNeedsFloat);
     }
     check(src.len() / 3, w, h, out_w, out_h)?;
-    if src.len() % 3 != 0 {
+    if !src.len().is_multiple_of(3) {
         return Err(UpscaleError::LengthMismatch);
     }
     let samples: Vec<[f32; 3]> = src
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|p| [p[0] as f32 / 255.0, p[1] as f32 / 255.0, p[2] as f32 / 255.0])
         .collect();
     let out = filter(&samples, w, h, out_w, out_h, mode);

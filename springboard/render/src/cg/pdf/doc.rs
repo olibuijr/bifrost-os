@@ -10,6 +10,9 @@ use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+/// Objects parsed out of object streams, keyed by stream number.
+type ObjStmCache = HashMap<u32, Rc<Vec<(u32, Obj)>>>;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Entry {
     Offset(usize),
@@ -24,7 +27,7 @@ pub struct Doc {
     xref: HashMap<u32, Entry>,
     pub trailer: Dict,
     cache: RefCell<HashMap<u32, Obj>>,
-    objstms: RefCell<HashMap<u32, Rc<Vec<(u32, Obj)>>>>,
+    objstms: RefCell<ObjStmCache>,
     loading: RefCell<HashSet<u32>>,
     crypt: Option<Crypt>,
     encrypt_obj: Option<u32>,

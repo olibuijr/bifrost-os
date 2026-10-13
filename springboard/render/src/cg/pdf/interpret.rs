@@ -631,7 +631,7 @@ impl<'a, 'd> Interp<'a, 'd> {
         let mut found = None;
         let mut i = start;
         while i + 2 <= d.len() {
-            if &d[i..i + 2] == b"EI" && (i == start || is_ws(d[i - 1])) && d.get(i + 2).map_or(true, |&c| is_ws(c)) {
+            if &d[i..i + 2] == b"EI" && (i == start || is_ws(d[i - 1])) && d.get(i + 2).is_none_or(|&c| is_ws(c)) {
                 found = Some(i);
                 break;
             }

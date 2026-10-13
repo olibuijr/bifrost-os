@@ -24,7 +24,7 @@ pub struct Spot {
 impl Spot {
     /// The spot to show, or None when it must be hidden.
     pub fn want(pos: (f32, f32), pressed: bool, present: bool, screen_on: bool, now: f64, last_motion: f64) -> Option<Spot> {
-        (present && screen_on && now - last_motion < HIDE_MS).then(|| Spot { x: pos.0 as i32, y: pos.1 as i32, size: if pressed { SIZE_PRESSED } else { SIZE } })
+        (present && screen_on && now - last_motion < HIDE_MS).then_some(Spot { x: pos.0 as i32, y: pos.1 as i32, size: if pressed { SIZE_PRESSED } else { SIZE } })
     }
 }
 

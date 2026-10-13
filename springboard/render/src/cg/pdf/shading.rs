@@ -8,6 +8,9 @@ use super::obj::{Dict, Obj, Stream};
 use super::page::{Matrix, Rect};
 use super::sink::{Rgb, Shading, ShadingKind, Vertex};
 
+/// Control points and corner colours of the previously decoded patch.
+type PatchPrev = ([(f64, f64); 16], [Rgb; 4]);
+
 const RAMP: usize = 256;
 const GRID: usize = 48;
 const PATCH_STEPS: usize = 8;
@@ -258,7 +261,7 @@ fn mesh(doc: &Doc, s: &Stream, ty: i64, cs: &ColorSpace, f: Option<&Function>) -
         }
         _ => {
             let npts = if ty == 6 { 12 } else { 16 };
-            let mut prev: Option<([(f64, f64); 16], [Rgb; 4])> = None;
+            let mut prev: Option<PatchPrev> = None;
             let mut patches = 0;
             while patches < 20_000 {
                 let Some(flag) = b.read(p.bpflag) else { break };

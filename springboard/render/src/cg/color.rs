@@ -250,6 +250,7 @@ impl RgbSpace {
         apply(&self.to_xyz, lin)
     }
 
+    #[allow(clippy::wrong_self_convention)] // converts from the PCS into this space; the name mirrors `to_pcs`
     fn from_pcs(&self, xyz: [f64; 3]) -> [f32; 3] {
         let lin = apply(&self.from_xyz, xyz);
         [0, 1, 2].map(|i| {
@@ -288,6 +289,7 @@ pub struct IndexedSpace {
 
 /// The colorimetric part of a space read from a profile.
 #[derive(Clone, Debug, PartialEq)]
+#[allow(clippy::large_enum_variant)] // public variants are constructed and matched directly; boxing would change the API
 pub enum ProfileBody {
     Rgb(RgbSpace),
     Gray(GraySpace),
@@ -743,8 +745,8 @@ impl ColorConversionInfo {
     /// Converts the components `c` of the source space. `None` when `c` is too short.
     pub fn apply(&self, c: &[f32]) -> Option<Vec<f32>> {
         let mut xyz = self.src.to_xyz(c)?;
-        for i in 0..3 {
-            xyz[i] *= self.abs_scale[i];
+        for (x, s) in xyz.iter_mut().zip(self.abs_scale) {
+            *x *= s;
         }
         self.dst.from_xyz(xyz)
     }

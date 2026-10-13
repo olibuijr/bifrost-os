@@ -131,7 +131,7 @@ pub enum Extreme {
 /// pixel. Min is erosion and max is dilation. Returns `None` unless both sides
 /// are odd and at least 1.
 pub fn area_filter(src: &Plane, kw: usize, kh: usize, extreme: Extreme) -> Option<Plane> {
-    if kw == 0 || kh == 0 || kw % 2 == 0 || kh % 2 == 0 {
+    if kw == 0 || kh == 0 || kw.is_multiple_of(2) || kh.is_multiple_of(2) {
         return None;
     }
     let (w, h) = (src.width, src.height);
@@ -298,10 +298,9 @@ pub fn arithmetic(a: &Plane, b: &Plane, op: Arithmetic) -> Option<Plane> {
                 Arithmetic::Subtract => x.saturating_sub(y),
                 Arithmetic::Multiply => x * y / 255,
                 Arithmetic::Divide => {
-                    if y == 0 {
-                        255
-                    } else {
-                        (x * 255 / y).min(255)
+                    match (x * 255).checked_div(y) {
+                        None => 255,
+                        Some(q) => q.min(255),
                     }
                 }
             };

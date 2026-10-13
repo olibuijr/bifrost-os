@@ -93,6 +93,7 @@ fn filter_rows(raw: &[u8], row_len: usize, h: usize, bpp: usize) -> Vec<u8> {
     out
 }
 
+#[allow(clippy::too_many_arguments)] // PNG header fields plus pixel buffer; a struct would only be used here
 fn finish_png(w: usize, h: usize, depth: u8, ctype: u8, raw: &[u8], bpp: usize, row_len: usize, o: &PngOptions) -> Vec<u8> {
     let mut out = super::png::SIGNATURE.to_vec();
     let mut ihdr = Vec::new();
@@ -148,7 +149,7 @@ pub fn encode_png(w: usize, h: usize, rgba: &[u8], o: &PngOptions) -> Option<Vec
     if w == 0 || h == 0 || rgba.len() < w * h * 4 {
         return None;
     }
-    let px = rgba.chunks_exact(4).take(w * h);
+    let px = rgba.as_chunks::<4>().0.iter().take(w * h);
     let opaque = px.clone().all(|p| p[3] == 255);
     let gray = px.clone().all(|p| p[0] == p[1] && p[1] == p[2]);
     let (ctype, ch): (u8, usize) = match (gray, opaque) {
@@ -366,8 +367,7 @@ impl Encoder<'_> {
             self.bits.put(v as u32, cat);
         }
         let mut run = 0;
-        for k in 1..64 {
-            let v = zz[k];
+        for &v in zz.iter().skip(1) {
             if v == 0 {
                 run += 1;
                 continue;
@@ -403,7 +403,7 @@ pub fn encode_jpeg(w: usize, h: usize, rgba: &[u8], o: &JpegOptions) -> Option<V
     if w == 0 || h == 0 || w > 65535 || h > 65535 || rgba.len() < w * h * 4 {
         return None;
     }
-    let gray = rgba.chunks_exact(4).take(w * h).all(|p| p[0] == p[1] && p[1] == p[2]);
+    let gray = rgba.as_chunks::<4>().0.iter().take(w * h).all(|p| p[0] == p[1] && p[1] == p[2]);
     let (hs, vs) = if gray || !o.subsample { (1usize, 1usize) } else { (2, 2) };
     let (mcu_w, mcu_h) = (8 * hs, 8 * vs);
     let (pw, ph) = (w.div_ceil(mcu_w) * mcu_w, h.div_ceil(mcu_h) * mcu_h);

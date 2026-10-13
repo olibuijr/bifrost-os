@@ -1247,7 +1247,7 @@ impl<'a> DrawContext<'a> {
     /// Strokes the segments (p0, p1), (p2, p3), ...; an odd trailing point is ignored.
     pub fn stroke_line_segments(&mut self, points: &[(f32, f32)]) {
         let mut p = Path::new();
-        for pair in points.chunks_exact(2) {
+        for pair in points.as_chunks::<2>().0 {
             p.move_to(pair[0]);
             p.line_to(pair[1]);
         }
@@ -1534,7 +1534,7 @@ impl Bitmap {
 
     /// A transparent bitmap whose rows are `bytes_per_row` apart; `None` unless that is a multiple of 4 and holds a row.
     pub fn with_bytes_per_row(w: usize, h: usize, bytes_per_row: usize) -> Option<Self> {
-        if bytes_per_row % 4 != 0 || bytes_per_row < w * 4 {
+        if !bytes_per_row.is_multiple_of(4) || bytes_per_row < w * 4 {
             return None;
         }
         let stride = bytes_per_row / 4;
@@ -1547,7 +1547,7 @@ impl Bitmap {
         if data.len() < bytes_per_row * h {
             return None;
         }
-        for (dst, src) in b.px.iter_mut().zip(data.chunks_exact(4)) {
+        for (dst, src) in b.px.iter_mut().zip(data.as_chunks::<4>().0.iter()) {
             *dst = u32::from_le_bytes([src[0], src[1], src[2], src[3]]);
         }
         Some(b)

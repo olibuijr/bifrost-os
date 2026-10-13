@@ -58,9 +58,7 @@ fn big_plan() -> &'static Option<[u64; 16]> {
     static PLAN: std::sync::OnceLock<Option<[u64; 16]>> = std::sync::OnceLock::new();
     PLAN.get_or_init(|| {
         let big = std::env::var("SPRINGBOARD_BIG_CPUS").ok();
-        if big.is_none() {
-            return None;
-        }
+        big.as_ref()?;
         let present = std::fs::read_to_string("/sys/devices/system/cpu/present").unwrap_or_default();
         plan(big.as_deref(), std::env::var("SPRINGBOARD_PIN").ok().as_deref(), &present)
     })

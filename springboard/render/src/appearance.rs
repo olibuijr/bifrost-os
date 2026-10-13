@@ -68,7 +68,15 @@ pub fn color_scheme_contrast() -> ColorSchemeContrast {
 
 /// Observers of display option changes (`accessibilityDisplayOptionsDidChangeNotification`).
 pub struct Observers {
-    list: std::sync::Mutex<(u64, Vec<(u64, std::sync::Arc<dyn Fn(DisplayOptions) + Send + Sync>)>)>,
+    list: std::sync::Mutex<ObserverList>,
+}
+
+type ObserverList = (u64, Vec<(u64, std::sync::Arc<dyn Fn(DisplayOptions) + Send + Sync>)>);
+
+impl Default for Observers {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Observers {

@@ -130,7 +130,7 @@ impl<'a> Tables<'a> {
             let Some(raw) = t.get(off..off + len) else { continue };
             let (rank, s) = match (pid, eid) {
                 (3, 1) | (3, 10) | (0, _) => {
-                    let units: Vec<u16> = raw.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
+                    let units: Vec<u16> = raw.as_chunks::<2>().0.iter().map(|c| u16::from_be_bytes([c[0], c[1]])).collect();
                     (0u8, String::from_utf16_lossy(&units))
                 }
                 (1, 0) => (1u8, raw.iter().map(|&b| if b < 128 { b as char } else { '?' }).collect()),

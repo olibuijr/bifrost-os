@@ -51,6 +51,8 @@ const SQUIRCLE_N: f32 = 5.0;
 const SQUIRCLE_REACH: f32 = 1.2819;
 
 /// Anti-aliased coverage of pixel centre `(px, py)` inside a rounded rect at `(x, y, w, h)`.
+// Geometry scalars (point, rect, radius) read clearer flat than wrapped in a one-use struct.
+#[allow(clippy::too_many_arguments)]
 pub fn rrect_cover(px: f32, py: f32, x: f32, y: f32, w: f32, h: f32, radius: f32, curve: CornerCurve) -> f32 {
     let (cx, cy) = (x + w * 0.5, y + h * 0.5);
     let (hw, hh) = (w * 0.5, h * 0.5);
@@ -85,6 +87,8 @@ pub fn rrect_cover(px: f32, py: f32, x: f32, y: f32, w: f32, h: f32, radius: f32
 }
 
 /// Coverage plane of a rounded rect (continuous or circular corners) in a `w` x `h` plane.
+// Same flat geometry scalars as `rrect_cover`.
+#[allow(clippy::too_many_arguments)]
 pub fn rrect_plane(w: usize, h: usize, x: f32, y: f32, rw: f32, rh: f32, radius: f32, curve: CornerCurve) -> Plane {
     let mut p = Plane::new(w, h);
     for j in 0..h {

@@ -51,11 +51,11 @@ impl TileGrid {
     }
 
     pub fn cols(&self) -> usize {
-        (self.w + self.tile_w - 1) / self.tile_w
+        self.w.div_ceil(self.tile_w)
     }
 
     pub fn rows(&self) -> usize {
-        (self.h + self.tile_h - 1) / self.tile_h
+        self.h.div_ceil(self.tile_h)
     }
 
     /// Number of tiles in the grid.

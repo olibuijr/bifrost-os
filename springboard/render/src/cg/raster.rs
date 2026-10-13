@@ -67,7 +67,7 @@ pub fn dash_polyline(points: &[Pt], pattern: &[f32], phase: f32) -> Vec<Vec<Pt>>
     }
     let valid = pattern.iter().all(|v| v.is_finite() && *v >= 0.0);
     let base: f32 = pattern.iter().sum();
-    if pattern.is_empty() || !valid || !(base > 0.0) {
+    if pattern.is_empty() || !valid || base.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
         return vec![points.to_vec()];
     }
     let pat: Vec<f32> = if pattern.len() % 2 == 1 { pattern.iter().chain(pattern.iter()).copied().collect() } else { pattern.to_vec() };
@@ -88,14 +88,14 @@ pub fn dash_polyline(points: &[Pt], pattern: &[f32], phase: f32) -> Vec<Vec<Pt>>
         }
     }
 
-    let mut on = idx % 2 == 0;
+    let mut on = idx.is_multiple_of(2);
     let mut at = points[0];
     let mut cur: Vec<Pt> = if on { vec![at] } else { Vec::new() };
     let mut out: Vec<Vec<Pt>> = Vec::new();
     for w in points.windows(2) {
         let (p, q) = (w[0], w[1]);
         let len = ((q.0 - p.0).powi(2) + (q.1 - p.1).powi(2)).sqrt();
-        if !(len > 0.0) {
+        if len.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
             continue;
         }
         let mut pos = 0.0f32;
@@ -242,7 +242,7 @@ pub fn fill(path: &Path, rule: FillRule, t: &Affine, clip: Option<&Coverage>, w:
             by1 = by1.max(p.1);
         }
     }
-    if !(bx0 <= bx1) {
+    if !matches!(bx0.partial_cmp(&bx1), Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)) {
         return Coverage::empty();
     }
     let x0 = x0.max(bx0.floor().max(-1e9) as i32);
@@ -345,15 +345,15 @@ pub fn fill_polygons(polys: &[Vec<Pt>], rule: FillRule, w: usize, h: usize) -> C
     let weight = 1.0 / SUB as f32;
     let mut acc = vec![0.0f32; w];
     let mut xs: Vec<(f32, i32)> = Vec::new();
-    for y in 0..h {
-        if rows[y].is_empty() {
+    for (y, row) in rows.iter().enumerate() {
+        if row.is_empty() {
             continue;
         }
         acc.iter_mut().for_each(|v| *v = 0.0);
         for sub in 0..SUB {
             let sy = y as f32 + (sub as f32 + 0.5) / SUB as f32;
             xs.clear();
-            for &ei in &rows[y] {
+            for &ei in row {
                 let e = &edges[ei as usize];
                 if sy >= e.y0 && sy < e.y1 {
                     xs.push((e.x0 + (sy - e.y0) * (e.x1 - e.x0) / (e.y1 - e.y0), e.dir));
@@ -454,7 +454,7 @@ pub fn stroke_polygons(runs: &[Run], style: &StrokeStyle) -> Vec<Vec<Pt>> {
     for run in runs {
         let mut pts: Vec<Pt> = Vec::with_capacity(run.points.len() + 1);
         for &p in &run.points {
-            if pts.last().map_or(true, |l| (l.0 - p.0).abs() > 1e-4 || (l.1 - p.1).abs() > 1e-4) {
+            if pts.last().is_none_or(|l| (l.0 - p.0).abs() > 1e-4 || (l.1 - p.1).abs() > 1e-4) {
                 pts.push(p);
             }
         }

@@ -294,7 +294,7 @@ pub fn aes_cbc_decrypt_raw(key: &[u8], iv: &[u8], data: &[u8]) -> Option<Vec<u8>
     let mut prev = [0u8; 16];
     prev.copy_from_slice(iv.get(..16)?);
     let mut out = Vec::with_capacity(data.len());
-    for chunk in data.chunks_exact(16) {
+    for chunk in data.as_chunks::<16>().0 {
         let mut b = [0u8; 16];
         b.copy_from_slice(chunk);
         let cipher = b;
@@ -314,7 +314,7 @@ pub fn aes_cbc_encrypt_raw(key: &[u8], iv: &[u8], data: &[u8]) -> Option<Vec<u8>
     let mut prev = [0u8; 16];
     prev.copy_from_slice(iv.get(..16)?);
     let mut out = Vec::with_capacity(data.len());
-    for chunk in data.chunks_exact(16) {
+    for chunk in data.as_chunks::<16>().0 {
         let mut b = [0u8; 16];
         for i in 0..16 {
             b[i] = chunk[i] ^ prev[i];

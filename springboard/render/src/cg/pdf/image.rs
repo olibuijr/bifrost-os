@@ -53,7 +53,7 @@ fn from_gfx(img: &Image) -> PdfImage {
 
 /// A premultiplied software image from a decoded one.
 pub fn to_gfx(img: &PdfImage) -> Image {
-    Image { w: img.w, h: img.h, px: img.rgba.chunks_exact(4).map(|p| rgba(p[0], p[1], p[2], p[3])).collect() }
+    Image { w: img.w, h: img.h, px: img.rgba.as_chunks::<4>().0.iter().map(|p| rgba(p[0], p[1], p[2], p[3])).collect() }
 }
 
 fn flag(doc: &Doc, d: &Dict, key: &str) -> bool {
@@ -195,7 +195,7 @@ fn raw_image(doc: &Doc, d: &Dict, data: &[u8], w: usize, h: usize, res: Option<&
 /// Applies /SMask or a stencil /Mask stream to the alpha channel.
 fn apply_masks(doc: &Doc, d: &Dict, img: &mut PdfImage, res: Option<&Dict>) {
     let plane: Option<(usize, usize, Vec<u8>)> = if let Obj::Stream(sm) = doc.field(d, "SMask") {
-        decode_depth(doc, &sm, res, 1).map(|m| (m.w, m.h, m.rgba.chunks_exact(4).map(|p| p[0]).collect()))
+        decode_depth(doc, &sm, res, 1).map(|m| (m.w, m.h, m.rgba.as_chunks::<4>().0.iter().map(|p| p[0]).collect()))
     } else if let Obj::Stream(m) = doc.field(d, "Mask") {
         stencil_plane(doc, &m)
     } else {
@@ -222,7 +222,7 @@ fn apply_masks(doc: &Doc, d: &Dict, img: &mut PdfImage, res: Option<&Dict>) {
     } else if mw != img.w || mh != img.h {
         alpha = nearest(&alpha, mw, mh, img.w, img.h);
     }
-    for (p, a) in img.rgba.chunks_exact_mut(4).zip(alpha) {
+    for (p, a) in img.rgba.as_chunks_mut::<4>().0.iter_mut().zip(alpha) {
         p[3] = ((p[3] as u32 * a as u32 + 127) / 255) as u8;
     }
 }

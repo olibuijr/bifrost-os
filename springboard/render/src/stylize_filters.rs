@@ -89,8 +89,8 @@ pub fn pixellate(img: &Image, center: (f32, f32), scale: f32) -> Image {
         for x in 0..img.w {
             let e = sums.entry(key(x, y)).or_insert(([0.0; 4], 0.0));
             let c = ch(img.px[y * img.w + x]);
-            for i in 0..4 {
-                e.0[i] += c[i];
+            for (a, v) in e.0.iter_mut().zip(c) {
+                *a += v;
             }
             e.1 += 1.0;
         }
@@ -151,8 +151,8 @@ pub fn crystallize(img: &Image, radius: f32) -> Image {
             let (i, _) = nearest(&sd, x as f32 + 0.5, y as f32 + 0.5);
             idx[y * img.w + x] = i;
             let c = ch(img.px[y * img.w + x]);
-            for k in 0..4 {
-                acc[i].0[k] += c[k];
+            for (a, v) in acc[i].0.iter_mut().zip(c) {
+                *a += v;
             }
             acc[i].1 += 1.0;
         }

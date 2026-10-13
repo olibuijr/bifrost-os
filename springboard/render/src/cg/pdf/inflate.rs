@@ -258,7 +258,7 @@ pub fn zlib(data: &[u8]) -> Result<Vec<u8>, Error> {
 /// Lenient zlib: a bad header falls back to raw DEFLATE, errors keep the
 /// partial output.
 pub fn zlib_lenient(data: &[u8]) -> Vec<u8> {
-    let header_ok = data.len() >= 2 && data[0] & 0x0f == 8 && (((data[0] as u16) << 8) | data[1] as u16) % 31 == 0;
+    let header_ok = data.len() >= 2 && data[0] & 0x0f == 8 && (((data[0] as u16) << 8) | data[1] as u16).is_multiple_of(31);
     if header_ok {
         inflate_lenient(&data[2..])
     } else {

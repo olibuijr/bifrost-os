@@ -387,7 +387,7 @@ impl ImageSource {
     pub fn image_premultiplied(&self, index: usize) -> Option<Image> {
         let f = self.all()?.frames.get(index)?;
         let mut img = Image::new(f.w, f.h);
-        for (o, p) in img.px.iter_mut().zip(f.rgba8.chunks_exact(4)) {
+        for (o, p) in img.px.iter_mut().zip(f.rgba8.as_chunks::<4>().0.iter()) {
             *o = crate::gfx::rgba(p[0], p[1], p[2], p[3]);
         }
         Some(img)

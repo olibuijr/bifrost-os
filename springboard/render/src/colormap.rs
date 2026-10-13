@@ -27,6 +27,11 @@ impl ColorMap {
         self.entries.len()
     }
 
+    /// True when there are no gradient entries.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
     /// The gradient colour at `t` in 0..=1, linearly interpolated between the two nearest entries.
     /// `t` is clamped.
     pub fn at(&self, t: f32) -> Rgb {
@@ -72,6 +77,11 @@ impl Palette {
     /// Number of palette colours.
     pub fn len(&self) -> usize {
         self.colours.len()
+    }
+
+    /// True when the palette has no colours.
+    pub fn is_empty(&self) -> bool {
+        self.colours.is_empty()
     }
 
     /// The palette colour nearest to `c`. A tie keeps the earlier entry.

@@ -127,7 +127,7 @@ pub fn from_bytes_u8(bytes: &[u8], layout: Layout) -> Option<Vec<u32>> {
         return None;
     }
     let n = layout.channels();
-    if bytes.len() % n != 0 {
+    if !bytes.len().is_multiple_of(n) {
         return None;
     }
     let px = bytes
@@ -146,11 +146,11 @@ pub fn from_bytes_u8(bytes: &[u8], layout: Layout) -> Option<Vec<u32>> {
 /// result is exact at the corners of the cube and has no paper colour. Returns None when the length is not a
 /// whole number of CMYK pixels.
 pub fn cmyk_to_rgb_u8(bytes: &[u8]) -> Option<Vec<u8>> {
-    if bytes.len() % 4 != 0 {
+    if !bytes.len().is_multiple_of(4) {
         return None;
     }
     let mut out = Vec::with_capacity(bytes.len() / 4 * 3);
-    for p in bytes.chunks_exact(4) {
+    for p in bytes.as_chunks::<4>().0 {
         let light_k = 255 - p[3] as u32;
         for &ink in &p[..3] {
             let light = (255 - ink as u32) * light_k;
@@ -168,11 +168,13 @@ pub fn gray_to_rgb_u8(bytes: &[u8]) -> Vec<u8> {
 /// Converts 8-bit RGB pixels to grey with the Rec. 601 luma weights, in integers: `(77 r + 150 g + 29 b + 128) / 256`.
 /// Returns None when the length is not a whole number of RGB pixels.
 pub fn rgb_to_gray_u8(bytes: &[u8]) -> Option<Vec<u8>> {
-    if bytes.len() % 3 != 0 {
+    if !bytes.len().is_multiple_of(3) {
         return None;
     }
     let grey: Vec<u8> = bytes
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .map(|p| ((77 * p[0] as u32 + 150 * p[1] as u32 + 29 * p[2] as u32 + 128) / 256) as u8)
         .collect();
     Some(grey)
@@ -181,7 +183,7 @@ pub fn rgb_to_gray_u8(bytes: &[u8]) -> Option<Vec<u8>> {
 /// Splits an interleaved 8-bit buffer with `channels` values per pixel into one plane per channel.
 /// Returns None when `channels` is zero or the length is not a whole number of pixels.
 pub fn deinterleave_u8(bytes: &[u8], channels: usize) -> Option<Vec<Vec<u8>>> {
-    if channels == 0 || bytes.len() % channels != 0 {
+    if channels == 0 || !bytes.len().is_multiple_of(channels) {
         return None;
     }
     let planes: Vec<Vec<u8>> = (0..channels)

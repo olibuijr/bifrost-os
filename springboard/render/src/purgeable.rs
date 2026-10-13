@@ -246,12 +246,16 @@ fn open_triggers() -> Option<(std::fs::File, std::fs::File)> {
     Some((open(b"some 150000 2000000\0")?, open(b"full 100000 2000000\0")?))
 }
 
+/// The handler `hosted_watcher` returns: `ready` flags per fd and the caller's clock in, next deadline out.
+#[cfg(target_os = "linux")]
+pub type HostedHandler = Box<dyn FnMut(&[bool], f64) -> Option<f64> + Send>;
+
 /// The pressure watcher as fds plus a handler, for a host that already blocks in `poll(2)` on its own thread
 /// (the shell's sys-watch), instead of a thread of its own. `ready[i]` says whether `fds[i]` signalled (POLLPRI
 /// or an error); the handler returns its next deadline in ms on the caller's clock, `now` (after an event, two
 /// quiet windows, 4 s, mean the pressure is gone). None when the watcher already runs or PSI is missing.
 #[cfg(target_os = "linux")]
-pub fn hosted_watcher() -> Option<(Vec<i32>, Box<dyn FnMut(&[bool], f64) -> Option<f64> + Send>)> {
+pub fn hosted_watcher() -> Option<(Vec<i32>, HostedHandler)> {
     use std::os::fd::AsRawFd;
     let mut out = None;
     WATCH_ONCE.call_once(|| {

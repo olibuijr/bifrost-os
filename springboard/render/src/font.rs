@@ -994,6 +994,8 @@ impl Font<'_> {
         img
     }
 
+    // One shaped run: glyph ids, metrics and the target plane geometry; grouping them would only add a one-use struct.
+    #[allow(clippy::too_many_arguments)]
     fn raster_string(&self, gids: &[u16], advances: &[f32], offs: &[(f32, f32)], k: f32, pad: f32, baseline: f32, w: usize, h: usize, norm: &[f32]) -> Vec<u8> {
         let mut lines = Vec::new();
         let mut pen = pad;

@@ -59,6 +59,8 @@ impl Transform2D {
     }
 
     /// `self · o`: `o` is applied to a point first, then `self`.
+    // Called from many crates (sdk, chrome, gfx2d, shell); a rename would touch all of them.
+    #[allow(clippy::should_implement_trait)]
     pub fn mul(self, o: Transform2D) -> Transform2D {
         Transform2D {
             a: self.a * o.a + self.c * o.b,
@@ -396,9 +398,8 @@ pub(crate) fn with_font<R>(face: u64, f: impl FnOnce(&Font<'static>) -> R) -> Op
     let data = face_data(face)?;
     FONTS.with(|c| {
         let mut m = c.borrow_mut();
-        if !m.contains_key(&face) {
-            let parsed = Font::parse(data)?;
-            m.insert(face, parsed);
+        if let std::collections::hash_map::Entry::Vacant(e) = m.entry(face) {
+            e.insert(Font::parse(data)?);
         }
         let font = m.get(&face)?;
         Some(f(font))
@@ -515,7 +516,7 @@ fn blend(dst: &mut u32, src: u32, cov: f32, lerp: bool) {
 fn add_span(cov: &mut [f32], base: f32, a: f32, b: f32, weight: f32) {
     let a = a.max(base);
     let b = b.min(base + cov.len() as f32);
-    if !(b > a) {
+    if b.partial_cmp(&a) != Some(std::cmp::Ordering::Greater) {
         return;
     }
     let first = a.floor() as usize;
@@ -721,7 +722,7 @@ fn stroke_polys(s: &mut Surface, polys: &[(Vec<(f32, f32)>, bool)], hw: f32, col
             maxy = maxy.max(p.1);
         }
     }
-    if segs.is_empty() || !(hw > 0.0) {
+    if segs.is_empty() || hw.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
         return;
     }
     let x0 = (minx - hw - 1.0).floor().max(0.0);

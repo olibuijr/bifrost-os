@@ -193,7 +193,7 @@ impl<'a> Parser<'a> {
                     let genr = self.token();
                     if !genr.is_empty() && genr.iter().all(|c| c.is_ascii_digit()) {
                         self.skip_ws();
-                        if self.peek() == Some(b'R') && self.d.get(self.pos + 1).map_or(true, |&n| is_ws(n) || is_delim(n)) {
+                        if self.peek() == Some(b'R') && self.d.get(self.pos + 1).is_none_or(|&n| is_ws(n) || is_delim(n)) {
                             self.pos += 1;
                             let g = std::str::from_utf8(genr).ok().and_then(|g| g.parse().ok()).unwrap_or(0);
                             return Obj::Ref(i as u32, g);
