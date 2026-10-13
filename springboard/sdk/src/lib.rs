@@ -171,6 +171,7 @@ pub mod restoration;
 pub mod image_source;
 pub use restoration::RestorableState;
 pub mod attributed;
+pub mod layer_kinds;
 pub mod spellcheck;
 pub mod translation;
 pub mod wlan;
