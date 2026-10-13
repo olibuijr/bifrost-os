@@ -11,7 +11,7 @@ use springboard::shell::browser::images::{decode, PixelFormat};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 /// Decoded tiles kept in memory; past this the ones not wanted by the view are dropped.
 const KEEP_TILES: usize = 400;
@@ -63,6 +63,8 @@ pub struct TileLoader {
     finished: Finished,
     last_sent: Arc<Mutex<Option<u64>>>,
     online: bool,
+    /// a cached tile older than this is fetched again
+    max_age: Duration,
 }
 
 impl TileLoader {
@@ -81,7 +83,22 @@ impl TileLoader {
             finished: Arc::new(Mutex::new(Vec::new())),
             last_sent: Arc::new(Mutex::new(None)),
             online: true,
+            max_age: MAX_TILE_AGE,
         }
+    }
+
+    /// A loader for a layer drawn over the base map (traffic): its own cache folder, and tiles that are fetched again
+    /// once they are older than `max_age`.
+    pub fn overlay(root: &Path, source: TileSource, net: Arc<dyn Net>, max_age: Duration) -> Self {
+        let mut loader = TileLoader::new(root, source, net);
+        loader.cache = TileCache::new(root, &loader.source.overlay_cache_key());
+        loader.max_age = max_age;
+        loader
+    }
+
+    /// Lets tiles that failed to load be asked for again (when a layer is switched on).
+    pub fn retry_failed(&mut self) {
+        self.failed.clear();
     }
 
     /// Another map type: its own source, cache folder and tiles.
@@ -123,7 +140,7 @@ impl TileLoader {
                     }
                 }
             }
-            if self.cache.is_fresh(t, MAX_TILE_AGE) && self.images.contains_key(&t) {
+            if self.cache.is_fresh(t, self.max_age) && self.images.contains_key(&t) {
                 continue;
             }
             if self.online && !self.failed.contains(&t) && !self.pending.contains(&t) {
@@ -148,7 +165,7 @@ impl TileLoader {
             if self.pending.contains(&t) {
                 continue;
             }
-            if self.job_total > 0 && self.cache.is_fresh(t, MAX_TILE_AGE) {
+            if self.job_total > 0 && self.cache.is_fresh(t, self.max_age) {
                 self.job_done += 1;
                 continue;
             }
@@ -286,6 +303,30 @@ mod tests {
         assert!(loader.want(&[t]));
         assert!(loader.image(t).is_some());
         assert!(!loader.busy(), "a fresh cached tile asks for nothing");
+    }
+
+    #[test]
+    fn an_overlay_reads_its_own_folder_and_refetches_stale_tiles() {
+        let root = dir("overlay");
+        let source = TileSource::new("https://tile.openstreetmap.org/traffic/{z}/{x}/{y}.png", "ua").unwrap();
+        let t = TileId { z: 2, x: 1, y: 1 };
+        // a base tile of the same host must not show up as traffic
+        TileCache::new(&root, &source.cache_key()).write(t, &png()).unwrap();
+        let mut loader = TileLoader::overlay(&root, source.clone(), Arc::new(crate::net::Offline), crate::source::TRAFFIC_MAX_AGE);
+        loader.set_online(false);
+        assert!(!loader.want(&[t]));
+        assert!(loader.image(t).is_none());
+        TileCache::new(&root, &source.overlay_cache_key()).write(t, &png()).unwrap();
+        assert!(loader.want(&[t]));
+        assert!(loader.image(t).is_some());
+        // zero tolerance for age: the cached tile counts as stale, so a fetch is queued once online
+        let mut old = TileLoader::overlay(&root, source, Arc::new(crate::net::Offline), Duration::ZERO);
+        old.want(&[t]);
+        assert!(!old.busy(), "offline: nothing is asked for");
+        old.set_online(true);
+        std::thread::sleep(Duration::from_millis(20));
+        old.want(&[t]);
+        assert!(old.busy(), "a stale overlay tile is asked for again");
     }
 
     #[test]
