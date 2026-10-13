@@ -9,3 +9,4 @@ bifrost-core = { path = "../core" }
 bifrost-ui = { path = "../ui" }
 # the shell's PNG writer, settings store and data directory (screencapture, pmset)
 springboard = { path = ".." }
+bifrost-proto = { path = "../proto" }
