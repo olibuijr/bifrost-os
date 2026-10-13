@@ -116,7 +116,11 @@ fn mode_label(mode: &str) -> String {
     mode.replace('x', " \u{d7} ")
 }
 
-pub fn spec(gpus: &[Gpu]) -> Spec {
+/// The page for the adapters read so far; `None` while the read runs (a placeholder row, not "Not detected").
+pub fn spec(gpus: Option<&[Gpu]>) -> Spec {
+    let Some(gpus) = gpus else {
+        return Spec { id: PageId::Graphics, title: "Graphics".into(), large: false, groups: vec![Group::new(vec![Item::new("Graphics").value("Loading…").tint(super::list::Tint::Dim)])] };
+    };
     let mut groups = Vec::new();
     for g in gpus {
         let mut rows = vec![Item::new("Graphics").value(g.name.clone()), Item::new("Driver").value(if g.driver.is_empty() { "None".into() } else { g.driver.clone() })];
@@ -200,12 +204,19 @@ mod tests {
     #[test]
     fn the_page_lists_rows_the_driver_exposes_and_a_displays_group() {
         let root = fake();
-        let s = spec(&read_from(&root, IDS));
+        let s = spec(Some(&read_from(&root, IDS)));
         let labels: Vec<_> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| (i.label.clone(), i.value.clone()))).collect();
         assert!(labels.contains(&("Clock Speed".into(), "350 of 1050 MHz".into())));
         assert!(labels.contains(&("DP-1".into(), "2560 \u{d7} 1440".into())));
         assert!(!labels.iter().any(|(l, _)| l == "Video Memory"), "no VRAM row when the driver has none");
-        assert_eq!(spec(&[]).groups.len(), 1);
+        assert_eq!(spec(Some(&[])).groups.len(), 1);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn the_page_shows_a_placeholder_until_the_read_lands() {
+        let s = spec(None);
+        assert_eq!(s.groups.len(), 1);
+        assert_eq!(s.groups[0].items[0].value, "Loading…");
     }
 }

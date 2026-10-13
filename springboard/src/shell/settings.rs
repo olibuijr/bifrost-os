@@ -18,6 +18,7 @@ use super::passcode::{self, Lock, LockOut, Overlay, OverlayOut};
 use super::screentime::{self, config::Config as StConfig, page::{StEdit, View as StView}, usage as st_usage};
 use super::prefs::Prefs;
 use super::storage::Scanner;
+use super::async_load::Loaded;
 use bifrost_ui::transition::{Ease, Subtype, Transition};
 use super::storage_page::{self, DevState, PageState};
 use super::update::{self, Updater};
@@ -253,8 +254,8 @@ pub struct Settings {
     login_moved: Vec<String>,
     /// the Login Items & Extensions page's background agents and app extensions (`login_items_page::scan_installed`), with the agents the user turned off
     login_ext: super::login_items_page::LoginExtensions,
-    /// Settings > Fonts, loaded when the page opens
-    fonts: super::pages::FontsView,
+    /// Settings > Fonts: the roles and the library, read on a worker when the page opens
+    fonts: Loaded<super::pages::FontsView>,
     sound: super::sound_page::SoundView,
     login_out: Vec<String>,
     /// the Focus time row the time-of-day picker is editing
@@ -279,8 +280,10 @@ pub struct Settings {
     data_dir: PathBuf,
     /// the bifrost Storage measurement, run on a worker thread
     scan: Scanner,
-    /// the graphics adapters shown by Display > Graphics, read when the page opens
-    gpus: Vec<super::gpu_page::Gpu>,
+    /// the graphics adapters shown by Display > Graphics, read on a worker when the page opens
+    gpus: Loaded<Vec<super::gpu_page::Gpu>>,
+    /// Settings > Sharing: the computer name and the sharing services, read on a worker when the page opens
+    sharing: Loaded<super::sharing_page::View>,
     /// Developer switches as read from the Android properties
     dev: DevState,
     updater: Updater,
@@ -475,7 +478,8 @@ impl Settings {
             detail: String::new(),
             data_dir: super::apphost::root(),
             scan: Scanner::default(),
-            gpus: Vec::new(),
+            gpus: Loaded::default(),
+            sharing: Loaded::default(),
             dev: DevState { perf_hud: prefs.get(PERF_HUD_PREF) == Some("1"), gpu_scanout: crate::bare::scanout::pref_on(prefs.get(GPU_SCANOUT_PREF)), ..DevState::read() },
             updater: Updater::new(super::apphost::root(), prefs.get(update::URL_PREF)),
             update_badge: false,
@@ -537,7 +541,7 @@ impl Settings {
 
     fn model(&self) -> Model<'_> {
         let now = self.info.battery_history.last().map_or(0, |s| s.unix);
-        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: &self.fonts, sound: &self.sound }
+        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: self.fonts.get().unwrap_or(&super::pages::NO_FONTS), sound: &self.sound }
     }
 
     fn wallpaper_name(&self) -> String {
@@ -568,7 +572,8 @@ impl Settings {
                 s.groups.push(notify_page::schedule_group(&NotifyPrefs { clock_24h: self.opts.clock_24h, ..self.notify.clone() }));
                 s
             }
-            PageId::Graphics => super::gpu_page::spec(&self.gpus),
+            PageId::Graphics => super::gpu_page::spec(self.gpus.get().map(Vec::as_slice)),
+            PageId::Sharing => super::pages::sharing_spec(&self.opts, self.sharing.get()),
             PageId::GameControllers | PageId::GameController(_) => super::game_controllers_page::spec(id, &super::services::gamepad_service::snapshot()),
             PageId::Storage | PageId::Passcode | PageId::Developer => {
                 let passcode_on = passcode::Store::load(self.data_dir.join("passcode.ini")).enabled();
@@ -791,15 +796,15 @@ impl Settings {
     }
 
     /// Settings > Fonts: each role's default family and saved override (the data dir's settings.ini, as the
-    /// shell reads it at start), and the font library in the data dir.
+    /// shell reads it at start), and the font library in the data dir. Read on a worker; the page shows the last answer until this one lands.
     fn load_fonts(&mut self) {
         use bifrost_render::fontprefs::{family, font_override, installed, library, FontRole};
         let dir = self.data_dir.to_string_lossy().into_owned();
-        self.fonts = super::pages::FontsView {
+        self.fonts.start("fonts-read", move || super::pages::FontsView {
             defaults: FontRole::ALL.map(|r| family(&format!("{dir}/{}", r.file())).unwrap_or_default()),
             overrides: FontRole::ALL.map(|r| font_override(&dir, r)),
             library: installed(&[library(&dir)]),
-        };
+        });
     }
 
     pub(super) fn set_defaults(&mut self, v: Vec<super::defaultapps::CategoryView>) {
@@ -1150,6 +1155,11 @@ impl Settings {
             self.rebuild(ui);
             frame = true;
         }
+        // panes whose system read has landed show it on the next frame (a read still running shows its placeholder)
+        if self.gpus.poll() | self.sharing.poll() | self.fonts.poll() {
+            self.rebuild_visible(ui);
+            frame = true;
+        }
         if self.stale_depth > 0 && self.transition.is_none() && self.stack.len() < self.stale_depth {
             self.rebuild(ui);
             frame = true;
@@ -1206,7 +1216,7 @@ impl Settings {
         if self.transition.is_some() || self.list().is_some_and(|p| p.animating(t)) || self.sidebar.as_ref().is_some_and(|p| p.animating(t)) || self.passcode.as_ref().is_some_and(|o| o.animating(t)) || self.st_gate.as_ref().is_some_and(|(l, _)| l.animating(t)) {
             return Some(t);
         }
-        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() {
+        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() || self.gpus.busy() || self.sharing.busy() || self.fonts.busy() {
             return Some(t + 100.0);
         }
         self.search.next_wake(t).or_else(|| self.zone_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.time_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.sheet.as_ref().and_then(|sh| sh.next_wake(t)))
@@ -1215,7 +1225,8 @@ impl Settings {
     fn push(&mut self, ui: &Ui, id: PageId, t: f64) {
         match id {
             PageId::Storage => self.scan.start(self.data_dir.clone()),
-            PageId::Graphics => self.gpus = super::gpu_page::read_system(),
+            PageId::Graphics => self.gpus.start("gpu-read", super::gpu_page::read_system),
+            PageId::Sharing => self.sharing.start("sharing-read", super::sharing_page::View::load),
             PageId::Developer => {
                 let (perf_hud, gpu_scanout) = (self.dev.perf_hud, self.dev.gpu_scanout);
                 self.dev = DevState { perf_hud, gpu_scanout, ..DevState::read() };
@@ -1969,7 +1980,9 @@ impl Settings {
                 if let Err(e) = prefs.set(role.pref(), path.as_deref().unwrap_or("")) {
                     eprintln!("springboard: settings.ini: {e}");
                 }
-                self.fonts.overrides[role.index()] = path;
+                if let Some(f) = self.fonts.get_mut() {
+                    f.overrides[role.index()] = path;
+                }
                 self.rebuild_visible(ui);
                 vec![]
             }
@@ -2190,7 +2203,10 @@ impl Settings {
                 vec![]
             }
             Action::Sharing(edit) => {
-                let r = super::sharing_page::apply(&edit, &super::sharing_page::View::load());
+                let view = self.sharing.get().cloned().unwrap_or_else(super::sharing_page::View::load);
+                let r = super::sharing_page::apply(&edit, &view);
+                // the services are read again on a worker; the page keeps the last answer until it lands
+                self.sharing.start("sharing-read", super::sharing_page::View::load);
                 self.edit_result(ui, t, r);
                 vec![]
             }
@@ -2882,6 +2898,16 @@ mod tests {
         (dir, lib.to_string_lossy().into_owned())
     }
 
+    /// Lets the Fonts read on its worker land, as the frames would.
+    fn settle_fonts(st: &mut Settings, ui: &Ui) {
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while st.fonts.busy() && std::time::Instant::now() < end {
+            st.tick(ui, 0.0);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        st.tick(ui, 0.0);
+    }
+
     #[test]
     fn picking_a_library_font_saves_the_override_the_shell_reads() {
         use bifrost_render::fontprefs::{family, FontRole};
@@ -2890,14 +2916,16 @@ mod tests {
         let (dir, lib) = font_dir("pick");
         st.set_data_dir(&dir);
         let name = family(&lib).expect("the library font has a family name");
-        for label in ["General", "Fonts", "System Font"] {
+        for label in ["General", "Fonts"] {
             tap_row(&mut st, &ui, &mut prefs, label);
         }
+        settle_fonts(&mut st, &ui);
+        tap_row(&mut st, &ui, &mut prefs, "System Font");
         assert_eq!(st.page(), PageId::FontPick(FontRole::System));
         tap_row(&mut st, &ui, &mut prefs, &name);
         assert_eq!(prefs.get(FontRole::System.pref()), Some(lib.as_str()), "saved under the key the shell reads at start");
-        assert_eq!(st.fonts.overrides[FontRole::System.index()].as_deref(), Some(lib.as_str()));
-        let default = format!("{} (Default)", st.fonts.defaults[FontRole::System.index()]);
+        assert_eq!(st.fonts.get().unwrap().overrides[FontRole::System.index()].as_deref(), Some(lib.as_str()));
+        let default = format!("{} (Default)", st.fonts.get().unwrap().defaults[FontRole::System.index()]);
         tap_row(&mut st, &ui, &mut prefs, &default);
         assert_eq!(prefs.get(FontRole::System.pref()), Some(""), "Default clears the override");
         std::fs::remove_dir_all(&dir).unwrap();

@@ -564,6 +564,20 @@ fn bluetooth_spec(m: &Model, page: impl Fn(&str, bool, Vec<Group>) -> Spec) -> S
     page("Bluetooth", false, groups)
 }
 
+/// Settings > Sharing: the computer name and services (`None` while they are read), then Nearby Share and AirPlay & Handoff.
+pub fn sharing_spec(o: &Options, view: Option<&super::sharing_page::View>) -> Spec {
+    let mut groups = match view {
+        Some(v) => super::sharing_page::groups(v),
+        None => vec![Group::new(vec![Item::new("Computer Name").value("Loading…").tint(Tint::Dim)])],
+    };
+    groups.push(Group::new(vec![
+        Item::new("Nearby Share").glyph(Glyph::Nearby).value(NEARBY_CHOICES.get(o.nearby).copied().unwrap_or(NEARBY_CHOICES[0])).link(PageId::Nearby),
+        Item::new("AirPlay & Handoff").value(if o.handoff { "Handoff On" } else { "Handoff Off" }).link(PageId::AirPlayHandoff),
+    ])
+    .footer("Choose who can share files with this computer nearby, and whether your other devices can pick up work from it."));
+    Spec { id: PageId::Sharing, title: "Sharing".into(), large: false, groups }
+}
+
 /// The page `id` as the model shows it now.
 pub fn spec(id: PageId, m: &Model) -> Spec {
     let (info, o) = (m.info, m.opts);
@@ -799,15 +813,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             vec![Group::new(NEARBY_CHOICES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.nearby, Action::Pick(Pick::Nearby(i)))).collect())
                 .footer("Nearby Share lets you share instantly with devices nearby. You can be discoverable to receive from everyone or only from devices you have already seen nearby.")],
         ),
-        PageId::Sharing => {
-            let mut groups = super::sharing_page::groups(&super::sharing_page::View::load());
-            groups.push(Group::new(vec![
-                Item::new("Nearby Share").glyph(Glyph::Nearby).value(NEARBY_CHOICES.get(o.nearby).copied().unwrap_or(NEARBY_CHOICES[0])).link(PageId::Nearby),
-                Item::new("AirPlay & Handoff").value(if o.handoff { "Handoff On" } else { "Handoff Off" }).link(PageId::AirPlayHandoff),
-            ])
-            .footer("Choose who can share files with this computer nearby, and whether your other devices can pick up work from it."));
-            page("Sharing", false, groups)
-        }
+        // the Settings pane reads the computer name and services on a worker and passes them in (`settings.rs`)
+        PageId::Sharing => sharing_spec(o, None),
         PageId::PrintScan => super::print_scan_page::spec(&super::print_scan_page::View::load()),
         PageId::LockScreen => page(
             "Lock Screen",
@@ -1779,13 +1786,15 @@ mod tests {
         assert!(items.iter().any(|i| i.action == Action::Push(PageId::LockScreen)), "Lock Screen is in the root list");
 
         // the computer name and the sharing services come first; Nearby Share and AirPlay & Handoff are the last group
-        let sharing = spec(PageId::Sharing, &model(&info, &opts));
+        let view = super::sharing_page::View { computer: "Midget".into(), services: Vec::new() };
+        let sharing = sharing_spec(&opts, Some(&view));
         assert_eq!(sharing.groups[0].items[0].action, Action::Sharing(super::super::sharing_page::Edit::ComputerName));
         assert_eq!(sharing.groups[2].items[0].action, Action::Push(PageId::Nearby));
         assert_eq!(sharing.groups[2].items[0].value, NEARBY_CHOICES[opts.nearby.min(NEARBY_CHOICES.len() - 1)]);
         assert_eq!(sharing.groups[2].items[1].action, Action::Push(PageId::AirPlayHandoff), "AirPlay & Handoff is reachable, not an orphan page");
         opts.handoff = true;
-        assert_eq!(spec(PageId::Sharing, &model(&info, &opts)).groups[2].items[1].value, "Handoff On");
+        assert_eq!(sharing_spec(&opts, Some(&view)).groups[2].items[1].value, "Handoff On");
+        assert_eq!(sharing_spec(&opts, None).groups[0].items[0].value, "Loading…", "the page shows a placeholder until the read lands");
 
         let lock = spec(PageId::LockScreen, &model(&info, &opts));
         assert_eq!(lock.groups[0].items[0].action, Action::Push(PageId::Passcode));

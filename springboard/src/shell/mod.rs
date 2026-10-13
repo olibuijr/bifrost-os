@@ -111,6 +111,7 @@ pub mod screensaver;
 pub mod storage;
 pub mod storage_page;
 pub mod gpu_page;
+pub mod async_load;
 pub mod quicksearch;
 pub mod quicksearch_math;
 pub mod switcher;
