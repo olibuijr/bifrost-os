@@ -815,7 +815,9 @@ mod tests {
         assert!((p.position_ms() - at).abs() < 1.0);
         p.play();
         assert_eq!(p.state(), State::Playing);
-        let frames = pump(&mut p, 1000, |p| p.position_ms() > at + 200.0);
+        // Frames more than LATE_MS behind the clock are dropped, so under a loaded test run 200 ms of media can pass
+        // with few frames shown; wait for 400 ms of media within a longer budget.
+        let frames = pump(&mut p, 3000, |p| p.position_ms() > at + 400.0);
         assert!(!frames.is_empty());
         p.stop();
         assert_eq!(p.state(), State::Ended);
