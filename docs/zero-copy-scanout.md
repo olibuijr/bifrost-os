@@ -1,11 +1,11 @@
 # Zero-copy scanout and GPU compositing plan (OLI-695)
 
-## State (0.2.2)
-Zero-copy scanout is implemented and OFF by default. Pieces:
+## State (shell 0.7.25)
+Zero-copy scanout is implemented for the bare (tablet, no Wayland) path and is ON when the `gpu_scanout` pref is unset; `0` turns it off. The Wayland PC session never uses it (`!wayland` in `bin/shell.rs`): `bifrost-wm` owns scanout there. Pieces:
 - `bare/scanout.rs`: kernel step (dumb buffer exported as dma-buf), pure decision table (`decide`), `FrameSwitch`.
 - `gpu/scanout.rs`: runtime probe (KMS + EGL import for XB24/XR24, both methods).
 - `gpu::Gpu::enable_scanout` / `present_scanout` / `disable_scanout`: render straight into 3 scanout buffers, page-flip the finished one.
-- `bin/shell.rs`: enabled at start when the pref `gpu_scanout` is `1` (Settings > Developer > Zero-Copy GPU Output, restart); flip failure or GPU loss drops back to the copy path and frees the buffers.
+- `bin/shell.rs`: enabled at start when the pref `gpu_scanout` is unset or `1` (Settings > Developer > Zero-Copy GPU Output, restart); flip failure or GPU loss drops back to the copy path and frees the buffers.
 
 ## Host benchmark (`cargo run --release --example scanout_bench`)
 The CPU copy-out that scanout removes, 1920x1200, ms per frame (x86 host, 4 threads available):
@@ -22,7 +22,7 @@ Host memory bandwidth is far above a write-combined dumb buffer's, so these are 
 ## Plan
 1. Done: probe, buffers, render-to-scanout, flip, fallback, Developer toggle (flag).
 2. On-device trial (user present, per HANDOFF: never deploy while they are on the machine): enable the toggle, restart, check `bifrost logs` for "zero-copy scanout on", compare frame times for rotation/app open/switcher against the copy path using the perf HUD; look for tearing, stale regions (damage + 3 buffers) and suspend/resume (buffers and KMS state across sleep).
-3. Go/no-go for default-on: no flip failures over a day, large-damage frames at least 3 ms faster, no visual artifacts, suspend/resume clean. Then flip the default of `pref_on` and keep the toggle as the escape hatch.
+3. (default flipped to on when the pref is unset; the criteria stay the check) Go/no-go for default-on: no flip failures over a day, large-damage frames at least 3 ms faster, no visual artifacts, suspend/resume clean. The toggle stays as the escape hatch.
 4. Later: GPU blur for materials and Settings push/pop (keeps frames on the GPU instead of falling back to CPU composition), GSP 2D blitter (`/dev/gsp`) for the remaining CPU paths.
 
 Owner of the device trial: QA Engineer (Final QA), needs the user's go-ahead.
