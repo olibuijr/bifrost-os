@@ -564,11 +564,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/shaders/mod.rs, springboard/ui/src/image_kernels.rs",
+   "status": "partial",
+   "note": "equivalent kernel in shader library; CPU fallback (blur, colour controls/matrix, sepia, vignette, affine, lanczos, source-over, convolution, histogram). Needs a Midget check for parity.",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreImage.framework/Versions/A/Resources/CIPortraitBlurStitchableV2.metallib",
@@ -627,11 +627,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/shaders/mod.rs, springboard/ui/src/image_kernels.rs",
+   "status": "partial",
+   "note": "equivalent kernel in shader library; CPU fallback (blur, colour controls/matrix, sepia, vignette, affine, lanczos, source-over, convolution, histogram). Needs a Midget check for parity.",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreImage.framework/Versions/A/Resources/ci_filters_stitchable.metallib",
@@ -648,11 +648,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/shaders/mod.rs, springboard/ui/src/image_kernels.rs",
+   "status": "partial",
+   "note": "equivalent kernel in shader library; CPU fallback (blur, colour controls/matrix, sepia, vignette, affine, lanczos, source-over, convolution, histogram). Needs a Midget check for parity.",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreImage.framework/Versions/A/Resources/ci_raw.metallib",
@@ -711,11 +711,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/shaders/mod.rs, springboard/ui/src/image_kernels.rs",
+   "status": "partial",
+   "note": "equivalent kernel in shader library; CPU fallback (blur, colour controls/matrix, sepia, vignette, affine, lanczos, source-over, convolution, histogram). Needs a Midget check for parity.",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreImage.framework/Versions/A/Resources/ci_stdlib_h.metallib",
@@ -732,11 +732,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/shaders/mod.rs, springboard/ui/src/image_kernels.rs",
+   "status": "partial",
+   "note": "equivalent kernel in shader library; CPU fallback (blur, colour controls/matrix, sepia, vignette, affine, lanczos, source-over, convolution, histogram). Needs a Midget check for parity.",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreImage.framework/Versions/A/Resources/ci_stdlib_stitchable.metallib",
@@ -753,11 +753,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/shaders/mod.rs, springboard/ui/src/image_kernels.rs",
+   "status": "partial",
+   "note": "equivalent kernel in shader library; CPU fallback (blur, colour controls/matrix, sepia, vignette, affine, lanczos, source-over, convolution, histogram). Needs a Midget check for parity.",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreImage.framework/Versions/A/Resources/ci_stdlib_stitchable_h.metallib",
@@ -774,11 +774,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: BifrOSt writes its own shaders",
+   "bifrost": "springboard/ui/src/shaders/mod.rs, springboard/ui/src/image_kernels.rs",
+   "status": "partial",
+   "note": "equivalent kernel in shader library; CPU fallback (blur, colour controls/matrix, sepia, vignette, affine, lanczos, source-over, convolution, histogram). Needs a Midget check for parity.",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   },
   {
    "id": "path:/System/Library/Frameworks/CoreImage.framework/Versions/A/Resources/ci_ubershader.metallib",
