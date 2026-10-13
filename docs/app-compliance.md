@@ -38,7 +38,7 @@ Rule IDs are the gate's own and stable; the third column names the bifrost-hig r
 | COL-03 | warning | COL-05 | hard-coded white/black background | fill with a scheme Pair (DETAIL_BG, CARD_BG, FIELD_BG ...); WHITE is right only for text on the accent |
 | TYP-01 | warning | TYP-01 | literal font size | use a MAC_*_PT token from render/src/ui.rs |
 | TYP-02 | warning | TYP-01 | literal size in fit() | measure with the same MAC_*_PT token the text is drawn with |
-| TYP-03 | warning | TYP-04 | iOS text-size constant on the PC | use the MAC_*_PT constant (macOS HIG table) |
+| TYP-03 | warning | TYP-04 | mobile text-size constant on the PC | use the MAC_*_PT constant (Golden Gate HIG table) |
 | LAY-01 | warning | LAY-04, COL-01 | literal corner radius | use prefs_layout m::* (window 17, card 13, plate 9, tile 5) or a named token; capsules pass a huge radius |
 | LAY-02 | warning | LAY-04 | literal radius constant | point the constant at prefs_layout m::* instead of a number |
 | LAY-03 | warning | LAY-03 | assumes a fixed resolution | derive layout from the window size (ctx.cfg, Layout) and ui.pt(); no screen-size literals |
@@ -60,7 +60,7 @@ Rule IDs are the gate's own and stable; the third column names the bifrost-hig r
 | RES-02 | warning | CTL-04 | polling next_wake with a worker thread | finish work on the main queue (DispatchQueue::main().async_) or wake_fd; return None from next_wake when idle |
 | RES-03 | warning | CTL-04 | no ctx.enable_sudden_termination() but no unsaved state | call ctx.enable_sudden_termination() once in configure (docs/bifrost-ui.md "Sudden termination") |
 | SDK-01 | error | CTL-01 | deprecated SDK API | use the replacement named at the item (#[deprecated] note) or in docs/bifrost-ui.md |
-| CHR-01 | error | CHR-07 | app menu repeats a shell menu | the shell bar already provides File, Edit, View, Window and Help: give app menus their own titles and route standard commands through the shell |
+| CHR-01 | error | CHR-07 | app menu repeats the shell Edit menu | an app menu titled File, View, Window or Help merges into the shell menu of that name (its items lead); the shell Edit already holds the standard items, so route them through the shell instead of a second Edit (`edit_menu()` next to the shell Edit is flagged too) |
 | CHR-02 | warning | CHR-02 | hand-built standard Edit items | standard Cut/Copy/Paste/Undo come from the shell Edit menu and ctx commands; do not rebuild them |
 | TST-01 | error | APP-02 | tests/compliance.rs missing | python3 tools/check-app-compliance.py --gen-tests --write |
 | TST-02 | warning | APP-02 | tests/compliance.rs differs from the template | python3 tools/check-app-compliance.py --gen-tests --write (keep KNOWN_GAPS) |
@@ -72,8 +72,17 @@ a rule appears that the app did not have.
 APP-10 checks the icon named by `manifest.toml` (`icon = "icon.png"`, relative to the app directory). The gate reads the
 PNG signature and the IHDR chunk with the Python stdlib (no Pillow): the file must be a PNG and exactly 180 x 180 pixels.
 It runs only when the icon file exists (APP-03 covers a missing one). Other formats and sizes, including a non-square
-180 x 120, are reported with the measured size. The twelve `*craft` apps are prebuilt upstream packages (`upstream.toml`): only
+180 x 120, are reported with the measured size. The `*craft` apps are prebuilt upstream packages (`upstream.toml`): only
 the manifest, CHANGELOG and upstream rules (APP-*) apply to them.
+
+Permissions the gate knows (`KNOWN_PERMS` in the script): `network`, `storage`, `audio`, `notifications`, `documents`,
+`keychain`, `remote-desktop`. The shell also accepts `accessibility` and `display-config`
+([app-isolation.md](app-isolation.md)); the gate reports those as unknown until the list is extended.
+
+Status (2026-10-13): the ratchet fails. The baseline was last written on 2026-10-12 and 56 apps exist now; it reports 139
+regressions in 33 apps (new apps with no baseline entry, plus `weather-desktop` COL-03 10 against 3). The per-app table below
+is regenerated from the current code, not from the baseline. Fixing the findings and running `--update-baseline --write-doc`
+is the way out; never raise the baseline to hide them.
 
 ## Runtime checks (`tests/compliance.rs` in each app crate)
 
@@ -85,14 +94,14 @@ Dark, and asserts:
 - chrome: sidebar rows (Row/List), toolbar buttons and a search field are published as controls when the source uses
   `source_list`, `toolbar` or `search_field`;
 - labels: every visible Button, TextField, Toggle, Checkbox, Slider, SegmentedControl and MenuItem has a label;
-- menus: the app's menus are unique and none is File, Edit, View, Window or Help (the shell bar adds those);
+- menus: the app's menus are unique, every item has a title, and a menu titled File, Edit, View, Window or Help merges into the shell's menu of that name;
 - snapshot: a quarter-size golden per appearance at scale 1.0 (`tests/snapshots/<app>-<light|dark>.png`, about 170 KB;
   `MAX_DIFF_FRAC` per app tolerates live data such as dates).
 
 `KNOWN_GAPS` in each file lists check ids that fail today (seeded with `menus` where CHR-01 fires). They print as
 `known gap` and do not fail; delete the id when the app is fixed. The system keyboard has `FRAME_REQUIRED = false`
-(TODO(lead): it draws only after `keyboard_config`). The first run of the new tests was not compiled or run when they
-were written: expect to triage with `COMPLIANCE_SOFT=1` and bless the first goldens.
+(it draws only after `keyboard_config`). Apps without a `tests/compliance.rs` yet show TST-01; generate it with `--gen-tests --write`,
+triage with `COMPLIANCE_SOFT=1` and bless the first goldens.
 
 ## SDK change trigger
 
