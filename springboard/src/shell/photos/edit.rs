@@ -1,13 +1,13 @@
 //! The edit mode's pixel work: rotate by quarter turns, crop to an aspect
 //! preset, filters, blur, brightness and contrast, exposure, saturation,
-//! warmth and vignette, and saving the result as a copy. Photos are opaque,
+//! warmth and vignette. The edit itself is stored as a recipe (see `recipe`);
+//! the original file is never written. Photos are opaque,
 //! so the colour ops treat the packed pixels as straight RGB and leave alpha
 //! alone. The blur and the colour effects come from the renderer's own filter
 //! models (`blur_kernels`, `effect_chain`), not separate code.
 
 use crate::gfx::Image;
 use bifrost_render::{blur_kernels, effect_chain};
-use std::path::{Path, PathBuf};
 
 /// Crop presets of the edit bar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -430,29 +430,6 @@ pub fn slider_pos(value: f32, x0: f32, x1: f32, lo: f32, hi: f32) -> f32 {
     x0 + ((value - lo) / (hi - lo)).clamp(0.0, 1.0) * (x1 - x0)
 }
 
-/// Where a copy of `original` goes: "IMG_1 edited.png" next to it, numbered
-/// ("IMG_1 edited 2.png") while the name is taken.
-pub fn copy_path(original: &Path, taken: impl Fn(&Path) -> bool) -> PathBuf {
-    let stem = original.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Photo".into());
-    let dir = original.parent().unwrap_or(Path::new("."));
-    let mut path = dir.join(format!("{stem} edited.png"));
-    let mut n = 2;
-    while taken(&path) {
-        path = dir.join(format!("{stem} edited {n}.png"));
-        n += 1;
-    }
-    path
-}
-
-/// Writes `img` as a PNG copy beside `original`; returns the new path.
-pub fn save_copy(original: &Path, img: &Image) -> std::io::Result<PathBuf> {
-    let path = copy_path(original, |p| p.exists());
-    let tmp = path.with_extension("tmp");
-    std::fs::write(&tmp, crate::pngenc::encode_rgb(img.w, img.h, &img.px))?;
-    std::fs::rename(&tmp, &path)?;
-    Ok(path)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -610,25 +587,6 @@ mod tests {
         assert!(!Edit { crop_zoom: 2.0, ..Edit::default() }.is_identity());
     }
 
-    #[test]
-    fn copies_never_overwrite_the_original_or_each_other() {
-        let o = Path::new("/p/IMG_1.jpg");
-        assert_eq!(copy_path(o, |_| false), Path::new("/p/IMG_1 edited.png"));
-        assert_eq!(copy_path(o, |p| p.ends_with("IMG_1 edited.png")), Path::new("/p/IMG_1 edited 2.png"));
-        let dir = super::super::library::tests::scratch("edit-copy");
-        let orig = dir.join("a.jpg");
-        std::fs::write(&orig, b"x").unwrap();
-        let img = grid(4, 2);
-        let first = save_copy(&orig, &img).unwrap();
-        let second = save_copy(&orig, &img).unwrap();
-        assert_eq!(first, dir.join("a edited.png"));
-        assert_eq!(second, dir.join("a edited 2.png"));
-        assert_eq!(std::fs::read(&orig).unwrap(), b"x");
-        let back = crate::cg::imageio::decode(&std::fs::read(&first).unwrap()).unwrap();
-        assert_eq!((back.w, back.h), (4, 2));
-        assert_eq!(back.px[5], img.px[5]);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
 
     #[test]
     fn exposure_saturation_and_warmth_use_the_catalogue_maths() {
