@@ -182,6 +182,7 @@ pub mod stream;
 pub mod websocket;
 pub mod service_discovery;
 pub mod privacy_permissions;
+pub mod screen_sample;
 pub mod external_accessory;
 pub mod error;
 pub mod coding;
