@@ -1024,7 +1024,7 @@ impl Route {
 
 /// The route for an app the shell is about to launch, pure. Direct only when the shell itself runs with
 /// `BIFROST_DIRECT=1` under `bifrost-wm` (its environment and `/etc/bifrost/compositor`); anything else is the
-/// shared-memory path, so labwc sessions and missing switches keep the old behaviour.
+/// shared-memory path, so any other session and missing switches keep the shared-memory path.
 pub fn route_for(direct_env: Option<&str>, compositor: Option<&str>) -> Route {
     match (direct_env.map(str::trim), compositor.map(str::trim)) {
         (Some("1"), Some("bifrost-wm")) => Route::Direct,
@@ -1957,7 +1957,7 @@ mod route_tests {
     fn the_route_is_direct_only_under_bifrost_wm_with_the_switch_on() {
         assert_eq!(route_for(Some("1"), Some("bifrost-wm")), Route::Direct);
         assert_eq!(route_for(Some(" 1\n"), Some("bifrost-wm\n")), Route::Direct);
-        assert_eq!(route_for(Some("1"), Some("labwc")), Route::Shm, "labwc sessions keep the shared-memory path");
+        assert_eq!(route_for(Some("1"), Some("labwc")), Route::Shm, "any other compositor keeps the shared-memory path");
         assert_eq!(route_for(None, Some("bifrost-wm")), Route::Shm, "no switch, no direct path");
         assert_eq!(route_for(Some("0"), Some("bifrost-wm")), Route::Shm);
         assert_eq!(route_for(Some("1"), None), Route::Shm, "no /etc/bifrost/compositor, no direct path");

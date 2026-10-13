@@ -1,7 +1,7 @@
 //! Reveal once (docs/boot-architecture.md, "Reveal once"): the window server holds the boot frame until the wallpaper,
 //! the menu bar and the Dock have each presented their first complete frame, or until a 4 s ceiling, and then fades
 //! once. Pure logic (no I/O): the caller reads the marks file and passes its text in. Shared by `bifrost-wm` (included
-//! by path in `wm/src/boot.rs`) and the shell's labwc-path KMS boot fade (`bare/kms.rs`). Owner: task 09.
+//! by path in `wm/src/boot.rs`) and the shell's bifrost-wm-path KMS boot fade (`bare/kms.rs`). Owner: task 09.
 
 /// The three desktop parts whose first complete frame gates the reveal; each writes its mark when presented. The
 /// wallpaper is drawn into the desktop surface (its first commit, `bare/wayland.rs`, `mark_first_frame`); the menu bar
