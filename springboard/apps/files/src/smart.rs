@@ -35,6 +35,7 @@ pub(crate) fn folder_index(path: &Path) -> Option<usize> {
     path.strip_prefix(SMART).ok()?.to_str()?.parse().ok()
 }
 
+#[cfg_attr(not(test), allow(dead_code))] // saving waits for the New Smart Folder sheet; the tests round-trip it
 fn field(s: &str) -> String {
     s.replace(['\t', '\n', '\r'], " ")
 }
@@ -44,6 +45,7 @@ fn dash_or(s: &str) -> Option<&str> {
 }
 
 impl SmartFolder {
+    #[cfg_attr(not(test), allow(dead_code))] // saving waits for the New Smart Folder sheet; the tests round-trip it
     pub(crate) fn serialize(&self) -> String {
         let days = self.within_days.map_or("-".to_string(), |d| d.to_string());
         let tag = self.tag.map_or("-", |t| t.label());
@@ -117,6 +119,7 @@ pub(crate) fn parse(text: &str) -> Vec<SmartFolder> {
     text.lines().filter_map(SmartFolder::parse_line).collect()
 }
 
+#[cfg_attr(not(test), allow(dead_code))] // saving waits for the New Smart Folder sheet; the tests round-trip it
 pub(crate) fn serialize(folders: &[SmartFolder]) -> String {
     folders.iter().map(|f| f.serialize() + "\n").collect()
 }
