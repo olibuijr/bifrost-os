@@ -220,6 +220,21 @@ impl Files {
     }
 }
 
+impl Files {
+    /// Adds a batch of a loading folder's rows. While no folder is expanded and no search is showing, the rows are the
+    /// listing itself, so the batch goes onto both without rebuilding either.
+    pub(crate) fn append_batch(&mut self, batch: Vec<Entry>) {
+        if self.hits.is_none() && self.vo.expanded.is_empty() {
+            self.listing.extend(batch.iter().cloned());
+            self.rows.extend(batch);
+            self.vo.depth.resize(self.rows.len(), 0);
+        } else {
+            self.listing.extend(batch);
+            self.refresh_rows();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

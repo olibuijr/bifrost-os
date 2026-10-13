@@ -1,3 +1,7 @@
+## 1.27.1 — 2026-10-13
+
+- Speed: a large folder shows its first rows at once. The folder is read in batches (64 rows, then 512 at a time) and the sorted list replaces them when the read ends. Subfolder item counts are no longer read with every listing; the control API counts a folder only when it is asked for. An expanded folder in the list view is read again only when its modification time changes, instead of on every refresh.
+
 ## 1.27.0 — 2026-10-13
 
 - Drag and drop with other windows and apps: a drag of items starts a session with read grants for them, so a file dropped on another window or app arrives there as a copy. Files is a drop target too: files from other apps are copied into the folder under the pointer (or the folder shown), a folder hovered during a drag opens after the spring-loaded delay, and a drag inside Files still moves the items (Option copies).
