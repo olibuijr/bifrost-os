@@ -7,7 +7,7 @@
 //! change while a path is being built.
 use super::color::Color;
 use super::paint::Paint;
-use super::path::{Affine, Path};
+use super::path::{Affine, Path, Rect as PathRect};
 use super::raster::{self, Coverage, FillRule, StrokeStyle};
 pub use super::raster::{LineCap, LineJoin};
 use crate::blend::{blend_channel, Mode};
@@ -126,7 +126,7 @@ pub enum TextDrawing {
 }
 
 /// Shadow cast by what is drawn: offset in user space, blur as a Gaussian diameter, colour with its alpha.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Shadow {
     pub offset: (f32, f32),
     pub blur: f32,
@@ -167,8 +167,8 @@ impl GState {
         GState {
             ctm: Affine::IDENTITY,
             clip: None,
-            fill: Paint::Solid(Color::BLACK),
-            stroke: Paint::Solid(Color::BLACK),
+            fill: Paint::Solid(Color::black()),
+            stroke: Paint::Solid(Color::black()),
             line_width: 1.0,
             cap: LineCap::Butt,
             join: LineJoin::Miter,
@@ -245,8 +245,13 @@ fn pack_f(c: [f32; 4]) -> u32 {
 }
 
 fn premul(c: &Color) -> [f32; 4] {
-    let a = c.a.clamp(0.0, 1.0);
-    [c.r * a, c.g * a, c.b * a, a]
+    let [r, g, b, a] = c.to_srgb().unwrap_or([0.0; 4]);
+    [r * a, g * a, b * a, a]
+}
+
+/// The path-module rectangle for a context rectangle.
+fn prect(r: Rect) -> PathRect {
+    PathRect::new(r.x, r.y, r.w, r.h)
 }
 
 fn mul4(c: [f32; 4], k: f32) -> [f32; 4] {
@@ -417,7 +422,7 @@ fn cov_at(c: &Coverage, x: i32, y: i32) -> u8 {
     if dx < 0 || dy < 0 || dx as usize >= c.w || dy as usize >= c.h {
         0
     } else {
-        c.data[dy as usize * c.w + dx as usize]
+        c.a[dy as usize * c.w + dx as usize]
     }
 }
 
@@ -428,7 +433,7 @@ fn intersect(a: &Coverage, b: &Coverage) -> Coverage {
     let x1 = (a.x + a.w as i32).min(b.x + b.w as i32);
     let y1 = (a.y + a.h as i32).min(b.y + b.h as i32);
     if x1 <= x0 || y1 <= y0 {
-        return Coverage { x: x0, y: y0, w: 0, h: 0, data: Vec::new() };
+        return Coverage { x: x0, y: y0, w: 0, h: 0, a: Vec::new() };
     }
     let (w, h) = ((x1 - x0) as usize, (y1 - y0) as usize);
     let mut data = Vec::with_capacity(w * h);
@@ -438,19 +443,15 @@ fn intersect(a: &Coverage, b: &Coverage) -> Coverage {
             data.push(((p * q + 127) / 255) as u8);
         }
     }
-    Coverage { x: x0, y: y0, w, h, data }
+    Coverage { x: x0, y: y0, w, h, a: data }
 }
 
 fn rect_path(r: Rect) -> Path {
-    let mut p = Path::new();
-    p.add_rect(r.x, r.y, r.w, r.h);
-    p
+    Path::from_rect(prect(r))
 }
 
 fn ellipse_path(r: Rect) -> Path {
-    let mut p = Path::new();
-    p.add_ellipse(r.x, r.y, r.w, r.h);
-    p
+    Path::from_ellipse(prect(r))
 }
 
 fn bbox_of(points: &[(f32, f32)]) -> Rect {
@@ -532,7 +533,7 @@ fn target<'t>(surf: &'t mut Surface<'_>, layers: &'t mut [Layer]) -> Surface<'t>
 }
 
 fn cmyk(c: f32, m: f32, y: f32, k: f32, a: f32) -> Color {
-    Color::rgba((1.0 - c) * (1.0 - k), (1.0 - m) * (1.0 - k), (1.0 - y) * (1.0 - k), a)
+    Color::srgb((1.0 - c) * (1.0 - k), (1.0 - m) * (1.0 - k), (1.0 - y) * (1.0 - k), a)
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -612,7 +613,7 @@ impl<'a> DrawContext<'a> {
 
     /// Uniform scale of the current transform (square root of the area factor).
     fn unit_scale(&self) -> f32 {
-        self.gs.ctm.det().abs().sqrt()
+        self.gs.ctm.determinant().abs().sqrt()
     }
 
     pub fn point_to_device(&self, p: (f32, f32)) -> (f32, f32) {
@@ -706,7 +707,7 @@ impl<'a> DrawContext<'a> {
 
     /// A shadow in the default colour (black at a third of full opacity).
     pub fn set_shadow(&mut self, offset: (f32, f32), blur: f32) {
-        self.set_shadow_with_color(offset, blur, Some(Color::rgba(0.0, 0.0, 0.0, 1.0 / 3.0)));
+        self.set_shadow_with_color(offset, blur, Some(Color::srgb(0.0, 0.0, 0.0, 1.0 / 3.0)));
     }
 
     /// `None` removes the shadow.
@@ -719,7 +720,7 @@ impl<'a> DrawContext<'a> {
     }
 
     pub fn shadow(&self) -> Option<Shadow> {
-        self.gs.shadow
+        self.gs.shadow.clone()
     }
 
     pub fn set_interpolation_quality(&mut self, q: Interpolation) {
@@ -784,19 +785,19 @@ impl<'a> DrawContext<'a> {
     }
 
     pub fn set_fill_rgb(&mut self, r: f32, g: f32, b: f32, a: f32) {
-        self.set_fill_color(Color::rgba(r, g, b, a));
+        self.set_fill_color(Color::srgb(r, g, b, a));
     }
 
     pub fn set_stroke_rgb(&mut self, r: f32, g: f32, b: f32, a: f32) {
-        self.set_stroke_color(Color::rgba(r, g, b, a));
+        self.set_stroke_color(Color::srgb(r, g, b, a));
     }
 
     pub fn set_fill_gray(&mut self, w: f32, a: f32) {
-        self.set_fill_color(Color::gray(w, a));
+        self.set_fill_color(Color::generic_gray(w, a));
     }
 
     pub fn set_stroke_gray(&mut self, w: f32, a: f32) {
-        self.set_stroke_color(Color::gray(w, a));
+        self.set_stroke_color(Color::generic_gray(w, a));
     }
 
     /// Plain device-CMYK conversion (no profile).
@@ -820,24 +821,24 @@ impl<'a> DrawContext<'a> {
 
     pub fn move_to(&mut self, x: f32, y: f32) {
         let (dx, dy) = self.gs.ctm.apply(x, y);
-        self.path.move_to(dx, dy);
+        self.path.move_to((dx, dy));
     }
 
     pub fn line_to(&mut self, x: f32, y: f32) {
         let (dx, dy) = self.gs.ctm.apply(x, y);
-        self.path.line_to(dx, dy);
+        self.path.line_to((dx, dy));
     }
 
     pub fn quad_curve_to(&mut self, cx: f32, cy: f32, x: f32, y: f32) {
         let c = self.gs.ctm;
         let (a, b) = (c.apply(cx, cy), c.apply(x, y));
-        self.path.quad_to(a.0, a.1, b.0, b.1);
+        self.path.quad_to(a, b);
     }
 
     pub fn curve_to(&mut self, c1x: f32, c1y: f32, c2x: f32, c2y: f32, x: f32, y: f32) {
         let c = self.gs.ctm;
         let (a, b, e) = (c.apply(c1x, c1y), c.apply(c2x, c2y), c.apply(x, y));
-        self.path.cubic_to(a.0, a.1, b.0, b.1, e.0, e.1);
+        self.path.cubic_to(a, b, e);
     }
 
     pub fn close_path(&mut self) {
@@ -846,8 +847,7 @@ impl<'a> DrawContext<'a> {
 
     /// Adds `p`, given in user space, to the current path.
     pub fn add_path(&mut self, p: &Path) {
-        let moved = p.transform(&self.gs.ctm);
-        self.path.append(&moved);
+        self.path.add_path(&p.transformed(&self.gs.ctm));
     }
 
     /// The current path in user space.
@@ -880,14 +880,14 @@ impl<'a> DrawContext<'a> {
 
     pub fn add_arc(&mut self, cx: f32, cy: f32, r: f32, start: f32, end: f32, clockwise: bool) {
         let mut t = self.user_continuation();
-        t.arc(cx, cy, r, start, end, clockwise);
-        self.path.append(&t.transform(&self.gs.ctm));
+        t.add_arc((cx, cy), r, start, end, clockwise);
+        self.path.add_path(&t.transformed(&self.gs.ctm));
     }
 
     pub fn add_arc_to_point(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, r: f32) {
         let mut t = self.user_continuation();
-        t.arc_to(x1, y1, x2, y2, r);
-        self.path.append(&t.transform(&self.gs.ctm));
+        t.add_arc_to((x1, y1), (x2, y2), r);
+        self.path.add_path(&t.transformed(&self.gs.ctm));
     }
 
     /// A user-space path that starts at the current point (if any), to extend with an arc.
@@ -895,14 +895,14 @@ impl<'a> DrawContext<'a> {
         let mut t = Path::new();
         if let (Some(cp), Some(inv)) = (self.path.current_point(), self.gs.ctm.invert()) {
             let (x, y) = inv.apply(cp.0, cp.1);
-            t.move_to(x, y);
+            t.move_to((x, y));
         }
         t
     }
 
     fn user_path(&self) -> Path {
         match self.gs.ctm.invert() {
-            Some(inv) => self.path.transform(&inv),
+            Some(inv) => self.path.transformed(&inv),
             None => self.path.clone(),
         }
     }
@@ -914,7 +914,7 @@ impl<'a> DrawContext<'a> {
     /// Bounding box of the current path in user space (control points included).
     pub fn path_bounding_box(&self) -> Rect {
         match self.user_path().bounds() {
-            Some((x, y, w, h)) => Rect::new(x, y, w, h),
+            Some(b) => Rect::new(b.x, b.y, b.w, b.h),
             None => Rect::ZERO,
         }
     }
@@ -922,8 +922,8 @@ impl<'a> DrawContext<'a> {
     /// Whether the user-space point lies in the area `mode` would paint.
     pub fn path_contains_point(&self, p: (f32, f32), mode: PathDrawing) -> bool {
         let user = self.user_path();
-        let fill = |rule| user.contains(p.0, p.1, rule);
-        let stroked = || raster::stroke_path(&user, &self.stroke_style()).contains(p.0, p.1, FillRule::NonZero);
+        let fill = |rule| user.contains(p, rule);
+        let stroked = || raster::stroke_path(&user, &self.stroke_style()).contains(p, FillRule::NonZero);
         match mode {
             PathDrawing::Fill => fill(FillRule::NonZero),
             PathDrawing::EoFill => fill(FillRule::EvenOdd),
@@ -936,7 +936,7 @@ impl<'a> DrawContext<'a> {
     /// Replaces the current path by the outline `stroke_path` would paint.
     pub fn replace_path_with_stroked_path(&mut self) {
         let outline = raster::stroke_path(&self.user_path(), &self.stroke_style());
-        self.path = outline.transform(&self.gs.ctm);
+        self.path = outline.transformed(&self.gs.ctm);
     }
 
     fn stroke_style(&self) -> StrokeStyle {
@@ -956,7 +956,7 @@ impl<'a> DrawContext<'a> {
     fn raw_cov(&self, path: &Path, rule: FillRule, xf: &Affine) -> Coverage {
         let mut c = raster::fill(path, rule, xf, None, self.surf.w, self.surf.h);
         if !self.antialiased() {
-            for v in &mut c.data {
+            for v in &mut c.a {
                 *v = if *v >= 128 { 255 } else { 0 };
             }
         }
@@ -967,7 +967,7 @@ impl<'a> DrawContext<'a> {
     fn shape_cov(&self, path: &Path, rule: FillRule, xf: &Affine) -> Coverage {
         let mut c = raster::fill(path, rule, xf, self.gs.clip.as_deref(), self.surf.w, self.surf.h);
         if !self.antialiased() {
-            for v in &mut c.data {
+            for v in &mut c.a {
                 *v = if *v >= 128 { 255 } else { 0 };
             }
         }
@@ -980,7 +980,7 @@ impl<'a> DrawContext<'a> {
             Some(c) => (**c).clone(),
             None => {
                 let (w, h) = (self.surf.w, self.surf.h - self.surf.y0.min(self.surf.h));
-                Coverage { x: 0, y: self.surf.y0 as i32, w, h, data: vec![255; w * h] }
+                Coverage { x: 0, y: self.surf.y0 as i32, w, h, a: vec![255; w * h] }
             }
         }
     }
@@ -1009,7 +1009,7 @@ impl<'a> DrawContext<'a> {
     pub fn clip_to_rects(&mut self, rects: &[Rect]) {
         let mut p = Path::new();
         for r in rects {
-            p.add_rect(r.x, r.y, r.w, r.h);
+            p.add_rect(prect(*r));
         }
         self.clip_to_path(&p, FillRule::NonZero);
     }
@@ -1039,7 +1039,7 @@ impl<'a> DrawContext<'a> {
     /// Clips to the alpha of `mask`, stretched over `rect`.
     pub fn clip_to_mask(&mut self, rect: Rect, mask: &Image) {
         if mask.w == 0 || mask.h == 0 || rect.is_empty() {
-            self.intersect_clip(Coverage { x: 0, y: 0, w: 0, h: 0, data: Vec::new() });
+            self.intersect_clip(Coverage { x: 0, y: 0, w: 0, h: 0, a: Vec::new() });
             return;
         }
         let Some(inv) = self.gs.ctm.invert() else { return };
@@ -1049,11 +1049,11 @@ impl<'a> DrawContext<'a> {
         for row in 0..c.h {
             for col in 0..c.w {
                 let i = row * c.w + col;
-                if c.data[i] == 0 {
+                if c.a[i] == 0 {
                     continue;
                 }
                 let a = samp(c.x + col as i32, c.y + row as i32)[3];
-                c.data[i] = (c.data[i] as f32 * a + 0.5) as u8;
+                c.a[i] = (c.a[i] as f32 * a + 0.5) as u8;
             }
         }
         self.intersect_clip(c);
@@ -1076,16 +1076,20 @@ impl<'a> DrawContext<'a> {
 
     // ---- painting -------------------------------------------------------------------------------------
 
-    fn source_of(&self, p: &Paint) -> Src<'static> {
-        match p {
-            Paint::Solid(c) => Src::Solid(premul(c)),
-        }
-    }
-
+    /// Paints `cov` with the fill or stroke paint. A solid colour is a constant source; any other paint is
+    /// sampled through the inverse of the CTM, since paint coordinates are user space.
     fn paint_cov(&mut self, cov: &Coverage, fill: bool) {
         let paint = if fill { self.gs.fill.clone() } else { self.gs.stroke.clone() };
-        let src = self.source_of(&paint);
-        self.composite(cov, &src);
+        if let Paint::Solid(c) = &paint {
+            self.composite(cov, &Src::Solid(premul(c)));
+            return;
+        }
+        let Some(inv) = self.gs.ctm.invert() else { return };
+        let sample = |x: i32, y: i32| {
+            let (ux, uy) = inv.apply(x as f32 + 0.5, y as f32 + 0.5);
+            unpack(paint.shade(ux, uy))
+        };
+        self.composite(cov, &Src::Sample(&sample));
     }
 
     /// Writes `src` through `cov` into the target under the current alpha and blend mode, shadow first.
@@ -1098,7 +1102,7 @@ impl<'a> DrawContext<'a> {
         if x0 >= x1 || y0 >= y1 {
             return;
         }
-        if let Some(sd) = self.gs.shadow {
+        if let Some(sd) = self.gs.shadow.clone() {
             self.draw_shadow(cov, src, &sd);
         }
         let (alpha, mode, stride) = (self.gs.alpha, self.gs.blend, self.surf.stride);
@@ -1107,7 +1111,7 @@ impl<'a> DrawContext<'a> {
             let crow = (y - cov.y) as usize * cov.w;
             let prow = (y - top) as usize * stride;
             for x in x0..x1 {
-                let c = cov.data[crow + (x - cov.x) as usize] as u32;
+                let c = cov.a[crow + (x - cov.x) as usize] as u32;
                 if c == 0 {
                     continue;
                 }
@@ -1131,7 +1135,7 @@ impl<'a> DrawContext<'a> {
         let alpha = self.gs.alpha;
         for row in 0..cov.h {
             for col in 0..cov.w {
-                let c = cov.data[row * cov.w + col];
+                let c = cov.a[row * cov.w + col];
                 if c == 0 {
                     continue;
                 }
@@ -1146,7 +1150,7 @@ impl<'a> DrawContext<'a> {
         let (left, upper) = (cov.x - pad as i32 + dx, cov.y - pad as i32 + dy);
         let (sw, sh, top, stride) = (self.surf.w as i32, self.surf.h as i32, self.surf.y0 as i32, self.surf.stride);
         let clip = self.gs.clip.clone();
-        let col = sd.color;
+        let [cr, cg, cb, ca] = sd.color.to_srgb().unwrap_or([0.0; 4]);
         let mut t = target(&mut self.surf, &mut self.layers);
         for row in 0..bh {
             let y = upper + row as i32;
@@ -1160,11 +1164,11 @@ impl<'a> DrawContext<'a> {
                     continue;
                 }
                 let m = clip_at(&clip, x, y) as f32 / 255.0;
-                let a = (v * col.a * m).clamp(0.0, 1.0);
+                let a = (v * ca * m).clamp(0.0, 1.0);
                 if a <= 0.0 {
                     continue;
                 }
-                let s = pack_f([col.r * a, col.g * a, col.b * a, a]);
+                let s = pack_f([cr * a, cg * a, cb * a, a]);
                 let p = &mut t.px[(y - top) as usize * stride + x as usize];
                 *p = over(*p, s);
             }
@@ -1241,7 +1245,7 @@ impl<'a> DrawContext<'a> {
     pub fn fill_rects(&mut self, rects: &[Rect]) {
         let mut p = Path::new();
         for r in rects {
-            p.add_rect(r.x, r.y, r.w, r.h);
+            p.add_rect(prect(*r));
         }
         self.fill(&p, FillRule::NonZero);
     }
@@ -1269,15 +1273,15 @@ impl<'a> DrawContext<'a> {
     pub fn stroke_line_segments(&mut self, points: &[(f32, f32)]) {
         let mut p = Path::new();
         for pair in points.chunks_exact(2) {
-            p.move_to(pair[0].0, pair[0].1);
-            p.line_to(pair[1].0, pair[1].1);
+            p.move_to(pair[0]);
+            p.line_to(pair[1]);
         }
         self.stroke(&p);
     }
 
     /// Erases `r` to transparent (under the clip), whatever blend mode and alpha are set.
     pub fn clear_rect(&mut self, r: Rect) {
-        let (blend, alpha, shadow) = (self.gs.blend, self.gs.alpha, self.gs.shadow);
+        let (blend, alpha, shadow) = (self.gs.blend, self.gs.alpha, self.gs.shadow.clone());
         self.gs.blend = BlendMode::Clear;
         self.gs.alpha = 1.0;
         self.gs.shadow = None;
@@ -1296,7 +1300,7 @@ impl<'a> DrawContext<'a> {
 
     /// `mask`: paint the image's alpha with this premultiplied colour instead of its own colours.
     /// `exact`: one image pixel per device pixel, so sample without filtering.
-    fn image_impl(&mut self, img: &Image, dest: Rect, mask: Option<[f32; 4]>, exact: bool) {
+    fn image_impl(&mut self, img: &Image, dest: Rect, mask: Option<&Paint>, exact: bool) {
         if img.w == 0 || img.h == 0 || dest.w == 0.0 || dest.h == 0.0 {
             return;
         }
@@ -1317,8 +1321,11 @@ impl<'a> DrawContext<'a> {
         let samp = sampler(source, inv, dest, q, false);
         match mask {
             None => self.composite(&cov, &Src::Sample(&samp)),
-            Some(col) => {
-                let m = move |x: i32, y: i32| mul4(col, samp(x, y)[3]);
+            Some(paint) => {
+                let m = move |x: i32, y: i32| {
+                    let (ux, uy) = inv.apply(x as f32 + 0.5, y as f32 + 0.5);
+                    mul4(unpack(paint.shade(ux, uy)), samp(x, y)[3])
+                };
                 self.composite(&cov, &Src::Sample(&m));
             }
         }
@@ -1355,7 +1362,7 @@ impl<'a> DrawContext<'a> {
             buf: vec![0; self.surf.px.len()],
             alpha: self.gs.alpha,
             blend: self.gs.blend,
-            shadow: self.gs.shadow,
+            shadow: self.gs.shadow.clone(),
             clip: self.gs.clip.clone(),
         });
         self.gs.alpha = 1.0;
@@ -1451,10 +1458,8 @@ impl<'a> DrawContext<'a> {
             top += (dy.round() - dy) / c.d;
         }
         let dest = Rect::new(left, top, img.w as f32 / k, img.h as f32 / k);
-        let col = match &self.gs.fill {
-            Paint::Solid(c) => premul(c),
-        };
-        self.image_impl(img, dest, Some(col), aligned);
+        let paint = self.gs.fill.clone();
+        self.image_impl(img, dest, Some(&paint), aligned);
     }
 
     fn glyph_style(&self, px: f32) -> Style {
@@ -1619,7 +1624,7 @@ mod tests {
     }
 
     fn red() -> Color {
-        Color::rgba(1.0, 0.0, 0.0, 1.0)
+        Color::srgb(1.0, 0.0, 0.0, 1.0)
     }
 
     #[test]
@@ -1682,7 +1687,7 @@ mod tests {
         cx.set_shadow((1.0, 2.0), 3.0);
         let s = cx.shadow().unwrap();
         assert_eq!((s.offset, s.blur), ((1.0, 2.0), 3.0));
-        assert!(close(s.color.a, 1.0 / 3.0));
+        assert!(close(s.color.alpha(), 1.0 / 3.0));
         cx.set_shadow_with_color((0.0, 0.0), 1.0, None);
         assert!(cx.shadow().is_none());
     }
@@ -1779,12 +1784,12 @@ mod tests {
 
     #[test]
     fn intersect_multiplies_over_the_overlap() {
-        let a = Coverage { x: 0, y: 0, w: 4, h: 1, data: vec![255, 255, 128, 0] };
-        let b = Coverage { x: 2, y: 0, w: 4, h: 1, data: vec![255, 128, 255, 255] };
+        let a = Coverage { x: 0, y: 0, w: 4, h: 1, a: vec![255, 255, 128, 0] };
+        let b = Coverage { x: 2, y: 0, w: 4, h: 1, a: vec![255, 128, 255, 255] };
         let c = intersect(&a, &b);
         assert_eq!((c.x, c.y, c.w, c.h), (2, 0, 2, 1));
-        assert_eq!(c.data, vec![128, 0]);
-        let far = Coverage { x: 50, y: 50, w: 1, h: 1, data: vec![255] };
+        assert_eq!(c.a, vec![128, 0]);
+        let far = Coverage { x: 50, y: 50, w: 1, h: 1, a: vec![255] };
         let none = intersect(&a, &far);
         assert_eq!((none.w, none.h), (0, 0));
     }
@@ -1832,8 +1837,8 @@ mod tests {
 
     #[test]
     fn cmyk_black_and_white() {
-        assert_eq!(cmyk(0.0, 0.0, 0.0, 1.0, 1.0), Color::rgba(0.0, 0.0, 0.0, 1.0));
-        assert_eq!(cmyk(0.0, 0.0, 0.0, 0.0, 0.5), Color::rgba(1.0, 1.0, 1.0, 0.5));
+        assert_eq!(cmyk(0.0, 0.0, 0.0, 1.0, 1.0), Color::srgb(0.0, 0.0, 0.0, 1.0));
+        assert_eq!(cmyk(0.0, 0.0, 0.0, 0.0, 0.5), Color::srgb(1.0, 1.0, 1.0, 0.5));
     }
 
     #[test]
@@ -1934,7 +1939,7 @@ mod tests {
         let mut bm = Bitmap::new(16, 16);
         {
             let mut cx = bm.context();
-            cx.set_shadow_with_color((6.0, 0.0), 0.0, Some(Color::rgba(0.0, 0.0, 1.0, 1.0)));
+            cx.set_shadow_with_color((6.0, 0.0), 0.0, Some(Color::srgb(0.0, 0.0, 1.0, 1.0)));
             cx.set_fill_color(red());
             cx.fill_rect(Rect::new(2.0, 2.0, 4.0, 4.0));
         }
