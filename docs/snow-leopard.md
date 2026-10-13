@@ -86,11 +86,10 @@ on a desktop `set_wallpaper` no longer builds `home_dim` or the Today frost, `Sh
 when the lock screen or Today is in view and frees `home_dim` after (expected -28 MiB idle, rebuilt in one frame
 on lock). Not changed: `fit_home` (the presenter's source), `lock_dim`/`fit_lock` (only when a lock wallpaper is set).
 
-Release profile: `strip = true`, `panic = "abort"`, LTO and one codegen unit are already set. Note that with
-`panic = "abort"` the `catch_unwind` calls in `sdk/src/dispatch.rs`, `render/src/gfx/pool.rs` and
-`src/deildu/jobs.rs` never catch anything in release builds; a panicking job aborts the process. Unchanged here;
-decide whether job isolation (unwind) is worth its ~5 % binary size. `opt-level = "s"` was not applied: the
-software raster paths are hot.
+Release profile: `strip = true`, `panic = "unwind"`, LTO and one codegen unit are set. Under `panic = "abort"` the
+`catch_unwind` calls in `sdk/src/dispatch.rs`, `render/src/gfx/pool.rs` and `src/deildu/jobs.rs` caught nothing and any
+panic killed the shell; unwind makes a panic end only the thread or job that hit it (the crash-log hook still writes
+first). Accepted cost: a few percent of binary size. `opt-level = "s"` was not applied: the software raster paths are hot.
 
 ## Round 2 plan (next)
 

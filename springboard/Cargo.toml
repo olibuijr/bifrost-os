@@ -87,7 +87,9 @@ debug = "line-tables-only"
 opt-level = 3
 lto = true
 codegen-units = 1
-panic = "abort"
+# unwind, not abort: a panic in one service thread (or a sdk/render job) ends that thread, the panic hook has
+# already written crash.log, and the desktop keeps running. Under abort any panic killed the whole shell.
+panic = "unwind"
 strip = true
 
 # Host iteration (lab ISOs, lab-push): no LTO, many codegen units, incremental, the same
