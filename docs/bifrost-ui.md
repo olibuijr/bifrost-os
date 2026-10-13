@@ -189,7 +189,7 @@ springs with a damping ratio, retargeting without a jump).
 Foundation and UIKit kits (round 7): `diff` (`NSDiffableDataSourceSnapshot`), `cache` (`NSCache`, cost-limited LRU),
 `fuzzy` (match with highlight positions), `format` (byte counts, positional durations, relative times, grouped
 numbers), `gesture` (`Tap`, `LongPress`, `Pan` with velocity), `focus` (key-view loop and arrow focus), `uttype`
-(`UTType` conformance), `typeset` (typesetter, framesetter, frame, line and run objects with UAX 14/29 breaking and paragraph styles; any font through a `GlyphSource`), `observe`
+(`UTType` conformance; `uttype_declarations`: app-declared types, below), `typeset` (typesetter, framesetter, frame, line and run objects with UAX 14/29 breaking and paragraph styles; any font through a `GlyphSource`), `observe`
 (`Observable<T>`), `calendar` (Gregorian arithmetic and month grids). Costs are in `docs/perf-history.jsonl`
 (`ui_diff_*`, `ui_cache_*`, `ui_fuzzy_*`, `ui_typeset_*`, `ui_calendar_*`, `ui_focus_*`).
 
@@ -2551,3 +2551,21 @@ path, so it stays the same across rescans. Models: `bifrost_ui::photo_fetch`, `p
 `springboard/src/shell/services/photos.rs`. Decision: an unauthorized fetch is an error (PhotoKit returns an empty
 result). Gaps: no access sheet, asset creation, collections, change observation or `isFavorite` (the Photos app keeps
 the marks); rows stay partial until a Midget check.
+
+
+### Uniform Type Identifiers: app-declared types (`uttype_declarations`)
+
+`UTExportedTypeDeclarations` and `UTImportedTypeDeclarations` for apps. A manifest lists `[[exported_types]]` and
+`[[imported_types]]` blocks with `id`, `conforms_to`, `extensions`, `mime_types` and `description`;
+`parse_manifest` reads them and `register_manifest` (or `register_plist` for `UTTypeIdentifier`,
+`UTTypeConformsTo`, `UTTypeTagSpecification` shaped entries) installs them, so `uttype::type_for_extension`,
+`type_for_mime`, `conforms`, `distance`, `description`, `extensions` and `mime` see the app types. Rules: an
+exported type beats an imported one with the same id; a type with no parent conforms to `public.data`; cycles,
+`public.`/`dyn.` ids and unknown parents are refused and the previous set stays; an app cannot take a built-in
+extension or MIME type; only the first MIME type of a declaration is indexed.
+
+`UtType` mirrors `UTType`: `new`, `exported_as`, `imported_as`, `filename_extension`, `mime_type`,
+`tag(tag, UtTagClass, conforming_to)`, `tags`, `conforms_to`, `is_declared`, `is_dynamic` (`dyn.*`: no one declared
+the tag; it conforms to the requested type or `public.data`) and `is_public` (system-declared). `UtTagClass` takes
+the two Apple classes or any declared class string. Not done: the shell does not call `register_manifest` at app
+launch yet, and nothing is checked on Midget (row stays `partial`).
