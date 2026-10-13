@@ -58,7 +58,11 @@ impl Files {
             (52, true) => self.toggle_hidden(),    // Shift+.
             (53, false) => self.toggle_status_bar(), // /: View > Show Status Bar
             (23, false) => self.get_info(),        // I
-            (20, false) => self.open_tags(),       // T
+            (20, false) => self.new_tab(),         // T: File > New Tab
+            (20, true) => self.open_tags(),        // Shift+T: Tags
+            (17, false) => self.close_tab(),       // W: Close Tab
+            (15, false) => self.step_tab(true),    // Ctrl+Tab: next tab (Tab key)
+            (15, true) => self.step_tab(false),    // Ctrl+Shift+Tab: previous tab
             (2, false) => self.set_view(true, false),  // 1: icons
             (3, false) => self.set_view(false, false), // 2: list
             (4, false) => self.set_view(false, true),  // 3: columns
