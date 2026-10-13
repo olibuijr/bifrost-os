@@ -23,6 +23,8 @@ const BANNER_PT: f32 = 36.0;
 const CORNER_PT: f32 = 6.0;
 const CELL_PT: f32 = 40.0;
 const MEMBER_ROWS: usize = 8;
+/// How many shared picture names the details panel lists.
+const SHARED_ROWS: usize = 4;
 const SEND_W_PT: f32 = 64.0;
 const BUBBLE_PAD_PT: f32 = 10.0;
 const BUBBLE_LINE_PT: f32 = 18.0;
@@ -425,7 +427,10 @@ impl MessagesWindow {
             Overlay::Details => {
                 let members = self.model.selected_room().map_or(0, |r| r.members.len());
                 let rows = members.min(MEMBER_ROWS) + usize::from(members > MEMBER_ROWS);
-                let ph = head + lay.pad + lay.button_h + lay.pad + lay.line + rows as f32 * lay.line + ui.pt(SHEET_FOOT_PT);
+                let pictures = self.model.selected_room().map_or(0, |r| r.shared_pictures().len());
+                let media = media_rows(pictures);
+                let media_h = if media == 0 { 0.0 } else { lay.pad + media as f32 * lay.line };
+                let ph = head + lay.pad + lay.button_h + lay.pad + lay.line + rows as f32 * lay.line + media_h + ui.pt(SHEET_FOOT_PT);
                 let r = place(ph, pw);
                 let content_y = r[1] + head + lay.pad;
                 let rename = [r[0] + pw - lay.pad - bw, content_y, bw, lay.button_h];
@@ -834,6 +839,23 @@ impl MessagesWindow {
                     if room.members.len() > MEMBER_ROWS {
                         let more = format!("and {} more", room.members.len() - MEMBER_ROWS);
                         put(s, &mut self.labels, ui, &more, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, y);
+                        y += lay.line;
+                    }
+                    let pictures = room.shared_pictures();
+                    if !pictures.is_empty() {
+                        y += lay.pad;
+                        let heading = format!("Shared pictures ({})", pictures.len());
+                        put(s, &mut self.labels, ui, &heading, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), text_x, y);
+                        y += lay.line;
+                        for name in pictures.iter().take(SHARED_ROWS) {
+                            let shown = fit(ui, name, MAC_BODY_PT, Weight::Regular, text_w);
+                            put(s, &mut self.labels, ui, &shown, MAC_BODY_PT, Weight::Regular, LABEL.now(), text_x, y);
+                            y += lay.line;
+                        }
+                        if pictures.len() > SHARED_ROWS {
+                            let more = format!("and {} more", pictures.len() - SHARED_ROWS);
+                            put(s, &mut self.labels, ui, &more, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, y);
+                        }
                     }
                 }
             }
@@ -969,6 +991,16 @@ pub fn room_tags(pinned: bool, muted: bool) -> String {
 /// The height of a day heading: its line and the space around it.
 fn day_height(lay: &Layout) -> f32 {
     lay.foot + 2.0 * lay.gap
+}
+
+/// The lines the shared-pictures block of the details panel takes for `pictures` pictures: its heading, the names it
+/// lists and a "more" line. None when there are no pictures.
+pub fn media_rows(pictures: usize) -> usize {
+    if pictures == 0 {
+        0
+    } else {
+        1 + pictures.min(SHARED_ROWS) + usize::from(pictures > SHARED_ROWS)
+    }
 }
 
 /// The height of the timeline rows before row `index`, each followed by `gap`: how far the content has to scroll for
@@ -1260,6 +1292,14 @@ mod tests {
         assert_eq!(rows_height_before(&heights, 8.0, 0), 0.0);
         assert_eq!(rows_height_before(&heights, 8.0, 2), 38.0 + 58.0);
         assert_eq!(rows_height_before(&heights, 8.0, 9), 38.0 + 58.0 + 28.0, "past the end counts every row");
+    }
+
+    #[test]
+    fn the_shared_pictures_block_has_a_heading_the_names_and_a_more_line() {
+        assert_eq!(media_rows(0), 0);
+        assert_eq!(media_rows(1), 2);
+        assert_eq!(media_rows(SHARED_ROWS), 1 + SHARED_ROWS);
+        assert_eq!(media_rows(SHARED_ROWS + 3), 2 + SHARED_ROWS);
     }
 
     #[test]

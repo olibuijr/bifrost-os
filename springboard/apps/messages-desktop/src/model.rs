@@ -149,6 +149,18 @@ impl Room {
         })
     }
 
+    /// The file names of the pictures in the loaded timeline, newest first. Removed messages are left out.
+    pub fn shared_pictures(&self) -> Vec<String> {
+        self.timeline
+            .iter()
+            .rev()
+            .filter_map(|m| match &m.body {
+                Body::Image { name, .. } => Some(name.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The one-line preview of the newest message, for the room list.
     pub fn preview(&self) -> String {
         match self.timeline.last() {
@@ -1325,6 +1337,19 @@ mod tests {
         m.show_new_room("!new:x");
         assert_eq!(m.selected.as_deref(), Some("!new:x"));
         assert!(m.rooms.iter().any(|r| r.id == "!new:x"));
+    }
+
+    #[test]
+    fn shared_pictures_list_the_loaded_images_newest_first() {
+        let mut m = signed_in();
+        let image = |id: &str, ts: u64, name: &str| ev(id, "@bob:x", ts, Body::Image { name: name.into(), mxc: "mxc://x/y".into() });
+        let events = vec![image("$1", 1, "a.png"), ev("$2", "@bob:x", 2, Body::Text("hi".into())), image("$3", 3, "b.png"), image("$4", 4, "c.png")];
+        m.apply_sync(&sync(vec![update("!a:x", events, 0)]));
+        assert_eq!(m.rooms[0].shared_pictures(), vec!["c.png".to_string(), "b.png".to_string(), "a.png".to_string()]);
+        let mut gone = update("!a:x", vec![], 0);
+        gone.redactions = vec!["$4".into()];
+        m.apply_sync(&sync(vec![gone]));
+        assert_eq!(m.rooms[0].shared_pictures(), vec!["b.png".to_string(), "a.png".to_string()], "a removed picture is not listed");
     }
 
     #[test]
