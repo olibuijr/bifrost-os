@@ -9,6 +9,7 @@ pub mod network;
 pub mod networksetup;
 pub mod diskutil;
 pub mod launchctl;
+pub mod leave;
 pub mod mdfind;
 pub mod mdutil;
 pub mod hdiutil;
