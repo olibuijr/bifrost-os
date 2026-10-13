@@ -124,6 +124,7 @@ pub mod gpu_page;
 pub mod quicksearch;
 pub mod quicksearch_math;
 pub mod switcher;
+pub mod touch_gestures;
 pub mod textarea;
 pub mod termtouch;
 pub mod terminal;
