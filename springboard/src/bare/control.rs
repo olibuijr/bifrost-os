@@ -13,6 +13,8 @@
 //!   trace on|off                 -> "ok" (log every input event)
 //!   lock                         -> "ok" (menu > Lock Screen)
 //!   quicksearch                    -> "ok" (opens Search, as Cmd+Space; the compositor's Super+Space binding)
+//!   image-attach ro|rw <path>      -> "ok <loop device> <folder>" (binds a disk image and mounts it, `shell::disk_image`)
+//!   image-detach <device|folder>   -> "ok <loop device>" (unmounts a disk image and releases its loop device)
 
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
