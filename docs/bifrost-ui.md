@@ -1497,6 +1497,16 @@ Gaps: no `FileWrapper`, bookmarks or security-scoped URLs, no `usingNewMetadataO
 options, no resource keys on the enumerator, and no `~/Library` folders (Linux XDG locations are used). Tests:
 `file_manager::tests` (run with `cargo test -p bifrost-app file_manager`).
 
+## NSFileVersion (Foundation parity)
+
+`bifrost_app::file_version`: `FileVersionStore::new(root)` is the per-app version store, keyed by file identity (device
+and inode) so a renamed file keeps its history. `current_version_of_item(url)`, `other_versions_of_item(url)` (newest
+first), `add_of_item(url, contents, AddingOptions { discardable })`, `remove_other_versions_of_item(url)` and
+`replace_item(&version, url, ReplacingOptions { by_moving })` (keeps the current contents as a version first). A
+`FileVersion` exposes `url()`, `modification_date()`, `localized_name()`, `is_resolved()`, `is_discardable()`,
+`set_localized_name()` and `remove()`. Copies are atomic (`fsutil::write_atomic`); discardable versions are pruned by
+`max_discardable` and `max_discardable_age` on each add. Gaps: no conflict or iCloud versions. Tests: `file_version::tests`.
+
 ## Host statistics and ProcessInfo (Foundation/Mach parity)
 
 One implementation, `bifrost_core::host` (re-exported as `bifrost_app::host`), serves the shell and the SDK. Every call
