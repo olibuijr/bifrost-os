@@ -82,6 +82,8 @@ pub enum PageId {
     Passcode,
     /// Settings > Passwords: saved website logins, revealed after the passcode (see `passwords_page`)
     Passwords,
+    /// Settings > Internet Accounts: the mail, calendar and contact accounts (see `internet_accounts_page`)
+    InternetAccounts,
     Developer,
     ScreenTime,
     StDowntime,
@@ -335,6 +337,8 @@ pub enum Action {
     LoginItemRemove(String),
     /// a tap on a Settings > Passwords row (see `passwords_page::Act`)
     Passwords(super::passwords_page::Act),
+    /// a tap on a Settings > Internet Accounts row (see `internet_accounts_page::Act`)
+    InternetAccounts(super::internet_accounts_page::Act),
     /// Login Items: allow this pending app (id) to open at login
     LoginItemApprove(String),
     /// Game Controllers: change one button's output, or restore a controller's defaults
@@ -572,6 +576,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Item::new("Lock Screen").icon(Icon::Passcode).link(PageId::LockScreen),
                     Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode),
                     Item::new("Passwords").icon(Icon::Passcode).link(PageId::Passwords),
+                    Item::new("Internet Accounts").icon(Icon::General).link(PageId::InternetAccounts),
                 ]),
                 Group::new(vec![Item::new("Developer").icon(Icon::General).link(PageId::Developer)]),
             ],
@@ -1089,7 +1094,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         // built by `game_controllers_page::spec`, which reads the live controllers
         PageId::GameControllers | PageId::GameController(_) => page("", false, vec![]),
         // built by `storage_page::spec`, which also knows the live state
-        PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Passwords | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
+        PageId::Storage | PageId::Graphics | PageId::Passcode | PageId::Passwords | PageId::InternetAccounts | PageId::Developer | PageId::Backup | PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => page("", false, vec![]),
         // built by `notify_page::spec`
         PageId::Notifications | PageId::NotificationApp | PageId::NightShift => page("Notifications", false, vec![]),
         PageId::Privacy => page("Privacy", false, vec![Group::new(vec![Item::new("App Permissions").link(PageId::PrivacyPermissions), Item::new("Analytics & Diagnostics").link(PageId::Diagnostics)]).footer("BifrOSt keeps everything on this computer and sends nothing anywhere unless you share a diagnostics report.")]),
@@ -1529,7 +1534,7 @@ mod tests {
         let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
         assert_eq!(labels[..3], ["Airplane Mode", "Wi-Fi", "Bluetooth"]);
         assert_eq!(labels[3..7], ["Notifications", "Sounds", "Focus", "Screen Time"]);
-        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Lock Screen", "Passcode", "Passwords", "Developer"]);
+        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Print & Scan", "Keyboard Shortcuts", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Lock Screen", "Passcode", "Passwords", "Internet Accounts", "Developer"]);
         assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
         // Sharing, Trackpad, Mouse and Users & Groups sit before Wallpaper
         assert_eq!(s.groups[2].items[13].value, "Lake Day");

@@ -169,6 +169,15 @@ pub fn remove(root: &Path, site: &str, account: &str) -> Result<(), Error> {
     Store::open_group(root, PASSWORDS_GROUP)?.delete(site, account)
 }
 
+/// Saves a login in the passwords group, or replaces the password of the login that exists (Internet Accounts).
+pub fn save(root: &Path, site: &str, account: &str, password: &str) -> Result<(), Error> {
+    let store = Store::open_group(root, PASSWORDS_GROUP)?;
+    match store.add(site, account, password.as_bytes()) {
+        Err(Error::DuplicateItem) => store.update(site, account, password.as_bytes()),
+        other => other,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
