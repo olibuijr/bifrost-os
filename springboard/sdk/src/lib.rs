@@ -175,6 +175,7 @@ pub mod credential_exchange;
 pub mod safari_extension;
 pub mod safari_auth;
 pub mod http_auth;
+pub mod dav_client;
 pub mod host_addressing;
 pub mod ftp;
 pub mod dns_service;
