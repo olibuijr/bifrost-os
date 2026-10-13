@@ -347,7 +347,7 @@ impl Files {
     }
     /// A click in the gallery: a strip thumbnail picks that item; the preview area keeps the current one.
     pub(crate) fn gallery_hit(&self, x: f32, y: f32) -> Option<usize> {
-        if x < self.side() + 16. || y < HEADER_H || y > self.bottom() {
+        if x < self.side() + 16. || y < self.body_top() || y > self.bottom() {
             return None;
         }
         let visible = self.visible();
@@ -367,7 +367,7 @@ impl Files {
             None => return,
         };
         let (top, cols, first) = self.strip_geom(visible);
-        let (x0, y0, x1) = (self.side() + 16., HEADER_H + 6., self.w - 16.);
+        let (x0, y0, x1) = (self.side() + 16., self.body_top() + 6., self.w - 16.);
         let y1 = top - 8.;
         s.fill_rrect(ui.pt(x0), ui.pt(y0), ui.pt(x1 - x0), ui.pt((y1 - y0).max(0.)), ui.pt(CARD_R), CARD_BG.now());
         let e = &self.rows[cur];
@@ -406,7 +406,7 @@ impl Files {
 
     /// The separator (1 based) under a point in the columns view, to start a resize.
     pub(crate) fn column_edge(&self, x: f32, y: f32) -> Option<usize> {
-        if !self.columns || y < HEADER_H || y > self.bottom() || x < self.side() + 16. {
+        if !self.columns || y < self.body_top() || y > self.bottom() || x < self.side() + 16. {
             return None;
         }
         let w = self.vo.col_w;
@@ -429,14 +429,14 @@ impl Files {
         if w < 96. {
             return;
         }
-        rect(s, ui, x, HEADER_H, 1., self.bottom() - HEADER_H, SEPARATOR_C.now());
+        rect(s, ui, x, self.body_top(), 1., self.bottom() - self.body_top(), SEPARATOR_C.now());
         let side = (w - 24.).min(160.);
-        let shown = self.blit_thumb(s, ui, e, (x + 12., ROWS_TOP + 8., w - 24., side));
+        let shown = self.blit_thumb(s, ui, e, (x + 12., self.rows_top() + 8., w - 24., side));
         if !shown {
             let icon = side.min(96.);
-            self.paint_entry_icon(ui, s, e, x + 12. + (w - 24. - icon) / 2., ROWS_TOP + 8., icon, false);
+            self.paint_entry_icon(ui, s, e, x + 12. + (w - 24. - icon) / 2., self.rows_top() + 8., icon, false);
         }
-        let y = ROWS_TOP + side + 20.;
+        let y = self.rows_top() + side + 20.;
         text(s, ui, &e.name, 13., LABEL.now(), x + 12., y, w - 24.);
         text(s, ui, &format!("{} · {}", e.kind.label(), fs::size_text(e.size)), 11., LABEL_2.now(), x + 12., y + 20., w - 24.);
         text(s, ui, &format!("Modified {}", date_text(e.mtime)), 11., LABEL_2.now(), x + 12., y + 38., w - 24.);
@@ -446,7 +446,7 @@ impl Files {
 
     fn panel_rect(&self) -> Rect {
         let x = (self.w - PANEL_W - 16.).max(self.side() + 16.);
-        Rect { x, y: HEADER_H + 6., w: PANEL_W.min(self.w - x - 8.), h: PANEL_H }
+        Rect { x, y: self.body_top() + 6., w: PANEL_W.min(self.w - x - 8.), h: PANEL_H }
     }
     /// The panel's clickable plates, in paint order.
     fn panel_hits(&self) -> Vec<(Rect, OptAct)> {

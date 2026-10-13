@@ -288,6 +288,13 @@ impl Files {
             }
             return;
         }
+        if let Some(hit) = self.tab_hit(x, y) {
+            match hit {
+                TabHit::Select(i) => self.select_tab(i),
+                TabHit::Close(i) => self.close_tab_at(i),
+            }
+            return;
+        }
         if y >= self.bottom() {
             if let Some(i) = bifrost_app::controls::pathbar::hit(&self.path_segs, x, y) {
                 if let Some((_, _, p)) = self.path_items().into_iter().nth(i) {
@@ -301,7 +308,7 @@ impl Files {
         if self.options_click(x, y) {
             return;
         }
-        if self.is_list() && y >= HEADER_H && y < HEADER_H + 34. {
+        if self.is_list() && y >= self.body_top() && y < self.rows_top() {
             if let Some((by, _)) = self.list_columns().into_iter().rev().find(|(_, cx)| x >= *cx - 8.) {
                 self.sort_by(by);
             }
@@ -380,8 +387,9 @@ impl Files {
             let changed = self.selection.iter().chain(self.painted_selection.iter()).filter(|i| self.selection.contains(i) != self.painted_selection.contains(i));
             for &selection in changed {
                 if let Some(n) = visible.iter().position(|i| *i == selection) {
-                    let (y,height) = if self.grid {(104. + (n/cols) as f32*self.grid_h() - self.scroll,self.grid_h())}
-                        else {(94. + n as f32*32. - self.scroll,32.)};
+                    let first = self.rows_top();
+                    let (y,height) = if self.grid {(first + 10. + (n/cols) as f32*self.grid_h() - self.scroll,self.grid_h())}
+                        else {(first + n as f32*32. - self.scroll,32.)};
                     let top = ui.pt(y).floor() as i32;
                     let bottom = ui.pt(y+height).ceil() as i32;
                     damage.add(0,top,s.w as i32,bottom-top);
@@ -407,6 +415,7 @@ impl Files {
             rect(s, ui, self.side() - 1., 0., 1., h, SEPARATOR_C.now());
         }
         widgets::toolbar_band(s, ui, Rect { x: self.side(), y: 0., w: w - self.side(), h: HEADER_H });
+        self.paint_tab_strip(ui, s);
         let title = self.title();
         self.title_w = (ui.measure(&title, MAC_TITLE3_PT, Weight::Bold) / ui.pt(1.) + 4.).clamp(40., self.title_room());
         let placed = widgets::toolbar(s, ui, self.bar_bounds(), &self.bar(), None);
@@ -434,8 +443,9 @@ impl Files {
             self.paint_gallery(ui, s, &visible);
         } else {
             // only the rows or icon lines that can reach the viewport are drawn
-            let (top, step, per) = if self.grid { (110., self.grid_h(), cols) } else { (94., 32., 1) };
-            let span = row_span(self.scroll, top, step, 64., bottom, visible.len().div_ceil(per));
+            let first = self.rows_top();
+            let (top, step, per) = if self.grid { (first + 16., self.grid_h(), cols) } else { (first, 32., 1) };
+            let span = row_span(self.scroll, top, step, self.body_top() + 4., bottom, visible.len().div_ceil(per));
             for n in span.start * per..(span.end * per).min(visible.len()) {
                 let i = visible[n];
                 if self.grid {
@@ -451,7 +461,7 @@ impl Files {
             } else {
                 self.error.as_deref().unwrap_or(if self.in_bin() { "The Trash is empty" } else { "This folder is empty" })
             };
-            text(s, ui, msg, 15., LABEL_2.now(), self.side() + 32., 110., w - 270.);
+            text(s, ui, msg, 15., LABEL_2.now(), self.side() + 32., self.rows_top() + 16., w - 270.);
         }
         let fh = self.footer_h();
         if fh > 0. {

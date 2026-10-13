@@ -24,6 +24,8 @@ pub(crate) enum JobKind {
     /// Duplicate: a taken name keeps both, without asking.
     Duplicate,
     Trash,
+    /// Empty Trash: every item in Recently Deleted is deleted for good.
+    Empty,
     Compress(archive::Format),
     Extract,
 }
@@ -166,6 +168,26 @@ pub(crate) fn extract_now(archive: &Path, dest: &Path, cancel: &AtomicBool, tx: 
     report
 }
 
+/// Deletes each item in the Recently Deleted folder for good, then drops the origins of those that are gone.
+pub(crate) fn empty_now(items: &[PathBuf], bin: &Path, cancel: &AtomicBool, tx: &Feed<Event>) -> Report {
+    let mut report = Report::default();
+    for (n, path) in items.iter().enumerate() {
+        if cancel.load(Ordering::Relaxed) {
+            report.cancelled = true;
+            break;
+        }
+        let current = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let _ = tx.send(Event::Progress(Progress { items_done: n, items_total: items.len(), current, ..Default::default() }));
+        match crate::coordinate::writing(path, || fs::delete(path)) {
+            Ok(Ok(())) => report.done.push(path.clone()),
+            Ok(Err(e)) => report.failed.push((path.clone(), batch::friendly(&e))),
+            Err(e) => report.failed.push((path.clone(), crate::coordinate::message(&e))),
+        }
+    }
+    prune_origins(bin);
+    report
+}
+
 /// Moves each item into the Recently Deleted folder, recording where it came from.
 pub(crate) fn trash_now(sources: &[PathBuf], bin: &Path, cancel: &AtomicBool, tx: &Feed<Event>) -> Report {
     let mut report = Report::default();
@@ -226,6 +248,7 @@ impl Files {
                 JobKind::Transfer(op) => transfer_now(op, &s, &d, &flag, &tx, Some(&answer_rx)),
                 JobKind::Duplicate => transfer_now(Op::Copy, &s, &d, &flag, &tx, None),
                 JobKind::Trash => trash_now(&s, &bin, &flag, &tx),
+                JobKind::Empty => empty_now(&s, &bin, &flag, &tx),
                 JobKind::Compress(format) => compress_now(&s, &d, format, &flag, &tx),
                 JobKind::Extract => extract_now(&s[0], &d, &flag, &tx),
             };
@@ -254,6 +277,7 @@ impl Files {
             JobKind::Duplicate => "duplicated",
             JobKind::Transfer(Op::Move) => "moved",
             JobKind::Trash => "moved to the Trash",
+            JobKind::Empty => "deleted",
             JobKind::Compress(_) => "compressed",
             JobKind::Extract => "extracted",
         };
@@ -360,6 +384,22 @@ impl Files {
         }
         let dest = self.path.clone();
         self.start_job("Moving to the Trash", JobKind::Trash, paths, dest);
+    }
+    /// Empty Trash (⇧⌘⌫): deletes every item in Recently Deleted for good, as a job. Undo does not bring them back.
+    pub(crate) fn empty_trash(&mut self) {
+        let bin = self.bin();
+        let items: Vec<PathBuf> = std::fs::read_dir(&bin)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.file_name() != Some(std::ffi::OsStr::new(ORIGINS)))
+            .collect();
+        if items.is_empty() {
+            self.notice = Some("The Trash is already empty".into());
+            return;
+        }
+        self.start_job("Emptying the Trash", JobKind::Empty, items, bin);
     }
     /// Puts trashed items back where they came from (Home when the folder is gone).
     pub(crate) fn put_back(&mut self) {

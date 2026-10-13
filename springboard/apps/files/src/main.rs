@@ -80,6 +80,7 @@ use statusbar::*;
 use system::*;
 use toolbar::*;
 use undo::*;
+use tabs::TabHit;
 use window::*;
 use views::{*, column::*, icon::*, list::*, options::*};
 
@@ -519,7 +520,7 @@ impl Files {
                         visible as f32 * 32.
                     };
                     self.scroll =
-                        (self.scroll + old - new).clamp(0., (total - (self.h - 164.)).max(0.));
+                        (self.scroll + old - new).clamp(0., (total - (self.h - self.rows_top() - 70.)).max(0.));
                     if let Some((_, old, _)) = &mut self.down {
                         *old = new
                     }
@@ -879,10 +880,10 @@ mod tests {
         assert_eq!(files.item_at(176. + 2. * COLUMN_W + 10., 100.), Some(0));
         assert_eq!(files.item_at(182., 100.), None, "an ancestor column is not an item");
         // the first column lists the root's folders: a click on Projects opens it
-        assert_eq!(files.ancestor_hit(182., ROWS_TOP + 0.5 * ROW_H), Some(dir.join("Projects")));
+        assert_eq!(files.ancestor_hit(182., files.rows_top() + 0.5 * ROW_H), Some(dir.join("Projects")));
         // the second column lists Projects: "app" (a folder, sorted first) opens; notes.txt does not
-        assert_eq!(files.ancestor_hit(182. + COLUMN_W, ROWS_TOP + 0.5 * ROW_H), Some(dir.join("Projects/app")));
-        assert_eq!(files.ancestor_hit(182. + COLUMN_W, ROWS_TOP + 1.5 * ROW_H), None, "a file is not opened as a folder");
+        assert_eq!(files.ancestor_hit(182. + COLUMN_W, files.rows_top() + 0.5 * ROW_H), Some(dir.join("Projects/app")));
+        assert_eq!(files.ancestor_hit(182. + COLUMN_W, files.rows_top() + 1.5 * ROW_H), None, "a file is not opened as a folder");
         let _ = std::fs::remove_dir_all(&dir);
     }
     #[test]
@@ -916,6 +917,41 @@ mod tests {
         assert!(files.bar_bounds().x < shown && files.bar_bounds().x > traffic_lights_trailing());
         assert!(files.chord(31, CHORD_CTRL | CHORD_META), "⌃⌘S again");
         assert!(!files.sidebar_hidden, "the chord shows it again");
+    }
+    #[test]
+    fn emptying_the_trash_deletes_every_item_for_good() {
+        let dir = temp("empty-trash");
+        let bin = dir.join(".RecentlyDeleted");
+        std::fs::create_dir_all(bin.join("sub")).unwrap();
+        std::fs::write(bin.join("1__a.txt"), "x").unwrap();
+        std::fs::write(bin.join("2__b.txt"), "y").unwrap();
+        let items = vec![bin.join("1__a.txt"), bin.join("2__b.txt"), bin.join("sub")];
+        let (tx, _rx) = feed();
+        let report = empty_now(&items, &bin, &AtomicBool::new(false), &tx);
+        assert_eq!(report.done.len(), 3);
+        assert!(report.failed.is_empty() && !report.cancelled);
+        let left: Vec<_> = std::fs::read_dir(&bin).unwrap().flatten().filter(|e| e.file_name().to_str() != Some(ORIGINS)).collect();
+        assert!(left.is_empty(), "only the origins file remains");
+    }
+    #[test]
+    fn empty_trash_says_so_when_the_bin_has_nothing_to_delete() {
+        let mut files = fixture(vec![]);
+        files.empty_trash();
+        assert_eq!(files.notice.as_deref(), Some("The Trash is already empty"));
+    }
+    #[test]
+    fn the_tab_strip_shows_with_two_tabs_and_moves_the_content_under_it() {
+        let mut files = fixture(vec![]);
+        assert_eq!(files.body_top(), HEADER_H, "one tab: no strip");
+        assert_eq!(files.tab_hit(300., HEADER_H + 5.), None);
+        files.tabs.insert_after_active(tabs::TabState { path: "/fixture/Music".into(), history: vec![], at: 0 });
+        assert_eq!(files.body_top(), HEADER_H + tabs::TAB_STRIP_H);
+        assert_eq!(files.rows_top(), HEADER_H + tabs::TAB_STRIP_H + 34.);
+        let (x0, _) = files.tab_cells()[0];
+        assert_eq!(files.tab_hit(x0 + 4., HEADER_H + 4.), Some(tabs::TabHit::Select(0)));
+        assert_eq!(files.tab_hit(x0 + 4., HEADER_H - 1.), None, "the toolbar is not the strip");
+        assert_eq!(files.tab_hit(x0 + 4., files.body_top() + 1.), None, "the content is not the strip");
+        assert_eq!(files.tab_label(0), "fixture", "a parked tab is named by its folder");
     }
     #[test]
     fn toolbar_buttons_are_published_as_controls_where_they_are_drawn() {
