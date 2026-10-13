@@ -1777,3 +1777,17 @@
         let buds = action_of(&sh, "\u{2713} Buds").expect("connected device row acts");
         assert_eq!(sh.run_menu_action(buds, 0.0), vec![Effect::Bluetooth(BtCmd::Disconnect("AA:BB:CC:DD:EE:01".into()))]);
     }
+
+    /// Settings window repaint cost at the lab panel's size (`cargo test --profile fast --lib -- --ignored
+    /// bench_settings_window_draw --nocapture`). Each frame counts as fresh input, so the window is drawn in full.
+    #[test]
+    #[ignore]
+    fn bench_settings_window_draw() {
+        let mut sh=shell_sized(2560,1440);sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;
+        sh.desk_open(AppId::Settings,0.);
+        let (w,h)=(sh.w as usize,sh.h as usize);let mut img=Image::new(w,h);
+        for k in 0..5 {sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut img.px,y0:0},100.+k as f64*20.);}
+        let n=200;let start=std::time::Instant::now();
+        for k in 0..n {let t=1000.+k as f64*16.;sh.last_input=t;sh.draw_desk(&mut Surface{w,h,stride:w,px:&mut img.px,y0:0},t);}
+        eprintln!("settings window repaint: {:.2} ms a frame at {w}x{h}",start.elapsed().as_secs_f64()*1000./n as f64);
+    }

@@ -930,9 +930,28 @@ impl Surface<'_> {
                 *d = over(*d, scale(color, (c * 255.0) as u32));
             }
         };
-        if stroke.is_some() {
+        if let Some(t) = stroke {
+            // A pixel centre a whole pixel inside the inner edge's straight sides and outside its corner squares has
+            // inner coverage 1 (and outer 1), so it draws nothing: each such row only walks its two edge bands. The
+            // skipped pixels drew nothing before either, so the result is the same bit for bit; a large outline no
+            // longer costs a full per-pixel pass over its area (window and card borders were most of a Settings
+            // frame on the lab PC, round 75).
+            let inset = r.max(t) + 1.0;
             for py in iy0..iy1 {
-                for px in ix0..ix1 {
+                let ly = py as f32 + 0.5 - y;
+                let hollow = ly > inset && ly < h - inset;
+                let (skip0, skip1) = if hollow {
+                    // centres strictly between x + t + 1 and x + w - t - 1
+                    let a = ((x + t + 1.0 - 0.5).floor() as isize + 1).max(ix0 as isize) as usize;
+                    let b = ((x + w - t - 1.0 - 0.5).ceil() as isize).max(a as isize) as usize;
+                    (a.min(ix1), b.min(ix1))
+                } else {
+                    (ix1, ix1)
+                };
+                for px in ix0..skip0 {
+                    edge(self, px, py);
+                }
+                for px in skip1.max(skip0)..ix1 {
                     edge(self, px, py);
                 }
             }
@@ -1294,6 +1313,30 @@ mod tests {
         assert!(buf[..8].iter().all(|&p| p == 0), "rows above the band untouched");
         assert_eq!(buf[8], pack(1, 1, 1, 255));
         assert_eq!(buf[15], pack(9, 9, 9, 255));
+    }
+
+    #[test]
+    fn stroke_rrect_matches_the_per_pixel_reference() {
+        // the edge-band walk must draw exactly what a full per-pixel pass draws (round 75 speed-up)
+        let color = pack(200, 120, 40, 255);
+        for &(x, y, w, h, r, t) in &[(2.0f32, 3.0f32, 40.0f32, 30.0f32, 6.0f32, 1.0f32), (1.3, 0.7, 37.4, 28.9, 9.5, 2.5), (0.0, 0.0, 50.0, 50.0, 0.0, 1.0), (4.6, 2.2, 20.0, 41.0, 3.0, 6.0), (0.5, 0.5, 12.0, 12.0, 6.0, 1.5)] {
+            let (sw, sh) = (56usize, 52usize);
+            let mut fast = vec![0u32; sw * sh];
+            Surface { w: sw, h: sh, stride: sw, px: &mut fast, y0: 0 }.stroke_rrect(x, y, w, h, r, t, color);
+            let mut slow = vec![0u32; sw * sh];
+            let rr = r.min(w / 2.0).min(h / 2.0);
+            let c0 = crate::appearance::contrast(color);
+            for py in 0..sh {
+                for px in 0..sw {
+                    let (lx, ly) = (px as f32 + 0.5 - x, py as f32 + 0.5 - y);
+                    let c = rrect_coverage(lx, ly, w, h, rr) * (1.0 - rrect_coverage(lx - t, ly - t, w - 2.0 * t, h - 2.0 * t, (rr - t).max(0.0)));
+                    if c > 0.0 {
+                        slow[py * sw + px] = over(slow[py * sw + px], scale(c0, (c * 255.0) as u32));
+                    }
+                }
+            }
+            assert!(fast == slow, "stroke differs for {:?}", (x, y, w, h, r, t));
+        }
     }
 
     #[test]

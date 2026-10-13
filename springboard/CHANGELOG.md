@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.2 — 2026-10-13
+
+- Smoothness: a rounded-rectangle outline (window and card borders) only walks its edge bands instead of every pixel of its area; same pixels, bit for bit (test `stroke_rrect_matches_the_per_pixel_reference`). A Settings repaint at 2560x1440 went from 47 to 21 ms on the CPU path in the host bench `bench_settings_window_draw`.
+
 ## 0.7.1 — 2026-10-13
 
 - Smoothness: a focused Settings window keeps its cached pixels until input, a change Settings reports or an animation makes them stale (it was redrawn in full on every desktop frame, about 23 ms a frame at 2560x1440 on the lab PC). It still refreshes at least once a second.
