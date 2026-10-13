@@ -2,10 +2,19 @@
 //! [`Path`] the shape layer understands (curves flattened, y down, origin on the baseline); [`text_path`] does it for a
 //! string with advances; [`draw_glyphs`] paints glyphs at given positions into a surface; [`fill_path`] paints any
 //! path with a solid colour (hard edged, for masks and large shapes).
+//!
+//! Shape painters (the shell's glyph functions: [`paint`] with [`disc`], [`ring`], [`segment`], [`arc`] and [`either`]
+//! as signed distances, plus the named icons [`globe`], [`mic`], [`dismiss_keyboard`], [`alarm_clock`], [`stopwatch`]
+//! and [`timer`]) are re-exported from `bifrost_render::sdf_glyphs`, so apps draw through the SDK and the shell draws the
+//! same pixels.
 use bifrost_render::bezier::{BezierPath, WindingRule};
 use bifrost_render::font::{Font, Style, Var};
 use bifrost_render::gfx::{pack, Image, Surface};
 use bifrost_render::cg::path::Path;
+
+pub use bifrost_render::sdf_glyphs::{
+    alarm_clock, arc, dismiss_keyboard, disc, either, ellipse, globe, mic, paint, ring, segment, stopwatch, timer,
+};
 
 /// Joins flat segments `[x0, y0, x1, y1]` (consecutive segments of one contour share an end point) into a path.
 /// A contour whose last point returns to its first is closed.
@@ -143,5 +152,71 @@ mod tests {
         fill_path(&mut s, &p, 0xff00_00ff);
         assert_ne!(px[3 * 8 + 3], 0);
         assert_eq!(px[7 * 8 + 7], 0);
+    }
+
+    /// Runs `draw` on a fresh 64 x 64 surface and returns its pixels.
+    fn with_surface(draw: impl FnOnce(&mut Surface)) -> Vec<u32> {
+        let mut buf = vec![0u32; 64 * 64];
+        {
+            let mut s = Surface { w: 64, h: 64, stride: 64, px: &mut buf, y0: 0 };
+            draw(&mut s);
+        }
+        buf
+    }
+
+    #[test]
+    fn sdk_painters_draw_the_same_pixels_as_the_shell() {
+        let white = pack(255, 255, 255, 255);
+        let sdk = with_surface(|s| {
+            paint(s, (0.0, 0.0, 64.0, 64.0), white, either(disc((20.0, 24.0), 9.0), segment((30.0, 10.0), (50.0, 40.0), 3.0)));
+        });
+        let shell = with_surface(|s| {
+            use springboard::shell::glyphs as shell_glyphs;
+            shell_glyphs::paint(
+                s,
+                (0.0, 0.0, 64.0, 64.0),
+                white,
+                shell_glyphs::either(shell_glyphs::disc((20.0, 24.0), 9.0), shell_glyphs::segment((30.0, 10.0), (50.0, 40.0), 3.0)),
+            );
+        });
+        assert_eq!(sdk, shell);
+        assert!(sdk.iter().any(|&p| p >> 24 == 255), "the glyph drew ink");
+    }
+
+    #[test]
+    fn sdk_named_icons_match_the_shell() {
+        let white = pack(255, 255, 255, 255);
+        let sdk = with_surface(|s| globe(s, (32.0, 32.0), 14.0, 2.0, white));
+        let shell = with_surface(|s| springboard::shell::glyphs::globe(s, (32.0, 32.0), 14.0, 2.0, white));
+        assert_eq!(sdk, shell);
+    }
+
+    #[test]
+    fn disc_covers_its_radius_at_two_sizes() {
+        let white = pack(255, 255, 255, 255);
+        for r in [6.0_f32, 20.0] {
+            let buf = with_surface(|s| paint(s, (0.0, 0.0, 64.0, 64.0), white, disc((32.0, 32.0), r)));
+            // row 32 (its pixel centres sit half a pixel below the centre): the last pixel inside is solid, the first past the edge is empty
+            let inside = 32 + r as usize - 1;
+            let outside = 32 + r as usize;
+            assert!(buf[32 * 64 + inside] >> 24 > 240, "r {r}: last pixel inside the disc is solid");
+            assert_eq!(buf[32 * 64 + outside] >> 24, 0, "r {r}: pixel past the radius is empty");
+            let area: f32 = buf.iter().map(|&p| (p >> 24) as f32 / 255.0).sum();
+            let want = std::f32::consts::PI * r * r;
+            assert!((area - want).abs() < want * 0.05, "r {r}: coverage {area} within 5% of {want}");
+        }
+    }
+
+    #[test]
+    fn segment_keeps_its_width_at_two_lengths() {
+        let white = pack(255, 255, 255, 255);
+        for (len, t) in [(8.0_f32, 2.0_f32), (40.0, 6.0)] {
+            let (x0, x1) = (12.0_f32, 12.0 + len);
+            let buf = with_surface(|s| paint(s, (0.0, 0.0, 64.0, 64.0), white, segment((x0, 32.0), (x1, 32.0), t)));
+            let mid = ((x0 + x1) / 2.0) as usize;
+            assert!(buf[32 * 64 + mid] >> 24 > 240, "len {len}: the middle of the line is solid");
+            assert_eq!(buf[(32 + t as usize) * 64 + mid] >> 24, 0, "len {len}: one width below the line is empty");
+            assert_eq!(buf[32 * 64 + (x1 + t) as usize + 1] >> 24, 0, "len {len}: nothing past the round cap");
+        }
     }
 }
