@@ -4,7 +4,7 @@
   "macos_since": "10.4",
   "status": "partial",
   "bifrost": "springboard/audiod/src/main.rs (audio service), springboard/src/media/audioplayer.rs, springboard/src/media/route.rs, springboard/src/bare/bluetooth.rs",
-  "summary": "CoreAudioKit is the view layer for Audio Unit plugin UIs, Bluetooth and network MIDI/audio device pickers and inter-app audio widgets. BifrOSt has no Audio Unit host and no AU view API; its audio service and Bluetooth module cover playback routing and device status but none of the CoreAudioKit views.",
+  "summary": "CoreAudioKit is the view layer for Audio Unit plugin UIs, Bluetooth and network MIDI/audio device pickers and inter-app audio widgets. BifrOSt has no Audio Unit host and no AU view API; its audio service and Bluetooth module cover playback routing and device status but none of the CoreAudioKit views. A pure network audio browser model (receiver discovery, expiry and route picker rows) is built in springboard/ui/src/network_audio_browser.rs but is not wired into the shell.",
   "rea_evidence": "ev_fce537cae879085afc4fa492589b09fde26470cac4c1bd04590c15f5923fbaa6",
   "features": [
     {
@@ -31,9 +31,9 @@
     {
       "feature": "Network audio device browser",
       "apple": "CANetworkBrowserWindowController",
-      "bifrost": "springboard/src/deildu/mod.rs (LAN stream URL for the TV), springboard/src/media/route.rs (route display)",
-      "status": "gap",
-      "note": "No browser for network audio devices and no SDK API for one. The LAN stream server serves a download to the TV, not a device picker."
+      "bifrost": "springboard/ui/src/network_audio_browser.rs (NetworkAudioBrowser), springboard/ui/src/route_picker.rs (picker rows)",
+      "status": "partial",
+      "note": "built on parity/team-j-audio-unit; not yet verified on Midget. Pure model: the discovery source reports announcements and expiry times; no socket is opened and no receiver is contacted."
     },
     {
       "feature": "Audio route indicator for connected devices",
@@ -75,7 +75,8 @@
     "No Audio Unit host: BifrOSt cannot load third-party AU plugins or show their custom views (AUViewController, AUAudioUnitViewConfiguration).",
     "No generic audio unit view (AUGenericView) or panner view (AUPannerView) for plugins without a custom UI.",
     "No BLE MIDI peripheral picker or local MIDI peripheral advertising (CABTMIDI* equivalents).",
-    "No network audio device browser (CANetworkBrowserWindowController equivalent) and no SDK route picker for apps.",
-    "Bluetooth audio streaming (A2DP/AVDTP) is not handled in springboard/src/bare/bluetooth.rs, so a device picker would list devices that cannot carry audio yet."
+    "Bluetooth audio streaming (A2DP/AVDTP) is not handled in springboard/src/bare/bluetooth.rs, so a device picker would list devices that cannot carry audio yet.",
+    "No SDK route picker for apps: the picker rows exist in springboard/ui/src/route_picker.rs but no SDK API exposes them.",
+    "No discovery source for network audio receivers; the browser model is fed by the caller and nothing scans the network yet."
   ]
 }
