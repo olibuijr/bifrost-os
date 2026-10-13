@@ -69,6 +69,10 @@ pub fn paint(w: &mut DiskUtility, s: &mut Surface, ui: &Ui) {
         let color = if is_error { DESTRUCTIVE } else { LABEL_2.now() };
         text_mid(&mut w.labels, s, ui, &text, MAC_CALLOUT_PT, Weight::Regular, color, x, y, cw);
     }
+
+    if let Some(pending) = &w.sheet {
+        widgets::sheet(s, ui, w.window_rect(), UNIFIED_BAR_PT, &pending.sheet, 1.0, None);
+    }
 }
 
 /// The info pane for the selected row: its name, what it is, a capacity bar and the card of facts.
@@ -99,7 +103,11 @@ fn paint_detail(w: &mut DiskUtility, s: &mut Surface, ui: &Ui, node: &Node) {
             rule(s, ui, x + 16.0, card.y + 6.0 + (i + 1) as f32 * LINE_PT, cw - 32.0, 0.0);
         }
     }
-    let note = if node.kind == Kind::Disk { "Erasing and partitioning are not available in this version." } else { "Mount and unmount act on this volume only." };
+    let note = if node.kind == Kind::Disk {
+        "Erase formats the whole disk as FAT32. First Aid checks a volume."
+    } else {
+        "Mount and unmount act on this volume only. Erase formats it; First Aid checks it."
+    };
     text_mid(&mut w.labels, s, ui, note, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_3.now(), x + 16.0, card.y + card.h + 18.0, cw - 32.0);
 }
 

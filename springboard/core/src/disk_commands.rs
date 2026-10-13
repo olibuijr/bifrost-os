@@ -35,6 +35,10 @@ pub enum Refusal {
     ReadOnly,
     /// The last snapshot has no disk with this device name.
     NoDisk(String),
+    /// The request needs a whole disk and the device is a partition.
+    NotWhole(String),
+    /// The request needs a partition and the device is a whole disk.
+    NotPartition(String),
 }
 
 impl Refusal {
@@ -50,6 +54,8 @@ impl Refusal {
             Refusal::NotMounted => "The volume is not mounted.".to_string(),
             Refusal::ReadOnly => "The volume is read-only.".to_string(),
             Refusal::NoDisk(name) => format!("{name} is no longer connected."),
+            Refusal::NotWhole(name) => format!("{name} is a partition. Choose the whole disk instead."),
+            Refusal::NotPartition(name) => format!("{name} is a whole disk. Choose one of its partitions instead."),
         }
     }
 }

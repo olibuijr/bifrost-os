@@ -8,10 +8,13 @@ use crate::model::{self, Kind, Node};
 use crate::{probe, sysfs};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
+use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::{TextCache, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
+use bifrost_core::disk_format::Personality;
+use bifrost_core::disk_request::DiskRequest;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::mpsc::{Receiver, TryRecvError};
@@ -35,6 +38,13 @@ pub const B_UNMOUNT: u32 = 2;
 pub const B_EJECT: u32 = 3;
 pub const B_REFRESH: u32 = 4;
 pub const B_DETACH: u32 = 5;
+pub const B_ERASE: u32 = 6;
+pub const B_FIRST_AID: u32 = 7;
+/// The confirmation sheet's buttons: Cancel closes it; the others answer with the request they name.
+pub const SHEET_CANCEL: u32 = 10;
+pub const SHEET_CONFIRM: u32 = 11;
+pub const SHEET_VERIFY: u32 = 12;
+pub const SHEET_REPAIR: u32 = 13;
 
 /// Accessibility and sidebar ids: a row's id is `ROW_BASE` plus its index in `DiskUtility::nodes`.
 pub const ROW_BASE: u64 = 100;
@@ -46,11 +56,26 @@ pub enum Target {
     Toolbar(u32),
     /// An index into `DiskUtility::nodes`.
     Row(usize),
+    /// A button of the confirmation sheet.
+    Sheet(u32),
 }
 
-/// A mount, unmount or eject that is running on its own thread.
+/// The erase or first-aid action the user asked for on the selected row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ask {
+    Erase,
+    FirstAid,
+}
+
+/// A confirmation sheet and the requests its buttons start, by button id.
+pub struct Pending {
+    pub sheet: Sheet,
+    pub requests: Vec<(u32, DiskRequest)>,
+}
+
+/// A mount, unmount, eject or privileged request that is running on its own thread. `verb` is its progress word.
 pub struct Job {
-    pub action: Action,
+    pub verb: &'static str,
     pub name: String,
     pub rx: Receiver<Result<(), String>>,
 }
@@ -64,6 +89,8 @@ pub struct DiskUtility {
     /// The sentence for the last failed action or refusal.
     pub error: Option<String>,
     pub job: Option<Job>,
+    /// The confirmation sheet, while one is open.
+    pub sheet: Option<Pending>,
     /// SMART health by device name, read once per disk (Refresh clears it).
     pub smart: BTreeMap<String, String>,
     pub labels: TextCache,
@@ -84,6 +111,7 @@ impl DiskUtility {
             selected: None,
             error: None,
             job: None,
+            sheet: None,
             smart: BTreeMap::new(),
             labels: TextCache::default(),
             size: (1200.0, 780.0),
@@ -166,7 +194,7 @@ impl DiskUtility {
         match actions::plan(action, &disks, &name, &mounted) {
             Ok(plan) => {
                 self.error = None;
-                self.job = Some(Job { action, name, rx: actions::spawn(plan) });
+                self.job = Some(Job { verb: action.verb(), name, rx: actions::spawn(plan) });
             }
             Err(refusal) => self.error = Some(refusal.sentence()),
         }
@@ -192,7 +220,71 @@ impl DiskUtility {
         if let Some(error) = &self.error {
             return Some((error.clone(), true));
         }
-        self.job.as_ref().map(|job| (format!("{} {}\u{2026}", job.action.verb(), job.name), false))
+        self.job.as_ref().map(|job| (format!("{} {}\u{2026}", job.verb, job.name), false))
+    }
+
+    /// Opens the confirmation sheet for an erase or a first-aid request on the selected row. A request the disks already
+    /// refuse (a mounted volume, a partition where a whole disk is needed) becomes the footer's error and no sheet opens.
+    fn ask(&mut self, ask: Ask) -> bool {
+        if self.job.is_some() {
+            return false;
+        }
+        let Some(node) = self.selected_node().cloned() else { return false };
+        let name = node.name.clone();
+        let (title, message, buttons, requests) = match ask {
+            Ask::Erase => {
+                let request = if node.kind == Kind::Disk {
+                    DiskRequest::EraseDisk { device: name.clone(), fs: Personality::Fat32, label: String::new() }
+                } else {
+                    DiskRequest::EraseVolume { device: name.clone(), fs: Personality::Fat32, label: String::new() }
+                };
+                let buttons = vec![SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel), SheetButton::new(SHEET_CONFIRM, "Erase", ButtonRole::Destructive)];
+                (format!("Erase {name}?"), request.confirm_text(), buttons, vec![(SHEET_CONFIRM, request)])
+            }
+            Ask::FirstAid => {
+                let buttons = vec![
+                    SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel),
+                    SheetButton::new(SHEET_VERIFY, "Check Only", ButtonRole::Normal),
+                    SheetButton::new(SHEET_REPAIR, "Repair", ButtonRole::Default),
+                ];
+                let message = format!("Check {name} for errors. Repair fixes what it finds; Check Only changes nothing.");
+                let requests = vec![(SHEET_VERIFY, DiskRequest::VerifyVolume { device: name.clone() }), (SHEET_REPAIR, DiskRequest::RepairVolume { device: name.clone() })];
+                (format!("First Aid on {name}?"), message, buttons, requests)
+            }
+        };
+        if let Some(sentence) = requests.iter().find_map(|(_, r)| actions::check_request(r, &self.nodes).err()) {
+            self.error = Some(sentence);
+            return true;
+        }
+        self.error = None;
+        self.sheet = Some(Pending { sheet: Sheet::alert(&title, &message, buttons), requests });
+        true
+    }
+
+    /// The sheet's answer. Cancel closes it; another button starts the request it names.
+    fn answer(&mut self, id: u32) -> bool {
+        let Some(pending) = self.sheet.take() else { return false };
+        if id != SHEET_CANCEL {
+            if let Some((_, request)) = pending.requests.into_iter().find(|(button, _)| *button == id) {
+                self.start_request(request);
+            }
+        }
+        true
+    }
+
+    /// Starts a privileged request on its own thread, with its progress word in the footer.
+    fn start_request(&mut self, request: DiskRequest) {
+        if self.job.is_some() {
+            return;
+        }
+        self.error = None;
+        let job = Job { verb: request.progress_word(), name: request.device().to_string(), rx: actions::spawn_request(request) };
+        self.job = Some(job);
+    }
+
+    /// The whole window in points, the parent of a sheet.
+    pub fn window_rect(&self) -> Rect {
+        Rect { x: 0.0, y: 0.0, w: self.size.0, h: self.size.1 }
     }
 
     /// Activates a target. True when the window needs a new frame.
@@ -203,6 +295,9 @@ impl DiskUtility {
             Target::Toolbar(B_UNMOUNT) => self.start(Action::Unmount),
             Target::Toolbar(B_EJECT) => self.start(Action::Eject),
             Target::Toolbar(B_DETACH) => self.start(Action::Detach),
+            Target::Toolbar(B_ERASE) => self.ask(Ask::Erase),
+            Target::Toolbar(B_FIRST_AID) => self.ask(Ask::FirstAid),
+            Target::Sheet(id) => self.answer(id),
             Target::Toolbar(B_REFRESH) => {
                 self.smart.clear();
                 self.refresh(t, true);
@@ -232,6 +327,8 @@ impl DiskUtility {
             ToolbarItem::button(B_UNMOUNT, "Unmount").enabled(idle && mounted),
             ToolbarItem::button(B_EJECT, "Eject").enabled(idle && ejectable),
             ToolbarItem::button(B_DETACH, "Detach").enabled(idle && self.selected_image()),
+            ToolbarItem::button(B_ERASE, "Erase").enabled(idle && node.is_some()),
+            ToolbarItem::button(B_FIRST_AID, "First Aid").enabled(idle && node.is_some()),
             ToolbarItem::flexible_space(),
             ToolbarItem::icon(B_REFRESH, "Refresh", "arrow.clockwise"),
         ])
@@ -287,6 +384,13 @@ impl DiskUtility {
 
     /// What the point is over. Points, with the window's origin at the top left.
     pub fn hit(&self, ui: &Ui, x: f32, y: f32) -> Target {
+        // an open sheet blocks the window: only its buttons answer
+        if let Some(pending) = &self.sheet {
+            return match pending.sheet.hit(self.window_rect(), UNIFIED_BAR_PT, 1.0, x, y) {
+                Hit::Button(id) => Target::Sheet(id),
+                _ => Target::Nothing,
+            };
+        }
         if y < UNIFIED_BAR_PT {
             let bar = self.toolbar();
             let layout = self.toolbar_layout(ui);
@@ -384,5 +488,47 @@ mod tests {
         assert!(w.activate(Target::Toolbar(B_UNMOUNT), 1.0));
         assert_eq!(w.footer().map(|(_, e)| e), Some(true));
         assert!(w.job.is_none());
+    }
+
+    fn one_stick() -> DiskUtility {
+        let mut w = DiskUtility::new();
+        w.nodes = vec![
+            Node { name: "sdb".into(), removable: true, size: 8_000_000_000, ..Node::default() },
+            Node { name: "sdb1".into(), kind: Kind::Partition, parent: Some("sdb".into()), fs_type: Some("vfat".into()), ..Node::default() },
+        ];
+        w
+    }
+
+    #[test]
+    fn a_refused_erase_is_the_footer_error_and_opens_no_sheet() {
+        let mut w = one_stick();
+        w.nodes[1].mount_point = Some("/mnt/a".into());
+        w.selected = Some("sdb1".into());
+        assert!(w.activate(Target::Toolbar(B_ERASE), 1.0));
+        assert!(w.sheet.is_none() && w.job.is_none());
+        let footer = w.footer().expect("footer");
+        assert!(footer.1 && footer.0.contains("/mnt/a"), "{footer:?}");
+    }
+
+    #[test]
+    fn an_erase_asks_first_and_cancel_closes_the_sheet_without_a_job() {
+        let mut w = one_stick();
+        w.selected = Some("sdb".into());
+        assert!(w.activate(Target::Toolbar(B_ERASE), 1.0));
+        let pending = w.sheet.as_ref().expect("sheet");
+        assert!(pending.requests.iter().any(|(id, r)| *id == SHEET_CONFIRM && r.method() == "disk.erase_disk"));
+        assert!(w.activate(Target::Sheet(SHEET_CANCEL), 1.0));
+        assert!(w.sheet.is_none() && w.job.is_none());
+    }
+
+    #[test]
+    fn a_sheet_blocks_the_toolbar_under_it() {
+        let mut w = one_stick();
+        w.selected = Some("sdb1".into());
+        assert!(w.activate(Target::Toolbar(B_FIRST_AID), 1.0));
+        let parent = w.window_rect();
+        let pending = w.sheet.as_ref().expect("sheet");
+        let (cx, cy) = pending.sheet.layout(parent, UNIFIED_BAR_PT, 1.0).buttons.iter().find(|(id, _)| *id == SHEET_REPAIR).map(|(_, r)| (r.x + r.w / 2.0, r.y + r.h / 2.0)).expect("repair button");
+        assert_eq!(pending.sheet.hit(parent, UNIFIED_BAR_PT, 1.0, cx, cy), Hit::Button(SHEET_REPAIR));
     }
 }

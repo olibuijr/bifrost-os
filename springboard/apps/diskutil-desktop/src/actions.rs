@@ -1,14 +1,26 @@
-//! Mount, unmount and eject. The plans come from the disk session in `bifrost-core` (`disk_session`, `disk_commands`):
-//! the same claims and approval gates the shell uses. This module feeds the session the disks it read, asks it for a
-//! plan, and runs the plan's commands on a thread so the window keeps drawing. There are no erase or partition
-//! operations in this app.
+//! Mount, unmount and eject, and the privileged erase and first-aid requests. Mount, unmount and eject plan through the
+//! disk session in `bifrost-core` (`disk_session`, `disk_commands`), the same claims and approval gates the shell uses,
+//! and run the plan's commands on a thread. Erase and first aid are `disk_request` requests: they are checked against
+//! the disks here before a confirmation sheet opens, and then sent to the privileged helper (`privd`) on a thread.
 
 use crate::model::{to_disk, Node};
 use bifrost_core::disk_claims::Claims;
 use bifrost_core::disk_commands::{self, Command, MountOptions, Refusal};
 use bifrost_core::disk_events::{Approvals, Disk};
+use bifrost_core::disk_request::{self, DiskRequest};
+use bifrost_core::disk_run;
+use bifrost_core::disk_scan::Entry;
 use bifrost_core::disk_session::Session;
+use bifrost_core::json::Json;
+use bifrost_core::privd_wire;
+use std::path::Path;
 use std::sync::mpsc::{channel, Receiver};
+use std::time::Duration;
+
+/// The helper's socket when the session does not name one (`SPRINGBOARD_PRIVD`).
+const PRIVD_SOCKET: &str = "/run/bifrost/privd.sock";
+/// A privileged request may run for a long time (a full erase): the helper answers when it is done.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(3600);
 
 /// The owner name this app claims devices under.
 pub const OWNER: &str = "is.olibuijr.diskutil.desktop";
@@ -79,24 +91,47 @@ pub fn plan(action: Action, disks: &[Disk], name: &str, mounted_partitions: &[St
 pub fn spawn(plan: Vec<Command>) -> Receiver<Result<(), String>> {
     let (tx, rx) = channel();
     std::thread::spawn(move || {
-        let result = run(&plan);
+        let result = disk_run::run_plan(&plan, false).map(|_| ());
         let _ = tx.send(result);
     });
     rx
 }
 
-fn run(plan: &[Command]) -> Result<(), String> {
-    for command in plan {
-        let out = std::process::Command::new(command.program)
-            .args(&command.args)
-            .output()
-            .map_err(|e| format!("{} could not run: {e}", command.program))?;
-        if !out.status.success() {
-            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            return Err(if stderr.is_empty() { format!("{} failed", command.program) } else { stderr });
-        }
-    }
-    Ok(())
+/// The disks as planning sees them: each row with its parent.
+pub fn entries_of(nodes: &[Node]) -> Vec<Entry> {
+    nodes.iter().map(|n| Entry { disk: to_disk(n), parent: n.parent.clone() }).collect()
+}
+
+/// Checks a privileged request against the disks the window shows, so a refusal (a mounted volume, a partition where
+/// a disk is needed) is known before a confirmation sheet opens. The helper plans it again with its own snapshot.
+pub fn check_request(request: &DiskRequest, nodes: &[Node]) -> Result<(), String> {
+    let probed = nodes.iter().find(|n| n.name == request.device()).and_then(|n| n.fs_type.clone()).unwrap_or_default();
+    disk_request::plan(request, &entries_of(nodes), &probed).map(|_| ()).map_err(|refusal| refusal.sentence())
+}
+
+/// Sends a privileged request to the helper on a new thread. The receiver gets Ok when the helper ran it, else the
+/// sentence for the footer.
+pub fn spawn_request(request: DiskRequest) -> Receiver<Result<(), String>> {
+    let (tx, rx) = channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(send_request(&request));
+    });
+    rx
+}
+
+/// One request over the helper's socket. The session token is the shell's to hold, so this program sends none and
+/// the helper answers the unlock-only methods to it with `unauthorized`; that is shown as a sentence, not a code.
+fn send_request(request: &DiskRequest) -> Result<(), String> {
+    let socket = std::env::var("SPRINGBOARD_PRIVD").ok().filter(|s| !s.is_empty()).unwrap_or_else(|| PRIVD_SOCKET.to_string());
+    let fields = match request.to_params() {
+        Json::Obj(fields) => fields,
+        _ => Vec::new(),
+    };
+    privd_wire::call(Path::new(&socket), None, request.method(), fields, REQUEST_TIMEOUT).map(|_| ()).map_err(|e| match e.code.as_str() {
+        "unauthorized" | "locked" => "The disk helper needs an unlocked BifrOSt session, and this app does not have one.".to_string(),
+        "unavailable" => "The disk helper is not running.".to_string(),
+        _ => e.message,
+    })
 }
 
 #[cfg(test)]

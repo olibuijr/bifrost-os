@@ -53,6 +53,7 @@ UNAUTH = allowed on the lock screen. AUTH = needs Unlocked and the session token
 | `net.*` | yes | | only what NetworkManager D-Bus + polkit cannot do |
 | `system.boot_attempt {event:"begin"\|"stable"}` | `begin` no, `stable` token | | privd owns persistent `boot_attempts`; only a logged-in session clears the latch. The shell retries `stable` until it has a token |
 | `backup.restore_apply` | yes | | |
+| `disk.erase_disk {device,fs,label}` `disk.erase_volume {device,fs,label}` `disk.partition_disk {device,partitions:[{size_mib,fs,label}]}` `disk.verify_volume {device}` `disk.repair_volume {device}` | yes | | Erase, partition and first-aid requests from `bifrost_core::disk_request`. Each is planned against a fresh snapshot of `/sys/block` and `/proc/mounts` (refused when mounted, or a partition where a disk is needed, or a disk where a partition is); the file system type of a checked volume comes from `blkid`. Result `{device, steps:[tool,...]}`; refusals are `bad_params` with the reason as the message. Runs as root with fixed argv |
 
 Rules: validate all params; ids and paths canonicalised against allow-listed roots; fixed argv, no shell strings; every
 call logged to the journal; passwords never logged.

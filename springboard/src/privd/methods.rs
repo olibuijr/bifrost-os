@@ -77,6 +77,7 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
             Some(Ok(n)) => Ok(obj(vec![("files", Json::Num(n as f64))])),
             Some(Err(e)) => Err(PErr::internal(e.to_string())),
         },
+        m if super::disk::handles(m) => super::disk::call(m, p),
         _ => super::accounts::call(method, p).unwrap_or_else(|| Err(PErr::bad(format!("unknown method {method}")))),
     }
 }
