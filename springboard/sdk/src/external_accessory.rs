@@ -73,6 +73,23 @@ impl Accessory {
     pub fn supports_protocol(&self, protocol: &str) -> bool {
         self.protocol_strings.iter().any(|p| p == protocol)
     }
+
+    /// The app view of an accessory that the USB accessory manager holds (springboard/core/src/accessory_manager.rs).
+    /// The connection id is the manager's id, the identity strings and protocol strings are copied, and the connected
+    /// state follows the manager. Revisions are not part of the app view.
+    pub fn from_core(core: &bifrost_core::accessory_manager::Accessory) -> Self {
+        let protocols: Vec<&str> = core.protocol_strings.iter().map(String::as_str).collect();
+        let mut accessory = Accessory::new(
+            u64::from(core.id),
+            &core.name,
+            &core.manufacturer,
+            &core.model_number,
+            &core.serial_number,
+            &protocols,
+        );
+        accessory.connected = core.is_connected();
+        accessory
+    }
 }
 
 /// A connect or disconnect notification. The accessory is copied as it was at the change.
@@ -228,6 +245,42 @@ impl Session {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn app_view_copies_identity_and_connected_state_from_the_usb_manager() {
+        let mut core = bifrost_core::accessory_manager::Accessory::new(
+            5,
+            bifrost_core::usb_descriptors::DeviceDescriptor {
+                usb_version: 0x0200,
+                class: 0,
+                subclass: 0,
+                protocol: 0,
+                max_packet_size0: 64,
+                vendor_id: 0x1234,
+                product_id: 0x0007,
+                device_version: 0x0100,
+                configurations: 1,
+            },
+        );
+        core.name = "Meter".to_string();
+        core.manufacturer = "Acme".to_string();
+        core.model_number = "M-100".to_string();
+        core.serial_number = "SN-1".to_string();
+        core.protocol_strings = vec!["com.acme.meter".to_string()];
+        let mut manager = bifrost_core::accessory_manager::AccessoryManager::new();
+        let id = manager.attach(core);
+
+        let view = Accessory::from_core(manager.accessory(id).unwrap());
+        assert_eq!(view.connection_id(), u64::from(id));
+        assert_eq!(view.name, "Meter");
+        assert_eq!(view.manufacturer, "Acme");
+        assert!(view.supports_protocol("com.acme.meter"));
+        assert!(view.is_connected());
+
+        manager.detach(5);
+        let gone = Accessory::from_core(manager.accessory(id).unwrap());
+        assert!(!gone.is_connected());
+    }
     use crate::stream::StreamError;
 
     fn meter() -> Accessory {

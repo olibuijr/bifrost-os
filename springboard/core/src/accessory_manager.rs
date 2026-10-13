@@ -35,6 +35,17 @@ pub enum Error {
     Internal,
 }
 
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::ListenerAlreadyRegistered => write!(f, "A listener is already registered under this key"),
+            Error::NotAccessible => write!(f, "The accessory is disconnected or open for another owner"),
+            Error::InvalidState => write!(f, "The accessory is not in the state this call needs"),
+            Error::Internal => write!(f, "The listener is not registered"),
+        }
+    }
+}
+
 /// A connection change for one accessory, carrying its connection id.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Event {
@@ -433,5 +444,19 @@ mod tests {
         m.detach(50);
         assert_eq!(m.session(id, "com.example.pad"), Err(Error::NotAccessible));
         assert_eq!(m.session(99, "com.example.pad"), Err(Error::NotAccessible));
+    }
+
+    #[test]
+    fn every_error_has_a_readable_message() {
+        let all = [
+            Error::ListenerAlreadyRegistered,
+            Error::NotAccessible,
+            Error::InvalidState,
+            Error::Internal,
+        ];
+        for error in all {
+            assert!(!error.to_string().is_empty());
+        }
+        assert_eq!(Error::NotAccessible.to_string(), "The accessory is disconnected or open for another owner");
     }
 }
