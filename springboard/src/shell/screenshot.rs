@@ -23,6 +23,8 @@ const THUMB_FRACTION: f32 = 0.2;
 const MARGIN_PT: f32 = 12.0;
 const BOTTOM_PT: f32 = 52.0;
 const BORDER_PT: f32 = 2.5;
+/// A press on the thumbnail becomes a drag once the pointer has moved this far, in points; before that it is a tap.
+pub const DRAG_PT: f32 = 6.0;
 /// Corner radius in px of the white frame around the thumbnail (rule: at most 6).
 const FRAME_RADIUS_PX: f32 = 6.0;
 const WHITE: u32 = pack(255, 255, 255, 255);
@@ -61,6 +63,12 @@ pub struct Overlay {
     h: i32,
     /// px per point
     s: f32,
+    /// How far the thumbnail has been dragged from its resting place, in px.
+    offset: (i32, i32),
+    /// The press that may become a drag: where it landed, and the offset it started from.
+    grab: Option<(f32, f32, (i32, i32))>,
+    /// Whether the press has moved far enough to be a drag.
+    moved: bool,
 }
 
 impl Overlay {
@@ -69,7 +77,7 @@ impl Overlay {
         let (w, h) = (frame.w as i32, frame.h as i32);
         let r = thumb_rect(w, h, s);
         let thumb = frame.resized(r.w as usize, r.h as usize);
-        Overlay { frame, thumb, path, start: t, w, h, s }
+        Overlay { frame, thumb, path, start: t, w, h, s, offset: (0, 0), grab: None, moved: false }
     }
 
     /// The captured frame (what Markup edits).
@@ -77,9 +85,42 @@ impl Overlay {
         &self.frame
     }
 
-    /// Where the thumbnail rests.
+    /// Where the thumbnail rests: its corner, moved by any drag and kept on the screen.
     pub fn thumb_rect(&self) -> Rect {
-        thumb_rect(self.w, self.h, self.s)
+        let base = thumb_rect(self.w, self.h, self.s);
+        Rect {
+            x: (base.x + self.offset.0).clamp(0, (self.w - base.w).max(0)),
+            y: (base.y + self.offset.1).clamp(0, (self.h - base.h).max(0)),
+            ..base
+        }
+    }
+
+    /// A press on the resting thumbnail. It is a tap unless the pointer then moves (see `drag_to`).
+    pub fn grab(&mut self, x: f32, y: f32) {
+        self.grab = Some((x, y, self.offset));
+        self.moved = false;
+    }
+
+    /// The pointer moved while it holds the thumbnail: the thumbnail follows it, kept on the screen.
+    pub fn drag_to(&mut self, x: f32, y: f32) {
+        let Some((gx, gy, start)) = self.grab else { return };
+        let (dx, dy) = ((x - gx).round() as i32, (y - gy).round() as i32);
+        if !self.moved && dx.abs().max(dy.abs()) as f32 <= DRAG_PT * self.s {
+            return;
+        }
+        self.moved = true;
+        let base = thumb_rect(self.w, self.h, self.s);
+        let ox = (start.0 + dx).clamp(-base.x, (self.w - base.w - base.x).max(-base.x));
+        let oy = (start.1 + dy).clamp(-base.y, (self.h - base.h - base.y).max(-base.y));
+        self.offset = (ox, oy);
+    }
+
+    /// Ends the press. Returns true when it was a drag (so it is not a tap).
+    pub fn release(&mut self) -> bool {
+        let moved = self.moved;
+        self.grab = None;
+        self.moved = false;
+        moved
     }
 
     /// The frame's box at `t`: shrinking from the full screen to the thumbnail, then sliding out.
@@ -181,6 +222,28 @@ mod tests {
         let photo = crate::shell::photos::library::Photo::from_path(path).unwrap();
         assert_eq!(photo.mtime, 1_791_073_395);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_drag_moves_the_thumbnail_and_keeps_it_on_screen() {
+        let frame = Image { w: 1200, h: 1920, px: vec![pack(1, 2, 3, 255); 1200 * 1920] };
+        let mut o = Overlay::new(frame, PathBuf::from("/x.png"), 1200.0 / 768.0, 0.0);
+        let rest = o.thumb_rect();
+        o.grab(100.0, 100.0);
+        o.drag_to(102.0, 101.0);
+        assert!(!o.release(), "a small move is still a tap");
+        o.grab(100.0, 100.0);
+        o.drag_to(160.0, 90.0);
+        assert!(o.release(), "a move past the slop is a drag");
+        let moved = o.thumb_rect();
+        assert_eq!((moved.x - rest.x, moved.y - rest.y), (60, -10));
+        o.grab(0.0, 0.0);
+        o.drag_to(-5000.0, 5000.0);
+        o.release();
+        let far = o.thumb_rect();
+        assert!(far.x >= 0 && far.y >= 0 && far.x + far.w <= 1200 && far.y + far.h <= 1920, "kept on screen: {far:?}");
+        assert_eq!(far.x, 0);
+        assert_eq!(far.y + far.h, 1920);
     }
 
     #[test]
