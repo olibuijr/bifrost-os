@@ -166,6 +166,8 @@ struct Files {
     data_dir: Option<PathBuf>,
     /// Rendered names, bounded and keyed by path and mtime.
     labels: Labels,
+    /// rendered list-row text (names, dates, sizes, kinds), so a repaint does not rasterise every visible row again
+    row_text: std::cell::RefCell<bifrost_app::kit::TextCache>,
     /// The folder or sidebar place a drag would drop onto.
     drop_target: Option<PathBuf>,
     /// Undoable file operations, newest last (Cmd+Z).
@@ -260,6 +262,7 @@ impl Files {
             vo: ViewOpts::default(),
             data_dir: None,
             labels: new_labels(),
+            row_text: Default::default(),
             sys: SystemState::default(),
         };
         // a folder given on the command line opens there (Show in Files)
@@ -698,7 +701,7 @@ mod tests {
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
             query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,last_click:None,preview:None,
             w:960.,h:630.,painted_state:String::new(),painted_selection:vec![],revision:0,
-            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,smart:vec![],open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),sys:SystemState::default(),
+            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,smart:vec![],open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),row_text:Default::default(),sys:SystemState::default(),
         }
     }
     fn folder(name: &str) -> Entry {

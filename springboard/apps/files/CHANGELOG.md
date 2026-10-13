@@ -1,3 +1,7 @@
+## 1.27.0 — 2026-10-13
+
+- Smoother scrolling in the list view: each row's name, date, size and kind are rendered once through the shared text cache, so scrolling back over rows no longer rasterises their text again.
+
 ## 1.26.0 — 2026-10-13
 
 - Tab strip: with two or more tabs a strip runs under the toolbar. Each tab shows its folder's name, the open tab is raised, a click selects a tab, and its close box closes it (the open tab closes the same way as ⌘W). The strip is hidden while there is one tab, and the content moves below it.
