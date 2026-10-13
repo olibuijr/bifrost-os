@@ -17,6 +17,16 @@ pub const DEFAULT_PORT: u16 = 631;
 const TIMEOUT: Duration = Duration::from_secs(10);
 
 /// The attributes a printer listing asks for.
+const CAPABILITY_ATTRIBUTES: &[&str] = &[
+    "media-supported",
+    "media-default",
+    "sides-supported",
+    "print-color-mode-supported",
+    "printer-state",
+    "printer-state-reasons",
+    "printer-state-message",
+];
+
 const PRINTER_ATTRIBUTES: &[&str] = &[
     "printer-name",
     "printer-uri-supported",
@@ -420,6 +430,16 @@ impl<T: Transport> Client<T> {
             .collect())
     }
 
+    /// Capabilities of one printer (Get-Printer-Attributes): paper list, duplex, colour modes and status.
+    pub fn get_printer_attributes(&mut self, printer: &str) -> Result<crate::printer_caps::PrinterCapabilities, CupsError> {
+        let req = base(op::GET_PRINTER_ATTRIBUTES)
+            .with(group::OPERATION, "printer-uri", vec![Value::uri(&target(printer)?)])
+            .with(group::OPERATION, "requested-attributes", keywords(CAPABILITY_ATTRIBUTES));
+        let resp = self.exchange(req)?;
+        let g = resp.groups_with(group::PRINTER).next().ok_or(CupsError::Missing("printer attributes"))?;
+        Ok(crate::printer_caps::PrinterCapabilities::from_group(g))
+    }
+
     /// Jobs still in the queue of `printer` (completed and canceled jobs are left out).
     pub fn jobs(&mut self, printer: &str) -> Result<Vec<Job>, CupsError> {
         let req = base(op::GET_JOBS)
@@ -779,5 +799,23 @@ mod tests {
         assert_eq!(a.name, "job-id");
         assert_eq!(a.values, vec![Value::Integer(1)]);
         assert_eq!(tag::INTEGER, 0x21);
+    }
+
+    #[test]
+    fn printer_attributes_reply_becomes_capabilities() {
+        let g = Group {
+            tag: group::PRINTER,
+            attributes: vec![
+                attr("media-supported", Value::keyword("iso_a4_210x297mm")),
+                attr("sides-supported", Value::keyword("two-sided-long-edge")),
+                attr("printer-state", Value::Enum(3)),
+            ],
+        };
+        let mut client = Client::new(Canned::new(vec![reply(0, 1, vec![g])]));
+        let caps = client.get_printer_attributes("Office").unwrap();
+        assert_eq!(caps.papers.len(), 1);
+        assert!(caps.supports_duplex());
+        assert_eq!(caps.status.state, PrinterState::Idle);
+        assert!(client.get_printer_attributes("bad name").is_err());
     }
 }
