@@ -48,8 +48,6 @@ pub const LONG_PRESS_MS: f64 = 500.0;
 const SLOP: f32 = 12.0;
 /// Bytes sniffed to classify a file of unknown kind.
 const SNIFF: usize = 4096;
-/// Back-button labels kept before the cache starts over (a folder has a handful of distinct names).
-const BACK_LABELS: usize = 32;
 
 /// Something the shell must do for the app.
 #[derive(Clone, Debug, PartialEq)]
@@ -150,8 +148,8 @@ pub struct Files {
     alert_pressed: Option<alert::Hit>,
     gen: u64,
     dirty: bool,
-    /// Back labels rendered so far, by text
-    back: std::cell::RefCell<std::collections::HashMap<String, Image>>,
+    /// Rendered labels (Back, sort, menu and footer text), bounded like the shell's text caches
+    text_cache: std::cell::RefCell<crate::shell::cache::TextCache>,
 }
 
 impl Files {
@@ -202,7 +200,7 @@ impl Files {
             alert_pressed: None,
             gen: 0,
             dirty: true,
-            back: Default::default(),
+            text_cache: Default::default(),
         })
     }
 
@@ -1164,16 +1162,15 @@ impl Files {
         self.dirty
     }
 
-    /// The Back label reading `text`, rendered once.
+    /// The Back label reading `text`, rendered once per string.
     fn back_image(&self, ui: &Ui, text: &str) -> Image {
-        let mut back = self.back.borrow_mut();
-        if !back.contains_key(text) {
-            if back.len() >= BACK_LABELS {
-                back.clear();
-            }
-            back.insert(text.to_string(), ui.text(&ui.fit(text, 17.0, ui.pt(200.0)), 17.0, Weight::Regular, icons::BLUE));
-        }
-        back[text].clone()
+        let fitted = ui.fit(text, 17.0, ui.pt(200.0));
+        self.text_cache.borrow_mut().get(ui, &fitted, 17.0, Weight::Regular, icons::BLUE).clone()
+    }
+
+    /// Runs `f` on the rendering of `text` in this style, taken from the text cache (rendered once per string and style).
+    fn with_text<R>(&self, ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32, f: impl FnOnce(&Image) -> R) -> R {
+        f(self.text_cache.borrow_mut().get(ui, text, pt, weight, color))
     }
 }
 

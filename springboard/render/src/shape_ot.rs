@@ -31,7 +31,7 @@ pub fn tag(s: &str) -> [u8; 4] {
 
 /// The user's feature settings for a run: a tag and a value (0 off, 1 on, n selects alternate n for alternate
 /// substitutions). Features not listed keep their default.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct Features {
     items: Vec<([u8; 4], u32)>,
 }
