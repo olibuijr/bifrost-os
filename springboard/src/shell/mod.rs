@@ -480,6 +480,8 @@ pub struct Shell {
     st_cfg: Option<(screentime::config::Config, Option<std::time::SystemTime>)>,
     /// trims the caches while /data is nearly full
     storage_guard: storage::Guard,
+    /// the Login Items page's extension model, re-read only when the installed apps change
+    login_ext: login_items_page::ExtensionsCache,
     /// slides the Today View over the lock screen (one page plus the leading one)
     lock_pager: Pager,
     /// the Today View on page -1 of the home screen and the lock screen
@@ -784,6 +786,7 @@ impl Shell {
             st_blocked_at: 0,
             st_cfg: None,
             storage_guard: storage::Guard::default(),
+            login_ext: login_items_page::ExtensionsCache::default(),
             lock_pager,
             today,
             today_touch: false,
@@ -2585,7 +2588,7 @@ impl Shell {
                 self.ensure_defaults();
                 let logins = self.login_item_views();
                 let pending = self.login_pending_views();
-                let ext = login_items_page::scan_installed();
+                let ext = self.login_ext.get();
                 let background_off = login_items_page::background_off_from_pref(self.prefs.get(login_items_page::BACKGROUND_OFF_KEY));
                 let Some(st) = &mut self.settings else { return vec![] };
                 st.set_login_items(logins, pending);

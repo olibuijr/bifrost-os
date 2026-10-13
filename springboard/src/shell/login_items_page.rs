@@ -154,9 +154,28 @@ where
     out
 }
 
-/// The model for the installed apps, read from their manifests (the shell calls it when it fills the page).
-pub fn scan_installed() -> LoginExtensions {
-    let apps: Vec<Installed> = super::apphost::installed().iter().cloned().collect();
+/// The extension model, kept between touches. The page asks on every touch, but the manifests only change when
+/// the installed set does (`apphost::refresh` swaps the snapshot), so the files are read again only then.
+#[derive(Default)]
+pub struct ExtensionsCache {
+    snapshot: Option<std::sync::Arc<[Installed]>>,
+    value: LoginExtensions,
+}
+
+impl ExtensionsCache {
+    pub fn get(&mut self) -> LoginExtensions {
+        let now = super::apphost::installed();
+        if !self.snapshot.as_ref().is_some_and(|s| std::sync::Arc::ptr_eq(s, &now)) {
+            self.value = scan_installed(&now);
+            self.snapshot = Some(now);
+        }
+        self.value.clone()
+    }
+}
+
+/// The model for the installed apps, read from their manifests. Only `ExtensionsCache` calls it, and only when
+/// the installed set changed, so the manifest reads stay off the per-touch path.
+fn scan_installed(apps: &[Installed]) -> LoginExtensions {
     let texts: Vec<(String, String, String)> = apps
         .iter()
         .filter_map(|a| std::fs::read_to_string(a.dir.join("manifest.toml")).ok().map(|t| (a.manifest.id.clone(), a.manifest.name.clone(), t)))
