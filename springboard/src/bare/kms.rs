@@ -832,12 +832,6 @@ impl Display {
     /// True when the GPU presenter is drawing (it keeps the wallpaper texture).
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_trim_wake_ms(&self) -> Option<i32> {self.wayland.as_ref().and_then(|w| w.trim_wake_ms())}
-    /// Ms until a glass backdrop rebuild the 30 Hz cap skipped is due.
-    #[cfg(feature = "desktop-wayland")]
-    pub fn wayland_glass_wake_ms(&self) -> Option<i32> {self.wayland.as_ref().and_then(|w| w.glass_wake_ms())}
-    /// True once after a glass retry was owed: the shell draws a frame so the glass is presented.
-    #[cfg(feature = "desktop-wayland")]
-    pub fn wayland_take_glass_retry(&mut self) -> bool {self.wayland.as_mut().is_some_and(|w| w.take_glass_retry())}
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_gpu_active(&self) -> bool {self.wayland.as_ref().is_some_and(|w| w.gpu_active())}
     /// True once after the GPU presenter gave up for the SHM path: the shell draws a full frame.

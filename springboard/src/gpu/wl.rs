@@ -100,26 +100,6 @@ struct Surf {
     pending: Damage,
 }
 
-/// The live backdrop: wallpaper plus the windows' content at 1/LIVE_DIV resolution, blurred.
-/// Glass samples `up.last()` so menus, bars and the dock blur what is really behind them.
-struct Live {
-    base: Tex,
-    down: Vec<Tex>,
-    up: Vec<Tex>,
-}
-
-/// One window's behind-window backdrop: the live backdrop without that window and the windows above it.
-struct Under {
-    live: Option<Live>,
-    dirty: bool,
-    built: Option<std::time::Instant>,
-    /// the 30 Hz cap skipped a wanted rebuild
-    wait: bool,
-}
-
-/// Live backdrop resolution divisor (a quarter-size render keeps the rebuild cheap).
-const LIVE_DIV: usize = 4;
-
 struct Program {
     id: u32,
     view: i32,
@@ -181,22 +161,6 @@ pub struct Presenter {
     surfaces: HashMap<u32, Surf>,
     wallpaper: Option<(Tex, i32, i32)>,
     blur: Vec<Tex>,
-    /// windows in z order (bottom first): presenter key and the content origin in screen px
-    stack: Vec<(u32, i32, i32)>,
-    live: Option<Live>,
-    live_dirty: bool,
-    /// Backdrops of windows whose behind-window materials look active, by presenter key: as `live`, without the
-    /// window itself and the windows above it (a sidebar shows the windows behind its window, not its own content).
-    under: HashMap<u32, Under>,
-    /// windows whose backdrop changed since the caller last asked: their materials owe a redraw
-    under_changed: Vec<u32>,
-    /// a backdrop rebuild was wanted but the 30 Hz cap skipped it: `retry_in_ms` wakes the loop for it
-    live_wait: bool,
-    /// when the live backdrop was last rebuilt: rebuilds are capped at ~30 Hz so a video behind glass stays cheap
-    live_built: Option<std::time::Instant>,
-    /// a window changed since the chrome last drew: glass surfaces owe their shapes
-    live_changed: bool,
-    live_on: bool,
     /// glass rects were owed: the next present draws even with empty content damage
     flush: bool,
     wallpaper_key: (usize, usize, i32, u32),
@@ -324,33 +288,8 @@ void main() {
     o = c;
 }";
 
-/// The first stack position where `old` and `new` differ (a window moved, appeared, left or changed order).
-/// A window's backdrop reads only the windows below it, so only the windows above that position need a new one.
-fn stack_change_from(old: &[(u32, i32, i32)], new: &[(u32, i32, i32)]) -> usize {
-    old.iter().zip(new).position(|(a, b)| a != b).unwrap_or(old.len().min(new.len()))
-}
-
-/// Marks dirty the backdrops of the windows at stack position `from` and above, and lists them as changed.
-fn under_dirty_from(stack: &[(u32, i32, i32)], under: &mut HashMap<u32, Under>, changed: &mut Vec<u32>, from: usize) {
-    for &(k, ..) in stack.iter().skip(from) {
-        if let Some(u) = under.get_mut(&k) {
-            u.dirty = true;
-            if !changed.contains(&k) {
-                changed.push(k);
-            }
-        }
-    }
-}
-
 /// Blur pyramid depth: full -> 1/2 -> ... -> 1/2^LEVELS, then back up to 1/2.
 const LEVELS: usize = 4;
-
-/// Presenter keys at or above this are windows (`GPU_WINDOW + id`); below are the background and chrome.
-pub const WINDOW_KEY_BASE: u32 = 0x1000_0000;
-
-fn is_window(id: u32) -> bool {
-    (WINDOW_KEY_BASE..u32::MAX).contains(&id)
-}
 
 impl Presenter {
     /// Opens the GPU on its render node (GBM display), compiles the pipeline. Fails, never panics,
@@ -406,15 +345,6 @@ impl Presenter {
             surfaces: HashMap::new(),
             wallpaper: None,
             blur: Vec::new(),
-            stack: Vec::new(),
-            live: None,
-            live_dirty: false,
-            under: HashMap::new(),
-            under_changed: Vec::new(),
-            live_wait: false,
-            live_built: None,
-            live_changed: false,
-            live_on: true,
             flush: false,
             wallpaper_key: (0, 0, 0, 0),
             renderer,
@@ -505,82 +435,6 @@ impl Presenter {
         !fx.is_identity()
     }
 
-    /// Turns the live backdrop on or off (off under Reduce Transparency: glass is then not drawn at all,
-    /// and on slow software paths: glass falls back to the static wallpaper blur).
-    pub fn set_live(&mut self, on: bool) {
-        if self.live_on != on {
-            self.live_on = on;
-            self.live_dirty = on;
-            self.live_changed = true;
-            self.under_dirty_from(0);
-        }
-    }
-
-    /// The windows behind the glass, bottom first, with the screen position of each content rect.
-    /// A change rebuilds the backdrop with the next draw.
-    pub fn set_window_stack(&mut self, stack: Vec<(u32, i32, i32)>) {
-        if self.stack != stack {
-            let from = stack_change_from(&self.stack, &stack);
-            self.stack = stack;
-            self.live_dirty = true;
-            self.live_changed = true;
-            let keep: Vec<u32> = self.stack.iter().map(|t| t.0).collect();
-            let gone: Vec<u32> = self.under.keys().copied().filter(|k| !keep.contains(k)).collect();
-            for k in gone {
-                if let Some(l) = self.under.remove(&k).and_then(|u| u.live) {
-                    self.free_live(l);
-                }
-            }
-            self.under_dirty_from(from + 1);
-        }
-    }
-
-    /// Marks dirty the backdrops of every window at or above stack position `from` (a window at `from - 1` or a
-    /// position change below them altered what they show).
-    fn under_dirty_from(&mut self, from: usize) {
-        under_dirty_from(&self.stack, &mut self.under, &mut self.under_changed, from);
-    }
-
-    fn free_live(&self, l: Live) {
-        self.free(l.base);
-        for t in l.down.into_iter().chain(l.up) {
-            self.free(t);
-        }
-    }
-
-    /// Ms until a backdrop rebuild the 30 Hz cap skipped comes due (the main loop's one-shot timeout), or None.
-    pub fn retry_in_ms(&self) -> Option<i32> {
-        let left = |at: Option<std::time::Instant>| 33i32.saturating_sub(at.map_or(33, |t| t.elapsed().as_millis().min(33) as i32));
-        std::iter::once((self.live_wait, self.live_built)).chain(self.under.values().map(|u| (u.wait, u.built))).filter(|w| w.0).map(|w| left(w.1)).min()
-    }
-
-    /// True once a skipped rebuild is due: the glass that samples it owes a redraw (`take_live_changed`,
-    /// `take_under_changed`), which rebuilds the backdrop when it draws.
-    pub fn retry_now(&mut self) -> bool {
-        if self.retry_in_ms() != Some(0) {
-            return false;
-        }
-        self.live_changed |= std::mem::take(&mut self.live_wait);
-        for (&k, u) in self.under.iter_mut() {
-            if std::mem::take(&mut u.wait) && !self.under_changed.contains(&k) {
-                self.under_changed.push(k);
-            }
-        }
-        true
-    }
-
-    /// The windows (presenter keys) whose backdrop changed since the last call: the caller marks their material
-    /// rects owed (`owe_rects`) so they pick up the new backdrop.
-    pub fn take_under_changed(&mut self) -> Vec<u32> {
-        std::mem::take(&mut self.under_changed)
-    }
-
-    /// True once after any window content or position changed: the caller redraws the glass shapes
-    /// (see `owe_rects`) so they pick up the new backdrop.
-    pub fn take_live_changed(&mut self) -> bool {
-        std::mem::take(&mut self.live_changed)
-    }
-
     /// True once after `owe_rects`: the caller presents even when the content has no damage.
     pub fn take_flush(&mut self) -> bool {
         std::mem::take(&mut self.flush)
@@ -599,112 +453,6 @@ impl Presenter {
                 }
             }
         }
-    }
-
-    /// Renders wallpaper + windows into the quarter-size base and blurs it (dual Kawase, 3 down, 2 up).
-    /// Runs at most once per change; the pyramid textures are kept between rebuilds. `under` builds that
-    /// window's backdrop, which leaves the window and those above it out.
-    fn rebuild_live(&mut self, under: Option<u32>) {
-        if under.is_none() {
-            self.live_dirty = false;
-        }
-        let Some((wp, wx, wy)) = &self.wallpaper else { return };
-        let (sw, sh, wx, wy) = (wp.w, wp.h, *wx, *wy);
-        let (lw, lh) = ((sw / LIVE_DIV).max(2), (sh / LIVE_DIV).max(2));
-        let mut slot = match under {
-            Some(k) => self.under.get_mut(&k).and_then(|u| u.live.take()),
-            None => self.live.take(),
-        };
-        if slot.as_ref().is_none_or(|l| l.base.w != lw || l.base.h != lh) {
-            if let Some(old) = slot.take() {
-                self.free_live(old);
-            }
-            let Ok(fresh) = self.alloc_live(lw, lh) else { return };
-            slot = Some(fresh);
-        }
-        let Some(live) = slot else { return };
-        let windows = match under {
-            Some(k) => self.stack.iter().position(|t| t.0 == k).unwrap_or(0),
-            None => self.stack.len(),
-        };
-        let gl = self.gl;
-        let k = lw as f32 / sw as f32;
-        gl!(gl, disable(GL_SCISSOR_TEST));
-        gl!(gl, use_program(self.prog.id));
-        gl!(gl, bind_vertex_array(self.vao));
-        gl!(gl, active_texture(GL_TEXTURE0));
-        gl!(gl, bind_framebuffer(GL_FRAMEBUFFER, live.base.fbo));
-        gl!(gl, viewport(0, 0, lw as i32, lh as i32));
-        gl!(gl, uniform2f(self.prog.view, lw as f32, lh as f32));
-        gl!(gl, uniform1i(self.prog.mode, 0));
-        gl!(gl, uniform1f(self.prog.glass, 0.0));
-        gl!(gl, disable(GL_BLEND));
-        self.quad(self.wallpaper.as_ref().map_or(0, |w| w.0.tex), [wx as f32 * k, wy as f32 * k, sw as f32 * k, sh as f32 * k], 1.0, None);
-        gl!(gl, enable(GL_BLEND));
-        gl!(gl, blend_func(GL_ONE, GL_ONE_MINUS_SRC_ALPHA));
-        for &(id, x, y) in &self.stack[..windows] {
-            let Some(s) = self.surfaces.get(&id) else { continue };
-            let f = s.fx;
-            if f.alpha <= 0.0 {
-                continue;
-            }
-            let (w, h) = (s.cw as f32 * f.scale, s.ch as f32 * f.scale);
-            let r = [(x as f32 + (s.cw as f32 - w) / 2.0 + f.dx) * k, (y as f32 + (s.ch as f32 - h) / 2.0 + f.dy) * k, w * k, h * k];
-            // content is sampled 1:1 (nearest) on screen; the quarter-size copy filters it, or text shimmers
-            // through the glass as it scrolls
-            gl!(gl, bind_texture(GL_TEXTURE_2D, s.content.tex));
-            gl!(gl, tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
-            self.quad(s.content.tex, r, f.alpha, None);
-            gl!(gl, tex_parameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST));
-        }
-        gl!(gl, disable(GL_BLEND));
-        let mut src = (live.base.tex, live.base.w, live.base.h);
-        for d in &live.down {
-            self.pass(d, src, 1);
-            src = (d.tex, d.w, d.h);
-        }
-        for u in &live.up {
-            self.pass(u, src, 2);
-            src = (u.tex, u.w, u.h);
-        }
-        match under {
-            Some(k) => match self.under.get_mut(&k) {
-                Some(u) => u.live = Some(live),
-                None => self.free_live(live),
-            },
-            None => self.live = Some(live),
-        }
-    }
-
-    /// Allocates a backdrop pyramid: a `lw` x `lh` base, three halvings down and two back up. A failure part way
-    /// frees what was already made, so a GPU out of memory costs no textures.
-    fn alloc_live(&self, lw: usize, lh: usize) -> io::Result<Live> {
-        let base = self.texture(lw, lh, GL_LINEAR, None)?;
-        let mut down: Vec<Tex> = Vec::with_capacity(3);
-        let (mut w, mut h) = (lw, lh);
-        for _ in 0..3 {
-            w = (w / 2).max(1);
-            h = (h / 2).max(1);
-            match self.texture(w, h, GL_LINEAR, None) {
-                Ok(t) => down.push(t),
-                Err(e) => {
-                    self.free_live(Live { base, down, up: Vec::new() });
-                    return Err(e);
-                }
-            }
-        }
-        let mut up: Vec<Tex> = Vec::with_capacity(2);
-        for i in (0..2).rev() {
-            let (uw, uh) = (down[i].w, down[i].h);
-            match self.texture(uw, uh, GL_LINEAR, None) {
-                Ok(t) => up.push(t),
-                Err(e) => {
-                    self.free_live(Live { base, down, up });
-                    return Err(e);
-                }
-            }
-        }
-        Ok(Live { base, down, up })
     }
 
     pub fn has_surface(&self, id: u32) -> bool {
@@ -824,8 +572,6 @@ impl Presenter {
     /// that drawable still owes. Returns the areas to report as buffer damage (empty: nothing new).
     #[allow(clippy::too_many_arguments)]
     pub fn draw(&mut self, id: u32, slot: usize, content: &[u32], stride: usize, damage: &Damage, back: Backdrop, glass: &[Glass]) -> Vec<Area> {
-        // a shell surface (not a client window) may carry glass over the live backdrop
-        let windowed = !is_window(id);
         self.current();
         if !self.health.is_ok() {
             return Vec::new();
@@ -861,16 +607,6 @@ impl Presenter {
         }
         s.fresh = false;
         let t1 = std::time::Instant::now();
-        if is_window(id) && (!areas.is_empty() || s.fx != bifrost_render::glass::Fx::IDENTITY) {
-            self.live_dirty = self.live_on;
-            self.live_changed = self.live_on;
-            // the windows above this one blur it
-            if self.live_on {
-                if let Some(i) = self.stack.iter().position(|t| t.0 == id) {
-                    under_dirty_from(&self.stack, &mut self.under, &mut self.under_changed, i + 1);
-                }
-            }
-        }
         // 2. one render pass over what this drawable owes
         let owed: Vec<Area> = s.owed[slot].areas().to_vec();
         s.owed[slot].clear();
@@ -887,40 +623,10 @@ impl Presenter {
         let drect = [crect[0] + (crect[2] - dw) / 2.0 + fx.dx, crect[1] + (crect[3] - dh) / 2.0 + fx.dy, dw, dh];
         let fbo = s.ring[slot].fbo;
         let content_tex = s.content.tex;
-        // glass over shell surfaces blurs the live backdrop (windows behind it), rebuilt once per change
-        let due = |at: Option<std::time::Instant>| at.is_none_or(|at| at.elapsed() >= std::time::Duration::from_millis(33));
-        if windowed && self.live_on && self.live_dirty && !glass.is_empty() {
-            if due(self.live_built) {
-                self.live_built = Some(std::time::Instant::now());
-                self.live_wait = false;
-                self.rebuild_live(None);
-            } else {
-                self.live_wait = true;
-            }
-        }
-        // a window's behind-window materials blur the windows under it, when any of them looks active (an
-        // inactive window's materials that follow its state are opaque plates and need no backdrop)
+        // glass here is the shell's own chrome (desktop background, menu bar, dock, menus): it blurs the wallpaper.
+        // Client windows never reach this path: the window server blurs the real scene behind them.
         let active = matches!(back, Backdrop::GlassOnly { active: true, .. });
         let looks_active = |g: &Glass| g.active.unwrap_or(active || !g.kind.style().follows_active);
-        let under_glass = !windowed && self.live_on && self.stack.iter().any(|t| t.0 == id) && glass.iter().any(looks_active);
-        if under_glass {
-            let u = self.under.entry(id).or_insert(Under { live: None, dirty: true, built: None, wait: false });
-            if u.dirty {
-                if due(u.built) {
-                    u.built = Some(std::time::Instant::now());
-                    u.wait = false;
-                    u.dirty = false;
-                    self.rebuild_live(Some(id));
-                } else {
-                    u.wait = true;
-                }
-            }
-        } else if !windowed {
-            // no active-looking material any more (the window went inactive): drop its backdrop
-            if let Some(l) = self.under.remove(&id).and_then(|u| u.live) {
-                self.free_live(l);
-            }
-        }
         gl!(gl, bind_framebuffer(GL_FRAMEBUFFER, fbo));
         gl!(gl, viewport(0, 0, w as i32, h as i32));
         gl!(gl, use_program(self.prog.id));
@@ -954,13 +660,7 @@ impl Presenter {
                 if full_wp {
                     self.quad(wp.tex, dst, 1.0, None);
                 }
-                let live_tex = match () {
-                    _ if !self.live_on || self.stack.is_empty() => None,
-                    _ if windowed => self.live.as_ref().and_then(|l| l.up.last()),
-                    _ if under_glass => self.under.get(&id).and_then(|u| u.live.as_ref()).and_then(|l| l.up.last()),
-                    _ => None,
-                };
-                if let Some(b) = live_tex.or(self.blur.last()) {
+                if let Some(b) = self.blur.last() {
                     for g in glass {
                         let r = [g.x - ox as f32, g.y - oy as f32, g.w, g.h];
                         if r[0] >= a.x1 as f32 || r[1] >= a.y1 as f32 || r[0] + r[2] <= a.x0 as f32 || r[1] + r[3] <= a.y0 as f32 {
@@ -1301,10 +1001,6 @@ impl Drop for Presenter {
         if let Some(t) = self.zoom_copy.take() {
             self.free(t);
         }
-        let unders: Vec<Live> = self.under.drain().filter_map(|(_, u)| u.live).collect();
-        for l in self.live.take().into_iter().chain(unders) {
-            self.free_live(l);
-        }
         gl!(self.gl, delete_buffers(1, &self.vbo));
         gl!(self.gl, delete_vertex_arrays(1, &self.vao));
         gl!(self.gl, delete_program(self.prog.id));
@@ -1359,51 +1055,4 @@ fn link(gl: &Gles) -> io::Result<Program> {
     let tex = loc("u_tex");
     gl!(gl, uniform1i(tex, 0));
     Ok(Program { id, view: loc("u_view"), mode: loc("u_mode"), half: loc("u_half"), alpha: loc("u_alpha"), rrect: loc("u_rrect"), radius: loc("u_radius"), glass: loc("u_glass"), hole: loc("u_hole"), hole_r: loc("u_hole_r"), sat: loc("u_sat"), bright: loc("u_bright"), lum_amt: loc("u_lum_amt"), lum_v: loc("u_lum_v"), rim: loc("u_rim"), color: loc("u_color") })
-}
-
-#[cfg(test)]
-mod stack_tests {
-    use super::*;
-
-    fn under_entry() -> Under {
-        Under { live: None, dirty: false, built: None, wait: false }
-    }
-
-    /// A foreign toplevel is never in the stack and a stale key must not matter: marking dirty touches only
-    /// windows at or above `from` that have a backdrop, and never panics.
-    #[test]
-    fn dirty_from_marks_only_windows_above() {
-        let k = |n: u32| WINDOW_KEY_BASE + n;
-        let stack = vec![(k(1), 0, 0), (k(2), 10, 10), (k(3), 20, 20)];
-        let mut under: HashMap<u32, Under> = HashMap::new();
-        under.insert(k(2), under_entry());
-        under.insert(k(3), under_entry());
-        under.insert(k(9), under_entry());
-        let mut changed = Vec::new();
-        under_dirty_from(&stack, &mut under, &mut changed, 2);
-        assert_eq!(changed, vec![k(3)]);
-        assert!(under[&k(3)].dirty && !under[&k(2)].dirty && !under[&k(9)].dirty);
-        under_dirty_from(&stack, &mut under, &mut changed, 0);
-        assert_eq!(changed, vec![k(3), k(2)]);
-    }
-
-    #[test]
-    fn a_stack_change_only_dirties_the_windows_above_it() {
-        let a = (WINDOW_KEY_BASE + 1, 0, 0);
-        let b = (WINDOW_KEY_BASE + 2, 10, 10);
-        let c = (WINDOW_KEY_BASE + 3, 20, 20);
-        // nothing changed: the first position is past both stacks
-        assert_eq!(stack_change_from(&[a, b, c], &[a, b, c]), 3);
-        // the top window moved: only the position of the top changed
-        assert_eq!(stack_change_from(&[a, b, c], &[a, b, (c.0, 30, 30)]), 2);
-        // the bottom window moved: everything above it may see a new backdrop
-        assert_eq!(stack_change_from(&[a, b, c], &[(a.0, 1, 0), b, c]), 0);
-        // a window added on top changes nothing below it
-        assert_eq!(stack_change_from(&[a, b], &[a, b, c]), 2);
-    }
-
-    #[test]
-    fn window_keys_are_windows() {
-        assert!(is_window(WINDOW_KEY_BASE) && !is_window(5) && !is_window(u32::MAX));
-    }
 }

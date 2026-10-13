@@ -11,13 +11,24 @@ backdrop rebuilds. No Apple matrix rows are closed by this slice (the matrix row
 | `WindowFrame.opaque`: shell-drawn windows are opaque inside their corner radius (no vibrancy); client windows are not declared opaque and never cover others. | `springboard/src/bare/wayland.rs` (struct), `springboard/src/shell/desk.rs` (frame sites) | build-checked by the lead |
 | Glass (material) windows are always drawn; glass between a hidden window and its cover keeps the hidden one drawn, because the glass blurs what lies below it. Animating windows (fx not identity) are neither hidden nor covers. | `gpu::occlusion::hidden` | `gpu::occlusion::tests` |
 | A window's cover only counts once it has shown content (`frame.pixels`). | `render_windows` | by reading |
-| A stack change rebuilds only the glass backdrops above the first changed position, not all of them. | `Presenter::set_window_stack`, `stack_change_from` in `springboard/src/gpu/wl.rs` | `gpu::wl::stack_tests::a_stack_change_only_dirties_the_windows_above_it` |
+
+## Removed (sprint 6, T4)
+
+The presenter's shell-side live backdrop is gone: `set_window_stack`, `stack_change_from`, `under_dirty_from`, `Under`,
+`Live` and its pyramid, `rebuild_live`, `retry_in_ms`, `retry_now`, `take_under_changed`, `take_live_changed`,
+`set_live`, the per-window `under_glass` backdrop, and the `BIFROST_WM_MATERIALS` switch with `wm_materials_enabled`.
+The 33 ms rebuild cap, its main-loop wake-up and the glass retry frame went with them. Client windows send their
+material and blur regions to the window server (`bifrost_material_manager_v1`, `ext_background_effect_manager_v1`,
+bound unconditionally), which blurs the real scene. Shell chrome (desktop background, menu bar, dock, menus) keeps
+`Backdrop::Full`/`GlassOnly` with the wallpaper blur until it becomes layer clients (`docs/window-server.md`, step 5).
+Safe mode (a compositor without the material protocol): client window materials draw as the inactive opaque plate
+(`Kind::inactive()`), not a blur. Status stays partial; the Midget check is still owed.
 
 ## Already in place (checked, not changed)
 
 - Unchanged windows are not re-rendered: `draw_desk` reuses `window_cache` for unchanged, quiet windows, and
   `Presenter::draw` redraws only the owed areas of each drawable.
-- Moving a window damages no content: the presenter only changes the stack and the live backdrop.
+- Moving a window damages no content and rebuilds no backdrop: the shell has no live backdrop any more.
 - The GPU window shadow is a shader pass drawn only when the drawable owes a redraw (`set_shadow` owes the whole
   drawable on change), so it is already cached per drawable.
 
@@ -32,7 +43,7 @@ backdrop rebuilds. No Apple matrix rows are closed by this slice (the matrix row
 ## What still needs checking on Midget
 
 - Drag a window across a maximized window and back: no flicker, and the hidden window appears complete when uncovered.
-- Glass windows (Settings sidebar, Dock vibrancy) above and below a moving window: the blur still follows the window.
+- Glass windows (Settings sidebar, Dock vibrancy) above and below a moving window: the window server's blur follows the window; the Dock and menu bar blur the wallpaper.
 - Minimize, restore and close while another window covers the target: the effect still plays.
 
 ## Evidence

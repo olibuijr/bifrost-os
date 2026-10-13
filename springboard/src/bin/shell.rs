@@ -484,9 +484,6 @@ fn run() -> std::io::Result<()> {
         // the GPU pool's idle trim is one one-shot deadline, not a poll
         #[cfg(feature = "desktop-wayland")]
         if let Some(ms) = disp.wayland_trim_wake_ms() { timeout = timeout.min(ms); }
-        // so is a glass backdrop rebuild the 30 Hz cap skipped (a window behind glass changed meanwhile)
-        #[cfg(feature = "desktop-wayland")]
-        if let Some(ms) = disp.wayland_glass_wake_ms() { timeout = timeout.min(ms); }
         inputs.rescan_if_due(now);
         timeout = timeout.min(inputs.next_scan().map_or(i32::MAX, |at| (at - now).ceil().max(0.0) as i32));
         // the pointer's wheel ease and right-click hold, key auto-repeat, and the cursor hiding
@@ -546,7 +543,6 @@ fn run() -> std::io::Result<()> {
         #[cfg(feature = "desktop-wayland")]
         {
             disp.wayland_inputs(&mut events);
-            if disp.wayland_take_glass_retry() { shell.request_frame(); }
             if let Some(windows)=disp.wayland_foreign_windows() { shell.wayland_foreign_windows(windows); }
             for ev in disp.wayland_window_events() { shell.wayland_window_event(ev); }
         }
