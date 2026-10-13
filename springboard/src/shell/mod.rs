@@ -81,6 +81,7 @@ pub mod photos;
 pub mod music;
 pub mod list;
 pub mod low_battery;
+pub mod crash_alert;
 pub mod permission_sheet;
 pub mod options;
 pub mod pageedit;
@@ -623,6 +624,8 @@ pub struct Shell {
     low_alert: Option<low_battery::Alert>,
     /// the Allow / Don't Allow sheet for an app's privacy request (see `permission_sheet.rs`)
     permission_sheet: Option<permission_sheet::Sheet>,
+    /// the "quit unexpectedly" alert for an app that failed (see `crash_alert.rs`)
+    crash_alert: Option<crash_alert::Alert>,
     low_monitor: low_battery::Monitor,
     /// the announcement banner: the text apps post with `announce`, shown at the top of the screen for a few seconds
     announce: accessibility::banner::Banner,
@@ -874,6 +877,7 @@ impl Shell {
             share_rows: 0,
             low_alert: None,
             permission_sheet: None,
+            crash_alert: None,
             low_monitor: low_battery::Monitor::default(),
             announce: Default::default(),
             speech: accessibility::speech::Speaker::detect(),
@@ -1212,6 +1216,15 @@ impl Shell {
             if let Event::Up(x, y) = ev {
                 self.print_sheet_touch(x, y);
             }
+            return Some(vec![]);
+        }
+        if self.crash_alert.is_some() {
+            // the crash alert takes every touch until one of its buttons answers it
+            if matches!(ev, Event::Up(..)) {
+                self.crash_alert_touch(x, y);
+            }
+            self.drawn = Drawn::Nothing;
+            self.dirty = true;
             return Some(vec![]);
         }
         if self.permission_sheet.is_some() {
@@ -3239,7 +3252,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.keyboard_viewer.is_some() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.crash_alert.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.keyboard_viewer.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -3251,6 +3264,9 @@ impl Shell {
             }
             if let Some(p) = &self.permission_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(a) = &self.crash_alert {
+                a.draw(s, &self.ui, self.w, self.h);
             }
             if let Some(a) = &self.notify.ask {
                 a.draw(s, &self.ui, self.w, self.h);
@@ -3287,7 +3303,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }
@@ -3308,7 +3324,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }
@@ -3509,6 +3525,7 @@ impl Shell {
             ("share-prompt", self.share_prompt.is_some()),
             ("low-alert", self.low_alert.is_some()),
             ("permission-sheet", self.permission_sheet.is_some()),
+            ("crash-alert", self.crash_alert.is_some()),
             ("compose-sheet", self.compose_showing()),
             ("power-menu", self.power_menu.is_some()),
             ("screenshot", self.shot.is_some()),
