@@ -1,3 +1,7 @@
+## 1.25.0 — 2026-10-13
+
+- Tabs: New Tab (⌘T) opens a tab at the open folder with its own history; ⌘W closes the open tab (the last tab stays); Ctrl+Tab and Ctrl+Shift+Tab step through tabs. Tags moves from T to Shift+T. The tab strip is not drawn yet, so tabs are reached by the keys only.
+
 ## 1.24.0 — 2026-10-13
 
 - Icon view, gallery and the preview column draw pictures from the system thumbnails service: any file the service can draw (pictures, text pages, fonts, Office documents, audio and video covers, contacts, calendar events) shows its picture, and the rest keep their type icon. Files no longer decodes pictures itself, so the view does not read files on the paint path.

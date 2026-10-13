@@ -58,6 +58,7 @@ mod smart;
 mod server;
 mod sidebar;
 mod statusbar;
+mod tabs;
 mod system;
 mod toolbar;
 mod undo;
@@ -139,6 +140,8 @@ struct Files {
     tag_index: TagIndex,
     /// The Tags panel, which toggles colours on the selection.
     tag_panel: bool,
+    /// The open window's tabs; the open one's navigation is kept here too (see `tabs.rs`).
+    tabs: tabs::TabStrip<tabs::TabState>,
     /// Saved searches shown in the sidebar's Smart Folders section, from `.smart-folders` at home.
     smart: Vec<smart::SmartFolder>,
     /// The Open With panel for the focused file: the apps the launch service names for it.
@@ -202,6 +205,7 @@ impl Files {
         let smart = smart::load(&home);
         let mut f = Self {
             path: home.clone(),
+            tabs: tabs::TabStrip::new(tabs::TabState { path: home.clone(), history: vec![], at: 0 }),
             home,
             history: vec![],
             at: 0,
@@ -684,6 +688,7 @@ mod tests {
     fn fixture(rows: Vec<Entry>) -> Files {
         Files {
             home:"/fixture".into(), path:"/fixture".into(), history:vec![], at:0,
+            tabs: tabs::TabStrip::new(tabs::TabState { path: "/fixture".into(), history: vec![], at: 0 }),
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
             query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,last_click:None,preview:None,
             w:960.,h:630.,painted_state:String::new(),painted_selection:vec![],revision:0,
