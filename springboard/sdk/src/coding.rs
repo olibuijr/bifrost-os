@@ -1,4 +1,4 @@
-//! Codable parity: `JSONEncoder`/`JSONDecoder`, `PropertyListEncoder`/`PropertyListDecoder` (XML plist).
+//! Codable parity: `JSONEncoder`/`JSONDecoder`, `PropertyListEncoder`/`PropertyListDecoder` (XML plist; binary through `binary_plist`).
 //!
 //! No serde and no proc-macro: types implement [`Encodable`]/[`Decodable`] over the [`Value`] tree, by hand or with
 //! the [`codable!`](crate::codable) macro for plain structs. `Option` fields are left out when `None` and decode
@@ -389,6 +389,11 @@ impl PropertyListEncoder {
         o.push_str("</plist>\n");
         o
     }
+    /// Encodes as a binary property list (`bplist00`, see `binary_plist`). Dates keep their exact value.
+    pub fn encode_binary<T: Encodable>(&self, v: &T) -> Vec<u8> {
+        crate::binary_plist::write(&crate::binary_plist::from_value(&v.encode()))
+    }
+
     fn write(v: &Value, depth: usize, o: &mut String) {
         let pad = "\t".repeat(depth);
         match v {
@@ -426,6 +431,12 @@ impl PropertyListDecoder {
         let body = text.find("<plist").and_then(|i| text[i..].find('>').map(|j| &text[i + j + 1..])).ok_or_else(|| CodingError("not a plist".into()))?;
         let mut p = Plist { s: body, pos: 0 };
         T::decode(&p.value()?)
+    }
+
+    /// Decodes a binary property list written by `encode_binary` (or any writer), keeping dates exact.
+    pub fn decode_binary<T: Decodable>(&self, bytes: &[u8]) -> Result<T, CodingError> {
+        let parsed = crate::binary_plist::read(bytes).map_err(|e| CodingError(e.0))?;
+        T::decode(&crate::binary_plist::to_value(&parsed).map_err(|e| CodingError(e.0))?)
     }
 
     /// Decodes binary (`bplist00`) or text (XML or ASCII) property-list bytes. Binary dates decode like XML dates;

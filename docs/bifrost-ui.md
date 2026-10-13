@@ -1542,7 +1542,8 @@ tree, impls for integers, floats, bool, `String`, `Date`, `Option`, `Vec`, `Hash
 use `codable!(Name { field: Type, .. })` (macro_rules, no proc-macro). serde is in the lockfile only through other
 crates, so it is not used: the SDK stays lean and offline-buildable. `Option` fields are omitted when `None` and
 decode as `None` when missing. The Assistant's `model.rs` uses it. Gaps: no `CodingKeys` renaming (hand-write the impl,
-see `Message` in the Assistant), no binary plist, no key/date/data strategies beyond those above, `Data` unsupported.
+see `Message` in the Assistant), no key/date/data strategies beyond those above, `Data` unsupported. Binary plists:
+`PropertyListEncoder::encode_binary` and `PropertyListDecoder::decode_binary` (see "Files and data persistence").
 Tests: `sdk/tests/foundation.rs`. `Uuid` and `Decimal` encode as JSON strings.
 
 ### UUID and Decimal (Foundation parity)
@@ -1551,6 +1552,39 @@ Tests: `sdk/tests/foundation.rs`. `Uuid` and `Decimal` encode as JSON strings.
 `decimal::Decimal` (`i128` mantissa and base-10 exponent): `parse`, `from_string(text, &locale)`, `adding`/`subtracting`/`multiplying`/`dividing`
 (checked: `DecimalError::Overflow`/`DivideByZero`; `+ - *` operators panic on overflow), `rounded(scale, RoundingMode::{Plain, Down, Up, Bankers})`
 (`NSDecimalRound`), `Display` (`description`). 0.1 + 0.2 == 0.3. Division keeps 18 fractional digits. Gaps: no `NSDecimalNumber` object, no `power`, no NaN.
+
+## Files and data persistence (Foundation parity)
+
+All host-tested only (`sdk/tests/files_persistence.rs`); rows in `docs/parity-matrix/data/foundation-files-persistence.json`
+stay `partial` until a Midget check.
+
+- `binary_plist`: `BValue` (null, bool, int, real, date as seconds since 2001, data, string, `Uid`, array, dict), `read`,
+  `write`. Smallest widths, ASCII or UTF-16 strings, a bounded reader (depth limit, checked offsets and lengths).
+  `from_value`/`to_value` bridge to the Codable `Value`.
+- `keyed_archive`: `Archive::to_binary` / `from_binary` write the keyed-archive layout (`$archiver`, `$version` 100000, `$top`,
+  `$objects` with `$null` first, `$class` uids and `$classname`/`$classes` descriptions). Plain value slots written by other
+  writers are read as values. Secure coding: `KeyedUnarchiver::new` requires it; `decode_object_of(archive, owner, classes, key)`
+  is `decodeObject(of:forKey:)`; `without_secure_coding()` is `requiresSecureCoding = false`. The archiver name is our own.
+- `file_wrapper`: `FileWrapper` regular file, directory, symbolic link. `read_from`, `add_file_wrapper` (unique names
+  "name 2.ext"), `add_regular_file`, `remove_file_wrapper`, `matches_contents_of`, `write_to(path, WritingOptions { atomic,
+  with_name_updating }, original_contents)`. Atomic writes stage next to the target and swap in with `replace_item_at`;
+  unchanged members of `original_contents` are hard linked.
+- `bookmark`: `bookmark_data(path, options, keys, relative_to)`, `resolve_bookmark(data, options, relative_to)` with a stale flag
+  (inode first in its directory, then ancestors on the same volume), `resource_values_from_bookmark`, security scope
+  (`SecurityScope::start_accessing`/`stop_accessing`, read-only scopes) enforced by `ResolvedBookmark::read`/`write`.
+- `file_manager`: `replace_item_at(original, with, backup_name, ReplaceOptions)` keeps the original's permissions and xattrs and
+  can keep a backup; `enumerator(dir, keys, DirectoryEnumerationOptions)` with `skip_descendants` and prefetched `ResourceValues`;
+  `ResourceKey` includes `FileResourceIdentifier`, `IsExcludedFromBackup`, `VolumeAvailableCapacityForImportantUsage` (equal to
+  free space: nothing is purgeable yet).
+- `file_metadata`: extended attributes (`xattr`, `set_xattr`, `remove_xattr`, `list_xattrs`, `copy_xattrs`) and backup exclusion:
+  `set_excluded_from_backup` stores the `user.bifrost.exclude-from-backup` attribute; `backup_items(root)` skips excluded items
+  with their contents.
+- `metadata_query`: `MetadataQuery` with `predicate`, `search_scopes`, `start_query`, `poll(now)` delivering `DidStartGathering`,
+  `GatheringProgress`, `DidFinishGathering`, then `DidUpdate { added, changed, removed }` from the watch stream;
+  `MetadataItem::value(MetadataAttribute)`. Separate from the Core Spotlight index (`quicksearch`) and from `ui/src/metaquery.rs`.
+
+Gaps: no iCloud or ubiquity containers, no file versions, no on-disk purgeable data, no metadata query sort descriptors, grouping or
+predicate text parser, no network volumes in bookmarks.
 
 ## NotificationCenter (Foundation parity)
 
@@ -1592,22 +1626,25 @@ presenters only learn of changes inside folders the app's `FSEventStream` watche
 - `write_atomically(path, bytes)` is `Data.write(to:options: .atomic)`. It delegates to `bifrost_core::fsutil::write_atomic`
   (temporary sibling, sync, rename). Unlike `fsutil`, it does not create a missing parent directory; it returns
   `NotFound`, as `Data.write` does.
-- `replace_item_at(original, new_item, backup_item_name)` is `replaceItemAt(_:withItemAt:backupItemName:options:)`. The
-  old item is renamed aside first, the new one moved into its place, and the old one is put back if the move fails.
-  With a backup name the old item stays beside it (an older backup of that name is replaced); without one it is deleted.
-  It returns the placed path.
+- `replace_item_at(original, with_item, backup_item_name, ReplaceOptions)` is
+  `replaceItemAt(_:withItemAt:backupItemName:options:)`. A file replacing a file is one rename; otherwise the old item is
+  renamed aside first, the new one moved in, and the old one put back if the move fails. With a backup name the old item
+  is kept beside it, and deleted again after success unless `without_deleting_backup_item`; without a name it is deleted.
+  `using_new_metadata_only` keeps the replacement's own permissions and xattrs instead of the original's. It returns the
+  placed path.
 - `url_for(SearchPathDirectory, appropriate_for, create)` is `url(for:in:appropriateFor:create:)`, and `urls_for` is
   `urls(for:in:)`. The directories are `Desktop`, `Downloads`, `Documents`, `ApplicationSupport` (`$XDG_DATA_HOME`
   or `~/.local/share`), `Caches` (`$XDG_CACHE_HOME` or `~/.cache`) and `ItemReplacement`, which needs `appropriate_for`
   and is placed beside that item so the replacement stays a rename. The base is `$HOME`; the XDG values are used only
   when absolute.
 - `temporary_directory()` is `temporaryDirectory` (`env::temp_dir()`).
-- `enumerator(at, DirectoryEnumerationOptions)` is `enumerator(at:includingPropertiesForKeys:options:)`. The options
+- `enumerator(at, keys, DirectoryEnumerationOptions)` is `enumerator(at:includingPropertiesForKeys:options:)`. The options
   are `skips_hidden_files` (dot names and everything below them) and `skips_subdirectory_descendants`. Items are
-  full paths, depth first, names sorted, and links are never entered. The tree is read when the enumerator is created.
+  `EnumeratedItem { path, values }` (full path plus the prefetched `ResourceValues`), depth first, names sorted, links never
+  entered; the walk is lazy, an unreadable root is an error and an unreadable subdirectory is skipped.
+  `skip_descendants()` and `level()` work as on Foundation's enumerator.
 
-Gaps: no `FileWrapper`, bookmarks or security-scoped URLs, no `usingNewMetadataOnly` or `withoutDeletingBackupItem`
-options, no resource keys on the enumerator, and no `~/Library` folders (Linux XDG locations are used). Tests:
+Gaps: no `~/Library` folders (Linux XDG locations are used). `FileWrapper` and bookmarks are in their own modules. Tests:
 `file_manager::tests` (run with `cargo test -p bifrost-app file_manager`).
 
 ## NSFileVersion (Foundation parity)
@@ -2705,8 +2742,10 @@ are refused (`ListenerError::TlsUnsupported`), no IPv6 or interface selection, n
 
 ## URL bookmarks and FileWrapper (Foundation parity)
 
-- `bifrost_app::bookmark`: `bookmark_data(path, BookmarkCreationOptions, relative_to)` and `resolve_bookmark(data, relative_to) -> ResolvedBookmark { path, is_stale }`. The blob holds path, device, inode and size; a rename inside the old directory still resolves and reports stale. `with_security_scope` returns `Unsupported`.
-- `bifrost_app::file_wrapper::FileWrapper`: `regular_file_with_contents`, `directory_with_file_wrappers`, `from_path`, `is_directory`/`is_regular_file`/`is_symbolic_link`, `file_wrappers`, `add_regular_file`, `add_file_wrapper`, `remove_file_wrapper`, `write_to` (atomic by rename), `matches_contents`, `needs_to_be_updated`.
+One implementation of each, described under "Files and data persistence" above: `bifrost_app::bookmark`
+(`bookmark_data(path, options, keys, relative_to)`, `resolve_bookmark(data, options, relative_to)`, security scopes now
+supported) and `bifrost_app::file_wrapper::FileWrapper` (`read_from`, `write_to(path, WritingOptions, original_contents)`,
+`matches_contents_of`, `needs_to_be_updated`).
 
 ## Window server session parity: key bindings and frame capture (`bifrost-wm`)
 

@@ -15,19 +15,52 @@
 //! - Enumeration lists paths depth first, names sorted within each level, and does not descend into symbolic links,
 //!   so a link loop cannot run forever.
 //!
-//! Gaps: no `FileWrapper` (bundles of files), no bookmarks or security-scoped URLs (user files go through the file
-//! portal grants in `docbroker`), no attributes beyond kind, size and modification time, no extended attributes,
-//! no creation of symbolic links, no copy progress or delegate callbacks, and no cloud-synced (ubiquitous) items.
-//! `replace_item_at` has no `usingNewMetadataOnly` or `withoutDeletingBackupItem` options. The enumerator reads the
-//! whole tree when it is created and returns no resource keys. The user directories are the XDG-style Linux
-//! locations (`$HOME/Documents`, `$XDG_DATA_HOME`, `$XDG_CACHE_HOME`), not the `~/Library` folders.
+//! Also here: `replace_item_at` (atomic replace that keeps the original's metadata and can leave a backup),
+//! `enumerator` (a directory enumerator that prefetches resource keys) and `resource_values` (the resource keys
+//! `URLResourceValues` carries), plus the user directories (`url_for`, `urls_for`). `FileWrapper` is in
+//! `file_wrapper`, bookmarks (with security scopes) in `bookmark`.
+//!
+//! Gaps: no attributes beyond the resource keys below, no creation of symbolic links, no copy progress or
+//! delegate callbacks, and no cloud-synced (ubiquitous) items. The user directories are the XDG-style Linux
+//! locations (`$HOME/Documents`, `$XDG_DATA_HOME`, `$XDG_CACHE_HOME`), not the `~/Library` folders. The enumerator
+//! lists lazily and skips a subdirectory it cannot read; only an unreadable root is an error.
 
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
+use std::os::raw::{c_char, c_int};
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::SystemTime;
+
+use crate::file_metadata;
+
+/// The C `struct statvfs` on 64-bit Linux; the kernel fills it, so not every field is read.
+#[repr(C)]
+#[allow(dead_code)]
+struct StatVfs {
+    f_bsize: u64,
+    f_frsize: u64,
+    f_blocks: u64,
+    f_bfree: u64,
+    f_bavail: u64,
+    f_files: u64,
+    f_ffree: u64,
+    f_favail: u64,
+    f_fsid: u64,
+    f_flag: u64,
+    f_namemax: u64,
+    spare: [c_int; 6],
+}
+
+extern "C" {
+    fn statvfs(path: *const c_char, buf: *mut StatVfs) -> c_int;
+}
+
+static STAGE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 /// `EXDEV`: the rename crossed a file system boundary, so `move_item` copies and removes instead.
 const EXDEV: i32 = 18;
@@ -77,17 +110,111 @@ pub struct DirectoryEnumerationOptions {
     pub skips_subdirectory_descendants: bool,
 }
 
-/// `FileManager.DirectoryEnumerator`: the full paths of the items below a directory, in order.
-#[derive(Debug)]
+/// `URLResourceKey`: the properties of an item that can be asked for and prefetched.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ResourceKey {
+    Name,
+    IsDirectory,
+    IsRegularFile,
+    IsSymbolicLink,
+    IsHidden,
+    FileSize,
+    ContentModificationDate,
+    /// The device and inode numbers, which identify the item on its volume.
+    FileResourceIdentifier,
+    IsExcludedFromBackup,
+    VolumeTotalCapacity,
+    VolumeAvailableCapacity,
+    /// Free space plus what the system can reclaim. Nothing is reclaimable here, so it equals the free space.
+    VolumeAvailableCapacityForImportantUsage,
+}
+
+/// `URLResourceValues`: a value is `Some` only for a key that was asked for.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ResourceValues {
+    pub name: Option<String>,
+    pub is_directory: Option<bool>,
+    pub is_regular_file: Option<bool>,
+    pub is_symbolic_link: Option<bool>,
+    pub is_hidden: Option<bool>,
+    pub file_size: Option<u64>,
+    /// Seconds since 1970.
+    pub content_modification_date: Option<f64>,
+    /// (device, inode).
+    pub file_resource_identifier: Option<(u64, u64)>,
+    pub is_excluded_from_backup: Option<bool>,
+    pub volume_total_capacity: Option<u64>,
+    pub volume_available_capacity: Option<u64>,
+    pub volume_available_capacity_for_important_usage: Option<u64>,
+}
+
+/// `FileManager.ItemReplacementOptions`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ReplaceOptions {
+    /// Do not carry the original's permissions and extended attributes over to the replacement.
+    pub using_new_metadata_only: bool,
+    /// Keep the backup item (needs a backup name) instead of deleting it once the replace succeeded.
+    pub without_deleting_backup_item: bool,
+}
+
+/// One item the enumerator returned, with the resource values prefetched for the keys it was created with.
+#[derive(Clone, Debug, PartialEq)]
+pub struct EnumeratedItem {
+    pub path: PathBuf,
+    pub values: ResourceValues,
+}
+
+/// `FileManager.DirectoryEnumerator`: a deep, depth-first walk, names sorted within each level. A symbolic link is
+/// returned but never entered, and a directory that cannot be read is skipped.
 pub struct DirectoryEnumerator {
-    items: std::vec::IntoIter<PathBuf>,
+    stack: Vec<std::vec::IntoIter<PathBuf>>,
+    keys: Vec<ResourceKey>,
+    options: DirectoryEnumerationOptions,
+    /// A directory just returned; its children are pushed on the next call unless `skip_descendants` clears it.
+    descend: Option<PathBuf>,
+}
+
+impl DirectoryEnumerator {
+    /// `skipDescendants()`: do not enter the directory that was just returned.
+    pub fn skip_descendants(&mut self) {
+        self.descend = None;
+    }
+
+    /// How deep the walk is: 1 for the children of the root.
+    pub fn level(&self) -> usize {
+        self.stack.len()
+    }
 }
 
 impl Iterator for DirectoryEnumerator {
-    type Item = PathBuf;
+    type Item = EnumeratedItem;
 
-    fn next(&mut self) -> Option<PathBuf> {
-        self.items.next()
+    fn next(&mut self) -> Option<EnumeratedItem> {
+        if let Some(dir) = self.descend.take() {
+            if let Ok(names) = read_names(&dir) {
+                let children: Vec<PathBuf> = names.into_iter().map(|n| dir.join(n)).collect();
+                self.stack.push(children.into_iter());
+            }
+        }
+        loop {
+            let path = match self.stack.last_mut()?.next() {
+                Some(p) => p,
+                None => {
+                    self.stack.pop();
+                    continue;
+                }
+            };
+            let hidden = path.file_name().map_or(false, |n| n.as_bytes().first() == Some(&b'.'));
+            if self.options.skips_hidden_files && hidden {
+                continue;
+            }
+            let Ok(meta) = fs::symlink_metadata(&path) else { continue };
+            if kind_of(&meta) == ItemKind::Directory && !self.options.skips_subdirectory_descendants {
+                self.descend = Some(path.clone());
+            }
+            let values = values_for(&path, &meta, &self.keys);
+            return Some(EnumeratedItem { path, values });
+        }
     }
 }
 
@@ -119,17 +246,9 @@ impl NativeFileManager {
     /// `subpathsOfDirectory(atPath:)`: every item below `dir`, as paths relative to it, depth first.
     pub fn subpaths_of_directory(&self, dir: &Path) -> io::Result<Vec<PathBuf>> {
         Ok(self
-            .enumerator(dir, DirectoryEnumerationOptions::default())?
-            .filter_map(|p| p.strip_prefix(dir).ok().map(Path::to_path_buf))
+            .enumerator(dir, &[], DirectoryEnumerationOptions::default())?
+            .filter_map(|item| item.path.strip_prefix(dir).ok().map(Path::to_path_buf))
             .collect())
-    }
-
-    /// `enumerator(at:includingPropertiesForKeys:options:)`: the full paths of the items below `at`, depth first,
-    /// names sorted within each level. The tree is read now; an unreadable directory is an error.
-    pub fn enumerator(&self, at: &Path, options: DirectoryEnumerationOptions) -> io::Result<DirectoryEnumerator> {
-        let mut items = Vec::new();
-        collect_tree(at, options, &mut items)?;
-        Ok(DirectoryEnumerator { items: items.into_iter() })
     }
 
     /// `createDirectory(atPath:withIntermediateDirectories:)`. With `intermediates`, an existing directory is not an
@@ -151,39 +270,6 @@ impl NativeFileManager {
             }
         }
         bifrost_core::fsutil::write_atomic(path, bytes)
-    }
-
-    /// `replaceItemAt(_:withItemAt:backupItemName:options:)`: moves `new_item` into the place of `original` and
-    /// returns that place. With `backup_item_name`, the old item is kept beside it under that name, replacing an older
-    /// backup of that name. Without one, the old item is deleted once the new one is in place. If the new item
-    /// cannot be moved, the old item is put back and the error is returned.
-    pub fn replace_item_at(&self, original: &Path, new_item: &Path, backup_item_name: Option<&str>) -> io::Result<PathBuf> {
-        if self.item_kind(original).is_none() {
-            return Err(not_found(original));
-        }
-        if self.item_kind(new_item).is_none() {
-            return Err(not_found(new_item));
-        }
-        let dir = parent_dir(original);
-        let backup = match backup_item_name {
-            Some(name) => dir.join(name),
-            None => {
-                let name = original.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-                dir.join(format!(".{name}.replaced-{}", std::process::id()))
-            }
-        };
-        if self.item_kind(&backup).is_some() {
-            self.remove_item(&backup)?;
-        }
-        fs::rename(original, &backup)?;
-        if let Err(e) = self.move_item(new_item, original) {
-            let _ = fs::rename(&backup, original);
-            return Err(e);
-        }
-        if backup_item_name.is_none() {
-            self.remove_item(&backup)?;
-        }
-        Ok(original.to_path_buf())
     }
 
     /// `url(for:in:appropriateFor:create:)`. `appropriate_for` is needed by `ItemReplacement` only: the scratch
@@ -246,6 +332,168 @@ impl NativeFileManager {
             Err(e) => Err(e),
         }
     }
+
+    /// `resourceValues(forKeys:)`: the requested properties of the item at `path`. Does not follow a link.
+    pub fn resource_values(&self, path: &Path, keys: &[ResourceKey]) -> io::Result<ResourceValues> {
+        let meta = fs::symlink_metadata(path)?;
+        Ok(values_for(path, &meta, keys))
+    }
+
+    /// `enumerator(at:includingPropertiesForKeys:options:)`. The root must be a readable directory.
+    pub fn enumerator(&self, dir: &Path, keys: &[ResourceKey], options: DirectoryEnumerationOptions) -> io::Result<DirectoryEnumerator> {
+        let root: Vec<PathBuf> = read_names(dir)?.into_iter().map(|n| dir.join(n)).collect();
+        Ok(DirectoryEnumerator { stack: vec![root.into_iter()], keys: keys.to_vec(), options, descend: None })
+    }
+
+    /// `replaceItemAt(_:withItemAt:backupItemName:options:)`: puts `with_item` at the path of `original` and
+    /// returns that path.
+    ///
+    /// A file replacing a file is one atomic rename, so a reader sees the old or the new item, never a mixture.
+    /// Anything else (a directory, or a backup) moves the original aside first and puts it back if the move of
+    /// the replacement fails. Unless `using_new_metadata_only`, the replacement takes the original's permissions
+    /// and extended attributes. With `backup_item_name`, the original is kept next to itself under that name and
+    /// deleted again after success unless `without_deleting_backup_item`; an older item under that name is
+    /// replaced. A replacement on another volume is copied next to the original first.
+    pub fn replace_item_at(
+        &self,
+        original: &Path,
+        with_item: &Path,
+        backup_item_name: Option<&str>,
+        options: ReplaceOptions,
+    ) -> io::Result<PathBuf> {
+        let orig_meta = fs::symlink_metadata(original)?;
+        let new_meta = fs::symlink_metadata(with_item)?;
+        if let Some(name) = backup_item_name {
+            if name.is_empty() || name.contains('/') {
+                return Err(io::Error::new(io::ErrorKind::InvalidInput, "the backup name must be a plain file name"));
+            }
+        }
+        let staged = if orig_meta.dev() != new_meta.dev() {
+            let tmp = sibling_temp(original);
+            copy_tree(with_item, &tmp, &new_meta)?;
+            Some(tmp)
+        } else {
+            None
+        };
+        let source: &Path = staged.as_deref().unwrap_or(with_item);
+        if !options.using_new_metadata_only {
+            if kind_of(&new_meta) != ItemKind::Symlink {
+                let _ = fs::set_permissions(source, fs::Permissions::from_mode(orig_meta.mode() & 0o7777));
+            }
+            let _ = file_metadata::copy_xattrs(original, source);
+        }
+        let result = self.swap_in(original, source, &orig_meta, &new_meta, backup_item_name, options);
+        match (&result, &staged) {
+            (Ok(_), Some(_)) => {
+                let _ = self.remove_item(with_item);
+            }
+            (Err(_), Some(tmp)) => {
+                let _ = self.remove_item(tmp);
+            }
+            _ => {}
+        }
+        result.map(|()| original.to_path_buf())
+    }
+
+    fn swap_in(
+        &self,
+        original: &Path,
+        source: &Path,
+        orig_meta: &fs::Metadata,
+        new_meta: &fs::Metadata,
+        backup_item_name: Option<&str>,
+        options: ReplaceOptions,
+    ) -> io::Result<()> {
+        let backup = backup_item_name.map(|n| original.with_file_name(n));
+        let files_only = kind_of(orig_meta) != ItemKind::Directory && kind_of(new_meta) != ItemKind::Directory;
+        if backup.is_none() && files_only {
+            return fs::rename(source, original);
+        }
+        let aside = backup.clone().unwrap_or_else(|| sibling_temp(original));
+        if backup.is_some() && fs::symlink_metadata(&aside).is_ok() {
+            self.remove_item(&aside)?;
+        }
+        fs::rename(original, &aside)?;
+        if let Err(e) = fs::rename(source, original) {
+            let _ = fs::rename(&aside, original);
+            return Err(e);
+        }
+        if backup.is_none() || !options.without_deleting_backup_item {
+            let _ = self.remove_item(&aside);
+        }
+        Ok(())
+    }
+}
+
+/// A fresh hidden name next to `path`, for staging a replacement.
+fn sibling_temp(path: &Path) -> PathBuf {
+    let n = STAGE_COUNTER.fetch_add(1, Ordering::SeqCst);
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    path.with_file_name(format!(".{name}.stage-{}-{n}", std::process::id()))
+}
+
+fn values_for(path: &Path, meta: &fs::Metadata, keys: &[ResourceKey]) -> ResourceValues {
+    let kind = kind_of(meta);
+    let mut v = ResourceValues::default();
+    let mut volume: Option<(u64, u64)> = None;
+    for key in keys {
+        match key {
+            ResourceKey::Name => {
+                v.name = Some(path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default())
+            }
+            ResourceKey::IsDirectory => v.is_directory = Some(kind == ItemKind::Directory),
+            ResourceKey::IsRegularFile => v.is_regular_file = Some(meta.file_type().is_file()),
+            ResourceKey::IsSymbolicLink => v.is_symbolic_link = Some(kind == ItemKind::Symlink),
+            ResourceKey::IsHidden => {
+                v.is_hidden = Some(path.file_name().map_or(false, |n| n.as_bytes().first() == Some(&b'.')))
+            }
+            ResourceKey::FileSize => v.file_size = Some(meta.len()),
+            ResourceKey::ContentModificationDate => {
+                v.content_modification_date = Some(meta.mtime() as f64 + meta.mtime_nsec() as f64 / 1e9)
+            }
+            ResourceKey::FileResourceIdentifier => v.file_resource_identifier = Some((meta.dev(), meta.ino())),
+            ResourceKey::IsExcludedFromBackup => {
+                v.is_excluded_from_backup = Some(file_metadata::is_excluded_from_backup(path))
+            }
+            ResourceKey::VolumeTotalCapacity
+            | ResourceKey::VolumeAvailableCapacity
+            | ResourceKey::VolumeAvailableCapacityForImportantUsage => {
+                let (total, free) = *volume.get_or_insert_with(|| volume_capacity(path).unwrap_or((0, 0)));
+                match key {
+                    ResourceKey::VolumeTotalCapacity => v.volume_total_capacity = Some(total),
+                    ResourceKey::VolumeAvailableCapacity => v.volume_available_capacity = Some(free),
+                    _ => v.volume_available_capacity_for_important_usage = Some(free),
+                }
+            }
+        }
+    }
+    v
+}
+
+/// (total bytes, bytes available to an unprivileged user) of the volume that holds `path`.
+fn volume_capacity(path: &Path) -> Option<(u64, u64)> {
+    let c = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
+    let mut buf = StatVfs {
+        f_bsize: 0,
+        f_frsize: 0,
+        f_blocks: 0,
+        f_bfree: 0,
+        f_bavail: 0,
+        f_files: 0,
+        f_ffree: 0,
+        f_favail: 0,
+        f_fsid: 0,
+        f_flag: 0,
+        f_namemax: 0,
+        spare: [0; 6],
+    };
+    // SAFETY: `c` is a live NUL-terminated path and `buf` matches the C struct's layout on 64-bit Linux.
+    let rc = unsafe { statvfs(c.as_ptr(), &mut buf) };
+    if rc != 0 {
+        return None;
+    }
+    let unit = if buf.f_frsize != 0 { buf.f_frsize } else { buf.f_bsize };
+    Some((buf.f_blocks.saturating_mul(unit), buf.f_bavail.saturating_mul(unit)))
 }
 
 fn kind_of(m: &fs::Metadata) -> ItemKind {
@@ -267,26 +515,6 @@ fn read_names(dir: &Path) -> io::Result<Vec<OsString>> {
     }
     names.sort();
     Ok(names)
-}
-
-/// Pre-order walk that honours `options`. A symbolic link is listed but never entered.
-fn collect_tree(dir: &Path, options: DirectoryEnumerationOptions, out: &mut Vec<PathBuf>) -> io::Result<()> {
-    for name in read_names(dir)? {
-        if options.skips_hidden_files && is_hidden(&name) {
-            continue;
-        }
-        let child = dir.join(&name);
-        let is_real_dir = kind_of(&fs::symlink_metadata(&child)?) == ItemKind::Directory;
-        out.push(child.clone());
-        if is_real_dir && !options.skips_subdirectory_descendants {
-            collect_tree(&child, options, out)?;
-        }
-    }
-    Ok(())
-}
-
-fn is_hidden(name: &OsStr) -> bool {
-    name.to_string_lossy().starts_with('.')
 }
 
 /// The user directory for `directory`, under `home`. `data_home` and `cache_home` are the `XDG_*` values; a relative
@@ -328,10 +556,6 @@ fn home_dir() -> io::Result<PathBuf> {
 /// The directory an item lives in: its parent, or the current directory for a bare name.
 fn parent_dir(path: &Path) -> &Path {
     path.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."))
-}
-
-fn not_found(path: &Path) -> io::Error {
-    io::Error::new(io::ErrorKind::NotFound, format!("{} does not exist", path.display()))
 }
 
 fn refuse_existing(dst: &Path) -> io::Result<()> {
@@ -457,7 +681,7 @@ mod tests {
         touch(&s.0.join(".hidden/secret.txt"), "");
         touch(&s.0.join(".env"), "");
         let fm = NativeFileManager;
-        let list = |o| relative(&s.0, fm.enumerator(&s.0, o).unwrap());
+        let list = |o| relative(&s.0, fm.enumerator(&s.0, &[], o).unwrap().map(|i| i.path));
 
         let all = list(DirectoryEnumerationOptions::default());
         assert_eq!(all, vec![".env", ".hidden", ".hidden/secret.txt", "visible", "visible/.dot.txt", "visible/a.txt"]);
@@ -477,9 +701,9 @@ mod tests {
         let s = Scratch::new();
         touch(&s.0.join("a.txt"), "");
         let fm = NativeFileManager;
-        let first = fm.enumerator(&s.0, DirectoryEnumerationOptions::default()).unwrap().next().unwrap();
-        assert_eq!(first, s.0.join("a.txt"));
-        assert!(fm.enumerator(&s.0.join("missing"), DirectoryEnumerationOptions::default()).is_err());
+        let first = fm.enumerator(&s.0, &[], DirectoryEnumerationOptions::default()).unwrap().next().unwrap();
+        assert_eq!(first.path, s.0.join("a.txt"));
+        assert!(fm.enumerator(&s.0.join("missing"), &[], DirectoryEnumerationOptions::default()).is_err());
     }
 
     #[test]
@@ -548,7 +772,7 @@ mod tests {
         touch(&s.0.join("doc.txt"), "old");
         touch(&s.0.join("new.txt"), "new");
         let placed = NativeFileManager
-            .replace_item_at(&s.0.join("doc.txt"), &s.0.join("new.txt"), Some("doc.bak"))
+            .replace_item_at(&s.0.join("doc.txt"), &s.0.join("new.txt"), Some("doc.bak"), ReplaceOptions { without_deleting_backup_item: true, ..Default::default() })
             .unwrap();
         assert_eq!(placed, s.0.join("doc.txt"));
         assert_eq!(fs::read_to_string(s.0.join("doc.txt")).unwrap(), "new");
@@ -561,7 +785,7 @@ mod tests {
         let s = Scratch::new();
         touch(&s.0.join("doc.txt"), "old");
         touch(&s.0.join("new.txt"), "new");
-        NativeFileManager.replace_item_at(&s.0.join("doc.txt"), &s.0.join("new.txt"), None).unwrap();
+        NativeFileManager.replace_item_at(&s.0.join("doc.txt"), &s.0.join("new.txt"), None, ReplaceOptions::default()).unwrap();
         assert_eq!(fs::read_to_string(s.0.join("doc.txt")).unwrap(), "new");
         let names: Vec<OsString> = fs::read_dir(&s.0).unwrap().map(|e| e.unwrap().file_name()).collect();
         assert_eq!(names, vec![OsString::from("doc.txt")], "the old item is deleted");
@@ -572,7 +796,7 @@ mod tests {
         let s = Scratch::new();
         touch(&s.0.join("doc.txt"), "old");
         let fm = NativeFileManager;
-        let err = fm.replace_item_at(&s.0.join("doc.txt"), &s.0.join("absent.txt"), None).unwrap_err();
+        let err = fm.replace_item_at(&s.0.join("doc.txt"), &s.0.join("absent.txt"), None, ReplaceOptions::default()).unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::NotFound);
         assert_eq!(fs::read_to_string(s.0.join("doc.txt")).unwrap(), "old");
     }
