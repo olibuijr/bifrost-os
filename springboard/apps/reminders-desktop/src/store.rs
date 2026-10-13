@@ -1,5 +1,5 @@
-//! Bounded, escaped, atomically written store. Format v2 keeps lists, list groups, sections, templates and
-//! full reminders; the v1 date-only format still loads (all in one list). A line starts with its kind: `L` list,
+//! Bounded, escaped, atomically written store. Format v3 keeps lists, list groups, sections, templates, smart lists and
+//! full reminders; the v2 format (before groups and sections) and the v1 date-only format still load. A line starts with its kind: `L` list,
 //! `G` group, `S` section, `T` template, `U` template item, `M` smart list, `R` reminder. Older files have shorter `L` and `R`
 //! lines; the missing fields read as unset.
 use crate::model::{
@@ -16,7 +16,11 @@ use std::path::Path;
 pub const MAX_BYTES: usize = 8 * 1024 * 1024;
 /// Lines read after the header: reminders, lists, groups, sections, templates and their items.
 const MAX_LINES: usize = 25_000;
-const HEADER: &str = "springboard-reminders-v2";
+/// The format this version writes. An older version does not know it and leaves the file alone (it reports that it
+/// cannot read it and saves nothing), instead of reading the longer lines as damaged and dropping them.
+const HEADER: &str = "springboard-reminders-v3";
+/// The format of versions before 1.14: lists and reminders with fewer fields on their lines.
+const HEADER_V2: &str = "springboard-reminders-v2";
 const HEADER_V1: &str = "springboard-reminders-v1";
 const DAY_RANGE: std::ops::RangeInclusive<i64> = -719_162..=2_932_896;
 
@@ -183,7 +187,7 @@ fn parse_smart(fields: &[&str]) -> Option<SmartDef> {
 pub fn parse(text: &str) -> Data {
     let mut lines = text.lines();
     let v1 = match lines.next() {
-        Some(HEADER) => false,
+        Some(HEADER | HEADER_V2) => false,
         Some(HEADER_V1) => true,
         _ => return Data::default(),
     };
@@ -316,7 +320,7 @@ pub fn load_checked(path: &Path) -> std::io::Result<Data> {
         ));
     }
     let text = std::fs::read_to_string(path)?;
-    if !matches!(text.lines().next(), Some(HEADER | HEADER_V1)) {
+    if !matches!(text.lines().next(), Some(HEADER | HEADER_V2 | HEADER_V1)) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "Unknown reminders format",
@@ -486,6 +490,20 @@ mod tests {
         path
     }
     #[test]
+    fn the_header_written_is_the_one_an_older_version_refuses() {
+        let path = scratch("header");
+        save(&path, &Data::default()).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(text.lines().next(), Some("springboard-reminders-v3"));
+        assert!(load_checked(&path).is_ok());
+        // a file of the previous format loads, and a future one is refused whole
+        std::fs::write(&path, "springboard-reminders-v2\nL\t1\t0\t0\tOne\n").unwrap();
+        assert_eq!(load_checked(&path).unwrap().lists[0].name, "One");
+        std::fs::write(&path, "springboard-reminders-v4\nL\t1\t0\t0\tOne\n").unwrap();
+        assert!(load_checked(&path).is_err());
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+    #[test]
     fn local_day_observes_offset() {
         assert_eq!(local_day(1_791_072_000 - 1800, 3600), local_day(1_791_072_000, 0));
         assert_eq!(local_day(-1, 0), -1);
@@ -544,7 +562,7 @@ mod tests {
     #[test]
     fn files_from_before_groups_sections_and_creation_dates_still_load() {
         let text = format!(
-            "{HEADER}\nL\t1\t0\t0\tReminders\nL\t2\t1\t1\tWork\nR\t1\t1\t-\t-\t-\t0\t0\t0\t-\t-\tOld\t\t\nR\t2\t1\t-\t100\t-\t1\t0\t0\t-\t-\tOlder\t\t\t500\n"
+            "{HEADER_V2}\nL\t1\t0\t0\tReminders\nL\t2\t1\t1\tWork\nR\t1\t1\t-\t-\t-\t0\t0\t0\t-\t-\tOld\t\t\nR\t2\t1\t-\t100\t-\t1\t0\t0\t-\t-\tOlder\t\t\t500\n"
         );
         let data = parse(&text);
         assert_eq!(data.lists.len(), 2);

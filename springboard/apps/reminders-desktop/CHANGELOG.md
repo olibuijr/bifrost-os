@@ -18,7 +18,7 @@
 - File > Import List reads a Markdown checklist (the Export List format, with subtasks, due days and `## section` headings) into a new list. File > Print List prints the open list. Export List now writes each section as a `## heading`.
 - Quick Reminder: a menu bar extra with New Quick Reminder (opens the new reminder form) and Add Reminder from Clipboard, which reads the copied text as a quick-add line such as "pay rent every month !!" and adds it to the default list.
 - Shortcuts: new Add Quick Reminder, Create List, Open List, Open Smart List and Search Reminders actions next to Add Reminder.
-- The store keeps list groups, sections, templates, smart lists, pinned lists and creation dates in the same file. Files written by older versions still open; a file saved by this version has extra fields that older versions skip.
+- The store keeps list groups, sections, templates, smart lists, pinned lists, creation dates, time zones, urgent marks and picture names in the same file (format v3). Files from older versions still open and are rewritten in the new format on the next change. An older version of Reminders does not read a v3 file: it reports that it cannot read it and leaves it untouched.
 
 ## 1.13.3 — 2026-10-12
 
