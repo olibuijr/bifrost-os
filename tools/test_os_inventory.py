@@ -132,15 +132,14 @@ class Heuristics(unittest.TestCase):
     def test_app_with_a_matching_springboard_app_is_partial(self):
         repo = repo_with(dirs=["springboard/apps/calculator-desktop"])
         (e,) = self.assessed([rec("D", "System/Applications/Calculator.app")], repo)
-        self.assertEqual((e["status"], e["bifrost"], e["method"]), ("partial", "springboard/apps/calculator-desktop", "heuristic"))
+        self.assertEqual((e["status"], e["bifrost"]), ("partial", "springboard/apps/calculator-desktop"))
+        self.assertNotIn("method", e)  # a reviewed entry is written as assessed, without the heuristic marker
 
     def test_alias_counterpart_needs_the_file_to_exist(self):
         present = repo_with(files=[("springboard/apps/files/main.rs", "")])
         absent = repo_with()
-        (hit,) = self.assessed([rec("D", "System/Library/CoreServices/Finder.app")], present)
-        (miss,) = self.assessed([rec("D", "System/Library/CoreServices/Finder.app")], absent)
-        self.assertEqual((hit["status"], hit["bifrost"]), ("partial", "springboard/apps/files"))
-        self.assertEqual((miss["status"], miss["bifrost"]), ("gap", ""))
+        self.assertEqual(oi.Assessor(present).app("Finder"), "springboard/apps/files")
+        self.assertEqual(oi.Assessor(absent).app("Finder"), "")  # the alias only counts when the file exists
 
     def test_unknown_app_is_a_gap_without_a_citation(self):
         (e,) = self.assessed([rec("D", "System/Applications/Journal.app")], repo_with())
@@ -184,6 +183,68 @@ class Heuristics(unittest.TestCase):
             self.assertIn(e["status"], oi.STATUSES)
             if e["bifrost"]:
                 self.assertTrue(os.path.exists(os.path.join(repo, e["bifrost"])), e["bifrost"])
+
+
+class ReviewedTables(unittest.TestCase):
+    """The person-assessed apps, settings and system-ui counterparts (REVIEWED_* tables) and their defaults."""
+
+    def test_app_alias_table_points_at_existing_files(self):
+        for slug, path in oi.APP_ALIASES.items():
+            self.assertTrue(os.path.exists(os.path.join(oi.REPO, path)), f"{slug}: {path}")
+
+    def test_reviewed_counterparts_exist_in_the_repository(self):
+        for table in oi.REVIEWED_TABLES.values():
+            for name, (path, status, note) in table.items():
+                if path:
+                    self.assertTrue(os.path.exists(os.path.join(oi.REPO, path)), f"{name}: {path}")
+
+    def test_reviewed_statuses_are_valid_and_partial_names_a_file(self):
+        for table in oi.REVIEWED_TABLES.values():
+            for name, (path, status, note) in table.items():
+                self.assertIn(status, oi.STATUSES, name)
+                self.assertTrue(note, name)
+                if status == "partial":
+                    self.assertTrue(path, name)
+                if status in ("gap", "n/a"):
+                    self.assertEqual(path, "", name)
+
+    def test_reviewed_entry_is_written_without_the_heuristic_marker(self):
+        e = oi.entry("apps", "path:/System/Applications/Notes.app", "/System/Applications/Notes.app", "app", "Notes",
+                     method="heuristic")
+        (out,) = oi.assess([e], repo_with())
+        self.assertEqual((out["status"], out["bifrost"]), ("partial", "springboard/apps/notes-desktop"))
+        self.assertNotIn("method", out)
+
+    def test_reviewed_table_overrides_a_stale_heuristic_counterpart(self):
+        e = oi.entry("system-ui", "path:/x", "/x", "core service", "Dock", status="gap", bifrost="stale", method="heuristic")
+        (out,) = oi.assess([e], repo_with())
+        self.assertEqual((out["status"], out["bifrost"]), ("partial", "springboard/src/shell/desktop_dock.rs"))
+        self.assertNotIn("method", out)
+
+    def test_unreviewed_settings_entry_is_a_reviewed_gap(self):
+        e = oi.entry("settings", "settings:x", "/x", "settings pane", "Gizmo")
+        (out,) = oi.assess([e], repo_with())
+        self.assertEqual((out["status"], out["bifrost"]), ("gap", ""))
+        self.assertNotIn("method", out)
+
+    def test_apple_only_services_are_n_a_and_intents_are_gaps(self):
+        cases = {"CloudWorker": "n/a", "CloudUploadWorker": "n/a", "MediaRemoteAppIntentsExtension": "gap",
+                 "FamilyIntents": "gap", "FaceTimeNotificationExtension": "n/a"}
+        for name, status in cases.items():
+            e = oi.entry("system-ui", f"x:{name}", f"/{name}", "system extension", name)
+            (out,) = oi.assess([e], repo_with())
+            self.assertEqual(out["status"], status, name)
+
+    def test_fskit_filesystems_are_os_and_the_installer_is_a_gap(self):
+        for name, status in (("com.apple.fskit.exfat", "os"), ("Installer", "gap"), ("DiskImageMounter", "os")):
+            e = oi.entry("system-ui", f"x:{name}", f"/{name}", "core service", name)
+            (out,) = oi.assess([e], repo_with())
+            self.assertEqual(out["status"], status, name)
+
+    def test_rules_do_not_touch_other_categories(self):
+        e = oi.entry("cli", "cli:/usr/bin/ls", "/usr/bin/ls", "tool", "ls")
+        (out,) = oi.assess([e], repo_with())
+        self.assertEqual((out["status"], out["method"]), ("os", "heuristic"))
 
 
 class Merge(unittest.TestCase):
