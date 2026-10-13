@@ -8,9 +8,9 @@
 //! wayland-server code. Work that needs the renderer or the display backend goes through hooks in [`SessionHooks`]
 //! that the backend sets (`capture`, `set_mode`, `set_power`); without a hook the request is refused, never faked.
 //!
-//! Known gap: a captured frame is written into the client's wl_shm buffer by [`write_shm`], which is stubbed. A raw
-//! write into the pool needs `unsafe`, and this crate keeps `unsafe` out of its code, so until one audited write
-//! exists every copy is answered with `failed`. See `docs/graphics/g2-wm-session.md`.
+//! A captured frame is written into the client's wl_shm buffer by `write_shm` (one audited write; the pixel format
+//! conversion is [`rgba_to_shm`]). Still open: no backend sets the `capture` hook yet, so every copy is answered with
+//! `failed` until the render server's readback is wired to it. See `docs/graphics/g2-wm-session.md`.
 
 use std::{
     collections::HashMap,
@@ -72,7 +72,7 @@ use smithay::{
         compositor::with_states,
         cursor_shape::CursorShapeManagerState,
         shell::xdg::XdgToplevelSurfaceData,
-        shm::{with_buffer_contents, BufferData},
+        shm::{with_buffer_contents, with_buffer_contents_mut, BufferData},
         xdg_activation::{XdgActivationHandler, XdgActivationState, XdgActivationToken, XdgActivationTokenData},
     },
 };
@@ -208,7 +208,8 @@ pub fn stamp(d: Duration) -> (u32, u32, u32) {
 /// The window server's hooks into the backend. Each is optional; a request that needs a missing hook is refused.
 #[derive(Default)]
 pub struct SessionHooks {
-    /// Reads the pixels of a capture region as XRGB8888 rows of `region.w * 4` bytes. The Vulkan server reads them
+    /// Reads the pixels of a capture region as RGBA rows (R, G, B, A in memory) of `region.w * 4` bytes, wallpaper and
+    /// every layer composed; `write_shm` converts them to the client's format. The Vulkan server reads them
     /// back from the output target; the headless backend from its texture.
     pub capture: Option<Box<dyn FnMut(&CaptureSpec) -> Option<Vec<u8>>>>,
     /// Switches an output to a mode (a DRM modeset). Returns whether it took.
@@ -483,9 +484,64 @@ impl WmState {
     }
 }
 
-/// Writes captured pixels into a client's shm buffer. Stubbed: a raw write into the pool needs `unsafe`, which this
-/// crate does not use. Every copy is refused until one audited write exists here (see the module note).
-fn write_shm(_buffer: &WlBuffer, _pixels: &[u8]) -> Result<(), &'static str> { Err("shm write is not wired yet") }
+/// Converts RGBA rows (R, G, B, A in memory, what a GPU readback gives) into `format` rows of `dst_stride` bytes.
+/// XRGB8888 and ARGB8888 are little-endian words, so in memory they are B, G, R, X/A: the channels are swapped
+/// explicitly, never copied through. XRGB8888 stores 0xff in the unused byte. `Err` for any other format or short data.
+pub fn rgba_to_shm(src: &[u8], width: usize, height: usize, format: wl_shm::Format, dst: &mut [u8], dst_stride: usize) -> Result<(), &'static str> {
+    let opaque = match format {
+        wl_shm::Format::Xrgb8888 => true,
+        wl_shm::Format::Argb8888 => false,
+        _ => return Err("unsupported shm format"),
+    };
+    if src.len() < width * height * 4 {
+        return Err("short capture");
+    }
+    if dst_stride < width * 4 || (height > 0 && dst.len() < dst_stride * (height - 1) + width * 4) {
+        return Err("buffer too small");
+    }
+    for y in 0..height {
+        let from = &src[y * width * 4..(y + 1) * width * 4];
+        let to = &mut dst[y * dst_stride..y * dst_stride + width * 4];
+        for (p, q) in from.chunks_exact(4).zip(to.chunks_exact_mut(4)) {
+            q.copy_from_slice(&[p[2], p[1], p[0], if opaque { 0xff } else { p[3] }]);
+        }
+    }
+    Ok(())
+}
+
+/// Cuts `region` out of a full RGBA frame of `frame` (width, height) pixels. The region is clipped to the frame; the
+/// result is the clipped rectangle and its rows, `None` when nothing is left.
+pub fn crop_rgba(frame_px: &[u8], frame: (i32, i32), region: Rect) -> Option<(Rect, Vec<u8>)> {
+    let r = clamp_region(frame, region)?;
+    if frame_px.len() < (frame.0 as usize) * (frame.1 as usize) * 4 {
+        return None;
+    }
+    let mut out = Vec::with_capacity((r.w * r.h * 4) as usize);
+    for y in r.y..r.y + r.h {
+        let start = ((y * frame.0 + r.x) * 4) as usize;
+        out.extend_from_slice(&frame_px[start..start + (r.w * 4) as usize]);
+    }
+    Some((r, out))
+}
+
+/// Writes captured RGBA pixels (the `capture` hook's rows) into a client's shm buffer in the format it asked for.
+/// This is the one audited raw write into a client pool: the slice covers only the buffer's own rows, and its end is
+/// checked against the pool length first.
+fn write_shm(buffer: &WlBuffer, pixels: &[u8]) -> Result<(), &'static str> {
+    with_buffer_contents_mut(buffer, |ptr, len, d: BufferData| {
+        let (w, h) = (d.width.max(0) as usize, d.height.max(0) as usize);
+        let (stride, offset) = (d.stride.max(0) as usize, d.offset.max(0) as usize);
+        let need = if h == 0 { 0 } else { stride * (h - 1) + w * 4 };
+        if offset.checked_add(need).map_or(true, |end| end > len) {
+            return Err("buffer is outside its pool");
+        }
+        // SAFETY: `ptr` starts the mapped pool of `len` bytes; `offset + need <= len` was checked above, and the slice
+        // lives only for this call, while the pool stays mapped.
+        let dst = unsafe { std::slice::from_raw_parts_mut(ptr.add(offset), need) };
+        rgba_to_shm(pixels, w, h, d.format, dst, stride)
+    })
+    .map_err(|_| "shm buffer is not readable")?
+}
 
 /// Title and app id of a toplevel's surface, if it has been configured.
 fn toplevel_names(surface: &WlSurface) -> Option<(String, String)> {
@@ -965,6 +1021,48 @@ impl smithay::wayland::tablet_manager::TabletSeatHandler for WmState {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn argb8888_is_bgra_in_memory() {
+        let src = [1, 2, 3, 4, 5, 6, 7, 8];
+        let mut dst = [0u8; 8];
+        rgba_to_shm(&src, 2, 1, wl_shm::Format::Argb8888, &mut dst, 8).unwrap();
+        assert_eq!(dst, [3, 2, 1, 4, 7, 6, 5, 8]);
+    }
+
+    #[test]
+    fn xrgb8888_swaps_red_and_blue_and_forces_opaque() {
+        let mut dst = [0u8; 4];
+        rgba_to_shm(&[10, 20, 30, 0], 1, 1, wl_shm::Format::Xrgb8888, &mut dst, 4).unwrap();
+        assert_eq!(dst, [30, 20, 10, 0xff]);
+    }
+
+    #[test]
+    fn rows_honour_the_destination_stride_and_leave_padding() {
+        let src = [1, 2, 3, 4, 5, 6, 7, 8];
+        let mut dst = [9u8; 12];
+        rgba_to_shm(&src, 1, 2, wl_shm::Format::Argb8888, &mut dst, 8).unwrap();
+        assert_eq!(dst, [3, 2, 1, 4, 9, 9, 9, 9, 7, 6, 5, 8]);
+    }
+
+    #[test]
+    fn conversion_refuses_other_formats_and_short_buffers() {
+        let mut dst = [0u8; 4];
+        assert!(rgba_to_shm(&[0; 4], 1, 1, wl_shm::Format::Rgb565, &mut dst, 4).is_err());
+        assert!(rgba_to_shm(&[0; 3], 1, 1, wl_shm::Format::Argb8888, &mut dst, 4).is_err());
+        assert!(rgba_to_shm(&[0; 8], 2, 1, wl_shm::Format::Argb8888, &mut dst, 4).is_err());
+    }
+
+    #[test]
+    fn a_region_is_cropped_and_clipped_to_the_frame() {
+        // 3x2 frame; each pixel's first byte is its index
+        let frame: Vec<u8> = (0..6u8).flat_map(|i| [i, 0, 0, 0]).collect();
+        let (r, px) = crop_rgba(&frame, (3, 2), Rect::new(1, 0, 5, 5)).unwrap();
+        assert_eq!(r, Rect::new(1, 0, 2, 2));
+        assert_eq!(px.iter().step_by(4).copied().collect::<Vec<_>>(), vec![1, 2, 4, 5]);
+        assert!(crop_rgba(&frame, (3, 2), Rect::new(3, 0, 2, 2)).is_none());
+        assert!(crop_rgba(&frame[..8], (3, 2), Rect::new(0, 0, 3, 2)).is_none());
+    }
 
     fn info(id: WindowId, title: &str) -> ToplevelInfo { ToplevelInfo { id, title: title.into(), ..Default::default() } }
 

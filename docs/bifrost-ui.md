@@ -2499,3 +2499,11 @@ are refused (`ListenerError::TlsUnsupported`), no IPv6 or interface selection, n
 
 - `bifrost_app::bookmark`: `bookmark_data(path, BookmarkCreationOptions, relative_to)` and `resolve_bookmark(data, relative_to) -> ResolvedBookmark { path, is_stale }`. The blob holds path, device, inode and size; a rename inside the old directory still resolves and reports stale. `with_security_scope` returns `Unsupported`.
 - `bifrost_app::file_wrapper::FileWrapper`: `regular_file_with_contents`, `directory_with_file_wrappers`, `from_path`, `is_directory`/`is_regular_file`/`is_symbolic_link`, `file_wrappers`, `add_regular_file`, `add_file_wrapper`, `remove_file_wrapper`, `write_to` (atomic by rename), `matches_contents`, `needs_to_be_updated`.
+
+## Window server session parity: key bindings and frame capture (`bifrost-wm`)
+
+Mirrors WindowServer global hotkeys and ScreenCaptureKit / `CGWindowListCreateImage` single-frame capture. Status stays partial until checked on Midget.
+
+- `keybindings::action(keysym, Mods) -> Option<Action>` (pure): Super+Space `Spotlight` (sends `spotlight` to the shell control port 127.0.0.1:7777), Super+A `Apps` (starts `/usr/bin/bifrost-apps`), Alt+Tab `NextWindow`, Alt+F4 `CloseWindow` (xdg close request to the focused toplevel), Ctrl+Super+Left/Right/Up/Down `Tile(Arrow)` (half, half, maximize, centre via `tiling.rs`). Modifiers match exactly. `WmState::key` takes these chords before any client sees them; the action runs on the press and the release is swallowed too.
+- Screencopy: `session_protocols::write_shm` now writes into the client's wl_shm buffer. The `capture` hook returns RGBA rows (R, G, B, A in memory); `rgba_to_shm` converts to XRGB8888 (alpha forced to 0xff) or ARGB8888 (B, G, R, A in memory, the fix for swapped red and blue), honouring the buffer stride; `crop_rgba` clips a region out of a full-output frame. Other formats are refused.
+- Not done: no backend sets the `capture` hook yet (the render server readback of the composed output, wallpaper and all layers, still has to be wired), so grim, `bifrost-apps --screenshot` and the MCP screenshot tool still get `failed`. Cursor capture sessions and ScreenCaptureKit streams are not covered.
