@@ -3708,6 +3708,9 @@ Code: `springboard/sdk/src/graphics_context.rs` (`GraphicsContext`, `Path`, scan
 | `CGPath.contains`, `boundingBoxOfPath`, `currentPoint`, `copy(using:)` | `Path::contains(x, y, rule)`, `bounding_box`, `current_point`, `transformed` |
 | `CGGradient`, `drawLinearGradient`, `drawRadialGradient` | `Gradient::new` / `Gradient::evenly`, `draw_linear_gradient`, `draw_radial_gradient` (two circles) with `GradientOptions { draws_before_start, draws_after_end }` |
 | `CGLayer` | `GraphicsContext::new_layer_context(w, h)` and `draw_layer_at(&layer, dx, dy)`; `draw_layer` for a group |
+| `CGColorSpace`, `CGColor`, `CGColorConversionInfo` | `graphics_color`: `ColorSpace` (device, sRGB, Display P3, Lab, indexed, ICC via `space_from_profile`), `Color` (`srgb`, `from_rgba8`, `converted`, `to_rgba8`), `ColorConversionInfo`, `RenderingIntent` |
+| `CGPDFDocument`, `CGPDFPage`, `CGPDFContext` (write side) | `graphics_pdf`: `Document::open`, `page_count`, `page_size`, `render`; `PdfWriter` with `add_page`, `fill_rect`, `stroke_line`, `draw_rgb_image`, `finish`. No text drawing or annotation editing yet |
+| `CGImageSourceCreateWithData`, `CGImageDestination`, `CGImageSourceCopyTypeIdentifiers` | `graphics_imageio`: `detect`, `pixel_size`, `decode`, `encode(format, w, h, rgba)`, `encode_jpeg`, `can_write`. WebP is read only |
 
 Decisions and gaps: a stroke measures its width and dash with the CTM at stroke time, using the uniform scale
 `sqrt(|det|)`, so a non-uniform CTM gives an average width. Gradients are not shadowed. Gradient colours interpolate in
