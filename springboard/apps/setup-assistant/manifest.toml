@@ -1,0 +1,11 @@
+id = "is.olibuijr.setup.desktop"
+name = "Setup Assistant"
+version = "0.1.0"
+exec = "bifrost-setup-assistant"
+icon = "icon.svg"
+min_shell = "0.4.84"
+summary = "The first-run setup after install: time zone, keyboard, network, accessibility, appearance, privacy and the BifrOSt Account."
+category = "Utilities"
+architecture = "x86_64-linux"
+permissions = ["storage"]
+window = "full-size"
