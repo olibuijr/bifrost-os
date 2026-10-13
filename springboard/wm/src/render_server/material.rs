@@ -35,6 +35,8 @@ pub struct MaterialRegion {
     /// Premultiplied tint drawn over the blur.
     pub tint: [f32; 4],
     pub saturation: f32,
+    /// Luminance mapping and brightness applied after the saturation (`material_filter`).
+    pub tone: crate::material_filter::Tone,
 }
 
 /// A drop shadow behind an item, in output pixels.
@@ -49,6 +51,22 @@ pub struct ShadowSpec {
 
 /// Saturation of the blurred backdrop, as the shell's materials (`wm/src/glass.rs`, `SATURATION`).
 pub const SATURATION: f32 = 1.8;
+
+/// The number of pyramid levels a backdrop scale already implies: a backdrop blurred at 1/4 of the output starts two
+/// halvings down. The pyramid's first level is half the region, so the blur radius alone needs at least this many
+/// passes for the reduced scale to hold (pure; 1.0 -> 0, 0.5 -> 1, 0.25 -> 2, 0.125 -> 3).
+pub fn backdrop_levels(backdrop_scale: f32) -> u32 {
+    if !(backdrop_scale > 0.0 && backdrop_scale < 1.0) {
+        return 0;
+    }
+    (1.0 / backdrop_scale).log2().round().clamp(0.0, MAX_PASSES as f32) as u32
+}
+
+/// The passes to blur with for a radius in device px and a recipe's backdrop scale: enough for the radius, and at
+/// least the levels the backdrop scale implies, never above `MAX_PASSES`.
+pub fn passes_for(radius_px: f32, backdrop_scale: f32) -> u32 {
+    kawase_passes(radius_px).max(backdrop_levels(backdrop_scale)).min(MAX_PASSES)
+}
 
 /// Largest number of dual-Kawase passes the server runs.
 pub const MAX_PASSES: u32 = 6;
@@ -587,6 +605,17 @@ mod tests {
         assert_eq!(pyramid_sizes(100, 50, 3), vec![(50, 25), (25, 13), (13, 7)]);
         assert_eq!(pyramid_sizes(1, 1, 2), vec![(1, 1), (1, 1)]);
         assert_eq!(pyramid_sizes(640, 480, 0), Vec::<(u32, u32)>::new());
+    }
+
+    #[test]
+    fn a_reduced_backdrop_scale_implies_pyramid_levels() {
+        assert_eq!(backdrop_levels(1.0), 0);
+        assert_eq!(backdrop_levels(0.5), 1);
+        assert_eq!(backdrop_levels(0.25), 2);
+        assert_eq!(backdrop_levels(0.125), 3);
+        // a small radius still gets the two levels a quarter-scale backdrop needs; a large one keeps its own count
+        assert_eq!(passes_for(2.0, 0.25), 2);
+        assert_eq!(passes_for(45.0, 0.25), kawase_passes(45.0));
     }
 
     #[test]

@@ -23,7 +23,7 @@ fn glass_blurs_the_edge_behind_it_and_nothing_else() {
     let mut blur = Blur::new(&device).expect("blur");
     let glass_rect = [32.0, 8.0, 64.0, 48.0];
     let mut glass = solid(32.0, 8.0, 64.0, 48.0, [0.0; 4]);
-    glass.material = Some(MaterialRegion { rect: glass_rect, radius: 8.0, blur: 16.0, tint: [0.0; 4], saturation: 1.0 });
+    glass.material = Some(MaterialRegion { rect: glass_rect, radius: 8.0, blur: 16.0, tint: [0.0; 4], saturation: 1.0, tone: bifrost_wm::material_filter::Tone::NONE });
     let items = vec![solid(0.0, 0.0, 64.0, H as f32, [1.0, 1.0, 1.0, 1.0]), solid(64.0, 0.0, 64.0, H as f32, [0.0, 0.0, 0.0, 1.0]), glass];
     let queue = device.new_command_queue();
     let mut cb = queue.command_buffer().expect("command buffer");

@@ -61,3 +61,16 @@ the lead: `cargo test -p bifrost-audio-alsa`.
 4. Compare the jack lines with `amixer -c0 contents | grep -A2 Jack`; plug and unplug headphones and re-run.
 5. Under load: `stress-ng --cpu 8` in parallel, repeat; xruns should stay 0 once the server sets SCHED_FIFO (task 10).
 6. Try `AlsaOptions { no_period_wakeup: true, .. }` and compare timestamps.
+
+## Clock contract: PCM timestamps (2026-10-12)
+
+Every host time in the audio stack is `CLOCK_MONOTONIC_RAW` (`bifrost_audio_shm::now_ns`). The kernel stamps the PCM
+status page with `CLOCK_REALTIME` unless the file declared protocol >= 2.0.12 (`SNDRV_PCM_IOCTL_USER_PVERSION`);
+`sw_params.tstamp_type` alone is ignored. Measured on Midget (0.6.5): `midi-latency --live` saw 1.79e12 ms stamps
+(the Unix epoch). `Pcm::open` now sends `USER_PVERSION` (2.0.15) and `TTSTAMP(MONOTONIC_RAW)` right after open, and
+`sw.proto` is set. `status.tstamp` (not `audio_tstamp`) is the hardware-pointer time and follows that type, for the
+mapped page and `SYNC_PTR` alike.
+
+Defence in depth: `AlsaIo::position` accepts a stamp only within 1 s of `now_raw_ns()`; otherwise it substitutes the
+read time and logs once ("device timestamps are not on the host clock"). No other kernel-sourced time reaches the
+server, HAL, bench or midid: they use `now_ns()`; the timerfd uses `CLOCK_MONOTONIC` and `timer.rs` converts to RAW.

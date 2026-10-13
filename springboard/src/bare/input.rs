@@ -1,6 +1,7 @@
 //! evdev decoding: multitouch protocol B (first contact only) and keys.
 
 use super::pointer_finger::{Mouse, PointerFinger};
+use super::pointer_prefs::{self, Secondary};
 use super::sys::*;
 use std::ffi::c_int;
 use std::io;
@@ -240,6 +241,10 @@ const BTN_RIGHT: u16 = 0x111;
 const KEY_LEFTSHIFT: u16 = 42;
 const KEY_RIGHTSHIFT: u16 = 54;
 const BTN_TOOL_FINGER: u16 = 0x145;
+const BTN_TOOL_DOUBLETAP: u16 = 0x14d;
+/// a touchpad touch counts as a tap when it lifts within this many ms and moves less than `TAP_TRAVEL` px
+const TAP_MS: f64 = 250.0;
+const TAP_TRAVEL: f32 = 8.0;
 const SW_LID: u16 = 0x00;
 const INPUT_PROP_DIRECT: u16 = 0x01;
 /// pointer speed of an absolute touchpad, relative to its span covering the panel
@@ -392,6 +397,18 @@ pub struct PointerDecoder {
     moved: bool,
     shift: bool,
     finger: Option<PointerFinger>,
+    /// finger travel since the touch began, in panel px (tap to click)
+    travel: f32,
+    /// when the current touchpad touch began, in ms
+    tap_started: Option<f64>,
+    /// a physical button went down during this touch, so it is not a tap
+    tap_clicked: bool,
+    /// a tap's press is pending; its release follows in the same sync
+    tap_release: bool,
+    /// two fingers are down on the touchpad (BTN_TOOL_DOUBLETAP)
+    two_fingers: bool,
+    /// the touchpad press in progress is a secondary click
+    click_right: bool,
 }
 
 impl PointerDecoder {
@@ -429,11 +446,55 @@ impl PointerDecoder {
             (EV_REL, REL_WHEEL) => self.wheel += value,
             (EV_REL, REL_HWHEEL) => self.hwheel += value,
             (EV_ABS, ABS_X | ABS_Y) => self.abs(ptr, code == ABS_X, value),
-            (EV_KEY, BTN_TOUCH) if self.touchpad => self.last = (None, None),
-            (EV_KEY, BTN_LEFT | BTN_TOUCH) if value != 2 => self.pending = Some(value == 1),
-            (EV_KEY, BTN_RIGHT) if value != 2 => self.pending_right = Some(value == 1),
+            (EV_KEY, BTN_TOUCH) if self.touchpad => self.touch(value == 1, t),
+            (EV_KEY, BTN_TOUCH) if value != 2 => self.button(ptr, true, value == 1),
+            (EV_KEY, BTN_TOOL_DOUBLETAP) => self.two_fingers = value != 0,
+            (EV_KEY, BTN_LEFT | BTN_RIGHT) if value != 2 => self.button(ptr, code == BTN_LEFT, value == 1),
             (EV_SYN, 0) => self.sync(ptr, t, out),
             _ => {}
+        }
+    }
+
+    /// A touchpad touch began or lifted. A quick touch with little travel and no button counts as a tap
+    /// when tap to click is on; the tap's press and release go out in the next sync.
+    fn touch(&mut self, down: bool, t: f64) {
+        self.last = (None, None);
+        if down {
+            self.tap_started = Some(t);
+            self.travel = 0.0;
+            self.tap_clicked = false;
+            return;
+        }
+        let started = self.tap_started.take();
+        let tap = pointer_prefs::get().tap_to_click && !self.tap_clicked && self.travel < TAP_TRAVEL && started.is_some_and(|s| t - s <= TAP_MS);
+        if tap {
+            self.pending = Some(true);
+            self.tap_release = true;
+        }
+    }
+
+    /// A button changed. On a touchpad the left button is the secondary click when the setting says so
+    /// (a press in the bottom-right corner, or with two fingers down). The mouse's buttons trade places when
+    /// Swap Buttons is on.
+    fn button(&mut self, ptr: &Pointer, left: bool, down: bool) {
+        let cfg = pointer_prefs::get();
+        let right = if self.touchpad && left {
+            if down {
+                self.tap_clicked = true;
+                self.click_right = match cfg.secondary {
+                    Secondary::TwoFingers => self.two_fingers,
+                    Secondary::Corner => ptr.x >= ptr.panel.0 * 0.8 && ptr.y >= ptr.panel.1 * 0.8,
+                };
+            }
+            self.click_right
+        } else {
+            !left
+        };
+        let right = right != (cfg.swap_buttons && !self.touchpad);
+        if right {
+            self.pending_right = Some(down);
+        } else {
+            self.pending = Some(down);
         }
     }
 
@@ -452,6 +513,7 @@ impl PointerDecoder {
         let (slot, axis) = if is_x { (&mut self.last.0, map.x) } else { (&mut self.last.1, map.y) };
         let span = (axis.range.max - axis.range.min).max(1) as f32;
         let d = slot.replace(v).map_or(0.0, |p| (v - p) as f32 * axis.out / span * TOUCHPAD_GAIN);
+        self.travel += d.abs();
         if is_x {
             self.dx += d;
         } else {
@@ -460,8 +522,10 @@ impl PointerDecoder {
     }
 
     fn sync(&mut self, ptr: &mut Pointer, t: f64, out: &mut Vec<Event>) {
+        let cfg = pointer_prefs::get();
         if self.dx != 0.0 || self.dy != 0.0 {
-            ptr.move_by(self.dx, self.dy);
+            let k = if self.touchpad { cfg.trackpad_speed } else { cfg.mouse_speed };
+            ptr.move_by(self.dx * k, self.dy * k);
             self.moved = true;
         }
         let at = (ptr.x, ptr.y);
@@ -472,11 +536,16 @@ impl PointerDecoder {
         } else if self.moved {
             finger.feed(t, at, shift, Mouse::Moved, out);
         }
+        if std::mem::take(&mut self.tap_release) {
+            finger.feed(t, at, shift, Mouse::Left(false), out);
+        }
         if let Some(down) = self.pending_right.take() {
             finger.feed(t, at, shift, Mouse::Right(down), out);
         }
         if self.wheel != 0 || self.hwheel != 0 {
-            finger.feed(t, at, shift, Mouse::Wheel { h: self.hwheel, v: self.wheel }, out);
+            let v = pointer_prefs::scroll_step(self.wheel, cfg.mouse_scroll, cfg.natural_scroll);
+            let h = pointer_prefs::scroll_step(self.hwheel, cfg.mouse_scroll, cfg.natural_scroll);
+            finger.feed(t, at, shift, Mouse::Wheel { h, v }, out);
         }
         (self.dx, self.dy, self.wheel, self.hwheel, self.moved) = (0.0, 0.0, 0, 0, false);
     }

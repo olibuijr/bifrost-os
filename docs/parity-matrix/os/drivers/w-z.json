@@ -1,0 +1,28 @@
+{
+ "category": "drivers",
+ "shard": "w-z",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/DriverExtensions/XboxGamepad.dext",
+   "category": "drivers",
+   "name": "XboxGamepad",
+   "path": "/System/Library/DriverExtensions/XboxGamepad.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

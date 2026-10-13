@@ -53,6 +53,7 @@ pub mod kb_clicks;
 pub mod hwkeys;
 pub mod backup;
 pub mod backup_page;
+pub mod timemachine;
 pub mod md;
 pub mod sha256;
 pub mod share;
@@ -2485,8 +2486,11 @@ impl Shell {
                 self.ensure_defaults();
                 let logins = self.login_item_views();
                 let pending = self.login_pending_views();
+                let ext = login_items_page::scan_installed();
+                let background_off = login_items_page::background_off_from_pref(self.prefs.get(login_items_page::BACKGROUND_OFF_KEY));
                 let Some(st) = &mut self.settings else { return vec![] };
                 st.set_login_items(logins, pending);
+                st.set_login_extensions(ext, background_off);
                 if let Some(dock) = self.desk.as_ref().map(|d| d.dock_preferences.clone()) {
                     st.set_dock(dock);
                 }

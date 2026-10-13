@@ -1,0 +1,747 @@
+{
+ "category": "system-ui",
+ "shard": "d-f",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/CoreServices/Database Events.app",
+   "category": "system-ui",
+   "name": "Database Events",
+   "path": "/System/Library/CoreServices/Database Events.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "AppleScript database events",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Diagnostics Reporter.app",
+   "category": "system-ui",
+   "name": "Diagnostics Reporter",
+   "path": "/System/Library/CoreServices/Diagnostics Reporter.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/diagnostics_page.rs",
+   "status": "partial",
+   "note": "diagnostics page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/DiscHelper.app",
+   "category": "system-ui",
+   "name": "DiscHelper",
+   "path": "/System/Library/CoreServices/DiscHelper.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/DiskImageMounter.app",
+   "category": "system-ui",
+   "name": "DiskImageMounter",
+   "path": "/System/Library/CoreServices/DiskImageMounter.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "disk image mounting, the Linux base mounts images",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Dock.app",
+   "category": "system-ui",
+   "name": "Dock",
+   "path": "/System/Library/CoreServices/Dock.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/desktop_dock.rs",
+   "status": "partial",
+   "note": "desktop dock",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Dwell Control.app",
+   "category": "system-ui",
+   "name": "Dwell Control",
+   "path": "/System/Library/CoreServices/Dwell Control.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no dwell control",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Enhanced Logging.app",
+   "category": "system-ui",
+   "name": "Enhanced Logging",
+   "path": "/System/Library/CoreServices/Enhanced Logging.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/console-desktop",
+   "status": "partial",
+   "note": "Console app, unified logging",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Erase Assistant.app",
+   "category": "system-ui",
+   "name": "Erase Assistant",
+   "path": "/System/Library/CoreServices/Erase Assistant.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple hardware erase assistant",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/EscrowSecurityAlert.app",
+   "category": "system-ui",
+   "name": "EscrowSecurityAlert",
+   "path": "/System/Library/CoreServices/EscrowSecurityAlert.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud Keychain escrow",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Family.app",
+   "category": "system-ui",
+   "name": "Family",
+   "path": "/System/Library/CoreServices/Family.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Family Sharing service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/FamilyExtensionHost.app",
+   "category": "system-ui",
+   "name": "FamilyExtensionHost",
+   "path": "/System/Library/CoreServices/FamilyExtensionHost.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/FileProvider-Feedback.app",
+   "category": "system-ui",
+   "name": "FileProvider-Feedback",
+   "path": "/System/Library/CoreServices/FileProvider-Feedback.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple file provider feedback",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Finder.app",
+   "category": "system-ui",
+   "name": "Finder",
+   "path": "/System/Library/CoreServices/Finder.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/files",
+   "status": "partial",
+   "note": "Files app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/FolderActionsDispatcher.app",
+   "category": "system-ui",
+   "name": "FolderActionsDispatcher",
+   "path": "/System/Library/CoreServices/FolderActionsDispatcher.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/DDUIExtension.appex",
+   "category": "system-ui",
+   "name": "DDUIExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/DDUIExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/DefaultExtensionEnablement.appex",
+   "category": "system-ui",
+   "name": "DefaultExtensionEnablement",
+   "path": "/System/Library/ExtensionKit/Extensions/DefaultExtensionEnablement.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/DevicePropertiesExtension.appex",
+   "category": "system-ui",
+   "name": "DevicePropertiesExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/DevicePropertiesExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/DoNotDisturbAppIntents.appex",
+   "category": "system-ui",
+   "name": "DoNotDisturbAppIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/DoNotDisturbAppIntents.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Drift.appex",
+   "category": "system-ui",
+   "name": "Drift",
+   "path": "/System/Library/ExtensionKit/Extensions/Drift.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple internal service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/DynamicBackgroundPosterExtension.appex",
+   "category": "system-ui",
+   "name": "DynamicBackgroundPosterExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/DynamicBackgroundPosterExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/EnhancedLoggingFollowUpExtension.appex",
+   "category": "system-ui",
+   "name": "EnhancedLoggingFollowUpExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/EnhancedLoggingFollowUpExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/EventKitUIRemoteUIExtension.appex",
+   "category": "system-ui",
+   "name": "EventKitUIRemoteUIExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/EventKitUIRemoteUIExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/calendar-desktop",
+   "status": "partial",
+   "note": "calendar event UI",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/ExclavesInferenceProvider.appex",
+   "category": "system-ui",
+   "name": "ExclavesInferenceProvider",
+   "path": "/System/Library/ExtensionKit/Extensions/ExclavesInferenceProvider.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FSKitModuleManagement.appex",
+   "category": "system-ui",
+   "name": "FSKitModuleManagement",
+   "path": "/System/Library/ExtensionKit/Extensions/FSKitModuleManagement.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "filesystem module manager, the Linux kernel provides filesystems",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FamilyIntents.appex",
+   "category": "system-ui",
+   "name": "FamilyIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/FamilyIntents.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FamilyOutOfProcessUIExtension.appex",
+   "category": "system-ui",
+   "name": "FamilyOutOfProcessUIExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/FamilyOutOfProcessUIExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FedAutoEvalPlugin.appex",
+   "category": "system-ui",
+   "name": "FedAutoEvalPlugin",
+   "path": "/System/Library/ExtensionKit/Extensions/FedAutoEvalPlugin.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FedStatsMLHostPlugin.appex",
+   "category": "system-ui",
+   "name": "FedStatsMLHostPlugin",
+   "path": "/System/Library/ExtensionKit/Extensions/FedStatsMLHostPlugin.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FedStatsMLHostPluginClassA.appex",
+   "category": "system-ui",
+   "name": "FedStatsMLHostPluginClassA",
+   "path": "/System/Library/ExtensionKit/Extensions/FedStatsMLHostPluginClassA.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FedStatsMLHostPluginClassB.appex",
+   "category": "system-ui",
+   "name": "FedStatsMLHostPluginClassB",
+   "path": "/System/Library/ExtensionKit/Extensions/FedStatsMLHostPluginClassB.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FedStatsPluginDynamic.appex",
+   "category": "system-ui",
+   "name": "FedStatsPluginDynamic",
+   "path": "/System/Library/ExtensionKit/Extensions/FedStatsPluginDynamic.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FedStatsPluginStatic.appex",
+   "category": "system-ui",
+   "name": "FedStatsPluginStatic",
+   "path": "/System/Library/ExtensionKit/Extensions/FedStatsPluginStatic.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FindMyCoreFollowUpExtension.appex",
+   "category": "system-ui",
+   "name": "FindMyCoreFollowUpExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/FindMyCoreFollowUpExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FindMyIntentsExtension.appex",
+   "category": "system-ui",
+   "name": "FindMyIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/FindMyIntentsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FindMyUIAdaptor.appex",
+   "category": "system-ui",
+   "name": "FindMyUIAdaptor",
+   "path": "/System/Library/ExtensionKit/Extensions/FindMyUIAdaptor.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Flurry.appex",
+   "category": "system-ui",
+   "name": "Flurry",
+   "path": "/System/Library/ExtensionKit/Extensions/Flurry.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/FontThumbnailExtension.appex",
+   "category": "system-ui",
+   "name": "FontThumbnailExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/FontThumbnailExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  }
+ ]
+}

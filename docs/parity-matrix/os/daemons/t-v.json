@@ -1,0 +1,28 @@
+{
+ "category": "daemons",
+ "shard": "t-v",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/LaunchDaemons/tftp.plist",
+   "category": "daemons",
+   "name": "tftp",
+   "path": "/System/Library/LaunchDaemons/tftp.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 715
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

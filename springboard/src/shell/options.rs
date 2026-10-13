@@ -15,6 +15,21 @@ pub const TEXT_SIZES: [f32; 7] = [TEXT_SCALE_MIN, 0.9, 0.95, 1.0, 1.1, 1.2, TEXT
 pub const POWER_MODES: [(&str, Pref); 4] = [("Automatic", Pref::Auto), ("Performance", Pref::Performance), ("Balanced", Pref::Balanced), ("Battery Saver", Pref::Battery)];
 /// Home Screen & Dock › App Icons choices.
 pub const ICON_SIZES: [&str; 2] = ["More", "Bigger"];
+/// Pointer speed and scrolling multipliers: the Mouse and Trackpad sliders span this range.
+pub const SPEED_MIN: f32 = 0.25;
+pub const SPEED_MAX: f32 = 3.0;
+/// Trackpad › Secondary Click choices, as `Options::trackpad_secondary` indexes them.
+pub const TRACKPAD_SECONDARY: [&str; 2] = ["Click in Bottom-Right Corner", "Click with Two Fingers"];
+
+/// The slider's 0..1 position for a speed multiplier.
+pub fn speed_slider(speed: f32) -> f32 {
+    ((speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN)).clamp(0.0, 1.0)
+}
+
+/// The speed multiplier for a slider position in 0..1.
+pub fn speed_from_slider(v: f32) -> f32 {
+    SPEED_MIN + v.clamp(0.0, 1.0) * (SPEED_MAX - SPEED_MIN)
+}
 
 /// A menu-bar extra the user can show or hide (Settings › Menu Bar, like Golden Gate Control Center settings).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,21 +95,40 @@ pub struct Options {
     pub corner_swipe: bool,
     /// General › Software Update › Back Up Before Updates: a backup (see `backup`) before an update installs
     pub backup_before_update: bool,
+    /// Mouse › Tracking Speed: a multiplier, see `speed_from_slider`
+    pub mouse_speed: f32,
+    /// Mouse › Scrolling Speed: a multiplier on wheel steps
+    pub mouse_scroll: f32,
+    /// Trackpad › Tracking Speed: a multiplier on finger travel
+    pub trackpad_speed: f32,
+    /// Mouse and Trackpad › Natural Scrolling: the content follows the fingers or the wheel
+    pub natural_scroll: bool,
+    /// Trackpad › Tap to Click
+    pub tap_to_click: bool,
+    /// Trackpad › Secondary Click: index into `TRACKPAD_SECONDARY`
+    pub trackpad_secondary: usize,
+    /// Mouse › Swap Left and Right Buttons
+    pub swap_buttons: bool,
+    /// Users & Groups › Login Options: the login window asks for a name and password, not a user picture
+    pub login_name_password: bool,
+    /// Users & Groups › Login Options: the login window shows password hints
+    pub login_hints: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, keyboard_clicks: true, lock_sound: true, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0 }
+        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, keyboard_clicks: true, lock_sound: true, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, login_name_password: false, login_hints: false }
     }
 }
 
-const KEYS: [&str; 31] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "keyboard_clicks", "lock_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes"];
+const KEYS: [&str; 40] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "keyboard_clicks", "lock_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "login_name_password", "login_hints"];
 
 impl Options {
     /// Reads every key, keeping the default for a missing or malformed one.
     pub fn load(p: &Prefs) -> Self {
         let d = Options::default();
         let flag = |k: &str, default: bool| p.get_bool(k, default);
+        let speed = |k: &str, default: f32| p.get_parsed::<f32>(k).filter(|v| v.is_finite()).map_or(default, |v| v.clamp(SPEED_MIN, SPEED_MAX));
         Options {
             auto_lock_ms: p.get_parsed("auto_lock_ms").unwrap_or(d.auto_lock_ms),
             system_sleep_min: p.get_parsed("system_sleep_minutes").unwrap_or(d.system_sleep_min),
@@ -127,6 +161,15 @@ impl Options {
             four_finger: flag("four_finger", d.four_finger),
             corner_swipe: flag("corner_swipe", d.corner_swipe),
             backup_before_update: flag("backup_before_update", d.backup_before_update),
+            mouse_speed: speed("mouse_speed", d.mouse_speed),
+            mouse_scroll: speed("mouse_scroll_speed", d.mouse_scroll),
+            trackpad_speed: speed("trackpad_speed", d.trackpad_speed),
+            natural_scroll: flag("natural_scroll", d.natural_scroll),
+            tap_to_click: flag("tap_to_click", d.tap_to_click),
+            trackpad_secondary: p.get_parsed("trackpad_secondary").filter(|&i: &usize| i < TRACKPAD_SECONDARY.len()).unwrap_or(d.trackpad_secondary),
+            swap_buttons: flag("swap_buttons", d.swap_buttons),
+            login_name_password: flag("login_name_password", d.login_name_password),
+            login_hints: flag("login_hints", d.login_hints),
         }
     }
 
@@ -165,10 +208,33 @@ impl Options {
             self.menu_extras.to_string(),
             self.screensaver_module.to_string(),
             self.screensaver_minutes.to_string(),
+            format!("{:.2}", self.mouse_speed),
+            format!("{:.2}", self.mouse_scroll),
+            format!("{:.2}", self.trackpad_speed),
+            flag(self.natural_scroll).into(),
+            flag(self.tap_to_click).into(),
+            self.trackpad_secondary.to_string(),
+            flag(self.swap_buttons).into(),
+            flag(self.login_name_password).into(),
+            flag(self.login_hints).into(),
         ];
         let pairs: Vec<(&str, &str)> = KEYS.iter().copied().zip(values.iter().map(String::as_str)).collect();
         if let Err(e) = p.set_many(&pairs) {
             eprintln!("springboard: settings.ini: {e}");
+        }
+    }
+
+    /// The pointer and touchpad choices the input layer applies (see `bare::pointer_prefs`).
+    pub fn pointer_tuning(&self) -> crate::bare::pointer_prefs::Tuning {
+        use crate::bare::pointer_prefs::{Secondary, Tuning};
+        Tuning {
+            mouse_speed: self.mouse_speed,
+            mouse_scroll: self.mouse_scroll,
+            trackpad_speed: self.trackpad_speed,
+            natural_scroll: self.natural_scroll,
+            tap_to_click: self.tap_to_click,
+            secondary: if self.trackpad_secondary == 0 { Secondary::Corner } else { Secondary::TwoFingers },
+            swap_buttons: self.swap_buttons,
         }
     }
 
@@ -198,9 +264,11 @@ mod tests {
         assert_eq!(d, Options::default());
         assert_eq!(d.auto_lock_label(), "Never");
         assert_eq!(d.text_size_step(), 3);
-        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, keyboard_clicks: false, lock_sound: false, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5 };
+        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, keyboard_clicks: false, lock_sound: false, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, login_name_password: true, login_hints: true };
         o.save(&mut p);
         assert_eq!(p.get("auto_lock_ms"), Some("0"));
+        assert_eq!(p.get("mouse_scroll_speed"), Some("0.50"));
+        assert_eq!(p.get("natural_scroll"), Some("1"));
         assert_eq!(p.get("system_sleep_minutes"), Some("15"));
         assert_eq!(p.get("text_scale"), Some("1.20"));
         assert_eq!(p.get("bold_text"), Some("1"));
@@ -231,5 +299,32 @@ mod tests {
         assert_eq!(o.volume, 0.0);
         assert!(!o.bold_text);
         assert_eq!(o.power_profile, Pref::Auto);
+        p.set("mouse_speed", "NaN").unwrap();
+        p.set("trackpad_speed", "40").unwrap();
+        p.set("trackpad_secondary", "9").unwrap();
+        let o = Options::load(&p);
+        assert_eq!(o.mouse_speed, Options::default().mouse_speed);
+        assert_eq!(o.trackpad_speed, SPEED_MAX);
+        assert_eq!(o.trackpad_secondary, Options::default().trackpad_secondary);
+    }
+
+    #[test]
+    fn speed_slider_maps_both_ways() {
+        assert_eq!(speed_from_slider(0.0), SPEED_MIN);
+        assert_eq!(speed_from_slider(1.0), SPEED_MAX);
+        assert!((speed_slider(speed_from_slider(0.4)) - 0.4).abs() < 1e-5);
+        assert_eq!(speed_slider(0.0), 0.0);
+        assert!((speed_from_slider(speed_slider(1.0)) - 1.0).abs() < 1e-5, "the default multiplier sits on the slider");
+    }
+
+    #[test]
+    fn pointer_tuning_follows_the_choices() {
+        use crate::bare::pointer_prefs::Secondary;
+        let d = Options::default().pointer_tuning();
+        assert_eq!(d.secondary, Secondary::TwoFingers);
+        assert!(!d.natural_scroll && !d.tap_to_click && !d.swap_buttons);
+        let o = Options { trackpad_secondary: 0, tap_to_click: true, ..Options::default() };
+        assert_eq!(o.pointer_tuning().secondary, Secondary::Corner);
+        assert!(o.pointer_tuning().tap_to_click);
     }
 }

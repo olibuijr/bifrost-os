@@ -97,6 +97,7 @@ pub mod daily_metric_report;
 pub mod status_item;
 pub mod share;
 pub use bifrost_ui::print;
+pub use bifrost_ui::{cups, ipp};
 pub mod print_panel;
 pub mod usb_printer;
 pub mod pasteboard;
@@ -115,6 +116,7 @@ pub mod extension;
 pub mod quicksearch;
 pub mod visual_search;
 pub mod data_scanner;
+pub mod image_analysis;
 pub mod peek;
 pub mod quick_look;
 pub mod permission_kit;
@@ -126,6 +128,7 @@ pub mod power_sources;
 pub mod hid_devices;
 pub mod serial_ports;
 pub mod ble_midi;
+pub mod midi;
 pub mod device_registry;
 pub mod script_value;
 pub mod script_syntax;
@@ -154,6 +157,9 @@ pub mod network_connection;
 pub mod network_browser;
 pub mod http_cookies;
 pub mod passkey_client_data;
+pub mod credential_exchange;
+pub mod safari_extension;
+pub mod safari_auth;
 pub mod http_auth;
 pub mod host_addressing;
 pub mod ftp;
@@ -172,6 +178,8 @@ pub mod peer_identity;
 pub mod nearby_service;
 pub mod restoration;
 pub mod image_source;
+pub mod image_blur;
+pub mod image_filter;
 pub use restoration::RestorableState;
 pub mod attributed;
 pub mod spellcheck;
@@ -202,6 +210,7 @@ pub mod inference;
 pub mod music_understanding;
 pub mod hotspot_configuration;
 pub mod accessory_hotspot;
+pub mod vpn_configuration;
 pub mod wifi_accessory_browser;
 pub mod compression;
 pub mod pixel_buffer;
@@ -234,6 +243,8 @@ pub mod central;
 pub use process_info::{Activity, ActivityOptions, ProcessInfo, ThermalState};
 /// Mach-style host statistics (`host_statistics64`, `task_info`, `os_proc_available_memory`); see `docs/bifrost-ui.md`.
 pub use bifrost_core::host;
+/// Raw accelerometer and gyroscope updates (the motion manager model) and the kernel sensor reader; see `docs/core-motion.md`.
+pub use bifrost_core::{inertial_sensors, motion_manager};
 mod runtime;
 pub use kit::{Damage, Surface, Ui};
 pub use runtime::{run, run_on, Ctx, Document, DocumentEvent, Input, OpenOptions};
@@ -242,12 +253,36 @@ pub use proto::ContextItem;
 /// The audio service client (`audio::Client`): playback state and transport over `bifrost_proto::svc::audio`.
 pub use springboard::svc::audio;
 
+/// The AVAudioPlayer shape (`audio_player::AudioPlayer`): play, pause and stop, volume with fade, stereo pan, playback
+/// rate, loops, seeking and rendered stereo blocks. Shared with the shell through `bifrost_ui`.
+pub use bifrost_ui::audio_player;
+
+/// The AVAudioEngine shape (`audio_engine::Engine`): the node graph of players, mixers, units and taps, offline or on
+/// the audio device through the HAL.
+pub use bifrost_audio_engine as audio_engine;
+
 /// Microphone consent, the mute switch and the one recording owner (`microphone::Microphone`). The shell answers the
 /// prompt; an app asks `begin` before it sends `RecordStart` to the audio service.
 pub use bifrost_ui::mic_consent as microphone;
 
 /// Speech model assets: installed locales, downloads and reservations (`speech_models::AssetInventory`).
 pub use bifrost_ui::speech_assets as speech_models;
+
+/// Speech recognition requests, tasks and authorization (`speech_recognition::Recognizer`, `Request`, `Task`).
+pub use bifrost_ui::recognition_task as speech_recognition;
+
+/// Calls: the call controller, transactions and observation (`calling::CallCenter`, `calling::Handle`). The shell
+/// owns ringing and audio; an app drives calls through this model.
+pub use bifrost_ui::call as calling;
+
+/// The incoming-call card and its update (`calling_ui::CallUpdate`, `calling_ui::IncomingCard`).
+pub use bifrost_ui::call_ui as calling_ui;
+
+/// The default calling app and the apps registered for calling (`calling_apps::CallingApps`).
+pub use bifrost_ui::call_apps as calling_apps;
+/// Drawing models for the reference pencil-canvas framework: drawings, strokes, the lasso and the tool picker,
+/// shared by the shell and apps through `bifrost_ui`.
+pub use bifrost_ui::{drawing, lasso, tool_picker};
 
 /// An app. Only `id` and `draw` are required.
 pub trait App {
@@ -428,3 +463,4 @@ pub trait App {
 pub mod definitions;
 
 pub mod encryption_preference;
+pub mod graphics_context;

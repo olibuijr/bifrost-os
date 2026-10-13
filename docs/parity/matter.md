@@ -29,6 +29,19 @@ two pure models that Matter onboarding and discovery need. Nothing else is wired
      Unknown keys and value-less attributes are skipped.
    - `operational_from_instance` parses `<compressed fabric>-<node>` in hex.
 
+3. **Cluster model** (feature "Clusters", was gap, now partial): `springboard/core/src/matter_cluster.rs`.
+   - Static tables for Descriptor (0x001D), Identify (0x0003), On/Off (0x0006) and Level Control (0x0008):
+     attributes with access and value kind, commands with their fields and which fields are required.
+   - `check_write` refuses a wildcard path, an unknown cluster or attribute, a read-only attribute and a value
+     outside its kind. `check_command` refuses an unknown cluster, command or field, a field value outside its
+     kind and a missing required field. List-valued attributes are `Opaque` and accept no value.
+   - Typed state: `OnOffState::apply` (Off, On, Toggle) and `LevelState::move_to`, which clamps to the minimum and
+     maximum level and never panics.
+   - Decision: the On/Off and Level Control attributes are read-only for clients, because the specification
+     changes them through commands. Global attributes (attribute list, cluster revision, feature map) are not
+     modelled yet. No wire encoding, no transport, and no SDK re-export: `bifrost_app` does not expose Matter
+     yet, so the SDK surface is still a gap.
+
 ## Official API names mirrored
 
 Onboarding: `MTROnboardingPayloadParser`, `MTRQRCodeSetupPayloadParser`, `MTROptionalQRCodeInfo`.
@@ -52,13 +65,18 @@ the framework's Objective-C class names are not allowed in source (owner rule).
   `MTRFabricInfo`.)
 - No Thread: no border router, no network dataset, no OpenThread.
 - No attribute or command client and no subscriptions (`MTRDevice`, `MTRReadParams`, `MTRSubscribeParams`).
-- No cluster model. Typed clusters (about 200 in the framework) are not started.
+- Cluster model covers four clusters only (Descriptor, Identify, On/Off, Level Control). The other clusters
+  (about 200 in the framework) and the global attributes are not modelled. No SDK re-export yet.
 - No mDNS or DNS-SD transport. The parsers have no responder or querier, and apps cannot browse services.
   The only LAN beacon is `springboard/src/net/share.rs`.
 - No camera or BLE source for setup codes. The Bluetooth module does classic pairing only.
 - No SDK surface or Home-style app. Whether to add one is a product decision.
 
 ## Tests
+
+`springboard/core/src/matter_cluster.rs` tests: the cluster list and ID order, write checks (range, read-only,
+unknown cluster and attribute, wildcard), opaque values, MoveToLevel field rules, On/Off commands, On/Off
+toggle state and level clamping. Not run in this round (no builds in this stage).
 
 `#[cfg(test)] mod tests` in `springboard/core/src/matter.rs` covers: the QR vector, a packed round trip
 through Base38, QR rejections (prefix, version, padding, flow, passcode), Base38 character and group errors,

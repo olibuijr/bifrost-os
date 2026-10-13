@@ -1,0 +1,287 @@
+{
+ "category": "settings",
+ "shard": "t-v",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/TimeMachineSettings.appex",
+   "category": "settings",
+   "name": "TimeMachineSettings",
+   "path": "/System/Library/ExtensionKit/Extensions/TimeMachineSettings.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/backup_page.rs",
+   "status": "partial",
+   "note": "Backup page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/TimeMachineSettingsIntents.appex",
+   "category": "settings",
+   "name": "TimeMachineSettingsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/TimeMachineSettingsIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/TimerIntentsExtension.appex",
+   "category": "settings",
+   "name": "TimerIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/TimerIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Touch ID & Password.appex",
+   "category": "settings",
+   "name": "Touch ID & Password",
+   "path": "/System/Library/ExtensionKit/Extensions/Touch ID & Password.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Touch ID hardware",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/TrackpadExtension.appex",
+   "category": "settings",
+   "name": "TrackpadExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/TrackpadExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no trackpad settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/TrackpadIntentsExtension.appex",
+   "category": "settings",
+   "name": "TrackpadIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/TrackpadIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/TransparencySettingsIntents.appex",
+   "category": "settings",
+   "name": "TransparencySettingsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/TransparencySettingsIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/UsersGroups.appex",
+   "category": "settings",
+   "name": "UsersGroups",
+   "path": "/System/Library/ExtensionKit/Extensions/UsersGroups.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no users and groups page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/UsersGroupsIntentsExtension.appex",
+   "category": "settings",
+   "name": "UsersGroupsIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/UsersGroupsIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/VpnSettingsIntents.appex",
+   "category": "settings",
+   "name": "VpnSettingsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/VpnSettingsIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/TimeMachine.prefPane",
+   "category": "settings",
+   "name": "TimeMachine",
+   "path": "/System/Library/PreferencePanes/TimeMachine.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/backup_page.rs",
+   "status": "partial",
+   "note": "Backup page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/TouchID.prefPane",
+   "category": "settings",
+   "name": "TouchID",
+   "path": "/System/Library/PreferencePanes/TouchID.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Touch ID hardware",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Trackpad.prefPane",
+   "category": "settings",
+   "name": "Trackpad",
+   "path": "/System/Library/PreferencePanes/Trackpad.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no trackpad settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/UniversalAccessPref.prefPane",
+   "category": "settings",
+   "name": "UniversalAccessPref",
+   "path": "/System/Library/PreferencePanes/UniversalAccessPref.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Accessibility page",
+   "rea": []
+  }
+ ]
+}

@@ -1,0 +1,70 @@
+{
+ "category": "input-methods",
+ "shard": "j-l",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/Input Methods/JapaneseIM-KanaTyping.app",
+   "category": "input-methods",
+   "name": "JapaneseIM-KanaTyping",
+   "path": "/System/Library/Input Methods/JapaneseIM-KanaTyping.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Input Methods/JapaneseIM-RomajiTyping.app",
+   "category": "input-methods",
+   "name": "JapaneseIM-RomajiTyping",
+   "path": "/System/Library/Input Methods/JapaneseIM-RomajiTyping.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Input Methods/KoreanIM.app",
+   "category": "input-methods",
+   "name": "KoreanIM",
+   "path": "/System/Library/Input Methods/KoreanIM.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

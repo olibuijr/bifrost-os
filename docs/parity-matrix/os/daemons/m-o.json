@@ -1,0 +1,133 @@
+{
+ "category": "daemons",
+ "shard": "m-o",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/LaunchDaemons/ntalk.plist",
+   "category": "daemons",
+   "name": "ntalk",
+   "path": "/System/Library/LaunchDaemons/ntalk.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 627
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/LaunchDaemons/org.apache.httpd.plist",
+   "category": "daemons",
+   "name": "org.apache.httpd",
+   "path": "/System/Library/LaunchDaemons/org.apache.httpd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 626
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/LaunchDaemons/org.cups.cups-lpd.plist",
+   "category": "daemons",
+   "name": "org.cups.cups-lpd",
+   "path": "/System/Library/LaunchDaemons/org.cups.cups-lpd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 903
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/LaunchDaemons/org.cups.cupsd.plist",
+   "category": "daemons",
+   "name": "org.cups.cupsd",
+   "path": "/System/Library/LaunchDaemons/org.cups.cupsd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 1242
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/LaunchDaemons/org.net-snmp.snmpd.plist",
+   "category": "daemons",
+   "name": "org.net-snmp.snmpd",
+   "path": "/System/Library/LaunchDaemons/org.net-snmp.snmpd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 515
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/LaunchDaemons/org.openldap.slapd.plist",
+   "category": "daemons",
+   "name": "org.openldap.slapd",
+   "path": "/System/Library/LaunchDaemons/org.openldap.slapd.plist",
+   "kind": "launchd plist",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 980
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: system service, provided by the Linux base or a BifrOSt unit",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

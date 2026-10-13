@@ -1,0 +1,247 @@
+{
+ "category": "settings",
+ "shard": "p-r",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PasswordManagerAppIntentsExtension.appex",
+   "category": "settings",
+   "name": "PasswordManagerAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/PasswordManagerAppIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PasswordSettingsAppIntentsExtension.appex",
+   "category": "settings",
+   "name": "PasswordSettingsAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/PasswordSettingsAppIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PlaceholderSettingsSearchTermsIntents.appex",
+   "category": "settings",
+   "name": "PlaceholderSettingsSearchTermsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/PlaceholderSettingsSearchTermsIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PowerPreferences.appex",
+   "category": "settings",
+   "name": "PowerPreferences",
+   "path": "/System/Library/ExtensionKit/Extensions/PowerPreferences.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Energy page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PrefPaneSearchIntent.appex",
+   "category": "settings",
+   "name": "PrefPaneSearchIntent",
+   "path": "/System/Library/ExtensionKit/Extensions/PrefPaneSearchIntent.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/settings_search.rs",
+   "status": "partial",
+   "note": "settings search",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/PrinterScannerSettings.appex",
+   "category": "settings",
+   "name": "PrinterScannerSettings",
+   "path": "/System/Library/ExtensionKit/Extensions/PrinterScannerSettings.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no printer settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/ProfilesSettingsExt.appex",
+   "category": "settings",
+   "name": "ProfilesSettingsExt",
+   "path": "/System/Library/ExtensionKit/Extensions/ProfilesSettingsExt.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no configuration profiles page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/ProfilesSettingsIntents.appex",
+   "category": "settings",
+   "name": "ProfilesSettingsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/ProfilesSettingsIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Passwords.prefPane",
+   "category": "settings",
+   "name": "Passwords",
+   "path": "/System/Library/PreferencePanes/Passwords.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/passwords_page.rs",
+   "status": "partial",
+   "note": "passwords page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/PrintAndFax.prefPane",
+   "category": "settings",
+   "name": "PrintAndFax",
+   "path": "/System/Library/PreferencePanes/PrintAndFax.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no printer settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/PrintAndScan.prefPane",
+   "category": "settings",
+   "name": "PrintAndScan",
+   "path": "/System/Library/PreferencePanes/PrintAndScan.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no printer settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Profiles.prefPane",
+   "category": "settings",
+   "name": "Profiles",
+   "path": "/System/Library/PreferencePanes/Profiles.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no configuration profiles page",
+   "rea": []
+  }
+ ]
+}

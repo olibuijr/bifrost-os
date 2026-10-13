@@ -222,6 +222,47 @@ struct Slot {
     effect: Effect,
     /// The millisecond the effect was started, or `None` while it is stopped.
     started_at: Option<u64>,
+    /// A pulse made by [`Device::pulse`]: [`Device::reap`] frees it once it has finished.
+    transient: bool,
+}
+
+/// The kind of haptic pulse an app asks for. It matches the three feedback patterns of the reference haptic API
+/// (generic, alignment, level change); the strengths and durations in [`pulse_effect`] are BifrOSt's own values.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Pattern {
+    /// The default pulse, which is what the SDK's parameterless haptic call asks for.
+    #[default]
+    Generic,
+    /// A light tap that marks a snap or an alignment.
+    Alignment,
+    /// A firmer click for a change of level, such as a slider step.
+    LevelChange,
+}
+
+/// The effect for one haptic pulse: a short constant force at a level that depends on the pattern.
+pub fn pulse_effect(pattern: Pattern) -> Effect {
+    let (level, duration_ms) = match pattern {
+        Pattern::Generic => (0.6, 40),
+        Pattern::Alignment => (0.4, 20),
+        Pattern::LevelChange => (0.8, 60),
+    };
+    Effect { shape: Shape::Constant { level }, duration_ms, delay_ms: 0, envelope: Envelope::NONE }
+}
+
+/// The evdev event type for force feedback, `EV_FF`, in the device's event-type bitmap.
+pub const EV_FF: u16 = 0x15;
+
+/// The force-feedback effect code for a constant force, `FF_CONSTANT`, in the force-feedback bitmap.
+pub const FF_CONSTANT: u16 = 0x52;
+
+/// Whether a node's event-type bitmap (`EVIOCGBIT(0)`) reports force feedback at all.
+pub fn has_force_feedback(event_types: &[u8]) -> bool {
+    crate::gamepad::has_bit(event_types, EV_FF)
+}
+
+/// Whether a node's force-feedback bitmap (`EVIOCGBIT(EV_FF)`) reports a constant force, which every pulse uses.
+pub fn supports_constant_force(force_feedback: &[u8]) -> bool {
+    crate::gamepad::has_bit(force_feedback, FF_CONSTANT)
 }
 
 /// A force-feedback device: up to [`MAX_EFFECTS`] effects, each stopped or playing, with a gain that scales the sum and
@@ -247,14 +288,46 @@ impl Device {
 
     /// Stores a new effect, stopped, and returns its id. Ids count up from 1.
     pub fn create(&mut self, effect: Effect) -> Result<u16, Error> {
+        self.create_slot(effect, false)
+    }
+
+    fn create_slot(&mut self, effect: Effect, transient: bool) -> Result<u16, Error> {
         effect.validate()?;
         if self.slots.len() >= MAX_EFFECTS {
             return Err(Error::Full);
         }
         let id = self.next_id;
         self.next_id = self.next_id.wrapping_add(1).max(1);
-        self.slots.push(Slot { id, effect, started_at: None });
+        self.slots.push(Slot { id, effect, started_at: None, transient });
         Ok(id)
+    }
+
+    /// Plays one haptic pulse at `now_ms` and returns its id. Finished pulses are freed first (see [`Device::reap`]),
+    /// so a steady stream of pulses never fills the device. The id can be stopped early like any other effect.
+    pub fn pulse(&mut self, pattern: Pattern, now_ms: u64) -> Result<u16, Error> {
+        self.reap(now_ms);
+        let id = self.create_slot(pulse_effect(pattern), true)?;
+        self.start(id, now_ms)?;
+        Ok(id)
+    }
+
+    /// Frees the pulses from [`Device::pulse`] that have finished by `now_ms`. Effects made with [`Device::create`]
+    /// stay until they are unloaded, even when they have run out.
+    pub fn reap(&mut self, now_ms: u64) {
+        self.slots.retain(|slot| {
+            if !slot.transient {
+                return true;
+            }
+            match slot.started_at {
+                Some(started) => {
+                    let end = started
+                        .saturating_add(u64::from(slot.effect.delay_ms))
+                        .saturating_add(u64::from(slot.effect.duration_ms));
+                    now_ms < end
+                }
+                None => true,
+            }
+        });
     }
 
     /// Replaces the parameters of an effect. A playing effect keeps its start time.
@@ -347,6 +420,12 @@ impl Device {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn bitmap_with(code: u16) -> Vec<u8> {
+        let mut v = vec![0u8; 32];
+        v[usize::from(code / 8)] |= 1 << (code % 8);
+        v
+    }
 
     fn close(a: f64, b: f64) -> bool {
         (a - b).abs() < 1e-9
@@ -514,5 +593,79 @@ mod tests {
         d.stop(id).unwrap();
         assert!(!d.is_playing(id));
         assert_eq!(d.output(120, 0.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn pulse_patterns_have_distinct_strengths_and_short_durations() {
+        let generic = pulse_effect(Pattern::Generic);
+        let tap = pulse_effect(Pattern::Alignment);
+        let click = pulse_effect(Pattern::LevelChange);
+        assert_eq!(Pattern::default(), Pattern::Generic);
+        assert_eq!(generic.shape, Shape::Constant { level: 0.6 });
+        assert_eq!(tap.shape, Shape::Constant { level: 0.4 });
+        assert_eq!(click.shape, Shape::Constant { level: 0.8 });
+        assert!(tap.duration_ms < generic.duration_ms && generic.duration_ms < click.duration_ms);
+        for e in [generic, tap, click] {
+            assert_eq!(e.validate(), Ok(()));
+            assert_eq!(e.sample(u64::from(e.duration_ms), 0.0, 0.0), 0.0);
+        }
+    }
+
+    #[test]
+    fn a_pulse_plays_from_its_start_and_is_freed_once_it_has_finished() {
+        let mut d = Device::new();
+        let id = d.pulse(Pattern::Generic, 1000).unwrap();
+        assert!(d.is_playing(id));
+        assert!(close(d.output(1000, 0.0, 0.0), 0.6));
+        d.reap(1039);
+        assert_eq!(d.len(), 1);
+        d.reap(1040);
+        assert!(d.is_empty());
+        assert!(!d.is_playing(id));
+    }
+
+    #[test]
+    fn reap_keeps_effects_the_app_created_even_after_they_run_out() {
+        let mut d = Device::new();
+        let id = d.create(plain(Shape::Constant { level: 0.5 }, 10)).unwrap();
+        d.start(id, 0).unwrap();
+        d.reap(1000);
+        assert_eq!(d.len(), 1);
+        assert_eq!(d.output(1000, 0.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn a_steady_stream_of_pulses_never_fills_the_device() {
+        let mut d = Device::new();
+        for i in 0..(MAX_EFFECTS as u64 * 3) {
+            d.pulse(Pattern::Alignment, i * 100).unwrap();
+        }
+        assert!(d.len() <= 1);
+        let mut full = Device::new();
+        for _ in 0..MAX_EFFECTS {
+            full.pulse(Pattern::Generic, 0).unwrap();
+        }
+        assert_eq!(full.pulse(Pattern::Generic, 0), Err(Error::Full));
+        assert!(full.pulse(Pattern::Generic, 40).is_ok());
+    }
+
+    #[test]
+    fn a_pulse_respects_gain_and_can_be_stopped_early() {
+        let mut d = Device::new();
+        d.set_gain(0.5);
+        let id = d.pulse(Pattern::LevelChange, 0).unwrap();
+        assert!(close(d.output(0, 0.0, 0.0), 0.4));
+        d.stop(id).unwrap();
+        assert_eq!(d.output(10, 0.0, 0.0), 0.0);
+    }
+
+    #[test]
+    fn force_feedback_bits_are_read_from_the_event_type_and_effect_bitmaps() {
+        assert!(has_force_feedback(&bitmap_with(EV_FF)));
+        assert!(!has_force_feedback(&bitmap_with(0x14)));
+        assert!(!has_force_feedback(&[]));
+        assert!(supports_constant_force(&bitmap_with(FF_CONSTANT)));
+        assert!(!supports_constant_force(&bitmap_with(0x50)));
+        assert!(!supports_constant_force(&[]));
     }
 }

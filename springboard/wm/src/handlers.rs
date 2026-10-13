@@ -67,6 +67,7 @@ impl CompositorHandler for WmState {
     fn commit(&mut self, surface: &WlSurface) {
         on_commit_buffer_handler::<Self>(surface);
         crate::background_effect::commit(surface);
+        crate::bifrost_material::commit(surface);
         if !is_sync_subsurface(surface) {
             let mut root = surface.clone();
             while let Some(parent) = get_parent(&root) {

@@ -131,6 +131,9 @@ struct Program {
     hole: i32,
     hole_r: i32,
     sat: i32,
+    bright: i32,
+    lum_amt: i32,
+    lum_v: i32,
     rim: i32,
     color: i32,
 }
@@ -219,6 +222,9 @@ uniform float u_glass;
 uniform vec4 u_hole;
 uniform float u_hole_r;
 uniform float u_sat;
+uniform float u_bright;
+uniform float u_lum_amt;
+uniform vec4 u_lum_v;
 uniform float u_rim;
 uniform vec4 u_color;
 in vec2 v_uv;
@@ -275,6 +281,15 @@ void main() {
             // vibrancy: the material lifts the saturation of what is behind it (Rec. 709 luminance)
             float l = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
             c.rgb = clamp(mix(vec3(l), c.rgb, u_sat), 0.0, c.a);
+            // the material recipe's luminance mapping (a cubic curve through four control values, pulled towards by the
+            // amount) and brightness offset; render/src/glass.rs `Look::apply` is the reference arithmetic
+            if (u_lum_amt != 0.0) {
+                float m = clamp(dot(c.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0, 1.0);
+                float w = 1.0 - m;
+                float cv = w * w * w * u_lum_v.x + 3.0 * w * w * m * u_lum_v.y + 3.0 * w * m * m * u_lum_v.z + m * m * m * u_lum_v.w;
+                c.rgb = clamp(c.rgb + u_lum_amt * (cv - m), 0.0, c.a);
+            }
+            c.rgb = clamp(c.rgb + u_bright, 0.0, c.a);
             // Liquid Glass edge: a thin specular rim lit from the top left, its opposite edge catching a
             // weaker reflection; the light falls off with the angle between the edge normal and the light
             if (u_rim > 0.0) {
@@ -919,6 +934,9 @@ impl Presenter {
                         let uv = [(r[0] - dst[0]) / dst[2], (r[1] - dst[1]) / dst[3], (r[0] + r[2] - dst[0]) / dst[2], (r[1] + r[3] - dst[1]) / dst[3]];
                         gl!(gl, uniform1f(self.prog.glass, 1.0));
                         gl!(gl, uniform1f(self.prog.sat, style.saturation));
+                        gl!(gl, uniform1f(self.prog.bright, style.brightness));
+                        gl!(gl, uniform1f(self.prog.lum_amt, style.lum_amount));
+                        gl!(gl, uniform4f(self.prog.lum_v, style.lum_values[0], style.lum_values[1], style.lum_values[2], style.lum_values[3]));
                         gl!(gl, uniform1f(self.prog.rim, style.rim));
                         // Liquid Glass clarity: clear lets the sharp wallpaper show through the blur
                         // (only when the sharp wallpaper was drawn underneath), tinted is fully blurred.
@@ -1200,7 +1218,7 @@ fn link(gl: &Gles) -> io::Result<Program> {
     };
     let tex = loc("u_tex");
     gl!(gl, uniform1i(tex, 0));
-    Ok(Program { id, view: loc("u_view"), mode: loc("u_mode"), half: loc("u_half"), alpha: loc("u_alpha"), rrect: loc("u_rrect"), radius: loc("u_radius"), glass: loc("u_glass"), hole: loc("u_hole"), hole_r: loc("u_hole_r"), sat: loc("u_sat"), rim: loc("u_rim"), color: loc("u_color") })
+    Ok(Program { id, view: loc("u_view"), mode: loc("u_mode"), half: loc("u_half"), alpha: loc("u_alpha"), rrect: loc("u_rrect"), radius: loc("u_radius"), glass: loc("u_glass"), hole: loc("u_hole"), hole_r: loc("u_hole_r"), sat: loc("u_sat"), bright: loc("u_bright"), lum_amt: loc("u_lum_amt"), lum_v: loc("u_lum_v"), rim: loc("u_rim"), color: loc("u_color") })
 }
 
 #[cfg(test)]

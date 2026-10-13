@@ -54,6 +54,7 @@ mod pathbar;
 mod perf;
 mod peek;
 mod search;
+mod smart;
 mod server;
 mod sidebar;
 mod statusbar;
@@ -138,6 +139,8 @@ struct Files {
     tag_index: TagIndex,
     /// The Tags panel, which toggles colours on the selection.
     tag_panel: bool,
+    /// Saved searches shown in the sidebar's Smart Folders section, from `.smart-folders` at home.
+    smart: Vec<smart::SmartFolder>,
     /// The Open With panel for the focused file: the apps the launch service names for it.
     open_with: Option<OpenWith>,
     /// A press on an item has moved far enough to drag the selection.
@@ -196,6 +199,7 @@ impl Files {
             let _ = std::fs::create_dir_all(home.join(folder));
         }
         let tag_index = TagIndex::load(&sidecar_path(&home));
+        let smart = smart::load(&home);
         let mut f = Self {
             path: home.clone(),
             home,
@@ -235,6 +239,7 @@ impl Files {
             notice: None,
             info: None,
             tag_index,
+            smart,
             tag_panel: false,
             open_with: None,
             dragging: false,
@@ -678,7 +683,7 @@ mod tests {
             listing: rows.clone(), rows, hits: None, search: None, selection:vec![], select_mode:false, sidebar_hidden:false, status_bar:false, title_w:120., path_segs:vec![], loading:false, error:None, job:None,grid:true,sort:Sort::Name,
             query:TextField::new(),controls:Controls::default(),searching:false,scroll:0.,down:None,last_click:None,preview:None,
             w:960.,h:630.,painted_state:String::new(),painted_selection:vec![],revision:0,
-            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),sys:SystemState::default(),
+            show_hidden:false,clip:None,naming:None,work:None,notice:None,info:None,tag_index:TagIndex::default(),tag_panel:false,smart:vec![],open_with:None,dragging:false,drop_target:None,undo:vec![],columns:false,ancestors:vec![],watch:None,journal:bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),journal_seen:0,fx:FileManagerState::default(),vo:ViewOpts::default(),data_dir:None,labels:new_labels(),sys:SystemState::default(),
         }
     }
     fn folder(name: &str) -> Entry {

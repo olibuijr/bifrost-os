@@ -594,6 +594,8 @@
         let mut sh=shell();sh.desk=Some(desk::Desk::new());sh.screen=Screen::Home;sh.anim=None;sh.perf.enabled=true;sh.drawn=Drawn::App;
         let mut pixels=vec![0;sh.w as usize*sh.h as usize];
         let (w,h)=(sh.w as usize,sh.h as usize);
+        // a perf-only repaint always follows a full desktop frame (it is what sets desk_drawn)
+        sh.draw(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0},0.);
         sh.draw_desktop_background(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0});
         sh.draw_perf(&mut Surface{w,h,stride:w,px:&mut pixels,y0:0});
         sh.perf.fps=60.;let mut expected=pixels.clone();

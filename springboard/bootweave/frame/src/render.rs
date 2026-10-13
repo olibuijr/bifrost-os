@@ -315,15 +315,6 @@ impl Canvas<'_> {
     }
 }
 
-/// The progress bar: the track, and the fill over its left `progress` share.
-fn bar(c: &mut Canvas, width: u32, height: u32, progress: f32, pal: &Palette) {
-    let (x, y, bw, bh) = bar_rect(width, height);
-    let fill = (bw as f32 * progress.clamp(0.0, 1.0) + 0.5) as i64;
-    let (x, y, bw, bh) = (x as i64, y as i64, bw as i64, bh as i64);
-    c.rect(x, y, x + bw, y + bh, pal.track);
-    c.rect(x, y, x + fill, y + bh, pal.fill);
-}
-
 /// Draws `frame` into `out` (`stride` pixels per row, at least `frame.width`, and `frame.height` rows).
 pub fn render(frame: &Frame, out: &mut [u32], stride: usize, order: PixelOrder) {
     let (w, h) = (frame.width, frame.height);
@@ -332,9 +323,7 @@ pub fn render(frame: &Frame, out: &mut [u32], stride: usize, order: PixelOrder) 
     c.fill_all(pack(pal.bg, order));
     let (mx, my, side) = mark_box(w, h);
     c.mark(mx as i64, my as i64, side as i64, &pal);
-    if let Some(p) = frame.progress {
-        bar(&mut c, w, h, p, &pal);
-    }
+    // No progress bar: the boot frame is the mark alone (`frame.progress` is kept for the timing logic only).
     // the controls sit where the bar's row continues
     let (_, by, _, bh) = bar_rect(w, h);
     let y_ctl = (by + bh) as i64;
@@ -392,13 +381,8 @@ pub fn render(frame: &Frame, out: &mut [u32], stride: usize, order: PixelOrder) 
     }
 }
 
-/// The progress bar only (the incremental update each stage does per tick). Draws over whatever the frame holds,
-/// so the caller keeps the rest of the screen as it was.
-pub fn render_bar(width: u32, height: u32, progress: f32, appearance: Appearance, out: &mut [u32], stride: usize, order: PixelOrder) {
-    let pal = palette(appearance);
-    let mut c = Canvas { px: out, stride, w: width as i64, h: height as i64, order };
-    bar(&mut c, width, height, progress, &pal);
-}
+/// Kept so callers need no change: the boot frame has no progress bar any more, so this draws nothing.
+pub fn render_bar(_width: u32, _height: u32, _progress: f32, _appearance: Appearance, _out: &mut [u32], _stride: usize, _order: PixelOrder) {}
 
 #[cfg(test)]
 mod tests {
@@ -445,19 +429,15 @@ mod tests {
     }
 
     #[test]
-    fn the_progress_fill_is_the_left_share_of_the_bar() {
-        // 1920x1080, bar 180 wide at x 870, rows 622..625; progress 0.5 fills 90 px (x 870..960)
-        let px = boot(1920, 1080, Appearance::Dark, Some(0.5), Screen::Boot);
-        let at = |x: usize, y: usize| px[y * 1920 + x];
-        assert_eq!(at(915, 622), 0xffe5_e5ea, "filled left half");
-        assert_eq!(at(1005, 622), 0xff3a_3a3c, "track on the right half");
-        assert_eq!(at(915, 624), 0xffe5_e5ea, "all bar rows fill");
-        assert_eq!(at(915, 625), 0xff00_0000, "one row below the bar is background");
-        // progress 1.0 fills the whole bar; 0.0 leaves only the track
-        let full = boot(1920, 1080, Appearance::Dark, Some(1.0), Screen::Boot);
-        assert_eq!(full[622 * 1920 + 1005], 0xffe5_e5ea);
-        let empty = boot(1920, 1080, Appearance::Dark, Some(0.0), Screen::Boot);
-        assert_eq!(empty[622 * 1920 + 870], 0xff3a_3a3c);
+    fn the_boot_frame_has_no_progress_bar() {
+        // with or without progress the frame is identical, and the old bar row is background
+        let with = boot(1920, 1080, Appearance::Dark, Some(0.5), Screen::Boot);
+        let without = boot(1920, 1080, Appearance::Dark, None, Screen::Boot);
+        assert_eq!(with, without);
+        assert_eq!(with[622 * 1920 + 915], 0xff00_0000);
+        let mut px = with.clone();
+        render_bar(1920, 1080, 1.0, Appearance::Dark, &mut px, 1920, PixelOrder::Bgrx);
+        assert_eq!(px, with, "render_bar is a no-op");
     }
 
     #[test]

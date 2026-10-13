@@ -350,6 +350,9 @@ pub struct DeviceRunner {
     timeline_frames: u64,
     start_host: u64,
     seed: u32,
+    /// the previous zero stamp (hw_frames, host_ns) and the smoothed rate scalar derived from stamp deltas
+    last_stamp: Option<(u64, u64)>,
+    rate_scalar: f64,
     drv: Box<Activation>,
     snapshot: Arc<Vec<Arc<ClientSlot>>>,
     gen_seen: u32,
@@ -379,6 +382,8 @@ impl DeviceRunner {
             timeline_frames: 0,
             start_host: 0,
             seed: 1,
+            last_stamp: None,
+            rate_scalar: 1.0,
             drv: Box::default(),
             snapshot: Arc::default(),
             gen_seen: 0,
@@ -462,13 +467,23 @@ impl DeviceRunner {
         std::mem::swap(&mut self.states, &mut self.spare);
     }
 
-    fn publish_zero(&self, pos: &HwPosition) {
-        let span = pos.host_ns.saturating_sub(self.start_host);
-        let rate_scalar = if span >= 100_000_000 {
-            pos.hw_frames as f64 / (self.cfg.rate as f64 * span as f64 / 1e9)
-        } else {
-            1.0
+    fn publish_zero(&mut self, pos: &HwPosition) {
+        // The scalar comes from the deltas between two stamps, never from the absolute counters: hw_frames is the
+        // device's own counter and need not share a base with start_host (that produced absurd scalars and latencies).
+        let rate_scalar = match self.last_stamp {
+            Some((f0, h0)) => match next_rate_scalar(self.rate_scalar, self.cfg.rate, (f0, h0), (pos.hw_frames, pos.host_ns)) {
+                Some(r) => {
+                    self.last_stamp = Some((pos.hw_frames, pos.host_ns));
+                    r
+                }
+                None => self.rate_scalar, // stamps too close: keep the anchor, wait for a longer span
+            },
+            None => {
+                self.last_stamp = Some((pos.hw_frames, pos.host_ns));
+                1.0
+            }
         };
+        self.rate_scalar = rate_scalar;
         let v = ZeroStampValue { sample_time: pos.hw_frames, host_ns: pos.host_ns, rate_scalar, seed: self.seed };
         for s in self.snapshot.iter() {
             s.zero().publish(v);
@@ -482,6 +497,8 @@ impl DeviceRunner {
         let rate = self.cfg.rate.max(1) as u128;
         self.start_host = z.host_ns.saturating_sub((z.sample_time as u128 * 1_000_000_000 / rate) as u64);
         self.timeline_frames = z.sample_time;
+        self.last_stamp = None;
+        self.rate_scalar = 1.0;
         self.seed = self.seed.wrapping_add(1);
         self.shared.restarts.fetch_add(1, Ordering::Relaxed);
         let v = ZeroStampValue { sample_time: z.sample_time, host_ns: z.host_ns, rate_scalar: 1.0, seed: self.seed };
@@ -808,8 +825,35 @@ pub fn spawn_io_thread_tuned(mut runner: DeviceRunner, name: String, tuning: cra
     })
 }
 
+/// One DLL-style step of the rate scalar: the measured ratio of device frames to host time between two stamps
+/// (`rate_scalar` 1.0 is the nominal rate), smoothed into `prev` and clamped to 0.98..1.02. `None` when the stamps
+/// are under 100 ms apart or go backwards (too short a span to measure).
+fn next_rate_scalar(prev: f64, rate: u32, (f0, h0): (u64, u64), (f1, h1): (u64, u64)) -> Option<f64> {
+    let span = h1.checked_sub(h0)?;
+    if span < 100_000_000 || f1 < f0 || rate == 0 {
+        return None;
+    }
+    let measured = (f1 - f0) as f64 / (rate as f64 * span as f64 / 1e9);
+    Some((prev + 0.1 * (measured - prev)).clamp(0.98, 1.02))
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn rate_scalar_uses_stamp_deltas_not_absolute_counters() {
+        // a device counter that starts far from the host base must not matter
+        let r = super::next_rate_scalar(1.0, 48_000, (9_000_000_000, 5_000_000_000), (9_000_048_000, 6_000_000_000)).unwrap();
+        assert!((r - 1.0).abs() < 1e-9);
+        // a fast device (+1%) moves the scalar towards 1.01, never beyond the clamp
+        let r = super::next_rate_scalar(1.0, 48_000, (0, 0), (48_480, 1_000_000_000)).unwrap();
+        assert!(r > 1.0 && r <= 1.02);
+        let r = super::next_rate_scalar(1.02, 48_000, (0, 0), (480_000, 1_000_000_000)).unwrap();
+        assert_eq!(r, 1.02);
+        // too short a span, or a backwards stamp: no update
+        assert!(super::next_rate_scalar(1.0, 48_000, (0, 0), (480, 10_000_000)).is_none());
+        assert!(super::next_rate_scalar(1.0, 48_000, (100, 0), (50, 1_000_000_000)).is_none());
+    }
+
     use super::*;
     use bifrost_audio_driver::null::NullDriver;
     use bifrost_audio_driver::{Driver, IoConfig};
