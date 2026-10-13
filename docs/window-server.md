@@ -1,21 +1,21 @@
 # BifrOSt window server (`bifrost-wm`)
 
-BifrOSt replaces labwc with its own Wayland compositor, written in Rust on [Smithay](https://github.com/Smithay/smithay).
+BifrOSt's own Wayland compositor (it replaced labwc, which is removed), written in Rust on [Smithay](https://github.com/Smithay/smithay).
 The compositor is the window server: it owns window positions, stacking, focus and input routing, and it composites
 every frame. Translucent materials blur the live content behind them at composite time, the way macOS WindowServer,
 KWin and Mutter do it.
 
 ## Why
 
-With labwc as the compositor, the shell is only a client. Wayland clients never learn where the compositor put or
+With a third-party compositor (labwc, removed), the shell is only a client. Wayland clients never learn where the compositor put or
 moved their windows, so the shell's GPU presenter blurred a backdrop built from positions it guessed. A titlebar drag
-(`xdg_toplevel.move`) moved the window inside labwc while the shell kept blurring the old spot: the glass stood still
+(`xdg_toplevel.move`) moved the window inside that compositor while the shell kept blurring the old spot: the glass stood still
 while the window moved. Third-party apps could never get live glass at all. The fix is architectural: the process that
 knows the geometry must draw the blur.
 
 ## Process model
 
-`bifrost-wm` runs as the local account, exactly where labwc runs today (seatd for DRM and input, started by
+`bifrost-wm` runs as the local account, as the only window server (seatd for DRM and input, started by
 `/usr/lib/bifrost/session`). The shell stays a separate, privileged client. Putting the compositor inside the shell
 would make a root process the server for every untrusted app, so it stays out.
 
@@ -24,9 +24,9 @@ would make a root process the server for every untrusted app, so it stays out.
 - Rounded material shapes and the BifrOSt glass styles (tint pairs, clarity mix) come in a later private extension
   (`bifrost_material_v1`); the standard protocol carries rectangles only.
 
-## What labwc does today (parity checklist)
+## What the former compositor did (parity checklist)
 
-| Area | Today (labwc) | `bifrost-wm` |
+| Area | Former (labwc) | `bifrost-wm` |
 |---|---|---|
 | Core | `wl_compositor`, `wl_shm`, `wl_seat`, `wl_output`, `xdg_wm_base`, `zwp_linux_dmabuf_v1` | phase 1 |
 | Shell surfaces | `zwlr_layer_shell_v1` (desktop background, menu bar, dock, menus) | phase 1 |
@@ -55,14 +55,14 @@ would make a root process the server for every untrusted app, so it stays out.
    toplevels, output management, screencopy, keybindings, server-side decorations.
 4. **XWayland** and the acceptance list in `docs/wayland-desktop.md`.
 5. **Switch.** The shell drops its own backdrop blur and requests regions instead; the session script starts
-   `bifrost-wm`, with labwc as the fallback until acceptance passes on Midget.
+   `bifrost-wm`, the only window server; the fallback is `bifrost-wm` safe mode (GLES, no direct apps, no chrome clients) after three quick exits, then the recovery flow.
 
 ## Boot: one modeset, one fade
 
 `bifrost-wm` keeps the boot policy of `docs/bifrost-boot-design.md`:
 
 - It opens the GPU without resetting connectors and keeps the mode the CRTC already shows (the loader's, or the
-  learned `video=` mode), so the loader's modeset stays the boot's only one, as labwc's `reuseOutputMode` did.
+  learned `video=` mode), so the loader's modeset stays the boot's only one, as the former compositor's `reuseOutputMode` did.
   Only without an active mode does it pick the native size at its fastest refresh. `BIFROST_WM_MODE=WxH@R` overrides.
 - With `BIFROST_BOOT_FADE` it shows the loader's frame (`bootsplash::paint`, the shell's own file) from its first
   scanout, holds it until the shell's first desktop frame (`$XDG_RUNTIME_DIR/shell-ready`), then cross-fades over
@@ -81,7 +81,7 @@ grabs) live in plain Rust modules without Smithay types, so they are unit-tested
 The shell-side GPU presenter (`springboard/src/gpu/wl.rs`) fakes glass inside its own buffers. Bugs of that design,
 found on Midget on 2026-10-11:
 
-- **Frozen glass while dragging.** labwc moves the window (`xdg_toplevel.move`); the presenter keeps blurring the old
+- **Frozen glass while dragging.** the old compositor moved the window (`xdg_toplevel.move`); the presenter keeps blurring the old
   spot. Only the compositor knows the geometry.
 - **Burn-in after the full-screen app switcher.** `bifrost_render::glass::merge` drops a stored shape only when it lies
   wholly inside one damage rectangle, and keeps partly damaged shapes on purpose (the clock redraws a strip of the bar
@@ -94,7 +94,7 @@ found on Midget on 2026-10-11:
 
 1. Dock icons vibrate under hover magnification; it must be smooth, and every dock setting belongs in Settings.
 2. Files: the empty-folder screen needs a proper Golden Gate design.
-3. Super+Space does not open Spotlight (labwc keybinding today; `bifrost-wm` phase 3 owns keys).
+3. Super+Space does not open Spotlight (a former labwc keybinding; `bifrost-wm` phase 3 owns keys).
 4. Switching windows: the dimming of inactive windows should fade in and out, in both directions.
 5. The dock icon context menu is oversized; follow the HIG menu metrics.
 6. The burn-in above.
@@ -107,7 +107,7 @@ Every built-in shell window (Settings and the rest) is already its own xdg tople
 
 | Path | Who blurs | What the blur sees |
 |---|---|---|
-| labwc (default until acceptance) | the shell's presenter paints the blur into the window's own buffer (`Backdrop::GlassOnly`, `Presenter::under`) | wallpaper plus the shell's own windows only. labwc toplevels (Files) are separate buffers the shell cannot sample, so they are never in the backdrop: Settings over Files shows the wallpaper, not Files. A limit of this path. |
+| labwc (removed) | the shell's presenter paints the blur into the window's own buffer (`Backdrop::GlassOnly`, `Presenter::under`) | wallpaper plus the shell's own windows only. labwc-era toplevels (Files) are separate buffers the shell cannot sample, so they are never in the backdrop: Settings over Files shows the wallpaper, not Files. A limit of this path. |
 | bifrost-wm | the window server (`wm/src/scene.rs`, `glass.rs`): each surface with an `ext-background-effect-v1` blur region gets a backdrop rendered from every element below it (all clients), re-rendered when the signature of those elements changes (window moved, client committed) | the real composed scene, including Files |
 
 Shell side (this round): the shell binds `ext_background_effect_manager_v1` when the compositor offers it and reports
@@ -116,14 +116,14 @@ blur region and leaves the window translucent: no presenter blur, no inactive op
 `BIFROST_WM_MATERIALS=0` keeps the presenter path. The SDK apps (`bifrost_app`) must use the same call; no client
 sends a region yet except the shell and, through it, SDK apps (step 3 below).
 
-### labwc: black Files and black Settings material (diagnosis, not reproduced)
+### Former labwc path: black Files and black Settings material (diagnosis, not reproduced)
 
 No Midget in this round. From the code: foreign toplevels are never added to the presenter stack (`set_window_stack`
 takes only the shell's windows) and the shell never paints a foreign window, so no shell path paints Files black.
-Remaining candidates: (a) the shell believes it is key while labwc activated Files (`State::focused` is the shell's
+Remaining candidates: (a) the shell believes it is key while the compositor activated Files (`State::focused` is the shell's
 own front window, never the compositor's activation), and the inactive path of `Presenter::draw` paints
 `Kind::inactive()` plates, near-black in Dark (`MATERIAL_SIDEBAR_SOLID` 20,20,22); (b) Files' own alpha dma-buf
-composed black by labwc. Check on Midget with a screenshot while Files is open, Dark and Light, with and without
+composed black by the compositor. Check on Midget with a screenshot while Files is open, Dark and Light, with and without
 `BIFROST_WM_MATERIALS`.
 
 ### Migration plan: one window model for built-in and external apps
@@ -142,7 +142,7 @@ composed black by labwc. Check on Midget with a screenshot while Files is open, 
    shell windows, so foreign focus no longer leaves the shell believing it is key.
 5. Shell chrome (menu bar, dock, panels) are layer clients (`bifrost-chrome`): give them blur regions too and drop
    `Presenter::set_window_stack` / `under`.
-6. Remove the presenter blur path and labwc after Midget acceptance.
+6. (done for labwc) labwc is removed; remove the presenter blur path after Midget acceptance.
 
 ## Materials (2026-10-12)
 

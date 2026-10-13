@@ -107,7 +107,7 @@ The tests were not run (`cargo test` is not part of this round's rules). The lea
 
 ## How to verify on Midget (once items 1 and 2 are in)
 
-Midget is an Intel HD 530 with Mesa ANV and Vulkan 1.4. Its session runs labwc unless `/etc/bifrost/compositor` says
+Midget is an Intel HD 530 with Mesa ANV and Vulkan 1.4. Its session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` says
 `bifrost-wm`.
 
 1. Build the client and the shell with the fast profile: `cargo build --offline --profile fast --bin shell

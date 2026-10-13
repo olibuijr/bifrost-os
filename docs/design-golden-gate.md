@@ -93,7 +93,7 @@ Next profiling step: `perf record` on the `bench_desktop_frame` test binary (run
 - Sidebar tint is subtle on Midget; compare with a Golden Gate screenshot.
 - Check the traffic-light glyphs on Midget (0.4.56 makes them bolder; 0.4.55 drew them too faint to see).
 
-## Third-party window chrome (labwc)
+## Third-party window chrome (server-side, history: labwc theme)
 
 Apps that are not ours (the ArtCraft apps) get server-side title bars from labwc. `packaging/arch/wayland/rc.xml`
 puts the buttons on the left (close, minimise, zoom), centres the title (13 pt bold) and uses the 17 pt window radius.

@@ -117,7 +117,7 @@ The expected results are the test expectations in `view/mod.rs` (`canvas_tests`)
 suite, all passing. `view::canvas_tests::replaying_the_recorded_tree_matches_drawing_it_directly` is the key check: a
 recorded view tree must replay identically to a direct draw.
 
-Midget (Intel HD 530, Mesa ANV, Vulkan 1.4). The session runs labwc unless `/etc/bifrost/compositor` says
+Midget (Intel HD 530, Mesa ANV, Vulkan 1.4). The session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` says
 `bifrost-wm`. Visual change must be zero for the existing apps, since they still draw through `Surface`:
 
 1. `bifrost pc publish`, then `bifrost pc midget ota` until `phase=accepted`.

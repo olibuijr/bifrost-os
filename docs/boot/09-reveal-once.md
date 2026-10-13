@@ -35,7 +35,7 @@ Task: `tasks/boot/09-reveal-once.md`. Branch `boot/09-reveal-once`.
 | 4 s ceiling | `READY_CEILING_MS` (from the gate start, not from boot) |
 | One 450 ms fade, then `desktop-faded` | `splash_alpha` in `wm/src/boot.rs`, `drm.rs` `alpha()`; `kms.rs` `present` through `Handoff::compose` |
 | No partial desktop shown | the gate holds the frame until all three parts are marked |
-| Same rule on the labwc path | `kms.rs` `boot_fade` with `Reveal` |
+| Same rule on the GLES safe-mode path | `kms.rs` `boot_fade` with `Reveal` |
 
 ## Tests (hand-worked, not run: the lead builds)
 
@@ -47,7 +47,7 @@ Task: `tasks/boot/09-reveal-once.md`. Branch `boot/09-reveal-once`.
 - `wm/src/boot.rs`: `the_loader_frame_holds_until_the_shell_is_ready`,
   `it_fades_with_the_loaders_easing_and_then_goes_away`, `the_frame_is_held_until_the_last_desktop_part_then_fades_once`,
   `a_stalled_desktop_is_revealed_by_the_ceiling`.
-- Not added: a KMS unit test (the held branch needs a `Display`), so the labwc path is verified on Midget only.
+- Not added: a KMS unit test (the held branch needs a `Display`), so the GLES safe-mode path is verified on Midget only.
 
 ## What is left
 

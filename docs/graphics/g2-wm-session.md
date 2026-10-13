@@ -53,7 +53,7 @@ for example the diff test expects `Changed(1)`, `Added(3)`, `Removed(2)` in that
 `choose_mode(modes, (1920, 1080, Some(75000)))` to be `None` because the nearest rate (60 Hz) is 15 Hz away, beyond the
 1 Hz tolerance.
 
-Midget (Intel HD 530, Mesa ANV, Vulkan 1.4). The session runs labwc unless `/etc/bifrost/compositor` says
+Midget (Intel HD 530, Mesa ANV, Vulkan 1.4). The session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` says
 `bifrost-wm`. To test the protocols:
 
 1. Build and publish as usual (`bifrost pc publish`), then set `/etc/bifrost/compositor` to `bifrost-wm` and set

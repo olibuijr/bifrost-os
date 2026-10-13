@@ -12,10 +12,10 @@ Measured from the code (0.5.44):
 2. It sends the buffer to the shell over `SOCK_SEQPACKET` (`docs/apps.md`, "Frames").
 3. The shell, a single root process with one event loop that also draws the desktop, copies or uploads those pixels
    into its own xdg toplevel for that app (`src/bare/wayland.rs`, `Window`).
-4. labwc composites the toplevel.
+4. The window server composites the toplevel.
 
 Every animation, scroll and hover is a full CPU redraw in the app plus a copy in the shell plus a composite, and any
-stall in the shell stalls every app. Window moves feel fine because labwc moves the window without the app or the
+stall in the shell stalls every app. Window moves feel fine because the window server moves the window without the app or the
 shell drawing anything. That is the property the final architecture gives to everything.
 
 ## The architecture
@@ -27,7 +27,7 @@ shell drawing anything. That is the property the final architecture gives to eve
 | Core Graphics / Core Text drawing | `Canvas`: one drawing vocabulary (rects, rounded rects, strokes, gradients, shadows, images, glyph runs, paths, clips, transforms). `Surface` implements it on the CPU; `DisplayList` records it; `bifrost-2d` executes display lists on the GPU with SDF shapes and a glyph atlas. | `springboard/render/src/canvas.rs`, `display_list.rs`; `springboard/gfx2d` |
 | Core Animation (client side) | `bifrost-layers`: a layer tree (frame, anchor, transform, opacity, corner radius, masks, border, shadow, material, contents) changed in atomic transactions, with implicit and explicit animations (basic, keyframe, spring, timing functions, media timing). | `springboard/layers` |
 | Core Animation render server | Inside the window server: it holds each client's committed layer tree, evaluates animations for every display frame and composites the result. Animations never wait for the app. | `springboard/wm/src/render_server/` |
-| WindowServer | `bifrost-wm` (Smithay for protocols, DRM/KMS, libinput, libseat): the only compositor. Owns window positions, stacking, focus, cursor, input routing, materials (live blur), window shadows, the frame clock and scanout. labwc is removed once Midget acceptance passes. | `springboard/wm` |
+| WindowServer | `bifrost-wm` (Smithay for protocols, DRM/KMS, libinput, libseat): the only compositor. Owns window positions, stacking, focus, cursor, input routing, materials (live blur), window shadows, the frame clock and scanout. labwc is removed; `bifrost-wm` is the only window server. | `springboard/wm` |
 | CADisplayLink / CVDisplayLink | Frame clock driven by vblank: the window server schedules composition just before vblank, sends `wp_presentation` feedback and frame callbacks with the predicted presentation time; the SDK exposes a display link. | `wm/src/render_server/clock.rs`, `sdk/src/display_link.rs` |
 | AppKit / SwiftUI | The SDK. Views are layer-backed: a scroll is a layer offset animated by the window server; a hover is a property change; a redraw re-records only the damaged layer's display list. | `springboard/sdk` |
 | Dock, menu bar, SystemUIServer, Notification Center | Separate privileged clients of the window server (layer-shell + layer trees), split out of the shell. | `springboard/src/shell` (split) |
@@ -144,7 +144,7 @@ Smithay handles protocols, the DRM/KMS backend, libinput and libseat; rendering 
   applied at frame start, `Tree::presentation(t)` composited, events sent.
 - `input.rs`: libinput configuration (acceleration, natural scrolling, tap), gestures (pinch, swipe, hold), kinetic
   scrolling, key repeat; input goes straight to the focused surface.
-- Session parity with labwc: foreign-toplevel list, screencopy, cursor shapes, xdg-activation, output management,
+- Session features: foreign-toplevel list, screencopy, cursor shapes, xdg-activation, output management,
   idle/power, session lock, keybindings (tiling, Super+Space, Alt+Tab), server-side decorations for third-party
   apps, XWayland.
 
@@ -172,5 +172,5 @@ Every component adds its timings to `tools/bench.py --midget` and `docs/perf-his
 
 Main stays releasable. The new path is selected by `/etc/bifrost/compositor = bifrost-wm` and `BIFROST_DIRECT=1`
 until the acceptance list (`docs/wayland-desktop.md`) and the budgets above pass on Midget; then the session starts
-`bifrost-wm` only, labwc and the shell's per-app toplevels are removed, and the shared-memory frame path stays only
-as a fallback for machines without Vulkan.
+`bifrost-wm` only (labwc is removed), the shell's per-app toplevels are removed, and the shared-memory frame path stays only
+as a fallback for machines without Vulkan. The fallback is `bifrost-wm` safe mode (GLES, no direct apps, no chrome clients) after three quick exits, then the recovery flow.

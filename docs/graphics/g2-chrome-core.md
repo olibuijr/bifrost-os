@@ -133,7 +133,7 @@ CARGO_TARGET_DIR=/home/olibuijr/Projects/bifrost-os/springboard/target-agents ca
 The codec, link, pixel and slot tests need no compositor. `Display::connect` needs a compositor and the GPU, so it is
 checked on Midget.
 
-Midget (Intel HD 530, Mesa ANV, Vulkan 1.4; the session runs labwc unless `/etc/bifrost/compositor` says
+Midget (Intel HD 530, Mesa ANV, Vulkan 1.4; the session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` says
 `bifrost-wm`):
 
 1. Check the chrome socket. With the shell started under `BIFROST_CHROME=1`, the file

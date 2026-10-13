@@ -7,7 +7,7 @@ Status: design only. No code changes. Implementation is a later task.
 Native (non-SDK) packages receive the real compositor socket. Their sandbox
 binds it into the child namespace and exports `WAYLAND_DISPLAY`, so any
 protocol the compositor advertises is reachable from the app. The compositor
-is labwc (wlroots), per `docs/wayland-desktop.md`. Under wlroots that set
+was labwc (wlroots, removed), now `bifrost-wm`, per `docs/wayland-desktop.md`. Under wlroots that set
 includes screen capture, input injection, overlay surfaces, and window
 enumeration. `docs/app-isolation.md` (lines 32-33) lists privileged-protocol
 filtering as future work; this document is that plan.

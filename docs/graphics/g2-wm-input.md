@@ -88,7 +88,7 @@ Host tests in `input.rs` (`cargo test -p bifrost-wm input::` once the lead runs 
 
 ## Verification on Midget
 
-Midget: Intel HD 530, Mesa ANV, Vulkan 1.4. The session runs labwc unless `/etc/bifrost/compositor` says
+Midget: Intel HD 530, Mesa ANV, Vulkan 1.4. The session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` says
 `bifrost-wm`. Steps (the shell has no pointer or trackpad page yet, so the prefs are written by hand):
 
 1. Build and push the window server: `cargo build --offline --profile fast --bin bifrost-wm` in `springboard/`,

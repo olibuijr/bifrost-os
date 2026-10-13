@@ -12,26 +12,24 @@ component is removed.
 | EFI handoff and USB discovery | Rust `springboard/bootweave/efi` | Rust EFI boot app | EFI fast/release build and USB boot |
 | Kernel and hardware drivers | Linux kernel and firmware | BifrOSt policy around Linux | Hardware bring-up, suspend, USB, graphics |
 | Early splash and handoff | Rust EFI frame plus Bootweave | Rust Bootweave supervisor | No black/text transition on OVMF and hardware |
-| Live installer display | labwc/Wayland session | `bifrost-installer` direct DRM/KMS | Installer owns the card and completes install |
-| Installed desktop display | labwc Wayland compositor | Native BifrOSt compositor | Shell, apps, input, hotplug and recovery |
+| Live installer display | Wayland session (`bifrost-wm`) | `bifrost-installer` direct DRM/KMS | Installer owns the card and completes install |
+| Installed desktop display | `bifrost-wm` (native compositor) | `bifrost-wm` | Shell, apps, input, hotplug and recovery |
 | Service startup | systemd units and scripts | Rust BifrOSt supervisor | Boot, restart, logs, recovery and updates |
 
 ## Removal rule
 
 Do not remove Linux, motherboard firmware, GPU firmware, or USB controller
 firmware: these are hardware/runtime prerequisites, not BifrOSt desktop glue.
-Do not remove labwc, Wayland session glue, or systemd until the native
+Do not remove Wayland session glue or systemd until the native
 replacement owns the same stage and has passed the removal gate. Bootweave
-now owns the Plymouth-sized lifecycle boundary; labwc remains until the native
-Rust compositor exists.
+now owns the Plymouth-sized lifecycle boundary; labwc is gone: `bifrost-wm` is the only window server.
 
 The first native slice is already in place: the Rust EFI image is the shared
 ISO/installed recovery artifact, and the live installer starts directly on
 DRM/KMS. Bootweave is the first early-userspace handoff slice: it retains the
 last EFI frame while starting and supervising the installer or installed
 compositor, and records compositor/first-frame timing. It is not a second
-splash compositor. After the native compositor owns the installed desktop,
-remove labwc and its session-only packages in one separately tested change.
+splash compositor. labwc and its session-only packages are removed.
 
 ## Acceptance storyboard
 

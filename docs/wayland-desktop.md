@@ -6,7 +6,7 @@ The live installer and installed desktop share `/usr/lib/bifrost/session`.
 
 ## Runtime
 
-`springboard.service` runs the session supervisor. It starts labwc as the
+`springboard.service` runs the session supervisor. It starts `bifrost-wm`, the only window server, as the
 installed local account with seatd for DRM/input access. BifrOSt connects with
 its `desktop-wayland` feature; it never grabs evdev or becomes DRM master in
 this mode. The installer follows the same path using a live-only account.
@@ -56,8 +56,7 @@ Software Update check/install, compositor failure/recovery, and a reboot.
 Save captures and logs under `out/wayland-vm/`. Publish/install on Midget only
 after this record passes. Midget additionally verifies native refresh and GPU.
 
-Protocol/runtime references: [labwc](https://labwc.github.io/),
-[layer and window integration](https://labwc.github.io/integration.html),
+Protocol/runtime references: [Smithay](https://github.com/Smithay/smithay),
 [wayland-client](https://docs.rs/wayland-client/latest/wayland_client/).
 
 ### Window memory ownership (0.4.13)

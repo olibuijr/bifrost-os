@@ -38,7 +38,7 @@ APIs, three client binaries) with `src/shell/chrome_host/`, Smithay's `xwayland`
 | 3 | `wm-scene` | `wm/src/scene.rs`, `render_server/compose.rs` glue | Port scene building (surface trees, subsurfaces, popups, layer-shell, cursor, boot fade) to `DrawItem`s; window shadows and glass through `material`. |
 | 4 | `wm-sync-feedback` | new `wm/src/sync.rs`, handlers glue | linux-dmabuf v4 feedback from the device's formats, `wp_linux_drm_syncobj_v1` explicit sync (acquire and release points on `SharedEvent`), `wp_presentation` feedback from the clock. |
 | 5 | `wm-session` | new `wm/src/session_protocols.rs` | foreign-toplevel (Dock, switcher, MCP), screencopy (ext-image-copy-capture plus wlr-screencopy for grim and `bifrost-apps --screenshot`), cursor-shape, xdg-activation, wlr-output-management. |
-| 6 | `wm-windows` | `wm/src/wm.rs`, `grabs.rs`, new `decorations.rs` | labwc's keybindings (Ctrl+Super arrows tiling, Super+Space, Alt+Tab, Alt+F4), xdg-decoration with server-side titlebars for third-party apps, window open, close and minimize animations run by the server (minimize targets the Dock icon rect the Dock client publishes). |
+| 6 | `wm-windows` | `wm/src/wm.rs`, `grabs.rs`, new `decorations.rs` | the former keybindings (Ctrl+Super arrows tiling, Super+Space, Alt+Tab, Alt+F4), xdg-decoration with server-side titlebars for third-party apps, window open, close and minimize animations run by the server (minimize targets the Dock icon rect the Dock client publishes). |
 | 7 | `wm-input` | `wm/src/input.rs` | libinput configuration from the shell's prefs (acceleration, natural scrolling, tap), pointer-gestures (swipe, pinch, hold), pointer constraints and relative pointer, key repeat, cursor theme and size. |
 | 8 | `wm-xwayland` | new `wm/src/xwayland.rs` | XWayland via Smithay's xwayland support, X11 windows in the same stack. |
 | 9 | `kit-canvas` | `sdk/src/widgets.rs`, `glyphs.rs` | The SDK kit draws through `&mut dyn Canvas` (Surface still works because it implements Canvas). |
@@ -52,10 +52,10 @@ APIs, three client binaries) with `src/shell/chrome_host/`, Smithay's `xwayland`
 | 17 | `chrome-panels` | `springboard/chrome/src/panels.rs` | Notification Center, Control Center and search as one panels client, with glass materials from the window server. |
 | 18 | `chrome-core` | `chrome/src/{surface,link,model}.rs`, `src/shell/chrome_host/server.rs` | The chrome clients' Wayland connection, GPU surfaces and layer trees, the shell link on both ends, the model codec. (The App Store's move out of the shell goes to G3.) |
 | 19 | `bench-graphics` | `tools/bench.py` graphics suite | Midget: window-server frame stats (`bifrost-wm-frames.jsonl`), input-to-photon (uinput click to the first presented frame that shows it), animation drops, app redraw time; budget gate against `docs/graphics-architecture.md`. |
-| 20 | `session-switch` | `packaging/arch/wayland/session`, PKGBUILD, Settings > Developer | Ship `bifrost-wm` and its shaders, a Developer toggle for the new window server and direct apps, and a crash-loop fallback to labwc. |
+| 20 | `session-switch` | `packaging/arch/wayland/session`, PKGBUILD, Settings > Developer | Ship `bifrost-wm` and its shaders, a Developer toggle for the new window server and direct apps, and a crash-loop fallback to `bifrost-wm` safe mode (GLES, no direct apps, no chrome clients) after three quick exits, then the recovery flow. |
 
 Exit criteria for G2: the Vulkan server boots on Midget with the toggle, the desktop and one direct app draw, glass
-and shadows show, `bench --midget` reports the frame budgets, and the GLES and labwc paths still work.
+and shadows show, `bench --midget` reports the frame budgets, and the GLES safe mode still works.
 
 ## G3: move everything over
 
@@ -64,9 +64,11 @@ and Deildu leave the shell as SDK apps; the shell keeps only the session, servic
 socket; the menu bar, Dock and panels run as chrome clients by default; foreign-toplevel replaces the shell's own
 window list; snapshots are blessed from GPU renders.
 
-## G4: switch and remove
+## G4: switch and remove (done)
+
+Done: `bifrost-wm` is the only window server; labwc is removed. The fallback is `bifrost-wm` safe mode (GLES, no direct apps, no chrome clients) after three quick exits, then the recovery flow.
 
 Midget acceptance (`docs/wayland-desktop.md`) and the budgets pass for a week of use; the session starts
-`bifrost-wm` only; labwc, the shell's per-app toplevels, the shell-side presenter (`src/gpu/wl.rs`) and the
+`bifrost-wm` only; labwc (removed), the shell's per-app toplevels, the shell-side presenter (`src/gpu/wl.rs`) and the
 shared-memory frame path for direct-capable apps are removed (the CPU path stays only for machines without Vulkan);
 docs, the website architecture chapter and the parity rows are updated.

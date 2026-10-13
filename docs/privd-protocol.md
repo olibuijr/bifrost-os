@@ -16,7 +16,7 @@ until privd's session is Unlocked.
 1. `springboard.service` (root) runs bootweave and `/usr/lib/bifrost/session`, now a thin root supervisor.
 2. `bifrost-privd.service` (root, `Before=springboard.service`, `Restart=always`) runs `bifrost-privd` (module
    `springboard::privd` + `src/bin/privd.rs`; not linked against the UI). It is not ordered after the UI.
-3. labwc and dbus-daemon run as the user. The shell is launched as the user:
+3. `bifrost-wm` and dbus-daemon run as the user. The shell is launched as the user:
    `setpriv --reuid=$uid --regid=$gid --init-groups --inh-caps=-all --bounding-set=-all` (or `runuser -u`).
    Env: HOME, USER, LOGNAME, SHELL, `XDG_RUNTIME_DIR=/run/bifrost/user`, DBUS_SESSION_BUS_ADDRESS, WAYLAND_DISPLAY,
    `SPRINGBOARD_WAYLAND=1`, `SPRINGBOARD_PRIVD=/run/bifrost/privd.sock`,

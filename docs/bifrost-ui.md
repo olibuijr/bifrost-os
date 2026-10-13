@@ -872,7 +872,7 @@ interface, served by our own `bifrost-portal` (no xdg-desktop-portal or GNOME st
   file every 500 ms. D-Bus activated by `/usr/share/dbus-1/services/org.freedesktop.portal.Desktop.service`.
 - Session bus: `packaging/arch/wayland/session` starts `dbus-daemon --session` as the account at
   `$XDG_RUNTIME_DIR/bus` (exported as `DBUS_SESSION_BUS_ADDRESS`, so `session.json` and `bifrost-apps` carry it);
-  labwc `autostart` starts `bifrost-portal`. The native-app sandbox (`bare/app_policy.rs`) binds that socket and sets
+  the session script starts `bifrost-portal`. The native-app sandbox (`bare/app_policy.rs`) binds that socket and sets
   the variable. Launch-time env such as `GTK_THEME` cannot follow later switches, so the portal is the only live path.
 - Not yet matched: `contrast` does not follow Increase Contrast, and Auto switches reach apps up to 500 ms late.
 

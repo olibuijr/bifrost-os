@@ -38,7 +38,7 @@ HANDOFF.md. Tick items here as they land (commit hash).
 - [ ] OPEN AX value setting (`ax set`) for sliders and text fields; apps other than Files declare no ax controls
 - [ ] OPEN Shell pages use no popup_button/gesture/focus kits (kit adoption in the shell)
 - [ ] OPEN Large title not cached (`sdk/src/widgets.rs` large_title)
-- [ ] OPEN labwc removal: bifrost-wm default (another session owns `springboard/wm`)
+- [x] DONE labwc removal: `bifrost-wm` is the only window server (docs updated)
 - [ ] CHECK Overview F3 over MCP key; Console duplicate Edit/View menus; new windows cascade into the dock; Open panel centring
 
 ## SDK and kits

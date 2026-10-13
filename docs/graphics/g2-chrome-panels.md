@@ -50,7 +50,7 @@ Host (pure logic), from `springboard/`:
 
 The owner runs the tests with `cargo test -p bifrost-chrome panels`.
 
-Midget (Intel HD 530, Mesa ANV, Vulkan 1.4). The session runs labwc unless `/etc/bifrost/compositor` says
+Midget (Intel HD 530, Mesa ANV, Vulkan 1.4). The session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` says
 `bifrost-wm`. Once the surface API lands: set `/etc/bifrost/compositor` to `bifrost-wm`, set
 `BIFROST_WM_RENDERER=vulkan BIFROST_CHROME=1` and start `bifrost-panels`; send `ShowPanel("notifications")` and
 check the panel slides in and the glass blurs the desktop behind it. Until then `bifrost-panels` exits with the

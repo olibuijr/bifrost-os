@@ -75,5 +75,5 @@ Contract: `docs/graphics-architecture.md`; wave row: `docs/graphics-waves.md` (G
 3. Nested window on a desktop: `BIFROST_WM_RENDERER=vulkan cargo run --offline -p bifrost-wm` in a session with a
    Wayland or X11 display; the log should not show "vulkan render server unavailable". With no scene nodes the window
    is the clear colour, which confirms the path runs.
-4. Midget: the session runs labwc unless `/etc/bifrost/compositor` says `bifrost-wm`; `/etc/bifrost/renderer` set to
+4. Midget: the session (history: ran labwc before its removal) runs `bifrost-wm`; formerly unless `/etc/bifrost/compositor` says `bifrost-wm`; `/etc/bifrost/renderer` set to
    `vulkan` selects this path. Check `journalctl` for the fallback message.
