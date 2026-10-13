@@ -794,6 +794,7 @@ pub mod script;
 pub mod writing_assist;
 pub mod vcard;
 pub mod contact_book;
+pub mod contact_address;
 pub mod contact_vcard;
 pub mod internet_accounts;
 pub mod contact_groups;
