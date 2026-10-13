@@ -1,11 +1,11 @@
 id = "is.olibuijr.files.desktop"
 name = "Files"
-version = "1.26.0"
+version = "1.27.0"
 exec = "bifrost-files"
 icon = "icon.png"
 min_shell = "0.4.84"
 summary = "Desktop file browser with sidebar, icon and list views, search and Preview."
 category = "Utilities"
 architecture = "x86_64-linux"
-permissions = ["storage"]
+permissions = ["storage", "documents"]
 window = "full-size"

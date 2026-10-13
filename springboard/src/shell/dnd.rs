@@ -12,8 +12,20 @@
 //! `Session` is the pure state machine; `Shell::dnd_*` feed it from the sockets and the pointer.
 
 use super::sharing::INBOUND;
-use bifrost_proto::{DragItem, DragPhase, DragPreview, Payload, ToApp, ToShell};
+use super::apps::apps;
+use super::AppId;
+use bifrost_proto::{dragop, DocMode, DragItem, DragPhase, DragPreview, GrantId, Payload, ToApp, ToShell};
 use std::collections::HashMap;
+use std::path::Path;
+
+/// Where a drop that no app window takes goes: a Dock icon, or the desktop.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Zone {
+    /// the Dock icon of the app with this icon key: the files open in it, as Open With does
+    Dock(String),
+    /// the desktop: the files are copied into the account's Desktop folder
+    Desktop,
+}
 
 /// The window under the pointer, with the pointer in that window's coordinates (the same space as `Touch`).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -165,6 +177,18 @@ pub fn preview_image(p: &DragPreview) -> Option<bifrost_render::gfx::Image> {
     Some(bifrost_render::gfx::Image { w: p.w as usize, h: p.h as usize, px })
 }
 
+/// The name a copy takes in a folder that already holds `taken`: `name`, else `name 2`, `name 3`... (before the extension).
+pub fn free_name(taken: &[String], name: &str) -> String {
+    if !taken.iter().any(|t| t == name) {
+        return name.to_string();
+    }
+    let (stem, ext) = match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() => (stem, format!(".{ext}")),
+        _ => (name, String::new()),
+    };
+    (2..).map(|n| format!("{stem} {n}{ext}")).find(|c| !taken.iter().any(|t| t == c)).unwrap_or_else(|| name.to_string())
+}
+
 /// Checks the items of a new session: at least one, every item offered as at least one type, and only files the caller can
 /// name. (The broker checks the grants themselves when the files are handed over.)
 pub fn valid_items(items: &[DragItem]) -> bool {
@@ -239,8 +263,10 @@ impl super::Shell {
             let source_gone = self.dnd.session.as_ref().is_some_and(|s| s.source == slot);
             let outs = self.dnd.session.as_mut().map(|s| s.cancel()).unwrap_or_default();
             if source_gone {
-                // nobody to tell; just drop the session
-                self.dnd.session = None;
+                // nobody to tell; just drop the session and the grants it made
+                if let Some(s) = self.dnd.session.take() {
+                    self.dnd_release_sources(&s);
+                }
                 self.dirty = true;
             } else {
                 self.dnd_apply(outs);
@@ -262,7 +288,7 @@ impl super::Shell {
     }
 
     /// Pointer events while a session is live. None when there is no session (the event goes on).
-    pub(super) fn dnd_event(&mut self, ev: bifrost_ui::Event) -> Option<Vec<super::Effect>> {
+    pub(super) fn dnd_event(&mut self, ev: bifrost_ui::Event, t: f64) -> Option<Vec<super::Effect>> {
         use bifrost_ui::Event;
         self.dnd.session.as_ref()?;
         if self.dnd.session.as_ref().is_some_and(|s| s.performing.is_some()) {
@@ -282,12 +308,110 @@ impl super::Shell {
         let mut outs = sess.moved(target, &takes);
         sess.pos = Some((x, y));
         if up {
+            if sess.over().is_none() {
+                if let Some(zone) = self.dnd_zone(x, y) {
+                    // the Dock or the desktop takes the files; the session ends here
+                    let op = self.dnd_zone_drop(&sess, zone, t);
+                    self.dnd_release_sources(&sess);
+                    self.ext_send(sess.source as usize, &ToApp::DragEnded { session: sess.id, op });
+                    self.dirty = true;
+                    return Some(Vec::new());
+                }
+            }
             outs.extend(sess.release());
         }
         self.dnd.session = Some(sess);
         self.dnd_apply(outs);
         self.dirty = true;
         Some(Vec::new())
+    }
+
+    /// The Dock icon or the desktop under the pointer, for a drop no app window took. None over windows, the menu bar or
+    /// nothing at all.
+    fn dnd_zone(&self, x: f32, y: f32) -> Option<Zone> {
+        if !self.desk_active() {
+            return None;
+        }
+        let m = self.desk_metrics();
+        if self.dock_is_visible() {
+            let (list, _, rects) = self.desk_dock(&m);
+            for (k, r) in rects.iter().enumerate() {
+                if x >= r.x as f32 && x < (r.x + r.w) as f32 && y >= r.y as f32 && y < (r.y + r.h) as f32 {
+                    return list.get(k).and_then(|&e| apps().get(e)).map(|a| Zone::Dock(a.icon.to_string()));
+                }
+            }
+        }
+        let over_window = self.desk.as_ref().and_then(|d| d.pick(&m, x, y)).is_some();
+        (!over_window && y as i32 > m.menubar).then_some(Zone::Desktop)
+    }
+
+    /// Hands the session's files to `zone`; returns the operation the source hears (0 when nothing took them).
+    fn dnd_zone_drop(&mut self, sess: &Session, zone: Zone, t: f64) -> u8 {
+        let grants: Vec<GrantId> = sess.items.iter().filter_map(|i| if let Payload::File { grant, .. } = &i.payload { Some(*grant) } else { None }).collect();
+        if grants.is_empty() || sess.allowed & dragop::COPY == 0 {
+            return 0;
+        }
+        match zone {
+            Zone::Dock(key) => {
+                let Some(app) = apps().iter().find(|a| a.icon == key).map(|a| a.id) else { return 0 };
+                let app = match app {
+                    AppId::Files => super::apphost::slot_of("is.olibuijr.files.desktop").map_or(app, |s| AppId::External(s as u8)),
+                    other => other,
+                };
+                let AppId::External(to) = app else { return 0 };
+                self.desk_open_or_start(app, t);
+                let request = self.app_share.next_inbound();
+                self.inbound_files(&sess.source_app, &key, to, request, &grants);
+                dragop::COPY
+            }
+            Zone::Desktop => {
+                if self.dnd_copy_to_desktop(&sess.source_app, &grants) {
+                    dragop::COPY
+                } else {
+                    0
+                }
+            }
+        }
+    }
+
+    /// Copies the files of `grants` (made for `source_app`) into the account's Desktop folder, made if missing. A name
+    /// already there gets a number. Folders are skipped. True when at least one file was copied.
+    fn dnd_copy_to_desktop(&mut self, source_app: &str, grants: &[GrantId]) -> bool {
+        let Some(b) = self.doc_broker() else { return false };
+        let dir = Path::new("Desktop");
+        let _ = b.opener.make_dir(Path::new(""), "Desktop");
+        let mut taken: Vec<String> = b.opener.list(dir).unwrap_or_default().into_iter().map(|(n, _)| n).collect();
+        let mut copied = false;
+        for g in grants {
+            let Ok(grant) = b.grants.get(source_app, g) else { continue };
+            let Some(file_name) = grant.path.file_name().map(|n| n.to_string_lossy().into_owned()) else { continue };
+            let Ok(mut src) = b.opener.open_any(&grant.path, DocMode::Read) else { continue };
+            if !src.metadata().is_ok_and(|m| m.is_file()) {
+                continue;
+            }
+            let name = free_name(&taken, &file_name);
+            let Ok((pending, mut out)) = b.opener.begin_save(dir, &name) else { continue };
+            if std::io::copy(&mut src, &mut out).is_ok() {
+                if pending.commit(&b.opener).is_ok() {
+                    taken.push(name);
+                    copied = true;
+                }
+            } else {
+                pending.abort(&b.opener);
+            }
+        }
+        copied
+    }
+
+    /// The grants a drag made for its file items go when the drag ends. The destinations' own grants stay.
+    fn dnd_release_sources(&mut self, sess: &Session) {
+        let source = sess.source_app.clone();
+        let Some(b) = self.doc_broker() else { return };
+        for i in &sess.items {
+            if let Payload::File { grant, .. } = &i.payload {
+                let _ = b.grants.release(&source, grant);
+            }
+        }
     }
 
     /// Sends what the state machine asked for; a finished session is dropped.
@@ -316,6 +440,7 @@ impl super::Shell {
                 }
                 Out::Ended { op } => {
                     if let Some(s) = self.dnd.session.take() {
+                        self.dnd_release_sources(&s);
                         self.ext_send(s.source as usize, &ToApp::DragEnded { session: s.id, op });
                     }
                     self.dirty = true;
@@ -330,6 +455,10 @@ impl super::Shell {
         let items = self.dnd.session.as_ref().map(|s| s.items.clone()).unwrap_or_default();
         let registered = super::apphost::installed();
         let Some(dest_app) = registered.get(dest_slot as usize).map(|a| a.manifest.id.clone()) else { return Vec::new() };
+        // a window of the source app already holds the grants: it gets them as they are
+        if dest_app == source_app {
+            return items;
+        }
         // Without the desktop broker there is no grant mapping, so `map_files` drops every file item.
         #[cfg(feature = "desktop-wayland")]
         let mapping = {
@@ -516,6 +645,15 @@ mod tests {
         assert_eq!(img.px[1] >> 24, 0);
         assert!(preview_image(&DragPreview::default()).is_none());
         assert!(preview_image(&DragPreview { w: 4, h: 4, rgba: vec![0; 3] }).is_none());
+    }
+
+    #[test]
+    fn copies_take_a_free_name_before_the_extension() {
+        let taken = vec!["a.png".to_string(), "a 2.png".to_string(), "notes".to_string()];
+        assert_eq!(free_name(&taken, "b.png"), "b.png");
+        assert_eq!(free_name(&taken, "a.png"), "a 3.png");
+        assert_eq!(free_name(&taken, "notes"), "notes 2");
+        assert_eq!(free_name(&[".hidden".to_string()], ".hidden"), ".hidden 2", "a leading dot is not an extension");
     }
 
     #[test]

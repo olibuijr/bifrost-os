@@ -24,9 +24,10 @@ impl Files {
         self.path_segs = widgets::path_bar(s, ui, Rect { x: self.side() + 12., y: top + (FOOTER_H - 20.) / 2., w: (w - self.side() - 36. - status_w).max(0.), h: 20. }, &refs);
         // The status:  a running job, else a failed action, else the item count and selection.
         if self.dragging {
-            let n = self.selection.len();
+            // a drag from another app copies its items; a drag of this window's items moves them unless Option copies
+            let (n, copying) = if self.dnd.foreign.is_some() { (self.dnd.foreign_items, true) } else { (self.selection.len(), self.fx.copy_drag) };
             let line = match &self.drop_target {
-                Some(target) => format!("{} {} to {}", if self.fx.copy_drag { "Copy" } else { "Move" }, if n == 1 { "1 item".to_string() } else { format!("{n} items") }, target.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Computer".into())),
+                Some(target) => format!("{} {} to {}", if copying { "Copy" } else { "Move" }, if n == 1 { "1 item".to_string() } else { format!("{n} items") }, target.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "Computer".into())),
                 None => "Drag onto a folder or a sidebar place to move; Option copies".into(),
             };
             text(s, ui, &line, 11., LABEL.now(), w - 12. - status_w, line_y, status_w);

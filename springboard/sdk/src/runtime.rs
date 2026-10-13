@@ -390,6 +390,14 @@ impl Ctx {
     pub fn release_document(&self, grant: crate::proto::GrantId) {
         self.send(ToShell::DocRelease { grant });
     }
+
+    /// A read grant for the file or folder at `path` (absolute, under the account's home), for the file items of a drag
+    /// (`dnd::begin`). Answered with `Opened` (the grant and the descriptor) or `Failed`. Needs the `documents` permission.
+    pub fn grant_path(&self, path: &str) -> u32 {
+        let request = self.docs.borrow_mut().next();
+        self.send(ToShell::DocGrantPath { request, path: path.into() });
+        request
+    }
 }
 
 /// Takes ownership of a received descriptor as a `File`.

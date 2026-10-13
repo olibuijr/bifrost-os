@@ -351,6 +351,8 @@ pub const MAX_DOC_FILTERS: usize = 16;
 pub const MAX_DOC_FILTER: usize = 64;
 /// Panel titles and file names are cut to this many characters.
 pub const MAX_DOC_TEXT: usize = 255;
+/// The longest path a `DocGrantPath` carries (bytes).
+pub const MAX_DOC_PATH: usize = 4096;
 
 /// Shell -> app.
 #[derive(Clone, Debug, PartialEq)]
@@ -622,6 +624,10 @@ pub enum ToShell {
     /// temporary file next to it (the same reply as a save panel's), then `DocCommit` renames it over the file and the
     /// grant keeps its id. Needs a `Write` grant.
     DocSaveGrant { request: u32, grant: GrantId },
+    /// A read grant for the file or folder at `path` (absolute, under the account's home), to put in the file items of a
+    /// drag this window begins (`dnd::begin`). Answered with `DocGranted` (the descriptor follows) or `DocError`. Needs the
+    /// `documents` permission.
+    DocGrantPath { request: u32, path: String },
     /// The window's vibrancy regions (`NativeVisualEffectView` .sidebar / .titlebar), sent when they change, only after
     /// the shell set `appearance::VIBRANCY`. An empty list clears them.
     Materials(Vec<Material>),
@@ -824,6 +830,7 @@ mod tag {
     pub const PASTEBOARD_SET: u32 = 0x190;
     pub const DOCUMENT_STATE: u32 = 0x180;
     pub const DOC_SAVE_GRANT: u32 = 0x181;
+    pub const DOC_GRANT_PATH: u32 = 0x11b;
     pub const TEXT_STATE: u32 = 0x150;
     pub const CARET_RECT: u32 = 0x151;
     pub const INPUT_TRAITS: u32 = 0x152;
@@ -1497,6 +1504,11 @@ impl ToShell {
                 u32_(&mut b, tag::DOC_RELEASE);
                 b.extend_from_slice(grant);
             }
+            ToShell::DocGrantPath { request, path } => {
+                u32_(&mut b, tag::DOC_GRANT_PATH);
+                u32_(&mut b, *request);
+                str_(&mut b, path);
+            }
             ToShell::Keychain { request, op } => {
                 u32_(&mut b, tag::KEYCHAIN);
                 u32_(&mut b, *request);
@@ -1614,6 +1626,14 @@ impl ToShell {
                 ToShell::DocSaveGrant { request, grant: r.grant()? }
             }
             tag::DOC_RELEASE => ToShell::DocRelease { grant: r.grant()? },
+            tag::DOC_GRANT_PATH => {
+                let request = r.u32()?;
+                let path = r.str()?;
+                if path.len() > MAX_DOC_PATH {
+                    return Err(DecodeError::BadValue);
+                }
+                ToShell::DocGrantPath { request, path }
+            }
             tag::APP_MENUS => {
                 let n = r.u32()? as usize;
                 if n > MAX_APP_MENUS {
@@ -1838,6 +1858,7 @@ mod tests {
             ToShell::DocReopen { request: 4, grant: g },
             ToShell::DocRelease { grant: g },
             ToShell::DocSaveGrant { request: 5, grant: g },
+            ToShell::DocGrantPath { request: 6, path: "/home/a/Notes/b.txt".into() },
         ] {
             assert_eq!(ToShell::decode(&m.encode()), Ok(m));
         }
