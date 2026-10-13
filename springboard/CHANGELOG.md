@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.15 — 2026-10-13
+
+- Unlock hands the lock screen's freed memory back to the system (`malloc_trim` when the unlock finishes): shell memory after a lock cycle 112 → 97 MiB on Midget.
+
 ## 0.7.14 — 2026-10-13
 
 - Boot: the compositor starts without `--verbose` (dozens of debug lines into the journal on every boot; no measurable start-up change, less log noise).

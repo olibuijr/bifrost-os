@@ -2887,6 +2887,14 @@ impl Shell {
                     Anim::Unlock { to, .. } if to >= 1.0 => {
                         self.screen = Screen::Home;
                         self.leave_today();
+                        // the lock screen's buffers are gone: hand their pages back to the system
+                        #[cfg(target_env = "gnu")]
+                        {
+                            unsafe extern "C" {
+                                fn malloc_trim(pad: usize) -> i32;
+                            }
+                            unsafe { malloc_trim(0) };
+                        }
                     }
                     Anim::Open { app, .. } => self.screen = Screen::App(app),
                     _ => {}
