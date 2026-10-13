@@ -21,8 +21,8 @@ would make a root process the server for every untrusted app, so it stays out.
 
 - Apps and the shell declare blur regions with the standard `ext-background-effect-v1` protocol and draw their own tint
   with alpha on top. The compositor blurs what is behind the region every frame it is damaged.
-- Rounded material shapes and the BifrOSt glass styles (tint pairs, clarity mix) come in a later private extension
-  (`bifrost_material_v1`); the standard protocol carries rectangles only.
+- Rounded material shapes and the BifrOSt glass styles come through the private `bifrost_material_v1` protocol (see
+  Materials); the standard protocol carries rectangles only.
 
 ## What the former compositor did (parity checklist)
 
@@ -39,8 +39,8 @@ would make a root process the server for every untrusted app, so it stays out.
 | Activation | `xdg_activation_v1` | phase 3 |
 | Window list | `zwlr_foreign_toplevel_manager_v1` (dock, app switcher) | phase 3 |
 | Output modes | `wlr-output-management` via `wlr-randr` (`video-arg`, `session-env`) | phase 3; the compositor picks the fastest native mode itself |
-| Screenshots | `wlr-screencopy` via `grim` (`bifrost-apps --screenshot`) | readback in `wm/src/capture.rs` (see Screen capture) |
-| Keys | Super+Space (Spotlight via control port), Super+A (apps), Alt+Tab, Alt+F4 | phase 3 |
+| Screenshots | `wlr-screencopy` via `grim` (`bifrost-apps --screenshot`) | done: readback in `wm/src/capture.rs` (see Screen capture) |
+| Keys | Super+Space (search panel via control port), Super+A (apps), Alt+Tab, Alt+F4, Ctrl+Super+arrows | done: `wm/src/keybindings.rs` (see Key bindings) |
 | X11 apps | XWayland | phase 4 |
 | Backend | DRM/KMS, libinput, libseat | phase 3 (phase 1 runs nested for development) |
 
@@ -68,18 +68,18 @@ would make a root process the server for every untrusted app, so it stays out.
   scanout, holds it until the shell's first desktop frame (`$XDG_RUNTIME_DIR/shell-ready`), then cross-fades over
   450 ms with the loader's smoothstep, writing the `desktop-first-ui` and `desktop-faded` marks. The compositor owns
   the screen, so under `bifrost-wm` the shell no longer fades itself.
-- `video-arg` keeps learning the fastest mode for the next boot's command line; it reads the modes from `bifrost-wm`
-  once output management lands (phase 3) instead of `wlr-randr`.
+- `video-arg` keeps learning the fastest mode for the next boot's command line, and `display-refresh` (session autostart) picks the fastest refresh at native size. Both still read the modes with `wlr-randr`; moving them to `bifrost-wm` output management is open.
 
 ## Code
 
 `springboard/wm` (crate `bifrost-wm`). Window-management rules (placement, stacking, focus, move and resize
 grabs) live in plain Rust modules without Smithay types, so they are unit-tested on any host.
 
-## Presenter bugs the window server retires
+## Presenter bugs the window server retired
 
-The shell-side GPU presenter (`springboard/src/gpu/wl.rs`) fakes glass inside its own buffers. Bugs of that design,
-found on Midget on 2026-10-11:
+History. The shell-side GPU presenter (`springboard/src/gpu/wl.rs`) faked glass inside its own buffers. The live
+backdrop (`Presenter::under`, `BIFROST_WM_MATERIALS`) was deleted with the labwc removal; the window server is the only
+place glass is composed now. Bugs of that design, found on Midget on 2026-10-11:
 
 - **Frozen glass while dragging.** the old compositor moved the window (`xdg_toplevel.move`); the presenter keeps blurring the old
   spot. Only the compositor knows the geometry.
@@ -90,11 +90,11 @@ found on Midget on 2026-10-11:
 - **Black desktop after unlock** (fixed in `cbd807d`): the lock unmapped the desktop layer surface and the unlock
   attached a buffer before the new configure.
 
-## Open desktop issues (user notes, 2026-10-11)
+## Desktop issues (user notes, 2026-10-11)
 
 1. Dock icons vibrate under hover magnification; it must be smooth, and every dock setting belongs in Settings.
 2. Files: the empty-folder screen needs a proper Golden Gate design.
-3. Super+Space does not open Spotlight (a former labwc keybinding; `bifrost-wm` phase 3 owns keys).
+3. Super+Space did not open the search panel (a former labwc keybinding). Fixed: `bifrost-wm` owns the chord and sends `quicksearch` to the shell (see Key bindings).
 4. Switching windows: the dimming of inactive windows should fade in and out, in both directions.
 5. The dock icon context menu is oversized; follow the HIG menu metrics.
 6. The burn-in above.
@@ -107,16 +107,16 @@ Every built-in shell window (Settings and the rest) is already its own xdg tople
 
 | Path | Who blurs | What the blur sees |
 |---|---|---|
-| labwc (removed) | the shell's presenter paints the blur into the window's own buffer (`Backdrop::GlassOnly`, `Presenter::under`) | wallpaper plus the shell's own windows only. labwc-era toplevels (Files) are separate buffers the shell cannot sample, so they are never in the backdrop: Settings over Files shows the wallpaper, not Files. A limit of this path. |
+| labwc (removed, history) | the shell's presenter painted the blur into the window's own buffer (`Backdrop::GlassOnly`, `Presenter::under`; both deleted) | wallpaper plus the shell's own windows only: Settings over Files showed the wallpaper, not Files. |
 | bifrost-wm | the window server (`wm/src/scene.rs`, `glass.rs`): each surface with an `ext-background-effect-v1` blur region gets a backdrop rendered from every element below it (all clients), re-rendered when the signature of those elements changes (window moved, client committed) | the real composed scene, including Files |
 
 Shell side (this round): the shell binds `ext_background_effect_manager_v1` when the compositor offers it and reports
 the blur capability. For each window with materials it then sends the material rects (shadow margin added) as the
 blur region and leaves the window translucent: no presenter blur, no inactive opaque plate.
-`BIFROST_WM_MATERIALS=0` keeps the presenter path. The SDK apps (`bifrost_app`) must use the same call; no client
+`BIFROST_WM_MATERIALS` and the presenter path no longer exist. The SDK apps (`bifrost_app`) must use the same call; no client
 sends a region yet except the shell and, through it, SDK apps (step 3 below).
 
-### Former labwc path: black Files and black Settings material (diagnosis, not reproduced)
+### Former labwc path: black Files and black Settings material (history, diagnosis, not reproduced)
 
 No Midget in this round. From the code: foreign toplevels are never added to the presenter stack (`set_window_stack`
 takes only the shell's windows) and the shell never paints a foreign window, so no shell path paints Files black.
@@ -124,7 +124,7 @@ Remaining candidates: (a) the shell believes it is key while the compositor acti
 own front window, never the compositor's activation), and the inactive path of `Presenter::draw` paints
 `Kind::inactive()` plates, near-black in Dark (`MATERIAL_SIDEBAR_SOLID` 20,20,22); (b) Files' own alpha dma-buf
 composed black by the compositor. Check on Midget with a screenshot while Files is open, Dark and Light, with and without
-`BIFROST_WM_MATERIALS`.
+the compositor.
 
 ### Migration plan: one window model for built-in and external apps
 
@@ -142,7 +142,7 @@ composed black by the compositor. Check on Midget with a screenshot while Files 
    shell windows, so foreign focus no longer leaves the shell believing it is key.
 5. Shell chrome (menu bar, dock, panels) are layer clients (`bifrost-chrome`): give them blur regions too and drop
    `Presenter::set_window_stack` / `under`.
-6. (done for labwc) labwc is removed; remove the presenter blur path after Midget acceptance.
+6. (done) labwc is removed and the shell-side live backdrop is deleted (sprint 6).
 
 ## Materials (2026-10-12)
 
@@ -193,7 +193,8 @@ Tints equal the shell's `MATERIAL_*` pairs (`render/src/ui.rs`).
   elements below (id, commit, geometry), the output size or the recipe saturation changes.
 - Budget: `budgeted_blur` lowers the number of dual-Kawase passes until the pyramid (levels written down and up) is at most
   3.5 M texels, about 2 ms on a Skylake HD 530; a full 2560x1440 region costs about 2.5 M texels at 5 or 6 passes, so the budget only bites on larger outputs or radii.
-- Noise is in the recipe table but not drawn yet; the GLES path leaves the tint to the client and applies the saturation.
+- Colour stages: saturation, brightness and luminance mapping per recipe, as pure math in `wm/src/material_filter.rs`. The compose shader and the GLES glass path apply the same arithmetic. Measured values: `docs/reference/materials-recipes.md`.
+- Noise is in the recipe table but not drawn yet; the GLES path leaves the tint to the client.
 - Appearance comes from `WmState::material_dark` (`BIFROST_WM_APPEARANCE=light` for Light); no appearance protocol yet.
 
 ## Accessibility display options (for the window server)
@@ -204,9 +205,40 @@ Reduce Transparency, Increase Contrast or Button Shapes. Format: `key=0|1` lines
 A missing file means all off. Read it with `bifrost_render::appearance::DisplayOptions::read_from(DISPLAY_FILE)` (poll
 it, or watch the directory with inotify) and turn glass off (opaque material tints, no blur) while `reduce_transparency` is set.
 
+## Key bindings
+
+`wm/src/keybindings.rs` takes these chords before any client sees them (the shell only gets keys while one of its
+surfaces has focus). Modifiers must match exactly, so Super+Shift+Space is not the search panel.
+
+| Chord | Action |
+|---|---|
+| Super+Space | sends `quicksearch` to the shell control port (127.0.0.1:7777) |
+| Super+A | starts `/usr/bin/bifrost-apps` |
+| Alt+Tab | focuses the lowest shown window, so repeated presses walk the stack |
+| Alt+F4 | closes the focused toplevel |
+| Ctrl+Super+Left / Right | tiles to a half |
+| Ctrl+Super+Up / Down | maximizes / centres at the previous size |
+
+## Window models
+
+Pure Rust modules without Smithay types, host-tested. Most are models the compositor does not drive yet:
+
+- `tiling.rs`: half and quarter frames, edge and corner drop zones for drags, arrow-key layouts (Fn+Ctrl+arrows).
+- `spaces.rs`: desktops and a space per full-screen window (Ctrl+Left/Right step, Ctrl+1 to 9 pick).
+- `overview.rs`: all windows as a thumbnail grid, desktops in a strip, and the per-app overview.
+- `stage.rs`: the focus strip, the active window large with recent ones as thumbnails.
+- `output_layout.rs`: arrangement and mirroring behind Settings > Displays. The DRM backend drives one connector, so layouts are not applied to hardware yet.
+
+## Safe mode
+
+`/usr/lib/bifrost/session` restarts `bifrost-wm` in safe mode after three unplanned exits within 60 s
+(`/run/bifrost/compositor-fallback`, exit times in `/run/bifrost/wm-safe-exits`). Safe mode uses the default GLES renderer,
+no direct apps and no chrome clients (`session-policy` prints no environment words). Three more exits in safe mode end the
+session and `bifrost-update-guard` (the recovery flow) takes over. Safe mode lasts until the next boot.
+
 ## Screen capture
 
-`wlr-screencopy` (`grim`, `bifrost-apps --screenshot`, the MCP screenshot tool) and `ext-image-copy-capture` ask the
+`wlr-screencopy` (`grim`; the screenshot tools write the file through the same hook)  and `ext-image-copy-capture` ask the
 backend through `SessionHooks::capture(&mut WmState, &CaptureSpec) -> Option<Vec<u8>>` (`session_protocols.rs`). The
 hook returns RGBA rows (R, G, B, A in memory) of the requested region; `write_shm` converts them to the client's
 XRGB8888 or ARGB8888 buffer. Without a hook the request is answered `failed`.
@@ -220,5 +252,5 @@ XRGB8888 or ARGB8888 buffer. Without a hook the request is answered `failed`.
   Regions are clipped to it with `clamp_region`.
 - `overlay_cursor` paints the pointer on DRM; the headless output has no pointer image. ext-image-copy-capture cursor
   options are not read yet.
-- The Vulkan scanout (`BIFROST_WM_RENDERER=vulkan`) has no GLES readback here, so captures fail there.
+- The Vulkan scanout (`BIFROST_WM_RENDERER=vulkan`) has no readback, so captures fail there.
 - Tests: `capture_size`/`clamp_region` unit tests, and `tests/capture.rs` (headless, red scene reads back `[255,0,0,255]`).
