@@ -167,6 +167,8 @@ pub mod authorization;
 pub mod audio_session;
 pub mod now_playing;
 pub mod thumbnails;
+pub mod thumbnail_error;
+pub mod peek_pdf;
 pub mod web_download;
 pub mod web_config;
 pub mod web_data;
