@@ -498,6 +498,7 @@ name = "bifrost-cmd"
 version = "0.1.0"
 dependencies = [
  "bifrost-core",
+ "bifrost-proto",
  "bifrost-ui",
 ]
 
@@ -791,7 +792,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-sysinfo"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",

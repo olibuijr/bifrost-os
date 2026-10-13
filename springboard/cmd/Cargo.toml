@@ -7,3 +7,4 @@ description = "Command-line tools for BifrOSt (one binary per tool in src/bin/, 
 [dependencies]
 bifrost-core = { path = "../core" }
 bifrost-ui = { path = "../ui" }
+bifrost-proto = { path = "../proto" }
