@@ -43,6 +43,7 @@ use bifrost_app::kit::ui::{SPACE_L, SPACE_XL, SPACE_XS};
 
 mod control;
 mod dragout;
+mod dragpreview;
 mod coordinate;
 mod go;
 mod info;
