@@ -1,4 +1,8 @@
 # Changelog
+## 0.2.0 — 2026-10-13
+
+- Safe HTML mail: `html` sanitizes bodies (scripts, styles, frames, event handlers and script or relative URLs removed,
+  remote images blocked and counted, inline raster images kept) and gives plain text for previews and search.
 ## 0.1.0 — 2026-10-13
 
 - New app: the mail core. Accounts (IMAP and SMTP servers, password kept in the keychain), a pure IMAP response parser and

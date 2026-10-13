@@ -4,6 +4,7 @@
 pub mod account;
 pub mod codec;
 pub mod flags;
+pub mod html;
 pub mod imap;
 pub mod layout;
 pub mod message;
