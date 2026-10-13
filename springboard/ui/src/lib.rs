@@ -1043,6 +1043,7 @@ pub mod scene_source;
 pub mod node_constraint;
 pub mod tilemap;
 pub mod scene2d;
+pub mod camera2d;
 pub mod midi_thru;
 pub mod midi_events;
 pub mod midi_ble;
