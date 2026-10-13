@@ -17,8 +17,9 @@ pub enum Event {
     /// A switch (jack insert and the like): the code and whether it is on.
     Switch { code: u16, on: bool },
     /// One finger of a multi-touch screen: the contact's id (unique among the fingers down), its phase and its
-    /// position in panel pixels. Every finger produces these. The first finger of a touch sequence also produces
-    /// the single-pointer `Down` / `Move` / `Up` events above, so the shell's pointer-style handling keeps working.
+    /// position in screen pixels. Only the Wayland client path (`wl_touch`) produces these so far; the evdev decoder
+    /// reports the first contact alone. The first finger of a touch sequence also produces the single-pointer
+    /// `Down` / `Move` / `Up` events above, so the shell's pointer-style handling keeps working.
     Contact { id: i32, phase: TouchPhase, x: f32, y: f32, t: f64 },
 }
 
