@@ -3,16 +3,16 @@
   "doc": "https://developer.apple.com/documentation/iousbhost",
   "macos_since": "10.15",
   "status": "partial",
-  "bifrost": "springboard/src/bare/input.rs (kernel input devices), springboard/src/media/v4l2.rs (UVC cameras via kernel V4L2), springboard/audiod (audio devices); no app-facing USB API",
+  "bifrost": "springboard/src/bare/input.rs (kernel input devices), springboard/src/media/v4l2.rs (UVC cameras via kernel V4L2), springboard/audiod (audio devices); no app-facing USB API; springboard/sdk/src/usb_device.rs (claim planning, not sent to devices)",
   "summary": "IOUSBHost is Apple's framework for user-space host-mode USB drivers that let apps talk to custom USB devices. BifrOSt has no app-facing USB transport API: the Linux kernel drives USB, and the shell and daemons handle input, camera and audio devices by class. Raw device claim, descriptors, pipes and isochronous streams have no SDK counterpart, and the app sandbox does not expose USB device nodes.",
   "rea_evidence": "ev_a8792b7a789634fc2e35b8dfc894673ef8d9fe7860fc71b9c0e72e944432958c",
   "features": [
     {
       "feature": "Device driver access (claim, configure, descriptors, device requests)",
       "apple": "IOUSBHostDevice, IOUSBHostObject",
-      "bifrost": "springboard/core/src/usb_descriptors.rs",
+      "bifrost": "springboard/sdk/src/usb_device.rs (plan_claim, ClaimPlan), springboard/core/src/usb_claim.rs, springboard/core/src/usb_descriptors.rs",
       "status": "partial",
-      "note": "Wave 2 (theme-18, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No SDK call for an app to claim a USB device or send control requests. Apps run under bwrap with no /dev/bus/usb binding (springboard/src/bare/app_policy.rs binds only /dev/snd and /dev/dri)."
+      "note": "built on parity/team-k-accessory-access; not yet verified on Midget. An app can plan a claim (configuration and alternate-setting requests in order, and the pipes the interface opens). Nothing sends the requests; the sandbox binds no /dev/bus/usb."
     },
     {
       "feature": "Interface, pipe and stream I/O (control, bulk, interrupt, isochronous)",
@@ -79,7 +79,7 @@
     }
   ],
   "gaps": [
-    "No app-facing API to claim a USB device, read descriptors or send control, bulk, interrupt or isochronous requests (IOUSBHostDevice, IOUSBHostInterface, IOUSBHostPipe, IOUSBHostStream).",
+    "No app-facing transport: the claim plan (springboard/sdk/src/usb_device.rs) is not sent and no control, bulk, interrupt or isochronous request reaches a device (IOUSBHostDevice, IOUSBHostInterface, IOUSBHostPipe, IOUSBHostStream).",
     "The app sandbox (springboard/src/bare/app_policy.rs) does not bind USB device nodes, so a sandboxed app cannot reach raw USB even if an API existed.",
     "No scanner API and no USB transport for printers (springboard/ui/src/print.rs).",
     "Owner decision needed: whether a desktop needs app-level raw USB access at all. The triage note says likely n/a; the framework's stated use cases (cameras, audio, scanners, printers, MIDI, hubs) are mostly covered at the system layer, which leaves custom device drivers as the real gap."
