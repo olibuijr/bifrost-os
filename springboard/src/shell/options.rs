@@ -8,6 +8,9 @@ use super::ui::{TEXT_SCALE_MAX, TEXT_SCALE_MIN};
 /// The Auto-Lock choices as (label, ms); 0 is Never.
 /// Energy "Put the computer to sleep when the display is off": (label, minutes), 0 = never.
 pub const SYSTEM_SLEEP: [(&str, u32); 7] = [("1 minute", 1), ("5 minutes", 5), ("10 minutes", 10), ("15 minutes", 15), ("30 minutes", 30), ("1 hour", 60), ("Never", 0)];
+/// Lock Screen > Require Password: how long after the display goes off the screen may come back without a password,
+/// as (label, seconds). 0 is Immediately.
+pub const REQUIRE_AFTER: [(&str, u32); 6] = [("Immediately", 0), ("5 seconds", 5), ("1 minute", 60), ("5 minutes", 300), ("15 minutes", 900), ("1 hour", 3600)];
 pub const AUTO_LOCK: [(&str, u32); 5] = [("30 seconds", 30_000), ("1 minute", 60_000), ("2 minutes", 120_000), ("5 minutes", 300_000), ("Never", 0)];
 /// The Text Size slider's notches, the bifrost Dynamic Type steps.
 pub const TEXT_SIZES: [f32; 7] = [TEXT_SCALE_MIN, 0.9, 0.95, 1.0, 1.1, 1.2, TEXT_SCALE_MAX];
@@ -117,15 +120,17 @@ pub struct Options {
     pub login_name_password: bool,
     /// Users & Groups › Login Options: the login window shows password hints
     pub login_hints: bool,
+    /// Lock Screen > Require Password: seconds the screen may stay off before a password is asked (0 = at once)
+    pub lock_grace_s: u32,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, login_name_password: false, login_hints: false }
+        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, login_name_password: false, login_hints: false, lock_grace_s: 0 }
     }
 }
 
-const KEYS: [&str; 41] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "login_name_password", "login_hints"];
+const KEYS: [&str; 42] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "login_name_password", "login_hints", "lock_grace_seconds"];
 
 impl Options {
     /// Reads every key, keeping the default for a missing or malformed one.
@@ -175,6 +180,7 @@ impl Options {
             swap_buttons: flag("swap_buttons", d.swap_buttons),
             login_name_password: flag("login_name_password", d.login_name_password),
             login_hints: flag("login_hints", d.login_hints),
+            lock_grace_s: p.get_parsed("lock_grace_seconds").filter(|s: &u32| REQUIRE_AFTER.iter().any(|(_, v)| v == s)).unwrap_or(d.lock_grace_s),
         }
     }
 
@@ -223,6 +229,7 @@ impl Options {
             flag(self.swap_buttons).into(),
             flag(self.login_name_password).into(),
             flag(self.login_hints).into(),
+            self.lock_grace_s.to_string(),
         ];
         let pairs: Vec<(&str, &str)> = KEYS.iter().copied().zip(values.iter().map(String::as_str)).collect();
         if let Err(e) = p.set_many(&pairs) {
@@ -242,6 +249,11 @@ impl Options {
             secondary: if self.trackpad_secondary == 0 { Secondary::Corner } else { Secondary::TwoFingers },
             swap_buttons: self.swap_buttons,
         }
+    }
+
+    /// The Require Password label for the current choice.
+    pub fn lock_grace_label(&self) -> &'static str {
+        REQUIRE_AFTER.iter().find(|(_, s)| *s == self.lock_grace_s).map_or("Immediately", |(l, _)| l)
     }
 
     /// The Auto-Lock label for the current choice.
@@ -270,7 +282,7 @@ mod tests {
         assert_eq!(d, Options::default());
         assert_eq!(d.auto_lock_label(), "Never");
         assert_eq!(d.text_size_step(), 3);
-        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, keyboard_clicks: false, lock_sound: false, alert_sound: 2, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, login_name_password: true, login_hints: true };
+        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, keyboard_clicks: false, lock_sound: false, alert_sound: 2, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, login_name_password: true, login_hints: true, lock_grace_s: 300 };
         o.save(&mut p);
         assert_eq!(p.get("auto_lock_ms"), Some("0"));
         assert_eq!(p.get("mouse_scroll_speed"), Some("0.50"));
@@ -284,9 +296,11 @@ mod tests {
         assert_eq!(p.get("volume"), Some("0.25"));
         assert_eq!(p.get("low_power"), Some("1"));
         assert_eq!(p.get("power_profile"), Some("battery"));
+        assert_eq!(p.get("lock_grace_seconds"), Some("300"));
         let back = Options::load(&p);
         assert_eq!(back, o);
         assert_eq!(back.auto_lock_label(), "Never");
+        assert_eq!(back.lock_grace_label(), "5 minutes");
         assert_eq!(back.text_size_step(), 5);
     }
 
@@ -313,6 +327,8 @@ mod tests {
         assert_eq!(o.mouse_speed, Options::default().mouse_speed);
         assert_eq!(o.trackpad_speed, SPEED_MAX);
         assert_eq!(o.trackpad_secondary, Options::default().trackpad_secondary);
+        p.set("lock_grace_seconds", "17").unwrap();
+        assert_eq!(Options::load(&p).lock_grace_s, 0, "a choice the list does not offer falls back");
         p.set("alert_sound", "99").unwrap();
         assert_eq!(Options::load(&p).alert_sound, Options::default().alert_sound);
     }
