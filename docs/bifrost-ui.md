@@ -1793,6 +1793,17 @@ Apple's CoreSpotlight lets an app index its own content so system search finds i
 Tests: `bifrost_proto::spotlight` (wire round trip, packet bound), `bifrost_app::spotlight` (`Ctx::testing` + `take_sent`),
 `springboard::shell::spotindex` (ranking, replace, delete, bounds, disk round trip).
 
+Query side (`bifrost_ui::spotlight_query`, pure model, host-tested, not yet wired to the shell or `bifrost_app`):
+`SearchQuery::new(query_string, QueryContext{fetch_attributes, filter_queries, source_options})` with `start(items, now,
+found_items, completion)` (batches of 8, `cancel()` / `CancelHandle`, `found_item_count`); language `attr == "text"`
+(`!=`, `<` `>` `<=` `>=` for numbers and times), `*` wildcard, modifiers `c` `d` `w`, `&&` over `||`, parentheses,
+`$time.now` / `$time.now(-3600)`. `UserQuery` + `UserQueryContext` rank results (title > keywords > description) and give
+`Suggestion`s. `SearchableIndex::new(name, protection_class, capacity)` has acknowledged `index_searchable_items` /
+`delete_searchable_items` (`Error::RemoteConnection` when offline, oldest evicted past capacity, `take_evicted`),
+`begin_batch` / `end_batch(client_state)` / `fetch_last_client_state`, and `IndexDelegate` (`reindex_all_searchable_items`,
+`reindex_searchable_items`) invoked by `index_lost` / `items_corrupt`. Gaps: shell store still the per-app JSON file,
+`sourceOptions` has no effect, `SpotlightSearchTool` is a gap; not tested on Midget.
+
 Gaps, decided and recorded: no `CSSearchQuery` (an app searching its own index; apps search their own data), no
 `CSSearchableIndexDelegate` re-index requests, no `expirationDate`, `rankingHint` or per-attribute `CSSearchableItemAttributeSet`
 types beyond the five above, no completion handler or error for index calls, and the panel does not draw the thumbnail yet
