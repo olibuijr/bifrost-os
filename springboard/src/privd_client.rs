@@ -153,6 +153,53 @@ impl Client {
         self.call("time.set_ntp", vec![("on", Json::Bool(on))]).map(|_| ())
     }
 
+    /// Settings > Users & Groups: creates an account (`admin` adds it to the administrators).
+    pub fn user_add(&self, name: &str, full_name: &str, admin: bool, password: &str) -> Result<(), ClientError> {
+        self.call("user.add", vec![("name", privd::s(name)), ("full_name", privd::s(full_name)), ("admin", Json::Bool(admin)), ("password", privd::s(password))]).map(|_| ())
+    }
+
+    pub fn user_delete(&self, name: &str, remove_home: bool) -> Result<(), ClientError> {
+        self.call("user.delete", vec![("name", privd::s(name)), ("remove_home", Json::Bool(remove_home))]).map(|_| ())
+    }
+
+    pub fn user_set_admin(&self, name: &str, admin: bool) -> Result<(), ClientError> {
+        self.call("user.set_admin", vec![("name", privd::s(name)), ("admin", Json::Bool(admin))]).map(|_| ())
+    }
+
+    /// Another account's password (the installed account changes its own through `account.set_password`).
+    pub fn user_set_password(&self, name: &str, new: &str) -> Result<(), ClientError> {
+        self.call("user.set_password", vec![("name", privd::s(name)), ("new", privd::s(new))]).map(|_| ())
+    }
+
+    pub fn group_add(&self, name: &str) -> Result<(), ClientError> {
+        self.call("group.add", vec![("name", privd::s(name))]).map(|_| ())
+    }
+
+    pub fn group_delete(&self, name: &str) -> Result<(), ClientError> {
+        self.call("group.delete", vec![("name", privd::s(name))]).map(|_| ())
+    }
+
+    pub fn group_member(&self, group: &str, user: &str, add: bool) -> Result<(), ClientError> {
+        self.call("group.member", vec![("group", privd::s(group)), ("user", privd::s(user)), ("add", Json::Bool(add))]).map(|_| ())
+    }
+
+    /// Settings > Sharing: the computer name people see and/or the local host name.
+    pub fn set_names(&self, computer: Option<&str>, local: Option<&str>) -> Result<(), ClientError> {
+        let mut p = vec![];
+        if let Some(c) = computer {
+            p.push(("computer", privd::s(c)));
+        }
+        if let Some(l) = local {
+            p.push(("local", privd::s(l)));
+        }
+        self.call("system.set_names", p).map(|_| ())
+    }
+
+    /// Settings > Sharing: starts and enables (or stops and disables) a sharing service by id.
+    pub fn set_service(&self, id: &str, on: bool) -> Result<(), ClientError> {
+        self.call("service.set", vec![("id", privd::s(id)), ("on", Json::Bool(on))]).map(|_| ())
+    }
+
     pub fn update_check(&self) -> Result<UpdateInfo, ClientError> {
         let r = self.call_timeout("update.check", vec![], Duration::from_secs(300))?;
         Ok(UpdateInfo { installed: r.str_field("installed"), version: r.str_field("version"), size: r.get("size").and_then(Json::as_u64).unwrap_or(0), notes: r.str_field("notes") })

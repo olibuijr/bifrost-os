@@ -72,7 +72,7 @@ pub fn call(method: &str, p: &Json) -> Result<Json, PErr> {
             Some(Ok(n)) => Ok(obj(vec![("files", Json::Num(n as f64))])),
             Some(Err(e)) => Err(PErr::internal(e.to_string())),
         },
-        _ => Err(PErr::bad(format!("unknown method {method}"))),
+        _ => super::accounts::call(method, p).unwrap_or_else(|| Err(PErr::bad(format!("unknown method {method}")))),
     }
 }
 
