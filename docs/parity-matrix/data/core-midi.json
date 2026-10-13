@@ -52,9 +52,9 @@
     {
       "feature": "MIDI Networking (network sessions and hosts)",
       "apple": "MIDINetworkSession, MIDINetworkHost, MIDINetworkConnection (https://developer.apple.com/documentation/coremidi/midi-networking)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "The LAN code (springboard/src/net/share.rs, UDP beacon on port 5354) does not carry MIDI sessions."
+      "bifrost": "springboard/sdk/src/midi_network.rs",
+      "status": "partial",
+      "note": "Sprint 3: NetworkSession, Host, Connection, ConnectionPolicy and RTP-MIDI session packets (IN, OK, NO, BY) with host unit tests; no sockets or mDNS discovery, not wired into the shell, not yet checked on Midget."
     },
     {
       "feature": "MIDI Drivers (driver plug-ins and device lists)",
@@ -66,9 +66,9 @@
     {
       "feature": "MIDI Capability Inquiry (MIDI-CI discovery, profiles, property exchange)",
       "apple": "MIDICIDiscoveryManager, MIDICISession, MIDICIProfile, MIDICIResponder, MIDICIDevice (https://developer.apple.com/documentation/coremidi/midi-capability-inquiry)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "No MIDI-CI discovery, profile or property exchange code."
+      "bifrost": "springboard/sdk/src/midi_ci.rs",
+      "status": "partial",
+      "note": "Sprint 3: MIDI-CI 1.1 discovery, invalidate MUID and profile inquiry/set/enabled messages, DiscoveryManager, Device and Profile, with host unit tests; no property exchange, no transport, not yet checked on Midget."
     }
   ],
   "gaps": [
