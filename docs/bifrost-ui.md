@@ -2284,7 +2284,11 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 `restricted`, `denied`, `authorized`, `limited`); `fetch` returns the named fields (`given_name`, `family_name`,
 `organization`, `phones`, `emails`, `address`, `note`) of each readable contact, sorted by name, with an optional text
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
-shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
+shell side is `springboard/src/shell/services/contacts.rs`. `phones`, `emails` and `urls` come back as lists of `LabeledValue { label, value, identifier }` (labels `LABEL_HOME`,
+`LABEL_WORK`, `LABEL_OTHER`, `LABEL_PHONE_MOBILE`, `LABEL_PHONE_MAIN`); `birthday` is `DateComponents { year?, month, day }` and
+`dates` is a list of labeled `DateComponents`. A reply with plain strings still decodes, into one-entry lists with no label.
+The first phone and email come from the contacts file, the rest from the sidecar `contacts-extra.tsv`
+(`springboard/src/shell/contactextras.rs`). Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
 
 ## InputMethodKit: composing input methods (`springboard/src/shell/input_methods`)

@@ -8,7 +8,9 @@
 //! - `request {}` returns `{status}`, the current status. It changes nothing: an app cannot grant itself access. The
 //!   person's answer is set by [`answer_prompt`] (the access sheet) or [`change_by_user`] (Settings).
 //! - `fetch {keys, query?}` returns `{contacts: [{id, <key>: value | null, ...}]}`. `keys` names the fields
-//!   (`given_name`, `family_name`, `organization`, `phones`, `emails`, `address`, `note`) and must not be empty; `query`
+//!   (`given_name`, `family_name`, `organization`, `phones`, `emails`, `address`, `note`, `urls`, `birthday`, `dates`)
+//!   and must not be empty. `phones`, `emails` and `urls` are lists of `{label, value, identifier}`, `birthday` is
+//!   `{year?, month, day}` and `dates` is a list of `{label, year?, month, day}`. `query`
 //!   filters by any text of the contact. Answers only the contacts the app may read, sorted by name. Without a
 //!   read grant it is an error.
 //! - `save {add?, update?, delete?}` changes the book and returns `{added: [id, ...]}`, the ids the new contacts got.
@@ -16,13 +18,18 @@
 //!   fields it names; `null` clears one). `delete` holds `{id}` objects. Only full access writes: a limited grant is read-only. The whole
 //!   call applies or none of it does, and the shell stores the book only when it succeeds.
 //!
+//! The first phone and email come from the contacts file (labeled by its label row); more phones and emails, URLs, the
+//! birthday and dates come from the sidecar (`contactextras`). A contact without a sidecar entry reads as before, with
+//! one-element lists.
+//!
 //! The store holds one name per contact: the last word of it is the family name and the rest is the given name. The
 //! grants live per shell thread (thread-local, like the `privacy` service), so they reset when the shell restarts.
 use super::{Shell, SystemService};
-use crate::shell::contactstore::{self, Contact};
+use crate::shell::contactextras::{self, Book, Extras};
+use crate::shell::contactstore::{self, Contact, LABELS};
 use bifrost_core::json::Json;
 use bifrost_ui::contact_access::{Access, Choice, Error, Status};
-use bifrost_ui::contact_fetch::{project, Key, Keys, Partial, Record, Value};
+use bifrost_ui::contact_fetch::{project, DateComponents, Key, Keys, LabeledValue, Partial, Record, Value};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
@@ -52,13 +59,29 @@ pub fn reads(app_id: &str) -> bool {
 
 /// The record a store contact is seen as: the last word of its name is the family name.
 pub fn record_of(c: &Contact) -> Record {
+    record_with(c, &Extras::default())
+}
+
+/// The record of a store contact together with its extra multi-value fields. The file's phone and email come first.
+pub fn record_with(c: &Contact, extras: &Extras) -> Record {
     let mut r = Record::new(c.id);
     let (given, family) = split_name(&c.name);
     r.set(Key::GivenName, Value::Text(given));
     r.set(Key::FamilyName, Value::Text(family));
     r.set(Key::Organization, Value::Text(c.company.clone()));
-    r.set(Key::Phones, Value::List(vec![c.phone.clone()]));
-    r.set(Key::Emails, Value::List(vec![c.email.clone()]));
+    let first = |value: &str, set: usize, more: &[LabeledValue]| {
+        let label = LABELS[set].get(c.labels[set] as usize).copied().unwrap_or("other");
+        let mut items = vec![LabeledValue::new(label, value)];
+        items.extend(more.iter().cloned());
+        LabeledValue::numbered(items.into_iter().filter(|i| !i.value.trim().is_empty()).collect())
+    };
+    r.set(Key::Phones, Value::Labeled(first(&c.phone, 0, &extras.phones)));
+    r.set(Key::Emails, Value::Labeled(first(&c.email, 1, &extras.emails)));
+    r.set(Key::Urls, Value::Labeled(LabeledValue::numbered(extras.urls.clone())));
+    if let Some(b) = extras.birthday {
+        r.set(Key::Birthday, Value::Date(b));
+    }
+    r.set(Key::Dates, Value::Dates(extras.dates.clone()));
     r.set(Key::Address, Value::Text(c.address.clone()));
     r.set(Key::Note, Value::Text(c.notes.clone()));
     r
@@ -79,10 +102,32 @@ pub fn partial_json(p: &Partial) -> Json {
         let value = match p.get(key) {
             Ok(Some(Value::Text(text))) => Json::Str(text.clone()),
             Ok(Some(Value::List(items))) => Json::Arr(items.iter().map(|item| Json::Str(item.clone())).collect()),
+            Ok(Some(Value::Labeled(items))) => Json::Arr(items.iter().map(labeled_json).collect()),
+            Ok(Some(Value::Date(d))) => date_fields(*d, Vec::new()),
+            Ok(Some(Value::Dates(items))) => {
+                Json::Arr(items.iter().map(|(label, d)| date_fields(*d, vec![("label".to_string(), Json::Str(label.clone()))])).collect())
+            }
             _ => Json::Null,
         };
         fields.push((key.name().to_string(), value));
     }
+    Json::Obj(fields)
+}
+
+fn labeled_json(item: &LabeledValue) -> Json {
+    Json::Obj(vec![
+        ("label".to_string(), Json::Str(item.label.clone())),
+        ("value".to_string(), Json::Str(item.value.clone())),
+        ("identifier".to_string(), Json::Str(item.identifier.clone())),
+    ])
+}
+
+fn date_fields(d: DateComponents, mut fields: Vec<(String, Json)>) -> Json {
+    if let Some(y) = d.year {
+        fields.push(("year".to_string(), Json::Num(y as f64)));
+    }
+    fields.push(("month".to_string(), Json::Num(d.month as f64)));
+    fields.push(("day".to_string(), Json::Num(d.day as f64)));
     Json::Obj(fields)
 }
 
@@ -219,6 +264,11 @@ pub fn apply_save(app_id: &str, params: &Json, book: &[Contact]) -> Result<(Json
 /// `fetch` by an app that holds a read grant. Pure: no file access here. A `save` is answered by [`apply_save`]
 /// through the service, which stores the book.
 pub fn answer(app_id: &str, method: &str, params: &Json, contacts: &[Contact]) -> Result<Json, String> {
+    answer_with(app_id, method, params, contacts, &Book::new())
+}
+
+/// [`answer`] with the sidecar of extra multi-value fields, by contact id.
+pub fn answer_with(app_id: &str, method: &str, params: &Json, contacts: &[Contact], extras: &Book) -> Result<Json, String> {
     let access = access_of(app_id);
     match method {
         "access" => {
@@ -240,7 +290,7 @@ pub fn answer(app_id: &str, method: &str, params: &Json, contacts: &[Contact]) -
             let hits = contactstore::search(&pool, query);
             let rows: Vec<Json> = hits
                 .into_iter()
-                .map(|i| partial_json(&project(&record_of(&pool[i]), &keys)))
+                .map(|i| partial_json(&project(&record_with(&pool[i], &extras.get(&pool[i].id).cloned().unwrap_or_default()), &keys)))
                 .collect();
             Ok(Json::Obj(vec![("contacts".into(), Json::Arr(rows))]))
         }
@@ -266,11 +316,11 @@ impl SystemService for Contacts {
                 contactstore::save(&path, &next).map_err(|e| e.to_string())?;
                 Ok(reply)
             }
-            "fetch" => {
-                let book = if reads(app_id) { load()? } else { Vec::new() };
-                answer(app_id, method, params, &book)
+            "fetch" if reads(app_id) => {
+                let extras = contactextras::load(&contactextras::path_for(&path));
+                answer_with(app_id, method, params, &load()?, &extras)
             }
-            _ => answer(app_id, method, params, &[]),
+            _ => answer_with(app_id, method, params, &[], &Book::new()),
         }
     }
 }
@@ -543,5 +593,53 @@ mod tests {
         let one = record_of(&contact(10, "Cher", "", "", ""));
         assert_eq!(one.get(Key::GivenName), Some(&Value::Text("Cher".into())));
         assert_eq!(one.get(Key::FamilyName), None);
+    }
+
+    fn extras_for_ada() -> Book {
+        let mut book = Book::new();
+        book.insert(
+            1,
+            Extras {
+                phones: vec![LabeledValue::new("work", "+354 555 0199")],
+                emails: vec![LabeledValue::new("work", "ada@work.example")],
+                urls: vec![LabeledValue::new("home", "https://ada.example")],
+                birthday: DateComponents::new(Some(1815), 12, 10),
+                dates: vec![("anniversary".into(), DateComponents::new(None, 7, 8).unwrap())],
+            },
+        );
+        book
+    }
+
+    #[test]
+    fn two_emails_and_a_birthday_are_returned_with_labels_and_identifiers() {
+        let id = "is.example.contacts-multi";
+        answer_prompt(id, Choice::All).unwrap();
+        let reply = answer_with(id, "fetch", &keys(&["emails", "birthday", "phones", "urls", "dates"]), &book(), &extras_for_ada()).unwrap();
+        let ada = &reply.get("contacts").and_then(Json::as_array).unwrap()[0];
+        let emails = ada.get("emails").and_then(Json::as_array).unwrap();
+        assert_eq!(emails.len(), 2);
+        assert_eq!(emails[0].get("label").and_then(Json::as_str), Some("home"));
+        assert_eq!(emails[0].get("value").and_then(Json::as_str), Some("ada@example.com"));
+        assert_eq!(emails[1].get("label").and_then(Json::as_str), Some("work"));
+        assert_eq!(emails[1].get("identifier").and_then(Json::as_str), Some("2"));
+        assert_eq!(ada.get("phones").and_then(Json::as_array).map(|a| a.len()), Some(2));
+        assert_eq!(ada.get("urls").and_then(Json::as_array).map(|a| a.len()), Some(1));
+        let b = ada.get("birthday").unwrap();
+        assert_eq!((b.get("year").and_then(Json::as_u64), b.get("month").and_then(Json::as_u64), b.get("day").and_then(Json::as_u64)), (Some(1815), Some(12), Some(10)));
+        let dates = ada.get("dates").and_then(Json::as_array).unwrap();
+        assert_eq!(dates[0].get("label").and_then(Json::as_str), Some("anniversary"));
+        assert!(dates[0].get("year").is_none());
+    }
+
+    #[test]
+    fn keys_left_out_are_not_returned_and_a_contact_without_extras_reads_as_before() {
+        let id = "is.example.contacts-multi-keys";
+        answer_prompt(id, Choice::All).unwrap();
+        let reply = answer_with(id, "fetch", &keys(&["emails", "birthday"]), &book(), &extras_for_ada()).unwrap();
+        let rows = reply.get("contacts").and_then(Json::as_array).unwrap();
+        assert!(rows[0].get("phones").is_none());
+        let grace = rows.iter().find(|r| r.get("id").and_then(Json::as_u64) == Some(2)).unwrap();
+        assert_eq!(grace.get("emails").and_then(Json::as_array).map(|a| a.len()), Some(1));
+        assert_eq!(grace.get("birthday"), Some(&Json::Null));
     }
 }

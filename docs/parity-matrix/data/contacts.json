@@ -1,124 +1,124 @@
 {
-  "framework": "Contacts",
-  "doc": "https://developer.apple.com/documentation/contacts",
-  "macos_since": "10.11",
-  "status": "partial",
-  "bifrost": "springboard/src/shell/contactstore.rs (local store), springboard/src/shell/services/contacts.rs (contacts service: access, fetch, save), springboard/sdk/src/contacts.rs (SDK), springboard/apps/contacts-desktop (Contacts app), springboard/src/shell/quicksearch.rs (search index), springboard/src/shell/share/mod.rs (vCard export)",
-  "summary": "BifrOSt has a shell-internal local contact store (one flat file, fixed fields, atomic save) that the Contacts app, Search and Share use directly. Apps read and save contacts through the SDK contacts module and the contacts service, behind a per-app access grant. No groups, containers or change history exists. Apps with a contacts read grant get system.contacts.change when the store file changes.",
-  "rea_evidence": "ev_7d7f7f98ebfa979bea510b281e185ad1768b0842b8247a95e914096424ceeb15",
-  "features": [
-    {
-      "feature": "Contact store access (CNContactStore)",
-      "apple": "CNContactStore",
-      "bifrost": "springboard/src/shell/contactstore.rs (load, load_checked, save), springboard/src/shell/services/contacts.rs (contacts service), springboard/sdk/src/contacts.rs (access, request, fetch, save)",
-      "status": "partial",
-      "note": "The store is a shell module (the Contacts app reaches it by crate path, springboard/apps/contacts-desktop/src/contacts.rs:20). Apps reach it only through the contacts service and the SDK contacts module, behind a per-app grant. The store file itself is not visible to apps."
-    },
-    {
-      "feature": "Authorization and privacy",
-      "apple": "Accessing the contact store; NSContactsUsageDescription; contact access button and picker",
-      "bifrost": "springboard/ui/src/contact_access.rs, springboard/src/shell/services/contacts.rs (access, request), springboard/sdk/src/contacts.rs (access, request, decode_status, decode_picked)",
-      "status": "partial",
-      "note": "Four-state model per app: not determined, denied, authorized (every contact) and limited (a picked set, read-only), plus restricted. An app reads its status with access and asks with request, but request never grants. The shell sets grants; the access sheet and Settings row are not built yet. Grants reset on restart."
-    },
-    {
-      "feature": "Contact data model (CNContact, CNMutableContact)",
-      "apple": "CNContact, CNMutableContact",
-      "bifrost": "springboard/src/shell/contactstore.rs:Contact; wired: springboard/apps/contacts-desktop/src/extras.rs; src/contacts.rs (card_entry, card_rows)",
-      "status": "partial",
-      "note": "Fixed fields: name, phone, email, notes, company, address, favorite, and three label indexes. No multi-value lists (one phone, one email, one address), no birthday, dates, relations, social profiles, instant messages, URLs, images or nickname. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Labeled values and predefined labels",
-      "apple": "CNLabeledValue, CNContactProperty, localizedString(for:Label)",
-      "bifrost": "springboard/src/shell/contactstore.rs:LABELS; wired: springboard/apps/contacts-desktop/src/extras.rs (ValueKind, labels from contactstore::LABELS); src/exchange.rs (type_of, label mapping)",
-      "status": "partial",
-      "note": "Fixed English label sets (mobile, home, work, other) indexed by number. No custom labels, no localized label strings. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Fetch with key-based property selection",
-      "apple": "CNContactFetchRequest, CNContactPropertyNotFetchedExceptionName, Contact Keys",
-      "bifrost": "springboard/ui/src/contact_fetch.rs (project, Keys), springboard/src/shell/services/contacts.rs (fetch), springboard/sdk/src/contacts.rs (fetch, decode_contacts)",
-      "status": "partial",
-      "note": "The contacts service returns each record with only the keys the app asked for, and fetch takes an optional query over any text of the contact. Not yet: a partial-contact error when a key was not fetched, and Midget testing. Search covers name, phone, email, notes, company and address."
-    },
-    {
-      "feature": "Save requests (CNSaveRequest)",
-      "apple": "CNSaveRequest",
-      "bifrost": "springboard/src/shell/services/contacts.rs (apply_save), springboard/sdk/src/contacts.rs (SaveRequest, save, decode_saved), springboard/src/shell/contactstore.rs:save, springboard/src/shell/fsutil.rs (write_atomic)",
-      "status": "partial",
-      "note": "Apps add, update and delete contacts in one save call through the contacts service and the SDK. Full access only: a limited grant is read-only. The whole call applies or none of it does, and the store is rewritten atomically only on success. No per-record change history."
-    },
-    {
-      "feature": "Containers and groups",
-      "apple": "CNContainer, CNGroup, CNMutableGroup, CNContainerTypeKey",
-      "bifrost": "springboard/ui/src/contact_changes.rs, springboard/ui/src/contact_groups.rs, springboard/ui/src/vcard.rs; wired: springboard/ui/src/contact_groups.rs (wired in springboard/apps/contacts-desktop/src/contacts.rs and group_file.rs)",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. One flat list with no groups, containers or subgroups. Contacts keeps a lists sidebar in the app, but it has no group data behind it. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
-    },
-    {
-      "feature": "Change history and contacts-changed notification",
-      "apple": "CNChangeHistoryFetchRequest, CNChangeHistoryEvent family, CNChangeHistoryEventVisitor, Contacts changed notifications",
-      "bifrost": "springboard/ui/src/contact_changes.rs, springboard/ui/src/contact_groups.rs, springboard/ui/src/vcard.rs",
-      "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No change log: the shell posts system.contacts.change to apps with contacts access when the store file changes, not per-record events. Search results are rebuilt from the store when the file is loaded."
-    },
-    {
-      "feature": "Formatting names and addresses",
-      "apple": "CNContactFormatter, CNPostalAddressFormatter",
-      "bifrost": "springboard/src/shell/contactstore.rs:Contact::display_name, Contact::initials; wired: springboard/ui/src/contact_display.rs (sort order wired in springboard/apps/contacts-desktop/src/contacts.rs and display_file.rs; name display order still missing); wired: springboard/apps/contacts-desktop/src/names.rs (NameOrder, shown); View menu in src/contacts.rs (main_menu, set_name_order)",
-      "status": "partial",
-      "note": "Display name falls back name, company, phone, email. Initials are computed. No locale-aware name order and no postal address formatter. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
-    },
-    {
-      "feature": "vCard serialization",
-      "apple": "CNContactVCardSerialization",
-      "bifrost": "springboard/src/shell/share/mod.rs:33 (Item::from_contact builds a vCard card); wired: springboard/apps/contacts-desktop/src/exchange.rs via File menu; wired: springboard/apps/contacts-desktop/src/exchange.rs (export writes extra values and addresses)",
-      "status": "partial",
-      "note": "Export only, for Share. No vCard import and no parse of a vCard to a Contact. The share module is not a Contacts API. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
-    },
-    {
-      "feature": "Predefined display preferences",
-      "apple": "CNContactsUserDefaults",
-      "bifrost": "springboard/ui/src/contact_display.rs; wired: springboard/apps/contacts-desktop/src/display_file.rs (name line in display.txt)",
-      "status": "partial",
-      "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No contact display preferences such as sort order or name order. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
-    },
-    {
-      "feature": "Search index for system search",
-      "apple": "Spotlight-style indexing of contacts (no direct CNContact symbol)",
-      "bifrost": "springboard/src/shell/quicksearch.rs:201 (results_with_contacts); springboard/sdk/src/quicksearch.rs",
-      "status": "partial",
-      "note": "Shell Search returns contacts from the store. Apps index their own content through the SDK quicksearch module, which the contact store does not use."
-    },
-    {
-      "feature": "Contact picker and access UI (ContactsUI)",
-      "apple": "Contact access button, Contact access picker (sample code)",
-      "bifrost": "springboard/ui/src/contact_access.rs (access model, wired in springboard/src/shell/services/contacts.rs); springboard/ui/src/contact_picker.rs (wired: Add People picker in springboard/apps/contacts-desktop/src/contacts.rs, Picker at line 1063)",
-      "status": "partial",
-      "note": "The Contacts app uses the picker model for its Add People flow. No SDK picker lets an app ask the user to choose a contact and receive the result, so that part is still missing. Not yet tested on the VM or Midget."
-    },
-    {
-      "feature": "Errors and validation",
-      "apple": "CNError, CNErrorDomain, CNErrorUserInfo keys",
-      "bifrost": "springboard/src/shell/contactstore.rs:save (io::Error InvalidInput)",
-      "status": "partial",
-      "note": "Errors are std io errors with fixed text (Invalid contact, Contacts file too large, Unknown contacts format). No typed error codes for apps."
-    },
-    {
-      "feature": "Notes and images",
-      "apple": "CNContactNoteKey, com.apple.developer.contacts.notes, CNContactImageDataKey, CNContactThumbnailImageDataKey",
-      "bifrost": "springboard/src/shell/contactstore.rs:Contact.notes (MAX_NOTES 4000)",
-      "status": "partial",
-      "note": "Notes are plain text with a 4000-character limit, with no entitlement. No contact photo or thumbnail data."
-    }
-  ],
-  "gaps": [
-    "No groups, containers or subgroups.",
-    "No per-record change history.",
-    "Single-valued fields only: one phone, one email, one address. No birthday, dates, relations, social profiles, instant messages, URLs or photos.",
-    "No access sheet or Settings row for contact access; the shell sets grants, and they reset on restart.",
-    "No vCard in the SDK: apps cannot parse or build vCards. Import and export live in the Contacts app (springboard/apps/contacts-desktop/src/exchange.rs).",
-    "Every fetch reads the whole store file (cap 10,000 contacts, 8 MiB file) before the service filters it."
-  ]
+ "framework": "Contacts",
+ "doc": "https://developer.apple.com/documentation/contacts",
+ "macos_since": "10.11",
+ "status": "partial",
+ "bifrost": "springboard/src/shell/contactstore.rs (local store), springboard/src/shell/services/contacts.rs (contacts service: access, fetch, save), springboard/sdk/src/contacts.rs (SDK), springboard/apps/contacts-desktop (Contacts app), springboard/src/shell/quicksearch.rs (search index), springboard/src/shell/share/mod.rs (vCard export)",
+ "summary": "BifrOSt has a shell-internal local contact store (one flat file, fixed fields, atomic save) that the Contacts app, Search and Share use directly. Apps read and save contacts through the SDK contacts module and the contacts service, behind a per-app access grant. No groups, containers or change history exists. Apps with a contacts read grant get system.contacts.change when the store file changes.",
+ "rea_evidence": "ev_7d7f7f98ebfa979bea510b281e185ad1768b0842b8247a95e914096424ceeb15",
+ "features": [
+  {
+   "feature": "Contact store access (CNContactStore)",
+   "apple": "CNContactStore",
+   "bifrost": "springboard/src/shell/contactstore.rs (load, load_checked, save), springboard/src/shell/services/contacts.rs (contacts service), springboard/sdk/src/contacts.rs (access, request, fetch, save)",
+   "status": "partial",
+   "note": "The store is a shell module (the Contacts app reaches it by crate path, springboard/apps/contacts-desktop/src/contacts.rs:20). Apps reach it only through the contacts service and the SDK contacts module, behind a per-app grant. The store file itself is not visible to apps."
+  },
+  {
+   "feature": "Authorization and privacy",
+   "apple": "Accessing the contact store; NSContactsUsageDescription; contact access button and picker",
+   "bifrost": "springboard/ui/src/contact_access.rs, springboard/src/shell/services/contacts.rs (access, request), springboard/sdk/src/contacts.rs (access, request, decode_status, decode_picked)",
+   "status": "partial",
+   "note": "Four-state model per app: not determined, denied, authorized (every contact) and limited (a picked set, read-only), plus restricted. An app reads its status with access and asks with request, but request never grants. The shell sets grants; the access sheet and Settings row are not built yet. Grants reset on restart."
+  },
+  {
+   "feature": "Contact data model (CNContact, CNMutableContact)",
+   "apple": "CNContact, CNMutableContact",
+   "bifrost": "springboard/src/shell/contactstore.rs:Contact; wired: springboard/apps/contacts-desktop/src/extras.rs; src/contacts.rs (card_entry, card_rows); springboard/src/shell/contactextras.rs; springboard/sdk/src/contacts.rs",
+   "status": "partial",
+   "note": "Fixed fields: name, phone, email, notes, company, address, favorite, and three label indexes. The SDK and the `contacts` service now return labeled multi-values (phones, emails, URLs as label/value/identifier), a birthday and labeled dates from a sidecar file (springboard/src/shell/contactextras.rs); the Contacts app still edits one phone, one email and one address. No relations, social profiles, instant messages, URLs, images or nickname. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Multi-values are SDK-side only; verify on Midget."
+  },
+  {
+   "feature": "Labeled values and predefined labels",
+   "apple": "CNLabeledValue, CNContactProperty, localizedString(for:Label)",
+   "bifrost": "springboard/src/shell/contactstore.rs:LABELS; wired: springboard/apps/contacts-desktop/src/extras.rs (ValueKind, labels from contactstore::LABELS); src/exchange.rs (type_of, label mapping); springboard/ui/src/contact_fetch.rs:LabeledValue",
+   "status": "partial",
+   "note": "Fixed English label sets (mobile, home, work, other) indexed by number. No custom labels, no localized label strings. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity. Wave sprint4/7: LabeledValue (label, value, identifier), DateComponents and label constants (home, work, other, mobile, main) in springboard/ui/src/contact_fetch.rs and the SDK; custom labels are carried as plain text."
+  },
+  {
+   "feature": "Fetch with key-based property selection",
+   "apple": "CNContactFetchRequest, CNContactPropertyNotFetchedExceptionName, Contact Keys",
+   "bifrost": "springboard/ui/src/contact_fetch.rs (project, Keys), springboard/src/shell/services/contacts.rs (fetch), springboard/sdk/src/contacts.rs (fetch, decode_contacts)",
+   "status": "partial",
+   "note": "The contacts service returns each record with only the keys the app asked for, and fetch takes an optional query over any text of the contact. Not yet: a partial-contact error when a key was not fetched, and Midget testing. Search covers name, phone, email, notes, company and address."
+  },
+  {
+   "feature": "Save requests (CNSaveRequest)",
+   "apple": "CNSaveRequest",
+   "bifrost": "springboard/src/shell/services/contacts.rs (apply_save), springboard/sdk/src/contacts.rs (SaveRequest, save, decode_saved), springboard/src/shell/contactstore.rs:save, springboard/src/shell/fsutil.rs (write_atomic)",
+   "status": "partial",
+   "note": "Apps add, update and delete contacts in one save call through the contacts service and the SDK. Full access only: a limited grant is read-only. The whole call applies or none of it does, and the store is rewritten atomically only on success. No per-record change history."
+  },
+  {
+   "feature": "Containers and groups",
+   "apple": "CNContainer, CNGroup, CNMutableGroup, CNContainerTypeKey",
+   "bifrost": "springboard/ui/src/contact_changes.rs, springboard/ui/src/contact_groups.rs, springboard/ui/src/vcard.rs; wired: springboard/ui/src/contact_groups.rs (wired in springboard/apps/contacts-desktop/src/contacts.rs and group_file.rs)",
+   "status": "partial",
+   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. One flat list with no groups, containers or subgroups. Contacts keeps a lists sidebar in the app, but it has no group data behind it. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+  },
+  {
+   "feature": "Change history and contacts-changed notification",
+   "apple": "CNChangeHistoryFetchRequest, CNChangeHistoryEvent family, CNChangeHistoryEventVisitor, Contacts changed notifications",
+   "bifrost": "springboard/ui/src/contact_changes.rs, springboard/ui/src/contact_groups.rs, springboard/ui/src/vcard.rs",
+   "status": "partial",
+   "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No change log: the shell posts system.contacts.change to apps with contacts access when the store file changes, not per-record events. Search results are rebuilt from the store when the file is loaded."
+  },
+  {
+   "feature": "Formatting names and addresses",
+   "apple": "CNContactFormatter, CNPostalAddressFormatter",
+   "bifrost": "springboard/src/shell/contactstore.rs:Contact::display_name, Contact::initials; wired: springboard/ui/src/contact_display.rs (sort order wired in springboard/apps/contacts-desktop/src/contacts.rs and display_file.rs; name display order still missing); wired: springboard/apps/contacts-desktop/src/names.rs (NameOrder, shown); View menu in src/contacts.rs (main_menu, set_name_order)",
+   "status": "partial",
+   "note": "Display name falls back name, company, phone, email. Initials are computed. No locale-aware name order and no postal address formatter. Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+  },
+  {
+   "feature": "vCard serialization",
+   "apple": "CNContactVCardSerialization",
+   "bifrost": "springboard/src/shell/share/mod.rs:33 (Item::from_contact builds a vCard card); wired: springboard/apps/contacts-desktop/src/exchange.rs via File menu; wired: springboard/apps/contacts-desktop/src/exchange.rs (export writes extra values and addresses)",
+   "status": "partial",
+   "note": "Export only, for Share. No vCard import and no parse of a vCard to a Contact. The share module is not a Contacts API. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity. Wired into the UI in wiring wave 6 (0.5.44); verify on Midget for parity."
+  },
+  {
+   "feature": "Predefined display preferences",
+   "apple": "CNContactsUserDefaults",
+   "bifrost": "springboard/ui/src/contact_display.rs; wired: springboard/apps/contacts-desktop/src/display_file.rs (name line in display.txt)",
+   "status": "partial",
+   "note": "Wave 6 (b03, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. No contact display preferences such as sort order or name order. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+  },
+  {
+   "feature": "Search index for system search",
+   "apple": "Spotlight-style indexing of contacts (no direct CNContact symbol)",
+   "bifrost": "springboard/src/shell/quicksearch.rs:201 (results_with_contacts); springboard/sdk/src/quicksearch.rs",
+   "status": "partial",
+   "note": "Shell Search returns contacts from the store. Apps index their own content through the SDK quicksearch module, which the contact store does not use."
+  },
+  {
+   "feature": "Contact picker and access UI (ContactsUI)",
+   "apple": "Contact access button, Contact access picker (sample code)",
+   "bifrost": "springboard/ui/src/contact_access.rs (access model, wired in springboard/src/shell/services/contacts.rs); springboard/ui/src/contact_picker.rs (wired: Add People picker in springboard/apps/contacts-desktop/src/contacts.rs, Picker at line 1063)",
+   "status": "partial",
+   "note": "The Contacts app uses the picker model for its Add People flow. No SDK picker lets an app ask the user to choose a contact and receive the result, so that part is still missing. Not yet tested on the VM or Midget."
+  },
+  {
+   "feature": "Errors and validation",
+   "apple": "CNError, CNErrorDomain, CNErrorUserInfo keys",
+   "bifrost": "springboard/src/shell/contactstore.rs:save (io::Error InvalidInput)",
+   "status": "partial",
+   "note": "Errors are std io errors with fixed text (Invalid contact, Contacts file too large, Unknown contacts format). No typed error codes for apps."
+  },
+  {
+   "feature": "Notes and images",
+   "apple": "CNContactNoteKey, com.apple.developer.contacts.notes, CNContactImageDataKey, CNContactThumbnailImageDataKey",
+   "bifrost": "springboard/src/shell/contactstore.rs:Contact.notes (MAX_NOTES 4000)",
+   "status": "partial",
+   "note": "Notes are plain text with a 4000-character limit, with no entitlement. No contact photo or thumbnail data."
+  }
+ ],
+ "gaps": [
+  "No groups, containers or subgroups.",
+  "No per-record change history.",
+  "Single-valued fields only: one phone, one email, one address. No birthday, dates, relations, social profiles, instant messages, URLs or photos.",
+  "No access sheet or Settings row for contact access; the shell sets grants, and they reset on restart.",
+  "No vCard in the SDK: apps cannot parse or build vCards. Import and export live in the Contacts app (springboard/apps/contacts-desktop/src/exchange.rs).",
+  "Every fetch reads the whole store file (cap 10,000 contacts, 8 MiB file) before the service filters it."
+ ]
 }
