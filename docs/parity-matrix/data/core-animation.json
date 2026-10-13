@@ -80,7 +80,7 @@
   {
    "feature": "Shape layer (CAShapeLayer, Bezier paths)",
    "apple": "CAShapeLayer, CAShapeLayerFillRule, CAShapeLayerLineCap, CAShapeLayerLineJoin",
-   "bifrost": "springboard/ui/src/stroke_style.rs, springboard/ui/src/shape.rs (Path::dashed)",
+   "bifrost": "springboard/render/src/cg/context.rs, springboard/ui/src/shape.rs (Path::dashed)",
    "status": "parity",
    "note": "verified on Midget 0.7.25 by 3 tests. Wave 4 (w4-core-animation, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no app-facing path or stroke API; polygon fill is private to shell modules"
   },
