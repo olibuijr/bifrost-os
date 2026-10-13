@@ -10,7 +10,7 @@ mod model;
 use bifrost_app::kit::{Damage, Surface, Ui};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
 use canvas::{Action, Layout, PictureCache, Scene, Tool};
-use document::{Body, Document};
+use document::Document;
 use model::{Adjust, Mark, MarkKind, Norm, View, Zoom, HIGHLIGHT, MARK_BLUE};
 use std::path::{Path, PathBuf};
 
@@ -75,13 +75,12 @@ impl Viewer {
         }
     }
 
-    /// The picture geometry for the current page and view, or `None` for a text page or no document.
+    /// The picture geometry for the current page and view, or `None` with no document.
     fn placed(&self, lay: &Layout) -> Option<canvas::Placed> {
         let doc = self.doc.as_ref()?;
-        let page = doc.pages.get(self.view.page)?;
-        let Body::Picture(img) = &page.body else { return None };
+        let (w, h) = doc.page_size(self.view.page)?;
         let (cx, cy, cw, ch) = lay.canvas();
-        let (rw, rh) = model::turn_size(img.w, img.h, self.view.quarters);
+        let (rw, rh) = model::turn_size(w, h, self.view.quarters);
         let scale = self.view.zoom.scale(rw, rh, cw as usize, ch as usize);
         Some(canvas::place((cx, cy, cw, ch), rw, rh, scale, self.view.pan))
     }
@@ -96,13 +95,10 @@ impl Viewer {
         Some(Mark { kind: *kind, page: self.view.page, rect: Norm::from_corners(a, b), color: color_for(*kind), text: String::new() })
     }
 
-    /// The size the zoom steps work from: the turned picture, or the canvas for text.
+    /// The size the zoom steps work from: the turned picture, or the canvas with no document.
     fn page_dims(&self, lay: &Layout) -> (usize, usize) {
         let (_, _, cw, ch) = lay.canvas();
-        let picture = self.doc.as_ref().and_then(|d| d.pages.get(self.view.page)).and_then(|p| match &p.body {
-            Body::Picture(img) => Some(model::turn_size(img.w, img.h, self.view.quarters)),
-            Body::Text(_) => None,
-        });
+        let picture = self.doc.as_ref().and_then(|d| d.page_size(self.view.page)).map(|(w, h)| model::turn_size(w, h, self.view.quarters));
         picture.unwrap_or((cw as usize, ch as usize))
     }
 
@@ -351,13 +347,12 @@ impl App for Viewer {
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         let open = self.doc.is_some();
         let count = self.doc.as_ref().map_or(0, |d| d.count());
-        let picture = self.doc.as_ref().is_some_and(|d| matches!(d.pages.get(self.view.page).map(|p| &p.body), Some(Body::Picture(_))));
         let tool_items: Vec<AppMenuItem> = [Tool::Pan, Tool::Highlight, Tool::Note, Tool::Rect, Tool::Rounded]
             .into_iter()
             .map(|t| item(Action::UseTool(t), open, self.tool == t))
             .collect();
         vec![
-            AppMenu { title: "File".into(), items: vec![item(Action::ExportPng, picture, false)] },
+            AppMenu { title: "File".into(), items: vec![item(Action::ExportPng, open, false)] },
             AppMenu {
                 title: "View".into(),
                 items: vec![

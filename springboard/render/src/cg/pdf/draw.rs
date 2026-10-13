@@ -393,8 +393,8 @@ pub fn render_page(doc: &Doc, page: &Page, w: usize, h: usize) -> Option<Image> 
     Some(bm.make_image())
 }
 
-/// Rasterises `page` scaled to fit inside `max_w` x `max_h` pixels, keeping its aspect.
-pub fn render_page_fit(doc: &Doc, page: &Page, max_w: usize, max_h: usize) -> Option<Image> {
+/// The picture size [`render_page_fit`] gives `page` in a `max_w` x `max_h` box.
+pub fn fit_size(page: &Page, max_w: usize, max_h: usize) -> Option<(usize, usize)> {
     let (pw, ph) = page.size(PageBox::Crop);
     if !(pw > 0.0 && ph > 0.0) {
         return None;
@@ -402,6 +402,12 @@ pub fn render_page_fit(doc: &Doc, page: &Page, max_w: usize, max_h: usize) -> Op
     let k = (max_w as f64 / pw).min(max_h as f64 / ph);
     let w = (pw * k).round().max(1.0) as usize;
     let h = (ph * k).round().max(1.0) as usize;
+    Some((w, h))
+}
+
+/// Rasterises `page` scaled to fit inside `max_w` x `max_h` pixels, keeping its aspect.
+pub fn render_page_fit(doc: &Doc, page: &Page, max_w: usize, max_h: usize) -> Option<Image> {
+    let (w, h) = fit_size(page, max_w, max_h)?;
     render_page(doc, page, w, h)
 }
 

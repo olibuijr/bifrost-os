@@ -9,8 +9,6 @@ pub const ZOOM_MIN: f32 = 0.05;
 pub const ZOOM_MAX: f32 = 8.0;
 /// One Zoom In or Zoom Out step.
 const ZOOM_STEP: f32 = 1.25;
-/// Text pages are cut once they pass this many characters.
-pub const TEXT_PAGE_CHARS: usize = 1500;
 
 /// How the picture is scaled into the canvas.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -402,27 +400,6 @@ pub fn burn(img: &mut Image, marks: &[Mark], page: usize, quarters: u8) {
     }
 }
 
-/// Cuts a run of text parts into pages of about `limit` characters, at part boundaries. A part
-/// longer than the limit becomes a page of its own.
-pub fn chunk_text(parts: &[&str], limit: usize) -> Vec<String> {
-    let mut pages = Vec::new();
-    let mut cur = String::new();
-    for part in parts.iter().filter(|p| !p.trim().is_empty()) {
-        // a page never runs past the limit, the blank line between parts included
-        if !cur.is_empty() && cur.chars().count() + 2 + part.trim().chars().count() > limit {
-            pages.push(std::mem::take(&mut cur));
-        }
-        if !cur.is_empty() {
-            cur.push_str("\n\n");
-        }
-        cur.push_str(part.trim());
-    }
-    if !cur.is_empty() {
-        pages.push(cur);
-    }
-    pages
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -549,13 +526,4 @@ mod tests {
         assert_eq!(picture.px[99], pack(255, 255, 255, 255));
     }
 
-    #[test]
-    fn text_chunks_break_at_parts_and_skip_blanks() {
-        let parts = ["alpha", "  ", "beta", "gamma"];
-        assert_eq!(chunk_text(&parts, 100), vec!["alpha\n\nbeta\n\ngamma".to_string()]);
-        let pages = chunk_text(&parts, 9);
-        assert_eq!(pages, vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()], "no page passes 9 characters with its separators");
-        assert_eq!(chunk_text(&parts, 11), vec!["alpha\n\nbeta".to_string(), "gamma".to_string()], "exactly at the limit still fits");
-        assert!(chunk_text(&[], 10).is_empty());
-    }
 }

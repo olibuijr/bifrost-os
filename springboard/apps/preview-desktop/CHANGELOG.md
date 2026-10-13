@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0
+
+- PDF pages are drawn by the PDF engine in `cg::pdf` (paths, text, images, shadings), so they look as they do in the file. Pages are drawn when shown, with thumbnails drawn at open. Text reflow is gone from Viewer.
+- PNG export works for PDF pages too, with markup burned in.
+
 ## 0.1.0
 
 - New Viewer app (`is.olibuijr.preview.desktop`): opens PNG and JPEG images and PDF files.

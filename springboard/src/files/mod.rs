@@ -401,17 +401,13 @@ impl Files {
         self.pool.spawn(move || {
             let kind = if kind == Kind::Other { fs::head(&path, SNIFF).map(|h| fs::sniff(&h)).unwrap_or(Kind::Other) } else { kind };
             let result = if preview::is_pdf(&path.to_string_lossy()) {
-                // the Books engine flows the PDF's text; Preview shows it as text
-                match crate::shell::books::engine::load(&path) {
-                    Ok(book) => {
-                        let text: Vec<&str> = book.blocks.iter().filter_map(|b| b.text()).collect();
-                        if text.is_empty() {
-                            Loaded::Info(Kind::Other)
-                        } else {
-                            Loaded::Text(text.join("\n\n"), false)
-                        }
-                    }
-                    Err(e) => Loaded::Error(e),
+                // the first page, drawn by the PDF engine and fitted to the pane
+                match std::fs::read(&path) {
+                    Ok(bytes) => match bifrost_render::cg::pdf::draw::render_file_page(bytes, 0, w, h) {
+                        Ok(img) => Loaded::Image(img),
+                        Err(e) => Loaded::Error(e),
+                    },
+                    Err(e) => Loaded::Error(e.to_string()),
                 }
             } else {
                 match kind {

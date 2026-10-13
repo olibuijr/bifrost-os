@@ -2,8 +2,8 @@
 //! `Ui` scale (`ui.pt`), and every colour from the shared tokens in `kit::ui`. The picture and text
 //! draw first; the sidebar and the toolbar draw last, so anything that runs under them is covered.
 
-use crate::document::{Body, Document, THUMB_W};
-use crate::model::{self, Adjust, Mark, MarkKind, Norm, View, Zoom, HIGHLIGHT, MARK_BLUE};
+use crate::document::{Document, THUMB_W};
+use crate::model::{self, Adjust, Mark, MarkKind, Norm, View, HIGHLIGHT, MARK_BLUE};
 use bifrost_app::kit::ui::{self, Ui, Weight};
 use bifrost_app::kit::{rgba, Image, Surface};
 
@@ -280,50 +280,22 @@ pub fn draw(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene, cache: &mut O
         }
         Some(doc) => {
             let page_no = scene.view.page.min(doc.pages.len().saturating_sub(1));
-            match &doc.pages[page_no].body {
-                Body::Picture(img) => {
+            match doc.picture(page_no) {
+                Some(img) => {
                     let q = scene.view.quarters;
                     let (rw, rh) = model::turn_size(img.w, img.h, q);
                     let scale = scene.view.zoom.scale(rw, rh, cw as usize, ch as usize);
                     let target_w = ((rw as f32 * scale).round() as usize).max(1);
                     let target_h = ((rh as f32 * scale).round() as usize).max(1);
                     let p = place((cx, cy, cw, ch), rw, rh, scale, scene.view.pan);
-                    let shown = picture_for(cache, page_no, img, &scene.adjust, q, target_w, target_h);
+                    let shown = picture_for(cache, page_no, &img, &scene.adjust, q, target_w, target_h);
                     s.blit(shown, p.x, p.y, 255, 255);
                     for m in doc.marks.iter().filter(|m| m.page == page_no).chain(scene.draft.iter()) {
                         draw_mark(s, &p, q, m);
                     }
                     placed = Some(p);
                 }
-                Body::Text(text) => {
-                    let factor = match scene.view.zoom {
-                        Zoom::Factor(f) => f.clamp(0.5, 3.0),
-                        Zoom::Fit => 1.0,
-                    };
-                    let pt = ui::MAC_BODY_PT * factor;
-                    let margin = ui.pt(ui::SPACE_XXL) as i32;
-                    let max_px = (cw - 2 * margin).max(1) as f32;
-                    let lines: Vec<String> = text.split('\n').flat_map(|l| ui.wrap(l, pt, Weight::Regular, max_px)).collect();
-                    let line_h = pt * 1.5;
-                    let text_h = line_h * lines.len() as f32;
-                    let lim = ((text_h - ch as f32) / 2.0).max(0.0);
-                    let oy = scene.view.pan.1.clamp(-lim, lim);
-                    let top = cy as f32 + margin as f32 + oy;
-                    for (i, line) in lines.iter().enumerate() {
-                        let y = top + i as f32 * line_h;
-                        if y + line_h < cy as f32 || y > (cy + ch) as f32 {
-                            continue;
-                        }
-                        let img = ui.text(line, pt, Weight::Regular, ui::WHITE);
-                        s.blit_colored(&img, cx + margin, y as i32, ui::LABEL.now(), 255);
-                    }
-                    for m in doc.marks.iter().filter(|m| m.page == page_no) {
-                        if m.kind == MarkKind::Note {
-                            let y = (top + m.rect.y * text_h).max(cy as f32) as i32;
-                            fill(s, cx + 2, y, 3, (line_h as i32).max(4), MARK_BLUE);
-                        }
-                    }
-                }
+                None => {}
             }
         }
     }

@@ -12,7 +12,7 @@ pub enum Preview {
     Image,
     /// a card with a Play button; nothing plays until it is tapped
     Audio,
-    /// first page rendered with the Books PDF engine
+    /// first page drawn by the PDF engine (`cg::pdf`)
     Pdf,
     /// size and item count of a folder
     FolderSummary,
