@@ -1,6 +1,6 @@
 # Desktop application isolation
 
-Shell 0.4.19 centrally launches installed PC SDK and native packages through
+Since shell 0.4.19 the shell centrally launches installed PC SDK and native packages through
 `bare/app_policy.rs`. App entry points run as the installed non-root account,
 inside bubblewrap filesystem/PID/IPC/UTS/user namespaces. Launch fails if identity,
 permission validation or sandbox setup fails; there is no unrestricted fallback.
@@ -24,13 +24,22 @@ Supported manifest capabilities:
 | network | Host network namespace |
 | storage | Local account's full home directory (Files compatibility) |
 | audio | Sound devices and the existing audio service socket, when present |
+| notifications | May post notifications through the shell |
+| documents | May ask for files through the shell's open and save panels; binds nothing, each chosen file arrives as a descriptor ([file-portal-design.md](file-portal-design.md)) |
+| keychain | May store secrets with the shell (`ToShell::Keychain`); binds nothing |
+| accessibility | May post input events and install event taps through the shell's `events` service; the service checks the manifest on every call |
+| display-config | May ask the shell's `display` service for another display mode |
 | remote-desktop | Fixed Remote sharing broker request, restricted to the Remote package and requiring network/storage |
+
+Entitlements are separate from permissions and first-party only (`is.olibuijr.*`). `entitlements = ["log-store"]` on a
+`system-app` mounts the system journal read-only so `LogStore::local()` works (the Console app); it is set by
+`Policy::with_entitlements`, never from `permissions`.
 
 Unsupported permissions fail launch. Storage currently grants the full home,
 not individual user-selected files. Native applications additionally receive
 their compositor socket, read-only session/hardware discovery metadata and GPU
-devices; no D-Bus socket. Wayland privileged
-protocol filtering and a document-picker portal are future work. Unpackaged Arch
+devices; no D-Bus socket. The document picker exists for SDK apps (the `documents` permission, so an app need not hold `storage`);
+Wayland privileged protocol filtering and the picker for native apps are future work. Unpackaged Arch
 applications launched through the Linux application launcher are outside this
 installed-package policy. Do not claim universal application isolation.
 
