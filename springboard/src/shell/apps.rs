@@ -28,7 +28,7 @@ pub struct AppDef {
 
 pub const APPS: &[AppDef] = &[
     AppDef { id: AppId::Settings, name: "Settings", icon: "bifrost.settings", icon_image: None },
-    AppDef { id: AppId::Terminal, name: "Term", icon: "is.olibuijr.term", icon_image: None },
+    AppDef { id: AppId::Terminal, name: "Term", icon: "is.olibuijr.term", icon_image: Some(term_icon) },
     AppDef { id: AppId::Deildu, name: "Deildu", icon: "is.olibuijr.deildu", icon_image: None },
     AppDef { id: AppId::Photos, name: "Photos", icon: "bifrost.photos", icon_image: None },
     AppDef { id: AppId::Files, name: "Files", icon: "bifrost.files", icon_image: None },
@@ -37,6 +37,21 @@ pub const APPS: &[AppDef] = &[
     AppDef { id: AppId::Magnifier, name: "Magnifier", icon: "bifrost.magnifier", icon_image: Some(magnifier::icon) },
     AppDef { id: AppId::AppStore, name: "App Store", icon: "bifrost.appstore", icon_image: Some(store::icon) },
 ];
+/// The Terminal icon at `size` px: the reference icon when one is installed (personal-use reference assets,
+/// see `bifrost_core::ref_assets`), else BifrOSt's own artwork (`res/term-icon/icon.svg`, rendered to PNG).
+pub fn term_icon(size: usize) -> Image {
+    use bifrost_core::ref_assets::{Kind, Resolver};
+    let reference = Resolver::standard(None)
+        .resolve(Kind::AppIcon, "Terminal")
+        .and_then(|p| std::fs::read(p).ok())
+        .and_then(|b| crate::cg::imageio::decode(&b));
+    let img = reference.or_else(|| crate::cg::imageio::decode(TERM_ICON_PNG)).unwrap_or_else(|| Image { w: size, h: size, px: vec![0; size * size] });
+    if img.w == size && img.h == size { img } else { img.resized(size, size) }
+}
+
+/// BifrOSt's Terminal artwork, 512 px (`res/term-icon/icon.svg` rendered with rsvg-convert).
+const TERM_ICON_PNG: &[u8] = include_bytes!("../../res/term-icon/icon-512.png");
+
 /// Every app on the home screen: the built-in `APPS`, then the installed ones
 /// (`apphost::register` must run before the first call to include them).
 pub fn apps() -> &'static [AppDef] {
@@ -113,6 +128,15 @@ mod tests {
         assert_eq!(icons.len(), APPS.len());
         assert!(icons.iter().all(Option::is_none));
         assert!(decode_icons(&[], 64).is_empty());
+    }
+
+    #[test]
+    fn terminal_icon_is_drawn_at_any_size() {
+        for size in [32, 100, 160] {
+            let img = term_icon(size);
+            assert_eq!((img.w, img.h, img.px.len()), (size, size, size * size));
+        }
+        assert!(APPS.iter().any(|a| a.id == AppId::Terminal && a.icon_image.is_some()));
     }
 
     #[test]

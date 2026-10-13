@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- BifrOSt Terminal (is.olibuijr.term): near-black tile, fine inner border, ">_" prompt on a 32 px grid -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2c2c30"/>
+      <stop offset="1" stop-color="#0e0e10"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.12"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#d4d6dc"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#tile)"/>
+  <rect x="4" y="4" width="504" height="504" rx="108" fill="none" stroke="url(#rim)" stroke-width="4"/>
+  <path d="M148 168 L256 256 L148 344" fill="none" stroke="url(#ink)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="288" y="320" width="104" height="40" rx="20" fill="url(#ink)"/>
+</svg>

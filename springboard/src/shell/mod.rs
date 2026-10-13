@@ -768,7 +768,9 @@ impl Shell {
         let all = apps();
         let decoded: Vec<Option<Image>> = apps::decode_icons(all, size);
         let tile = |a: &AppDef, decoded: Option<Image>| {
-            let mut img = decoded.or_else(|| icon(a.icon, size)).or_else(|| a.icon_image.map(|f| f(size))).unwrap_or_else(|| scene::placeholder_icon(size));
+            // the Terminal's own artwork outranks a stale packaged `icons/*.raw`
+            let own = (a.id == AppId::Terminal).then(|| a.icon_image.map(|f| f(size))).flatten();
+            let mut img = decoded.or(own).or_else(|| icon(a.icon, size)).or_else(|| a.icon_image.map(|f| f(size))).unwrap_or_else(|| scene::placeholder_icon(size));
             img.apply_mask(&mask);
             Tile { icon: img, label: ui.styled(&ui.fit(a.name, 12.0, layout.label_w as f32), 12.0, Weight::Regular, WHITE, true) }
         };
