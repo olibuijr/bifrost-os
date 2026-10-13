@@ -13,7 +13,8 @@
 //! - `volume` -> `{level, muted, gain}`; `set_volume` `{level}` (0 to 1); `set_muted` `{muted}`
 //!
 //! Events (to every app): `devices_changed` `{devices: [id]}` when the device list changes, and `route_changed`
-//! `{route, output}` when the output route or the default output changes.
+//! `{route, output}` when the output route or the default output changes, and `volume_changed` `{level, muted, gain}`
+//! when the output level or mute changes (from any control, the Control Center included).
 use super::{Event, Shell, SystemService};
 use crate::media::route::Route;
 use bifrost_core::json::Json;
@@ -108,6 +109,8 @@ struct Seen {
     ids: Vec<String>,
     output: Option<String>,
     route: Route,
+    level: f32,
+    muted: bool,
 }
 
 impl AudioDevices {
@@ -134,6 +137,8 @@ impl AudioDevices {
             ids: devices.iter().map(|d| d.id.clone()).collect(),
             output: self.defaults.default_for(Role::Output).map(|d| d.id.clone()),
             route: shell.cc.route,
+            level: shell.volume(),
+            muted: shell.music_muted,
         }
     }
 }
@@ -236,6 +241,9 @@ fn diff(prev: Option<&Seen>, now: &Seen) -> Vec<Event> {
     if prev.route != now.route || prev.output != now.output {
         let body = obj(vec![("route", Json::Str(now.route.label().into())), ("output", opt_str(now.output.as_deref()))]);
         out.push(event("route_changed", body));
+    }
+    if prev.level != now.level || prev.muted != now.muted {
+        out.push(event("volume_changed", volume_view(now.level, now.muted)));
     }
     out
 }
@@ -417,8 +425,14 @@ mod tests {
 
     #[test]
     fn a_route_change_and_a_device_change_are_each_one_event() {
-        let before = Seen { ids: vec![SPEAKER.into()], output: Some(SPEAKER.into()), route: Route::Speaker };
-        let after = Seen { ids: vec![HEADPHONES.into(), SPEAKER.into()], output: Some(HEADPHONES.into()), route: Route::Headphones };
+        let before = Seen { ids: vec![SPEAKER.into()], output: Some(SPEAKER.into()), route: Route::Speaker, level: 0.5, muted: false };
+        let after = Seen {
+            ids: vec![HEADPHONES.into(), SPEAKER.into()],
+            output: Some(HEADPHONES.into()),
+            route: Route::Headphones,
+            level: 0.5,
+            muted: false,
+        };
         assert!(diff(None, &after).is_empty());
         assert!(diff(Some(&before), &before).is_empty());
         let events = diff(Some(&before), &after);
@@ -428,6 +442,23 @@ mod tests {
         assert_eq!(events[1].body.get("route"), Some(&Json::Str("Headphones".into())));
         assert_eq!(events[1].body.get("output"), Some(&Json::Str(HEADPHONES.into())));
         assert!(events.iter().all(|e| e.app.is_none()));
+    }
+
+    #[test]
+    fn a_volume_or_mute_change_is_one_volume_event_with_the_new_view() {
+        let before = Seen { ids: vec![SPEAKER.into()], output: Some(SPEAKER.into()), route: Route::Speaker, level: 0.5, muted: false };
+        let louder = Seen { level: 0.75, ..before.clone() };
+        let muted = Seen { muted: true, ..louder.clone() };
+        let events = diff(Some(&before), &louder);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event, "volume_changed");
+        assert_eq!(events[0].body.get("level"), Some(&Json::Num(0.75)));
+        assert_eq!(events[0].body.get("gain"), Some(&Json::Num(0.75)));
+        let events = diff(Some(&louder), &muted);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].body.get("muted"), Some(&Json::Bool(true)));
+        assert_eq!(events[0].body.get("gain"), Some(&Json::Num(0.0)));
+        assert!(diff(Some(&muted), &muted).is_empty());
     }
 
     #[test]
