@@ -849,6 +849,29 @@ pub fn popup_button(s: &mut dyn Canvas, ui: &Ui, bounds: Rect, title: &str, open
 /// An open menu on the Popover material at `origin` (points). The highlighted row is the accent colour with white
 /// text, disabled rows are tertiary, separators are hairlines, checked rows carry a check mark, and shortcuts sit
 /// at the trailing edge. Returns the menu's rectangle in points.
+/// Row pitch, padding, width and the gap under the field of the accent candidate list, in points.
+const CANDIDATE_ROW_PT: f32 = 24.0;
+const CANDIDATE_PAD_PT: f32 = 6.0;
+const CANDIDATE_WIDTH_PT: f32 = 180.0;
+const CANDIDATE_GAP_PT: f32 = 4.0;
+
+/// The accent candidate list of an open composition (`text::TextEditor::candidates`): a popover of numbered rows under
+/// `anchor`, one row per candidate. Draws nothing when `items` is empty. Shared by every SDK text field and text view.
+pub fn candidate_list(s: &mut dyn Canvas, ui: &Ui, anchor: Rect, items: &[String]) {
+    if items.is_empty() {
+        return;
+    }
+    let (row, pad) = (CANDIDATE_ROW_PT, CANDIDATE_PAD_PT);
+    let bounds = Rect { x: anchor.x, y: anchor.bottom() + CANDIDATE_GAP_PT, w: CANDIDATE_WIDTH_PT, h: pad * 2.0 + row * items.len() as f32 };
+    material(s, ui, bounds, 8.0, Material::Popover);
+    for (i, item) in items.iter().enumerate() {
+        let img = ui.text(&format!("{}   {}", i + 1, item), MAC_BODY_PT, Weight::Regular, WHITE);
+        let x = ui.pt(bounds.x + pad * 2.0);
+        let y = ui.pt(bounds.y + pad + row * i as f32) + (ui.pt(row) - img.h as f32) / 2.0;
+        image_tinted_at(s, &img, x as i32, y as i32, LABEL.now());
+    }
+}
+
 pub fn menu(s: &mut dyn Canvas, ui: &Ui, origin: (f32, f32), width: f32, menu: &Menu) -> Rect {
     let (rows, total) = menu.rows(MENU_ROW_PT, MENU_SEPARATOR_PT, MENU_PAD_PT);
     let bounds = Rect { x: origin.0, y: origin.1, w: width, h: total };
