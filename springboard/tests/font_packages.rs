@@ -12,9 +12,7 @@ const PROVIDES: &[(&str, &[&str])] = &[
     ("ttf-liberation", &["Liberation Sans", "Liberation Serif", "Liberation Mono"]),
     ("ttf-croscore", &["Arimo", "Tinos", "Cousine"]),
     ("ttf-dejavu", &["DejaVu Sans", "DejaVu Serif", "DejaVu Sans Mono"]),
-    ("otf-stix", &["STIX Two Math", "STIX Two Text"]),
     ("gsfonts", &["D050000L", "Standard Symbols PS"]),
-    ("unifont", &["Unifont", "Unifont Upper"]),
     ("noto-fonts", &["Noto Sans", "Noto Serif", "Noto Sans Symbols", "Noto Sans Symbols 2", "Noto Sans Math"]),
 ];
 
@@ -23,7 +21,7 @@ fn runtime_packages_list_the_font_set() {
     let list = arch("runtime-packages.txt");
     let pkgs: Vec<&str> = list.lines().map(str::trim).collect();
     for want in [
-        "noto-fonts", "noto-fonts-extra", "ttf-liberation", "ttf-croscore", "otf-stix", "gsfonts", "unifont",
+        "noto-fonts", "noto-fonts-extra", "ttf-liberation", "ttf-croscore", "gsfonts",
         "noto-fonts-cjk", "noto-fonts-emoji", "ttf-dejavu",
     ] {
         assert!(pkgs.contains(&want), "runtime-packages.txt lacks {want}");

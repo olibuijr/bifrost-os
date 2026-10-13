@@ -209,7 +209,7 @@
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
-   "note": "open equivalent Unifont (unifont), glyph coverage not metric-identical",
+   "note": "open equivalent Noto Sans Symbols 2 (noto-fonts), glyph coverage not metric-identical",
    "rea": [],
    "method": "assessed"
   },

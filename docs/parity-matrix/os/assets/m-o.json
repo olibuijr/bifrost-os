@@ -3569,7 +3569,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "font family Mona Lisa Solid ITC TT: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
+   "note": "font family Mona Lisa Solid ITC TT: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: Noto Sans Math (OFL) for the STIX set",
    "rea": [],
    "method": "assessed"
   },

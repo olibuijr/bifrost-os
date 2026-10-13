@@ -41,7 +41,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "font family Webdings: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
+   "note": "font family Webdings: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: Noto Sans Math (OFL) for the STIX set",
    "rea": [],
    "method": "assessed"
   },
@@ -62,7 +62,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "font family Wingdings 2: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
+   "note": "font family Wingdings 2: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: Noto Sans Math (OFL) for the STIX set",
    "rea": [],
    "method": "assessed"
   },
@@ -83,7 +83,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "font family Wingdings 3: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
+   "note": "font family Wingdings 3: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: Noto Sans Math (OFL) for the STIX set",
    "rea": [],
    "method": "assessed"
   },
@@ -104,7 +104,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "font family Wingdings: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
+   "note": "font family Wingdings: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: Noto Sans Math (OFL) for the STIX set",
    "rea": [],
    "method": "assessed"
   },

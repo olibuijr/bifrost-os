@@ -713,7 +713,7 @@
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
-   "note": "open equivalent Unifont (Braille block) (unifont), glyph coverage not metric-identical",
+   "note": "open equivalent Noto Sans Symbols 2 (Braille block) (noto-fonts), glyph coverage not metric-identical",
    "rea": [],
    "method": "assessed"
   },
@@ -734,7 +734,7 @@
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
-   "note": "open equivalent Unifont (Braille block) (unifont), glyph coverage not metric-identical",
+   "note": "open equivalent Noto Sans Symbols 2 (Braille block) (noto-fonts), glyph coverage not metric-identical",
    "rea": [],
    "method": "assessed"
   },
@@ -755,7 +755,7 @@
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
-   "note": "open equivalent Unifont (Braille block) (unifont), glyph coverage not metric-identical",
+   "note": "open equivalent Noto Sans Symbols 2 (Braille block) (noto-fonts), glyph coverage not metric-identical",
    "rea": [],
    "method": "assessed"
   },
@@ -776,7 +776,7 @@
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
-   "note": "open equivalent Unifont (Braille block) (unifont), glyph coverage not metric-identical",
+   "note": "open equivalent Noto Sans Symbols 2 (Braille block) (noto-fonts), glyph coverage not metric-identical",
    "rea": [],
    "method": "assessed"
   },
@@ -797,7 +797,7 @@
    "doc": "",
    "bifrost": "packaging/arch/runtime-packages.txt",
    "status": "partial",
-   "note": "open equivalent Unifont (Braille block) (unifont), glyph coverage not metric-identical",
+   "note": "open equivalent Noto Sans Symbols 2 (Braille block) (noto-fonts), glyph coverage not metric-identical",
    "rea": [],
    "method": "assessed"
   },
@@ -1679,7 +1679,7 @@
    "doc": "",
    "bifrost": "",
    "status": "gap",
-   "note": "font family Bodoni Ornaments: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
+   "note": "font family Bodoni Ornaments: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: Noto Sans Math (OFL) for the STIX set",
    "rea": [],
    "method": "assessed"
   },

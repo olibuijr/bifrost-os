@@ -28,7 +28,5 @@ noto-fonts-emoji
 ttf-dejavu
 ttf-liberation
 ttf-croscore
-otf-stix
 gsfonts
-unifont
 systemd-ukify
