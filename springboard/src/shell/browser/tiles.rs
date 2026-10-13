@@ -14,6 +14,7 @@
 use super::css::Color;
 use super::display::{xf_mul, xf_point, xf_rect, DisplayItem, DisplayList, Fit, Rect, Xf, IDENTITY};
 use crate::gfx::{over, rgba, rrect_coverage, scale, Surface};
+use bifrost_render::cg::paint::{ColorRamp, LinearGradient, Paint, RadialGradient};
 use std::collections::{HashMap, HashSet};
 
 pub const TILE: usize = 512;
@@ -244,24 +245,15 @@ fn image(s: &mut Surface, r: &Rect, img: &crate::gfx::Image, fit: Fit, radius: f
     });
 }
 
-fn stop_color(stops: &[(f32, Color)], t: f32) -> u32 {
-    let first = stops[0];
-    if stops.len() == 1 || t <= first.0 {
-        return pm(first.1);
-    }
-    for w in stops.windows(2) {
-        let ((o0, c0), (o1, c1)) = (w[0], w[1]);
-        if t <= o1 {
-            let f = if o1 > o0 { (t - o0) / (o1 - o0) } else { 1.0 };
-            let mix = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * f).round().clamp(0.0, 255.0) as u8;
-            return rgba(mix(c0.r, c1.r), mix(c0.g, c1.g), mix(c0.b, c1.b), mix(c0.a, c1.a));
-        }
-    }
-    pm(stops[stops.len() - 1].1)
+/// The colour ramp of CSS stops (offset, straight colour); `None` for no stops.
+fn ramp(stops: &[(f32, Color)]) -> Option<ColorRamp> {
+    let v: Vec<(f32, [u8; 4])> = stops.iter().map(|&(o, c)| (o, [c.r, c.g, c.b, c.a])).collect();
+    ColorRamp::from_rgba8(&v)
 }
 
 fn linear(s: &mut Surface, r: &Rect, angle: f32, stops: &[(f32, Color)]) {
-    if stops.is_empty() || r.is_empty() {
+    let Some(ramp) = ramp(stops) else { return };
+    if r.is_empty() {
         return;
     }
     let (sn, cs) = angle.to_radians().sin_cos();
@@ -271,25 +263,20 @@ fn linear(s: &mut Surface, r: &Rect, angle: f32, stops: &[(f32, Color)]) {
         return;
     }
     let (cx, cy) = (r.x + r.w / 2.0, r.y + r.h / 2.0);
-    per_pixel(s, r, |px, py| {
-        if !r.contains_point(px, py) {
-            return 0;
-        }
-        stop_color(stops, ((px - cx) * dx + (py - cy) * dy) / len + 0.5)
-    });
+    // the gradient line runs through the centre and is `len` long
+    let (hx, hy) = (dx * len / 2.0, dy * len / 2.0);
+    let paint = Paint::Linear(LinearGradient::new((cx - hx, cy - hy), (cx + hx, cy + hy), ramp).extended(true, true));
+    per_pixel(s, r, |px, py| if r.contains_point(px, py) { paint.shade(px, py) } else { 0 });
 }
 
 fn radial(s: &mut Surface, r: &Rect, c: (f32, f32), rad: (f32, f32), stops: &[(f32, Color)]) {
-    if stops.is_empty() || r.is_empty() || rad.0 <= 0.0 || rad.1 <= 0.0 {
+    let Some(ramp) = ramp(stops) else { return };
+    if r.is_empty() || rad.0 <= 0.0 || rad.1 <= 0.0 {
         return;
     }
-    per_pixel(s, r, |px, py| {
-        if !r.contains_point(px, py) {
-            return 0;
-        }
-        let (dx, dy) = ((px - c.0) / rad.0, (py - c.1) / rad.1);
-        stop_color(stops, (dx * dx + dy * dy).sqrt())
-    });
+    // an ellipse is the unit circle in a space scaled by the radii
+    let paint = Paint::Radial(RadialGradient::new((0.0, 0.0), 0.0, (0.0, 0.0), 1.0, ramp).extended(false, true));
+    per_pixel(s, r, |px, py| if r.contains_point(px, py) { paint.shade((px - c.0) / rad.0, (py - c.1) / rad.1) } else { 0 });
 }
 
 // ------------------------------------------------------------ rasteriser

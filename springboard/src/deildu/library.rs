@@ -6,6 +6,8 @@ use super::site::{self, Item, CATEGORIES};
 use super::scroll::Scroller;
 use super::{within, Target, BLUE, FIELD, SEGMENT_ON};
 use crate::gfx::{rgba, Image, Surface};
+use bifrost_render::blend::Mode as BlendMode;
+use bifrost_render::cg::paint::{ColorRamp, LinearGradient, Paint};
 use crate::shell::ui::{centred, Ui, Weight, CELL, SECONDARY, TRACK, WHITE};
 
 pub const MARGIN_PT: f32 = 20.0;
@@ -431,11 +433,19 @@ impl Library {
     /// Darkens the lower part of the hero so the title reads over the art.
     /// Black over the black page outside the rounded corners is invisible.
     fn gradient(s: &mut Surface, x: f32, y: f32, w: f32, h: f32) {
-        let rows = (h * 0.55) as i32;
-        for i in 0..rows {
-            let a = (i as f32 / rows as f32).powf(1.5) * 230.0;
-            s.fill_rrect(x, y + h - rows as f32 + i as f32, w, 1.0, 0.0, rgba(0, 0, 0, a as u8));
+        let rows = (h * 0.55).floor();
+        if rows < 1.0 {
+            return;
         }
+        // alpha follows (position)^1.5 up to 230; nine stops trace the curve
+        let stops: Vec<(f32, [u8; 4])> = (0..=8).map(|i| {
+            let t = i as f32 / 8.0;
+            (t, [0, 0, 0, (t.powf(1.5) * 230.0) as u8])
+        }).collect();
+        let Some(ramp) = ColorRamp::from_rgba8(&stops) else { return };
+        let top = y + h - rows;
+        let paint = Paint::Linear(LinearGradient::new((0.0, top), (0.0, y + h), ramp).extended(true, true));
+        paint.fill_rect(s, x.round() as i32, top.round() as i32, (x + w).round() as i32, (y + h).round() as i32, BlendMode::Normal, 1.0);
     }
 
     pub fn draw(&self, s: &mut Surface, ui: &Ui, w: i32, bottom: f32, art: &mut Cache, pressed: Option<Target>) {

@@ -1,13 +1,13 @@
 //! The look of each stroke for Freeform's shape inspector: a fill (solid, or a two-colour gradient, for rectangles
 //! and ovals), a dashed outline, a drop shadow and opacity. The look lives beside the drawing model, one `Style` per
 //! stroke at the same index, so the shared model crate keeps its own shape. Painting builds on the discs and trails of
-//! `ink`, and on the models `gradient` (the ramp), `layer_style` (the shadow) and `cg::raster` (the fill and the dash pieces).
+//! `ink`, and on the models `cg::paint` (the ramp), `layer_style` (the shadow) and `cg::raster` (the fill and the dash pieces).
 //! `Bitmap` is the bitmap drawing context a picture is exported through: a pixel buffer that is painted and then
 //! written as a PNG.
 
 use crate::ink;
 use bifrost_app::controls::drawing::{InkKind, Stroke};
-use bifrost_app::controls::gradient::{Gradient, Stop};
+use bifrost_app::kit::cg::paint::{ColorRamp, LinearGradient};
 use bifrost_app::controls::layer_style::Shadow;
 use bifrost_app::controls::cg::path::{Affine, Path};
 use bifrost_app::controls::cg::raster::{self, dash_polyline, FillRule};
@@ -60,8 +60,8 @@ fn rgba_of(c: u32) -> [u8; 4] {
 }
 
 /// The two-stop ramp of a gradient fill.
-fn ramp(a: u32, b: u32) -> Gradient {
-    Gradient::new(vec![Stop { at: 0.0, rgba: rgba_of(a) }, Stop { at: 1.0, rgba: rgba_of(b) }])
+fn ramp(a: u32, b: u32) -> ColorRamp {
+    ColorRamp::from_rgba8(&[(0.0, rgba_of(a)), (1.0, rgba_of(b))]).expect("two stops")
 }
 
 /// The shadow the inspector draws: the model's shadow, with the offset, opacity and blur radius above.
@@ -121,6 +121,7 @@ fn fill_polygon(px: &mut [u32], cw: usize, ch: usize, pts: &[(f32, f32)], fill: 
         y1 = y1.max(y);
     }
     let cy = (y0 + y1) / 2.0;
+    let gradient = gradient.map(|r| LinearGradient::new((x0, cy), (x1, cy), r).extended(true, true));
     let a = (255.0 * alpha).round().clamp(0.0, 255.0) as u32;
     let mut path = Path::new();
     path.add_lines(pts);
@@ -136,7 +137,8 @@ fn fill_polygon(px: &mut [u32], cw: usize, ch: usize, pts: &[(f32, f32)], fill: 
             let px_x = cov.x as usize + col;
             let colour = match &gradient {
                 Some(g) => {
-                    let [r, gg, b, _] = g.color_at(Gradient::linear_t((x0, cy), (x1, cy), px_x as f32 + 0.5, py as f32 + 0.5));
+                    // a zero-width box has no axis: it takes the start colour
+                    let [r, gg, b, _] = g.shade_rgba(px_x as f32 + 0.5, py as f32 + 0.5).unwrap_or_else(|| g.ramp.color_at(0.0));
                     0xFF00_0000 | (r as u32) << 16 | (gg as u32) << 8 | b as u32
                 }
                 None => solid,

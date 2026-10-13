@@ -705,6 +705,7 @@ pub mod scene3d;
 pub mod scene_action;
 pub mod scene_view;
 pub mod gradient;
+pub mod path;
 pub mod clip;
 pub mod render_loop;
 pub mod drawable;

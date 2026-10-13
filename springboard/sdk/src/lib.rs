@@ -24,6 +24,8 @@ pub mod kit {
     pub use bifrost_render::gfx::{self, pack, rgba, Area, Damage, Image, Surface};
     pub use bifrost_render::cache::TextCache;
     pub use bifrost_render::clipboard;
+    /// The 2D drawing stack: colours and colour spaces (`cg::color`), gradients, shadings, functions and patterns (`cg::paint`).
+    pub use bifrost_render::cg;
     /// The drawing vocabulary `draw_canvas` takes (`Canvas`, `RectF`, `ImageRef`, ...).
     pub use bifrost_render::canvas;
     /// Pixel buffer layouts and the 8-bit CMYK, grey and RGB conversions, plane splitting and interleaving.

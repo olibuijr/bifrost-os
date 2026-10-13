@@ -10,7 +10,9 @@
 
 use super::play::{PlayState, Player};
 use super::{within, BLACK, RED};
-use crate::gfx::{over, rgba, Image, Surface};
+use crate::gfx::{rgba, Image, Surface};
+use bifrost_render::blend::Mode as BlendMode;
+use bifrost_render::cg::paint::{ColorRamp, LinearGradient, Paint};
 use crate::shell::glyphs;
 use crate::shell::icons;
 use crate::shell::ui::{centred, Ui, Weight};
@@ -985,19 +987,11 @@ fn bbox((cx, cy): (f32, f32), r: f32) -> Rect {
 
 /// Black fading from alpha `a0` at row `y0` to `a1` at row `y1` (0..255), times `k`.
 fn gradient(s: &mut Surface, y0: i32, y1: i32, a0: f32, a1: f32, k: f32) {
+    let al = |a: f32| (a * k).clamp(0.0, 255.0) as u8;
+    let Some(ramp) = ColorRamp::from_rgba8(&[(0.0, [0, 0, 0, al(a0)]), (1.0, [0, 0, 0, al(a1)])]) else { return };
     let span = (y1 - y0).max(1) as f32;
-    for y in y0.max(s.y0 as i32)..y1.min(s.h as i32) {
-        let f = (y - y0) as f32 / span;
-        let al = ((a0 + (a1 - a0) * f) * k).clamp(0.0, 255.0) as u32;
-        if al == 0 {
-            continue;
-        }
-        let c = al << 24;
-        let base = (y as usize - s.y0) * s.stride;
-        for d in &mut s.px[base..base + s.w] {
-            *d = over(*d, c);
-        }
-    }
+    let paint = Paint::Linear(LinearGradient::new((0.0, y0 as f32), (0.0, y0 as f32 + span), ramp).extended(true, true));
+    paint.fill_rect(s, 0, y0, s.w as i32, y1, BlendMode::Normal, 1.0);
 }
 
 fn play_icon(s: &mut Surface, (cx, cy): (f32, f32), r: f32, color: u32) {
