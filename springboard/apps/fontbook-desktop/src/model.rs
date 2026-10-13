@@ -4,6 +4,7 @@
 //! Scope is per user: turning a family off, collections and installs live in the user's data dir and in
 //! `~/.local/share/fonts`. The shell's own font library stays read-only here.
 
+use crate::validate;
 use bifrost_render::fontprefs::{self, Installed};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -47,7 +48,6 @@ fn key(name: &str) -> String {
 }
 
 /// A name safe for one line of a text file.
-#[cfg_attr(not(test), allow(dead_code))] // used by the collection editor still to come
 fn clean(name: &str) -> String {
     name.replace(['\t', '\n', '\r'], " ").trim().to_string()
 }
@@ -71,7 +71,7 @@ impl Library {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))] // collections UI still to come
+    #[cfg(test)]
     pub fn disabled_names(&self) -> Vec<String> {
         self.families.iter().filter(|f| !self.is_enabled(&f.family)).map(|f| f.family.clone()).collect()
     }
@@ -85,7 +85,6 @@ impl Library {
     }
 
     /// Adds a collection. Returns false when the name is empty or already taken (names ignore case).
-    #[cfg_attr(not(test), allow(dead_code))] // collections UI still to come
     pub fn create_collection(&mut self, name: &str) -> bool {
         let name = clean(name);
         if name.is_empty() || self.collections.keys().any(|k| key(k) == key(&name)) {
@@ -95,14 +94,13 @@ impl Library {
         true
     }
 
-    #[cfg_attr(not(test), allow(dead_code))] // collections UI still to come
+    #[cfg(test)]
     pub fn delete_collection(&mut self, name: &str) -> bool {
         let found = self.collections.keys().find(|k| key(k) == key(name)).cloned();
         found.is_some_and(|k| self.collections.remove(&k).is_some())
     }
 
     /// Adds `family` to `collection`. Returns false when it is already a member or the collection is missing.
-    #[cfg_attr(not(test), allow(dead_code))] // collections UI still to come
     pub fn add_to_collection(&mut self, collection: &str, family: &str) -> bool {
         let Some(list) = self.collections.iter_mut().find(|(k, _)| key(k) == key(collection)).map(|(_, v)| v) else {
             return false;
@@ -115,7 +113,6 @@ impl Library {
         true
     }
 
-    #[cfg_attr(not(test), allow(dead_code))] // collections UI still to come
     pub fn remove_from_collection(&mut self, collection: &str, family: &str) -> bool {
         let Some(list) = self.collections.iter_mut().find(|(k, _)| key(k) == key(collection)).map(|(_, v)| v) else {
             return false;
@@ -219,12 +216,28 @@ pub fn safe_file_name(name: &str) -> String {
     }
 }
 
+/// Rows for the Info panel from a font's check: characters, glyphs, the Unicode blocks covered and the validation.
+pub fn repertoire_rows(r: &validate::Report) -> Vec<(String, String)> {
+    let coverage = if r.blocks.is_empty() { "None".to_string() } else { r.blocks.join(", ") };
+    let validation = if r.is_valid() { "Valid".to_string() } else { r.problems.join(" ") };
+    vec![
+        ("Characters".to_string(), r.characters.to_string()),
+        ("Glyphs".to_string(), r.glyphs.to_string()),
+        ("Coverage".to_string(), coverage),
+        ("Validation".to_string(), validation),
+    ]
+}
+
 /// Installs the font file `src` into `user_dir` (created if needed). Only TrueType and OpenType files the
-/// renderer can draw are accepted. Returns the new path and the family name. An existing file is not overwritten.
+/// renderer can draw are accepted, and a file that fails validation is refused with its first problem. Returns the
+/// new path and the family name. An existing file is not overwritten.
 pub fn install(src: &Path, user_dir: &Path) -> Result<(PathBuf, String), String> {
     let ext = src.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
     if ext != "ttf" && ext != "otf" {
         return Err("Only .ttf and .otf fonts can be installed.".to_string());
+    }
+    if let Some(problem) = validate::check_file(src).problems.first() {
+        return Err(problem.clone());
     }
     let src_text = src.to_string_lossy();
     let family = fontprefs::family(&src_text).ok_or_else(|| "That file is not a font this desktop can draw.".to_string())?;
@@ -239,7 +252,6 @@ pub fn install(src: &Path, user_dir: &Path) -> Result<(PathBuf, String), String>
 }
 
 /// Removes a font the user installed. Only files inside `user_dir` can be removed; system and library fonts stay.
-#[cfg_attr(not(test), allow(dead_code))] // Remove Font is not in the menu yet
 pub fn uninstall(path: &Path, user_dir: &Path) -> Result<(), String> {
     if !path.starts_with(user_dir) || path == user_dir {
         return Err("Only fonts installed for this user can be removed.".to_string());
@@ -342,5 +354,32 @@ mod tests {
         let user = Path::new("/home/u/.local/share/fonts");
         assert!(uninstall(Path::new("/usr/share/fonts/x.ttf"), user).is_err());
         assert!(uninstall(user, user).is_err());
+    }
+
+    #[test]
+    fn install_refuses_a_font_file_that_fails_validation_without_copying_it() {
+        let dir = std::env::temp_dir().join(format!("fontbook-model-invalid-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let src = dir.join("Broken.ttf");
+        std::fs::write(&src, b"not a font at all").unwrap();
+        let user = dir.join("user");
+        let err = install(&src, &user).unwrap_err();
+        assert_eq!(err, "The file has no TrueType or OpenType header.");
+        assert!(!user.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn repertoire_rows_show_characters_coverage_and_validity() {
+        let ok = validate::Report { problems: Vec::new(), glyphs: 12, characters: 95, blocks: vec!["Basic Latin".to_string()] };
+        let rows = repertoire_rows(&ok);
+        assert!(rows.contains(&("Characters".to_string(), "95".to_string())));
+        assert!(rows.contains(&("Coverage".to_string(), "Basic Latin".to_string())));
+        assert!(rows.contains(&("Validation".to_string(), "Valid".to_string())));
+        let bad = validate::Report { problems: vec!["The maxp table is missing.".to_string()], ..validate::Report::default() };
+        let rows = repertoire_rows(&bad);
+        assert!(rows.contains(&("Coverage".to_string(), "None".to_string())));
+        assert!(rows.contains(&("Validation".to_string(), "The maxp table is missing.".to_string())));
     }
 }
