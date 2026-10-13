@@ -8,7 +8,7 @@ files are fetched, and a db is replaced only after every file it needs is presen
 
 usage: tools/pc_mirror.py [--sync] [--check]     (default: both; pc-publish.py runs both)
 env:   BIFROST_UPSTREAM_MIRROR  Arch mirror base, e.g. https://geo.mirror.pkgbuild.com ($repo/os/$arch is appended);
-       default: the first Server in /etc/pacman.d/mirrorlist
+       default: https://geo.mirror.pkgbuild.com
 """
 import io, os, re, subprocess, sys, tarfile, urllib.error, urllib.request
 
@@ -97,15 +97,8 @@ def wanted_names():
 
 
 def upstream():
-    base = os.environ.get("BIFROST_UPSTREAM_MIRROR")
-    if not base:
-        for line in open("/etc/pacman.d/mirrorlist"):
-            m = re.match(r"\s*Server\s*=\s*(\S+)", line)
-            if m:
-                base = m.group(1)
-                break
-    if not base:
-        sys.exit("pc-mirror: no upstream Arch mirror (set BIFROST_UPSTREAM_MIRROR)")
+    # the official Arch mirror by default: Titan's own mirrorlist (Omarchy's mirror) answers 403 to urllib
+    base = os.environ.get("BIFROST_UPSTREAM_MIRROR") or "https://geo.mirror.pkgbuild.com"
     return re.sub(r"/\$repo/os/\$arch/?$", "", base).rstrip("/")
 
 
