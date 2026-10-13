@@ -5,7 +5,7 @@
 //! device or draws: the shell or an app feeds points in and renders the strokes that come back.
 
 use crate::cg::path::Affine;
-use crate::cg::path::Path;
+use crate::cg::path::{Path, Point};
 use crate::Rect;
 use std::f32::consts::FRAC_PI_2;
 use std::fmt;

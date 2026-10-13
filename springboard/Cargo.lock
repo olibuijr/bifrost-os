@@ -564,7 +564,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-freeform"
-version = "1.6.3"
+version = "1.6.4"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
@@ -794,6 +794,7 @@ name = "bifrost-ui"
 version = "0.1.0"
 dependencies = [
  "bifrost-audio-types",
+ "bifrost-render",
 ]
 
 [[package]]

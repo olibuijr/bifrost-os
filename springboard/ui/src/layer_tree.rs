@@ -13,7 +13,7 @@
 //! [`LayerCmd`]s a renderer replays; the SDK does so for layer-backed views.
 //!
 //! Single-threaded: layers use `Rc`. Pure model with unit tests; the compositor is not involved.
-use crate::affine::AffineTransform;
+use crate::cg::path::Affine as AffineTransform;
 use crate::layer_layout::{Constraint, DrawOp, LayerAction, LayerContext, LayerDelegate, LayoutManager};
 use crate::transform3d::Transform3D;
 use crate::Rect;
@@ -486,7 +486,7 @@ impl Layer {
 
     /// The bounds in the superlayer's space (the bounding box when the transform rotates or skews).
     pub fn frame(&self) -> Rect {
-        self.affine_to_superlayer().apply_rect(self.bounds())
+        self.affine_to_superlayer().apply_rect(self.bounds().into()).into()
     }
 
     /// Moves and sizes the layer so its frame is `f`. With a transform other than the identity only the position
