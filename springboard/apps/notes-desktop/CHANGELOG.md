@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.15.0 — 2026-10-13
+
+- Share as PDF (the More menu in the editor) writes the note as a PDF: the title in bold, the body in Helvetica, wrapped and paginated. Share sends the file through the save panel, as Markdown and text do.
+- Insert Table (the More menu in the editor) puts a header row, its rule and an empty row at the caret as a Markdown table, typed in place.
+- New Quick Note in a menu bar extra starts a note from the menu bar, the same as Cmd+N.
+- Not in this version: a note cannot be locked with a password; tags are not listed or filtered as a group (a `#tag` is found by search as text); tables are not drawn as a grid in the editor, and the PDF shows each row on one line; the menu bar extra's symbol has not been checked on Midget.
+
 ## 1.14.1 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

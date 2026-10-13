@@ -708,7 +708,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-notes"
-version = "1.14.1"
+version = "1.15.0"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
