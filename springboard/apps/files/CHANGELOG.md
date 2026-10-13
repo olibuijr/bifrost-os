@@ -1,6 +1,6 @@
 ## 1.25.0 — 2026-10-13
 
-- Tabs: File > New Tab (⌘T) opens a tab at the open folder with its own history; ⌘W closes the open tab (the last tab stays); Ctrl+Tab and Ctrl+Shift+Tab step through tabs. Tags moves from T to Shift+T. The tab strip is not drawn yet, so tabs are reached by the keys only.
+- Tabs: New Tab (⌘T) opens a tab at the open folder with its own history; ⌘W closes the open tab (the last tab stays); Ctrl+Tab and Ctrl+Shift+Tab step through tabs. Tags moves from T to Shift+T. The tab strip is not drawn yet, so tabs are reached by the keys only.
 
 ## 1.24.0 — 2026-10-13
 
