@@ -673,6 +673,7 @@ pub mod mesh_process;
 pub mod procedural_texture;
 pub mod asset_resolver;
 pub mod stereo_camera;
+pub mod skeleton;
 pub mod morph_skin;
 pub mod shading;
 pub mod composition;
