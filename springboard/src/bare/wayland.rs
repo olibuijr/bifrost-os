@@ -833,6 +833,14 @@ fn wl_shape(k: bifrost_ui::cursor::Kind) -> cursor_device::Shape {
         K::ResizeRight => cursor_device::Shape::EResize,
         K::ResizeUp => cursor_device::Shape::NResize,
         K::ResizeDown => cursor_device::Shape::SResize,
+        K::ResizeNorthEastSouthWest => cursor_device::Shape::NeswResize,
+        K::ResizeNorthWestSouthEast => cursor_device::Shape::NwseResize,
+        K::ColumnResize => cursor_device::Shape::ColResize,
+        K::RowResize => cursor_device::Shape::RowResize,
+        K::Move => cursor_device::Shape::Move,
+        // the cursor-shape protocol has no rotate or window-capture shape: the nearest named ones
+        K::Rotate => cursor_device::Shape::Grabbing,
+        K::ScreenshotWindow => cursor_device::Shape::Crosshair,
     }
 }
 
