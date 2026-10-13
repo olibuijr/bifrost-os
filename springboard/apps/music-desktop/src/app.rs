@@ -620,6 +620,30 @@ mod tests {
     }
 
     #[test]
+    fn import_asks_for_several_songs_and_only_its_own_answer_is_taken() {
+        use bifrost_app::proto::DocErrorCode;
+        let ctx = test_ctx();
+        let mut app = MusicApp::new();
+        assert!(!app.menu_action(&ctx, Command::Import.id()), "the panel needs no frame");
+        let request = app.import_request.expect("the open panel was asked for");
+        let asked = ctx.take_sent().into_iter().any(|m| matches!(m, ToShell::DocOpenEx { title, options, .. } if title == "Import to Music" && options & bifrost_app::proto::docopt::MULTIPLE != 0));
+        assert!(asked, "one panel that allows several files");
+        assert!(!app.document(&ctx, DocumentEvent::Failed { request: request.wrapping_add(1), code: DocErrorCode::Cancelled }));
+        assert_eq!(app.import_request, Some(request), "another request's answer is not ours");
+        assert!(!app.document(&ctx, DocumentEvent::Failed { request, code: DocErrorCode::Cancelled }));
+        assert_eq!(app.import_request, None, "a cancelled panel is forgotten");
+    }
+
+    #[test]
+    fn without_a_window_there_are_no_menus_and_no_command_runs() {
+        let ctx = test_ctx();
+        let mut app = MusicApp::new();
+        assert!(app.main_menu(&ctx).is_empty());
+        assert!(!app.menu_action(&ctx, Command::PlayPause.id()));
+        assert!(!app.menu_action(&ctx, 7), "an id no menu carries");
+    }
+
+    #[test]
     fn route_and_command_events_without_a_window_do_nothing() {
         let ctx = test_ctx();
         let mut app = MusicApp::new();

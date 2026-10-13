@@ -70,7 +70,7 @@ impl Stats {
             if path.is_empty() {
                 continue;
             }
-            let stats = SongStats { rating: rating.parse().unwrap_or(0).min(MAX_RATING), favourite: fav == "1", plays: plays.parse().unwrap_or(0), last_played: last.parse().unwrap_or(0) };
+            let stats = SongStats { rating: rating.parse::<u8>().unwrap_or(0).min(MAX_RATING), favourite: fav == "1", plays: plays.parse::<u32>().unwrap_or(0), last_played: last.parse::<u64>().unwrap_or(0) };
             self.songs.insert(PathBuf::from(path), stats);
         }
         // the file lists the history oldest first
