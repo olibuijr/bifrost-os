@@ -4,7 +4,7 @@
 //!
 //! Rule: a stroke is selected when at least one of its points lies inside the loop. The loop closes itself, from the
 //! last point back to the first, and the test is even-odd, so a loop may be concave.
-use crate::affine::AffineTransform;
+use crate::cg::path::Affine;
 use crate::drawing::{union, Drawing};
 use crate::Rect;
 
@@ -95,7 +95,7 @@ impl Selection {
 
     /// Maps the selected strokes through `t` and leaves the rest of the drawing alone. Indices that are no
     /// longer in the drawing are skipped.
-    pub fn transform(&self, drawing: &mut Drawing, t: AffineTransform) {
+    pub fn transform(&self, drawing: &mut Drawing, t: Affine) {
         for &i in &self.indices {
             if let Some(s) = drawing.stroke_mut(i) {
                 s.transform(t);
@@ -183,7 +183,7 @@ mod tests {
     fn transform_moves_only_the_selected_strokes() {
         let mut d = Drawing::from_strokes(vec![stroke(&[(2.0, 2.0)]), stroke(&[(20.0, 20.0)])]);
         let sel = square().select(&d);
-        sel.transform(&mut d, AffineTransform::translate(100.0, 0.0));
+        sel.transform(&mut d, Affine::translate(100.0, 0.0));
         assert_eq!((d.strokes()[0].points[0].x, d.strokes()[0].points[0].y), (102.0, 2.0));
         assert_eq!((d.strokes()[1].points[0].x, d.strokes()[1].points[0].y), (20.0, 20.0));
     }

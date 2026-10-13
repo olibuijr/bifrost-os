@@ -4,8 +4,8 @@
 //! stroke by distance along it, and turns the flattened outline of a path into strokes. Nothing here reads the input
 //! device or draws: the shell or an app feeds points in and renders the strokes that come back.
 
-use crate::affine::AffineTransform;
-use crate::path::{Path, Point};
+use crate::cg::path::Affine;
+use crate::cg::path::Path;
 use crate::Rect;
 use std::f32::consts::FRAC_PI_2;
 use std::fmt;
@@ -83,13 +83,13 @@ fn seg(a: &StrokePoint, b: &StrokePoint) -> f32 {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Stroke {
     pub ink: Ink,
-    pub transform: AffineTransform,
+    pub transform: Affine,
     pub points: Vec<StrokePoint>,
 }
 
 impl Stroke {
     pub fn new(ink: Ink, points: Vec<StrokePoint>) -> Self {
-        Stroke { ink, transform: AffineTransform::IDENTITY, points }
+        Stroke { ink, transform: Affine::IDENTITY, points }
     }
 
     /// The drawn width at a point: the ink width, scaled from 25 percent at zero force to the full width at full force.
@@ -200,7 +200,7 @@ impl Drawing {
     /// full force and an upright stylus. Subpaths with fewer than two points are dropped.
     pub fn from_path(ink: Ink, path: &Path, tolerance: f32) -> Self {
         let strokes: Vec<Stroke> = path
-            .polylines(tolerance)
+            .flatten(tolerance)
             .into_iter()
             .map(|line| Stroke::new(ink, line.into_iter().map(|(x, y)| StrokePoint::at(x, y)).collect()))
             .collect();
@@ -226,7 +226,7 @@ impl Drawing {
     }
 
     /// Applies a transform to every stroke, after each stroke's own transform.
-    pub fn transform(&mut self, t: AffineTransform) {
+    pub fn transform(&mut self, t: Affine) {
         for s in &mut self.strokes {
             s.transform = s.transform.then(t);
         }
@@ -234,7 +234,7 @@ impl Drawing {
 
     /// Applies a transform to the strokes at `indices` only. Each index counts once, and indices past the end are
     /// ignored. Returns how many strokes were transformed.
-    pub fn transform_strokes(&mut self, indices: &[usize], t: AffineTransform) -> usize {
+    pub fn transform_strokes(&mut self, indices: &[usize], t: Affine) -> usize {
         let mut hit = vec![false; self.strokes.len()];
         for &i in indices {
             if i < hit.len() {
@@ -333,7 +333,7 @@ impl Drawing {
             let color = r.u32()?;
             let width = r.f32()?;
             let opacity = r.f32()?;
-            let transform = AffineTransform {
+            let transform = Affine {
                 a: r.f32()?,
                 b: r.f32()?,
                 c: r.f32()?,
@@ -455,7 +455,7 @@ mod tests {
 
     fn sample() -> Drawing {
         let mut s2 = stroke(&[(0.0, 0.0), (3.0, 4.0), (3.0, 10.0)]);
-        s2.transform = AffineTransform::translate(5.0, 0.0);
+        s2.transform = Affine::translate(5.0, 0.0);
         Drawing::from_strokes(vec![stroke(&[(0.0, 0.0), (1.0, 1.0)]), s2])
     }
 
@@ -530,7 +530,7 @@ mod tests {
         let square = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)];
         let mut d = Drawing::from_strokes(vec![stroke(&[(5.0, 5.0), (20.0, 20.0)]), stroke(&[(20.0, 20.0), (30.0, 30.0)])]);
         assert_eq!(d.lasso(&square), vec![0]);
-        assert_eq!(d.transform_strokes(&[1, 9], AffineTransform::translate(-18.0, -18.0)), 1);
+        assert_eq!(d.transform_strokes(&[1, 9], Affine::translate(-18.0, -18.0)), 1);
         assert_eq!(d.lasso(&square), vec![0, 1]);
         assert_eq!(d.lasso(&square[..2]), Vec::<usize>::new());
     }
@@ -538,7 +538,7 @@ mod tests {
     #[test]
     fn bounds_are_taken_in_drawing_space() {
         let mut s = stroke(&[(0.0, 0.0), (10.0, 5.0)]);
-        s.transform = AffineTransform::translate(100.0, 0.0);
+        s.transform = Affine::translate(100.0, 0.0);
         assert_eq!(Drawing::from_strokes(vec![s]).bounds(), Some(Rect { x: 100.0, y: 0.0, w: 10.0, h: 5.0 }));
         assert_eq!(Drawing::new().bounds(), None);
     }

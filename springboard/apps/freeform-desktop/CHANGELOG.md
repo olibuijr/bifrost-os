@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.4 — 2026-10-13
+
+- Shapes, transforms and fills use the shared path and scan converter; shape fills are antialiased.
+
 ## 1.6.3 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

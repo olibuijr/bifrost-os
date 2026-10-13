@@ -8,7 +8,7 @@
 
 use crate::ink;
 use crate::style::{self, Bitmap, Fill, Style, OPACITY_STEPS};
-use bifrost_app::controls::affine::AffineTransform;
+use bifrost_app::controls::cg::path::Affine;
 use bifrost_app::controls::cursor::Kind;
 use bifrost_app::controls::drawing::{Drawing, Ink, InkKind, Stroke, StrokePoint};
 use bifrost_app::controls::lasso::{Lasso, Selection};
@@ -710,11 +710,11 @@ impl Freeform {
                 let Some(b) = sel.bounds(&self.model) else { return };
                 let (cx, cy) = (b.x + b.w / 2.0, b.y + b.h / 2.0);
                 let t = match e {
-                    Edit::Turn => AffineTransform::rotate(15f32.to_radians()),
-                    Edit::Smaller => AffineTransform::scale(0.8, 0.8),
-                    _ => AffineTransform::scale(1.25, 1.25),
+                    Edit::Turn => Affine::rotate(15f32.to_radians()),
+                    Edit::Smaller => Affine::scale(0.8, 0.8),
+                    _ => Affine::scale(1.25, 1.25),
                 };
-                let about = AffineTransform::translate(-cx, -cy).then(t).then(AffineTransform::translate(cx, cy));
+                let about = Affine::translate(-cx, -cy).then(t).then(Affine::translate(cx, cy));
                 self.push_undo();
                 sel.transform(&mut self.model, about);
             }
@@ -941,7 +941,7 @@ impl Freeform {
             let (dx, dy) = (r.x - b.x, r.y - b.y);
             if dx != 0.0 || dy != 0.0 {
                 if let Some(s) = self.model.stroke_mut(*i) {
-                    s.transform(AffineTransform::translate(dx, dy));
+                    s.transform(Affine::translate(dx, dy));
                 }
             }
         }
@@ -966,7 +966,7 @@ impl Freeform {
     fn export_png(&self, ui: &Ui) -> Vec<u8> {
         let k = self.export_scale.max(1) as usize;
         let mut big = self.model.clone();
-        big.transform(AffineTransform::scale(k as f32, k as f32));
+        big.transform(Affine::scale(k as f32, k as f32));
         // the picture is painted into a bitmap context of the export size, with each stroke's look
         let mut bmp = Bitmap::new(self.cw * k, self.ch * k, PAPER);
         let (w, h) = (bmp.w, bmp.h);

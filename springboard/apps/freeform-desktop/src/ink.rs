@@ -1,9 +1,9 @@
 //! Pure stroke helpers for Freeform: painting strokes of the drawing model (`bifrost_app::controls::drawing`) into
 //! the pixel canvas, the spacing of the discs along a stroke, and the outlines the shape tools draw. Nothing here
 //! touches the screen, so the host tests cover it.
-use bifrost_app::controls::affine::AffineTransform;
+use bifrost_app::controls::cg::path::Affine;
 use bifrost_app::controls::drawing::{Drawing, Ink, InkKind, Stroke};
-use bifrost_app::controls::path::Path;
+use bifrost_app::controls::cg::path::Path;
 use bifrost_app::controls::Rect;
 
 /// Marker ink covers at most this alpha (96 of 255), as the live marker does.
@@ -82,16 +82,16 @@ pub fn shape_drawing(a: (f32, f32), b: (f32, f32), oval: bool, ink: Ink) -> Draw
     let r = rect_between(a, b);
     let mut p = Path::new();
     if oval {
-        p.add_ellipse_in(r);
+        p.add_ellipse(r.into());
     } else {
-        p.add_rect(r);
+        p.add_rect(r.into());
     }
     Drawing::from_path(&p, 0.5, ink)
 }
 
 /// The canvas-space transform that moves a selection by (`dx`, `dy`).
-pub fn nudge(dx: f32, dy: f32) -> AffineTransform {
-    AffineTransform::translate(dx, dy)
+pub fn nudge(dx: f32, dy: f32) -> Affine {
+    Affine::translate(dx, dy)
 }
 
 /// Whole-number factor for a crisp export: how many device pixels the display has per canvas pixel. A display that
@@ -110,7 +110,7 @@ const COPY_MARGIN_PT: f32 = 16.0;
 /// A PNG of the strokes alone, cropped to their box on paper, at `scale` pixels per point. An empty drawing gives a
 /// one-pixel paper PNG.
 pub fn render_png(drawing: &Drawing, scale: f32) -> Vec<u8> {
-    use bifrost_app::controls::affine::AffineTransform as T;
+    use bifrost_app::controls::cg::path::Affine as T;
     let paper = bifrost_app::kit::ui::WHITE;
     let Some(b) = drawing.bounds() else {
         return springboard::pngenc::encode_rgb(1, 1, &[paper]);

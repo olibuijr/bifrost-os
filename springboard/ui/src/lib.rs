@@ -694,6 +694,7 @@ pub mod compose_method;
 pub mod vertical_text;
 pub mod ruby;
 pub mod affine;
+pub use bifrost_render::cg;
 pub mod pdfpage;
 pub mod pdfselect;
 pub mod pdfannot;
