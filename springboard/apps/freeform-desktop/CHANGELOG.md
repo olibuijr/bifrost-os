@@ -4,6 +4,7 @@
 
 - Shapes, transforms and fills use the shared path and scan converter; shape fills are antialiased.
 - Gradient fills use the shared paint kit (`cg::paint`); the old per-app gradient model is gone.
+- Strokes, dashed outlines and shape outlines draw through the shared drawing context with round caps and joins.
 
 ## 1.6.3 — 2026-10-12
 

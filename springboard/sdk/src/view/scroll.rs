@@ -114,9 +114,10 @@ impl View for ScrollView {
     fn clips_children(&self) -> bool {
         true
     }
-    /// A dirty document row repaints the whole scroll view: partial repaints would need the offset and a clip.
+    /// A dirty document row repaints alone, clipped to the frame (`draw_dirty`); only a scroll view with a backdrop
+    /// of its own repaints as a whole, since clearing a row to the window background would punch a hole in it.
     fn opaque_backdrop(&self) -> bool {
-        true
+        self.base.background.is_some()
     }
     fn layout(&mut self, ui: &Ui, bounds: Rect) {
         self.set_frame(bounds);
