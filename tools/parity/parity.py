@@ -74,6 +74,7 @@ LABEL = {"parity": "Parity", "partial": "Partial", "os": "OS only", "gap": "Gap"
 WEIGHT = {"parity": 1.0, "partial": 0.5, "os": 0.5, "gap": 0.0}
 PARTS = {  # large frameworks split by official topic sections; slug prefix -> framework title
     "appkit-": "AppKit", "foundation-": "Foundation", "swiftui-": "SwiftUI", "avfoundation-": "AVFoundation",
+    "uikit-": "UIKit",  # the tablet platform's UIKit topic parts (ipados/data/uikit-*.json)
 }
 PLATFORMS = ("macos", "ipados")
 PLATFORM_NAME = {"macos": "macOS", "ipados": "iPadOS"}  # as the documentation metadata spells them

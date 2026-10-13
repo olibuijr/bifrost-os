@@ -24,3 +24,13 @@ A row's `bifrost` is `none` or lists repo paths that exist; a `none` row is `gap
 | `uikit-appearance-animation-layout` | View layout, Appearance customization, Animation and haptics |
 | `uikit-accessibility` | Accessibility for UIKit |
 | `uikit-graphics-printing-pencil` | Images and PDF, Drawing, Printing |
+
+The `uikit-` prefix maps to the framework title `UIKit` in `PARTS` (`tools/parity/parity.py`), so each part counts as a
+UIKit assessment: `check --platform ipados` does not list the UIKit index row as not assessed.
+
+## Status of the rows that the convergence work touched
+
+The touch, form factor, rotation, text input, gesture recognizer, login keyboard and desk keyboard rows now cite the arm code
+(`springboard/wm/src/touch.rs`, `springboard/src/bare/wl_touch.rs`, `springboard/ui/src/form_factor.rs`, `springboard/wm/src/transform.rs`,
+`springboard/ui/src/recognizer/`, `springboard/src/shell/login.rs`, `springboard/src/shell/desk.rs`). Their notes say "not yet verified on the
+tablet": the status is `partial` until a tablet run (and, for the matrix, a Midget check) confirms the behaviour.

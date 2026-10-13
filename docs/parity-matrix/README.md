@@ -16,8 +16,8 @@ Source of the Apple macOS 27 SDK vs BifrOSt matrix. The generated page is `docs/
 Statuses: `parity`, `partial`, `os`, `gap`, `n/a` (definitions in `agent-brief.md`). Coverage per framework: applicable rows
 (not `n/a`) score parity 1, partial 0.5, os 0.5, gap 0, divided by the applicable rows.
 
-Commands: `bifrost pc parity status | os-status | coverage [--group G] [--sort coverage|name|group] | show NAME |
-gaps [--group G] [--status gap,partial] | check | build [OUT.md] | apps [--gaps APP] [--json] | import DIR [--new-only] | db-export DIR |
+Commands: `bifrost pc parity status [--platform macos|ipados] | os-status | coverage [--platform macos|ipados] [--group G] [--sort coverage|name|group] | show NAME [--platform macos|ipados] |
+gaps [--group G] [--status gap,partial] [--platform macos|ipados] | check [--platform macos|ipados] | build [OUT.md] | apps [--gaps APP] [--json] | import DIR [--new-only] | db-export DIR |
 refresh-index | search QUERY [--top N] | related [--k N] | themes [--k N] | apply FILE.json [--dry-run] | verify plan|run|closures`.
 `check` fails on unreadable files, cited repo paths that do not exist, frameworks not yet assessed, and invalid `apps/*.json`.
 `search`, `related` and `themes` use embeddings from Titan (semantic search over the feature rows). `apply` takes closures
@@ -33,13 +33,13 @@ When a feature ships, edit its row in `data/<slug>.json` (status, BifrOSt path, 
 ## Tablet platform (`--platform ipados`)
 
 `status`, `coverage`, `show`, `gaps`, `check` and `refresh-index` take `--platform macos|ipados` (default `macos`; `build`, `apps`,
-`db-export` and the semantic commands stay macOS only). The tablet side is stored apart in `ipados/`, so the macOS matrix, its
+`db-export` and the semantic commands stay macOS only; `os-status` has no platform flag). The tablet side is stored apart in `ipados/`, so the macOS matrix, its
 `check` and `build` are not touched.
 
 - `refresh-index --platform ipados` re-reads the official documentation index and writes `ipados/index.json`. A page that lists
   the tablet without a version gets the phone version.
 - A framework that is in the tablet index and has a macOS assessment reuses those rows by reference: no file is needed, the
-  rows are read from `data/` at load time (split frameworks such as AppKit parts and SwiftUI parts keep their parts).
+  rows are read from `data/` at load time (split frameworks such as the AppKit, Foundation, SwiftUI, AVFoundation and tablet UIKit parts keep their parts; the prefixes are `PARTS` in `tools/parity/parity.py`).
   `status --platform ipados` shows how many frameworks reuse macOS rows and how many have their own file.
 - To change what the tablet says about a shared framework, add `ipados/data/<slug>.json`. Without a `reuse` key it replaces the
   macOS rows. With `"reuse": "macos"` (or `"macos:<slug>"`, or `{"platform": "macos", "slug": "<slug>"}`) it extends them: the
