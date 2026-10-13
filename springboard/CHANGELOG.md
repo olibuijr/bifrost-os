@@ -1,5 +1,10 @@
 # BifrOSt changelog
 
+## 0.7.9 — 2026-10-13
+
+- Idle: the clock service reads the Clock app's alarm files once a second only while the app runs (once a minute otherwise), and the microphone probe looks every 10 s instead of 2 s.
+- `SPRINGBOARD_WAKE_TRACE=1` logs which deadline wakes the shell (`Wake` records its call site).
+
 ## 0.7.8 — 2026-10-13
 
 - Idle: the SIGTERM watcher blocks on a self-pipe instead of polling every 100 ms (10 of the shell's 15 idle wake-ups a second on the lab PC).

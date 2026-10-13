@@ -1601,6 +1601,11 @@ impl Shell {
         if let Some(w) = self.audio_next_wake(t) {
             due.add(Some(w));
         }
+        if std::env::var_os("SPRINGBOARD_WAKE_TRACE").is_some() {
+            if let (Some(at), Some(src)) = (due.get(), due.source()) {
+                eprintln!("springboard: wake in {:.0} ms from {}:{}", at - t, src.file(), src.line());
+            }
+        }
         due.get()
     }
 
@@ -2978,6 +2983,12 @@ impl Shell {
             }
         }
         self.clock.set_muted(self.cc.volume <= 0.0);
+        // shell tests stand in for the Clock app by writing its files, so they count as the app running
+        let running = cfg!(test) || apphost::slot_of(clock::MANIFEST_ID).and_then(|k| self.ext.get(k).and_then(Option::as_ref)).is_some_and(|h| h.running());
+        if running && !self.clock.app_running {
+            self.clock.next_poll_now(t);
+        }
+        self.clock.app_running = running;
         let (clock_effects, changed) = self.clock.tick(&self.ui, t);
         effects.extend(clock_effects);
         if changed {

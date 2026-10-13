@@ -6,14 +6,23 @@
 
 /// The earliest deadline added so far.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Wake(Option<f64>);
+pub struct Wake(Option<f64>, Option<&'static std::panic::Location<'static>>);
 
 impl Wake {
     /// Adds a deadline; `None` (nothing pending) changes nothing.
+    #[track_caller]
     pub fn add(&mut self, at: Option<f64>) {
         if let Some(at) = at {
+            if self.0.is_none_or(|due| at < due) {
+                self.1 = Some(std::panic::Location::caller());
+            }
             self.0 = Some(self.0.map_or(at, |due| due.min(at)));
         }
+    }
+
+    /// The call site that supplied the earliest deadline (diagnostics: `SPRINGBOARD_WAKE_TRACE`).
+    pub fn source(&self) -> Option<&'static std::panic::Location<'static>> {
+        self.1
     }
 
     /// The fold so far, in monotonic ms.

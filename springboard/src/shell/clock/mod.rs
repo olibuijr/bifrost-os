@@ -33,8 +33,10 @@ pub const APP_ID: &str = "is.olibuijr.clock";
 /// are filed under the installed app with this id, which is found whether or not the app is running.
 pub const MANIFEST_ID: &str = "is.olibuijr.clock.desktop";
 
-/// How often the service looks for changes the app made to its files.
+/// How often the service looks for changes the app made to its files while the Clock app runs (it is their only
+/// writer), and while it does not: a once-a-second poll with no app open was the shell's main idle wake-up (round 75).
 const POLL_MS: f64 = 1000.0;
+const IDLE_POLL_MS: f64 = 60_000.0;
 
 /// Wall-clock time anchored to the monotonic frame clock.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -118,6 +120,8 @@ pub struct Clock {
     /// the files' modification times as last read or written
     seen: store::Stamp,
     next_poll: f64,
+    /// the Clock app is running, so its files may change at any moment (set by the shell before each tick)
+    pub app_running: bool,
     /// the home zone's daylight-saving rule, when known
     zone: Option<&'static City>,
     alert: Option<Alert>,
@@ -147,6 +151,7 @@ impl Clock {
             path: None,
             seen: store::Stamp::default(),
             next_poll: 0.0,
+            app_running: false,
             zone: None,
             alert: None,
             queue: vec![],
@@ -319,13 +324,18 @@ impl Clock {
 
     // ----- time -----
 
+    /// Look at the app's files on the next tick (the app just started).
+    pub fn next_poll_now(&mut self, t: f64) {
+        self.next_poll = self.next_poll.min(t);
+    }
+
     /// Fires due timers and alarms and picks up the app's edits. Returns
     /// effects (Alarm, WakeAt) and whether the alert's screen changed.
     pub fn tick(&mut self, _ui: &Ui, t: f64) -> (Vec<Effect>, bool) {
         let mut effects = vec![];
         let mut dirty = false;
         if t >= self.next_poll {
-            self.next_poll = t + POLL_MS;
+            self.next_poll = t + if self.app_running { POLL_MS } else { IDLE_POLL_MS };
             if let Some(p) = &self.path {
                 if store::stamp(p) != self.seen {
                     self.read_files(t);
@@ -531,6 +541,7 @@ mod tests {
         let ui = ui();
         let path = scratch("snooze");
         let mut c = clock(&ui);
+        c.app_running = true; // the Clock app writes the alarm below, so its files are watched every second
         c.load(&path, 1000.0);
         c.tick(&ui, 1500.0);
         let mut alarms = Alarms::default();

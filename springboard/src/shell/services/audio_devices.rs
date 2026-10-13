@@ -29,8 +29,9 @@ pub const SPEAKER: &str = "speaker";
 pub const MICROPHONE: &str = "microphone";
 
 /// The shell clock `t` of a service tick is in milliseconds.
-/// How often the capture devices are looked up again.
-const PROBE_EVERY_MS: f64 = 2_000.0;
+/// How often the capture devices are looked up again: a microphone appearing shows within 10 s; a faster poll was the
+/// audio thread's idle wake-up (round 75).
+const PROBE_EVERY_MS: f64 = 10_000.0;
 /// While the audio server is not there, a new connection is tried after this long, then twice as long after each
 /// failure, up to `RECONNECT_MAX_MS`.
 const RECONNECT_FIRST_MS: f64 = 1_000.0;
