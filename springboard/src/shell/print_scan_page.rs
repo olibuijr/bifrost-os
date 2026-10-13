@@ -35,9 +35,6 @@ impl View {
         }
     }
 
-    fn names(&self) -> Vec<String> {
-        self.printers.iter().map(|p| p.name.clone()).collect()
-    }
 }
 
 /// The state a printer's row shows.
@@ -85,34 +82,15 @@ pub fn apply(edit: &Edit) -> Result<Option<Prompt>, String> {
     }
 }
 
-/// A queue name from a device address: its host (or the USB or socket target) with characters the scheduler does
-/// not take replaced by hyphens. `taken` names are numbered (`-2`, `-3`) so an existing queue is never replaced.
-pub fn queue_name(device_uri: &str, taken: &[String]) -> String {
-    let rest = device_uri.split_once("://").map_or(device_uri, |(_, r)| r);
-    let host: String = rest.split(|c| c == '/' || c == ':').next().unwrap_or("").chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).take(60).collect();
-    let base = if host.trim_matches('-').is_empty() { "Printer".to_string() } else { host.trim_matches('-').to_string() };
-    let mut name = base.clone();
-    let mut n = 2;
-    while taken.iter().any(|t| t == &name) {
-        name = format!("{base}-{n}");
-        n += 1;
-    }
-    name
-}
-
 /// Finishes the address prompt: adds the queue through the scheduler. Other purposes are not this page's.
 pub fn finish(purpose: &Purpose, text: &str) -> Result<(), String> {
     if *purpose != Purpose::PrinterAddress {
         return Ok(());
     }
-    let device = text.trim();
-    if !cups::valid_device_uri(device) {
-        return Err(format!("unsupported device address {device:?}"));
-    }
-    let mut c = Client::local();
-    let taken = View::from_result(c.printers().map_err(|e| e.to_string())).names();
-    let name = queue_name(device, &taken);
-    c.add_driverless_printer(&name, device).map_err(|e| e.to_string())
+    cups::add_device(&mut Client::local(), text).map(|_| ()).map_err(|e| match e {
+        cups::CupsError::BadDeviceUri(device) => format!("unsupported device address {device:?}"),
+        other => other.to_string(),
+    })
 }
 
 #[cfg(test)]
@@ -167,16 +145,6 @@ mod tests {
         let g = groups(&View::from_result(Ok(vec![])));
         assert_eq!(g[0].items[0].label, "No Printers");
         assert_eq!(g[1].items[0].action, Action::PrintScan(Edit::Add));
-    }
-
-    #[test]
-    fn queue_names_come_from_the_host_and_never_repeat() {
-        assert_eq!(queue_name("ipp://printer.local/ipp/print", &[]), "printer-local");
-        assert_eq!(queue_name("socket://192.168.1.20:9100", &[]), "192-168-1-20");
-        assert_eq!(queue_name("usb://HP/LaserJet", &[]), "HP");
-        assert_eq!(queue_name("usb:///", &[]), "Printer");
-        let taken = vec!["HP".to_string(), "HP-2".to_string()];
-        assert_eq!(queue_name("usb://HP/LaserJet", &taken), "HP-3");
     }
 
     #[test]

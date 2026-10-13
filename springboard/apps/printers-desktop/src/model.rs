@@ -9,6 +9,8 @@ pub enum Action {
     Pause,
     Resume,
     SetDefault,
+    /// Removes the queue. The window asks twice before it sends this.
+    Delete,
     CancelJob(i32),
     HoldJob(i32),
     ReleaseJob(i32),
@@ -21,6 +23,7 @@ impl Action {
             Action::Pause => "Printer paused",
             Action::Resume => "Printer resumed",
             Action::SetDefault => "Default printer changed",
+            Action::Delete => "Printer deleted",
             Action::CancelJob(_) => "Job canceled",
             Action::HoldJob(_) => "Job held",
             Action::ReleaseJob(_) => "Job released",
@@ -35,6 +38,8 @@ pub enum Reply {
     Listed { printers: Vec<Printer>, printer: Option<String>, jobs: Vec<Job> },
     /// An action was accepted.
     Done(&'static str),
+    /// A printer was added under this queue name.
+    Added(String),
     /// The scheduler could not be reached or refused the request.
     Failed(String),
 }
@@ -48,6 +53,8 @@ pub struct Model {
     pub selected_job: Option<i32>,
     /// The last result, shown in the footer.
     pub status: String,
+    /// The printer whose removal the person has asked for once; a second request removes it.
+    pub confirm_delete: Option<String>,
 }
 
 impl Model {
@@ -66,6 +73,10 @@ impl Model {
                 }
             }
             Reply::Done(text) => self.status = text.to_string(),
+            Reply::Added(name) => {
+                self.status = format!("Added printer \"{name}\"");
+                self.select_printer(name);
+            }
             Reply::Failed(text) => self.status = text,
         }
     }
@@ -75,6 +86,7 @@ impl Model {
         self.selected = Some(name);
         self.jobs.clear();
         self.selected_job = None;
+        self.confirm_delete = None;
     }
 
     pub fn select_job(&mut self, id: i32) {
@@ -108,6 +120,17 @@ pub fn toggle(p: &Printer) -> (Action, &'static str) {
         (Action::Resume, "Resume")
     } else {
         (Action::Pause, "Pause")
+    }
+}
+
+/// The address the person copied, for Add Printer: trimmed, and only when the scheduler takes it. Otherwise the words
+/// the footer shows.
+pub fn device_from_clipboard(text: Option<&str>) -> Result<String, &'static str> {
+    let device = text.unwrap_or("").trim();
+    if bifrost_app::controls::cups::valid_device_uri(device) {
+        Ok(device.to_string())
+    } else {
+        Err("Copy a printer address, such as ipp://printer.local/ipp/print, then choose Add Printer")
     }
 }
 
@@ -275,6 +298,22 @@ mod tests {
         m.apply(Reply::Listed { printers: vec![printer("Office", true, PrinterState::Idle, 0), printer("Lab", false, PrinterState::Idle, 0)], printer: Some("Office".into()), jobs: vec![job(1, JobState::Pending)] });
         assert!(m.jobs.is_empty());
         assert_eq!(m.selected.as_deref(), Some("Lab"));
+    }
+
+    #[test]
+    fn an_added_printer_is_named_in_the_footer_and_selected() {
+        let mut m = Model::default();
+        m.apply(Reply::Added("HP".into()));
+        assert_eq!(m.status, "Added printer \"HP\"");
+        assert_eq!(m.selected.as_deref(), Some("HP"));
+        assert_eq!(Action::Delete.done(), "Printer deleted");
+    }
+
+    #[test]
+    fn the_address_for_add_printer_is_trimmed_and_must_be_one_the_scheduler_takes() {
+        assert_eq!(device_from_clipboard(Some(" ipp://printer.local/ipp/print \n")), Ok("ipp://printer.local/ipp/print".to_string()));
+        assert!(device_from_clipboard(Some("hello")).is_err());
+        assert!(device_from_clipboard(None).is_err());
     }
 
     #[test]

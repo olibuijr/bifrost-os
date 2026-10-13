@@ -2,8 +2,9 @@
 //!
 //! The sheet prints the desktop as the document. It captures the frame (the same drawing the screenshot uses), splits it
 //! into pages that fit the paper's printable area ([`layout`], the model behind `NativePrintInfo.imageableBounds` and the
-//! page scale), and shows the first page in a preview with Previous and Next. The printer list comes from CUPS
-//! (`bifrost_ui::print::printers`), and "Save as PDF" is always last. Print writes the pages into one PDF
+//! page scale), and shows the first page in a preview with Previous and Next. The printer list comes from the printing
+//! service (`bifrost_ui::cups`); a stopped printer is left out, and "Save as PDF" is always last. The Pages row prints
+//! every page or only the one in the preview. Print writes the pages into one PDF
 //! ([`write_pdf`]; raw RGB image pages, std only) and sends it through `PrintOperation` to the chosen queue, or copies it
 //! to Documents for Save as PDF. Print submits in the background so the desktop does not wait for CUPS.
 //!
@@ -12,7 +13,8 @@
 use super::ui::{Ui, Weight, CARD_BG, FILL_GRAY, LABEL, LINK, MAC_BODY_PT, MAC_TITLE3_PT, SEPARATOR, WHITE};
 use super::Shell;
 use crate::gfx::{Image, Surface};
-use bifrost_ui::print::{Destination, Orientation, PaperSize, PrintError, PrintInfo, PrintOperation, Printer};
+use bifrost_ui::cups::{Client, Printer, PrinterState};
+use bifrost_ui::print::{Destination, Orientation, PaperSize, PrintError, PrintInfo, PrintOperation};
 use std::path::{Path, PathBuf};
 
 /// The last printer choice; it writes a PDF rather than sending the job to a queue.
@@ -26,9 +28,9 @@ const PAPERS: [PaperSize; 5] = [PaperSize::A4, PaperSize::Letter, PaperSize::A3,
 /// The page preview box, in points: the page fits inside it.
 const PREVIEW_W_PT: f32 = 384.0;
 const PREVIEW_H_PT: f32 = 154.0;
-/// The rows, in order: printer, paper, orientation, scale, copies.
-const ROWS: usize = 5;
-const ROW_NAMES: [&str; ROWS] = ["Printer", "Paper", "Orientation", "Scale", "Copies"];
+/// The rows, in order: printer, paper, orientation, scale, copies, pages.
+const ROWS: usize = 6;
+const ROW_NAMES: [&str; ROWS] = ["Printer", "Paper", "Orientation", "Scale", "Copies", "Pages"];
 
 // indices into `PrintSheet::labels`
 const L_TITLE: usize = 0;
@@ -49,14 +51,19 @@ pub enum Target {
     Pdf,
 }
 
-/// The targets for the enabled printers, then Save as PDF.
+/// A printer the sheet offers: its queue is running (a stopped queue is paused by the person, or disabled).
+fn usable(p: &Printer) -> bool {
+    p.state != PrinterState::Stopped
+}
+
+/// The targets for the usable printers, then Save as PDF.
 pub fn targets(printers: &[Printer]) -> Vec<Target> {
-    printers.iter().filter(|p| p.enabled).map(|p| Target::Printer(p.name.clone())).chain(std::iter::once(Target::Pdf)).collect()
+    printers.iter().filter(|p| usable(p)).map(|p| Target::Printer(p.name.clone())).chain(std::iter::once(Target::Pdf)).collect()
 }
 
 /// The index of the default printer among [`targets`], or the first target when there is no default.
 pub fn default_index(printers: &[Printer]) -> usize {
-    printers.iter().filter(|p| p.enabled).position(|p| p.is_default).unwrap_or(0)
+    printers.iter().filter(|p| usable(p)).position(|p| p.is_default).unwrap_or(0)
 }
 
 /// What the page is printed on: the paper, the orientation and the scale it is drawn at.
@@ -67,6 +74,8 @@ pub struct Setup {
     pub landscape: bool,
     pub scale: usize,
     pub copies: u32,
+    /// Print only the page in the preview instead of every page.
+    pub this_page: bool,
 }
 
 /// Where each page of the captured document starts, and how many points one document pixel takes on the paper.
@@ -208,7 +217,7 @@ struct Geo {
 
 fn geo(ui: &Ui, w: i32, h: i32) -> Geo {
     let pt = |v: f32| ui.pt(v);
-    let (cw, ch) = (pt(440.0), pt(500.0));
+    let (cw, ch) = (pt(440.0), pt(540.0));
     let x0 = ((w as f32 - cw) / 2.0).max(0.0);
     let y0 = ((h as f32 - ch) / 2.0).max(0.0);
     let pad = pt(20.0);
@@ -285,7 +294,7 @@ impl PrintSheet {
     /// The sheet for `image` (the captured desktop) with the enabled `printers` and Save as PDF.
     pub fn new(ui: &Ui, image: Image, printers: &[Printer]) -> PrintSheet {
         let targets = targets(printers);
-        let setup = Setup { target: default_index(printers), paper: 0, landscape: false, scale: 2, copies: 1 };
+        let setup = Setup { target: default_index(printers), paper: 0, landscape: false, scale: 2, copies: 1, this_page: false };
         let mut sheet = PrintSheet {
             image,
             targets,
@@ -349,6 +358,7 @@ impl PrintSheet {
             if self.setup.landscape { "Landscape".to_string() } else { "Portrait".to_string() },
             format!("{}%", SCALES[self.setup.scale]),
             self.setup.copies.to_string(),
+            if self.setup.this_page { format!("Page {}", self.page + 1) } else { "All".to_string() },
         ];
         let mut labels = vec![ui.text("Print", MAC_TITLE3_PT, Weight::Semibold, WHITE)];
         for name in ROW_NAMES {
@@ -417,21 +427,28 @@ impl PrintSheet {
         }
     }
 
-    /// Advances one row's setting: printer or Save as PDF, paper, orientation, scale, copies (1 to 9).
+    /// Advances one row's setting: printer or Save as PDF, paper, orientation, scale, copies (1 to 9), all pages or the
+    /// page in the preview.
     fn cycle(&mut self, row: usize) {
         match row {
             0 => self.setup.target = (self.setup.target + 1) % self.targets.len(),
             1 => self.setup.paper = (self.setup.paper + 1) % PAPERS.len(),
             2 => self.setup.landscape = !self.setup.landscape,
             3 => self.setup.scale = (self.setup.scale + 1) % SCALES.len(),
-            _ => self.setup.copies = self.setup.copies % 9 + 1,
+            4 => self.setup.copies = self.setup.copies % 9 + 1,
+            _ => self.setup.this_page = !self.setup.this_page,
         }
     }
 
-    /// The job for the current settings: every page, as one PDF.
+    /// The job for the current settings: the pages (every page, or only the one in the preview), as one PDF.
     pub fn job(&self) -> Job {
         let info = self.info();
-        let pages: Vec<Image> = self.layout.slices.iter().map(|&(y, h)| self.image.crop(0, y, self.image.w, h)).collect();
+        let slices: Vec<(usize, usize)> = if self.setup.this_page {
+            self.layout.slices.get(self.page).copied().into_iter().collect()
+        } else {
+            self.layout.slices.clone()
+        };
+        let pages: Vec<Image> = slices.iter().map(|&(y, h)| self.image.crop(0, y, self.image.w, h)).collect();
         let (l, t, _, _) = info.imageable();
         let pdf = write_pdf(&pages, info.paper_size(), (l, t), self.layout.pt_per_px);
         Job { target: self.targets[self.setup.target].clone(), info, pdf }
@@ -489,7 +506,8 @@ impl Shell {
         self.drawn = super::Drawn::Nothing;
         self.draw(&mut Surface { w: img.w, h: img.h, stride: img.w, px: &mut img.px, y0: 0 }, t);
         self.drawn = super::Drawn::Nothing;
-        let printers = bifrost_ui::print::printers();
+        // no printing service means no queues: the sheet then offers Save as PDF only
+        let printers = Client::local().printers().unwrap_or_default();
         self.print_sheet = Some(PrintSheet::new(&self.ui, img, &printers));
         self.dirty = true;
     }
@@ -522,7 +540,19 @@ mod tests {
     use super::*;
 
     fn printer(name: &str, enabled: bool, is_default: bool) -> Printer {
-        Printer { name: name.to_string(), enabled, is_default }
+        Printer {
+            name: name.to_string(),
+            uri: bifrost_ui::cups::printer_uri(name),
+            state: if enabled { PrinterState::Idle } else { PrinterState::Stopped },
+            state_message: String::new(),
+            accepting_jobs: enabled,
+            is_default,
+            make_and_model: String::new(),
+            location: String::new(),
+            info: String::new(),
+            device_uri: String::new(),
+            queued_jobs: 0,
+        }
     }
 
     fn margins_zero() -> PrintInfo {
@@ -611,5 +641,27 @@ mod tests {
         assert_eq!(sheet.setup.copies, 1, "9 wraps to 1");
         sheet.cycle(2);
         assert!(sheet.info().paper_size().0 > sheet.info().paper_size().1, "landscape is wider than tall");
+    }
+
+    #[test]
+    fn the_pages_row_prints_the_previewed_page_or_all_of_them() {
+        let ui = crate::shell::tests::ui();
+        // 400 px wide fits the 523 pt printable width at 100 %; 1684 rows then take three pages of 770 pt
+        let mut sheet = PrintSheet::new(&ui, Image::new(400, 1684), &[]);
+        assert_eq!(sheet.layout.slices.len(), 3);
+        assert!(sheet.job().pdf.windows(8).any(|w| w == b"/Count 3"), "all pages by default");
+        sheet.page = 1;
+        sheet.cycle(5);
+        assert!(sheet.setup.this_page);
+        assert!(sheet.job().pdf.windows(8).any(|w| w == b"/Count 1"), "only the previewed page");
+        sheet.cycle(5);
+        assert!(!sheet.setup.this_page, "the row toggles back to all pages");
+    }
+
+    #[test]
+    fn stopped_printers_are_not_offered() {
+        let printers = [printer("Off", false, true), printer("On", true, false)];
+        assert_eq!(targets(&printers), vec![Target::Printer("On".into()), Target::Pdf]);
+        assert_eq!(default_index(&printers), 0, "a stopped default is skipped, so the first usable target is picked");
     }
 }
