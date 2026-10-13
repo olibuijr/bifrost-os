@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.13.0 — 2026-10-13
+
+- Search: Cmd+F or a click puts the cursor in the search field at the right of the toolbar. The events whose titles match replace the grid in a list (title, then day, time and place); a result opens its event on its day. Escape or the clear button ends the search; choosing a view or Today does too. The field is left out when the toolbar is narrower than 560 pt. Event > Search Events does the same.
+- Hold and drag in Day and Week: hold a press for a quarter of a second, then drag. On empty space it draws out a new event (the editor opens when you let go); on an event it moves the event to the time and day under the pointer, in quarter hours, and saves it. A press that moves at once still scrolls the grid.
+- Go to Date: Go > Go to Date... (Cmd+Shift+T) opens a sheet with day, month and year steppers, a Today shortcut and Go and Cancel. Return accepts and the arrow keys step the day and week.
+- View > Zoom In and Zoom Out (Cmd+= and Cmd+-) change the hour height of the Day and Week grids from 24 to 144 pt, keeping the same hour at the top; the size is kept.
+- Settings menu: start the week on Monday (Month, Week and Year follow, and the week numbers), the length of a new event, the hour the Day and Week views open at, and the default alert of a new timed and a new all-day event. A new event that is switched to all-day takes the all-day alert unless you picked one.
+- Edit > Cut, Copy and Paste work on events: the event open in the editor, else the one last opened or saved, else the first of the shown day. An event is copied as .ics text, so it pastes into other calendars or a text file; Paste puts the events on the shown day with their times, place, notes, alert and repeat. Inside the editor the commands go to the text field that has the cursor.
+- File > Import... reads an .ics or .vcs file or a calendar archive, and an .ics opened from Files imports the same way. File > Export Archive... saves the whole calendar (events and the repeat rules, alerts and invitees) as one .calarchive file; File > Import Archive... merges one back. An import adds what is missing and never removes anything.
+- File > Print... sends the shown day, week, month or year to the printing service as a plain-text agenda.
+- Calendar list: it now lists the saved events, Holidays and each subscribed calendar with a colour dot; a click shows or hides the calendar. Holidays are Iceland's public holidays and observances, worked out from the year (Easter, the first Thursday after 18 April, the first Monday of August and the fixed dates). They are read-only: a tap says what the day is.
+- File > Subscribe to Calendar from Clipboard adds the webcal:// or https:// address on the pasteboard as a subscribed calendar, and a webcal link opened from another app does the same. Each subscription is read every hour in the background, keeps its last answer for the next start and shows in its own colour; File > Unsubscribe from removes one.
+- Intents: show-date, show-event and create-event on the control socket (`intent.<id>`) and in the manifest, with Event entities for pickers.
+- Still open, listed in `docs/parity-matrix/apps/calendar.json`: the Birthdays calendar (needs the Contacts service), several local calendars, custom repeats and several alerts per event, inviting people and answering invitations, a time zone choice, travel time, dated reminders, and a window per event.
+
 ## 1.12.0 — 2026-10-13
 
 - Internet Accounts: the CalDAV accounts switched on for Calendars are read in the background (discovery, then the events

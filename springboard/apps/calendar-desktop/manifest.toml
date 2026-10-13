@@ -1,10 +1,10 @@
 id = "is.olibuijr.calendar.desktop"
 name = "Calendar"
-version = "1.12.0"
+version = "1.13.0"
 exec = "bifrost-calendar"
 icon = "icon.png"
 min_shell = "0.4.84"
-summary = "Month, week and day calendar with events, repeats and alerts."
+summary = "Month, week and day calendar with events, repeats, alerts, search, holidays and subscribed calendars."
 category = "Productivity"
 architecture = "x86_64-linux"
 permissions = ["storage", "documents", "notifications", "keychain"]
