@@ -121,17 +121,16 @@ fn run() -> std::io::Result<()> {
     bifrost_render::fontfallback::install_from_dir(&bifrost_render::fontprefs::library(&dir), "en");
     // the shell owns settings.ini from here on; the bin only reads start-up values
     let mut prefs = springboard::shell::prefs::Prefs::load(format!("{dir}/settings.ini"));
-    // the volume is the default output device's volume control on the audio server (connected lazily)
-    // (a worker thread owns the connection: the UI thread never waits on the audio server)
-    let volume_tx = spawn_volume_worker();
-    // key clicks and the alert tone of a timer or alarm play on the sound-effects role (a worker thread owns the player)
-    let sound_tx = spawn_sound_worker();
+    // the volume is the default output device's volume control on the audio server (connected lazily), and key
+    // clicks and the alert tone of a timer or alarm play on the sound-effects role; one worker thread owns both
+    // connections, so the UI thread never waits on the audio server
+    let audio_tx = spawn_audio_worker();
     // the headset jack: its input device reports plug state as switch events
     let mut headset = input::Device::by_hint(route::JACK_DEVICE_HINTS).and_then(|p| input::Device::open(&p).map_err(|e| eprintln!("springboard: headset {p}: {e}")).ok());
     let mut jack = headset.as_ref().map_or_else(route::Jack::default, |d| route::Jack::from_bits(d.switches()));
     let mut router = route::Router::from_prefs(|k| prefs.get(k).map(String::from), jack.plugged());
     let mut vol = router.volume();
-    let _ = volume_tx.send(vol);
+    let _ = audio_tx.send(AudioJob::Volume(vol));
     let mut jack_events = Vec::new();
     // a fresh install (no wallpaper chosen yet) starts on a random Icelandic still, kept from then on
     if prefs.get("wallpaper").is_none() {
@@ -843,7 +842,7 @@ fn run() -> std::io::Result<()> {
                     shell.pause_music();
                 }
                 vol = change.volume;
-                let _ = volume_tx.send(vol);
+                let _ = audio_tx.send(AudioJob::Volume(vol));
                 shell.set_route(change.route, vol.level(), change.hud, t);
                 shell.save_prefs(&change.prefs);
             }
@@ -875,7 +874,7 @@ fn run() -> std::io::Result<()> {
                 // a click is queued for the sound worker, so the UI thread never waits on the speaker; muted is silent
                 Effect::KeyClick(c) => {
                     if !vol.muted() {
-                        let _ = sound_tx.send(Sound::Click(c));
+                        let _ = audio_tx.send(AudioJob::Sound(Sound::Click(c)));
                     }
                 }
                 #[cfg(feature = "desktop-wayland")]
@@ -904,7 +903,7 @@ fn run() -> std::io::Result<()> {
                 }
                 Effect::Volume(v) => {
                     vol = Volume::new(v);
-                    let _ = volume_tx.send(vol);
+                    let _ = audio_tx.send(AudioJob::Volume(vol));
                     shell.set_volume(v);
                     shell.save_prefs(&router.set_level(v));
                 }
@@ -928,7 +927,7 @@ fn run() -> std::io::Result<()> {
                 // sound comes later; the full-screen alert already shows
                 Effect::Alarm => match shell.alert_tone() {
                     Some(index) => {
-                        let _ = sound_tx.send(Sound::Alert(index));
+                        let _ = audio_tx.send(AudioJob::Sound(Sound::Alert(index)));
                     }
                     None => eprintln!("springboard: alarm (muted)"),
                 },
@@ -1482,28 +1481,11 @@ fn wifi_settled(wifi: &springboard::net::wifi::Wifi) -> bool {
     matches!(wifi.status.lock().map(|s| s.state), Ok(State::Connected | State::Off))
 }
 
-/// Sets the level `v` on the default output device of the audio server (volume and mute controls);
-/// the player's software gain carries it when the server is not there. Connects lazily, so the
-/// shell may start before bifrost-audiod. Never an amplifier or a route.
+/// A job for the audio worker: a level for the default output device, or a sound on the sound-effects role.
 #[cfg(target_os = "linux")]
-fn spawn_volume_worker() -> std::sync::mpsc::Sender<springboard::media::volume::Volume> {
-    let (tx, rx) = std::sync::mpsc::channel::<springboard::media::volume::Volume>();
-    let spawned = std::thread::Builder::new().name("volume".into()).spawn(move || {
-        let mut dev: Option<bifrost_audio_hal::Device> = None;
-        // the device scalar last applied: a change walks from it, so the device never jumps
-        let mut at: Option<f32> = None;
-        // newest level wins: a slider drag while the server is slow collapses to one write
-        while let Ok(mut v) = rx.recv() {
-            while let Ok(newer) = rx.try_recv() {
-                v = newer;
-            }
-            apply_volume(v, &mut dev, &mut at);
-        }
-    });
-    if let Err(e) = spawned {
-        eprintln!("springboard: volume worker: {e}");
-    }
-    tx
+enum AudioJob {
+    Volume(springboard::media::volume::Volume),
+    Sound(Sound),
 }
 
 /// A sound the shell plays on the sound-effects role: a key click, or the alert tone at this index into
@@ -1515,25 +1497,37 @@ enum Sound {
     Alert(usize),
 }
 
-/// Plays key clicks and alert tones on the sound-effects role of the audio server. One worker thread owns the
-/// player, so a write never waits on the UI thread. Each batch of waiting sounds collapses to its newest alert and
-/// at most one click: a fast typist does not queue a tail of clicks behind the speaker, and an alert wins over a click.
+/// The audio worker: one thread for every audio job of the shell. A level sets the volume and mute controls of the
+/// default output device on the audio server; the player's software gain carries it when the server is not there.
+/// Sounds play on the sound-effects role. The worker owns the device and the player, both connected lazily, so the
+/// shell may start before bifrost-audiod. Each batch of waiting jobs collapses to its newest level, and to its newest
+/// alert and at most one click: a slider drag or a fast typist does not queue a tail behind the server, and an alert
+/// wins over a click. Never an amplifier or a route.
 #[cfg(target_os = "linux")]
-fn spawn_sound_worker() -> std::sync::mpsc::Sender<Sound> {
+fn spawn_audio_worker() -> std::sync::mpsc::Sender<AudioJob> {
     use springboard::media::system_sound::SoundPlayer;
-    let (tx, rx) = std::sync::mpsc::channel::<Sound>();
-    let spawned = std::thread::Builder::new().name("sound".into()).spawn(move || {
+    let (tx, rx) = std::sync::mpsc::channel::<AudioJob>();
+    let spawned = std::thread::Builder::new().name("audio".into()).spawn(move || {
+        let mut dev: Option<bifrost_audio_hal::Device> = None;
+        // the device scalar last applied: a change walks from it, so the device never jumps
+        let mut at: Option<f32> = None;
         let mut player: Option<SoundPlayer> = None;
         while let Ok(first) = rx.recv() {
-            let (mut alert, mut click) = (None, None);
+            let (mut volume, mut alert, mut click) = (None, None, None);
             let mut next = Some(first);
-            while let Some(s) = next {
-                match s {
-                    Sound::Alert(i) => alert = Some(i),
-                    Sound::Click(c) => click = Some(c),
+            while let Some(job) = next {
+                match job {
+                    AudioJob::Volume(v) => volume = Some(v),
+                    AudioJob::Sound(Sound::Alert(index)) => alert = Some(index),
+                    AudioJob::Sound(Sound::Click(c)) => click = Some(c),
                 }
                 next = rx.try_recv().ok();
             }
+            // newest level wins: a slider drag while the server is slow collapses to one write
+            if let Some(v) = volume {
+                apply_volume(v, &mut dev, &mut at);
+            }
+            let Some(sound) = alert.map(Sound::Alert).or(click.map(Sound::Click)) else { continue };
             if player.is_none() {
                 match SoundPlayer::on_sound_effects() {
                     Ok(p) => player = Some(p),
@@ -1544,10 +1538,9 @@ fn spawn_sound_worker() -> std::sync::mpsc::Sender<Sound> {
                 }
             }
             let Some(p) = player.as_mut() else { continue };
-            let played = match (alert, click) {
-                (Some(index), _) => p.alert(index, 1.0),
-                (None, Some(c)) => p.click(c, 1.0),
-                (None, None) => Ok(()),
+            let played = match sound {
+                Sound::Alert(index) => p.alert(index, 1.0),
+                Sound::Click(c) => p.click(c, 1.0),
             };
             if let Err(e) = played {
                 eprintln!("springboard: sound: {e}");
@@ -1557,7 +1550,7 @@ fn spawn_sound_worker() -> std::sync::mpsc::Sender<Sound> {
         }
     });
     if let Err(e) = spawned {
-        eprintln!("springboard: sound worker: {e}");
+        eprintln!("springboard: audio worker: {e}");
     }
     tx
 }
