@@ -71,9 +71,6 @@ Apple HIG and the Bifrost checklist are the design authority; cite the section (
 - Agent teams (owner, 2026-10-13): Haiku 5.5 agents only code and commit; they never build, test, run
   tools/check-names.py or touch Midget. The lead reviews and merges, asks the owner before every build, runs one build
   at a time, and never builds while agents run.
-- Agent teams (owner, 2026-10-13): Haiku 5.5 agents only code and commit; they never build, test, run
-  tools/check-names.py or touch Midget. The lead reviews and merges, asks the owner before every build, runs one build
-  at a time, and never builds while agents run.
 - **Parity status** (owner rule, 2026-10-11): parity with the reference SDKs is tracked with the `bifrost-parity-matrix`
   skill and `bifrost pc parity`. A change that adds or completes a capability updates its rows in
   `docs/parity-matrix/data/` in the same round (`check`, `build`, then the published database). Test on the host,
