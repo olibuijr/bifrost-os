@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0 — 2026-10-13
+
+- New Message takes several Matrix user ids, separated by commas, and starts a private group conversation; one id still starts a direct conversation.
+- Pinned conversations keep the order they were pinned in, at most nine can be pinned, and Move Pin Up and Move Pin Down (Conversation menu and the row context menu) reorder them.
+- Mark as Unread is stored on the account (room account data) and read back from the sync, so it shows on other devices too; opening the conversation clears it there as well.
+- Emoji picker: 64 emoji, a search field (type words such as "party", Return picks the first result) and the recently used emoji first. The recent ones are saved in the app's data directory.
+- Tapping the quoted line of a reply scrolls the timeline to the original message.
+- Message context menu: Edit History lists the earlier versions of an edited message, and Show Reactions names who gave each emoji.
+- Conversation details also list the pictures shared in the loaded messages.
+- Not yet: end-to-end encryption, dragging files in, a user directory search in New Message.
+
 ## 0.2.0 — 2026-10-13
 
 - Conversations: New Message (File menu, Cmd+N, or the + button) starts a direct conversation with a Matrix user id; Delete Conversation leaves and forgets a room after a confirmation; Pin keeps a conversation at the top; Hide Alerts stops its notifications and its dock badge count; Mark as Unread (also Mark as Read). The choices are saved in the app's data directory. All are in the Conversation menu and in the context menu of a conversation row.

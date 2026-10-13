@@ -490,7 +490,7 @@ impl MessagesWindow {
                     .enumerate()
                     .map(|(i, emoji)| {
                         let rect = [r[0] + lay.pad + (i % EMOJI_COLUMNS) as f32 * cell, content_y + (i / EMOJI_COLUMNS) as f32 * cell, cell, cell];
-                        button(rect, emoji, OverlayAction::Pick(i), false, false)
+                        button(rect, emoji.as_str(), OverlayAction::Pick(i), false, false)
                     })
                     .collect();
                 Some(Panel { panel: r, field: Some(field), content_y, buttons })
