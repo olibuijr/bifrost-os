@@ -27,7 +27,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use bootweave_frame::render::{bar_rect, render_bar, PixelOrder};
+use bootweave_frame::render::PixelOrder;
 use bootweave_frame::timing::Handoff;
 use bootweave_frame::{Appearance, BootTiming, Progress, Stage};
 use std::sync::Mutex;
@@ -62,8 +62,6 @@ const BAR_TICK: Duration = Duration::from_millis(33);
 const BAR_CEILING: Duration = Duration::from_secs(60);
 /// How long the record waits for `desktop-faded` before giving up on this boot.
 const RECORD_WAIT: Duration = Duration::from_secs(120);
-/// The failure screens' appearance (the boot timing record is not read on those paths).
-const APPEARANCE: Appearance = Appearance::Dark;
 /// How long the crash notice stays on the panel before the session takes it over.
 const CRASH_NOTICE_MS: u64 = 3000;
 /// How long to wait for a display to open before giving up on a screen.
@@ -204,10 +202,20 @@ fn park() -> ! {
     }
 }
 
+/// The one appearance source for every boot screen: the user's Settings choice, else the boot timing record the
+/// loader also reads, else Dark. The loader, Bootweave and the shell all end up on this value.
+pub fn boot_appearance() -> Appearance {
+    fs::read_to_string(SETTINGS)
+        .ok()
+        .and_then(|text| appearance_from_settings(&text))
+        .or_else(|| read_record(TIMING_PATH).map(|r| r.appearance))
+        .unwrap_or_default()
+}
+
 /// Renders `screen` at the panel's size and presents it. The display stays open while the caller holds it.
 fn present(display: &mut Display, screen: Screen) {
     let (w, h) = display.size();
-    let frame = Frame { width: w as u32, height: h as u32, appearance: APPEARANCE, progress: None, screen };
+    let frame = Frame { width: w as u32, height: h as u32, appearance: boot_appearance(), progress: None, screen };
     let mut pixels = vec![0u32; w * h];
     render(&frame, &mut pixels, w, PixelOrder::Bgrx);
     let mut damage = Damage::new(w, h);
@@ -481,7 +489,7 @@ impl Bar {
         let fb_stride = read_u32(&format!("{FB_SYSFS}/stride")).map_or(row_bytes, |s| (s as usize).max(row_bytes));
         let fb = OpenOptions::new().read(true).write(true).open(FB_DEV)?;
         let order = fb_order(&fb);
-        Ok(Bar {
+        let mut bar = Bar {
             progress: seed(timing),
             loader_ms,
             order,
@@ -491,7 +499,26 @@ impl Bar {
             fb_stride,
             buf: vec![0; width as usize * height as usize],
             fb,
-        })
+        };
+        bar.draw_frame()?;
+        Ok(bar)
+    }
+
+    /// Draws the whole boot frame once (the mark alone, no bar) through the shared renderer, so the panel shows the
+    /// same pixels as the loader's frame and as the start-failed screen without its buttons.
+    fn draw_frame(&mut self) -> io::Result<()> {
+        let frame = Frame { width: self.width, height: self.height, appearance: self.progress.timing.appearance, progress: None, screen: Screen::Boot };
+        render(&frame, &mut self.buf, self.width as usize, self.order);
+        let mut row = Vec::with_capacity(self.width as usize * 4);
+        for r in 0..self.height as usize {
+            row.clear();
+            for px in &self.buf[r * self.width as usize..(r + 1) * self.width as usize] {
+                row.extend_from_slice(&px.to_le_bytes());
+            }
+            self.fb.seek(SeekFrom::Start(r as u64 * self.fb_stride as u64))?;
+            self.fb.write_all(&row)?;
+        }
+        Ok(())
     }
 
     /// Moves the bar to where this boot is now (`boot_ms` since kernel start), and publishes the position when it
@@ -509,19 +536,7 @@ impl Bar {
                 self.published = Some(permille);
             }
         }
-        let appearance = self.progress.timing.appearance;
-        render_bar(self.width, self.height, shown, appearance, &mut self.buf, self.width as usize, self.order);
-        let (x, y, w, h) = bar_rect(self.width, self.height);
-        let mut row = Vec::with_capacity(w as usize * 4);
-        for r in y..y + h {
-            row.clear();
-            let start = r as usize * self.width as usize + x as usize;
-            for px in &self.buf[start..start + w as usize] {
-                row.extend_from_slice(&px.to_le_bytes());
-            }
-            self.fb.seek(SeekFrom::Start(r as u64 * self.fb_stride as u64 + x as u64 * 4))?;
-            self.fb.write_all(&row)?;
-        }
+        // the boot frame has no bar: only the honest position is published
         Ok(())
     }
 

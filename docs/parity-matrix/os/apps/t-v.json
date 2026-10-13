@@ -1,0 +1,147 @@
+{
+ "category": "apps",
+ "shard": "t-v",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Applications/TV.app",
+   "category": "apps",
+   "name": "TV",
+   "path": "/System/Applications/TV.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no TV app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/TextEdit.app",
+   "category": "apps",
+   "name": "TextEdit",
+   "path": "/System/Applications/TextEdit.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no plain text editor app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Time Machine.app",
+   "category": "apps",
+   "name": "Time Machine",
+   "path": "/System/Applications/Time Machine.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/backup_page.rs",
+   "status": "partial",
+   "note": "Backup page, the backup settings",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Tips.app",
+   "category": "apps",
+   "name": "Tips",
+   "path": "/System/Applications/Tips.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no tips app",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Utilities/Terminal.app",
+   "category": "apps",
+   "name": "Terminal",
+   "path": "/System/Applications/Utilities/Terminal.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/terminal/mod.rs",
+   "status": "partial",
+   "note": "Term (is.olibuijr.term) terminal",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/Utilities/VoiceOver Utility.app",
+   "category": "apps",
+   "name": "VoiceOver Utility",
+   "path": "/System/Applications/Utilities/VoiceOver Utility.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/accessibility/mod.rs",
+   "status": "partial",
+   "note": "accessibility tree and reader; no VoiceOver utility",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Applications/VoiceMemos.app",
+   "category": "apps",
+   "name": "VoiceMemos",
+   "path": "/System/Applications/VoiceMemos.app",
+   "kind": "app",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/apps/voicememos-desktop",
+   "status": "partial",
+   "note": "Voice Memos app",
+   "rea": []
+  }
+ ]
+}

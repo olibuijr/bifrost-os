@@ -1,0 +1,49 @@
+{
+ "category": "shaders",
+ "shard": "w-z",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SpatialConnect.framework/Versions/A/Resources/WarpShaders.metallib",
+   "category": "shaders",
+   "name": "WarpShaders.metallib",
+   "path": "/System/Library/PrivateFrameworks/SpatialConnect.framework/Versions/A/Resources/WarpShaders.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "SpatialConnect",
+   "facts": {
+    "size": 81420
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/iOSSupport/System/Library/PrivateFrameworks/WeatherMaps.framework/Versions/A/Resources/WeatherMapsMetalLib.metallib",
+   "category": "shaders",
+   "name": "WeatherMapsMetalLib.metallib",
+   "path": "/System/iOSSupport/System/Library/PrivateFrameworks/WeatherMaps.framework/Versions/A/Resources/WeatherMapsMetalLib.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "WeatherMaps",
+   "facts": {
+    "size": 65432
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

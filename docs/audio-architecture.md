@@ -287,6 +287,13 @@ and the server sleeps: no timers and no wakeups (`docs/snow-leopard.md` rules).
   released on exit (pidfd).
 - Aggregate: an ordered list of sub-device UIDs, one clock source, and per-sub-device drift compensation. Created by
   the Audio Setup app or the API. Private aggregates belong to one client.
+- Parity models (`bifrost-audio-hal`, no IO): `aggregate::Aggregate` validates an aggregate description the way
+  the reference's creation dictionary does (UID, sub-device list without duplicates, master defaults to the first
+  sub-device, clock defaults to the master) and maps aggregate channels onto sub-devices per direction. Decision: the
+  mapping is pure and tested on the host; drift compensation and the real clocks stay in the server. Not yet a
+  parity row: a row is `parity` only after the server creates the device and an app reads it on Midget.
+- Parity models: `process::ProcessList` keeps the audio processes (pid, bundle identifier, running input and output)
+  sorted by pid. The server feeds it from its client table; apps read it through the HAL client when wired.
 - Tap: a description (process list or global, mono, stereo or matching, muted or not). It is readable as an input
   stream of a private aggregate, as on the reference. It needs the `audio-capture` permission. The menu-bar
   indicator shows while it runs.

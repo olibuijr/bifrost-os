@@ -55,6 +55,36 @@ pub fn groups(ctx: &Ctx) -> u32 {
     call(ctx, "groups", &Json::Null)
 }
 
+/// Lists every item in `group` as `(service, account, modified)`, with no secrets. Answer: [`decode_list`].
+pub fn list(ctx: &Ctx, group: &str) -> u32 {
+    call(ctx, "list", &Json::Obj(vec![("group".to_string(), Json::Str(group.to_string()))]))
+}
+
+/// One row of a [`list`] answer: the item's service and account, and the Unix time it was last written.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Row {
+    pub service: String,
+    pub account: String,
+    pub modified: u64,
+}
+
+/// Decodes the answer to [`list`]; `None` when the answer is an error or not a list. Malformed rows are skipped.
+pub fn decode_list(result: &Result<Json, String>) -> Option<Vec<Row>> {
+    let items = result.as_ref().ok()?.as_array()?;
+    Some(
+        items
+            .iter()
+            .filter_map(|r| {
+                Some(Row {
+                    service: r.get("service")?.as_str()?.to_string(),
+                    account: r.get("account")?.as_str()?.to_string(),
+                    modified: r.get("modified")?.number()? as u64,
+                })
+            })
+            .collect(),
+    )
+}
+
 /// `SecItemAdd` in `group`: the answer is `DuplicateItem` when the item exists.
 pub fn add(ctx: &Ctx, group: &str, item_service: &str, account: &str, secret: &[u8]) -> u32 {
     call(ctx, "add", &params(group, item_service, account, Some(secret)))
@@ -148,6 +178,20 @@ mod tests {
         let list = Ok(Json::Arr(vec![Json::Str("is.a".into()), Json::Str("is.b".into())]));
         assert_eq!(decode_groups(&list), Some(vec!["is.a".to_string(), "is.b".to_string()]));
         assert_eq!(decode_groups(&Err("no".into())), None);
+    }
+
+    #[test]
+    fn the_list_answer_decodes_rows_and_skips_malformed_ones() {
+        let row = Json::Obj(vec![
+            ("service".into(), Json::Str("a.example".into())),
+            ("account".into(), Json::Str("me".into())),
+            ("modified".into(), Json::Num(1700.0)),
+        ]);
+        let bad = Json::Obj(vec![("service".into(), Json::Str("x".into()))]);
+        let answer = Ok(Json::Arr(vec![row, bad]));
+        assert_eq!(decode_list(&answer), Some(vec![Row { service: "a.example".into(), account: "me".into(), modified: 1700 }]));
+        assert_eq!(decode_list(&Err("no".into())), None);
+        assert_eq!(decode_list(&Ok(Json::Null)), None);
     }
 
     #[test]

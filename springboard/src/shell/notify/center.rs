@@ -10,6 +10,7 @@ use super::super::services::widgets_timeline::{self, Listing, Row};
 use super::super::gestures::{ease_out_quartic, progress, Drag, SPRING_MS};
 use super::super::ui::{centred, Weight, WHITE};
 use super::super::{apps, AppId, Effect, Event, Screen, Shell};
+use bifrost_ui::material_request::ShellSurface;
 use super::list::{Hit, ListView, Mode, Slide, CARD_W_PT};
 use crate::deildu::scroll::Scroller;
 use crate::gfx::{rgba, Image, Surface};
@@ -820,7 +821,7 @@ impl Shell {
         for ((x, y, w, h), row) in self.center_widget_rects() {
             let x = x + slide;
             let r = ui.pt(NC_CARD_R_PT);
-            desk_glass(s, (x, y, w, h), r, alpha);
+            desk_glass(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
             let room = w - 2.0 * pad;
             let head = ui.text(&ui.fit(&row.title, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, secondary);
             let value = ui.text(&ui.fit(&row.text, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
@@ -834,9 +835,9 @@ impl Shell {
             let r = ui.pt(NC_CARD_R_PT);
             if g.items.len() > 1 {
                 let inset = ui.pt(10.0);
-                desk_glass(s, (x + inset, y + h - r, w - 2.0 * inset, r + ui.pt(NC_STACK_PT)), r, alpha);
+                desk_glass(s, ShellSurface::NotificationPanel, (x + inset, y + h - r, w - 2.0 * inset, r + ui.pt(NC_STACK_PT)), r, alpha);
             }
-            desk_glass(s, (x, y, w, h), r, alpha);
+            desk_glass(s, ShellSurface::NotificationPanel, (x, y, w, h), r, alpha);
             let n = g.latest();
             let app = apps().iter().find(|a| a.id == g.app).map_or("", |a| a.name);
             let room = w - 2.0 * pad - ui.pt(NC_CLOSE_PT);
@@ -856,7 +857,7 @@ impl Shell {
         }
         // Edit Widgets: a glass capsule with a link-coloured label, at the foot of the column above the dock
         let (ex, ey, ew, eh) = self.center_edit_rect();
-        desk_glass(s, (ex + slide, ey, ew, eh), eh / 2.0, alpha);
+        desk_glass(s, ShellSurface::NotificationPanel, (ex + slide, ey, ew, eh), eh / 2.0, alpha);
         let et = ui.text("Edit Widgets", MAC_SUBHEAD_PT, Weight::Semibold, LINK);
         s.blit(&et, (ex + slide + (ew - et.w as f32) / 2.0) as i32, (ey + (eh - et.h as f32) / 2.0) as i32, 255, alpha);
     }
@@ -892,7 +893,7 @@ impl Shell {
                 None => String::new(),
             };
             let x = x + slide;
-            desk_glass(s, (x, y, w, h), r, alpha);
+            desk_glass(s, ShellSurface::Popover, (x, y, w, h), r, alpha);
             let vt = ui.text(&value, MAC_SUBHEAD_PT, Weight::Semibold, LINK);
             let name = ui.text(&ui.fit(key, MAC_HEADLINE_PT, w - 3.0 * pad - vt.w as f32), MAC_HEADLINE_PT, Weight::Semibold, label);
             s.blit(&name, (x + pad) as i32, (y + (h - name.h as f32) / 2.0) as i32, 255, alpha);
@@ -919,7 +920,7 @@ impl Shell {
         s.blit_colored(&tm, (title.0 + slide) as i32, ty, BAR_TEXT, alpha);
         // Done: a glass capsule with a link-coloured label
         let (dx, dy, dw, dh) = (done.0 + slide, done.1, done.2, done.3);
-        desk_glass(s, (dx, dy, dw, dh), dh / 2.0, alpha);
+        desk_glass(s, ShellSurface::Popover, (dx, dy, dw, dh), dh / 2.0, alpha);
         let dl = ui.text("Done", MAC_SUBHEAD_PT, Weight::Semibold, LINK);
         s.blit(&dl, (dx + (dw - dl.w as f32) / 2.0) as i32, (dy + (dh - dl.h as f32) / 2.0) as i32, 255, alpha);
         if self.notify.center.configuring.is_some() {
@@ -932,7 +933,7 @@ impl Shell {
         for (i, (x, y, w, h), toggle, small, large, opts) in rows {
             let item = &list[i];
             let x = x + slide;
-            desk_glass(s, (x, y, w, h), r, alpha);
+            desk_glass(s, ShellSurface::Popover, (x, y, w, h), r, alpha);
             // the name, and the search view's description under it, as far as the room between the pad and the controls
             let options_room = if opts.is_some() { 2.0 * ui.pt(NC_CHIP_W_PT) + ui.pt(NC_CHIP_GAP_PT) } else { 0.0 };
             let room = w - 2.0 * pad - ui.pt(NC_DISC_PT) - 3.0 * ui.pt(NC_CHIP_GAP_PT) - 2.0 * ui.pt(NC_CHIP_W_PT) - options_room;

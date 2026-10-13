@@ -45,6 +45,8 @@ impl Files {
             "Trash".into()
         } else if let Some(tag) = tag_filter(&self.path) {
             tag.map_or("Tags", |t| t.label()).into()
+        } else if let Some(i) = smart::folder_index(&self.path) {
+            self.smart.get(i).map_or("Smart Folder", |f| f.name.as_str()).into()
         } else if self.in_recents() {
             "Recents".into()
         } else {

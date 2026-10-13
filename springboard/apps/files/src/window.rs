@@ -36,13 +36,17 @@ impl Files {
         self.job = Some(rx);
         let roots = vec![self.home.clone()];
         let tagged = tag_filter(&path).map(|only| tagged_entries(&self.tag_index, only));
+        let smart = smart::folder_index(&path).and_then(|i| self.smart.get(i)).map(|f| (f.clone(), self.tag_index.clone()));
+        let now = std::time::SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
         // the stand-in listings have no folder above them to show
-        let virtual_folder = path == Path::new(fs::RECENTS) || path.starts_with(TAGGED) || path == self.bin();
+        let virtual_folder = path == Path::new(fs::RECENTS) || path.starts_with(TAGGED) || smart::folder_index(&path).is_some() || path == self.bin();
         let (sort, bin) = (self.sort, self.bin());
         let chain = if virtual_folder { vec![] } else { ancestor_chain(&path) };
         let work = move || {
             let result = if let Some(list) = tagged {
                 Ok(list)
+            } else if let Some((folder, index)) = smart {
+                Ok(folder.results(&index, now))
             } else if path == Path::new(fs::RECENTS) {
                 Ok(fs::recent_in(&roots, fs::RECENT_LIMIT))
             } else {
@@ -333,7 +337,7 @@ impl Files {
                 .map(|i| self.rows[i].path.clone())
         }?;
         // never into the bin (use Delete), the stand-in listings, or the folder already open
-        let blocked = target == self.bin() || target == self.path || target == Path::new(fs::RECENTS) || target.starts_with(TAGGED);
+        let blocked = target == self.bin() || target == self.path || target == Path::new(fs::RECENTS) || target.starts_with(TAGGED) || smart::folder_index(&target).is_some();
         (!blocked).then_some(target)
     }
     pub(crate) fn render(&mut self, ui: &Ui, s: &mut Surface) -> Damage {
@@ -449,8 +453,8 @@ impl Files {
         self.paint_goto(ui, s);
         self.paint_server(ui, s);
     }
-    /// Recents and Tags list files from several places; nothing can be created or pasted into them.
+    /// Recents, Tags and Smart Folders list files from several places; nothing can be created or pasted into them.
     pub(crate) fn in_recents(&self) -> bool {
-        self.path == Path::new(fs::RECENTS) || self.path.starts_with(TAGGED)
+        self.path == Path::new(fs::RECENTS) || self.path.starts_with(TAGGED) || smart::folder_index(&self.path).is_some()
     }
 }

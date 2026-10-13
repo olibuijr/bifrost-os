@@ -4,6 +4,7 @@
 use super::install::{parse_semver, InstalledApp};
 use crate::shell::kinds::Kind;
 use super::json;
+use bifrost_ui::product::ProductType;
 use bifrost_ui::purchase::Price;
 use std::path::Path;
 
@@ -35,6 +36,8 @@ pub struct StoreApp {
     pub price: Option<Price>,
     /// one of `AGE_RATINGS`, or empty when the entry is unrated or gives an unknown rating
     pub age_rating: String,
+    /// the product kind (`product_type` in the catalogue); `None` when the entry gives none or an unknown one
+    pub product_type: Option<ProductType>,
 }
 
 /// One released version and what changed in it.
@@ -137,6 +140,7 @@ pub fn parse_catalog(text: &str) -> Result<Vec<StoreApp>, String> {
             changelog: parse_changelog(a.get("changelog")),
             price: parse_price(a),
             age_rating: age_rating_of(&a.str_field("age_rating").unwrap_or_default()),
+            product_type: a.str_field("product_type").and_then(|t| ProductType::parse(&t)),
         });
     }
     Ok(out)
@@ -245,6 +249,17 @@ mod tests {
         assert_eq!((apps[2].is_paid(), apps[2].price_text(), apps[2].age_text()), (false, "Free".to_string(), "-".to_string()));
         assert!(!apps[3].is_paid(), "a price with no currency is no price");
         assert_eq!(age_rating_of(" 18+ "), "18+");
+    }
+
+    #[test]
+    fn product_type_comes_from_the_catalogue_and_unknown_values_are_none() {
+        let text = format!(
+            r#"{{"apps":[{{"id":"a","name":"A","version":"1.0.0","sha256":"{SUM}","package":"/p","product_type":"auto-renewable"}},{{"id":"b","name":"B","version":"1.0.0","sha256":"{SUM}","package":"/q","product_type":"rental"}},{{"id":"c","name":"C","version":"1.0.0","sha256":"{SUM}","package":"/r"}}]}}"#
+        );
+        let apps = parse_catalog(&text).unwrap();
+        assert_eq!(apps[0].product_type, Some(ProductType::AutoRenewable));
+        assert_eq!(apps[1].product_type, None, "an unknown kind is no kind");
+        assert_eq!(apps[2].product_type, None, "an entry without a kind has none");
     }
 
     #[test]

@@ -1,0 +1,427 @@
+{
+ "category": "shaders",
+ "shard": "m-o",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/Extensions/AGXMetalG16X.bundle/Contents/Resources/ms_tessellation.metallib",
+   "category": "shaders",
+   "name": "ms_tessellation.metallib",
+   "path": "/System/Library/Extensions/AGXMetalG16X.bundle/Contents/Resources/ms_tessellation.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "AGXMetalG16X",
+   "facts": {
+    "size": 42565
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/Metal.framework/Versions/A/Resources/MTLBVHBuilder.metallib",
+   "category": "shaders",
+   "name": "MTLBVHBuilder.metallib",
+   "path": "/System/Library/Frameworks/Metal.framework/Versions/A/Resources/MTLBVHBuilder.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "Metal",
+   "facts": {
+    "size": 6039280
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/Metal.framework/Versions/A/Resources/MTLECBE.metallib",
+   "category": "shaders",
+   "name": "MTLECBE.metallib",
+   "path": "/System/Library/Frameworks/Metal.framework/Versions/A/Resources/MTLECBE.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "Metal",
+   "facts": {
+    "size": 7692
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Frameworks/Metal.framework/Versions/A/Resources/MTLMeshShaderEmulator.metallib",
+   "category": "shaders",
+   "name": "MTLMeshShaderEmulator.metallib",
+   "path": "/System/Library/Frameworks/Metal.framework/Versions/A/Resources/MTLMeshShaderEmulator.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "Metal",
+   "facts": {
+    "size": 28524
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/mlx.metallib",
+   "category": "shaders",
+   "name": "mlx.metallib",
+   "path": "/System/Library/PrivateFrameworks/CorePhotogrammetry.framework/Versions/A/Resources/mlx.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CorePhotogrammetry",
+   "facts": {
+    "size": 2854220
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/mvf.metallib",
+   "category": "shaders",
+   "name": "mvf.metallib",
+   "path": "/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/mvf.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CoreRE",
+   "facts": {
+    "size": 200456
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/mxi-binaryarchive.metallib",
+   "category": "shaders",
+   "name": "mxi-binaryarchive.metallib",
+   "path": "/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/mxi-binaryarchive.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CoreRE",
+   "facts": {
+    "size": 141496464
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/mxi.metallib",
+   "category": "shaders",
+   "name": "mxi.metallib",
+   "path": "/System/Library/PrivateFrameworks/CoreRE.framework/Versions/A/Resources/mxi.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "CoreRE",
+   "facts": {
+    "size": 840032
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/DeepVideoProcessingCore.framework/opticalFlowMetalLib.metallib",
+   "category": "shaders",
+   "name": "opticalFlowMetalLib.metallib",
+   "path": "/System/Library/PrivateFrameworks/DeepVideoProcessingCore.framework/opticalFlowMetalLib.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "DeepVideoProcessingCore",
+   "facts": {
+    "size": 808576
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/GESS.framework/Versions/A/Resources/mlx.metallib",
+   "category": "shaders",
+   "name": "mlx.metallib",
+   "path": "/System/Library/PrivateFrameworks/GESS.framework/Versions/A/Resources/mlx.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "GESS",
+   "facts": {
+    "size": 102072920
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MXI.framework/Versions/A/Resources/mxi_archive.metallib",
+   "category": "shaders",
+   "name": "mxi_archive.metallib",
+   "path": "/System/Library/PrivateFrameworks/MXI.framework/Versions/A/Resources/mxi_archive.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "MXI",
+   "facts": {
+    "size": 45161184
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLDebugShaders.metallib",
+   "category": "shaders",
+   "name": "MTLDebugShaders.metallib",
+   "path": "/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLDebugShaders.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "MetalTools",
+   "facts": {
+    "size": 14576
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLGPUDebugAccelerationStructureSupport.metallib",
+   "category": "shaders",
+   "name": "MTLGPUDebugAccelerationStructureSupport.metallib",
+   "path": "/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLGPUDebugAccelerationStructureSupport.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "MetalTools",
+   "facts": {
+    "size": 15948
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLGPUDebugDeepResidencyCheck.metallib",
+   "category": "shaders",
+   "name": "MTLGPUDebugDeepResidencyCheck.metallib",
+   "path": "/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLGPUDebugDeepResidencyCheck.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "MetalTools",
+   "facts": {
+    "size": 35440
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLGPUDebugICBSupport.metallib",
+   "category": "shaders",
+   "name": "MTLGPUDebugICBSupport.metallib",
+   "path": "/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLGPUDebugICBSupport.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "MetalTools",
+   "facts": {
+    "size": 137292
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLLegacySVAccelerationStructureSupport.metallib",
+   "category": "shaders",
+   "name": "MTLLegacySVAccelerationStructureSupport.metallib",
+   "path": "/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLLegacySVAccelerationStructureSupport.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "MetalTools",
+   "facts": {
+    "size": 15948
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLLegacySVICBSupport.metallib",
+   "category": "shaders",
+   "name": "MTLLegacySVICBSupport.metallib",
+   "path": "/System/Library/PrivateFrameworks/MetalTools.framework/Versions/A/Resources/MTLLegacySVICBSupport.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "MetalTools",
+   "facts": {
+    "size": 103896
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/SubFrameworks/ShaderGraph.framework/Versions/A/Resources/MaterialX-1.38-apple.metallib",
+   "category": "shaders",
+   "name": "MaterialX-1.38-apple.metallib",
+   "path": "/System/Library/SubFrameworks/ShaderGraph.framework/Versions/A/Resources/MaterialX-1.38-apple.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "ShaderGraph",
+   "facts": {
+    "size": 5897308
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/SubFrameworks/ShaderGraph.framework/Versions/A/Resources/MaterialX-1.39.4-apple.metallib",
+   "category": "shaders",
+   "name": "MaterialX-1.39.4-apple.metallib",
+   "path": "/System/Library/SubFrameworks/ShaderGraph.framework/Versions/A/Resources/MaterialX-1.39.4-apple.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "ShaderGraph",
+   "facts": {
+    "size": 5644540
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/SubFrameworks/ShaderGraph.framework/Versions/A/Resources/MaterialX-Common.metallib",
+   "category": "shaders",
+   "name": "MaterialX-Common.metallib",
+   "path": "/System/Library/SubFrameworks/ShaderGraph.framework/Versions/A/Resources/MaterialX-Common.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "ShaderGraph",
+   "facts": {
+    "size": 8871424
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

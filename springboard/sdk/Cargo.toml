@@ -10,6 +10,7 @@ bifrost-render = { path = "../render" }
 bifrost-ui = { path = "../ui" }
 bifrost-proto = { path = "../proto" }
 bifrost-midi = { path = "../audio/midi" }
+bifrost-audio-engine = { path = "../audio/engine" }
 springboard = { path = ".." }
 # the direct path of the final architecture (docs/graphics-architecture.md, "SDK"): GPU drawing and layer trees
 bifrost-gpu = { path = "../gpu" }

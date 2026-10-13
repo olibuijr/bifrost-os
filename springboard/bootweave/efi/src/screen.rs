@@ -8,12 +8,9 @@ use bootweave_frame::{render, Appearance, Frame, PixelOrder, Screen};
 use uefi::boot;
 use uefi::proto::console::gop::{BltOp, BltPixel, BltRegion, GraphicsOutput};
 
-/// The loader's appearance until the boot timing record can say (the user's choice is stored there).
-const APPEARANCE: Appearance = Appearance::Dark;
-
 /// Draws `screen` over the whole panel. Returns false when there is no graphics output (the caller starts the boot
 /// anyway: a missing screen is not a reason to stop).
-pub fn show(screen: Screen) -> bool {
+pub fn show(screen: Screen, appearance: Appearance) -> bool {
     let Ok(handle) = boot::get_handle_for_protocol::<GraphicsOutput>() else {
         return false;
     };
@@ -21,7 +18,7 @@ pub fn show(screen: Screen) -> bool {
         return false;
     };
     let (w, h) = gop.current_mode_info().resolution();
-    let frame = Frame { width: w as u32, height: h as u32, appearance: APPEARANCE, progress: None, screen };
+    let frame = Frame { width: w as u32, height: h as u32, appearance, progress: None, screen };
     let mut pixels = vec![0u32; w * h];
     render(&frame, &mut pixels, w, PixelOrder::Bgrx);
     let blt: Vec<BltPixel> = pixels.iter().map(|&px| bgrx_to_blt(px)).collect();

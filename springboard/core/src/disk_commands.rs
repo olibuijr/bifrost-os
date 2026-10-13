@@ -33,6 +33,8 @@ pub enum Refusal {
     NotMounted,
     /// The device is read-only, so its label cannot change.
     ReadOnly,
+    /// The last snapshot has no disk with this device name.
+    NoDisk(String),
 }
 
 /// Options for a mount request.

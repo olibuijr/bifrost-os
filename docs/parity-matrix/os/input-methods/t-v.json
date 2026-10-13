@@ -1,0 +1,133 @@
+{
+ "category": "input-methods",
+ "shard": "t-v",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/Input Methods/TCIM.app",
+   "category": "input-methods",
+   "name": "TCIM",
+   "path": "/System/Library/Input Methods/TCIM.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Input Methods/TYIM.app",
+   "category": "input-methods",
+   "name": "TYIM",
+   "path": "/System/Library/Input Methods/TYIM.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Input Methods/TamilIM.app",
+   "category": "input-methods",
+   "name": "TamilIM",
+   "path": "/System/Library/Input Methods/TamilIM.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Input Methods/TrackpadIM.app",
+   "category": "input-methods",
+   "name": "TrackpadIM",
+   "path": "/System/Library/Input Methods/TrackpadIM.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Input Methods/TransliterationIM.app",
+   "category": "input-methods",
+   "name": "TransliterationIM",
+   "path": "/System/Library/Input Methods/TransliterationIM.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Input Methods/VietnameseIM.app",
+   "category": "input-methods",
+   "name": "VietnameseIM",
+   "path": "/System/Library/Input Methods/VietnameseIM.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

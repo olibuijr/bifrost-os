@@ -7,7 +7,7 @@
 /// Bumped on every breaking change of this module.
 pub use bifrost_ui::{Command, Commands, Node, Role, Rect as UiRect};
 
-pub const SDK_VERSION: u32 = 1;
+pub const SDK_VERSION: u32 = 2;
 /// Largest packet either side sends (damage lists and text are clamped to it).
 pub mod sys;
 pub mod svc;
@@ -507,65 +507,47 @@ pub mod appearance {
     pub const MATERIALS: u32 = 64;
 }
 
-/// `NativeVisualEffectView.Material` (the current, non-deprecated cases) a window may declare behind-window.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MaterialKind {
-    Sidebar = 0,
-    Titlebar = 1,
-    HeaderView = 2,
-    WindowBackground = 3,
-    ContentBackground = 4,
-    UnderWindowBackground = 5,
-    UnderPageBackground = 6,
-    Menu = 7,
-    Popover = 8,
-    Sheet = 9,
-    HudWindow = 10,
-    FullScreenUi = 11,
-    ToolTip = 12,
-    Selection = 13,
-}
-
-impl MaterialKind {
-    pub const ALL: [MaterialKind; 14] = [
-        MaterialKind::Sidebar,
-        MaterialKind::Titlebar,
-        MaterialKind::HeaderView,
-        MaterialKind::WindowBackground,
-        MaterialKind::ContentBackground,
-        MaterialKind::UnderWindowBackground,
-        MaterialKind::UnderPageBackground,
-        MaterialKind::Menu,
-        MaterialKind::Popover,
-        MaterialKind::Sheet,
-        MaterialKind::HudWindow,
-        MaterialKind::FullScreenUi,
-        MaterialKind::ToolTip,
-        MaterialKind::Selection,
-    ];
-    /// The kind an older shell (no `appearance::MATERIALS`) understands: the sidebar, or the title bar for the rest.
-    pub fn legacy(self) -> MaterialKind {
-        match self {
-            MaterialKind::Sidebar => MaterialKind::Sidebar,
-            _ => MaterialKind::Titlebar,
-        }
-    }
-}
-
-/// `NativeVisualEffectView.State`: whether the material follows its window's active state (the default; an
-/// inactive window's material is opaque) or always looks active or inactive.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum MaterialState {
-    #[default]
-    FollowsWindowActiveState = 0,
-    Active = 1,
-    Inactive = 2,
-}
+/// The material model is shared with the shell and the window server (`bifrost_ui::visual_effect`): one kind, state,
+/// blending and corner type for built-in shell surfaces and app windows. The kind discriminants are the wire values
+/// (declaration order, guarded by a test); `MaterialKind::legacy` is what a shell without `appearance::MATERIALS` decodes.
+pub use bifrost_ui::visual_effect::{BlendingMode, Corners, MaterialKind, MaterialState};
 
 /// A vibrancy region of the app's window, in window points (the `Configure` space), with its corner radius in points.
-/// On the wire the state rides in the top two bits of the kind byte (zero, the default, for older apps).
+/// On the wire the state rides in the top two bits of the kind byte, then rect and the uniform radius, then a flags byte
+/// (bit 0 emphasized, bit 1 within-window blending, bit 2 per-corner radii follow as four f32). `corners` is a
+/// rounded-rect mask; `None` means the uniform `radius`. Protocol 2 and later (`SDK_VERSION`).
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Material { pub kind: MaterialKind, pub rect: UiRect, pub radius: f32, pub state: MaterialState }
+pub struct Material {
+    pub kind: MaterialKind,
+    pub rect: UiRect,
+    pub radius: f32,
+    pub state: MaterialState,
+    pub blending: BlendingMode,
+    pub emphasized: bool,
+    pub corners: Option<Corners>,
+}
+
+impl Material {
+    /// A behind-window, follows-active, not emphasized region with a uniform radius.
+    pub fn new(kind: MaterialKind, rect: UiRect, radius: f32) -> Material {
+        Material { kind, rect, radius, state: MaterialState::FollowsWindowActiveState, blending: BlendingMode::BehindWindow, emphasized: false, corners: None }
+    }
+    /// The full request for this region (a rounded-rect mask from `corners` or `radius`).
+    pub fn request(&self) -> bifrost_ui::visual_effect::MaterialRequest {
+        use bifrost_ui::visual_effect::{Mask, MaterialRequest};
+        let mut r = MaterialRequest::new(self.kind, self.rect, self.radius).blending(self.blending).state(self.state).emphasized(self.emphasized);
+        if let Some(c) = self.corners {
+            r = r.mask(Mask::RoundedRect(c));
+        }
+        r
+    }
+    /// The wire form of a request; an alpha mask is dropped to its bounding rectangle (rounded rect only on the wire).
+    pub fn from_request(r: &bifrost_ui::visual_effect::MaterialRequest) -> Material {
+        use bifrost_ui::visual_effect::Mask;
+        let corners = match &r.mask { Mask::RoundedRect(c) => Some(*c), _ => None };
+        Material { kind: r.kind, rect: r.rect, radius: corners.map_or(0.0, |c| c.tl), state: r.state, blending: r.blending, emphasized: r.emphasized, corners }
+    }
+}
 
 /// At most this many material regions per window.
 pub const MAX_MATERIALS: usize = 16;
@@ -1540,6 +1522,12 @@ impl ToShell {
                     for v in [m.rect.x, m.rect.y, m.rect.w, m.rect.h, m.radius] {
                         f32_(&mut b, v);
                     }
+                    b.push(m.emphasized as u8 | ((m.blending == BlendingMode::WithinWindow) as u8) << 1 | (m.corners.is_some() as u8) << 2);
+                    if let Some(c) = m.corners {
+                        for v in [c.tl, c.tr, c.br, c.bl] {
+                            f32_(&mut b, v);
+                        }
+                    }
                 }
             }
         }
@@ -1758,7 +1746,21 @@ impl ToShell {
                     if ![rect.x, rect.y, rect.w, rect.h, radius].iter().all(|v| v.is_finite()) || rect.w < 0. || rect.h < 0. || radius < 0. {
                         return Err(DecodeError::BadValue);
                     }
-                    list.push(Material { kind, rect, radius, state });
+                    let flags = r.u8()?;
+                    if flags & !7 != 0 {
+                        return Err(DecodeError::BadValue);
+                    }
+                    let corners = if flags & 4 != 0 {
+                        let c = Corners { tl: r.f32()?, tr: r.f32()?, br: r.f32()?, bl: r.f32()? };
+                        if ![c.tl, c.tr, c.br, c.bl].iter().all(|v| v.is_finite() && *v >= 0.) {
+                            return Err(DecodeError::BadValue);
+                        }
+                        Some(c)
+                    } else {
+                        None
+                    };
+                    let blending = if flags & 2 != 0 { BlendingMode::WithinWindow } else { BlendingMode::BehindWindow };
+                    list.push(Material { kind, rect, radius, state, blending, emphasized: flags & 1 != 0, corners });
                 }
                 ToShell::Materials(list)
             }
@@ -1962,9 +1964,9 @@ mod tests {
             ToShell::Haptic,
             ToShell::SetBadge { label: "12".into() },
             ToShell::SetBadge { label: String::new() },
-            ToShell::Materials(vec![Material { kind: MaterialKind::Sidebar, rect: UiRect { x: 0., y: 0., w: 220., h: 600. }, radius: 17., state: MaterialState::FollowsWindowActiveState },
-                Material { kind: MaterialKind::Titlebar, rect: UiRect { x: 220., y: 0., w: 580., h: 52. }, radius: 0., state: MaterialState::Active }]),
-            ToShell::Materials(MaterialKind::ALL.iter().map(|&kind| Material { kind, rect: UiRect { x: 1., y: 2., w: 3., h: 4. }, radius: 5., state: MaterialState::Inactive }).collect()),
+            ToShell::Materials(vec![Material { kind: MaterialKind::Sidebar, rect: UiRect { x: 0., y: 0., w: 220., h: 600. }, radius: 17., state: MaterialState::FollowsWindowActiveState, blending: BlendingMode::BehindWindow, emphasized: false, corners: None },
+                Material { kind: MaterialKind::Titlebar, rect: UiRect { x: 220., y: 0., w: 580., h: 52. }, radius: 0., state: MaterialState::Active, blending: BlendingMode::WithinWindow, emphasized: true, corners: Some(Corners { tl: 1., tr: 2., br: 3., bl: 4. }) }]),
+            ToShell::Materials(MaterialKind::ALL.iter().map(|&kind| Material { kind, rect: UiRect { x: 1., y: 2., w: 3., h: 4. }, radius: 5., state: MaterialState::Inactive, blending: BlendingMode::BehindWindow, emphasized: false, corners: None }).collect()),
             ToShell::Materials(vec![]),
             ToShell::OpenUrl { url: "https://bifrost.olibuijr.com".into() },
             ToShell::Notify { title: "T".into(), body: "B ü".into() },
@@ -2198,11 +2200,26 @@ mod material_tests {
 
     #[test]
     fn an_older_apps_material_byte_decodes_with_the_default_state() {
-        let m = Material { kind: MaterialKind::Titlebar, rect: UiRect { x: 0., y: 0., w: 10., h: 10. }, radius: 0., state: MaterialState::FollowsWindowActiveState };
+        let m = Material { kind: MaterialKind::Titlebar, rect: UiRect { x: 0., y: 0., w: 10., h: 10. }, radius: 0., state: MaterialState::FollowsWindowActiveState, blending: BlendingMode::BehindWindow, emphasized: false, corners: None };
         let bytes = ToShell::Materials(vec![m]).encode();
         // the kind byte of a state-less sender is the bare kind
         assert!(bytes.windows(1).any(|b| b[0] == 1));
         assert_eq!(ToShell::decode(&bytes), Ok(ToShell::Materials(vec![m])));
+    }
+
+    #[test]
+    fn the_extended_material_round_trips_through_the_request() {
+        let mut m = Material::new(MaterialKind::HudWindow, UiRect { x: 1., y: 2., w: 30., h: 40. }, 6.);
+        m.blending = BlendingMode::WithinWindow;
+        m.emphasized = true;
+        m.corners = Some(Corners { tl: 1., tr: 2., br: 3., bl: 4. });
+        assert_eq!(ToShell::decode(&ToShell::Materials(vec![m]).encode()), Ok(ToShell::Materials(vec![m])));
+        let back = Material::from_request(&m.request());
+        assert_eq!((back.kind, back.blending, back.emphasized, back.corners), (m.kind, m.blending, true, m.corners));
+        // unknown flag bits and negative corners are refused
+        let mut bad = ToShell::Materials(vec![Material::new(MaterialKind::Menu, UiRect { x: 0., y: 0., w: 1., h: 1. }, 0.)]).encode();
+        *bad.last_mut().unwrap() = 8;
+        assert_eq!(ToShell::decode(&bad), Err(DecodeError::BadValue));
     }
 
     #[test]
@@ -2215,7 +2232,7 @@ mod material_tests {
 
     #[test]
     fn an_unknown_kind_or_state_is_refused() {
-        let m = Material { kind: MaterialKind::Selection, rect: UiRect { x: 0., y: 0., w: 1., h: 1. }, radius: 0., state: MaterialState::Inactive };
+        let m = Material { kind: MaterialKind::Selection, rect: UiRect { x: 0., y: 0., w: 1., h: 1. }, radius: 0., state: MaterialState::Inactive, blending: BlendingMode::BehindWindow, emphasized: false, corners: None };
         let good = ToShell::Materials(vec![m]).encode();
         let at = good.iter().position(|&b| b == (13 | 2 << 6)).unwrap();
         for bad_byte in [14u8, 3 << 6] {

@@ -7,6 +7,9 @@ impl Files {
         if let Some(tag) = tag_filter(&self.path) {
             return vec![(tag.map_or("Tags", |t| t.label()).into(), "tag", self.path.clone())];
         }
+        if let Some(i) = smart::folder_index(&self.path) {
+            return vec![(self.smart.get(i).map_or("Smart Folder", |f| f.name.as_str()).into(), "magnifyingglass", self.path.clone())];
+        }
         if self.in_recents() {
             return vec![("Recents".into(), "clock", self.path.clone())];
         }

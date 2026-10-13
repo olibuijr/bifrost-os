@@ -28,11 +28,17 @@ smithay = { version = "0.7", default-features = false, features = ["wayland_fron
 png = "0.18"
 # the final render server (docs/graphics-architecture.md): Vulkan via bifrost-gpu, layer trees via bifrost-layers
 bifrost-gpu = { path = "../gpu" }
+# the shared material model (kind tables in material_kind.rs map from it)
+bifrost-ui = { path = "../ui" }
 bifrost-layers = { path = "../layers", features = ["server"] }
 # the boot frame the first scanout shows (docs/boot-architecture.md, "One frame")
 bootweave-frame = { path = "../bootweave/frame" }
 # ext-background-effect-v1 lives in the staging set
 wayland-protocols = { version = "0.32", features = ["server", "staging"] }
+# bifrost_material_v1 (protocol/bifrost-material-v1.xml), generated in src/bifrost_material.rs
+wayland-scanner = "0.31"
+wayland-backend = "0.3"
+wayland-server = "0.31"
 
 [dev-dependencies]
 wayland-client = "0.31"

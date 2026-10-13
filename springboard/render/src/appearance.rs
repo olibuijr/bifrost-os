@@ -15,6 +15,7 @@ pub struct Appearance {
 }
 
 pub fn publish(a: Appearance) {
+    let before = display_options();
     TEXT_SCALE.store(a.text_scale.to_bits(), Relaxed);
     ZOOM.store(a.zoom.to_bits(), Relaxed);
     HOLD.store(a.hold_ms, Relaxed);
@@ -23,6 +24,122 @@ pub fn publish(a: Appearance) {
     CONTRAST.store(a.increase_contrast, Relaxed);
     TRANSPARENCY.store(a.reduce_transparency, Relaxed);
     SHAPES.store(a.button_shapes, Relaxed);
+    let after = display_options();
+    if after != before {
+        DISPLAY_OBSERVERS.notify(after);
+    }
+}
+
+// ---- Accessibility display options (NSWorkspace) --------------------------------------------------------------------
+//
+// `NSWorkspace.accessibilityDisplayShouldReduceTransparency`, `...ShouldIncreaseContrast` and
+// `...ShouldDifferentiateWithoutColor`, with `accessibilityDisplayOptionsDidChangeNotification`. SwiftUI's
+// `accessibilityReduceTransparency` and `colorSchemeContrast` read the same two values.
+
+/// The display options an app reads, as one value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct DisplayOptions {
+    /// `accessibilityDisplayShouldReduceTransparency` (also on while Increase Contrast is).
+    pub reduce_transparency: bool,
+    /// `accessibilityDisplayShouldIncreaseContrast`.
+    pub increase_contrast: bool,
+    /// `accessibilityDisplayShouldDifferentiateWithoutColor` (Settings > Accessibility > Display > Button Shapes).
+    pub differentiate_without_color: bool,
+}
+
+/// SwiftUI `ColorSchemeContrast`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ColorSchemeContrast {
+    Standard,
+    Increased,
+}
+
+pub fn display_options() -> DisplayOptions {
+    DisplayOptions { reduce_transparency: reduce_transparency(), increase_contrast: increase_contrast(), differentiate_without_color: button_shapes() }
+}
+/// `NSWorkspace.accessibilityDisplayShouldDifferentiateWithoutColor`.
+pub fn differentiate_without_color() -> bool {
+    button_shapes()
+}
+/// SwiftUI `@Environment(\.colorSchemeContrast)`.
+pub fn color_scheme_contrast() -> ColorSchemeContrast {
+    if increase_contrast() { ColorSchemeContrast::Increased } else { ColorSchemeContrast::Standard }
+}
+
+/// Observers of display option changes (`accessibilityDisplayOptionsDidChangeNotification`).
+pub struct Observers {
+    list: std::sync::Mutex<(u64, Vec<(u64, std::sync::Arc<dyn Fn(DisplayOptions) + Send + Sync>)>)>,
+}
+
+impl Observers {
+    pub const fn new() -> Self {
+        Observers { list: std::sync::Mutex::new((0, Vec::new())) }
+    }
+    /// Registers `f`; the returned token removes it again.
+    pub fn add(&self, f: impl Fn(DisplayOptions) + Send + Sync + 'static) -> u64 {
+        let mut g = self.list.lock().unwrap_or_else(|e| e.into_inner());
+        g.0 += 1;
+        let id = g.0;
+        g.1.push((id, std::sync::Arc::new(f)));
+        id
+    }
+    pub fn remove(&self, token: u64) {
+        self.list.lock().unwrap_or_else(|e| e.into_inner()).1.retain(|(id, _)| *id != token);
+    }
+    /// Calls every observer (outside the lock, so an observer may add or remove observers).
+    pub fn notify(&self, o: DisplayOptions) {
+        let fs: Vec<_> = self.list.lock().unwrap_or_else(|e| e.into_inner()).1.iter().map(|(_, f)| f.clone()).collect();
+        for f in fs {
+            f(o);
+        }
+    }
+}
+
+static DISPLAY_OBSERVERS: Observers = Observers::new();
+
+/// Calls `f` whenever a published change moves one of the display options. Returns a token for `remove_observer`.
+pub fn observe_display_options(f: impl Fn(DisplayOptions) + Send + Sync + 'static) -> u64 {
+    DISPLAY_OBSERVERS.add(f)
+}
+pub fn remove_observer(token: u64) {
+    DISPLAY_OBSERVERS.remove(token)
+}
+
+/// The system-wide value file the shell writes (`/run/bifrost/user/accessibility`) for processes without the shell's
+/// IPC (the window server).
+pub const DISPLAY_FILE: &str = "/run/bifrost/user/accessibility";
+
+impl DisplayOptions {
+    /// `key=0|1` lines.
+    pub fn to_text(self) -> String {
+        format!("reduce_transparency={}\nincrease_contrast={}\ndifferentiate_without_color={}\n", self.reduce_transparency as u8, self.increase_contrast as u8, self.differentiate_without_color as u8)
+    }
+    /// Missing or unknown keys read as off. Increase Contrast implies Reduce Transparency, as in `reduce_transparency`.
+    pub fn parse(text: &str) -> Self {
+        let mut o = DisplayOptions::default();
+        for line in text.lines() {
+            let Some((k, v)) = line.split_once('=') else { continue };
+            let on = v.trim() == "1";
+            match k.trim() {
+                "reduce_transparency" => o.reduce_transparency = on,
+                "increase_contrast" => o.increase_contrast = on,
+                "differentiate_without_color" => o.differentiate_without_color = on,
+                _ => {}
+            }
+        }
+        o.reduce_transparency |= o.increase_contrast;
+        o
+    }
+    /// Writes `path` atomically (temp file, rename). Best effort for the caller: a missing directory is an error.
+    pub fn write_to(self, path: &str) -> std::io::Result<()> {
+        let tmp = format!("{path}.tmp");
+        std::fs::write(&tmp, self.to_text())?;
+        std::fs::rename(&tmp, path)
+    }
+    /// Reads `path`; a missing or unreadable file is all off.
+    pub fn read_from(path: &str) -> Self {
+        std::fs::read_to_string(path).map(|t| Self::parse(&t)).unwrap_or_default()
+    }
 }
 
 /// The settings as they are now (a starting point for changing one field and publishing).
@@ -508,5 +625,48 @@ mod tinted_tests {
         assert_eq!((p.light >> 8) & 255, (255.0f32 * 0.82).round() as u32, "green is pulled toward the accent");
         assert_eq!(p.dark & 255, (30.0 + 225.0f32 * 0.32).round() as u32);
         assert_eq!(Pair::tinted_by(red, 0.0, 0.0), Pair { dark: 0xff1e_1e1e, light: 0xffff_ffff });
+    }
+}
+
+#[cfg(test)]
+mod display_option_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    #[test]
+    fn text_round_trip_and_implication() {
+        let o = DisplayOptions { reduce_transparency: false, increase_contrast: true, differentiate_without_color: true };
+        let back = DisplayOptions::parse(&o.to_text());
+        assert!(back.increase_contrast && back.differentiate_without_color && back.reduce_transparency);
+        assert_eq!(DisplayOptions::parse(""), DisplayOptions::default());
+    }
+
+    #[test]
+    fn file_round_trip() {
+        let dir = std::env::temp_dir().join(format!("bifrost-a11y-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("accessibility");
+        let path = path.to_str().unwrap();
+        let o = DisplayOptions { reduce_transparency: true, ..Default::default() };
+        o.write_to(path).unwrap();
+        assert_eq!(DisplayOptions::read_from(path), o);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(DisplayOptions::read_from(path), DisplayOptions::default());
+    }
+
+    #[test]
+    fn observers_are_called_and_removable() {
+        let obs = Observers::new();
+        let n = Arc::new(AtomicUsize::new(0));
+        let n2 = n.clone();
+        let t = obs.add(move |o| {
+            assert!(o.increase_contrast);
+            n2.fetch_add(1, Ordering::SeqCst);
+        });
+        obs.notify(DisplayOptions { increase_contrast: true, ..Default::default() });
+        obs.remove(t);
+        obs.notify(DisplayOptions { increase_contrast: true, ..Default::default() });
+        assert_eq!(n.load(Ordering::SeqCst), 1);
     }
 }

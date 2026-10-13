@@ -22,6 +22,10 @@ covers parsing, budgets and the table. Exit code 3 means a budget was exceeded.
 (`CLOCK_MONOTONIC_RAW`, the `host_ns` of every HAL `TimeStamp`): `midi-latency` stamps notes with it, and each note's
 landing is the cycle's output `host_ns` plus `(offset + device frames)` at the nominal rate (`live::landing_ns`; the
 server's DLL `rate_scalar` is no longer used, a wrong one is the suspected cause of the 1e9 to 1e11 ms runs).
+The scalar was `hw_frames / (rate * (host_ns - start_host))`, which assumes the device counter and `start_host`
+share a base; they need not. It is now measured from the deltas between consecutive zero stamps (stamps at least
+100 ms apart), smoothed (gain 0.1) and clamped to 0.98..1.02 (`next_rate_scalar` in `audio/server/src/io.rs`, unit
+tested); 1.0 until the first span and after a re-anchor. Unverified on the device.
 `audio-roundtrip` counts frames on the HAL sample timeline. Any live latency outside 0..1000 ms is a measurement
 error: the bench exits 1, and `tools/audio-bench.py` marks it failed and never appends it.
 

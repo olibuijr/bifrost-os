@@ -1,0 +1,427 @@
+{
+ "category": "drivers",
+ "shard": "a-c",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/DriverExtensions/AppleCentauriAlpha.dext",
+   "category": "drivers",
+   "name": "AppleCentauriAlpha",
+   "path": "/System/Library/DriverExtensions/AppleCentauriAlpha.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "heuristic: Apple hardware, not on PC",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/AppleCentauriBeta.dext",
+   "category": "drivers",
+   "name": "AppleCentauriBeta",
+   "path": "/System/Library/DriverExtensions/AppleCentauriBeta.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "heuristic: Apple hardware, not on PC",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/AppleCentauriControl.dext",
+   "category": "drivers",
+   "name": "AppleCentauriControl",
+   "path": "/System/Library/DriverExtensions/AppleCentauriControl.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "heuristic: Apple hardware, not on PC",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.AppleSunriseBluetooth.dext",
+   "category": "drivers",
+   "name": "com.apple.AppleSunriseBluetooth",
+   "path": "/System/Library/DriverExtensions/com.apple.AppleSunriseBluetooth.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.AppleSunriseWLAN.dext",
+   "category": "drivers",
+   "name": "com.apple.AppleSunriseWLAN",
+   "path": "/System/Library/DriverExtensions/com.apple.AppleSunriseWLAN.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.AppleUserHIDDrivers.dext",
+   "category": "drivers",
+   "name": "com.apple.AppleUserHIDDrivers",
+   "path": "/System/Library/DriverExtensions/com.apple.AppleUserHIDDrivers.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-Apple16X50PCI.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit-Apple16X50PCI",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit-Apple16X50PCI.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit-AppleBCMWLAN",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit-AppleBCMWLAN.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleEthernetE1000.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit-AppleEthernetE1000",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit-AppleEthernetE1000.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleEthernetIXGBE.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit-AppleEthernetIXGBE",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit-AppleEthernetIXGBE.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleEthernetIXL.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit-AppleEthernetIXL",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit-AppleEthernetIXL.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleEthernetMLX5.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit-AppleEthernetMLX5",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit-AppleEthernetMLX5.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBCHCOM.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit-AppleUSBCHCOM",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBCHCOM.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBFTDI.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit-AppleUSBFTDI",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBFTDI.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBPLCOM.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit-AppleUSBPLCOM",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBPLCOM.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBSLCOM.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit-AppleUSBSLCOM",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBSLCOM.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBSerial.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit-AppleUSBSerial",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit-AppleUSBSerial.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-IOUserDockChannelSerial.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit-IOUserDockChannelSerial",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit-IOUserDockChannelSerial.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit-UVCUserService.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit-UVCUserService",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit-UVCUserService.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/DriverExtensions/com.apple.DriverKit.AppleUserECM.dext",
+   "category": "drivers",
+   "name": "com.apple.DriverKit.AppleUserECM",
+   "path": "/System/Library/DriverExtensions/com.apple.DriverKit.AppleUserECM.dext",
+   "kind": "dext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}
