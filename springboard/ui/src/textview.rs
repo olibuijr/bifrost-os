@@ -39,8 +39,8 @@ pub struct TextView {
     rich_text: bool,
     uses_find_bar: bool,
     find_bar_visible: bool,
-    finder: TextFinder,
-    /// The spelling hook (`NSSpellChecker`): the misspelled byte ranges of a text.
+    find_session: TextFinder,
+    /// The spelling hook (`SpellChecker`): the misspelled byte ranges of a text.
     spell_check: Option<SpellHook>,
 }
 
@@ -124,7 +124,7 @@ impl TextView {
             rich_text: false,
             uses_find_bar: true,
             find_bar_visible: false,
-            finder: TextFinder::new(FindOptions::default()),
+            find_session: TextFinder::new(FindOptions::default()),
             spell_check: None,
         }
     }
@@ -315,39 +315,39 @@ impl TextView {
     }
 
     /// The find bar's model: query, matches, counter.
-    pub fn finder(&self) -> &TextFinder {
-        &self.finder
+    pub fn find_session(&self) -> &TextFinder {
+        &self.find_session
     }
 
     pub fn set_find_options(&mut self, options: FindOptions) {
         let text = self.editor.buf.text().to_string();
-        self.finder.set_options(&text, options);
+        self.find_session.set_options(&text, options);
     }
 
     /// Incremental search: sets the query and selects the first match at or after the start of the selection.
     pub fn set_find_query(&mut self, query: &str, measure: &dyn Fn(&str) -> f32) -> Option<Range<usize>> {
         let text = self.editor.buf.text().to_string();
-        self.finder.set_query(&text, query);
+        self.find_session.set_query(&text, query);
         let from = self.editor.buf.selection().start;
-        let r = self.finder.find_next(from);
+        let r = self.find_session.find_next(from);
         self.select_found(r, measure)
     }
 
     /// Next match after the selection, wrapping at the end.
     pub fn find_next(&mut self, measure: &dyn Fn(&str) -> f32) -> Option<Range<usize>> {
         let text = self.editor.buf.text().to_string();
-        self.finder.refresh(&text);
+        self.find_session.refresh(&text);
         let from = self.editor.buf.selection().end;
-        let r = self.finder.find_next(from);
+        let r = self.find_session.find_next(from);
         self.select_found(r, measure)
     }
 
     /// Previous match before the selection, wrapping at the start.
     pub fn find_previous(&mut self, measure: &dyn Fn(&str) -> f32) -> Option<Range<usize>> {
         let text = self.editor.buf.text().to_string();
-        self.finder.refresh(&text);
+        self.find_session.refresh(&text);
         let from = self.editor.buf.selection().start;
-        let r = self.finder.find_previous(from);
+        let r = self.find_session.find_previous(from);
         self.select_found(r, measure)
     }
 
@@ -362,27 +362,27 @@ impl TextView {
     /// Replaces the selected match with `with` (one undo step). False when the selection is not the current match.
     pub fn replace_current(&mut self, with: &str) -> bool {
         let sel = self.editor.buf.selection();
-        if self.finder.selected() != Some(sel.clone()) {
+        if self.find_session.selected() != Some(sel.clone()) {
             return false;
         }
         let done = self.editor.replace_range(sel, with, "Replace");
         let text = self.editor.buf.text().to_string();
-        self.finder.refresh(&text);
+        self.find_session.refresh(&text);
         done
     }
 
     /// Replaces every match with `with` (one undo step). Returns how many were replaced.
     pub fn replace_all(&mut self, with: &str) -> usize {
         let text = self.editor.buf.text().to_string();
-        self.finder.refresh(&text);
-        let ranges = self.finder.matches().to_vec();
+        self.find_session.refresh(&text);
+        let ranges = self.find_session.matches().to_vec();
         let n = self.editor.replace_ranges(&ranges, with, "Replace All");
         let text = self.editor.buf.text().to_string();
-        self.finder.refresh(&text);
+        self.find_session.refresh(&text);
         n
     }
 
-    /// Installs the spelling hook (`NSSpellChecker` integration).
+    /// Installs the spelling hook (`SpellChecker` integration).
     pub fn set_spell_checker(&mut self, hook: Option<SpellHook>) {
         self.spell_check = hook;
     }

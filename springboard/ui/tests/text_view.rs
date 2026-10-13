@@ -395,7 +395,7 @@ fn find_next_and_previous_wrap_around() {
     assert_eq!(v.find_next(&m), Some(16..19));
     assert_eq!(v.find_next(&m), Some(0..3), "wraps to the first match");
     assert_eq!(v.find_previous(&m), Some(16..19), "wraps to the last match");
-    assert_eq!(v.finder().position(), Some((3, 3)));
+    assert_eq!(v.find_session().position(), Some((3, 3)));
 }
 
 #[test]
@@ -405,7 +405,7 @@ fn incremental_search_starts_at_the_selection() {
     assert_eq!(v.set_find_query("o", &m), Some(6..7));
     assert_eq!(v.set_find_query("on", &m), Some(8..10));
     assert_eq!(v.set_find_query("zzz", &m), None);
-    assert_eq!(v.finder().count(), 0);
+    assert_eq!(v.find_session().count(), 0);
 }
 
 #[test]
@@ -413,11 +413,11 @@ fn find_honours_case_and_whole_word_options() {
     let mut v = view("cat concat Cat");
     v.set_find_options(Options { ignore_case: true, whole_word: true });
     v.set_find_query("cat", &m);
-    assert_eq!(v.finder().matches(), &[0..3, 11..14]);
+    assert_eq!(v.find_session().matches(), &[0..3, 11..14]);
     v.set_find_options(Options { ignore_case: false, whole_word: true });
-    assert_eq!(v.finder().matches(), &[0..3]);
+    assert_eq!(v.find_session().matches(), &[0..3]);
     v.set_find_options(Options { ignore_case: false, whole_word: false });
-    assert_eq!(v.finder().matches(), &[0..3, 7..10]);
+    assert_eq!(v.find_session().matches(), &[0..3, 7..10]);
 }
 
 #[test]

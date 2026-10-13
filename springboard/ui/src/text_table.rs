@@ -1,11 +1,11 @@
-//! Text tables (`NSTextTable`, `NSTextTableBlock`): a grid of blocks laid out in a container width. Columns take an
+//! Text tables (`TextTable`, `TextTableBlock`): a grid of blocks laid out in a container width. Columns take an
 //! absolute width, a percentage of the table, or an equal share of what is left. A row is as tall as its tallest
 //! cell. A block may span rows and columns.
 
 use crate::Rect;
 use std::ops::Range;
 
-/// How wide a column is (`NSTextBlock.setValue:type:forDimension:` for the width).
+/// How wide a column is (`TextBlock.setValue:type:forDimension:` for the width).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ColumnWidth {
     /// Points.
@@ -16,7 +16,7 @@ pub enum ColumnWidth {
     Auto,
 }
 
-/// One cell (`NSTextTableBlock`).
+/// One cell (`TextTableBlock`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextTableBlock {
     pub row: usize,
@@ -51,7 +51,7 @@ pub struct TableLayout {
     pub height: f32,
 }
 
-/// A table (`NSTextTable`).
+/// A table (`TextTable`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextTable {
     pub columns: Vec<ColumnWidth>,

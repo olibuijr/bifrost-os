@@ -1,11 +1,11 @@
-//! Text attachments (`NSTextAttachment`): an inline object, such as an image or a file icon, that takes the place of
+//! Text attachments (`TextAttachment`): an inline object, such as an image or a file icon, that takes the place of
 //! one attachment character in a text and sizes its glyph run like a character would. A pure model: the caller draws
 //! the content.
 
-/// The character that stands for an attachment in the text (`NSAttachmentCharacter`, U+FFFC).
+/// The character that stands for an attachment in the text (`AttachmentCharacter`, U+FFFC).
 pub const ATTACHMENT_CHARACTER: char = '\u{FFFC}';
 
-/// An inline object in a text (`NSTextAttachment`).
+/// An inline object in a text (`TextAttachment`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextAttachment {
     /// `fileType`: a type identifier of the contents, for example "public.png".

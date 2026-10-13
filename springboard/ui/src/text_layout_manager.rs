@@ -1,5 +1,5 @@
-//! TextKit 2 style layout (`NSTextContentStorage`, `NSTextLayoutManager`, `NSTextLayoutFragment`,
-//! `NSTextLineFragment`, `NSTextSelection`, `NSTextSelectionNavigation`). A pure model on top of `textlayout`
+//! TextKit 2 style layout (`TextContentStorage`, `TextLayoutManager`, `TextLayoutFragment`,
+//! `TextLineFragment`, `TextSelection`, `TextSelectionNavigation`). A pure model on top of `textlayout`
 //! (storage and container), `paragraph` (styles), `textlist` (markers) and `text_attachment`.
 //!
 //! * `TextContentStorage`: the text, a paragraph style and an optional list item per paragraph (kept as attribute runs
@@ -37,7 +37,7 @@ pub struct ParagraphAttrs {
     pub list: Option<ListItem>,
 }
 
-/// The text and its paragraph attributes and attachments (`NSTextContentStorage`).
+/// The text and its paragraph attributes and attachments (`TextContentStorage`).
 #[derive(Debug)]
 pub struct TextContentStorage {
     storage: TextStorage,
@@ -84,7 +84,7 @@ impl TextContentStorage {
         true
     }
 
-    /// Puts `attachment` at byte offset `at` as one `U+FFFC` character (`NSTextAttachment` in an attributed string).
+    /// Puts `attachment` at byte offset `at` as one `U+FFFC` character (`TextAttachment` in an attributed string).
     pub fn insert_attachment(&mut self, at: usize, attachment: TextAttachment) -> bool {
         let mut mark = [0u8; 4];
         if !self.replace_characters(at..at, ATTACHMENT_CHARACTER.encode_utf8(&mut mark)) {
@@ -203,7 +203,7 @@ impl TextContentStorage {
     }
 }
 
-/// One laid out line (`NSTextLineFragment`). Offsets are in the text, `x` and `y` in the container.
+/// One laid out line (`TextLineFragment`). Offsets are in the text, `x` and `y` in the container.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextLineFragment {
     /// The characters of the line, without the newline and without the spaces a wrap consumed.
@@ -218,7 +218,7 @@ pub struct TextLineFragment {
     pub first_in_paragraph: bool,
 }
 
-/// One laid out paragraph (`NSTextLayoutFragment`).
+/// One laid out paragraph (`TextLayoutFragment`).
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextLayoutFragment {
     pub range: Range<usize>,
@@ -395,7 +395,7 @@ fn advance_x(
     x + measure(&seg[run..])
 }
 
-/// The layout of a content storage in a container (`NSTextLayoutManager`).
+/// The layout of a content storage in a container (`TextLayoutManager`).
 #[derive(Debug)]
 pub struct TextLayoutManager {
     natural_line_height: f32,
@@ -564,7 +564,7 @@ impl TextLayoutManager {
     }
 }
 
-/// A move direction (`NSTextSelectionNavigation.Direction`, left to right text).
+/// A move direction (`TextSelectionNavigation.Direction`, left to right text).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Direction {
     Left,
@@ -573,7 +573,7 @@ pub enum Direction {
     Down,
 }
 
-/// How far one move goes (`NSTextSelection.Granularity`).
+/// How far one move goes (`TextSelection.Granularity`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Granularity {
     Character,
@@ -582,7 +582,7 @@ pub enum Granularity {
     Paragraph,
 }
 
-/// A selection (`NSTextSelection`): the anchor, the moving head, and the x that up and down moves keep.
+/// A selection (`TextSelection`): the anchor, the moving head, and the x that up and down moves keep.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextSelection {
     pub anchor: usize,
