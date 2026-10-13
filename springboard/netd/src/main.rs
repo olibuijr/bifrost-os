@@ -12,6 +12,7 @@ use std::time::Duration;
 const ID: &str = "is.olibuijr.net";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+// same helpers as audiod/netd; keep them in step
 /// Locks the core even after a client handler panicked while holding it. Each command applies whole, so the
 /// state stays usable, and one bad connection must not stop Wi-Fi for every other client.
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {

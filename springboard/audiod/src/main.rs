@@ -20,6 +20,7 @@ const ID: &str = "is.olibuijr.audio";
 const CLIENT: &str = springboard::media::speaker::CLIENT;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+// same helpers as audiod/netd; keep them in step
 /// Locks the core even after a client handler panicked while holding it. Each command applies whole, so the
 /// state stays usable, and one bad connection must not silence the sound for every other client.
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
