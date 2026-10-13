@@ -97,7 +97,7 @@ impl WmState {
         let window = self.pending[i].clone();
         let toplevel = window.toplevel().expect("toplevel").clone();
         let configured = with_states(root, |states| {
-            states.data_map.get::<XdgToplevelSurfaceData>().is_some_and(|d| d.lock().unwrap().initial_configure_sent)
+            states.data_map.get::<XdgToplevelSurfaceData>().is_some_and(|d| d.lock().unwrap_or_else(|p| p.into_inner()).initial_configure_sent)
         });
         if !configured {
             toplevel.send_configure();
@@ -145,7 +145,7 @@ impl WmState {
         let mut map = layer_map_for_output(&output);
         let Some(layer) = map.layer_for_surface(surface, smithay::desktop::WindowSurfaceType::TOPLEVEL).cloned() else { return };
         let initial = with_states(surface, |states| {
-            states.data_map.get::<LayerSurfaceData>().is_some_and(|d| d.lock().unwrap().initial_configure_sent)
+            states.data_map.get::<LayerSurfaceData>().is_some_and(|d| d.lock().unwrap_or_else(|p| p.into_inner()).initial_configure_sent)
         });
         map.arrange();
         if !initial {
@@ -226,8 +226,8 @@ impl XdgShellHandler for WmState {
         let Some(id) = WmState::known_id(&window) else { return };
         let was_max = self.wm.is_maximized(id);
         let Some(grab) = self.wm.begin_move(id, start.location.x as i32, start.location.y as i32) else { return };
-        if was_max {
-            let r = self.wm.rect(id).expect("frame");
+        // a maximized window without a frame has nothing to restore to: it just moves from where it is
+        if let Some(r) = was_max.then(|| self.wm.rect(id)).flatten() {
             surface.with_pending_state(|s| {
                 s.states.unset(xdg_toplevel::State::Maximized);
                 s.size = Some((r.w, r.h).into());

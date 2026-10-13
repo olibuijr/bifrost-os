@@ -621,7 +621,10 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
                     if let Ok(info) = g.p.add_drawable(GPU_BG) {
                         let qh = self.queue.handle();
                         match gpu_buffers(&self.state, &[info], &qh) {
-                            Ok(mut n) => { let v = self.state.gpu_slots.get_mut(&GPU_BG).unwrap(); v.append(&mut n); free = Some(v.len() - 1); }
+                            Ok(mut n) => match self.state.gpu_slots.get_mut(&GPU_BG) {
+                                Some(v) => { v.append(&mut n); free = Some(v.len() - 1); }
+                                None => g.p.pop_drawable(GPU_BG),
+                            },
                             Err(_) => g.p.pop_drawable(GPU_BG),
                         }
                     }
