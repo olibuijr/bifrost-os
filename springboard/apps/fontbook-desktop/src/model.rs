@@ -281,10 +281,6 @@ impl Library {
         self.smart.keys().cloned().collect()
     }
 
-    pub fn rule(&self, name: &str) -> Option<&Rule> {
-        self.smart.get(name)
-    }
-
     /// Adds a smart collection. False when the name is empty or already used by any collection.
     pub fn create_smart(&mut self, name: &str, rule: Rule) -> bool {
         let name = clean(name);
@@ -728,7 +724,7 @@ mod tests {
         assert!(lib.create_smart("Named", Rule::NameContains("int".into())));
         assert_eq!(names(lib.visible(&Source::Smart("Named".into()), "")), ["Inter"]);
         assert!(lib.rename_collection("Named", "Interish"));
-        assert!(lib.rule("Interish").is_some());
+        assert_eq!(lib.smart_names(), ["Interish"]);
         assert!(lib.delete_smart("interish"));
         assert!(!lib.delete_smart("interish"));
         assert_eq!(names(lib.visible(&Source::Smart("Missing".into()), "")), Vec::<String>::new());
