@@ -1,7 +1,10 @@
 # BifrOSt PC: working instructions
 
-This repo is the BifrOSt desktop for PC (bifrost-os): the desktop shell, the native installer, the Midget lab
-machine, and the Linux desktop apps sold through the PC App Store.
+This repo is BifrOSt OS (bifrost-os): the desktop shell, the native installer, the Midget lab machine, and the
+Linux desktop apps sold through the PC App Store. BifrOSt runs only on Arch: Arch Linux on the PC (x86_64) and Arch
+Linux ARM on the Samsung Tab A8 tablet (aarch64; port in ~/Projects/bifrost-arm, whose `os/` worktree tracks branch
+`arm`). One shell and one SDK serve both: tablet behaviour (touch, form factor, on-screen keyboard, gestures,
+rotation) is shared code here, chosen at run time by `bifrost_ui::form_factor`, never a separate fork of the UI.
 
 Read `HANDOFF.md` first for the current state and open problems.
 
@@ -65,6 +68,12 @@ Apple HIG and the Bifrost checklist are the design authority; cite the section (
   screenshot against the design rules below. Report the commands and their results.
 - Commit each finished change with a conventional message. If you are on `main`, create a feature branch first.
 - Do not push, merge or deploy unless asked.
+- Agent teams (owner, 2026-10-13): Haiku 5.5 agents only code and commit; they never build, test, run
+  tools/check-names.py or touch Midget. The lead reviews and merges, asks the owner before every build, runs one build
+  at a time, and never builds while agents run.
+- Agent teams (owner, 2026-10-13): Haiku 5.5 agents only code and commit; they never build, test, run
+  tools/check-names.py or touch Midget. The lead reviews and merges, asks the owner before every build, runs one build
+  at a time, and never builds while agents run.
 - **Parity status** (owner rule, 2026-10-11): parity with the reference SDKs is tracked with the `bifrost-parity-matrix`
   skill and `bifrost pc parity`. A change that adds or completes a capability updates its rows in
   `docs/parity-matrix/data/` in the same round (`check`, `build`, then the published database). Test on the host,
