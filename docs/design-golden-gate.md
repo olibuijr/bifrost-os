@@ -1,5 +1,9 @@
 # Design decisions from macOS Golden Gate (2026-10-08)
 
+> Status 2026-10-13: the decisions below are history with dates. Current values differ in places. Window radius is 17 pt and
+> menu radius 14 pt (`render/src/ui.rs`); the `bifrost-wm` compositor replaced labwc; the Liquid Glass slider and
+> hover-revealed traffic lights are built. See the notes marked "now" below.
+
 Source material for the BifrOSt PC desktop. Golden Gate is macOS 27 (developer betas from June 2026,
 release fall 2026). Use these notes to decide what the desktop does, and state the evidence each time.
 
@@ -20,8 +24,8 @@ release fall 2026). Use these notes to decide what the desktop does, and state t
    background windows, so the rim is only on the focused window. Tokens: `TRAFFIC_RIM`, `TRAFFIC_INACTIVE`
    in `render/src/ui.rs`. Status: shipped in 0.4.50; visually checked on Midget 0.4.51 (focused Settings
    window). Background-window state not yet checked on the device.
-2. **Window and menu corners.** One radius per surface family, named: `WINDOW_RADIUS_PT` (10),
-   `MENU_RADIUS_PT` (8). Golden Gate made window corners consistent across the OS, so new surfaces take a
+2. **Window and menu corners.** One radius per surface family, named: `WINDOW_RADIUS_PT` (10 then, 17 now since the owner decision of 2026-10-09),
+   `MENU_RADIUS_PT` (8 then, 14 now in `render/src/ui.rs`; the menu bar's own `MENU_RADIUS_PT` in `chrome/src/menubar.rs` is 6). Golden Gate made window corners consistent across the OS, so new surfaces take a
    named token, not a literal. Status: shipped in 0.4.50.
 3. **Window colours.** `WINDOW_BAR_FOCUSED` and `WINDOW_BAR_BLURRED` replace literals. Status: shipped.
 4. **Menus.** Golden Gate removes icons from items that do not need them. BifrOSt menus have no icons,
@@ -30,9 +34,10 @@ release fall 2026). Use these notes to decide what the desktop does, and state t
    window under the traffic lights. The SDK `source_list` draws it (accent glyphs, neutral bold selection) and an app
    asks for the full-height window with `window = "full-size"`. Files 1.13 is the first app; the rest follow the
    batches in `docs/golden-gate-sdk-adoption.md`.
-6. **Liquid Glass transparency (not done).** Golden Gate adds Settings > Appearance > Liquid Glass to set
-   how clear the glass is. BifrOSt already has Reduce Transparency (opaque fallback in
-   `render/src/gfx.rs`). A clear/tinted slider is a later step; it needs the GPU blur path first.
+6. **Liquid Glass transparency (done, now).** Golden Gate adds Settings > Appearance > Liquid Glass to set
+   how clear the glass is. BifrOSt has Reduce Transparency (opaque fallback in `render/src/gfx.rs`) and a clear to
+   tinted slider in Settings (`Slider::LiquidGlass` in `src/shell/pages.rs`, stored in the `LIQUID_GLASS_PREF`
+   preference and applied with `bifrost_render::glass::set_clarity`).
 7. **Icons (not done).** Apple added outlines and more contrast to system icons. Check the BifrOSt
    dock icons against that before the next icon pass.
 
@@ -45,7 +50,7 @@ release fall 2026). Use these notes to decide what the desktop does, and state t
 
 ## Golden Gate release notes that drive the next rounds (9to5Mac 2026-09-14, Six Colors review)
 
-- Liquid Glass slider (clear to tinted) in Appearance: `bifrost_render::glass::set_clarity` exists, Settings UI pending.
+- Liquid Glass slider (clear to tinted) in Appearance: done, see decision 6.
 - Traffic lights in Liquid Glass with a bounce on press: needs per-layer transforms (GPU layers).
 - One corner radius across windows (done: `WINDOW_RADIUS_PT`).
 - Fewer menu icons (BifrOSt menus have none).
@@ -73,8 +78,8 @@ release fall 2026). Use these notes to decide what the desktop does, and state t
 
 ## Open questions
 
-- Hover-revealed traffic-light glyphs (close, minimise, zoom on hover): not built; needs pointer hover
-  on the desktop.
+- Hover-revealed traffic-light glyphs (close, minimise, zoom on hover): built since 0.4.52 (`lights_hover` in
+  `src/shell/desktop_dock.rs`); the glyph check on a real panel is still open.
 - Whether the rim reads as glass on a real panel at 165 Hz. Check on Midget with a background window.
 
 ## Performance benchmarks and history
@@ -95,9 +100,9 @@ Next profiling step: `perf record` on the `bench_desktop_frame` test binary (run
 
 ## Third-party window chrome (server-side, history: labwc theme)
 
-Apps that are not ours (the ArtCraft apps) get server-side title bars from labwc. `packaging/arch/wayland/rc.xml`
-puts the buttons on the left (close, minimise, zoom), centres the title (13 pt bold) and uses the 17 pt window radius.
-The `BifrOSt` labwc theme ships in `packaging/arch/wayland/themes/{light,dark}/labwc/` (themerc plus 12 px
-traffic-light SVGs, grey when inactive); Light is installed at `/usr/share/themes/BifrOSt/labwc/`. On every
-Light/Dark change `shell/labwc_theme.rs` copies the matching variant into the session user's
-`~/.local/share/themes/BifrOSt/labwc/` and sends labwc SIGHUP. Our own apps (`is.olibuijr.bifrost.*`) keep drawing their own chrome.
+labwc is removed. The window server `bifrost-wm` (`docs/window-server.md`) draws server-side title bars for apps that
+are not ours: `wm/src/decorations.rs` gives them a 28 px title bar with 12 px traffic lights, 8 px apart and 12 px from
+the left edge, and the title. Our own apps (app ids starting `is.olibuijr.bifrost.`) draw their own chrome and get
+none. The old labwc theme (`rc.xml`, the `BifrOSt` labwc theme and `shell/labwc_theme.rs`) is gone. Material blur
+behind windows is done by the compositor at composite time; apps declare regions with `ext-background-effect-v1`, and
+the private `bifrost_material_v1` protocol carries the material kind (`wm/src/bifrost_material.rs`).
