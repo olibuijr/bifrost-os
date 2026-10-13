@@ -58,6 +58,8 @@ const TAP_PT: f32 = 8.0;
 const RECENTS: usize = 6;
 const SEARCHES: usize = 4;
 const PER_GROUP: usize = 3;
+/// How long a scan of the Files root is reused by later opens before the next opening scans again.
+const FILES_MAX_AGE: std::time::Duration = std::time::Duration::from_secs(20);
 const QUERY_MAX: usize = 64;
 /// the card over the wallpaper, as measured on the bifrost
 const CARD_BG: u32 = rgba_const(38, 41, 45, 222);
@@ -257,7 +259,13 @@ pub fn results(query: &str, deildu: &[String]) -> Vec<Group> {
 
 fn results_with_contacts(query: &str, deildu: &[String], contacts: &[super::contactstore::Contact]) -> Vec<Group> {
     let folded: Vec<String> = deildu.iter().map(|t| fuzzy::fold(t)).collect();
-    results_folded(query, deildu, &folded, contacts)
+    let contacts_folded: Vec<[String; 3]> = contacts.iter().map(folded_fields).collect();
+    results_folded(query, deildu, &folded, contacts, &contacts_folded)
+}
+
+/// The name, phone and email of a contact, folded for matching (kept by the caller between keystrokes).
+fn folded_fields(contact: &super::contactstore::Contact) -> [String; 3] {
+    [&contact.name, &contact.phone, &contact.email].map(|field| fuzzy::fold(field))
 }
 
 /// Candidates of the sources that never change while the shell runs, folded once.
@@ -279,8 +287,9 @@ fn fixed() -> &'static Fixed {
     })
 }
 
-/// `deildu_folded` holds `fuzzy::fold` of each `deildu` title, kept by the caller between keystrokes.
-fn results_folded(query: &str, deildu: &[String], deildu_folded: &[String], contacts: &[super::contactstore::Contact]) -> Vec<Group> {
+/// `deildu_folded` holds `fuzzy::fold` of each `deildu` title and `contacts_folded` the `folded_fields` of each contact,
+/// both kept by the caller between keystrokes.
+fn results_folded(query: &str, deildu: &[String], deildu_folded: &[String], contacts: &[super::contactstore::Contact], contacts_folded: &[[String; 3]]) -> Vec<Group> {
     let query = query.trim();
     if query.is_empty() {
         return vec![];
@@ -302,9 +311,8 @@ fn results_folded(query: &str, deildu: &[String], deildu_folded: &[String], cont
             ranked[1].push((rank, hit));
         }
     }
-    let mut people: Vec<_> = contacts.iter().filter_map(|contact| {
-        [&contact.name, &contact.phone, &contact.email].into_iter()
-            .filter_map(|field| m.rank(field)).min()
+    let mut people: Vec<_> = contacts.iter().zip(contacts_folded).filter_map(|(contact, folded)| {
+        folded.iter().filter_map(|field| m.rank_folded(field)).min()
             .map(|rank| (rank, Hit::Contact { id: contact.id, name: contact.display_name().into() }))
     }).collect();
     people.sort_by_key(|(rank, _)| *rank);
@@ -499,11 +507,16 @@ pub struct QuickSearch {
     /// `fuzzy::fold` of each Deildu title, kept so keystrokes do not re-fold them
     deildu_folded: Vec<String>,
     contacts: Vec<super::contactstore::Contact>,
+    /// `folded_fields` of each contact
+    contacts_folded: Vec<[String; 3]>,
     /// files under the Files root, newest first, and their folded names
     files: Vec<crate::files::fs::Entry>,
     files_folded: Vec<String>,
     /// the background file scan started at open, until its result is taken
     files_rx: Option<std::sync::mpsc::Receiver<Vec<crate::files::fs::Entry>>>,
+    /// the root the file list was scanned under, and when that scan finished
+    files_root: Option<PathBuf>,
+    files_at: Option<std::time::Instant>,
     /// modification times the contacts and Deildu title caches were read at
     contacts_stamp: Option<(PathBuf, std::time::SystemTime)>,
     deildu_stamp: Option<(PathBuf, std::time::SystemTime)>,
@@ -562,9 +575,12 @@ impl QuickSearch {
             deildu_titles: vec![],
             deildu_folded: vec![],
             contacts: vec![],
+            contacts_folded: vec![],
             files: vec![],
             files_folded: vec![],
             files_rx: None,
+            files_root: None,
+            files_at: None,
             contacts_stamp: None,
             deildu_stamp: None,
             suggestions: ui.text("Assistant Suggestions", 20.0, Weight::Semibold, WHITE),
@@ -652,13 +668,15 @@ impl QuickSearch {
         self.deildu_titles = titles;
     }
 
-    /// Re-reads the contacts and cached Deildu titles only when their files changed, and
-    /// scans `root` for files on a worker thread; the list fills in on a later tick.
+    /// Re-reads the contacts and cached Deildu titles only when their files changed, and scans `root` for files on a
+    /// worker thread when the list is older than `FILES_MAX_AGE` (or was scanned under another root). The list shown
+    /// meanwhile is the last one, so the card opens with results; a new list fills in on a later tick.
     pub fn refresh_sources(&mut self, contacts: &Path, deildu_dir: &Path, root: PathBuf) {
         let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
         let stamp = mtime(contacts).map(|t| (contacts.to_path_buf(), t));
         if stamp.is_none() || stamp != self.contacts_stamp {
             self.contacts = super::contactstore::load_checked(contacts).unwrap_or_default();
+            self.contacts_folded = self.contacts.iter().map(folded_fields).collect();
             self.contacts_stamp = stamp;
         }
         let cache = deildu_dir.join("cache");
@@ -667,7 +685,9 @@ impl QuickSearch {
             self.set_deildu_titles(cached_titles(deildu_dir));
             self.deildu_stamp = stamp;
         }
-        if self.files_rx.is_none() {
+        let fresh = self.files_root.as_ref() == Some(&root) && self.files_at.is_some_and(|at| at.elapsed() < FILES_MAX_AGE);
+        if self.files_rx.is_none() && !fresh {
+            self.files_root = Some(root.clone());
             let (tx, rx) = std::sync::mpsc::channel();
             crate::bare::sys::spawn_named("quicksearch-files", move || {
                 let _ = tx.send(crate::files::fs::recent_in(&[root], 2000));
@@ -683,6 +703,7 @@ impl QuickSearch {
             Ok(files) => {
                 self.set_files(files);
                 self.files_rx = None;
+                self.files_at = Some(std::time::Instant::now());
                 true
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => false,
@@ -866,7 +887,7 @@ impl QuickSearch {
     /// Rebuilds the result rows for the query, keeping what fits above the keyboard.
     fn search(&mut self, ui: &Ui, h: i32) {
         let m = self.m();
-        let mut groups = results_folded(self.field.text(), &self.deildu_titles, &self.deildu_folded, &self.contacts);
+        let mut groups = results_folded(self.field.text(), &self.deildu_titles, &self.deildu_folded, &self.contacts, &self.contacts_folded);
         let mut extra = indexed_groups(self.field.text());
         extra.extend(file_note_groups(self.field.text(), &self.files, &self.files_folded));
         if !groups.is_empty() {
