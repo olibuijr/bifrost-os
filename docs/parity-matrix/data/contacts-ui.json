@@ -4,7 +4,7 @@
   "macos_since": "10.11",
   "status": "partial",
   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs (app-internal card and editor); springboard/src/shell/contactstore.rs (shell-internal store); springboard/src/shell/share/mod.rs (vCard item)",
-  "summary": "Apple's Contacts UI is three view controllers or controls: a contact viewer, a contact picker, and a limited-access button. BifrOSt has no app-facing SDK equivalent of any of them. The Contacts app draws its own card and editor, and the contact store lives in the shell, so other apps cannot reuse either.",
+  "summary": "Apple's Contacts UI is three view controllers or controls: a contact viewer, a contact picker, and a limited-access button. BifrOSt has no SDK viewer or editor view, and no SDK picker that returns a chosen contact to an app. Apps reach the contact store through the SDK contacts module behind a per-app access grant, and the Contacts app's picker model drives its Add People flow. The card and editor stay private to the Contacts app.",
   "rea_evidence": "ev_6fb05553c10a345f6320e9c365f241ee7902da18913291c6e693fb6100143bc4",
   "features": [
     {
@@ -24,16 +24,16 @@
     {
       "feature": "Contact picker (popover and modal)",
       "apple": "CNContactPickerViewController, CNContactPicker",
-      "bifrost": "springboard/ui/src/contact_picker.rs (model only",
+      "bifrost": "springboard/ui/src/contact_picker.rs (wired: Add People picker in springboard/apps/contacts-desktop/src/contacts.rs, Picker at line 1063, via bifrost_app::controls::contact_picker)",
       "status": "partial",
-      "note": "Wave 2 (contacts-ui, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. An app cannot ask the user to choose a contact and receive the result. The share picker only lists apps, so this needs a new SDK picker and a contact-selection result."
+      "note": "The picker model is wired into the Contacts app. An app cannot ask the user to choose a contact and receive the result: no SDK picker returns a choice, and the share picker only lists apps. Not yet tested on the VM or Midget."
     },
     {
       "feature": "Contact search and store access",
       "apple": "CNContactStore-backed UI (implicit in the framework's contact views)",
-      "bifrost": "springboard/src/shell/contactstore.rs (search at line 126); springboard/sdk/src/quicksearch.rs (apps index their own content)",
-      "status": "os",
-      "note": "The shell keeps contacts in a local TSV store and searches them for the Search panel. No SDK call lets an app read or search contacts through a supported API."
+      "bifrost": "springboard/sdk/src/contacts.rs (access, request, fetch, save); springboard/src/shell/services/contacts.rs (contacts service: per-app grant, fetch by keys and query); springboard/src/shell/contactstore.rs (search at line 126, used by the Search panel)",
+      "status": "partial",
+      "note": "Apps read and save contacts through the contacts service, behind a per-app grant (every contact, a picked set read-only, or none). The Search panel searches the same store in the shell."
     },
     {
       "feature": "Sharing a contact as a card",
@@ -45,16 +45,14 @@
     {
       "feature": "Contact access button (limited access)",
       "apple": "ContactAccessButton (SwiftUI)",
-      "bifrost": "none found; no contacts permission gate in springboard/sdk/src or springboard/src/bare/app_policy.rs",
-      "status": "n/a",
-      "note": "Apple's button tied to the iOS and macOS limited-access permission model. BifrOSt apps have no contacts permission to request, so there is no button to match. The gap is that contact access is not gated at all."
+      "bifrost": "springboard/ui/src/contact_access.rs (Status::Limited, picked set); springboard/sdk/src/contacts.rs (access, decode_picked)",
+      "status": "partial",
+      "note": "The limited state and its picked set exist in the model and the service, so an app can see that it has a limited grant. No button or sheet draws it yet, so the person cannot change a limited grant from the app."
     }
   ],
   "gaps": [
     "No SDK contact picker (CNContactPicker or CNContactPickerViewController equivalent) that returns the chosen contact to an app.",
     "No SDK contact viewer or editor view that other apps can embed; the card and editor are private to contacts-desktop.",
-    "The contact store (springboard/src/shell/contactstore.rs) is not exposed to apps through the SDK, so no app can read or search contacts.",
-    "No contacts permission model. Apps cannot request access, and there is no limited-access state to match ContactAccessButton.",
-    "docs/bifrost-ui.md has no Contacts section. springboard/README.md (Contacts section) describes only the Contacts app itself."
+    "No access sheet or limited-access button; the person cannot change a contacts grant from the app or from Settings yet."
   ]
 }

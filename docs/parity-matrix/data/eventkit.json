@@ -2,8 +2,8 @@
   "framework": "EventKit",
   "doc": "https://developer.apple.com/documentation/eventkit",
   "macos_since": "10.8",
-  "status": "os",
-  "bifrost": "springboard/src/shell/calendar/store.rs, springboard/apps/calendar-desktop/src/calendar/, springboard/apps/reminders-desktop/src/",
+  "status": "partial",
+  "bifrost": "springboard/src/shell/calendar/store.rs, springboard/apps/calendar-desktop/src/calendar/, springboard/apps/reminders-desktop/src/, springboard/sdk/src/calendar.rs, springboard/src/shell/services/calendar.rs",
   "summary": "Events, recurrence, alarms, ICS import/export and reminders exist inside the shell and the Calendar and Reminders apps. Apps with the calendars permission can read events in a date range through the calendar service (springboard/sdk/src/calendar.rs); there is no write API, no recurrence expansion and no access prompt yet.",
   "rea_evidence": "ev_4bf4ac268a018a5e377584d729b63b1d10e6682cc1f1ee35fc153d3727099360",
   "features": [
