@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/ml-compute.json",
+   "status": "n/a",
+   "note": "from SDK matrix ml-compute.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MailKit.framework",
@@ -40,10 +40,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/mailkit.json",
-   "status": "gap",
-   "note": "heuristic: no status evidence; rows in the framework data file decide",
+   "status": "n/a",
+   "note": "from SDK matrix mailkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ManagedApp.framework",
@@ -81,11 +81,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/managed-app-distribution.json",
+   "status": "n/a",
+   "note": "from SDK matrix managed-app-distribution.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ManagedSettings.framework",
@@ -124,10 +124,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/mapkit.json",
-   "status": "gap",
-   "note": "heuristic: no status evidence; rows in the framework data file decide",
+   "status": "partial",
+   "note": "from SDK matrix mapkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Matter.framework",
@@ -145,10 +145,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/matter.json",
-   "status": "gap",
-   "note": "heuristic: no status evidence; rows in the framework data file decide",
+   "status": "partial",
+   "note": "from SDK matrix matter.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MatterSupport.framework",
@@ -165,11 +165,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/matter-support.json",
+   "status": "n/a",
+   "note": "from SDK matrix matter-support.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MediaAccessibility.framework",
@@ -186,11 +186,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/media-accessibility.json",
+   "status": "partial",
+   "note": "from SDK matrix media-accessibility.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MediaExtension.framework",
@@ -208,10 +208,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/mediaextension.json",
-   "status": "gap",
-   "note": "heuristic: no status evidence; rows in the framework data file decide",
+   "status": "partial",
+   "note": "from SDK matrix mediaextension.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MediaIntelligence.framework",
@@ -228,11 +228,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/media-intelligence.json",
+   "status": "partial",
+   "note": "from SDK matrix media-intelligence.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MediaIntents.framework",
@@ -249,11 +249,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/media-intents.json",
+   "status": "partial",
+   "note": "from SDK matrix media-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MediaLibrary.framework",
@@ -270,11 +270,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/media-library.json",
+   "status": "partial",
+   "note": "from SDK matrix media-library.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MediaPlayer.framework",
@@ -291,11 +291,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/media-player.json",
+   "status": "partial",
+   "note": "from SDK matrix media-player.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MediaToolbox.framework",
@@ -312,11 +312,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/media-toolbox.json",
+   "status": "os",
+   "note": "from SDK matrix media-toolbox.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/Message.framework",
@@ -355,10 +355,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/metal.json",
-   "status": "gap",
-   "note": "heuristic: no status evidence; rows in the framework data file decide",
+   "status": "os",
+   "note": "from SDK matrix metal.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalFX.framework",
@@ -376,10 +376,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/metalfx.json",
-   "status": "gap",
-   "note": "heuristic: no status evidence; rows in the framework data file decide",
+   "status": "partial",
+   "note": "from SDK matrix metalfx.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalKit.framework",
@@ -397,10 +397,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/metalkit.json",
-   "status": "gap",
-   "note": "heuristic: no status evidence; rows in the framework data file decide",
+   "status": "partial",
+   "note": "from SDK matrix metalkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformancePrimitives.framework",
@@ -438,11 +438,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/metal-performance-shaders.json",
+   "status": "partial",
+   "note": "from SDK matrix metal-performance-shaders.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MetalPerformanceShadersGraph.framework",
@@ -459,11 +459,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/metal-performance-shaders-graph.json",
+   "status": "partial",
+   "note": "from SDK matrix metal-performance-shaders-graph.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MetricKit.framework",
@@ -481,10 +481,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/metrickit.json",
-   "status": "gap",
-   "note": "heuristic: no status evidence; rows in the framework data file decide",
+   "status": "partial",
+   "note": "from SDK matrix metrickit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/ModelIO.framework",
@@ -501,11 +501,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/model-i-o.json",
+   "status": "partial",
+   "note": "from SDK matrix model-i-o.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MultipeerConnectivity.framework",
@@ -522,11 +522,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/multipeer-connectivity.json",
+   "status": "os",
+   "note": "from SDK matrix multipeer-connectivity.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MusicKit.framework",
@@ -544,10 +544,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/musickit.json",
-   "status": "gap",
-   "note": "heuristic: no status evidence; rows in the framework data file decide",
+   "status": "n/a",
+   "note": "from SDK matrix musickit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/MusicUnderstanding.framework",
@@ -564,11 +564,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/music-understanding.json",
+   "status": "partial",
+   "note": "from SDK matrix music-understanding.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/NaturalLanguage.framework",
@@ -585,11 +585,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/natural-language.json",
+   "status": "partial",
+   "note": "from SDK matrix natural-language.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/NearbyInteraction.framework",
@@ -606,11 +606,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/nearby-interaction.json",
+   "status": "n/a",
+   "note": "from SDK matrix nearby-interaction.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/NetFS.framework",
@@ -649,10 +649,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/network.json",
-   "status": "gap",
-   "note": "heuristic: no status evidence; rows in the framework data file decide",
+   "status": "partial",
+   "note": "from SDK matrix network.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/NetworkExtension.framework",
@@ -669,11 +669,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/network-extension.json",
+   "status": "partial",
+   "note": "from SDK matrix network-extension.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/NotificationCenter.framework",
@@ -690,11 +690,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/notification-center.json",
+   "status": "partial",
+   "note": "from SDK matrix notification-center.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/NowPlaying.framework",
@@ -711,11 +711,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/now-playing.json",
+   "status": "partial",
+   "note": "from SDK matrix now-playing.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/OSAKit.framework",
@@ -775,10 +775,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/oslog.json",
-   "status": "gap",
-   "note": "heuristic: no status evidence; rows in the framework data file decide",
+   "status": "partial",
+   "note": "from SDK matrix oslog.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/OpenAL.framework",
@@ -837,11 +837,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/open-directory.json",
+   "status": "partial",
+   "note": "from SDK matrix open-directory.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/OpenGL.framework",
@@ -881,9 +881,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MCCKitCategorization_macOS.framework",
@@ -902,9 +902,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MDMClientLibrary.framework",
@@ -923,9 +923,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MDSChannel.framework",
@@ -944,9 +944,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MFAAuthentication.framework",
@@ -965,9 +965,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MFiAuthentication.framework",
@@ -986,9 +986,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MIL.framework",
@@ -1007,9 +1007,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MLAssetIO.framework",
@@ -1028,9 +1028,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MLCompilerRuntime.framework",
@@ -1049,9 +1049,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MLCompilerServices.framework",
@@ -1070,9 +1070,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MLIR_ML.framework",
@@ -1091,9 +1091,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MLModelAsset.framework",
@@ -1112,9 +1112,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MLModelCache.framework",
@@ -1133,9 +1133,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MLModelSpecification.framework",
@@ -1154,9 +1154,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MLRuntime.framework",
@@ -1175,9 +1175,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MMCS.framework",
@@ -1196,9 +1196,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MMCSServices.framework",
@@ -1217,9 +1217,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MSGExternalSync.framework",
@@ -1238,9 +1238,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MSUDataAccessor.framework",
@@ -1259,9 +1259,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MTInferenceToolLib.framework",
@@ -1280,9 +1280,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MTL3On4.framework",
@@ -1301,9 +1301,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MTLCompiler.framework",
@@ -1322,9 +1322,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MTLSimDriver.framework",
@@ -1343,9 +1343,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MTLSimImplementation.framework",
@@ -1364,9 +1364,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MXI.framework",
@@ -1385,9 +1385,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MacMailSearchProcessing.framework",
@@ -1406,9 +1406,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MacSystemUI.framework",
@@ -1427,9 +1427,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MachineSettings.framework",
@@ -1448,9 +1448,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MacinTalk.framework",
@@ -1469,9 +1469,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MacinTalkCore.framework",
@@ -1490,9 +1490,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MagnifierServices.framework",
@@ -1511,9 +1511,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MagnifierSupport.framework",
@@ -1532,9 +1532,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Mail.framework",
@@ -1553,9 +1553,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailCore.framework",
@@ -1574,9 +1574,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailSearchSchemaManifest.framework",
@@ -1595,9 +1595,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailService.framework",
@@ -1616,9 +1616,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailSupport.framework",
@@ -1637,9 +1637,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailUI.framework",
@@ -1658,9 +1658,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MailWebProcessSupport.framework",
@@ -1679,9 +1679,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MallocStackLogging.framework",
@@ -1700,9 +1700,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedAppsCore.framework",
@@ -1721,9 +1721,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner ManagedApp, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedAppsInterface.framework",
@@ -1742,9 +1742,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner ManagedApp, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedBackgroundAssets.framework",
@@ -1763,9 +1763,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedBackgroundAssetsHelper.framework",
@@ -1784,9 +1784,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedBackgroundAssetsHelperFetching.framework",
@@ -1805,9 +1805,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedBackgroundAssetsRelay.framework",
@@ -1826,9 +1826,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedBackgroundAssetsXPC.framework",
@@ -1847,9 +1847,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedClient.framework",
@@ -1868,9 +1868,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedConfiguration.framework",
@@ -1889,9 +1889,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedConfigurationFiles.framework",
@@ -1910,9 +1910,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedOrganizationContacts.framework",
@@ -1931,9 +1931,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedSettingsObjC.framework",
@@ -1952,9 +1952,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner ManagedSettings, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ManagedSettingsSupport.framework",
@@ -1973,9 +1973,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner ManagedSettings, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Mangrove.framework",
@@ -1994,9 +1994,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MapsBlastDoorSupport.framework",
@@ -2013,11 +2013,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/mapkit.json",
+   "status": "partial",
+   "note": "private framework, owner MapKit; from SDK matrix mapkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MapsIntelligence.framework",
@@ -2034,11 +2034,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/mapkit.json",
+   "status": "partial",
+   "note": "private framework, owner MapKit; from SDK matrix mapkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MapsSuggestions.framework",
@@ -2055,11 +2055,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/mapkit.json",
+   "status": "partial",
+   "note": "private framework, owner MapKit; from SDK matrix mapkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MapsSupport.framework",
@@ -2076,11 +2076,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/mapkit.json",
+   "status": "partial",
+   "note": "private framework, owner MapKit; from SDK matrix mapkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MapsSync.framework",
@@ -2097,11 +2097,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/mapkit.json",
+   "status": "partial",
+   "note": "private framework, owner MapKit; from SDK matrix mapkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MapsUI.framework",
@@ -2118,11 +2118,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/mapkit.json",
+   "status": "partial",
+   "note": "private framework, owner MapKit; from SDK matrix mapkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Marco.framework",
@@ -2141,9 +2141,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MarketplaceIntents.framework",
@@ -2162,9 +2162,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MarkupUI.framework",
@@ -2183,9 +2183,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Marrs.framework",
@@ -2204,9 +2204,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MaterialKit.framework",
@@ -2225,9 +2225,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MathTypesetting.framework",
@@ -2246,9 +2246,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MatrixKit.framework",
@@ -2267,9 +2267,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MatterPlugin.framework",
@@ -2286,11 +2286,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/matter.json",
+   "status": "partial",
+   "note": "private framework, owner Matter; from SDK matrix matter.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaAgnosticUSB.framework",
@@ -2309,9 +2309,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaAnalysis.framework",
@@ -2330,9 +2330,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaAnalysisAccess.framework",
@@ -2351,9 +2351,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaAnalysisBlastDoorSupport.framework",
@@ -2372,9 +2372,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaAnalysisCore.framework",
@@ -2393,9 +2393,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaAnalysisPhotosServices.framework",
@@ -2414,9 +2414,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaAnalysisServices.framework",
@@ -2435,9 +2435,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaContinuityKit.framework",
@@ -2456,9 +2456,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaControl.framework",
@@ -2477,9 +2477,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaControlReceiver.framework",
@@ -2498,9 +2498,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaControlSender.framework",
@@ -2519,9 +2519,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaControlUI.framework",
@@ -2540,9 +2540,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaConversionService.framework",
@@ -2561,9 +2561,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaCoreUI.framework",
@@ -2582,9 +2582,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaExperience.framework",
@@ -2603,9 +2603,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaFoundation.framework",
@@ -2624,9 +2624,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaIntentsAISBridge.framework",
@@ -2643,11 +2643,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/media-intents.json",
+   "status": "partial",
+   "note": "private framework, owner MediaIntents; from SDK matrix media-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaIntentsSnippetModels.framework",
@@ -2664,11 +2664,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/media-intents.json",
+   "status": "partial",
+   "note": "private framework, owner MediaIntents; from SDK matrix media-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaKit.framework",
@@ -2687,9 +2687,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaML.framework",
@@ -2708,9 +2708,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaMLServices.framework",
@@ -2729,9 +2729,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaMiningKit.framework",
@@ -2750,9 +2750,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaPlaybackCore.framework",
@@ -2771,9 +2771,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaRemote.framework",
@@ -2792,9 +2792,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaRemoteDaemonServices.framework",
@@ -2813,9 +2813,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaServices.framework",
@@ -2834,9 +2834,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MediaStream.framework",
@@ -2855,9 +2855,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MemoryAccounting.framework",
@@ -2876,9 +2876,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MemoryDiagnostics.framework",
@@ -2897,9 +2897,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MenuBarClient.framework",
@@ -2918,9 +2918,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MenuBarClientCore.framework",
@@ -2939,9 +2939,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessageProtection.framework",
@@ -2960,9 +2960,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner Message, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessageSecurity.framework",
@@ -2981,9 +2981,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner Message, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessageUIMacHelper.framework",
@@ -3002,9 +3002,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner Message, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessagesBlastDoorSupport.framework",
@@ -3023,9 +3023,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner Message, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessagesCloudSync.framework",
@@ -3044,9 +3044,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner Message, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessagesEscrow.framework",
@@ -3065,9 +3065,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner Message, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessagesHelperKit.framework",
@@ -3086,9 +3086,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner Message, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessagesKit.framework",
@@ -3107,9 +3107,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner Message, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessagesSecurityPolicy.framework",
@@ -3128,9 +3128,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner Message, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MessagesSettingsUI.framework",
@@ -3149,9 +3149,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner Message, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetadataUtilities.framework",
@@ -3170,9 +3170,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetalMetrics.framework",
@@ -3189,11 +3189,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "docs/parity-matrix/data/metal.json",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner Metal; from SDK matrix metal.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetalSerializer.framework",
@@ -3210,11 +3210,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "docs/parity-matrix/data/metal.json",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner Metal; from SDK matrix metal.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetalTools.framework",
@@ -3231,11 +3231,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "docs/parity-matrix/data/metal.json",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner Metal; from SDK matrix metal.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetricKitCore.framework",
@@ -3252,11 +3252,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/metrickit.json",
+   "status": "partial",
+   "note": "private framework, owner MetricKit; from SDK matrix metrickit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetricKitServices.framework",
@@ -3273,11 +3273,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/metrickit.json",
+   "status": "partial",
+   "note": "private framework, owner MetricKit; from SDK matrix metrickit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetricKitSource.framework",
@@ -3294,11 +3294,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/metrickit.json",
+   "status": "partial",
+   "note": "private framework, owner MetricKit; from SDK matrix metrickit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetricMeasurement.framework",
@@ -3317,9 +3317,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetricsFramework.framework",
@@ -3338,9 +3338,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MetricsKit.framework",
@@ -3359,9 +3359,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MicroLocation.framework",
@@ -3380,9 +3380,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MicroLocationDaemon.framework",
@@ -3401,9 +3401,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MicroLocationKit.framework",
@@ -3422,9 +3422,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MicroLocationUtilities.framework",
@@ -3443,9 +3443,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MigrationKit.framework",
@@ -3464,9 +3464,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MilAneflow.framework",
@@ -3485,9 +3485,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MiniSoftwareUpdate.framework",
@@ -3506,9 +3506,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileAccessoryUpdater.framework",
@@ -3527,9 +3527,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileActivationMacOS.framework",
@@ -3548,9 +3548,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileAsset.framework",
@@ -3569,9 +3569,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileAssetDaemon.framework",
@@ -3590,9 +3590,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileAssetExclaveServices.framework",
@@ -3611,9 +3611,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileAssetUpdater.framework",
@@ -3632,9 +3632,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileBluetooth.framework",
@@ -3653,9 +3653,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileContainerManager.framework",
@@ -3674,9 +3674,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileIcons.framework",
@@ -3695,9 +3695,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileIdentityServiceUI.framework",
@@ -3716,9 +3716,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileInBoxUpdate.framework",
@@ -3737,9 +3737,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileInstallation.framework",
@@ -3758,9 +3758,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileKeyBag.framework",
@@ -3779,9 +3779,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileMulticastTransfer.framework",
@@ -3800,9 +3800,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileObliteration.framework",
@@ -3821,9 +3821,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileSoftwareUpdate.framework",
@@ -3842,9 +3842,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileStorage.framework",
@@ -3863,9 +3863,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileStoreDemoCore.framework",
@@ -3884,9 +3884,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileSystemServices.framework",
@@ -3905,9 +3905,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileTimer.framework",
@@ -3926,9 +3926,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileTimerSupport.framework",
@@ -3947,9 +3947,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MobileTimerUISupport.framework",
@@ -3968,9 +3968,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ModelCatalog.framework",
@@ -3989,9 +3989,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ModelCatalogRuntime.framework",
@@ -4010,9 +4010,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ModelInterfaces.framework",
@@ -4031,9 +4031,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ModelManagerExclaveInternal.framework",
@@ -4052,9 +4052,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ModelManagerServices.framework",
@@ -4073,9 +4073,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MomentsIntelligence.framework",
@@ -4094,9 +4094,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Mondrian.framework",
@@ -4115,9 +4115,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MonitorPanel.framework",
@@ -4136,9 +4136,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Montreal.framework",
@@ -4157,9 +4157,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Morpheus.framework",
@@ -4178,9 +4178,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MorpheusExtensions.framework",
@@ -4199,9 +4199,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MorphunAssets.framework",
@@ -4220,9 +4220,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MorphunSwift.framework",
@@ -4241,9 +4241,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MotionSensorLogging.framework",
@@ -4262,9 +4262,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MultitouchSessionFilterSupport.framework",
@@ -4283,9 +4283,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MultitouchSupport.framework",
@@ -4304,9 +4304,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MultiverseSupport.framework",
@@ -4325,9 +4325,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MusicKitInternal.framework",
@@ -4344,11 +4344,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/musickit.json",
+   "status": "n/a",
+   "note": "private framework, owner MusicKit; from SDK matrix musickit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MusicKitPlaybackSupport.framework",
@@ -4365,11 +4365,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/musickit.json",
+   "status": "n/a",
+   "note": "private framework, owner MusicKit; from SDK matrix musickit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MusicLibrary.framework",
@@ -4388,9 +4388,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MusicUI.framework",
@@ -4409,9 +4409,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/MusicUI_Mac.framework",
@@ -4430,9 +4430,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NANDInfo.framework",
@@ -4451,9 +4451,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NANDInfo_osx.framework",
@@ -4472,9 +4472,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NDOAPI.framework",
@@ -4493,9 +4493,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NDOUI.framework",
@@ -4514,9 +4514,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NLP.framework",
@@ -4535,9 +4535,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NPTKit.framework",
@@ -4556,9 +4556,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NSPredicateSecurityPolicy.framework",
@@ -4577,9 +4577,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NameRecognition.framework",
@@ -4598,9 +4598,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NanoPassKit.framework",
@@ -4619,9 +4619,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NanoPassKitUI.framework",
@@ -4640,9 +4640,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Navigation.framework",
@@ -4661,9 +4661,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NearField.framework",
@@ -4682,9 +4682,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NearFieldPrivateServices.framework",
@@ -4703,9 +4703,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NearbySessions.framework",
@@ -4724,9 +4724,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NeighborhoodActivityConduit.framework",
@@ -4745,9 +4745,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetAppsUtilities.framework",
@@ -4766,9 +4766,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetAuth.framework",
@@ -4787,9 +4787,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetFSServer.framework",
@@ -4808,9 +4808,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner NetFS, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Netrb.framework",
@@ -4829,9 +4829,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetworkInfo.framework",
@@ -4848,11 +4848,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/network.json",
+   "status": "partial",
+   "note": "private framework, owner Network; from SDK matrix network.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetworkMenusCommon.framework",
@@ -4869,11 +4869,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/network.json",
+   "status": "partial",
+   "note": "private framework, owner Network; from SDK matrix network.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetworkQuality.framework",
@@ -4890,11 +4890,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/network.json",
+   "status": "partial",
+   "note": "private framework, owner Network; from SDK matrix network.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetworkScore.framework",
@@ -4911,11 +4911,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/network.json",
+   "status": "partial",
+   "note": "private framework, owner Network; from SDK matrix network.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetworkServiceProxy.framework",
@@ -4932,11 +4932,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/network.json",
+   "status": "partial",
+   "note": "private framework, owner Network; from SDK matrix network.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NetworkStatistics.framework",
@@ -4953,11 +4953,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/network.json",
+   "status": "partial",
+   "note": "private framework, owner Network; from SDK matrix network.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NeuralNetworks.framework",
@@ -4976,9 +4976,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NeutrinoCore.framework",
@@ -4997,9 +4997,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NeutrinoKit.framework",
@@ -5018,9 +5018,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewDeviceOutreach.framework",
@@ -5039,9 +5039,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewDeviceOutreachMacUI.framework",
@@ -5060,9 +5060,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewsAnalyticsUpload.framework",
@@ -5081,9 +5081,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewsCore.framework",
@@ -5102,9 +5102,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewsDaemon.framework",
@@ -5123,9 +5123,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewsFoundation.framework",
@@ -5144,9 +5144,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewsToday.framework",
@@ -5165,9 +5165,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewsTransport.framework",
@@ -5186,9 +5186,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewsURLBucket.framework",
@@ -5207,9 +5207,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NewsURLResolution.framework",
@@ -5228,9 +5228,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Nexus.framework",
@@ -5249,9 +5249,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NexusDaemon.framework",
@@ -5270,9 +5270,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Nodes.framework",
@@ -5291,9 +5291,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NodesUI.framework",
@@ -5312,9 +5312,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesAnalytics.framework",
@@ -5333,9 +5333,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesEditor.framework",
@@ -5354,9 +5354,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesHTML.framework",
@@ -5375,9 +5375,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesPreviewKit.framework",
@@ -5396,9 +5396,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesShared.framework",
@@ -5417,9 +5417,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesSiriUI.framework",
@@ -5436,11 +5436,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "status": "partial",
+   "note": "private framework, owner Intents; from SDK matrix siri-kit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesSupport.framework",
@@ -5459,9 +5459,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesUI.framework",
@@ -5480,9 +5480,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotesUIServices.framework",
@@ -5501,9 +5501,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotificationCenterUI.framework",
@@ -5520,11 +5520,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/notification-center.json",
+   "status": "partial",
+   "note": "private framework, owner NotificationCenter; from SDK matrix notification-center.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NotificationPreferences.framework",
@@ -5543,9 +5543,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NowPlayingUI.framework",
@@ -5562,11 +5562,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/now-playing.json",
+   "status": "partial",
+   "note": "private framework, owner NowPlaying; from SDK matrix now-playing.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NumberAdder.framework",
@@ -5585,9 +5585,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NutritionCore.framework",
@@ -5606,9 +5606,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/NutritionUICore.framework",
@@ -5627,9 +5627,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OAHSoftwareUpdate.framework",
@@ -5648,9 +5648,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OAuth.framework",
@@ -5669,9 +5669,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ODDAnalytics.framework",
@@ -5690,9 +5690,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ODDIFramework.framework",
@@ -5711,9 +5711,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ODIE.framework",
@@ -5732,9 +5732,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ODIEDelegates.framework",
@@ -5753,9 +5753,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSAServicesClient.framework",
@@ -5774,9 +5774,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSASubmissionClient.framework",
@@ -5795,9 +5795,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSASyncProxyClient.framework",
@@ -5816,9 +5816,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSAnalytics.framework",
@@ -5837,9 +5837,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner OSAnalytics, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSAnalyticsPrivate.framework",
@@ -5858,9 +5858,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner OSAnalytics, which no SDK file assesses yet",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSD.framework",
@@ -5879,9 +5879,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSEligibility.framework",
@@ -5900,9 +5900,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSInstaller.framework",
@@ -5921,9 +5921,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSIntelligence.framework",
@@ -5942,9 +5942,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSPersonalization.framework",
@@ -5963,9 +5963,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OSUpdate.framework",
@@ -5984,9 +5984,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OTSVG.framework",
@@ -6005,9 +6005,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OctagonTrust.framework",
@@ -6026,9 +6026,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OfficeImport.framework",
@@ -6047,9 +6047,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OmniSearch.framework",
@@ -6068,9 +6068,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OmniSearchClient.framework",
@@ -6089,9 +6089,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OmniSearchTypes.framework",
@@ -6110,9 +6110,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OnBoardingKit.framework",
@@ -6131,9 +6131,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OnDeviceDaemon.framework",
@@ -6152,9 +6152,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OnDeviceFoundation.framework",
@@ -6173,9 +6173,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OnDeviceStorage.framework",
@@ -6194,9 +6194,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OnDeviceStorageCore.framework",
@@ -6215,9 +6215,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OnDeviceStorageDaemon.framework",
@@ -6236,9 +6236,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OpenAPIRuntimeInternal.framework",
@@ -6257,9 +6257,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OpenAPIURLSessionInternal.framework",
@@ -6278,9 +6278,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OpenDirectoryConfig.framework",
@@ -6297,11 +6297,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/open-directory.json",
+   "status": "partial",
+   "note": "private framework, owner OpenDirectory; from SDK matrix open-directory.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/OpenDirectoryConfigUI.framework",
@@ -6318,11 +6318,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/open-directory.json",
+   "status": "partial",
+   "note": "private framework, owner OpenDirectory; from SDK matrix open-directory.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Osprey.framework",
@@ -6341,9 +6341,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/nt.framework",
@@ -6362,9 +6362,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/oncrpc.framework",
@@ -6383,9 +6383,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }
