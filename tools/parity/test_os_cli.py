@@ -40,6 +40,73 @@ class MapTests(unittest.TestCase):
         self.assertIsNone(oc.na_reason("cat", "/bin/cat", M))
 
 
+class ShippedMapTests(unittest.TestCase):
+    """Rows of the real map: macOS-internal daemons are n/a with a specific reason, user tools map to Linux names."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = oc.load_map()
+
+    def test_internal_daemons_are_na_with_reason(self):
+        for name, path, word in [("ASPCarryLog", "/usr/libexec/", "macOS"), ("IOMFB_bics_daemon", "/usr/libexec/", "Apple"),
+                                 ("MobileStorageMounter", "/usr/libexec/", "BifrOSt"), ("kextcache", "/usr/sbin/", "kmod"),
+                                 ("mDNSResponderHelper", "/usr/libexec/", "netd"), ("DumpPanic", "/usr/libexec/", "coredump"),
+                                 ("BootCacheControl", "/usr/sbin/", "BifrOSt")]:
+            reason = oc.na_reason(name, path + name, self.m)
+            self.assertTrue(reason, name)
+            self.assertIn(word, reason, name)
+
+    def test_dtrace_scripts_are_na(self):
+        self.assertIn("DTrace", oc.na_reason("loads.d", "/usr/bin/loads.d", self.m))
+        self.assertIn("DTrace", oc.na_reason("opensnoop", "/usr/bin/opensnoop", self.m))
+
+    def test_pasteboard_daemon_points_at_pbcopy(self):
+        self.assertIn("pbcopy", oc.na_reason("pboard", "/usr/libexec/pboard", self.m))
+
+    def test_renamed_equivalents(self):
+        for name, cmd in {"md5": "md5sum", "jot": "seq", "ifconfig": "ip", "route": "ip", "netstat": "ss", "PlistBuddy": "plutil",
+                          "dns-sd": "avahi-browse", "mDNSResponder": "avahi-daemon", "dtruss": "strace", "vm_stat": "vmstat",
+                          "xattr": "getfattr", "newsyslog": "logrotate", "sandbox-exec": "bwrap", "locate.updatedb": "updatedb",
+                          "getty": "agetty", "tftpd": "in.tftpd", "afplay": "aplay", "audit": "auditctl"}.items():
+            self.assertEqual(oc.command_for(name, self.m), cmd, name)
+
+    def test_explicit_mapping_beats_generic_daemon_pattern(self):
+        # snmpd, slapd, atrun, getty, bootpd end in "d" under /usr/libexec but are real Linux services
+        for name in ("snmpd", "slapd", "atrun", "getty", "bootpd", "dhcp6d", "tftpd", "ippusbd", "rpc.rquotad"):
+            self.assertIsNone(oc.na_reason(name, "/usr/libexec/" + name, self.m), name)
+
+    def test_name_classes_still_win_over_commands(self):
+        self.assertIn("Xcode", oc.na_reason("xcrun", "/usr/bin/xcrun", self.m))
+
+    def test_common_tools_stay_mapped(self):
+        for name in ("less", "lsof", "jq", "dig", "bc", "ed", "cpio", "zip", "unzip", "rsync", "iperf3-darwin", "crontab", "lpstat", "ldapsearch"):
+            self.assertIsNone(oc.na_reason(name, "/usr/bin/" + name, self.m), name)
+            self.assertTrue(oc.command_for(name, self.m), name)
+
+    def test_gaps_have_no_command(self):
+        for name in ("osascript", "units", "banner", "lastcomm"):
+            self.assertIsNone(oc.command_for(name, self.m), name)
+
+    def test_every_renamed_or_package_command_is_listed_in_packages(self):
+        listed = set()
+        for line in (HERE / "os_cli_packages.txt").read_text().splitlines():
+            if line.startswith("# ") and ": " in line:
+                listed.update(t.split("->")[0] for t in line[2:].split(": ", 1)[1].split(", "))
+        for name in ("less", "lsof", "jq", "dig", "mDNSResponder", "dtruss", "lpstat", "snmpget", "unzip"):
+            self.assertIn(name, listed, name)
+
+    def test_no_name_is_both_na_and_gap(self):
+        classes = [c for c in self.m["na_names"].values() if isinstance(c, dict)]
+        for name, cmd in self.m["commands"].items():
+            if cmd is None:
+                continue
+            for c in classes:
+                self.assertNotIn(name, c["names"], name)
+
+    def test_batch_script_extends_path_for_perl_scripts(self):
+        self.assertIn("core_perl", oc.batch_script([]))
+
+
 class ProbeTests(unittest.TestCase):
     def test_probe_runs_version_or_help(self):
         p = oc.probe_for("cat", M)
