@@ -106,6 +106,7 @@ pub mod login;
 pub mod passcode;
 pub mod rotate;
 pub mod settings;
+pub mod settings_load;
 pub mod settings_search;
 pub mod screensaver;
 pub mod storage;
