@@ -187,6 +187,8 @@ pub struct Desk {
     pub(super) dock_label_last:Option<usize>,
     /// launch bounces: (`desk_dock` list entry, start in seconds) until the app's first window maps
     pub(super) dock_bounce:Vec<(usize,f64)>,
+    /// the outer size each app's window had when it was last closed (the window comes back at it when reopened)
+    pub(super) closed_sizes:std::collections::HashMap<AppId,(i32,i32)>,
     /// the last title-bar press (window, time in ms): a second press within DOUBLE_CLICK_MS zooms
     last_title: Option<(AppId, f64)>,
     pub(super) dock_hide_at:Option<f64>,
@@ -517,9 +519,12 @@ impl Desk {
     }
 
     pub fn close(&mut self, i: usize) -> AppId {
-        let app = self.wins.remove(i).app;
-        self.release_app_buffers(app);
-        app
+        let w = self.wins.remove(i);
+        // the frame the user left the window at (the zoomed one goes back to the frame before zoom)
+        let r = if w.maximized { w.restore } else { w.r };
+        self.closed_sizes.insert(w.app, (r.w, r.h));
+        self.release_app_buffers(w.app);
+        w.app
     }
 
     /// Drops the per-window pixel caches and stale dock icon resizes; true when something was freed.
@@ -1102,6 +1107,11 @@ impl Shell {
         let (w, h) = ((w as i32).min(m.w * 9 / 10), (h as i32).min(m.h * 85 / 100));
         // the manifest's window_size (content points) replaces the default size
         let (w, h) = size_limits(app).initial.map(|s| outer_px(app, &m, s)).unwrap_or((w, h));
+        // a window opened again comes back at the size it was closed with; a fixed manifest size still wins
+        let (w, h) = match (size_limits(app).initial, self.desk.as_ref().and_then(|d| d.closed_sizes.get(&app).copied())) {
+            (None, Some(closed)) => closed,
+            _ => (w, h),
+        };
         let existed = self.desk.as_ref().is_some_and(|d| d.index_of(app).is_some());
         let was_minimized = self.desk.as_ref().and_then(|d| d.index_of(app).map(|i| d.wins[i].minimized)).unwrap_or(false);
         if !existed {
@@ -2075,6 +2085,22 @@ mod tests {
         let r = d.wins[i].r;
         assert!(r.x >= a.x && r.y >= a.y && r.x + r.w <= a.x + a.w && r.y + r.h <= a.y + a.h, "{r:?}");
         assert!(!d.wins[i].maximized);
+    }
+
+    #[test]
+    fn a_closed_window_remembers_its_frame_for_the_next_open() {
+        let m = metrics();
+        let mut d = Desk::new();
+        let i = d.open(&m, AppId::Photos, (900, 600));
+        d.place(&m, i, Rect { x: 200, y: 150, w: 800, h: 500 });
+        d.close(0);
+        assert_eq!(d.closed_sizes.get(&AppId::Photos), Some(&(800, 500)), "the size it was closed with");
+        // a zoomed window is remembered at the frame it goes back to, not at the screen size
+        let i = d.open(&m, AppId::Photos, (900, 600));
+        d.place(&m, i, Rect { x: 200, y: 150, w: 800, h: 500 });
+        d.toggle_zoom(&m, i);
+        d.close(0);
+        assert_eq!(d.closed_sizes.get(&AppId::Photos), Some(&(800, 500)));
     }
 
     #[test]

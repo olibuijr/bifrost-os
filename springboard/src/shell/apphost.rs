@@ -1138,11 +1138,28 @@ impl Shell {
             }
             Err(e) => {
                 bifrost_core::log::shell_logger("apphost").error(format!("cannot start {}: {e}", app.manifest.id));
+                self.launch_failed(slot);
                 // never leave an empty (black) window behind a launch that failed
                 #[cfg(feature = "desktop-wayland")]
                 self.desk_close_app(AppId::External(slot as u8));
             }
         }
+    }
+
+    /// An installed app did not start (the spawn failed, or it exited before saying hello): the user gets an alert
+    /// from the app, and the app's Dock launch bounce stops instead of running out its timeout.
+    pub(super) fn launch_failed(&mut self, slot: usize) {
+        let registered = installed();
+        let Some(app) = registered.get(slot) else { return };
+        let (title, body) = launch_failure_text(&app.manifest.name);
+        let time = self.notify.now();
+        self.notify(super::notify::Notification::new(AppId::External(slot as u8), title, body, time));
+        if let Some(k) = super::apps().iter().position(|a| a.id == AppId::External(slot as u8)) {
+            if let Some(d) = self.desk.as_mut() {
+                d.dock_bounce.retain(|b| b.0 != k);
+            }
+        }
+        self.dirty = true;
     }
 
     pub(super) fn ext_close(&mut self, slot: usize) {
@@ -1372,6 +1389,8 @@ impl Shell {
         #[cfg(feature = "desktop-wayland")]
         let mut docs = Vec::new();
         let mut died = Vec::new();
+        // apps that exited before saying hello never started: the user is told (`launch_failed`)
+        let mut failed = Vec::new();
         // direct apps that fell back to the socket path: their window opens now (after the loop, the shell is free)
         let mut fell_back = Vec::new();
         for (slot, h) in self.ext.iter_mut().enumerate() {
@@ -1384,6 +1403,9 @@ impl Shell {
             let p = h.pump();
             if p.died {
                 died.push(slot as u8);
+                if !h.hello && !h.incompatible {
+                    failed.push(slot);
+                }
             }
             if h.take_fallback() {
                 fell_back.push(slot as u8);
@@ -1475,6 +1497,7 @@ impl Shell {
         for &slot in &died { self.dnd_app_gone(slot); self.extras_app_gone(slot); self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidTerminateApplication, slot); }
         // a window whose app has exited must not keep its last frame on screen
         for slot in died { self.desk_close_app(super::AppId::External(slot)); }
+        for slot in failed { self.launch_failed(slot); }
         if self.desk.is_some() {
             for slot in fell_back { self.desk_open(super::AppId::External(slot), t); }
         }
@@ -1819,6 +1842,13 @@ mod registry_update_tests {
     }
 }
 
+/// The alert title and body for an app that did not start, pure: an empty name reads as "The app".
+pub fn launch_failure_text(name: &str) -> (String, String) {
+    let name = name.trim();
+    let name = if name.is_empty() { "The app" } else { name };
+    (format!("{name} could not be opened"), "It stopped before it finished starting. Try opening it again.".to_string())
+}
+
 /// A dock badge as shown: control characters removed, trimmed, at most four characters
 /// ("99+" fits, a long text is cut).
 pub(super) fn clean_badge(raw: &str) -> String {
@@ -1838,6 +1868,14 @@ mod badge_tests {
         assert_eq!(clean_badge("a\u{0}b\tc"), "abc");
         assert_eq!(clean_badge(""), "");
         assert_eq!(clean_badge("éééééé"), "éééé", "cut by characters, not bytes");
+    }
+
+    #[test]
+    fn a_failed_launch_names_the_app_and_says_to_try_again() {
+        let (title, body) = launch_failure_text("  Notes ");
+        assert_eq!(title, "Notes could not be opened");
+        assert!(body.contains("Try opening it again"));
+        assert_eq!(launch_failure_text("").0, "The app could not be opened");
     }
 }
 
