@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn a_record_is_set_read_and_cleared_on_a_file() {
-        let dir = std::env::temp_dir().join(format!("sdk-quarantine-{}", std::process::id()));
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("target").join(format!("quarantine-test-{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let file = dir.join("download.bin");
         fs::write(&file, b"data").unwrap();

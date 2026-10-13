@@ -18,7 +18,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::quicksearch::CSSearchableItem;
-use crate::spellcheck::words;
+/// Lowercase words of a text, split at every character that is not alphanumeric.
+fn words(text: &str) -> Vec<String> {
+    text.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).map(str::to_lowercase).collect()
+}
 
 /// Words of indexed items. `postings` maps a word to the item ids that contain it; `words_of` is the reverse map,
 /// kept so that an item can be removed or replaced.
