@@ -14,7 +14,8 @@ MODE=lab; CARGO=1; DEPLOY=0; DEBUG=0
 CPROF=fast
 for a in "$@"; do case $a in --lab) MODE=lab ;; --debug) MODE=lab; DEBUG=1 ;; --release) MODE=release; CPROF=release ;; --skip-cargo) CARGO=0 ;; --deploy) DEPLOY=1 ;; *) echo "unknown option $a" >&2; exit 2 ;; esac; done
 
-KEEP=5
+KEEP=3        # newest local ISO builds kept in out/
+KEEP_WORK=1   # archiso work dirs kept (a successful build removes its own; only interrupted ones remain)
 # unmount anything still mounted inside a work dir first, then remove it without crossing mounts
 remove_work() {
   if findmnt -R "$1" >/dev/null 2>&1; then sudo umount -R -l "$1" || true; fi
@@ -108,9 +109,9 @@ sudo chown -R "$USER" "$OUT"
 ISO=$(ls "$OUT"/*.iso | head -1)
 remove_work "$WORK"
 echo "ISO ($MODE): $ISO"
-# keep at most KEEP local ISO builds and KEEP work dirs left behind by interrupted builds
+# keep at most KEEP local ISO builds and KEEP_WORK work dirs left behind by interrupted builds
 { ls -dt out/iso-lab-* out/iso-release-* 2>/dev/null || true; } | tail -n +$((KEEP + 1)) | while read -r d; do rm -rf --one-file-system "$d"; done
-{ ls -dt out/archiso-work-* 2>/dev/null || true; } | tail -n +$((KEEP + 1)) | while read -r d; do remove_work "$d"; done
+{ ls -dt out/archiso-work-* 2>/dev/null || true; } | tail -n +$((KEEP_WORK + 1)) | while read -r d; do remove_work "$d"; done
 if [ "$DEPLOY" = 1 ]; then
   D=out/iventoy/iventoy-1.0.44/iso; NAME=bifrost-$MODE$([ "$DEBUG" = 1 ] && echo -debug)-$STAMP.iso
   cp --reflink=auto "$ISO" "$D/$NAME"
