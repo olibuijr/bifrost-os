@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.13 — 2026-10-13
+
+- Reverts 0.7.12's release of the window scratch buffers: freeing and re-allocating them raised the shell's memory after a lock cycle (97 to 113 MiB) instead of lowering it.
+
 ## 0.7.11 — 2026-10-13
 
 - Boot: `video-arg` now writes the mode in use into a unified-kernel-image command line (it refused any line without `initrd=`), so the next boot starts at the panel's refresh and is not modeset twice; it follows the Settings refresh choice. The session keys its shell-version stamp on the binary (one stat) instead of globbing pacman's database, which took 0.65 s on a cold boot. Desktop first frame 6.64 to 6.37 s after kernel start, userspace 4.45 to 3.37 s on the lab PC.
