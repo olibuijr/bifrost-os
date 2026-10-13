@@ -494,6 +494,12 @@ the Keychain, the share sheet, notification actions and typed drag and drop are 
 Secrets an app must not keep in `defaults.txt` or anywhere in its own (app-readable) data directory. `bifrost_app::keychain`:
 `add`, `get`, `update`, `delete`, each `(ctx, service, account[, secret])`.
 
+- **Query API** (`bifrost_app::keychain_query`): `ItemClass` (generic and internet password), `Attributes` (service, account,
+  server, protocol, port, label, comment, creation and modification date, access group), `Query` with `MatchLimit::{One, All}`,
+  `return_data` / `return_attributes`, `Status` (OSStatus values), and `add_item`, `copy_matching`, `update_items`,
+  `delete_items`. Attributes are stored in the value as a `SIQ1` record, so the shell store is unchanged and legacy items
+  still read as secret-only generic passwords. Limitation: `MatchLimit::All` needs a shell list operation; until then
+  `select` filters records the app already has.
 - **Asynchronous**, like the document panels: each call returns a request id and the answer arrives in
   `App::keychain(ctx, keychain::Reply { request, result: Result<Vec<u8>, keychain::Error> })`. Decision: the app loop is
   single-threaded and the shell owns the store, so a blocking call would stall frames; Apple's calls are synchronous.
