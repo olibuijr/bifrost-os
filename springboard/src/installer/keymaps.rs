@@ -36,6 +36,12 @@ pub fn layouts() -> impl Iterator<Item = Layout> {
     LAYOUTS.iter().map(|&(id, name, xkb_layout, xkb_variant, console_keymap)| Layout { id, name, xkb_layout, xkb_variant, console_keymap })
 }
 
+/// The four characters a key types on a layout: plain, Shift, AltGr and Shift+AltGr (`'\0'` where it types none).
+/// Read by the keyboard viewer, which draws a board from the same tables the typing uses.
+pub fn key_levels(layout: usize, code: u16) -> Option<[char; 4]> {
+    KEYMAPS.get(layout)?.iter().find(|k| k.0 == code).map(|k| k.1)
+}
+
 pub fn layout_index(id: &str) -> Option<usize> {
     LAYOUTS.iter().position(|l| l.0 == id)
 }

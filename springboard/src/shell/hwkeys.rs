@@ -587,6 +587,8 @@ impl Shell {
                 }
                 vec![]
             }
+            // Escape hides the character viewer first, before it goes Back
+            Shortcut::Back if self.char_viewer_escape() => vec![],
             Shortcut::Back => self.hw_back(t),
             Shortcut::Home => self.assistive_action(super::assistive_touch::Action::Home, t),
             Shortcut::Term(k) => self.terminal_hw_key(k, t),

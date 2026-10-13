@@ -92,6 +92,8 @@ mod compose_sheet;
 mod recent_items;
 #[cfg(feature = "desktop-wayland")]
 mod print_sheet;
+mod character_viewer;
+mod keyboard_viewer;
 pub mod session;
 pub mod prefs;
 pub mod markup;
@@ -598,6 +600,10 @@ pub struct Shell {
     /// File > Print…: the print sheet over the captured desktop (see `print_sheet.rs`)
     #[cfg(feature = "desktop-wayland")]
     print_sheet: Option<print_sheet::PrintSheet>,
+    /// Edit > Emoji & Symbols: the character viewer panel (see `character_viewer.rs`)
+    char_viewer: Option<character_viewer::CharacterViewer>,
+    /// Input Sources > Show Keyboard Viewer: the keyboard board panel (see `keyboard_viewer.rs`)
+    keyboard_viewer: Option<keyboard_viewer::KeyboardViewer>,
     /// the share sheet, the nearby service and the incoming-file prompt
     share: Option<share::Sheet>,
     share_svc: Option<crate::net::share::Service>,
@@ -845,6 +851,8 @@ impl Shell {
             compose: None,
             #[cfg(feature = "desktop-wayland")]
             print_sheet: None,
+            char_viewer: None,
+            keyboard_viewer: None,
             share: None,
             share_svc: None,
             share_prompt: None,
@@ -1163,6 +1171,13 @@ impl Shell {
                 }
                 power_menu::Outcome::Idle | power_menu::Outcome::Redraw => vec![],
             });
+        }
+        if let Some(fx) = self.keyboard_viewer_touch(ev) {
+            return Some(fx);
+        }
+        if self.char_viewer.is_some() {
+            // the character viewer takes every touch until Done
+            return Some(self.char_viewer_event(ev));
         }
         #[cfg(feature = "desktop-wayland")]
         if self.print_sheet.is_some() {
@@ -3136,7 +3151,7 @@ impl Shell {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
-        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() {
+        if self.low_alert.is_some() || self.power_menu.is_some() || self.permission_sheet.is_some() || self.notify.ask.is_some() || self.compose_showing() || self.print_showing() || self.char_viewer.is_some() || self.keyboard_viewer.is_some() {
             // modal: repaint everything under it every frame, and again once it is gone
             damage.all();
             self.drawn = Drawn::Nothing;
@@ -3160,6 +3175,12 @@ impl Shell {
             if let Some(p) = &self.print_sheet {
                 p.draw(s, &self.ui, self.w, self.h);
             }
+            if let Some(v) = &self.char_viewer {
+                v.draw(s, &self.ui, self.w, self.h);
+            }
+            if let Some(v) = &self.keyboard_viewer {
+                v.draw(s, &self.ui, self.w, self.h, self.keyboard_viewer_layout());
+            }
         }
         self.draw_share(s);
         self.draw_assistive(s, t);
@@ -3178,7 +3199,7 @@ impl Shell {
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.notify.ask.is_none() && !self.print_showing() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }
@@ -3199,7 +3220,7 @@ impl Shell {
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
-            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.notify.ask.is_none() && !self.print_showing() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
+            && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
         }

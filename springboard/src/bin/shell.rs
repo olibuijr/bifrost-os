@@ -669,6 +669,7 @@ fn run() -> std::io::Result<()> {
                 input::Event::Key { code, down } => {
                     // session event taps see the key first and may drop or replace it
                     let Some(code) = shell.tap_key(code, down) else { continue };
+                    shell.keyboard_viewer_key(code, down);
                     let raw_sc = hw_keys.key_in(code, down, shell.term_front());
                     if trace {
                         eprintln!("springboard: key {code} {} shortcut={raw_sc:?}", if down { "down" } else { "up" });
