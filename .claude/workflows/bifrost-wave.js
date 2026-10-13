@@ -68,7 +68,7 @@ const VERDICT = {
 
 const results = await pipeline(picked,
   (t, _, i) => agent(
-    `${RULES}\n\nImplement this task. Owner rule: agents only code and commit; do NOT run tests, builds, publish or Midget commands (a hook blocks them). Create branch wave${WAVE}/${i}-<slug>, write the test first, then the fix, keep it minimal, update docs/parity-matrix/data rows if ${t.parityRows || 'parity is affected'}, and commit with a conventional message.\n\nTask: ${t.title}\nWhy: ${t.why}\nFiles: ${t.files.join(', ')}\nPlan: ${t.plan}`,
+    `${RULES}\n\nImplement this task. Owner rule: agents only code and commit; do NOT run tests, builds, publish or Midget commands (a hook blocks them). First, if springboard/assets is missing, run: ln -s ~/Projects/bifrost-os/springboard/assets springboard/assets (gitignored fonts; never commit it). Create branch wave${WAVE}/${i}-<slug>, write the test first, then the fix, keep it minimal, update docs/parity-matrix/data rows if ${t.parityRows || 'parity is affected'}, and commit with a conventional message.\n\nTask: ${t.title}\nWhy: ${t.why}\nFiles: ${t.files.join(', ')}\nPlan: ${t.plan}`,
     { label: `code:${t.title.slice(0, 40)}`, phase: 'Code', model: 'haiku', isolation: 'worktree', schema: DONE }),
   (d, t) => d && agent(
     `${RULES}\n\nAdversarially review branch ${d.branch} (git diff main...${d.branch}) for task "${t.title}". Try to find: logic errors, missing test, behaviour that diverges from the Apple API it mirrors, product names in code, unsafe without SAFETY, scope creep. Default merge=false if unsure. Read only.`,
