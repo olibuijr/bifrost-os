@@ -3,7 +3,7 @@
 //! network, the passwords or the window; `window.rs` runs the jobs and feeds their results in.
 
 use crate::body::Attachment;
-use crate::flags::{Flag, Flags};
+use crate::flags::{Flag, FlagColor, Flags};
 use crate::message::{self, Draft, Priority, Summary};
 use crate::search::{Doc, Query};
 use crate::session::Listed;
@@ -209,6 +209,8 @@ pub enum Sheet {
     Search(Form),
     /// New Mailbox and Rename Mailbox.
     Mailbox(MailboxSheet),
+    /// Open Quickly: one field; Return opens the first mailbox whose name contains the text.
+    Quickly(Form),
 }
 
 /// A message that arrived since the last listing of the inbox, for a notification.
@@ -276,6 +278,12 @@ pub struct Mail {
     pub show_cc: bool,
     pub show_bcc: bool,
     pub show_reply_to: bool,
+    /// Conversations whose new mail raises no notification (Message > Mute), by [`crate::mute::key`].
+    pub muted: HashSet<String>,
+    /// View > Show Sidebar.
+    pub show_sidebar: bool,
+    /// View > Raw Source: the reader shows the message as the server holds it, headers and all.
+    pub show_raw: bool,
 }
 
 impl Mail {
@@ -304,6 +312,9 @@ impl Mail {
             show_cc: true,
             show_bcc: false,
             show_reply_to: false,
+            muted: HashSet::new(),
+            show_sidebar: true,
+            show_raw: false,
         }
     }
 
@@ -343,6 +354,9 @@ impl Mail {
             let seen = self.baseline.get(account_id).copied();
             for m in arrivals(seen, &messages) {
                 let summary = Summary::from_headers(&m.header);
+                if self.muted.contains(&crate::mute::key(&summary)) {
+                    continue;
+                }
                 notices.push(Notice { account: account_id.to_string(), uid: m.uid, from: summary.from.clone(), subject: summary.subject.clone() });
             }
             if let Some(top) = messages.iter().map(|m| m.uid).max() {
@@ -389,6 +403,19 @@ impl Mail {
     pub fn set_flag_locally(&mut self, uid: u32, flag: Flag, on: bool) {
         for row in self.rows.iter_mut().chain(self.found.iter_mut().flatten()).filter(|r| r.uid == uid) {
             row.flags = row.flags.with(flag, on);
+            if flag == Flag::Flagged && !on {
+                row.flags = row.flags.without_color();
+            }
+        }
+    }
+
+    /// Flags a row in `color` at once, or clears its flag and colour (`None`), before the server answers.
+    pub fn set_color_locally(&mut self, uid: u32, color: Option<FlagColor>) {
+        for row in self.rows.iter_mut().chain(self.found.iter_mut().flatten()).filter(|r| r.uid == uid) {
+            row.flags = match color {
+                Some(color) => row.flags.without_color().with_color(color),
+                None => row.flags.with(Flag::Flagged, false).without_color(),
+            };
         }
     }
 
@@ -627,6 +654,36 @@ impl Mail {
             return Err(format!("There is already a mailbox named {name}"));
         }
         Ok(name)
+    }
+
+    /// Message > Mute: mutes the conversation of message `uid`, or unmutes it. Returns whether it is muted now.
+    pub fn toggle_mute(&mut self, uid: u32) -> Option<bool> {
+        let key = crate::mute::key(&self.row(uid)?.summary);
+        let muted = !self.muted.remove(&key);
+        if muted {
+            self.muted.insert(key);
+        }
+        Some(muted)
+    }
+
+    /// True when the conversation of message `uid` is muted.
+    pub fn is_muted(&self, uid: u32) -> bool {
+        self.row(uid).is_some_and(|r| self.muted.contains(&crate::mute::key(&r.summary)))
+    }
+
+    /// Open Quickly: a sheet that asks which mailbox to go to.
+    pub fn open_quickly(&mut self) {
+        self.sheet = Some(Sheet::Quickly(Form::new(vec![Field::new("Go to mailbox", "Type part of a mailbox name", "")])));
+    }
+
+    /// The mailboxes whose last name part contains `text` (without case), the ones that start with it first. An empty
+    /// text matches every mailbox.
+    pub fn quickly_matches(&self, text: &str) -> Vec<String> {
+        let needle = text.trim().to_lowercase();
+        let last = |m: &str| m.rsplit('/').next().unwrap_or(m).to_lowercase();
+        let mut found: Vec<String> = self.mailboxes.iter().filter(|m| m.to_lowercase().contains(&needle)).cloned().collect();
+        found.sort_by_key(|m| !last(m).starts_with(&needle));
+        found
     }
 
     /// The Find sheet, with the search applied so far.
@@ -955,6 +1012,52 @@ mod tests {
             Some(Sheet::Search(form)) => assert_eq!(form.value("Search"), "bo"),
             other => panic!("expected the Find sheet, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn muting_a_conversation_silences_its_notices_and_toggles_back() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let root = "Message-ID: <a@x>\r\nSubject: Fundur\r\n\r\n";
+        mail.apply_listing("work", INBOX, vec![], vec![Listed { uid: 1, flags: Flags::empty(), header: root.into() }]);
+        assert_eq!(mail.toggle_mute(1), Some(true));
+        assert!(mail.is_muted(1));
+        let reply = "Message-ID: <b@x>\r\nReferences: <a@x>\r\nSubject: Re: Fundur\r\n\r\n";
+        let other = "Message-ID: <z@x>\r\nSubject: Annad\r\n\r\n";
+        let messages = vec![
+            Listed { uid: 1, flags: Flags::empty(), header: root.into() },
+            Listed { uid: 2, flags: Flags::empty(), header: reply.into() },
+            Listed { uid: 3, flags: Flags::empty(), header: other.into() },
+        ];
+        let notices = mail.apply_listing("work", INBOX, vec![], messages);
+        assert_eq!(notices.iter().map(|n| n.uid).collect::<Vec<_>>(), vec![3]);
+        assert_eq!(mail.toggle_mute(1), Some(false));
+        assert!(!mail.is_muted(1));
+        assert_eq!(mail.toggle_mute(99), None, "an unlisted message cannot be muted");
+    }
+
+    #[test]
+    fn open_quickly_lists_matching_mailboxes_best_first() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.mailboxes = vec!["INBOX".into(), "Archive/Receipts".into(), "Sent".into(), "Rec".into(), "Drafts".into()];
+        assert_eq!(mail.quickly_matches("rec"), vec!["Archive/Receipts".to_string(), "Rec".to_string()]);
+        mail.mailboxes = vec!["Old receipts".into(), "Receipts".into()];
+        assert_eq!(mail.quickly_matches("receipts"), vec!["Receipts".to_string(), "Old receipts".to_string()], "a name that starts with the text first");
+        assert_eq!(mail.quickly_matches("").len(), 2);
+        assert!(mail.quickly_matches("zzz").is_empty());
+        mail.open_quickly();
+        assert!(matches!(mail.sheet, Some(Sheet::Quickly(_))));
+    }
+
+    #[test]
+    fn a_flag_colour_shows_at_once_and_clearing_the_flag_clears_the_colour() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(3, "x")]);
+        mail.set_color_locally(3, Some(FlagColor::Purple));
+        assert_eq!(mail.flags_of(3).and_then(Flags::color), Some(FlagColor::Purple));
+        mail.set_color_locally(3, Some(FlagColor::Blue));
+        assert_eq!(mail.flags_of(3).and_then(Flags::color), Some(FlagColor::Blue));
+        mail.set_flag_locally(3, Flag::Flagged, false);
+        assert_eq!(mail.flags_of(3), Some(Flags::empty()));
     }
 
     #[test]

@@ -114,9 +114,9 @@
    "feature": "Export as PDF, Save As message",
    "area": "menu",
    "apple": "File > Export as PDF, Save As",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/export.rs:save_eml",
+   "note": "File > Save As writes the raw .eml into the app data dir (saved/). No save panel yet and Export as PDF is not done.",
    "wire": "Render the message to PDF through the print path into a save panel; Save As writes the raw .eml"
   },
   {
@@ -132,9 +132,9 @@
    "feature": "Coloured flags",
    "area": "menu",
    "apple": "Message > Flag > colours",
-   "status": "gap",
-   "bifrost": "",
-   "note": "One flag only",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/flags.rs:FlagColor",
+   "note": "Message > Flag Color (seven colours, Clear Flag) stored as the $MailFlagBit0-2 keywords; the list row shows a colour dot. Not on the toolbar; no flag-colour smart filter yet.",
    "wire": "Map the colours to the $MailFlagBit0-2 keywords in flags.rs, add a submenu in window.rs and a colour dot to the list row in draw.rs"
   },
   {
@@ -195,9 +195,9 @@
    "feature": "Mute conversation / Ignore follow-up",
    "area": "menu",
    "apple": "Message > Mute",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/mute.rs:key",
+   "note": "Message > Mute / Unmute keeps the conversation key in muted.txt and silences its new-mail notifications. The list does not mark muted conversations and Ignore follow-up is not done.",
    "wire": "Store muted thread ids and skip notify() (window.rs:524) for them"
   },
   {
@@ -294,9 +294,9 @@
    "feature": "Hide or show sidebar and toolbar, column layout, side preview",
    "area": "view",
    "apple": "View > Show Sidebar, Use Column Layout",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Three fixed panes",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/layout.rs:panes_for",
+   "note": "View > Hide/Show Sidebar. Toolbar hiding, column layout and the side preview are not done.",
    "wire": "Add View menu toggles that feed layout::panes (layout.rs:11)"
   },
   {
@@ -429,9 +429,9 @@
    "feature": "All headers and raw source",
    "area": "view",
    "apple": "View > Message > All Headers, Raw Source; RawSourceWindow",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/draw.rs:raw_text",
+   "note": "View > Raw Source (Opt+Cmd+U) shows the whole message text in the reader. A separate window and a headers-only mode (All Headers) are not done.",
    "wire": "Add a raw source window over the fetched raw text in the body cache"
   },
   {
@@ -510,9 +510,9 @@
    "feature": "Open Quickly mailbox switcher",
    "area": "panel",
    "apple": "OpenQuicklyWindowController",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/state.rs:quickly_matches",
+   "note": "Mailbox > Open Quickly (Shift+Cmd+O) sheet; Return opens the best matching mailbox. The match list is not shown under the field and it only covers the shown account.",
    "wire": "Add a type-to-filter sheet over mail.mailboxes"
   },
   {

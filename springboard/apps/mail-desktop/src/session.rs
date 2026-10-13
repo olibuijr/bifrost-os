@@ -3,7 +3,7 @@
 //! folded into its response line as a quoted string, so the parsers in [`crate::imap`] see one line per response.
 
 use bifrost_app::controls::internet_accounts::{Security, Server};
-use crate::flags::{Flag, Flags};
+use crate::flags::{Flag, FlagColor, Flags, COLOR_KEYWORDS};
 use crate::imap::{self, Mailbox, Reply, Status, Value};
 use crate::line::{response_after, Lines};
 use crate::transport;
@@ -88,6 +88,17 @@ impl<S: Read + Write> Session<S> {
     pub fn set_flag(&mut self, uid: u32, flag: Flag, on: bool) -> Result<(), String> {
         let op = if on { '+' } else { '-' };
         self.run(&imap::store_flags(uid, op, Flags::empty().with(flag, true))).map(|_| ())
+    }
+
+    /// Flags a message in `color`, or clears its flag and colour (`None`). The old colour bits are cleared first, so the
+    /// colours never add up.
+    pub fn set_color(&mut self, uid: u32, color: Option<FlagColor>) -> Result<(), String> {
+        let everything = Flags::from_names(COLOR_KEYWORDS).with(Flag::Flagged, true);
+        self.run(&imap::store_flags(uid, '-', everything))?;
+        if let Some(color) = color {
+            self.run(&imap::store_flags(uid, '+', Flags::empty().with_color(color)))?;
+        }
+        Ok(())
     }
 
     /// Moves one message to `mailbox`: `UID MOVE` (RFC 6851) when the server has it; otherwise the message is copied,
@@ -416,6 +427,18 @@ mod tests {
         assert_eq!(s.idle().unwrap_err(), "IDLE not allowed");
         let mut s = session("+ idling\r\n* BYE logout\r\n");
         assert_eq!(s.idle().unwrap_err(), "BYE logout");
+    }
+
+    #[test]
+    fn a_flag_colour_clears_the_old_bits_then_sets_the_new_ones() {
+        let mut s = session("A001 OK done\r\nA002 OK done\r\nA003 OK done\r\n");
+        s.set_color(7, Some(FlagColor::Green)).unwrap();
+        s.set_color(7, None).unwrap();
+        let sent = s.lines.into_inner().sent();
+        assert!(
+            sent.starts_with("A001 UID STORE 7 -FLAGS.SILENT (\\Flagged $MailFlagBit0 $MailFlagBit1 $MailFlagBit2)\r\nA002 UID STORE 7 +FLAGS.SILENT (\\Flagged $MailFlagBit0 $MailFlagBit1)\r\nA003 UID STORE 7 -FLAGS.SILENT"),
+            "{sent}"
+        );
     }
 
     #[test]

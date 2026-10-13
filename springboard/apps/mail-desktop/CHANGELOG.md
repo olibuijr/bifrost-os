@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0 — 2026-10-13
+
+- Message > Flag Color (Red, Orange, Yellow, Green, Blue, Purple, Gray) and Clear Flag. The colour is kept in the
+  `$MailFlagBit0-2` keywords next to `\Flagged`, and the list row shows a dot in the colour. Clearing a flag also
+  clears its colour.
+- Message > Mute (and Unmute): new mail in a muted conversation raises no notification. The muted conversations are
+  kept in the app's data directory.
+- View > Raw Source (Opt+Cmd+U) shows the whole message as the server holds it. View > Hide Sidebar and Show Sidebar
+  (Ctrl+Cmd+S) give the room to the list and the reader.
+- Message > Save As (Shift+Cmd+S) writes the raw `.eml` file into the data directory; Save Attachments moves to
+  Opt+Cmd+A.
+- Mailbox > Open Quickly (Shift+Cmd+O) goes to the mailbox whose name matches what is typed.
+
 ## 0.7.0 — 2026-10-13
 
 - Compose has Cc, Bcc and Reply-To fields (View > Cc, Bcc and Reply-To Address Field show or hide them, in the open
