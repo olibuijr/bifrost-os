@@ -66,6 +66,7 @@ man-db
 mg
 nano
 ncompress
+net-snmp
 nethogs
 openbsd-netcat
 patch
@@ -84,9 +85,11 @@ strace
 sysstat
 tcpdump
 tcsh
+tftp-hpa
 tidy
 traceroute
 unzip
+usd
 vim
 which
 whois
