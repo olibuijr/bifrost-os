@@ -2066,3 +2066,22 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## Recurring events (EventKit: `EKRecurrenceRule`, `EKEventStore.events(matching:)`)
+
+`bifrost_app::event_recurrence` (`springboard/sdk/src/event_recurrence.rs`) is a pure model with host tests; status
+partial (not wired into the shell calendar store or the Calendar app, not yet checked on Midget).
+
+- `RecurrenceRule` (`frequency`, `interval`, `days_of_the_week: Vec<RecurrenceDayOfWeek>`, `days_of_the_month`,
+  `months_of_the_year`, `set_positions`, `recurrence_end: Option<RecurrenceEnd>`), `parse`/`format` for the RFC 5545
+  RRULE subset FREQ, INTERVAL, COUNT, UNTIL, BYDAY, BYMONTHDAY, BYMONTH, BYSETPOS. `RecurrenceEnd::EndDate(date)` and
+  `OccurrenceCount(n)`. `RecurrenceDayOfWeek { day_of_the_week (Sunday 1), week_number }`.
+- `EventStore::predicate_for_events(start, end, calendars)` and `events_matching(&predicate)` return one `Occurrence`
+  per repeat overlapping the window, with `occurrence_date` (the original start) and `is_detached`.
+- `Event.excluded_dates` skip repeats (they still count toward `OccurrenceCount`); `EventStore::detach` replaces one
+  repeat with its own time, length and title. `EventStore::remove(id, occurrence_date, Span::ThisEvent | FutureEvents)`.
+- Times are floating (`DateTime` = date + minute of day), so a 09:00 event stays at 09:00 across a clock change.
+  Weeks start on Monday. The first occurrence is always the start. `RecurrenceRule::from_repeat_choice` maps the
+  shell store's 6 stored repeat choices.
+- Differences from Apple: no time zones (floating only), no `EKRecurrenceRule` week-of-year or day-of-year parts, the
+  shell store still saves only the six repeat choices.

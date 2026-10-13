@@ -97,6 +97,7 @@ pub mod testing;
 pub mod usernotif;
 pub mod contacts;
 pub mod notification_schedule;
+pub mod event_recurrence;
 pub mod messaging;
 pub mod service_management;
 pub mod login_items_approval;
