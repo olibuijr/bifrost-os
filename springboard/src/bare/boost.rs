@@ -198,6 +198,20 @@ impl Boost {
         let _ = super::nl80211::set_power_save(crate::net::wifi::IFACE, rule.wifi_power_save);
     }
 
+    /// The Wi-Fi power-save mode the active profile asks for.
+    pub fn wifi_power_save(&self) -> bool {
+        self.profile.rule().wifi_power_save
+    }
+
+    /// Writes the active profile's Wi-Fi power-save mode again. Screen-off forces power save on and
+    /// nothing turns it off until the profile changes, so call this on every wake and after a resume
+    /// (the chip comes back with its own power state). Desktop mode too: the profile hand-off skips Wi-Fi.
+    pub fn restore_wifi_power_save(&self) {
+        // best effort: the chip may be off or the interface absent
+        #[cfg(unix)]
+        let _ = super::nl80211::set_power_save(crate::net::wifi::IFACE, self.wifi_power_save());
+    }
+
     /// Call every loop iteration with whether the UI is animating or was just touched.
     pub fn update(&mut self, active: bool, now: f64) {
         let rule = self.profile.rule();
@@ -384,5 +398,16 @@ mod tests {
         b.release();
         assert_eq!(read(&little, "scaling_max_freq"), "2000000");
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn wifi_power_save_follows_the_active_profile() {
+        let dir = std::env::temp_dir().join(format!("boost-wifi-{}", std::process::id()));
+        let mut b = Boost::at(dir.join("none").to_str().unwrap());
+        b.set_profile(Profile::Performance);
+        assert!(!b.wifi_power_save(), "performance keeps Wi-Fi out of power save");
+        b.set_profile(Profile::Battery);
+        assert!(b.wifi_power_save(), "battery saves power on Wi-Fi");
+        assert!(Boost::new().wifi_power_save(), "the default balanced profile saves Wi-Fi power");
     }
 }
