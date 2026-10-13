@@ -91,16 +91,21 @@ pub struct ImageInfo<'a> {
 /// A homeserver address as the sign-in sheet takes it (`matrix.org`, `https://matrix.example.org/`). Gives the base URL
 /// with `https://` and no trailing slash. Only https is accepted, because a sign-in sends the password.
 pub fn homeserver_base(input: &str) -> Result<String, String> {
-    let trimmed = input.trim().trim_end_matches('/');
-    if trimmed.is_empty() {
+    let trimmed = input.trim();
+    // The scheme is split off before the trailing slashes are trimmed, so `https://` alone leaves an empty host.
+    let rest = match trimmed.split_once("://") {
+        Some(("https", rest)) => rest,
+        Some(_) => return Err("The homeserver must use https".into()),
+        None => trimmed,
+    };
+    let host = rest.trim_end_matches('/');
+    if host.is_empty() {
         return Err("Enter the homeserver address".into());
     }
-    let base = if trimmed.contains("://") { trimmed.to_string() } else { format!("https://{trimmed}") };
-    let host = base.strip_prefix("https://").ok_or("The homeserver must use https")?;
-    if host.is_empty() || host.contains('/') || host.contains(char::is_whitespace) {
+    if host.contains('/') || host.contains(char::is_whitespace) {
         return Err("Enter the homeserver as a host name, such as matrix.org".into());
     }
-    Ok(base)
+    Ok(format!("https://{host}"))
 }
 
 /// Percent-encodes one URL path segment or query value. RFC 3986 unreserved characters pass; everything else, including
