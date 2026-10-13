@@ -2066,3 +2066,23 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## InputMethodKit: language methods, input sources, client protocol (sprint 9)
+
+New pure models in `springboard/ui/src/` (host unit tests only; not wired into the shell, not yet checked on Midget):
+
+- `hangul_method::HangulMethod`: two-set keys to jamo (`jamo_for_key`), joined into syllable blocks by the Unicode block
+  formula, compound vowels and finals, a vowel after a final moves it to the next block. `push`, `backspace`, `marked`,
+  `take`, like `kana_method::KanaMethod`. No hanja conversion.
+- `telex_method::TelexMethod`: Vietnamese Telex typing. `aa ee oo aw ow uw dd` shape marks, `s f r x j` tones (`z`
+  clears), tone placed by the orthography rules (marked vowel first, `oa oe uy` open, closed pairs on the second vowel,
+  `qu` and `gi` consonants). Lower-case keys only are interpreted.
+- `input_source::InputSources` (text input source services): `install`, `list(include_all_installed)`,
+  `for_language`, `current`, `enable`, `disable`, `select`, `select_next`, and `save`/`restore` as the persisted form.
+  A palette source is enabled but never selected; the selected and the last keyboard source cannot be disabled.
+- `imk_client::TextInputClient` (insertText(_:replacementRange:), setMarkedText(_:selectionRange:replacementRange:),
+  selectedRange, markedRange, attributes(forCharacterIndex:lineHeightRectangle:)) with `update_composition` and
+  `apply(outcome, client)` so a text view only implements the trait; a mock client drives the controller tests.
+
+Gaps: no pinyin (no syllable-to-hanzi data is shipped), no Tamil, Ainu, Transliteration or Dictation methods, the sources
+are not read from the shell yet (`shell/kb_layouts.rs` still has three layouts), no Wayland text-input provider.

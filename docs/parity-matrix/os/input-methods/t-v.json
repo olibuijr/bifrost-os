@@ -123,11 +123,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/ui/src/telex_method.rs",
+   "status": "partial",
+   "note": "Telex shape and tone composition model (host tests); VNI and VIQR not covered, not wired to the shell, not checked on Midget.",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   }
  ]
 }

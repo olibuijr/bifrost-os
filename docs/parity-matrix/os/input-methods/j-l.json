@@ -60,11 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: no counterpart yet",
+   "bifrost": "springboard/ui/src/hangul_method.rs",
+   "status": "partial",
+   "note": "Two-set hangul composition model (host tests); no hanja, not wired to the shell, not checked on Midget.",
    "rea": [],
-   "method": "heuristic"
+   "method": "manual"
   }
  ]
 }
