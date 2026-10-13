@@ -5,7 +5,9 @@ ipad-ref/
 springboard/assets/
 *.png
 goldengate_refimages/
-.claude/
+# local agent state; the shared workflow scripts are tracked
+.claude/*
+!.claude/workflows/
 apps/*/target/
 
 __pycache__/
