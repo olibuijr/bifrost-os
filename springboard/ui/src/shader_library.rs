@@ -35,6 +35,10 @@ pub enum LibraryError {
     NotFound(String),
     /// The named function exists but runs in the wrong stage for the pipeline.
     WrongStage { name: String, found: Stage },
+    /// A render pipeline descriptor has no function for this slot ("vertex" or "fragment").
+    MissingFunction(&'static str),
+    /// The sample count is not 1, 2, 4 or 8.
+    InvalidSampleCount(u32),
 }
 
 /// The longest allowed entry point name.
@@ -105,6 +109,54 @@ impl ShaderLibrary {
     /// Checks a compute pipeline: `kernel` must be a kernel entry point.
     pub fn check_compute_pipeline(&self, kernel: &str) -> Result<(), LibraryError> {
         expect_stage(self.make_function(kernel)?, Stage::Kernel)
+    }
+}
+
+impl ShaderLibrary {
+    /// `MTLDevice.makeLibrary(source:options:)`: scans `source` for entry points. A line that starts with `kernel`,
+    /// `vertex` or `fragment` declares one; its name is the last word before the first `(`. Lines starting with `//`
+    /// are comments. Nothing is compiled: the names and stages are what a pipeline check needs.
+    pub fn from_source(source: &str) -> Result<Self, LibraryError> {
+        let mut lib = ShaderLibrary::new();
+        for line in source.lines().map(str::trim).filter(|l| !l.starts_with("//")) {
+            let stage = match line.split_whitespace().next() {
+                Some("kernel") => Stage::Kernel,
+                Some("vertex") => Stage::Vertex,
+                Some("fragment") => Stage::Fragment,
+                _ => continue,
+            };
+            let Some((head, _)) = line.split_once('(') else { continue };
+            let name = head.split_whitespace().last().unwrap_or("");
+            lib.add(name, stage)?;
+        }
+        Ok(lib)
+    }
+}
+
+/// `MTLRenderPipelineDescriptor`: the function names and sample count a render pipeline is built from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderPipelineDescriptor {
+    pub label: Option<String>,
+    pub vertex_function: Option<String>,
+    pub fragment_function: Option<String>,
+    pub raster_sample_count: u32,
+}
+
+impl Default for RenderPipelineDescriptor {
+    fn default() -> Self {
+        RenderPipelineDescriptor { label: None, vertex_function: None, fragment_function: None, raster_sample_count: 1 }
+    }
+}
+
+impl RenderPipelineDescriptor {
+    /// Checks the descriptor against `lib`: both functions set and in the right stage, and a valid sample count.
+    pub fn validate(&self, lib: &ShaderLibrary) -> Result<(), LibraryError> {
+        if ![1, 2, 4, 8].contains(&self.raster_sample_count) {
+            return Err(LibraryError::InvalidSampleCount(self.raster_sample_count));
+        }
+        let vertex = self.vertex_function.as_deref().ok_or(LibraryError::MissingFunction("vertex"))?;
+        let fragment = self.fragment_function.as_deref().ok_or(LibraryError::MissingFunction("fragment"))?;
+        lib.check_render_pipeline(vertex, fragment)
     }
 }
 
@@ -186,5 +238,27 @@ mod tests {
         let lib = ShaderLibrary::new();
         assert!(lib.function_names().is_empty());
         assert_eq!(lib.label, None);
+    }
+
+    #[test]
+    fn source_scan_finds_entry_points_and_skips_comments() {
+        let src = "// kernel void hidden(\nvertex float4 v_main(uint i)\n{\n}\nfragment half4 f_main(\n float4 p)\nkernel void blur_pass(texture2d<float> t)";
+        let lib = ShaderLibrary::from_source(src).unwrap();
+        assert_eq!(lib.function_names(), vec!["v_main", "f_main", "blur_pass"]);
+        assert_eq!(lib.make_function("f_main").unwrap().stage, Stage::Fragment);
+        assert_eq!(ShaderLibrary::from_source("kernel void a(\nkernel void a("), Err(LibraryError::Duplicate("a".into())));
+    }
+
+    #[test]
+    fn render_descriptor_validates_against_the_library() {
+        let lib = sample();
+        let mut d = RenderPipelineDescriptor::default();
+        assert_eq!(d.validate(&lib), Err(LibraryError::MissingFunction("vertex")));
+        d.vertex_function = Some("quad_vertex".into());
+        assert_eq!(d.validate(&lib), Err(LibraryError::MissingFunction("fragment")));
+        d.fragment_function = Some("quad_fragment".into());
+        assert_eq!(d.validate(&lib), Ok(()));
+        d.raster_sample_count = 3;
+        assert_eq!(d.validate(&lib), Err(LibraryError::InvalidSampleCount(3)));
     }
 }

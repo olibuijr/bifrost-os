@@ -2850,3 +2850,30 @@ Pure-Rust, caller-clock playback model (microseconds); types drop the framework 
 - `MutableComposition` and `insert_time_range`, `MutableAudioMixInputParameters` volume ramps, `export_wav` (trimmed WAV via `ExportSession`).
 
 Gap: not connected to the audio engine or apps; video tracks and real metadata output are not modelled. Needs a Midget check.
+
+## Shader library and image kernels (Metal library, compute pipeline, Core Image kernels, MPS image kernels)
+
+Code: `ui/src/shader_library.rs` (names and stages, `from_source`, `RenderPipelineDescriptor`), `ui/src/shaders/mod.rs`
+(built-in library, function constants, compute pipeline state, Core Image routing), `ui/src/image_kernels.rs` (CPU
+reference kernels), `ui/src/compute_dispatch.rs` (the grid walk the kernels run on). Tests: `ui/tests/shader_kernels.rs`.
+
+| Apple | BifrOSt |
+|---|---|
+| `MTLDevice.makeLibrary(source:options:)` | `ShaderLibrary::from_source(&str)`; scans `kernel`, `vertex` and `fragment` declarations (nothing is compiled) |
+| `MTLLibrary.makeFunction(name:)` | `ShaderLibrary::make_function`; `LibraryError::NotFound` for a missing name |
+| `MTLFunctionConstantValues` | `shaders::FunctionConstantValues` (`set`, `set_bool`, `f32` values); unset constants take the Core Image default |
+| `MTLComputePipelineState` | `shaders::make_compute_pipeline_state(lib, name, &constants)` then `run(&Image)`; `thread_execution_width`, `max_total_threads_per_threadgroup` |
+| `MTLRenderPipelineDescriptor` | `RenderPipelineDescriptor { vertex_function, fragment_function, raster_sample_count }` with `validate(&lib)` |
+| `CIKernel`, `CIColorKernel`, `CIWarpKernel` `(functionName:fromMetalLibraryData:)` | `shaders::CiKernel::new(name, &lib, KernelKind)`; a class mismatch is `KernelError::KindMismatch` |
+| `CIGaussianBlur`, `CIColorControls`, `CISepiaTone`, `CIVignette`, `CILanczosScaleTransform`, `CIAffineTransform` | `shaders::ci_filter(name, &[("inputRadius", 2.0)])` |
+| `CIColorMatrix`, `CISourceOverCompositing` | `shaders::ci_color_matrix(r, g, b, a, bias)`, `image_kernels::source_over(fg, bg)` |
+| `MPSImageConvolution`, `MPSImageHistogram` | `image_kernels::convolve(img, w, h, weights, bias)`, `image_kernels::histogram(img)` |
+
+Decisions: pixels are the premultiplied `Image` format; colour kernels unpremultiply first. Convolution is a correlation with
+clamped edges and needs an odd size. The affine kernel samples nearest and leaves outside pixels transparent. The blur
+reuses `bifrost_render::blur_filters`.
+Gaps, stated rather than skipped: there is no GPU compute back end (the workspace has no GPU compute crate, so no adapter
+test exists yet; the CPU path is the reference a GPU path must match); no shader compiler, the library is a name table
+over built-in kernels, so app-supplied shader bodies are not run; no `MPSImageGaussianBlur` class (the blur kernel is
+`CIGaussianBlur`'s), no per-kernel `MPS` texture descriptors; `CIColorMatrix` and convolution weights are set by value, not
+by `CIFilter` input keys. Written without building or running (owner rule); parity needs a Midget check.
