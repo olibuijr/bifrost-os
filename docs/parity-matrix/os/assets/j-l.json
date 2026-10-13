@@ -205,11 +205,11 @@
     "size": 2416
    },
    "description": "",
-   "role": "",
+   "role": "Fallback or utility font",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt",
+   "status": "partial",
+   "note": "open equivalent Unifont (unifont), glyph coverage not metric-identical",
    "rea": [],
    "method": "heuristic"
   },

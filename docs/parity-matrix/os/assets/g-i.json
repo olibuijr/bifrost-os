@@ -1129,11 +1129,11 @@
     "size": 2338064
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt",
+   "status": "partial",
+   "note": "open equivalent Liberation Sans (Arimo) (ttf-liberation), metric-compatible, glyph shapes differ",
    "rea": [],
    "method": "heuristic"
   },
@@ -1150,11 +1150,11 @@
     "size": 4400792
    },
    "description": "",
-   "role": "",
+   "role": "Web/office compatibility font",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt",
+   "status": "partial",
+   "note": "open equivalent Liberation Sans (Arimo) (ttf-liberation), metric-compatible, glyph shapes differ",
    "rea": [],
    "method": "heuristic"
   },

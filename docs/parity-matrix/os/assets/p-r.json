@@ -247,11 +247,11 @@
     "size": 309040
    },
    "description": "",
-   "role": "",
+   "role": "Monospaced font",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt",
+   "status": "partial",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical",
    "rea": [],
    "method": "heuristic"
   },

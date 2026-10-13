@@ -142,11 +142,11 @@
     "size": 154344
    },
    "description": "",
-   "role": "",
+   "role": "Symbol font",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "packaging/arch/runtime-packages.txt",
+   "status": "partial",
+   "note": "open equivalent D050000L (gsfonts), glyph coverage not metric-identical",
    "rea": [],
    "method": "heuristic"
   },
