@@ -465,6 +465,51 @@ pub fn parse_collections(text: &str) -> BTreeMap<String, Vec<String>> {
     out
 }
 
+/// The URL scheme this app opens.
+pub const URL_SCHEME: &str = "fontbook";
+
+/// The family named by a `fontbook:` URL (`fontbook://Inter`, `fontbook:Fira%20Code`, `fontbook:///Noto+Sans`), or
+/// None when `url` is not one of ours or names nothing.
+pub fn family_from_url(url: &str) -> Option<String> {
+    let rest = url.trim().strip_prefix(URL_SCHEME)?.strip_prefix(':')?;
+    let rest = rest.trim_start_matches('/');
+    let rest = rest.split(['?', '#']).next().unwrap_or("");
+    let mut bytes = Vec::new();
+    let raw = rest.as_bytes();
+    let mut i = 0;
+    while i < raw.len() {
+        match raw[i] {
+            b'%' if raw.get(i + 1..i + 3).is_some_and(|h| h.iter().all(u8::is_ascii_hexdigit)) => {
+                let hex = std::str::from_utf8(&raw[i + 1..i + 3]).unwrap_or("00");
+                bytes.push(u8::from_str_radix(hex, 16).unwrap_or(b'?'));
+                i += 3;
+            }
+            b'+' => {
+                bytes.push(b' ');
+                i += 1;
+            }
+            b => {
+                bytes.push(b);
+                i += 1;
+            }
+        }
+    }
+    let name = String::from_utf8_lossy(&bytes).trim().to_string();
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
+}
+
+/// `base`, or `base 2`, `base 3`... the first that no name in `taken` uses (ignoring case).
+pub fn unique_name(taken: &[String], base: &str) -> String {
+    (1..)
+        .map(|n: u32| if n == 1 { base.to_string() } else { format!("{base} {n}") })
+        .find(|c| !taken.iter().any(|k| key(k) == key(c)))
+        .unwrap_or_default()
+}
+
 /// Reads a file under the app's data dir; a missing file is empty.
 pub fn read_text(dir: &Path, file: &str) -> String {
     std::fs::read_to_string(dir.join(file)).unwrap_or_default()
@@ -746,6 +791,24 @@ mod tests {
         assert!(!old.exists());
         assert!(system.exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn urls_name_a_family() {
+        assert_eq!(family_from_url("fontbook://Inter"), Some("Inter".to_string()));
+        assert_eq!(family_from_url("fontbook:Fira%20Code"), Some("Fira Code".to_string()));
+        assert_eq!(family_from_url("fontbook:///Noto+Sans?x=1"), Some("Noto Sans".to_string()));
+        assert_eq!(family_from_url("fontbook://%zz"), Some("%zz".to_string()));
+        assert_eq!(family_from_url("fontbook://"), None);
+        assert_eq!(family_from_url("https://x"), None);
+        assert_eq!(family_from_url("/home/u/a.ttf"), None);
+    }
+
+    #[test]
+    fn unique_names_count_up_ignoring_case() {
+        let taken = vec!["new collection".to_string(), "New Collection 2".to_string()];
+        assert_eq!(unique_name(&taken, "New Collection"), "New Collection 3");
+        assert_eq!(unique_name(&[], "Fixed Width"), "Fixed Width");
     }
 
     #[test]
