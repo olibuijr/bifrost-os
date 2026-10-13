@@ -2,7 +2,7 @@
 //! message, and the Seen flag. One connection serves one job. Every literal (`{n}` followed by n bytes) is read here and
 //! folded into its response line as a quoted string, so the parsers in [`crate::imap`] see one line per response.
 
-use crate::account::{Security, Server};
+use bifrost_app::controls::internet_accounts::{Security, Server};
 use crate::flags::{Flag, Flags};
 use crate::imap::{self, Mailbox, Reply, Status, Value};
 use crate::line::Lines;
@@ -82,6 +82,24 @@ impl<S: Read + Write> Session<S> {
 
     pub fn mark_seen(&mut self, uid: u32) -> Result<(), String> {
         self.run(&imap::store_flags(uid, '+', Flags::empty().with(Flag::Seen, true))).map(|_| ())
+    }
+
+    /// Adds (`on`) or removes one flag on a message, silently.
+    pub fn set_flag(&mut self, uid: u32, flag: Flag, on: bool) -> Result<(), String> {
+        let op = if on { '+' } else { '-' };
+        self.run(&imap::store_flags(uid, op, Flags::empty().with(flag, true))).map(|_| ())
+    }
+
+    /// Moves one message to `mailbox`: `UID MOVE` (RFC 6851) when the server has it; otherwise the message is copied,
+    /// marked `\Deleted`, and that one UID is expunged (UIDPLUS, RFC 4315), so other deleted messages stay.
+    pub fn move_to(&mut self, uid: u32, mailbox: &str) -> Result<(), String> {
+        let target = imap::quote(mailbox);
+        if self.run(&format!("UID MOVE {uid} {target}")).is_ok() {
+            return Ok(());
+        }
+        self.run(&format!("UID COPY {uid} {target}"))?;
+        self.run(&imap::store_flags(uid, '+', Flags::empty().with(Flag::Deleted, true)))?;
+        self.run(&format!("UID EXPUNGE {uid}")).map(|_| ())
     }
 
     pub fn logout(&mut self) {

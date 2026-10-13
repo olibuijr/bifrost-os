@@ -48,8 +48,8 @@ impl App for MailApp {
         }
     }
 
-    fn keychain(&mut self, ctx: &Ctx, reply: bifrost_app::keychain::Reply) -> bool {
-        self.window.as_mut().is_some_and(|mail| mail.keychain(ctx, reply))
+    fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<bifrost_core::json::Json, String>) -> bool {
+        self.window.as_mut().is_some_and(|mail| mail.service_reply(ctx, request, result))
     }
 
     fn tick(&mut self, ctx: &Ctx, t: f64) -> bool {

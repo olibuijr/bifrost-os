@@ -1,14 +1,27 @@
 //! The mail window's state: the accounts and what is selected, the message rows of the open mailbox, the open message,
 //! the sheets (account setup and compose) and the arrival baseline for new-mail notices. Nothing here touches the
-//! network, the keychain or the window; `window.rs` runs the jobs and feeds their results in.
+//! network, the passwords or the window; `window.rs` runs the jobs and feeds their results in.
 
-use crate::account::{self, Account, Security, Server};
+use crate::body::Attachment;
 use crate::flags::{Flag, Flags};
 use crate::message::{self, Draft, Summary};
+use crate::search::{Doc, Query};
 use crate::session::Listed;
+use crate::threads::{self, Node};
+use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Security, Server};
 use std::collections::HashMap;
 
 pub const INBOX: &str = "INBOX";
+/// One line of the list: a message, and in the threaded view how many messages its conversation holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Line {
+    pub row: Row,
+    pub thread: usize,
+}
+
+/// The mailbox names Archive and Trash are looked up under, in order (providers name them differently).
+pub const ARCHIVE_NAMES: [&str; 4] = ["Archive", "Archives", "All Mail", "[Gmail]/All Mail"];
+pub const TRASH_NAMES: [&str; 4] = ["Trash", "Deleted Items", "Deleted Messages", "[Gmail]/Trash"];
 /// The IMAP ports that start TLS at once; the other standard ports start with STARTTLS.
 const IMAP_TLS_PORT: u16 = 993;
 const SMTP_TLS_PORT: u16 = 465;
@@ -91,6 +104,8 @@ pub struct Compose {
 pub enum Sheet {
     Setup(Form),
     Compose(Compose),
+    /// The Find sheet: one field, the search text.
+    Search(Form),
 }
 
 /// A message that arrived since the last listing of the inbox, for a notification.
@@ -123,12 +138,18 @@ pub struct Mail {
     pub open: Option<u32>,
     /// Message text by UID, for the shown mailbox only.
     pub bodies: HashMap<u32, String>,
-    /// Passwords read from the keychain for this run. They are never written to the accounts file.
+    /// Passwords read from the Passwords group for this run. They are never written to the shared account list.
     pub passwords: HashMap<String, String>,
     /// The highest inbox UID seen per account id. Absent until the first inbox listing of the account.
     pub baseline: HashMap<String, u32>,
     pub sheet: Option<Sheet>,
     pub status: String,
+    /// The search text as applied. Empty shows every message.
+    pub search: String,
+    /// The threaded view: the list groups conversations together.
+    pub threaded: bool,
+    /// The files of each message loaded for the shown mailbox, by UID.
+    pub attachments: HashMap<u32, Vec<Attachment>>,
 }
 
 impl Mail {
@@ -145,6 +166,9 @@ impl Mail {
             baseline: HashMap::new(),
             sheet: None,
             status: String::new(),
+            search: String::new(),
+            threaded: false,
+            attachments: HashMap::new(),
         }
     }
 
@@ -170,6 +194,7 @@ impl Mail {
         self.mailbox = name.to_string();
         self.rows.clear();
         self.bodies.clear();
+        self.attachments.clear();
         self.open = None;
     }
 
@@ -211,14 +236,65 @@ impl Mail {
     }
 
     pub fn mark_seen_locally(&mut self, uid: u32) {
+        self.set_flag_locally(uid, Flag::Seen, true);
+    }
+
+    /// Sets a flag on a row at once, before the server answers.
+    pub fn set_flag_locally(&mut self, uid: u32, flag: Flag, on: bool) {
         if let Some(row) = self.rows.iter_mut().find(|r| r.uid == uid) {
-            row.flags = row.flags.with(Flag::Seen, true);
+            row.flags = row.flags.with(flag, on);
         }
+    }
+
+    /// The flags of a row in the shown mailbox, when it is listed.
+    pub fn flags_of(&self, uid: u32) -> Option<Flags> {
+        self.rows.iter().find(|r| r.uid == uid).map(|r| r.flags)
+    }
+
+    /// Takes a message out of the shown list, because it moved to another mailbox. An open message is closed.
+    pub fn remove_row(&mut self, uid: u32) {
+        self.rows.retain(|r| r.uid != uid);
+        self.bodies.remove(&uid);
+        self.attachments.remove(&uid);
+        if self.open == Some(uid) {
+            self.open = None;
+        }
+    }
+
+    /// The lines the list shows. Threaded, the matching messages are grouped by conversation (`threads::group`): each
+    /// conversation is listed together, the newest conversation first, the newest message first inside it.
+    pub fn visible_lines(&self) -> Vec<Line> {
+        let rows = self.visible_rows();
+        if !self.threaded {
+            return rows.into_iter().map(|row| Line { row, thread: 1 }).collect();
+        }
+        let nodes: Vec<Node> = rows
+            .iter()
+            .map(|r| Node {
+                message_id: r.summary.message_id.clone(),
+                in_reply_to: r.summary.in_reply_to.clone(),
+                references: r.summary.references.clone(),
+                subject: r.summary.subject.clone(),
+            })
+            .collect();
+        let mut lines = Vec::with_capacity(rows.len());
+        for group in threads::group(&nodes) {
+            for &i in &group {
+                lines.push(Line { row: rows[i].clone(), thread: group.len() });
+            }
+        }
+        lines
+    }
+
+    /// The first of `candidates` the account has as a mailbox (names match without case), for Archive and Trash.
+    pub fn find_mailbox(&self, candidates: &[&str]) -> Option<String> {
+        candidates.iter().find_map(|c| self.mailboxes.iter().find(|m| m.eq_ignore_ascii_case(c)).cloned())
     }
 
     /// The text of a message arrived. It is kept only when it belongs to the shown account and mailbox.
     pub fn body_arrived(&mut self, account_id: &str, mailbox: &str, uid: u32, text: String) {
         if self.current().is_some_and(|a| a.id == account_id) && self.mailbox == mailbox {
+            self.attachments.insert(uid, crate::body::attachments(&text));
             self.bodies.insert(uid, text);
         }
     }
@@ -229,7 +305,7 @@ impl Mail {
             Field::new("Name", "Shown in the sidebar", ""),
             Field::new("Email", hint_email, ""),
             Field::new("User name", "Same as the email when empty", ""),
-            Field { secret: true, ..Field::new("Password", "Stored in the keychain", "") },
+            Field { secret: true, ..Field::new("Password", "Stored in Passwords", "") },
             Field::new("Incoming server", "imap.<domain> when empty", ""),
             Field::new("Incoming port", "", &IMAP_TLS_PORT.to_string()),
             Field::new("Outgoing server", "smtp.<domain> when empty", ""),
@@ -254,15 +330,47 @@ impl Mail {
         self.sheet = Some(Sheet::Compose(Compose { form, in_reply_to: draft.in_reply_to, references: draft.references }));
     }
 
+    /// The Find sheet, with the search applied so far.
+    pub fn open_search(&mut self) {
+        let text = self.search.clone();
+        self.sheet = Some(Sheet::Search(Form::new(vec![Field::new("Search", "from:ana subject:fundur \"exact phrase\"", &text)])));
+    }
+
+    /// Applies a search text. Empty (or blank) shows every message again.
+    pub fn apply_search(&mut self, text: &str) {
+        self.search = text.trim().to_string();
+    }
+
+    /// The rows the list shows: the loaded rows that match the search, newest first. Bodies are searched when they are
+    /// loaded; a message whose body is not loaded matches on its headers only.
+    pub fn visible_rows(&self) -> Vec<Row> {
+        let query = Query::parse(&self.search);
+        self.rows
+            .iter()
+            .filter(|row| {
+                let body = self.bodies.get(&row.uid).map_or("", String::as_str);
+                let doc = Doc {
+                    from: row.summary.from.as_str(),
+                    to: row.summary.to.as_str(),
+                    subject: row.summary.subject.as_str(),
+                    body,
+                };
+                query.matches(&doc)
+            })
+            .cloned()
+            .collect()
+    }
+
     pub fn close_sheet(&mut self) {
         self.sheet = None;
     }
 
-    /// Checks the setup form and builds the account it describes, with its password. Hosts and ports fall back to the
-    /// domain's `imap.` and `smtp.` names and the standard ports.
-    pub fn account_from_form(&self, form: &Form) -> Result<(Account, String), String> {
+    /// Checks the setup form and builds the mail account it describes, with its password. Hosts and ports fall back to
+    /// the domain's `imap.` and `smtp.` names and the standard ports. `taken` is the whole shared list, so the new id
+    /// is unique among every account.
+    pub fn account_from_form(&self, form: &Form, taken: &[Account]) -> Result<(Account, String), String> {
         let email = form.value("Email").trim().to_string();
-        if !account::valid_address(&email) {
+        if !shared::valid_address(&email) {
             return Err("Enter an email address, for example name@example.com".into());
         }
         let domain = email.rsplit_once('@').map_or("", |(_, d)| d).to_string();
@@ -282,14 +390,10 @@ impl Mail {
         let smtp_port = port(form.value("Outgoing port"), 587)?;
         let imap_host = host(form.value("Incoming server"), &format!("imap.{domain}"));
         let smtp_host = host(form.value("Outgoing server"), &format!("smtp.{domain}"));
-        let account = Account {
-            id: account_id(&email, &self.accounts),
-            name,
-            email,
-            username,
-            imap: Server { host: imap_host, port: imap_port, security: security(imap_port, IMAP_TLS_PORT) },
-            smtp: Server { host: smtp_host, port: smtp_port, security: security(smtp_port, SMTP_TLS_PORT) },
-        };
+        let mut account = Account::new(Kind::Mail, &account_id(&email, taken), &name, &username);
+        account.email = email;
+        account.imap = Some(Server { host: imap_host, port: imap_port, security: security(imap_port, IMAP_TLS_PORT) });
+        account.smtp = Some(Server { host: smtp_host, port: smtp_port, security: security(smtp_port, SMTP_TLS_PORT) });
         account.validate().map_err(|e| e.to_string())?;
         Ok((account, password))
     }
@@ -319,7 +423,8 @@ impl Mail {
         })
     }
 
-    /// Adds an account the user set up. It becomes the shown account.
+    /// Adds an account the user set up, once it is in the shared list and its password is saved. It becomes the shown
+    /// account.
     pub fn add_account(&mut self, account: Account, password: String) {
         self.passwords.insert(account.id.clone(), password);
         self.accounts.push(account);
@@ -374,14 +479,11 @@ mod tests {
     use super::*;
 
     fn account(id: &str) -> Account {
-        Account {
-            id: id.into(),
-            name: "Work".into(),
-            email: "olibuijr@example.com".into(),
-            username: "olibuijr".into(),
-            imap: Server { host: "imap.example.com".into(), port: 993, security: Security::Tls },
-            smtp: Server { host: "smtp.example.com".into(), port: 587, security: Security::StartTls },
-        }
+        let mut a = Account::new(Kind::Mail, id, "Work", "olibuijr");
+        a.email = "olibuijr@example.com".into();
+        a.imap = Some(Server { host: "imap.example.com".into(), port: 993, security: Security::Tls });
+        a.smtp = Some(Server { host: "smtp.example.com".into(), port: 587, security: Security::StartTls });
+        a
     }
 
     fn listed(uid: u32, subject: &str) -> Listed {
@@ -448,6 +550,85 @@ mod tests {
     }
 
     #[test]
+    fn the_search_filters_the_rows_and_an_empty_search_shows_all() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(3, "Fundur"), listed(4, "Reikningur")]);
+        assert_eq!(mail.visible_rows().len(), 2);
+        mail.apply_search("  subject:fundur ");
+        assert_eq!(mail.search, "subject:fundur");
+        assert_eq!(mail.visible_rows().iter().map(|r| r.uid).collect::<Vec<_>>(), vec![3]);
+        mail.body_arrived("work", INBOX, 4, "Fundur um reikninginn".into());
+        mail.apply_search("body:fundur");
+        assert_eq!(mail.visible_rows().iter().map(|r| r.uid).collect::<Vec<_>>(), vec![4]);
+        mail.apply_search("");
+        assert_eq!(mail.visible_rows().len(), 2);
+    }
+
+    #[test]
+    fn the_threaded_view_lists_each_conversation_together() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let reply = "Message-ID: <b@x>\r\nIn-Reply-To: <a@x>\r\nSubject: Re: Plan\r\nFrom: Ana <ana@example.com>\r\n\r\n";
+        let plan = "Message-ID: <a@x>\r\nSubject: Plan\r\nFrom: Ana <ana@example.com>\r\n\r\n";
+        let lone = "Message-ID: <c@x>\r\nSubject: Lunch\r\nFrom: Bo <bo@example.com>\r\n\r\n";
+        let listed_threaded = |uid, header: &str| Listed { uid, flags: Flags::empty(), header: header.to_string() };
+        mail.apply_listing("work", INBOX, vec![], vec![listed_threaded(1, plan), listed_threaded(2, lone), listed_threaded(3, reply)]);
+        assert_eq!(mail.visible_lines().iter().map(|l| l.row.uid).collect::<Vec<_>>(), vec![3, 2, 1], "flat, newest first");
+        assert!(mail.visible_lines().iter().all(|l| l.thread == 1));
+        mail.threaded = true;
+        let lines = mail.visible_lines();
+        assert_eq!(lines.iter().map(|l| l.row.uid).collect::<Vec<_>>(), vec![3, 1, 2]);
+        assert_eq!(lines.iter().map(|l| l.thread).collect::<Vec<_>>(), vec![2, 2, 1]);
+    }
+
+    #[test]
+    fn a_loaded_message_keeps_its_files_until_the_mailbox_changes() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(3, "Skjöl")]);
+        let raw = "Content-Type: multipart/mixed; boundary=B\r\n\r\n--B\r\nContent-Type: text/plain\r\n\r\nSee attached\r\n--B\r\nContent-Type: text/csv; name=\"tolur.csv\"\r\nContent-Disposition: attachment; filename=\"tolur.csv\"\r\n\r\na,b\r\n--B--\r\n";
+        mail.body_arrived("work", INBOX, 3, raw.to_string());
+        let files = mail.attachments.get(&3).expect("the files of the loaded message");
+        assert_eq!(files.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(), vec!["tolur.csv"]);
+        mail.show_mailbox("Sent");
+        assert!(mail.attachments.is_empty());
+    }
+
+    #[test]
+    fn the_find_sheet_starts_from_the_applied_search() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_search("bo");
+        mail.open_search();
+        match &mail.sheet {
+            Some(Sheet::Search(form)) => assert_eq!(form.value("Search"), "bo"),
+            other => panic!("expected the Find sheet, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn flags_change_at_once_and_a_moved_message_leaves_the_list() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(3, "a"), listed(4, "b")]);
+        mail.open_message(3);
+        mail.set_flag_locally(3, Flag::Flagged, true);
+        assert!(mail.flags_of(3).is_some_and(|f| f.contains(Flag::Flagged)));
+        mail.remove_row(3);
+        assert_eq!(mail.open, None, "the open message closes when it moves");
+        assert_eq!(mail.rows.iter().map(|r| r.uid).collect::<Vec<_>>(), vec![4]);
+        assert_eq!(mail.flags_of(3), None);
+    }
+
+    #[test]
+    fn archive_and_trash_are_found_under_the_names_providers_use() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.mailboxes = vec!["INBOX".into(), "[Gmail]/All Mail".into(), "Trash".into()];
+        assert_eq!(mail.find_mailbox(&ARCHIVE_NAMES).as_deref(), Some("[Gmail]/All Mail"));
+        assert_eq!(mail.find_mailbox(&TRASH_NAMES).as_deref(), Some("Trash"));
+        mail.mailboxes = vec!["INBOX".into()];
+        assert_eq!(mail.find_mailbox(&ARCHIVE_NAMES), None);
+        mail.mailboxes = vec!["archive".into()];
+        assert_eq!(mail.find_mailbox(&ARCHIVE_NAMES).as_deref(), Some("archive"));
+    }
+
+    #[test]
     fn switching_mailboxes_clears_the_open_message() {
         let mut mail = Mail::new(vec![account("work")]);
         mail.open_message(3);
@@ -460,28 +641,39 @@ mod tests {
     fn a_setup_form_builds_an_account_with_defaults() {
         let mail = Mail::new(vec![]);
         let form = setup(&[("Email", "ana@example.com"), ("Password", "secret")]);
-        let (account, password) = mail.account_from_form(&form).unwrap();
+        let (account, password) = mail.account_from_form(&form, &[]).unwrap();
         assert_eq!(password, "secret");
+        assert_eq!(account.kind, Kind::Mail);
         assert_eq!(account.id, "ana-example-com");
         assert_eq!(account.username, "ana@example.com");
-        assert_eq!(account.imap, Server { host: "imap.example.com".into(), port: 993, security: Security::Tls });
-        assert_eq!(account.smtp, Server { host: "smtp.example.com".into(), port: 587, security: Security::StartTls });
+        assert_eq!(account.imap, Some(Server { host: "imap.example.com".into(), port: 993, security: Security::Tls }));
+        assert_eq!(account.smtp, Some(Server { host: "smtp.example.com".into(), port: 587, security: Security::StartTls }));
+        assert_eq!(account.password_site(), "imap.example.com");
     }
 
     #[test]
     fn a_setup_form_needs_an_address_and_a_password() {
         let mail = Mail::new(vec![]);
-        assert!(mail.account_from_form(&setup(&[("Email", "nope"), ("Password", "x")])).is_err());
-        assert!(mail.account_from_form(&setup(&[("Email", "ana@example.com")])).is_err());
-        assert!(mail.account_from_form(&setup(&[("Email", "ana@example.com"), ("Password", "x"), ("Incoming port", "0")])).is_err());
+        assert!(mail.account_from_form(&setup(&[("Email", "nope"), ("Password", "x")]), &[]).is_err());
+        assert!(mail.account_from_form(&setup(&[("Email", "ana@example.com")]), &[]).is_err());
+        assert!(mail.account_from_form(&setup(&[("Email", "ana@example.com"), ("Password", "x"), ("Incoming port", "0")]), &[]).is_err());
     }
 
     #[test]
     fn plain_imap_ports_start_with_starttls() {
         let mail = Mail::new(vec![]);
         let form = setup(&[("Email", "ana@example.com"), ("Password", "p"), ("Incoming port", "143")]);
-        let (account, _) = mail.account_from_form(&form).unwrap();
-        assert_eq!(account.imap.security, Security::StartTls);
+        let (account, _) = mail.account_from_form(&form, &[]).unwrap();
+        assert_eq!(account.imap.map(|s| s.security), Some(Security::StartTls));
+    }
+
+    #[test]
+    fn a_new_account_id_avoids_every_account_in_the_shared_list() {
+        let mail = Mail::new(vec![]);
+        let shared_list = vec![account("ana-example-com")];
+        let form = setup(&[("Email", "ana@example.com"), ("Password", "p")]);
+        let (account, _) = mail.account_from_form(&form, &shared_list).unwrap();
+        assert_eq!(account.id, "ana-example-com-2");
     }
 
     #[test]

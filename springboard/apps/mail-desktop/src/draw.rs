@@ -2,6 +2,7 @@
 //! [`crate::layout`], the message list and the reader scroll, and the sheets are panels centred over the window. The
 //! layout functions here are shared by the painter and the hit test, so a tap lands on what is drawn.
 
+use crate::attachments;
 use crate::flags::Flag;
 use crate::layout;
 use crate::state::{Mail, Sheet};
@@ -62,6 +63,8 @@ pub enum Button {
     Refresh,
     Compose,
     Reply,
+    Archive,
+    Trash,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,8 +85,8 @@ pub enum Hit {
     None,
 }
 
-/// The toolbar buttons and their rectangles, from the right edge inwards: Compose, then Reply when a message is open,
-/// then Refresh.
+/// The toolbar buttons and their rectangles, from the right edge inwards: Compose, then Reply, Archive and Trash when a
+/// message is open, then Refresh.
 fn toolbar_items(ui: &Ui, w: f32, open: bool) -> Vec<(Button, &'static str, Rect)> {
     let h = ui.pt(BUTTON_H_PT);
     let y = (ui.pt(TOOLBAR_PT) - h) / 2.0;
@@ -91,6 +94,8 @@ fn toolbar_items(ui: &Ui, w: f32, open: bool) -> Vec<(Button, &'static str, Rect
     let mut order: Vec<(Button, &'static str)> = vec![(Button::Compose, "Compose")];
     if open {
         order.push((Button::Reply, "Reply"));
+        order.push((Button::Archive, "Archive"));
+        order.push((Button::Trash, "Trash"));
     }
     order.push((Button::Refresh, "Refresh"));
     let mut right = w - pad;
@@ -133,7 +138,7 @@ pub struct SheetLayout {
 
 pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet) -> SheetLayout {
     let form = match sheet {
-        Sheet::Setup(form) => form,
+        Sheet::Setup(form) | Sheet::Search(form) => form,
         Sheet::Compose(compose) => &compose.form,
     };
     let pad = ui.pt(SHEET_PAD_PT);
@@ -298,8 +303,9 @@ impl MailWindow {
         if x < side + list {
             let row = ui.pt(ROW_PT);
             let index = ((y - top + self.list_scroll.offset()) / row).floor();
-            if index >= 0.0 && (index as usize) < self.mail.rows.len() {
-                return Hit::Message(self.mail.rows[index as usize].uid);
+            let lines = self.mail.visible_lines();
+            if index >= 0.0 && (index as usize) < lines.len() {
+                return Hit::Message(lines[index as usize].row.uid);
             }
         }
         Hit::None
@@ -368,13 +374,15 @@ impl MailWindow {
         let inset = ui.pt(SPACE_S);
         let dot = ui.pt(DOT_PT);
         let area = (h - top).max(0.0);
-        self.list_scroll.set_max((self.mail.rows.len() as f32 * row - area).max(0.0));
+        let lines = self.mail.visible_lines();
+        self.list_scroll.set_max((lines.len() as f32 * row - area).max(0.0));
         let offset = self.list_scroll.offset();
         s.fill_rect(px(x0), px(top), px(width), px(area), CONTENT_BG.now());
         let text_x = x0 + pad + dot;
         let right = x0 + width - pad;
         let open = self.mail.open;
-        for (i, r) in self.mail.rows.iter().enumerate() {
+        for (i, line) in lines.iter().enumerate() {
+            let r = &line.row;
             let y = top + i as f32 * row - offset;
             if y + row < top || y > h {
                 continue;
@@ -392,8 +400,9 @@ impl MailWindow {
             let name = fit(ui, display_name(&r.summary.from), MAC_BODY_PT, Weight::Semibold, name_max);
             put(s, &mut self.labels, ui, &name, MAC_BODY_PT, Weight::Semibold, c_name, text_x, y + row * 0.14);
             put(s, &mut self.labels, ui, &date, MAC_FOOTNOTE_PT, Weight::Regular, c_date, right - date_w, y + row * 0.16);
-            let subject = if r.summary.subject.is_empty() { "(no subject)" } else { r.summary.subject.as_str() };
-            let subject = fit(ui, subject, MAC_BODY_PT, Weight::Regular, (right - text_x).max(0.0));
+            let base = if r.summary.subject.is_empty() { "(no subject)" } else { r.summary.subject.as_str() };
+            let label = if line.thread > 1 { format!("({}) {base}", line.thread) } else { base.to_string() };
+            let subject = fit(ui, &label, MAC_BODY_PT, Weight::Regular, (right - text_x).max(0.0));
             put(s, &mut self.labels, ui, &subject, MAC_BODY_PT, Weight::Regular, c_sub, text_x, y + row * 0.5);
             if !selected {
                 s.fill_rect(px(text_x), px(y + row - 1.0), px(right - text_x), 1, SEPARATOR_C.now());
@@ -403,9 +412,11 @@ impl MailWindow {
         let footer = ui.pt(FOOT_LINE_PT) + 2.0 * pad;
         let footer_top = top + area - footer;
         let centre_x = x0 + width / 2.0;
-        if self.mail.rows.is_empty() {
+        if lines.is_empty() {
             let message = if self.mail.accounts.is_empty() {
                 "Add an account to start"
+            } else if !self.mail.search.is_empty() && !self.mail.rows.is_empty() {
+                "No matching messages"
             } else if self.busy() {
                 "Loading..."
             } else {
@@ -469,6 +480,18 @@ impl MailWindow {
         s.fill_rect(px(x), px(y), px(text_w), (ui.pt(1.0) as usize).max(1), SEPARATOR_C.now());
         y += ui.pt(SPACE_M);
 
+        let files: Option<String> = self.mail.attachments.get(&uid).filter(|f| !f.is_empty()).map(|files| {
+            let parts: Vec<String> = files.iter().map(|a| format!("{} ({})", a.name, attachments::size_text(a.bytes.len()))).collect();
+            format!("Attachments: {}", parts.join(", "))
+        });
+        if let Some(text) = files {
+            for line in wrap(ui, &text, text_w, MAC_FOOTNOTE_PT, Weight::Regular) {
+                put(s, &mut self.labels, ui, &line, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, y);
+                y += ui.pt(FOOT_LINE_PT);
+            }
+            y += ui.pt(SPACE_M);
+        }
+
         if !loaded {
             put(s, &mut self.labels, ui, "Loading...", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x, y);
             y += ui.pt(BODY_LINE_PT);
@@ -505,6 +528,7 @@ impl MailWindow {
         s.fill_rrect(px_, py, pw, ph, radius, CARD_BG.now());
 
         let (title, action, form) = match sheet {
+            Sheet::Search(form) => ("Find", "Search", form),
             Sheet::Setup(form) => ("Add Account", "Add Account", form),
             Sheet::Compose(compose) => (if compose.in_reply_to.is_some() { "Reply" } else { "New Message" }, "Send", &compose.form),
         };
