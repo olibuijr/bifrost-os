@@ -40,6 +40,8 @@ const MAX_LINE: u64 = 65_536;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Request {
     Shot(usize),
+    /// `capture select|window|screen`: opens the screenshot toolbar's capture session with that pick (`screencapture -i -w`)
+    Capture(String),
     Tap(f32, f32),
     Context(f32,f32),
     Hover(f32,f32),
@@ -156,6 +158,7 @@ pub fn parse(line: &str) -> Result<Request, String> {
     let num = |i: usize| -> Result<f32, String> { w.get(i).ok_or(format!("missing argument {i}"))?.parse::<f32>().map_err(|e| e.to_string()).and_then(|v| if v.is_finite() { Ok(v) } else { Err("not a finite number".to_string()) }) };
     match w.first().copied() {
         Some("shot") => Ok(Request::Shot(w.get(1).map(|s| s.parse().unwrap_or(1)).unwrap_or(1).clamp(1, 8))),
+        Some("capture") if w.len() == 2 && matches!(w[1], "select" | "window" | "screen") => Ok(Request::Capture(w[1].into())),
         Some("open-app") if w.len()==2=>Ok(Request::OpenApp(w[1].into())),
         Some("appearance") if matches!(w.get(1).copied(),Some("light"|"dark"|"auto"))&&w.len()==2=>Ok(Request::Appearance(w[1].into())),
         Some("context")=>Ok(Request::Context(num(1)?,num(2)?)),
@@ -343,6 +346,8 @@ mod tests {
     fn parses_commands() {
         assert_eq!(parse("shot 2\n"), Ok(Request::Shot(2)));
         assert_eq!(parse("shot"), Ok(Request::Shot(1)));
+        assert_eq!(parse("capture window\n"), Ok(Request::Capture("window".into())));
+        assert!(parse("capture movie\n").is_err(), "only select, window and screen");
         assert_eq!(parse("tap 10 20.5"), Ok(Request::Tap(10.0, 20.5)));
         assert_eq!(parse("swipe 1 2 3 4"), Ok(Request::Swipe { from: (1.0, 2.0), to: (3.0, 4.0), ms: 300.0 }));
         assert_eq!(parse("swipe 1 2 3 4 50"), Ok(Request::Swipe { from: (1.0, 2.0), to: (3.0, 4.0), ms: 50.0 }));

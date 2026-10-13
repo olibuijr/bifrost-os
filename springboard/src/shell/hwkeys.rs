@@ -17,6 +17,7 @@ const KEY_Q: u16 = 16;
 const KEY_H: u16 = 35;
 const KEY_F: u16 = 33;
 const KEY_GRAVE: u16 = 41;
+const KEY_5: u16 = 6;
 const KEY_UP: u16 = 103;
 const KEY_LEFT: u16 = 105;
 const KEY_RIGHT: u16 = 106;
@@ -121,6 +122,8 @@ pub enum Shortcut {
     ReaderActivate,
     /// Option+Cmd+F5: switches the features chosen for the Accessibility Shortcut (`accessibility::shortcut`)
     AccessibilityShortcut,
+    /// Shift+Cmd+5: the screenshot toolbar, a capture session over the screen
+    Capture,
 }
 
 impl Shortcut {
@@ -133,7 +136,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut | Shortcut::Capture => return None,
         }))
     }
 }
@@ -241,6 +244,7 @@ impl HwKeys {
             KEY_UP | KEY_DOWN if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderRotor(code == KEY_DOWN)),
             KEY_SPACE if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderActivate),
             KEY_F5 if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::AccessibilityShortcut),
+            KEY_5 if meta && self.shift > 0 && !ctrl && !alt => Some(Shortcut::Capture),
             KEY_COMMA if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Settings),
             KEY_C | KEY_X | KEY_V | KEY_A if (ctrl || meta) && !alt && self.shift == 0 => Some(match code {
                 KEY_C => Shortcut::Copy,
@@ -633,6 +637,15 @@ impl Shell {
                 }
                 vec![]
             }
+            // Shift+Cmd+5 opens the screenshot toolbar; Escape closes it before it goes Back
+            Shortcut::Capture if !self.is_locked() => {
+                self.capture = Some(super::capture::Session::new());
+                vec![]
+            }
+            Shortcut::Back if self.capture.is_some() => {
+                self.capture = None;
+                vec![]
+            }
             // Escape hides the character viewer first, before it goes Back
             Shortcut::Back if self.char_viewer_escape() => vec![],
             Shortcut::Back => self.hw_back(t),
@@ -749,6 +762,8 @@ mod tests {
     fn chords_map_to_shortcuts() {
         let mut k = HwKeys::default();
         assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_SPACE), Some(Shortcut::QuickSearch));
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], KEY_5), Some(Shortcut::Capture), "Shift-Cmd-5 opens the toolbar");
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA], KEY_5), None, "Cmd-5 alone is not a shortcut");
         assert_eq!(chord(&mut k, &[KEY_LEFTALT], KEY_TAB), Some(Shortcut::AppSwitch));
         assert_eq!(chord(&mut k, &[KEY_RIGHTMETA], KEY_TAB), Some(Shortcut::AppSwitch));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_C), Some(Shortcut::Copy));
