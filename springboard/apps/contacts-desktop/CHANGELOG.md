@@ -6,6 +6,10 @@
   contacts (a duplicate card is skipped). The password comes from the passwords group; the sync runs at start and every
   15 minutes. The file import uses the same merge.
 
+## 1.8.0
+
+- Smart Groups in the sidebar: With Email, With Phone, With Company and Missing Details. Each lists the contacts whose fields match, and updates as contacts change.
+
 ## 1.7.1 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

@@ -69,6 +69,9 @@ const LIST_ALL: u32 = 100;
 const LIST_FAVORITES: u32 = 101;
 const LIST_RECENT: u32 = 102;
 const LIST_DUPLICATES: u32 = 103;
+/// Smart group `n` (its offset in `smart::Smart::ALL`) is the sidebar row `LIST_SMART + n`.
+const LIST_SMART: u32 = 110;
+const LIST_SMART_LAST: u32 = LIST_SMART + crate::smart::Smart::ALL.len() as u32 - 1;
 /// Group `n` is the sidebar row `LIST_GROUP + n`; groups number from 1 and there are at most 1000 of them.
 const LIST_GROUP: u32 = 1000;
 const GROUPS_FILE: &str = "groups.txt";
@@ -85,6 +88,8 @@ enum Filter {
     Recent,
     /// Contacts that have a possible duplicate in the list.
     Duplicates,
+    /// A built-in smart group: the contacts whose fields match its rule.
+    Smart(crate::smart::Smart),
     Group(u64),
 }
 
@@ -96,6 +101,7 @@ impl Filter {
             Filter::Favorites => LIST_FAVORITES,
             Filter::Recent => LIST_RECENT,
             Filter::Duplicates => LIST_DUPLICATES,
+            Filter::Smart(s) => LIST_SMART + s.index() as u32,
             Filter::Group(g) => LIST_GROUP + g as u32,
         }
     }
@@ -106,6 +112,10 @@ impl Filter {
             LIST_FAVORITES => Filter::Favorites,
             LIST_RECENT => Filter::Recent,
             LIST_DUPLICATES => Filter::Duplicates,
+            id if (LIST_SMART..=LIST_SMART_LAST).contains(&id) => match crate::smart::Smart::from_index((id - LIST_SMART) as usize) {
+                Some(s) => Filter::Smart(s),
+                None => Filter::All,
+            },
             id if id > LIST_GROUP => Filter::Group((id - LIST_GROUP) as u64),
             _ => Filter::All,
         }
@@ -114,7 +124,7 @@ impl Filter {
 
 /// Whether a control identifier names a sidebar row. The group rows sit in their own range below the list rows.
 fn sidebar_node(id: u64) -> bool {
-    (LIST_ALL as u64..=LIST_DUPLICATES as u64).contains(&id)
+    (LIST_ALL as u64..=LIST_SMART_LAST as u64).contains(&id)
         || (LIST_GROUP as u64 + 1..=LIST_GROUP as u64 + 1000).contains(&id)
 }
 
@@ -596,8 +606,12 @@ impl Contacts {
             (LIST_FAVORITES, "Favorites".to_string(), "tag"),
             (LIST_RECENT, "Recently Changed".to_string(), "arrow.clockwise"),
             (LIST_DUPLICATES, "Possible Duplicates".to_string(), "doc"),
-            (0, "Groups".to_string(), ""),
+            (0, "Smart Groups".to_string(), ""),
         ];
+        for s in crate::smart::Smart::ALL {
+            rows.push((LIST_SMART + s.index() as u32, s.title().to_string(), s.symbol()));
+        }
+        rows.push((0, "Groups".to_string(), ""));
         for &id in &self.group_ids {
             if let Some(group) = self.groups.get(id) {
                 rows.push((LIST_GROUP + id as u32, group.name.clone(), "square.grid.2x2"));
@@ -749,6 +763,7 @@ impl Contacts {
             Filter::Favorites => Some(self.contacts.iter().filter(|c| c.favorite).map(|c| c.id).collect()),
             Filter::Recent => Some(self.history.changed_this_session()),
             Filter::Duplicates => Some(dupes::duplicate_ids(&self.contacts)),
+            Filter::Smart(smart) => Some(smart.ids(&self.contacts)),
             Filter::Group(group) => Some(
                 self.groups
                     .members(group, false)
@@ -2351,6 +2366,25 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Bo Berg\r\nN:Berg;Bo;;;\r\nEND:VCARD\r\n",
         app.rebuild(&ui);
         let names: Vec<&str> = app.listed().iter().map(|c| c.name.as_str()).collect();
         assert_eq!(names, ["A. As", "Anna As"]);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn a_smart_group_row_lists_the_contacts_that_match_its_rule() {
+        let path = file_with(
+            "smart",
+            &[Contact { email: "a@x.is".into(), ..contact(1, "Anna As") }, contact(2, "Bo Berg"), contact(3, "Cara Cole")],
+        );
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        let with_email = LIST_SMART + crate::smart::Smart::WithEmail.index() as u32;
+        assert!(sidebar_node(with_email as u64));
+        app.filter = Filter::from_sidebar_id(with_email);
+        assert_eq!(app.filter, Filter::Smart(crate::smart::Smart::WithEmail));
+        assert_eq!(app.filter.sidebar_id(), with_email);
+        app.rebuild(&ui);
+        let names: Vec<&str> = app.listed().iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names, ["Anna As"]);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
