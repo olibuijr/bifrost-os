@@ -362,7 +362,9 @@ mod tests {
         let out = enhanced_wav(&memo.path).unwrap();
         let back: Vec<i16> = out[44..].chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect();
         assert_eq!(back.len(), samples.len());
-        assert!(back[..4000].iter().all(|s| s.abs() < 40), "the hiss is turned down");
+        // The gate starts open so a take that opens on speech is not clipped; the first few ms of hiss pass
+        // unchanged and the gate has closed well before sample 200 (25 ms at 8 kHz).
+        assert!(back[200..4000].iter().all(|s| s.abs() < 40), "the hiss is turned down");
         let copy = save_enhanced(&memo).unwrap();
         assert_eq!(copy.file_name().unwrap(), "Lecture enhanced.wav");
         assert_eq!(scan(&dir).len(), 2);
