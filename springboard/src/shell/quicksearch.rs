@@ -167,6 +167,8 @@ pub enum Hit {
     Answer(String),
     /// a file under the Files root, previewed in Files
     File { path: PathBuf, name: String },
+    /// "Show in Folder": opens Files at `folder`, the folder that holds the file `name`
+    Reveal { folder: PathBuf, name: String },
     /// an app shortcut (`AppShortcut`): an intent declared in the app's manifest; opens the app and runs `intent.<id>`
     Shortcut { app_id: String, app_name: String, intent: String, title: String },
     /// an item an app put into the Core Search index: opens the app and sends it a continue-activity message.
@@ -345,25 +347,19 @@ fn indexed_groups(query: &str) -> Vec<Group> {
     }
 }
 
-/// "Files" section (names containing the query, newest first), up to three rows.
-/// `folded` holds `fuzzy::fold` of each file's name, so "bjork" finds "Björk.mp3".
+/// "Files" section (names containing the query, newest first), up to three rows, then a
+/// "Show in Folder" row for the top match. `folded` holds `fuzzy::fold` of each file's name,
+/// so "bjork" finds "Björk.mp3".
 fn file_note_groups(query: &str, files: &[crate::files::fs::Entry], folded: &[String]) -> Vec<Group> {
     let q = fuzzy::fold(query.trim());
     if q.is_empty() {
         return vec![];
     }
-    let hits: Vec<Hit> = files
-        .iter()
-        .zip(folded)
-        .filter(|(_, f)| f.contains(&q))
-        .take(PER_GROUP)
-        .map(|(e, _)| Hit::File { path: e.path.clone(), name: e.name.clone() })
-        .collect();
-    if hits.is_empty() {
-        vec![]
-    } else {
-        vec![Group { title: "Files", hits }]
-    }
+    let matches: Vec<&crate::files::fs::Entry> = files.iter().zip(folded).filter(|(_, f)| f.contains(&q)).map(|(e, _)| e).take(PER_GROUP).collect();
+    let Some(top) = matches.first() else { return vec![] };
+    let hits = matches.iter().map(|e| Hit::File { path: e.path.clone(), name: e.name.clone() }).collect();
+    let folder = top.path.parent().map_or_else(|| top.path.clone(), Path::to_path_buf);
+    vec![Group { title: "Files", hits }, Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder, name: top.name.clone() }] }]
 }
 
 /// A release title from a torrent name: dots and underscores become
@@ -835,6 +831,12 @@ impl QuickSearch {
                 self.move_selection(-1);
                 return None;
             }
+            // Space on an arrow-selected file previews it in Files instead of typing a space
+            Out::Text(ref text) if text == " " => {
+                if let Some(hit @ Hit::File { .. }) = self.selected_hit() {
+                    return Some(hit);
+                }
+            }
             _ => {}
         }
         if self.field.edit(ui, &out, t) {
@@ -903,6 +905,7 @@ impl QuickSearch {
                     Hit::Terminal(_) => "Search in Terminal".to_string(),
                     Hit::Answer(a) => format!("= {a}"),
                     Hit::File { name, .. } => name.clone(),
+                    Hit::Reveal { name, .. } => format!("Show {name} in Folder"),
                     Hit::Shortcut { title, app_name, .. } => format!("{title} ({app_name})"),
                     Hit::Indexed { title, kind, .. } => indexed_label(title, kind),
                 };
@@ -1267,7 +1270,7 @@ impl QuickSearch {
                         Hit::Deildu(_) => Some(AppId::Deildu),
                         Hit::Terminal(_) => Some(AppId::Terminal),
                         Hit::Answer(_) => super::apphost::slot_of(super::apphost::CALCULATOR).map(|n| AppId::External(n as u8)),
-                        Hit::File { .. } => Some(AppId::Files),
+                        Hit::File { .. } | Hit::Reveal { .. } => Some(AppId::Files),
                         Hit::Shortcut { app_id, .. } | Hit::Indexed { app_id, .. } => super::apphost::slot_of(app_id).map(|n| AppId::External(n as u8)),
                         Hit::Settings(_) => None,
                     };
@@ -1449,6 +1452,12 @@ impl Shell {
                 self.open(AppId::Files, t);
                 if let Some(entry) = self.quicksearch.files.iter().find(|e| e.path == path).cloned() {
                     self.preview_in_files(&entry, t);
+                }
+            }
+            Hit::Reveal { folder, .. } => {
+                self.open(AppId::Files, t);
+                if let Some(f) = &mut self.files {
+                    f.show_folder(&self.ui, &folder, t);
                 }
             }
             Hit::Shortcut { app_id, intent, .. } => {
@@ -1998,5 +2007,47 @@ mod desktop_tests {
         assert!(sh.quicksearch.is_shown(), "Search opens over an app");
         sh.hw_type(Out::Text("cl".into()), 2100.0);
         assert_eq!(sh.quicksearch.query(), "cl");
+    }
+}
+
+#[cfg(test)]
+mod file_actions_tests {
+    use super::*;
+    use crate::files::fs::{kind_of, Entry};
+
+    fn ui() -> Ui {
+        super::super::tests::ui()
+    }
+
+    fn entry(dir: &str, name: &str) -> Entry {
+        Entry { kind: kind_of(name, false), name: name.into(), path: PathBuf::from(dir).join(name), is_dir: false, size: 1, mtime: 0, items: None }
+    }
+
+    #[test]
+    fn a_file_match_comes_with_show_in_folder_for_the_top_match() {
+        let files = vec![entry("/home/me/Docs", "Q1 report.pdf"), entry("/home/me/Pics", "Beach.png")];
+        let folded: Vec<String> = files.iter().map(|e| fuzzy::fold(&e.name)).collect();
+        let groups = file_note_groups("report", &files, &folded);
+        assert_eq!(groups.len(), 2, "{groups:?}");
+        assert_eq!(groups[0].title, "Files");
+        assert_eq!(groups[0].hits, vec![Hit::File { path: PathBuf::from("/home/me/Docs/Q1 report.pdf"), name: "Q1 report.pdf".into() }]);
+        assert_eq!(groups[1], Group { title: "Show in Folder", hits: vec![Hit::Reveal { folder: PathBuf::from("/home/me/Docs"), name: "Q1 report.pdf".into() }] });
+        assert!(file_note_groups("zzz", &files, &folded).is_empty());
+        assert!(file_note_groups("  ", &files, &folded).is_empty());
+    }
+
+    #[test]
+    fn space_previews_an_arrow_selected_file_and_types_otherwise() {
+        let u = ui();
+        let mut q = QuickSearch::new(&u, 800.0, 1.0);
+        let file = Hit::File { path: PathBuf::from("/home/me/a.txt"), name: "a.txt".into() };
+        let section = |u: &Ui| Section { header: u.text("Files", 20.0, Weight::Semibold, WHITE), rows: vec![(file.clone(), u.text("a.txt", 13.0, Weight::Regular, WHITE))] };
+        q.sections = vec![section(&u)];
+        assert_eq!(q.key(&u, 800, Out::Text(" ".into()), 0.0), None, "no row selected: the space is typed");
+        assert_eq!(q.query(), " ");
+        q.sections = vec![section(&u)];
+        q.selected = Some((0, 0));
+        assert_eq!(q.key(&u, 800, Out::Text(" ".into()), 0.0), Some(file), "Space previews the selected file");
+        assert_eq!(q.query(), " ", "the query is untouched by the preview");
     }
 }

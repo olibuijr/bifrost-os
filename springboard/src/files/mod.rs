@@ -234,6 +234,20 @@ impl Files {
         self.dirty = true;
     }
 
+    /// Search's Show in Folder: the location list with `folder` pushed on top of it, under the
+    /// location that holds it. False (nothing changes) when no location holds the folder.
+    pub fn show_folder(&mut self, ui: &Ui, folder: &Path, t: f64) -> bool {
+        let root = match self.nav.pages().first() {
+            Some(Page::Locations(l)) => l.locations.iter().filter(|l| folder.starts_with(&l.path)).max_by_key(|l| l.path.as_os_str().len()).cloned(),
+            _ => None,
+        };
+        let Some(root) = root else { return false };
+        self.active_nav_mut().pop_to(1, t);
+        self.push_dir(ui, &root, folder, t);
+        self.dirty = true;
+        true
+    }
+
     /// Anchors the dates shown to the wall clock.
     pub fn set_wall(&mut self, unix: i64, offset: i32) {
         self.now = unix;
