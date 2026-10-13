@@ -38,7 +38,12 @@ pub struct StoreApp {
     pub age_rating: String,
     /// the product kind (`product_type` in the catalogue); `None` when the entry gives none or an unknown one
     pub product_type: Option<ProductType>,
+    /// absolute or store-relative URLs of the product page's screenshots, in order (at most `MAX_SHOTS`)
+    pub screenshots: Vec<String>,
 }
+
+/// Screenshots shown on a product page; any more in the catalogue are ignored.
+pub const MAX_SHOTS: usize = 6;
 
 /// One released version and what changed in it.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -141,9 +146,16 @@ pub fn parse_catalog(text: &str) -> Result<Vec<StoreApp>, String> {
             price: parse_price(a),
             age_rating: age_rating_of(&a.str_field("age_rating").unwrap_or_default()),
             product_type: a.str_field("product_type").and_then(|t| ProductType::parse(&t)),
+            screenshots: parse_screenshots(a.get("screenshots")),
         });
     }
     Ok(out)
+}
+
+/// Reads a `screenshots` array of URL strings: blanks are dropped and the list is capped at `MAX_SHOTS`.
+pub fn parse_screenshots(v: Option<&json::Json>) -> Vec<String> {
+    let Some(list) = v.and_then(|c| c.as_array()) else { return vec![] };
+    list.iter().filter_map(|x| x.as_str()).map(str::trim).filter(|x| !x.is_empty()).take(MAX_SHOTS).map(str::to_string).collect()
 }
 
 /// Reads `price` (minor units), `currency` (ISO 4217) and `fraction_digits` (default 2) of a catalogue entry.
@@ -214,6 +226,16 @@ mod tests {
         format!(
             r#"{{"apps":[{{"id":"is.olibuijr.calc","name":"Calc","version":"1.2.0","summary":"Adds","category":"Utilities","size":1234,"sha256":"{SUM}","icon":"/store/is.olibuijr.calc/icon.png","package":"/store/is.olibuijr.calc/is.olibuijr.calc-1.2.0.aap","min_shell":"0.1.0"}},{{"id":"broken","name":"x"}},{{"id":"bad.sha","name":"B","version":"1.0.0","sha256":"zz","package":"/p"}}]}}"#
         )
+    }
+
+    #[test]
+    fn screenshots_are_read_trimmed_and_capped() {
+        let v = json::parse(r#"["/s/1.png", "  ", 7, "/s/2.png"]"#).unwrap();
+        assert_eq!(parse_screenshots(Some(&v)), vec!["/s/1.png", "/s/2.png"]);
+        let many: Vec<String> = (0..9).map(|i| format!("\"/s/{i}.png\"")).collect();
+        let v = json::parse(&format!("[{}]", many.join(","))).unwrap();
+        assert_eq!(parse_screenshots(Some(&v)).len(), MAX_SHOTS);
+        assert!(parse_screenshots(None).is_empty());
     }
 
     #[test]
