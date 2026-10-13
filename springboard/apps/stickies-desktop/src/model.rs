@@ -238,8 +238,6 @@ pub enum Move {
     Right,
     LineStart,
     LineEnd,
-    Start,
-    End,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -420,8 +418,6 @@ impl Note {
             Move::Right => b.move_char(true, extend),
             Move::LineStart => b.move_line(false, extend),
             Move::LineEnd => b.move_line(true, extend),
-            Move::Start => b.move_document(false, extend),
-            Move::End => b.move_document(true, extend),
         });
     }
 
@@ -909,17 +905,15 @@ mod tests {
     }
 
     #[test]
-    fn the_caret_moves_by_character_line_and_document() {
+    fn the_caret_moves_by_character_and_line() {
         let mut n = Note::new(1, 0.0, 0.0, 0);
         n.set_text("ab\ncd");
         n.move_caret(Move::Left, false);
         assert_eq!(n.caret, 4);
         n.move_caret(Move::LineStart, false);
         assert_eq!(n.caret, 3);
-        n.move_caret(Move::Start, true);
-        assert_eq!(n.selection(), 0..3);
-        n.move_caret(Move::End, false);
-        assert_eq!((n.anchor, n.caret), (5, 5));
+        n.move_caret(Move::LineEnd, true);
+        assert_eq!(n.selection(), 3..5);
         n.move_caret(Move::Right, false);
         assert_eq!(n.caret, 5, "the end stays the end");
     }
