@@ -6,8 +6,12 @@
 //! turns a typed name into coordinates. Both are served over HTTPS and the
 //! crate has a TLS client (`deildu::http`), so the `https://` URLs are used.
 //! Every answer is kept under the Weather data directory (the raw JSON per
-//! location), so the last forecast still shows with no network. Fetching
-//! happens on worker threads (see `Weather`).
+//! location), so the last forecast still shows with no network. Two further
+//! Open-Meteo hosts fill in the rest: the air-quality host (`european_aqi`,
+//! `pm2_5`, asked on every refresh) and the archive host (the daily highs of
+//! this date over the last ten years, asked once per place and date), each
+//! kept in its own small file next to the forecast. Fetching happens on
+//! worker threads (see `Weather`).
 //!
 //! Stocks-lite uses Stooq's CSV quote endpoint: no key, one request for the
 //! whole watchlist, answers `Symbol,Date,Time,Open,High,Low,Close,Volume`.

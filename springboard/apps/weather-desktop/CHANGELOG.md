@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.6.0 — 2026-10-13
+
+- New detail tiles: Precipitation (the day's total and the next 24 hours), Visibility, Pressure (with a rising, falling
+  or steady note) and Averages (today's high against the mean high of this date over the last ten years). Amounts
+  follow the unit setting: mm, km and hPa with Celsius; in, mi and inHg with Fahrenheit.
+- Air Quality card with the European index, its band and PM2.5, over a scale from good to extremely poor. It comes from
+  Open-Meteo's air-quality service and is kept in the cache like the forecast.
+- Next Hour card: the minute forecast (15-minute steps) as bars, under a line such as "Rain starting in 30 minutes".
+  The footer no longer lists the minute forecast as missing; weather alerts are still not served by the data source.
+- Wind tile: gusts, the bearing the wind comes from and a compass dial. Humidity tile: the dew point. Sunrise tile: the
+  sun's day arc with the sun at its place.
+- Hourly forecast: the chance of precipitation under each hour, and a column for the sunrise or sunset where it falls.
+  10-day forecast: the chance of precipitation under each day's glyph.
+- Locations sidebar: each place shows its sky glyph, the sky in words and its temperature. Places can be dragged to
+  reorder them (the order is saved), removed with the Delete key and removed or switched with a secondary click.
+- Rain notifications: a Notify switch per place on the Locations page. When a refresh shows rain starting within the
+  hour at such a place, the app posts one notification for that spell of rain. New permission: notifications.
+- Share button in the toolbar sends the place, temperature, sky and range as text to the share menu.
+- `weather://` links: `weather://Akureyri` shows a saved place or looks the name up and adds the first match;
+  `weather://?lat=65.68&lon=-18.1&name=Akureyri` adds that position directly.
+- Control methods `weather.places`, `weather.current` and `weather.forecast` return what the window shows as JSON, with
+  an optional `place` parameter naming a saved place.
+
 ## 1.5.3 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
