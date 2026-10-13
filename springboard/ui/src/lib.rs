@@ -1076,4 +1076,6 @@ pub mod pdf_overlay;
 pub mod pdf_access;
 pub mod media_trim;
 pub mod print;
+pub mod ipp;
+pub mod cups;
 pub mod material_style;
