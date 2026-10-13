@@ -849,6 +849,7 @@ pub mod indexset;
 pub mod tracking;
 pub mod wheel;
 pub mod drag_session;
+pub mod trackpad_gesture;
 pub mod evaluation;
 pub mod notifattach;
 pub mod notifmedia;
