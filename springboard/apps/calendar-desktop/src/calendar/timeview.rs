@@ -24,7 +24,6 @@ const DAY_NUM_Y_PT: f32 = 173.0;
 /// Year view: the top of the month grid.
 const YEAR_TOP_PT: f32 = 140.0;
 const ALLDAY_H: f32 = 28.0;
-const HOUR_H: f32 = 48.0;
 const GUTTER: f32 = 52.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,27 +67,47 @@ impl Calendar {
         matches!(self.view, View::Day | View::Week)
     }
 
-    /// Days shown as columns: the selected day, or its Sunday-first week.
+    /// Days shown as columns: the selected day, or its week (Sunday first, or Monday with the setting).
     fn view_days(&self) -> Vec<Date> {
         if self.view == View::Day {
             return vec![self.selected];
         }
-        let start = self.selected.shift_days(-(self.selected.weekday() as i32));
+        let start = self.week_start();
         (0..7).map(|i| start.shift_days(i)).collect()
     }
 
-    fn week_start(&self) -> Date {
-        self.selected.shift_days(-(self.selected.weekday() as i32))
+    /// The first day of the week the selected day is in.
+    pub(super) fn week_start(&self) -> Date {
+        self.week_of(self.selected)
+    }
+
+    /// The first day of the week `day` is in.
+    pub(super) fn week_of(&self, day: Date) -> Date {
+        day.shift_days(-(self.prefs.column(day.weekday()) as i32))
     }
 
     /// Scroll range of the hour grid.
     pub(super) fn time_scroll_max(&self, ui: &Ui) -> f32 {
-        ui.pt(GRID0 + ALLDAY_H + 24.0 * HOUR_H + 16.0) - self.bottom(ui)
+        ui.pt(GRID0 + ALLDAY_H + 24.0 * self.prefs.hour_h + 16.0) - self.bottom(ui)
     }
 
-    /// Initial offset showing the morning (8 AM) at the top.
+    /// Initial offset showing the start of the day (8 AM unless the setting says otherwise) at the top.
     pub(super) fn scroll_to_morning(&mut self, ui: &Ui) {
-        self.scroll.jump_to(ui.pt(8.0 * HOUR_H));
+        self.scroll.jump_to(ui.pt(self.prefs.day_start as f32 * self.prefs.hour_h));
+    }
+
+    /// View > Zoom In / Zoom Out: changes the hour height one step and keeps the same time of day at the top of the grid.
+    pub(super) fn zoom_hours(&mut self, ui: &Ui, dir: i32) {
+        let old = self.prefs.hour_h;
+        let new = super::prefs::zoom(old, dir);
+        if new == old {
+            return;
+        }
+        let hours_at_top = self.scroll.offset() / ui.pt(old);
+        self.prefs.hour_h = new;
+        self.save_prefs();
+        self.fit_scroll(ui);
+        self.scroll.jump_to(hours_at_top * ui.pt(new));
     }
 
     /// Steps by the active view's unit.
@@ -112,7 +131,7 @@ impl Calendar {
         let (gut, col_w) = self.col_geometry(ui);
         let top = ui.pt(GRID0) - self.scroll.offset();
         let hours_top = top + ui.pt(ALLDAY_H);
-        let hh = ui.pt(HOUR_H);
+        let hh = ui.pt(self.prefs.hour_h);
         let mut out = vec![];
         for (i, d) in self.view_days().iter().enumerate() {
             let x0 = gut + col_w * i as f32;
@@ -218,7 +237,7 @@ impl Calendar {
         let off = self.scroll.offset();
         let top = ui.pt(GRID0) - off;
         let hours_top = top + ui.pt(ALLDAY_H);
-        let hh = ui.pt(HOUR_H);
+        let hh = ui.pt(self.prefs.hour_h);
         let rects = self.time_rects(ui);
         let c = tz::civil(self.wall.now(t), self.wall.offset);
         let now_min = c.hour * 60 + c.min;
@@ -291,7 +310,7 @@ impl Calendar {
             } else {
                 w / 7.0 * (i as f32 + 0.5)
             };
-            let name = &WEEKDAYS[i as usize][..3].to_uppercase();
+            let name = &WEEKDAYS[self.prefs.weekday_at(i as usize)][..3].to_uppercase();
             self.centre(s, ui, name, MAC_SUBHEAD_PT, Weight::Medium, LABEL_2.now(), cx, ui.pt(WEEKDAY_Y_PT));
             let sel = d == self.selected;
             let today = d == self.today;
@@ -343,8 +362,9 @@ impl Calendar {
             let mini_w = (cw - ui.pt(SPACE_L)) / 7.0;
             let mini_h = ((ch - ui.pt(36.0)) / 6.0).min(ui.pt(SPACE_XXL));
             for day in 1..=first.month_len() {
-                let col = (first.weekday() + day as usize - 1) % 7;
-                let row = (first.weekday() + day as usize - 1) / 7;
+                let lead = self.prefs.column(first.weekday());
+                let col = (lead + day as usize - 1) % 7;
+                let row = (lead + day as usize - 1) / 7;
                 let cx = x0 + ui.pt(SPACE_S) + mini_w * (col as f32 + 0.5);
                 let cy = y0 + ui.pt(36.0) + mini_h * (row as f32 + 0.5);
                 let is_today = current && day == self.today.day;

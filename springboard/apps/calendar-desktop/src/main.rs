@@ -6,6 +6,7 @@ use bifrost_app::controls::internet_accounts::Service;
 use bifrost_app::widgets_timeline;
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
 use bifrost_calendar::calendar::connect::{self, Connect, Snap};
+use bifrost_calendar::calendar::prefs::{self, Setting};
 use bifrost_calendar::calendar::{self, Command};
 use bifrost_core::json::Json;
 use springboard::shell::clock::Wall;
@@ -25,6 +26,24 @@ fn share_copy(c: &mut calendar::Calendar, ctx: &Ctx) {
     if let Some(text) = c.take_copied() {
         ctx.set_pasteboard_string(&text);
     }
+}
+
+/// The Settings menu: the week start, then a submenu of radio choices for each default.
+fn settings_items(c: &calendar::Calendar) -> Vec<AppMenuItem> {
+    let choice = |s: Setting| AppMenuItem::new(s.id(), &s.title()).checked(c.setting_checked(s)).enabled(c.settings_enabled()).depth(1);
+    let mut items = vec![AppMenuItem::new(Setting::MondayFirst.id(), &Setting::MondayFirst.title())
+        .checked(c.setting_checked(Setting::MondayFirst))
+        .enabled(c.settings_enabled())];
+    items.push(AppMenuItem::separator());
+    items.push(AppMenuItem::submenu("Default Event Length"));
+    items.extend((0..prefs::DURATIONS.len()).map(|i| choice(Setting::Length(i))));
+    items.push(AppMenuItem::submenu("Day Starts at"));
+    items.extend((0..prefs::DAY_STARTS.len()).map(|i| choice(Setting::DayStart(i))));
+    items.push(AppMenuItem::submenu("Default Alert"));
+    items.extend((0..prefs::ALERT_CHOICES).map(|v| choice(Setting::Alert(v))));
+    items.push(AppMenuItem::submenu("Default All-Day Alert"));
+    items.extend((0..prefs::ALERT_CHOICES).map(|v| choice(Setting::AllDayAlert(v))));
+    items
 }
 
 impl App for CalendarApp {
@@ -96,10 +115,19 @@ impl App for CalendarApp {
                     item(Command::CalendarList),
                 ],
             },
+            // merges into the shell's View menu
+            AppMenu {
+                title: "View".into(),
+                items: vec![item(Command::ZoomIn), item(Command::ZoomOut)],
+            },
+            AppMenu { title: "Settings".into(), items: settings_items(c) },
         ]
     }
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        if let Some(setting) = Setting::from_id(id) {
+            return self.cal.as_mut().is_some_and(|c| c.change_setting(&ctx.ui, setting));
+        }
         let Some(cmd) = Command::from_id(id) else { return false };
         let t = bifrost_app::proto::sys::now_ms();
         match &mut self.cal {

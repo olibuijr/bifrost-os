@@ -559,11 +559,11 @@ fn week_numbers_are_a_saved_setting() {
     let temp = Temp::new();
     let ui = crate::test_ui();
     let mut c = new(&ui, temp.file());
-    assert!(!c.week_numbers);
+    assert!(!c.prefs.week_numbers);
     c.activate(&ui, Target::WeekNumbers, 0.0);
-    assert!(c.week_numbers);
+    assert!(c.prefs.week_numbers);
     let again = new(&ui, temp.file());
-    assert!(again.week_numbers, "kept after a restart");
+    assert!(again.prefs.week_numbers, "kept after a restart");
 }
 
 #[test]
@@ -648,4 +648,104 @@ fn new_event_from_an_empty_pasteboard_is_a_plain_new_event() {
     assert!(!draft.existing);
     assert_eq!(draft.event.minute, 9 * 60, "the editor's default start");
     assert!(draft.event.title.is_empty());
+}
+
+#[test]
+fn zoom_changes_the_hour_height_and_keeps_it() {
+    use prefs::HOUR_H_DEFAULT;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(!c.enabled(Command::ZoomIn) && !c.enabled(Command::ZoomOut), "the month grid has no hours");
+    c.activate(&ui, Target::View(View::Week), 0.0);
+    assert!(c.enabled(Command::ZoomIn) && c.enabled(Command::ZoomOut));
+    assert!(c.perform(&ui, Command::ZoomIn, 0.0));
+    assert_eq!(c.prefs.hour_h, HOUR_H_DEFAULT + prefs::HOUR_H_STEP);
+    let again = new(&ui, temp.file());
+    assert_eq!(again.prefs.hour_h, HOUR_H_DEFAULT + prefs::HOUR_H_STEP, "kept after a restart");
+    for _ in 0..20 {
+        c.perform(&ui, Command::ZoomOut, 0.0);
+    }
+    assert_eq!(c.prefs.hour_h, prefs::HOUR_H_MIN);
+    assert!(!c.enabled(Command::ZoomOut), "at the smallest size");
+}
+
+#[test]
+fn zooming_keeps_the_same_hour_at_the_top() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.set_size(1200, 780);
+    c.activate(&ui, Target::View(View::Day), 0.0);
+    // the day opens at 8 AM
+    assert!((c.scroll.offset() - ui.pt(8.0 * prefs::HOUR_H_DEFAULT)).abs() < 1.0);
+    c.zoom_hours(&ui, 1);
+    assert!((c.scroll.offset() - ui.pt(8.0 * (prefs::HOUR_H_DEFAULT + prefs::HOUR_H_STEP))).abs() < 1.0);
+    assert!(c.time_scroll_max(&ui) > 0.0);
+}
+
+#[test]
+fn an_event_block_grows_with_the_zoom() {
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.events = vec![event(1, "Standup")];
+    c.activate(&ui, Target::View(View::Day), 0.0);
+    let height = |c: &Calendar| c.time_rects(&ui)[0].4;
+    let before = height(&c);
+    c.zoom_hours(&ui, 1);
+    assert!(height(&c) > before);
+}
+
+#[test]
+fn the_week_can_start_on_monday() {
+    use prefs::Setting;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    // 4 October 2026 is a Sunday; the 1st of the month is a Thursday
+    assert_eq!(c.week_start(), date(2026, 10, 4));
+    assert_eq!(c.grid_start(), date(2026, 9, 27));
+    assert!(c.change_setting(&ui, Setting::MondayFirst));
+    assert!(c.setting_checked(Setting::MondayFirst));
+    assert_eq!(c.week_start(), date(2026, 9, 28));
+    assert_eq!(c.grid_start(), date(2026, 9, 28));
+    let again = new(&ui, temp.file());
+    assert_eq!(again.week_start(), date(2026, 9, 28), "kept after a restart");
+}
+
+#[test]
+fn new_events_take_the_default_length_and_alerts() {
+    use prefs::Setting;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.change_setting(&ui, Setting::Length(2));
+    c.change_setting(&ui, Setting::Alert(3));
+    c.change_setting(&ui, Setting::AllDayAlert(6));
+    c.activate(&ui, Target::Add, 0.0);
+    let e = c.editor.as_ref().unwrap().event.clone();
+    assert_eq!((e.duration, e.alert), (90, 3));
+    // turning the new event all-day swaps the default alert, turning it back swaps it again
+    c.activate(&ui, Target::AllDay, 0.0);
+    assert_eq!(c.editor.as_ref().unwrap().event.alert, 6);
+    c.activate(&ui, Target::AllDay, 0.0);
+    assert_eq!(c.editor.as_ref().unwrap().event.alert, 3);
+    // a hand-picked alert is left alone
+    c.activate(&ui, Target::Alert, 0.0);
+    assert_eq!(c.editor.as_ref().unwrap().event.alert, 4);
+    c.activate(&ui, Target::AllDay, 0.0);
+    assert_eq!(c.editor.as_ref().unwrap().event.alert, 4);
+}
+
+#[test]
+fn settings_cannot_change_while_an_event_is_open() {
+    use prefs::Setting;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.activate(&ui, Target::Add, 0.0);
+    assert!(!c.settings_enabled());
+    assert!(!c.change_setting(&ui, Setting::MondayFirst));
+    assert!(!c.setting_checked(Setting::MondayFirst));
 }

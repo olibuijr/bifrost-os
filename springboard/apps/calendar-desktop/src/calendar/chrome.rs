@@ -107,7 +107,7 @@ impl Calendar {
         }
         items.push(ToolbarItem::flexible_space());
         if self.file_export {
-            items.push(ToolbarItem::button(B_WEEKNO, "Week Numbers").selected(self.week_numbers));
+            items.push(ToolbarItem::button(B_WEEKNO, "Week Numbers").selected(self.prefs.week_numbers));
             items.push(ToolbarItem::icon(B_EXPORT, "Export Calendar", "square.and.arrow.up"));
         }
         bars.push((Toolbar::new(items), band(start, end - start)));

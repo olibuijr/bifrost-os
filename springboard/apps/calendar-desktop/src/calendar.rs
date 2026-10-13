@@ -8,6 +8,7 @@ pub mod ics;
 pub mod invitees;
 pub mod layout;
 pub mod notes;
+pub mod prefs;
 pub mod quick;
 pub mod recur;
 pub mod search;
@@ -33,7 +34,7 @@ use springboard::shell::Event;
 use bifrost_app::controls::calendar_store_changes::StoreChangeHub;
 use springboard::deildu::scroll::Scroller;
 use springboard::gfx::Surface;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use store::CalendarEvent;
 use timeview::View;
 use bifrost_app::kit::ui::{SPACE_M, SPACE_S};
@@ -77,15 +78,6 @@ fn iso_week(day: Date) -> u32 {
     let thursday = Date::from_days(day.days() - monday_based as i64 + 3);
     let jan1 = Date { year: thursday.year, month: 1, day: 1 };
     ((thursday.days() - jan1.days()) / 7 + 1) as u32
-}
-
-/// The desktop's own settings, kept beside the events file.
-fn prefs_path(events: &Path) -> PathBuf {
-    events.with_file_name("calendar-prefs.txt")
-}
-
-fn load_week_numbers(events: &Path) -> bool {
-    std::fs::read_to_string(prefs_path(events)).is_ok_and(|text| text.lines().any(|l| l.trim() == "week_numbers=1"))
 }
 
 const WEEKDAYS: [&str; 7] = [
@@ -186,8 +178,9 @@ pub struct Calendar {
     copied: Option<String>,
     /// Desktop only: the editor offers Export Event, saved under ~/Documents.
     file_export: bool,
-    /// Month view: a leading column with ISO week numbers (the toggle is desktop-only, with `file_export`).
-    week_numbers: bool,
+    /// The desktop's settings (`prefs.rs`): week numbers (the toggle is desktop-only, with `file_export`), the zoom of
+    /// the hour grid, the first weekday and the defaults for a new event.
+    prefs: prefs::Prefs,
     /// The last deleted event and when its Undo bar lapses.
     undo: Option<(CalendarEvent, f64)>,
     storage_blocked: bool,
@@ -236,7 +229,7 @@ impl Calendar {
                 f.focused = false;
                 f
             });
-        let week_numbers = load_week_numbers(&path);
+        let prefs = prefs::Prefs::load(&path);
         let mut c = Self {
             w,
             x0: 0.0,
@@ -255,7 +248,7 @@ impl Calendar {
             notice: None,
             copied: None,
             file_export: false,
-            week_numbers,
+            prefs,
             undo: None,
             storage_blocked,
             text_style: (ui.text_scale, ui.bold),
@@ -418,15 +411,14 @@ impl Calendar {
 
     /// The month grid in px: left edge (after the week-number column), cell width, top, row height.
     fn grid_geom(&self, ui: &Ui) -> (f32, f32, f32, f32) {
-        let left = if self.week_numbers { ui.pt(28.0) } else { 0.0 };
+        let left = if self.prefs.week_numbers { ui.pt(28.0) } else { 0.0 };
         let top = ui.pt(GRID_TOP);
         ((left), (self.w as f32 - left) / 7.0, top, ((self.bottom(ui) - top) / 6.0).max(ui.pt(CELL_HEAD)))
     }
 
-    /// The first day shown in the month grid (the Sunday on or before the 1st).
+    /// The first day shown in the month grid (the first weekday on or before the 1st).
     fn grid_start(&self) -> Date {
-        let first = Date { day: 1, ..self.selected };
-        first.shift_days(-(first.weekday() as i32))
+        self.week_of(Date { day: 1, ..self.selected })
     }
 
     /// The events a day cell lists: up to as many lines as fit, the last one "n more" when some are left out.
@@ -513,13 +505,13 @@ impl Calendar {
                 id: store::next_id(&self.events),
                 date: self.selected,
                 minute: 9 * 60,
-                duration: 60,
+                duration: self.prefs.duration,
                 all_day: false,
                 title: String::new(),
                 location: String::new(),
                 notes: String::new(),
                 repeat: 0,
-                alert: 0,
+                alert: self.prefs.alert,
             }
         };
         self.open_draft(ui, event, id.is_some());
@@ -557,13 +549,13 @@ impl Calendar {
             id: store::next_id(&self.events),
             date: q.date.unwrap_or(self.selected),
             minute: q.minute.unwrap_or(9 * 60),
-            duration: 60,
+            duration: self.prefs.duration,
             all_day: false,
             title: q.title,
             location: q.location.unwrap_or_default(),
             notes: String::new(),
             repeat: 0,
-            alert: 0,
+            alert: self.prefs.alert,
         };
         self.open_draft(ui, event, false);
         self.dirty = true;
@@ -676,9 +668,8 @@ impl Calendar {
         }
     }
 
-    fn save_week_numbers(&mut self) {
-        let text = format!("week_numbers={}\n", u8::from(self.week_numbers));
-        if let Err(e) = springboard::shell::fsutil::write_atomic(&prefs_path(&self.path), &text) {
+    fn save_prefs(&mut self) {
+        if let Err(e) = self.prefs.save(&self.path) {
             eprintln!("springboard: calendar: {e}");
         }
     }
@@ -821,8 +812,8 @@ impl Calendar {
             Target::Export => self.export_event(),
             Target::ExportCalendar => self.export_calendar(),
             Target::WeekNumbers => {
-                self.week_numbers = !self.week_numbers;
-                self.save_week_numbers();
+                self.prefs.week_numbers = !self.prefs.week_numbers;
+                self.save_prefs();
             }
             Target::UndoDelete => self.undo_delete(ui, t),
             Target::Title => self.focus(Some(0)),
@@ -843,6 +834,7 @@ impl Calendar {
             | Target::Alert
             | Target::Toggle(_) => {
                 self.focus(None);
+                let prefs = self.prefs;
                 if let Some(draft) = &mut self.editor {
                     let end = draft.open == Some(Slot::End);
                     let e = &mut draft.event;
@@ -862,6 +854,13 @@ impl Calendar {
                             e.all_day = !e.all_day;
                             if e.all_day && end {
                                 draft.open = None;
+                            }
+                            // a new event still on the default alert follows the kind of event it became
+                            if !draft.existing {
+                                let (from, to) = if e.all_day { (prefs.alert, prefs.alert_all_day) } else { (prefs.alert_all_day, prefs.alert) };
+                                if e.alert == from {
+                                    e.alert = to;
+                                }
                             }
                         }
                         Target::Repeat => e.repeat = (e.repeat + 1) % store::REPEATS.len() as u8,
@@ -1082,14 +1081,15 @@ impl Calendar {
         self.draw_header(s, ui);
         let w = self.w as f32;
         let (left, cell, top, rh) = self.grid_geom(ui);
-        for (i, name) in WEEKDAYS.iter().enumerate() {
+        for i in 0..7 {
+            let name = WEEKDAYS[self.prefs.weekday_at(i)];
             self.right(s, ui, &name[..3], LABEL_2.now(), left + cell * (i as f32 + 1.0) - ui.pt(SPACE_S), top - ui.pt(SPACE_M));
         }
         let start = self.grid_start();
-        if self.week_numbers {
+        if self.prefs.week_numbers {
             for row in 0..6 {
                 // the row's Monday falls in the ISO week the row shows
-                let monday = start.shift_days(7 * row + 1);
+                let monday = start.shift_days(7 * row + if self.prefs.monday_first { 0 } else { 1 });
                 self.centre(s, ui, &iso_week(monday).to_string(), MAC_SUBHEAD_PT, Weight::Medium, LABEL_2.now(), left / 2.0, top + rh * row as f32 + ui.pt(SPACE_M));
             }
         }
@@ -1134,7 +1134,7 @@ impl Calendar {
         for col in 1..7 {
             s.fill_rrect(left + cell * col as f32, top, hair, rh * 6.0, 0.0, SEPARATOR_C.now());
         }
-        if self.week_numbers {
+        if self.prefs.week_numbers {
             s.fill_rrect(left, top, hair, rh * 6.0, 0.0, SEPARATOR_C.now());
         }
     }
@@ -1310,10 +1310,13 @@ pub enum Command {
     CalendarList,
     /// File > New Event from Text (the app reads the pasteboard, see `Calendar::new_event_from_text`).
     NewEventFromText,
+    /// View > Zoom In / Zoom Out: the hour height of the Day and Week grids.
+    ZoomIn,
+    ZoomOut,
 }
 
 impl Command {
-    pub const ALL: [Command; 16] = [
+    pub const ALL: [Command; 18] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1330,6 +1333,8 @@ impl Command {
         Command::WeekNumbers,
         Command::CalendarList,
         Command::NewEventFromText,
+        Command::ZoomIn,
+        Command::ZoomOut,
     ];
 
     pub fn id(self) -> u32 {
@@ -1358,6 +1363,8 @@ impl Command {
             Command::WeekNumbers => "Week Numbers",
             Command::CalendarList => "Calendar List",
             Command::NewEventFromText => "New Event from Text",
+            Command::ZoomIn => "Zoom In",
+            Command::ZoomOut => "Zoom Out",
         }
     }
 
@@ -1371,6 +1378,8 @@ impl Command {
             Command::ShowWeek => "cmd+2",
             Command::ShowMonth => "cmd+3",
             Command::ShowYear => "cmd+4",
+            Command::ZoomIn => "cmd+=",
+            Command::ZoomOut => "cmd+-",
             _ => "",
         }
     }
@@ -1386,6 +1395,8 @@ impl Calendar {
             Command::ExportEvent => editing && saved && self.file_export,
             Command::Delete => editing && saved,
             Command::WeekNumbers | Command::ExportCalendar => !editing && self.file_export,
+            Command::ZoomIn => !editing && self.time_view() && self.prefs.hour_h < prefs::HOUR_H_MAX,
+            Command::ZoomOut => !editing && self.time_view() && self.prefs.hour_h > prefs::HOUR_H_MIN,
             _ => !editing,
         }
     }
@@ -1397,7 +1408,7 @@ impl Calendar {
             Command::ShowWeek => self.view == View::Week,
             Command::ShowMonth => self.view == View::Month,
             Command::ShowYear => self.view == View::Year,
-            Command::WeekNumbers => self.week_numbers,
+            Command::WeekNumbers => self.prefs.week_numbers,
             Command::CalendarList => !self.side_hidden,
             _ => false,
         }
@@ -1417,6 +1428,11 @@ impl Calendar {
         if !self.enabled(cmd) {
             return false;
         }
+        if matches!(cmd, Command::ZoomIn | Command::ZoomOut) {
+            self.zoom_hours(ui, if cmd == Command::ZoomIn { 1 } else { -1 });
+            self.dirty = true;
+            return true;
+        }
         let target = match cmd {
             Command::NewEvent => Target::Add,
             Command::Save => Target::Save,
@@ -1435,8 +1451,35 @@ impl Calendar {
             Command::CalendarList => Target::Sidebar,
             // the app reads the pasteboard and calls `new_event_from_text`; this path is only a plain New Event
             Command::NewEventFromText => Target::Add,
+            Command::ZoomIn | Command::ZoomOut => return false,
         };
         self.activate(ui, target, t);
+        true
+    }
+
+    /// Whether the Settings menu can be used now (not while an event is open).
+    pub fn settings_enabled(&self) -> bool {
+        self.editor.is_none()
+    }
+
+    /// Whether Settings menu choice `setting` is the current one (its check mark).
+    pub fn setting_checked(&self, setting: prefs::Setting) -> bool {
+        self.prefs.is(setting)
+    }
+
+    /// Settings menu: picks `setting`, saves the settings beside the events and redraws. The settings change the
+    /// grids and the defaults of new events only; saved events are never touched. False while an event is open.
+    pub fn change_setting(&mut self, ui: &Ui, setting: prefs::Setting) -> bool {
+        if self.editor.is_some() {
+            return false;
+        }
+        self.prefs.apply(setting);
+        self.save_prefs();
+        if self.time_view() && matches!(setting, prefs::Setting::DayStart(_)) {
+            self.scroll_to_morning(ui);
+        }
+        self.fit_scroll(ui);
+        self.dirty = true;
         true
     }
 }

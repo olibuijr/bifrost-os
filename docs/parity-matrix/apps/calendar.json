@@ -220,19 +220,19 @@
    "feature": "Settings: general (week start, day start/end, days per week, default duration, default calendar)",
    "area": "settings",
    "apple": "PreferencesPanel.nib General/Advanced panes",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Only week numbers is persisted",
-   "wire": "Add a Settings window (shell Settings hook) with these options persisted beside events.tsv; use them in timeview.rs week_start/scroll_to_morning and new drafts."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/prefs.rs:1",
+   "note": "Settings menu: week start, default event length, day start hour; not day end, days per week or default calendar; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Add day end hour, days per week and a default calendar (needs multiple calendars) to the Settings menu in main.rs."
   },
   {
    "feature": "Settings: default alerts",
    "area": "settings",
    "apple": "PreferencesPanel.nib Alerts pane",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add default alert choices (timed events, all-day events, birthdays) to Settings, applied to new drafts in calendar.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/main.rs:32",
+   "note": "Settings menu: default alert for new timed and all-day events; not birthdays; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Add a default alert for birthdays once the Birthdays calendar exists."
   },
   {
    "feature": "Time zone support",
@@ -337,10 +337,10 @@
    "feature": "Zoom in / out of the time grid",
    "area": "view",
    "apple": "View > Zoom In / Zoom Out",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add Zoom In/Out commands (cmd+= / cmd+-) changing the hour height in timeview.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/timeview.rs:100",
+   "note": "Zoom In / Out under View, 12 pt steps from 24 to 144 pt per hour, kept across restarts; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Verify Cmd+= / Cmd+- and the toolbar on Midget."
   },
   {
    "feature": "User activities / intents (show date, show event, create event)",
