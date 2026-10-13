@@ -2,11 +2,13 @@
 //! drawn is what a tap hits. Colours are the kit's semantic tokens, resolved with `now()`, so Light and Dark follow
 //! the appearance. Text is cached per string in `TextCache`.
 
+use crate::form::{Control as FormControl, Form, LIST_ROW_PT, NOTE_PT};
 use crate::model::{self, info_rows, Kind, Node};
 use crate::window::{DiskUtility, KEY_PT, LINE_PT, PAD_PT, SIDE_PT};
+use bifrost_app::controls::sheet::SHEET_PAD_PT;
 use bifrost_app::controls::sidebar::SidebarItem;
 use bifrost_app::controls::{Node as Control, Rect, Role};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, SEPARATOR_C, SIDEBAR_BG};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_LARGE_TITLE_PT, SEPARATOR_C, SIDEBAR_BG, WHITE};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
@@ -72,6 +74,49 @@ pub fn paint(w: &mut DiskUtility, s: &mut Surface, ui: &Ui) {
 
     if let Some(pending) = &w.sheet {
         widgets::sheet(s, ui, w.window_rect(), UNIFIED_BAR_PT, &pending.sheet, 1.0, None);
+    }
+    let parent = w.window_rect();
+    if let Some(open) = &w.form {
+        paint_form(&mut w.labels, s, ui, &open.form, parent);
+    }
+}
+
+/// A form sheet: the panel and its buttons, then each row's label and control, then the notes and the refusal.
+fn paint_form(labels: &mut TextCache, s: &mut Surface, ui: &Ui, form: &Form, parent: Rect) {
+    widgets::sheet(s, ui, parent, UNIFIED_BAR_PT, &form.sheet(), 1.0, None);
+    let geo = form.geometry(parent, UNIFIED_BAR_PT);
+    for (i, (row, g)) in form.rows.iter().zip(&geo.rows).enumerate() {
+        text_mid(labels, s, ui, &row.label, MAC_BODY_PT, Weight::Regular, LABEL.now(), g.label.x, g.label.y + g.label.h / 2.0, g.label.w - 8.0);
+        match &row.control {
+            FormControl::Text { field, placeholder, .. } => widgets::text_field(s, ui, field, g.control, placeholder, form.focus == Some(i)),
+            FormControl::Choice { options, selected } => {
+                let names: Vec<&str> = options.iter().map(String::as_str).collect();
+                widgets::segmented(s, ui, g.control, &names, *selected, true);
+            }
+            FormControl::List { rows, on, .. } => {
+                for (k, text) in rows.iter().enumerate() {
+                    let line = Rect { x: g.control.x, y: g.control.y + k as f32 * LIST_ROW_PT, w: g.control.w, h: LIST_ROW_PT };
+                    let boxed = Rect { x: line.x, y: line.y + (LIST_ROW_PT - 14.0) / 2.0, w: 14.0, h: 14.0 };
+                    if on.get(k).copied().unwrap_or(false) {
+                        fill(s, ui, boxed, 3.0, LINK);
+                        fill(s, ui, Rect { x: boxed.x + 5.0, y: boxed.y + 5.0, w: 4.0, h: 4.0 }, 1.0, WHITE);
+                    } else {
+                        fill(s, ui, boxed, 3.0, SEPARATOR_C.now());
+                        fill(s, ui, Rect { x: boxed.x + 1.5, y: boxed.y + 1.5, w: 11.0, h: 11.0 }, 2.0, CARD_BG.now());
+                    }
+                    text_mid(labels, s, ui, text, MAC_BODY_PT, Weight::Regular, LABEL.now(), line.x + 22.0, line.y + LIST_ROW_PT / 2.0, line.w - 22.0);
+                }
+            }
+        }
+    }
+    let (x, width) = (geo.panel.x + SHEET_PAD_PT, geo.panel.w - SHEET_PAD_PT * 2.0);
+    let mut y = geo.notes_y + NOTE_PT / 2.0;
+    for note in &form.notes {
+        text_mid(labels, s, ui, note, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), x, y, width);
+        y += NOTE_PT;
+    }
+    if let Some(error) = &form.error {
+        text_mid(labels, s, ui, error, MAC_FOOTNOTE_PT, Weight::Regular, DESTRUCTIVE, x, y, width);
     }
 }
 

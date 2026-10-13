@@ -4,15 +4,19 @@
 //! `REFRESH_S` seconds, and usage every `USAGE_S` seconds.
 
 use crate::actions::{self, Action};
+use crate::flow::{Flow, Want};
+use crate::form::FormHit;
+use crate::forms::OpenForm;
 use crate::model::{self, Kind, Node};
 use crate::{probe, sysfs};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
 use bifrost_app::controls::sidebar::{SidebarItem, SourceList};
-use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton};
+use bifrost_app::controls::sheet::{ButtonRole, Hit, Sheet, SheetButton, BUTTON_H_PT, SHEET_PAD_PT};
 use bifrost_app::controls::Rect;
 use bifrost_app::kit::{TextCache, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
+use bifrost_core::disk_commands::Command;
 use bifrost_core::disk_format::{PartitionSpec, Personality};
 use bifrost_core::disk_request::DiskRequest;
 use std::collections::BTreeMap;
@@ -49,6 +53,19 @@ pub const SHEET_REPAIR: u32 = 13;
 /// Accessibility and sidebar ids: a row's id is `ROW_BASE` plus its index in `DiskUtility::nodes`.
 pub const ROW_BASE: u64 = 100;
 
+/// The longest line of an alert sheet's message, in characters (the alert sizes itself for this many).
+pub const ALERT_CHARS: usize = 34;
+/// The width of the Get Info sheet (points).
+const INFO_W_PT: f32 = 460.0;
+
+/// A Get Info sheet: one `Key: value` line per fact, in an alert wider than the usual one so a line is not cut short.
+pub fn info_sheet(title: &str, lines: &[String]) -> Sheet {
+    let mut sheet = Sheet::alert(title, &lines.join("\n"), vec![SheetButton::new(SHEET_CANCEL, "Done", ButtonRole::Cancel)]);
+    // the alert sizes its height for text that wraps at its own narrow width; these lines are kept whole
+    sheet.size = (INFO_W_PT, SHEET_PAD_PT * 2.0 + 18.0 + lines.len() as f32 * 15.0 + 8.0 + 16.0 + BUTTON_H_PT);
+    sheet
+}
+
 /// What a point or an accessibility id stands for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Target {
@@ -58,6 +75,8 @@ pub enum Target {
     Row(usize),
     /// A button of the confirmation sheet.
     Sheet(u32),
+    /// A button, field or option of the open form sheet.
+    Form(FormHit),
 }
 
 /// The erase or first-aid action the user asked for on the selected row.
@@ -82,6 +101,9 @@ pub struct Job {
     pub verb: &'static str,
     pub name: String,
     pub rx: Receiver<Result<(), String>>,
+    /// For a job that writes the file a save panel handed over: the panel's request, committed when the job succeeds
+    /// and thrown away when it fails.
+    pub commit: Option<u32>,
 }
 
 /// The window.
@@ -95,6 +117,15 @@ pub struct DiskUtility {
     pub job: Option<Job>,
     /// The confirmation sheet, while one is open.
     pub sheet: Option<Pending>,
+    /// The form sheet (Rename, Erase, Restore, RAID, the image sheets), while one is open.
+    pub form: Option<OpenForm>,
+    /// The open or save panel the logic wants shown next, and the one the window is waiting on (`flow.rs`).
+    pub want: Option<Want>,
+    pub flow: Option<Flow>,
+    /// A save the last job wrote: its request, and whether the job succeeded. `flush` commits or aborts it.
+    pub finished_save: Option<(u32, bool)>,
+    /// The footer line after something finished well.
+    pub notice: Option<String>,
     /// SMART health by device name, read once per disk (Refresh clears it).
     pub smart: BTreeMap<String, String>,
     pub labels: TextCache,
@@ -120,6 +151,11 @@ impl DiskUtility {
             error: None,
             job: None,
             sheet: None,
+            form: None,
+            want: None,
+            flow: None,
+            finished_save: None,
+            notice: None,
             smart: BTreeMap::new(),
             labels: TextCache::default(),
             show_all: true,
@@ -195,7 +231,7 @@ impl DiskUtility {
 
     /// Starts an action on the selected row. Refusals from the disk session become the footer's error.
     fn start(&mut self, action: Action) -> bool {
-        if self.job.is_some() {
+        if self.busy() {
             return false;
         }
         let Some(name) = self.selected.clone() else { return false };
@@ -204,11 +240,23 @@ impl DiskUtility {
         match actions::plan(action, &disks, &name, &mounted) {
             Ok(plan) => {
                 self.error = None;
-                self.job = Some(Job { verb: action.verb(), name, rx: actions::spawn(plan) });
+                self.notice = None;
+                self.job = Some(Job { verb: action.verb(), name, rx: actions::spawn(plan), commit: None });
             }
             Err(refusal) => self.error = Some(refusal.sentence()),
         }
         true
+    }
+
+    /// Runs a plan of commands on a thread with `verb` and `name` in the footer. `repairing` lets a checker that exits 1
+    /// after fixing something count as a success.
+    pub fn start_plan(&mut self, verb: &'static str, name: String, plan: Vec<Command>, repairing: bool) {
+        if self.job.is_some() {
+            return;
+        }
+        self.error = None;
+        self.notice = None;
+        self.job = Some(Job { verb, name, rx: actions::spawn_with(plan, repairing), commit: None });
     }
 
     /// Takes the result of a running action when it has one. True when the window changed.
@@ -219,6 +267,9 @@ impl DiskUtility {
             Err(TryRecvError::Empty) => return false,
             Err(TryRecvError::Disconnected) => Err("The operation ended without a result.".to_string()),
         };
+        if let Some(request) = job.commit {
+            self.finished_save = Some((request, outcome.is_ok()));
+        }
         self.error = outcome.err();
         self.job = None;
         self.refresh(t, true);
@@ -230,33 +281,28 @@ impl DiskUtility {
         if let Some(error) = &self.error {
             return Some((error.clone(), true));
         }
-        self.job.as_ref().map(|job| (format!("{} {}\u{2026}", job.verb, job.name), false))
+        if let Some(job) = &self.job {
+            return Some((format!("{} {}\u{2026}", job.verb, job.name), false));
+        }
+        self.notice.clone().map(|text| (text, false))
     }
 
     /// Opens the confirmation sheet for an erase or a first-aid request on the selected row. A request the disks already
     /// refuse (a mounted volume, a partition where a whole disk is needed) becomes the footer's error and no sheet opens.
     fn ask(&mut self, ask: Ask) -> bool {
-        if self.job.is_some() {
+        if self.busy() {
             return false;
         }
         let Some(node) = self.selected_node().cloned() else { return false };
         let name = node.name.clone();
         let (title, message, buttons, requests) = match ask {
-            Ask::Erase => {
-                let fs = self.erase_fs;
-                let request = if node.kind == Kind::Disk {
-                    DiskRequest::EraseDisk { device: name.clone(), fs, label: String::new() }
-                } else {
-                    let label = model::erase_label(node.label.as_deref(), fs.label_limit());
-                    DiskRequest::EraseVolume { device: name.clone(), fs, label }
-                };
-                let buttons = vec![SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel), SheetButton::new(SHEET_CONFIRM, "Erase", ButtonRole::Destructive)];
-                (format!("Erase {name}?"), request.confirm_text(), buttons, vec![(SHEET_CONFIRM, request)])
-            }
+            // the name, format and scheme are asked for in a form sheet, which then confirms
+            Ask::Erase => return self.open_erase_form(),
             Ask::Info => {
-                let message = model::detail_rows(&node).iter().map(|(k, v)| format!("{k}: {v}")).collect::<Vec<_>>().join("\n");
+                let extra = model::extra_rows(&probe::read_lsblk(&name));
                 self.error = None;
-                self.sheet = Some(Pending { sheet: Sheet::alert(&format!("Info for {name}"), &message, vec![SheetButton::new(SHEET_CANCEL, "Done", ButtonRole::Cancel)]), requests: Vec::new() });
+                self.notice = None;
+                self.sheet = Some(Pending { sheet: info_sheet(&format!("Info for {name}"), &model::info_lines(&node, &extra)), requests: Vec::new() });
                 return true;
             }
             Ask::Partition(count) => {
@@ -286,8 +332,19 @@ impl DiskUtility {
             return true;
         }
         self.error = None;
-        self.sheet = Some(Pending { sheet: Sheet::alert(&title, &message, buttons), requests });
+        self.notice = None;
+        self.sheet = Some(Pending { sheet: Sheet::alert(&title, &model::wrap_text(&message, ALERT_CHARS), buttons), requests });
         true
+    }
+
+    /// Replaces any form with the confirmation sheet for `request`: `button` starts it, Cancel drops it.
+    pub fn confirm(&mut self, title: String, request: DiskRequest, button: &str, destructive: bool) {
+        let role = if destructive { ButtonRole::Destructive } else { ButtonRole::Default };
+        let buttons = vec![SheetButton::new(SHEET_CANCEL, "Cancel", ButtonRole::Cancel), SheetButton::new(SHEET_CONFIRM, button, role)];
+        let message = model::wrap_text(&request.confirm_text(), ALERT_CHARS);
+        self.error = None;
+        self.notice = None;
+        self.sheet = Some(Pending { sheet: Sheet::alert(&title, &message, buttons), requests: vec![(SHEET_CONFIRM, request)] });
     }
 
     /// The sheet's answer. Cancel closes it; another button starts the request it names.
@@ -307,7 +364,8 @@ impl DiskUtility {
             return;
         }
         self.error = None;
-        let job = Job { verb: request.progress_word(), name: request.device().to_string(), rx: actions::spawn_request(request) };
+        self.notice = None;
+        let job = Job { verb: request.progress_word(), name: request.device().to_string(), rx: actions::spawn_request(request), commit: None };
         self.job = Some(job);
     }
 
@@ -327,6 +385,7 @@ impl DiskUtility {
             Target::Toolbar(B_ERASE) => self.ask(Ask::Erase),
             Target::Toolbar(B_FIRST_AID) => self.ask(Ask::FirstAid),
             Target::Sheet(id) => self.answer(id),
+            Target::Form(hit) => self.form_activate(hit),
             Target::Toolbar(B_REFRESH) => {
                 self.smart.clear();
                 self.refresh(t, true);
@@ -346,7 +405,7 @@ impl DiskUtility {
 
     /// The toolbar for the current state. Actions need a selected row and no running action.
     pub fn toolbar(&self) -> Toolbar {
-        let idle = self.job.is_none();
+        let idle = !self.busy();
         let node = self.selected_node();
         let mountable = node.is_some_and(|n| n.mount_point.is_none() && n.fs_type.is_some());
         let mounted = node.is_some_and(|n| n.mount_point.is_some());
@@ -463,9 +522,21 @@ impl DiskUtility {
         widgets::toolbar_layout(ui, self.bar_rect(), &self.toolbar())
     }
 
+    /// What the point is over while a form sheet is open (it blocks the window), or `None` when there is no form.
+    pub fn form_target(&self, x: f32, y: f32) -> Option<Target> {
+        let open = self.form.as_ref()?;
+        Some(match open.form.hit(self.window_rect(), UNIFIED_BAR_PT, x, y) {
+            FormHit::Nothing => Target::Nothing,
+            hit => Target::Form(hit),
+        })
+    }
+
     /// What the point is over. Points, with the window's origin at the top left.
     pub fn hit(&self, ui: &Ui, x: f32, y: f32) -> Target {
-        // an open sheet blocks the window: only its buttons answer
+        // an open sheet blocks the window: only its buttons (and a form's fields) answer
+        if let Some(target) = self.form_target(x, y) {
+            return target;
+        }
         if let Some(pending) = &self.sheet {
             return match pending.sheet.hit(self.window_rect(), UNIFIED_BAR_PT, 1.0, x, y) {
                 Hit::Button(id) => Target::Sheet(id),
@@ -592,14 +663,32 @@ mod tests {
     }
 
     #[test]
-    fn an_erase_asks_first_and_cancel_closes_the_sheet_without_a_job() {
+    fn an_erase_asks_for_its_options_then_confirms_and_cancel_closes_without_a_job() {
         let mut w = one_stick();
         w.selected = Some("sdb".into());
         assert!(w.activate(Target::Toolbar(B_ERASE), 1.0));
+        assert!(w.form.is_some() && w.sheet.is_none(), "the options come first");
+        assert!(w.activate(Target::Form(FormHit::Button(crate::form::FORM_OK)), 1.0));
         let pending = w.sheet.as_ref().expect("sheet");
         assert!(pending.requests.iter().any(|(id, r)| *id == SHEET_CONFIRM && r.method() == "disk.erase_disk"));
+        assert!(w.form.is_none());
         assert!(w.activate(Target::Sheet(SHEET_CANCEL), 1.0));
         assert!(w.sheet.is_none() && w.job.is_none());
+    }
+
+    #[test]
+    fn an_open_form_blocks_the_toolbar_and_the_sidebar_under_it() {
+        let mut w = one_stick();
+        w.selected = Some("sdb".into());
+        assert!(w.activate(Target::Toolbar(B_ERASE), 1.0));
+        assert_eq!(w.form_target(100.0, 40.0), Some(Target::Nothing), "the dimmed window answers nothing");
+        assert!(!w.activate(Target::Toolbar(B_FIRST_AID), 1.0), "busy");
+        assert!(w.toolbar().items.iter().filter(|i| i.id == B_ERASE).all(|i| !i.enabled));
+        let geo = w.form.as_ref().unwrap().form.geometry(w.window_rect(), UNIFIED_BAR_PT);
+        let r = geo.rows[0].control;
+        assert_eq!(w.form_target(r.x + 10.0, r.y + 5.0), Some(Target::Form(FormHit::Text(0))));
+        w.form = None;
+        assert_eq!(w.form_target(0.0, 0.0), None);
     }
 
     #[test]
@@ -642,6 +731,7 @@ mod tests {
         w.selected = Some("sdb1".into());
         assert!(w.set_erase_fs(Personality::ExFat));
         assert!(w.ask_menu(Ask::Erase));
+        assert!(w.submit_form());
         let (_, request) = &w.sheet.as_ref().expect("sheet").requests[0];
         assert_eq!(*request, DiskRequest::EraseVolume { device: "sdb1".into(), fs: Personality::ExFat, label: "Games".into() });
     }

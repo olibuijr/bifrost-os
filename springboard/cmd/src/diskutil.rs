@@ -1,5 +1,6 @@
 //! `diskutil`: lists disks and their volumes, shows one device's details, mounts, unmounts or ejects it, and runs the
-//! privileged requests: `eraseDisk`, `eraseVolume`, `partitionDisk`, `verifyVolume` and `repairVolume`. Reads are from
+//! privileged requests: `eraseDisk`, `eraseVolume`, `partitionDisk`, `verifyVolume`, `repairVolume`, `renameVolume`,
+//! `restoreVolume` and `createRaid`. Reads are from
 //! the kernel's device tree (`bifrost_core::disk_scan`); mount, unmount and eject go through the disk session in
 //! `bifrost-core` (the same claims and approval gates the desktop's Disk Utility uses). The privileged requests are the
 //! ones the desktop sends too (`bifrost_core::disk_request`), and the helper plans and runs them as root, so they need
@@ -10,12 +11,12 @@
 use bifrost_core::disk_claims::Claims;
 use bifrost_core::disk_commands::{self, Command, MountOptions, Refusal};
 use bifrost_core::disk_events::Approvals;
-use bifrost_core::disk_format::{PartitionSpec, Personality};
+use bifrost_core::disk_format::{PartitionSpec, Personality, RaidLevel, Scheme};
 use bifrost_core::disk_request::DiskRequest;
 use bifrost_core::disk_scan::Entry;
 use bifrost_core::disk_session::Session;
 
-pub const USAGE: &str = "usage: diskutil [list | info <device> | mount <device> | unmount <device> | eject <device>\n       | eraseDisk <device> <fs> [label] | eraseVolume <device> <fs> [label]\n       | partitionDisk <device> <fs[:size_mib[:label]]>... | verifyVolume <device> | repairVolume <device>]\n       fs is ext4, exfat or fat32; size 0 or none takes the rest of the disk. The erase, partition and check verbs need root.";
+pub const USAGE: &str = "usage: diskutil [list | info <device> | mount <device> | unmount <device> | eject <device>\n       | eraseDisk <device> <fs> [label] [--mbr] | eraseVolume <device> <fs> [label]\n       | partitionDisk <device> <fs[:size_mib[:label]]>... | verifyVolume <device> | repairVolume <device>\n       | renameVolume <device> <label> | restoreVolume <device> <source> | createRaid <md name> <level> <member>...]\n       fs is ext4, exfat, fat32, ntfs or btrfs; size 0 or none takes the rest of the disk; --mbr writes a DOS partition table\n       instead of a GPT. level is 0, 1, 5, 6 or 10. The erase, partition, check, rename, restore and RAID verbs need root.";
 /// The owner name this tool claims devices under.
 pub const OWNER: &str = "is.olibuijr.diskutil.cli";
 
@@ -38,7 +39,7 @@ pub enum Cmd {
     Request(DiskRequest),
 }
 
-const REQUEST_VERBS: [&str; 5] = ["eraseDisk", "eraseVolume", "partitionDisk", "verifyVolume", "repairVolume"];
+const REQUEST_VERBS: [&str; 8] = ["eraseDisk", "eraseVolume", "partitionDisk", "verifyVolume", "repairVolume", "renameVolume", "restoreVolume", "createRaid"];
 
 /// Reads the arguments.
 pub fn parse(args: &[String]) -> Result<Cmd, String> {
@@ -57,8 +58,14 @@ pub fn parse(args: &[String]) -> Result<Cmd, String> {
         ["mount", name] => Ok(Cmd::Act(Action::Mount, device(name)?)),
         ["unmount", name] => Ok(Cmd::Act(Action::Unmount, device(name)?)),
         ["eject", name] => Ok(Cmd::Act(Action::Eject, device(name)?)),
-        ["eraseDisk", name, fs, rest @ ..] if rest.len() <= 1 => {
-            Ok(Cmd::Request(DiskRequest::EraseDisk { device: device(name)?, fs: fs_arg(fs)?, label: rest.first().unwrap_or(&"").to_string() }))
+        ["eraseDisk", name, fs, rest @ ..] if rest.len() <= 2 => {
+            let scheme = if rest.contains(&"--mbr") { Scheme::Mbr } else { Scheme::Gpt };
+            let labels: Vec<&&str> = rest.iter().filter(|w| **w != "--mbr").collect();
+            if labels.len() > 1 {
+                return Err(format!("eraseDisk: wrong arguments\n{USAGE}"));
+            }
+            let label = labels.first().map(|l| l.to_string()).unwrap_or_default();
+            Ok(Cmd::Request(DiskRequest::EraseDisk { device: device(name)?, fs: fs_arg(fs)?, label, scheme }))
         }
         ["eraseVolume", name, fs, rest @ ..] if rest.len() <= 1 => {
             Ok(Cmd::Request(DiskRequest::EraseVolume { device: device(name)?, fs: fs_arg(fs)?, label: rest.first().unwrap_or(&"").to_string() }))
@@ -69,6 +76,13 @@ pub fn parse(args: &[String]) -> Result<Cmd, String> {
         }
         ["verifyVolume", name] => Ok(Cmd::Request(DiskRequest::VerifyVolume { device: device(name)? })),
         ["repairVolume", name] => Ok(Cmd::Request(DiskRequest::RepairVolume { device: device(name)? })),
+        ["renameVolume", name, label] => Ok(Cmd::Request(DiskRequest::RenameVolume { device: device(name)?, label: label.to_string() })),
+        ["restoreVolume", name, source] => Ok(Cmd::Request(DiskRequest::RestoreVolume { device: device(name)?, source: device(source)? })),
+        ["createRaid", name, level, members @ ..] if !members.is_empty() => {
+            let level = RaidLevel::parse(level).ok_or_else(|| format!("\u{201c}{level}\u{201d} is not a RAID level: use 0, 1, 5, 6 or 10"))?;
+            let members = members.iter().map(|m| device(m)).collect::<Result<Vec<String>, String>>()?;
+            Ok(Cmd::Request(DiskRequest::CreateRaid { name: device(name)?, level, members }))
+        }
         [verb, ..] if ["info", "mount", "unmount", "eject"].contains(verb) => Err(format!("{verb} needs one device name\n{USAGE}")),
         [verb, ..] if REQUEST_VERBS.contains(verb) => Err(format!("{verb}: wrong arguments\n{USAGE}")),
         [other, ..] => Err(format!("unknown verb {other}\n{USAGE}")),
@@ -76,7 +90,7 @@ pub fn parse(args: &[String]) -> Result<Cmd, String> {
 }
 
 fn fs_arg(word: &str) -> Result<Personality, String> {
-    Personality::parse(word).ok_or_else(|| format!("\u{201c}{word}\u{201d} is not a file system: use ext4, exfat or fat32"))
+    Personality::parse(word).ok_or_else(|| format!("\u{201c}{word}\u{201d} is not a file system: use ext4, exfat, fat32, ntfs or btrfs"))
 }
 
 /// One partition of `partitionDisk`: `fs`, `fs:size_mib` or `fs:size_mib:label`.
@@ -191,6 +205,9 @@ pub fn request_verb(req: &DiskRequest) -> &'static str {
         DiskRequest::PartitionDisk { .. } => "partitionDisk",
         DiskRequest::VerifyVolume { .. } => "verifyVolume",
         DiskRequest::RepairVolume { .. } => "repairVolume",
+        DiskRequest::RenameVolume { .. } => "renameVolume",
+        DiskRequest::RestoreVolume { .. } => "restoreVolume",
+        DiskRequest::CreateRaid { .. } => "createRaid",
     }
 }
 
@@ -202,6 +219,9 @@ pub fn request_done_text(req: &DiskRequest) -> String {
         DiskRequest::PartitionDisk { .. } => format!("Partitioned {device}."),
         DiskRequest::VerifyVolume { .. } => format!("Checked {device}."),
         DiskRequest::RepairVolume { .. } => format!("Repaired {device}."),
+        DiskRequest::RenameVolume { label, .. } => format!("Renamed {device} to {label}."),
+        DiskRequest::RestoreVolume { source, .. } => format!("Restored {source} onto {device}."),
+        DiskRequest::CreateRaid { level, .. } => format!("Created {} array {device}.", level.title()),
     }
 }
 
@@ -239,14 +259,42 @@ mod tests {
     fn erase_and_check_verbs_parse_into_privileged_requests() {
         assert_eq!(
             parse(&args(&["eraseDisk", "sdb", "fat32", "STICK"])),
-            Ok(Cmd::Request(DiskRequest::EraseDisk { device: "sdb".into(), fs: Personality::Fat32, label: "STICK".into() }))
+            Ok(Cmd::Request(DiskRequest::EraseDisk { device: "sdb".into(), fs: Personality::Fat32, label: "STICK".into(), scheme: Scheme::Gpt }))
         );
+        assert_eq!(
+            parse(&args(&["eraseDisk", "sdb", "ntfs", "--mbr"])),
+            Ok(Cmd::Request(DiskRequest::EraseDisk { device: "sdb".into(), fs: Personality::Ntfs, label: String::new(), scheme: Scheme::Mbr }))
+        );
+        assert_eq!(
+            parse(&args(&["eraseDisk", "sdb", "btrfs", "--mbr", "DATA"])),
+            Ok(Cmd::Request(DiskRequest::EraseDisk { device: "sdb".into(), fs: Personality::Btrfs, label: "DATA".into(), scheme: Scheme::Mbr }))
+        );
+        assert!(parse(&args(&["eraseDisk", "sdb", "ext4", "A", "B"])).unwrap_err().contains("wrong arguments"));
         assert_eq!(
             parse(&args(&["eraseVolume", "sdb1", "ext4"])),
             Ok(Cmd::Request(DiskRequest::EraseVolume { device: "sdb1".into(), fs: Personality::Ext4, label: String::new() }))
         );
         assert_eq!(parse(&args(&["verifyVolume", "sdb1"])), Ok(Cmd::Request(DiskRequest::VerifyVolume { device: "sdb1".into() })));
         assert_eq!(parse(&args(&["repairVolume", "sdb1"])), Ok(Cmd::Request(DiskRequest::RepairVolume { device: "sdb1".into() })));
+    }
+
+    #[test]
+    fn rename_restore_and_raid_verbs_parse_into_privileged_requests() {
+        assert_eq!(
+            parse(&args(&["renameVolume", "sdb1", "PHOTOS"])),
+            Ok(Cmd::Request(DiskRequest::RenameVolume { device: "sdb1".into(), label: "PHOTOS".into() }))
+        );
+        assert_eq!(
+            parse(&args(&["restoreVolume", "sdc1", "sdb1"])),
+            Ok(Cmd::Request(DiskRequest::RestoreVolume { device: "sdc1".into(), source: "sdb1".into() }))
+        );
+        assert_eq!(
+            parse(&args(&["createRaid", "md0", "1", "sdb", "sdc"])),
+            Ok(Cmd::Request(DiskRequest::CreateRaid { name: "md0".into(), level: RaidLevel::Raid1, members: vec!["sdb".into(), "sdc".into()] }))
+        );
+        assert!(parse(&args(&["createRaid", "md0", "2", "sdb", "sdc"])).unwrap_err().contains("not a RAID level"));
+        assert!(parse(&args(&["createRaid", "md0", "1"])).unwrap_err().contains("wrong arguments"));
+        assert!(parse(&args(&["restoreVolume", "sdc1", "../sda"])).unwrap_err().contains("not a device name"));
     }
 
     #[test]
@@ -262,7 +310,7 @@ mod tests {
 
     #[test]
     fn bad_file_systems_sizes_and_arity_are_refused_with_usage() {
-        assert!(parse(&args(&["eraseDisk", "sdb", "ntfs"])).unwrap_err().contains("not a file system"));
+        assert!(parse(&args(&["eraseDisk", "sdb", "xfs"])).unwrap_err().contains("not a file system"));
         assert!(parse(&args(&["partitionDisk", "sdb", "ext4:big"])).unwrap_err().contains("not a size"));
         assert!(parse(&args(&["eraseDisk", "sdb"])).unwrap_err().contains("wrong arguments"));
         assert!(parse(&args(&["verifyVolume"])).unwrap_err().contains("wrong arguments"));
@@ -310,6 +358,9 @@ mod tests {
         let req = DiskRequest::VerifyVolume { device: "sdb1".into() };
         assert_eq!(request_verb(&req), "verifyVolume");
         assert_eq!(request_done_text(&req), "Checked sdb1.");
-        assert_eq!(request_done_text(&DiskRequest::EraseDisk { device: "sdb".into(), fs: Personality::Ext4, label: String::new() }), "Erased sdb.");
+        assert_eq!(request_done_text(&DiskRequest::EraseDisk { device: "sdb".into(), fs: Personality::Ext4, label: String::new(), scheme: Scheme::Gpt }), "Erased sdb.");
+        let raid = DiskRequest::CreateRaid { name: "md0".into(), level: RaidLevel::Raid5, members: vec!["sdb".into(), "sdc".into(), "sdd".into()] };
+        assert_eq!(request_verb(&raid), "createRaid");
+        assert_eq!(request_done_text(&raid), "Created RAID 5 array md0.");
     }
 }

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.0
+
+- Form sheets with text fields, choices and lists, in the sheet style of the other dialogs.
+- Disk > Rename changes the name of an unmounted volume (ext4, exFAT, FAT32, NTFS and btrfs).
+- Disk > Erase asks for a name, a format (ext4, exFAT, FAT32, NTFS or btrfs) and, for a whole disk, a partition scheme (GUID Partition Map or Master Boot Record) before the confirmation. NTFS and btrfs join the Format menu items and the first-aid checks.
+- Disk > Restore copies a volume, or an attached disk image, onto the selected volume. The source must be unmounted and fit.
+- Disk > RAID Assistant creates a software RAID 0, 1, 5, 6 or 10 array from the unmounted disks and volumes you tick.
+- File > New Image > Blank Image makes a sparse raw image of a chosen size, optionally with an empty file system and volume name, in a place chosen in the save panel. File > New Image > Image from Folder builds an ISO image of a folder.
+- File > Open Disk Image attaches an .iso or .img file through the open panel.
+- Image > Convert Image writes an image as raw, QCOW2, VMDK, VHDX or VDI. Image > Resize Image grows an image, or shrinks an ext image after shrinking the file system inside it.
+- Get Info adds the UUIDs, block sizes, transport, serial number and the other facts `lsblk` knows, and is wide enough not to cut lines short.
+- The confirmation sheets wrap their text instead of cutting it off, and Escape cancels one.
+- The app now asks for the documents permission, for the open and save panels.
+
 ## 0.5.0
 
 - File > Show in Files (cmd+shift+R) opens the selected volume's mount point in the file manager.
