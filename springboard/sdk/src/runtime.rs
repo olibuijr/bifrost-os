@@ -700,6 +700,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                     }
                 }
                 ToApp::Pasteboard { change_count, items } => crate::pasteboard::mirror(change_count, items),
+                // the shell's input source: the kana (Romaji) flag the text input reads (`compose_method`)
+                ToApp::InputSource { japanese } => bifrost_ui::compose_method::set_japanese_source(japanese),
                 ToApp::Clipboard { text } => {
                     kit::clipboard::set_text(&text);
                     clip_seen = kit::clipboard::text();
