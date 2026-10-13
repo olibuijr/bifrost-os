@@ -8,8 +8,10 @@
 //! [`PixelBuffer::base_address_mut`]. [`PixelBufferPool`] recycles buffers of one format and size through
 //! `bifrost_render::buffer_pool`. Nothing here touches the GPU: buffers the presenter renders into stay in the system layer.
 
+use bifrost_render::buffer_attach::Rect;
 use bifrost_render::pixel_format::{self, FourCc, PixelFormat};
 
+pub use bifrost_render::buffer_attach::{Attachments, Primaries, Transfer, YcbcrMatrix};
 pub use bifrost_render::buffer_pool::{Config as PoolConfig, PoolError};
 
 /// Why a pixel buffer could not be made or unlocked.
@@ -32,6 +34,8 @@ pub struct PixelBuffer {
     planes: Vec<Vec<u8>>,
     read_only_locks: usize,
     read_write_locks: usize,
+    attachments: Attachments,
+    revision: u64,
 }
 
 impl PixelBuffer {
@@ -52,7 +56,16 @@ impl PixelBuffer {
                 vec![0u8; len]
             })
             .collect();
-        PixelBuffer { layout, width, height, planes, read_only_locks: 0, read_write_locks: 0 }
+        PixelBuffer {
+            layout,
+            width,
+            height,
+            planes,
+            read_only_locks: 0,
+            read_write_locks: 0,
+            attachments: Attachments::default(),
+            revision: 0,
+        }
     }
 
     /// The format code, such as NV12.
@@ -120,14 +133,45 @@ impl PixelBuffer {
         }
     }
 
-    /// Releases one lock of the given kind. `NotLocked` when none of that kind is held.
+    /// Releases one lock of the given kind. `NotLocked` when none of that kind is held. Releasing a read-write lock
+    /// counts as a change of the pixels and advances [`PixelBuffer::revision`].
     pub fn unlock(&mut self, read_only: bool) -> Result<(), PixelBufferError> {
         let count = if read_only { &mut self.read_only_locks } else { &mut self.read_write_locks };
         if *count == 0 {
             return Err(PixelBufferError::NotLocked);
         }
         *count -= 1;
+        if !read_only {
+            self.revision += 1;
+        }
         Ok(())
+    }
+
+    /// Counts the read-write unlocks so far. A cache that holds a copy of the pixels compares this value to know the
+    /// copy is stale.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// The colour metadata attached to the buffer (`CVBufferCopyAttachments`).
+    pub fn attachments(&self) -> &Attachments {
+        &self.attachments
+    }
+
+    /// Replaces the colour metadata (`CVBufferSetAttachment`, for each key at once). Attachments do not change the
+    /// pixels, so the revision stays the same.
+    pub fn set_attachments(&mut self, attachments: Attachments) {
+        self.attachments = attachments;
+    }
+
+    /// The working colour space the attachments name, when the renderer has it (`CVImageBufferGetColorSpace`).
+    pub fn color_space(&self) -> Option<bifrost_render::colorspace::Space> {
+        self.attachments.color_space()
+    }
+
+    /// The clean aperture clipped to the buffer (`CVImageBufferGetCleanRect`).
+    pub fn clean_rect(&self) -> Rect {
+        self.attachments.clean_rect(self.width, self.height)
     }
 
     /// The bytes of plane `plane`, readable only while locked. None when unlocked or the plane does not exist.
@@ -290,5 +334,43 @@ mod tests {
         pool.release(b, 6);
         assert_eq!(pool.flush(), 1);
         assert_eq!(pool.live(), 1);
+    }
+
+    #[test]
+    fn revision_counts_read_write_unlocks_only() {
+        let mut buf = PixelBuffer::new(code("AR24"), 2, 2).unwrap();
+        assert_eq!(buf.revision(), 0);
+        buf.lock(true);
+        buf.unlock(true).unwrap();
+        assert_eq!(buf.revision(), 0);
+        buf.lock(false);
+        buf.unlock(false).unwrap();
+        assert_eq!(buf.revision(), 1);
+        assert_eq!(buf.unlock(false), Err(PixelBufferError::NotLocked));
+        assert_eq!(buf.revision(), 1);
+    }
+
+    #[test]
+    fn attachments_default_to_none_and_full_clean_rect() {
+        let buf = PixelBuffer::new(code("NV12"), 1920, 1080).unwrap();
+        assert!(buf.attachments().is_empty());
+        assert_eq!(buf.color_space(), None);
+        assert_eq!(buf.clean_rect(), Rect { x: 0, y: 0, w: 1920, h: 1080 });
+    }
+
+    #[test]
+    fn attachments_name_the_colour_space_and_clip_the_aperture() {
+        let mut buf = PixelBuffer::new(code("NV12"), 12, 8).unwrap();
+        let before = buf.revision();
+        buf.set_attachments(Attachments {
+            primaries: Some(Primaries::DisplayP3),
+            transfer: Some(Transfer::Srgb),
+            matrix: Some(YcbcrMatrix::Bt709),
+            clean: Some(Rect { x: 4, y: 2, w: 10, h: 10 }),
+        });
+        assert_eq!(buf.color_space(), Some(bifrost_render::colorspace::Space::DisplayP3));
+        assert_eq!(buf.clean_rect(), Rect { x: 4, y: 2, w: 8, h: 6 });
+        // Attachments do not touch the pixels.
+        assert_eq!(buf.revision(), before);
     }
 }
