@@ -2456,3 +2456,16 @@ the login backend (read-only) and locks an app out after five failures. Gaps: th
 `evaluate` without a `password` returns `not_interactive` with `prompt: true`; no biometry (the biometrics policy is
 `biometry_not_available`); the fallback and cancel titles are held by the context but not yet shown; grants and the
 failure count reset on shell restart. Rows stay partial until a Midget check.
+
+## Network: NWListener (`bifrost_app::network_listener`)
+
+`Listener::new(parameters, port)` mirrors `NWListener(using:on:)`; port 0 lets the system choose and `port()` returns the
+bound port once ready. `start()` binds with `std::net` (TCP or UDP, all IPv4 addresses) and moves `State` from `Setup`
+to `Ready`, or to `Failed(reason)` when the bind fails; `cancel()` closes the socket and moves to `Cancelled`. Handlers
+(`set_state_update_handler`, `set_new_connection_handler` giving `Accepted { stream, remote }`, and
+`set_new_datagram_handler` giving `Datagram { from, data }` for UDP) fire from `poll()`, which the app calls from its run
+loop and which never blocks. `set_new_connection_limit(Some(n))` is `newConnectionLimit`: extra peers are closed at once.
+`Service::new(name, kind, domain, txt)` is `NWListener.Service`; `advertiser(host, addresses)` returns the
+`service_discovery::ServiceAdvertiser` for the bound port, and the app answers mDNS queries with it. Gaps: TLS listeners
+are refused (`ListenerError::TlsUnsupported`), no IPv6 or interface selection, no automatic Bonjour publishing, no
+`NWConnection` wrapper around `Accepted` yet (the app owns the `TcpStream`). Host tests only; not yet checked on Midget.

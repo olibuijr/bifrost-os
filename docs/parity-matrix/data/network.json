@@ -24,9 +24,9 @@
     {
       "feature": "Listeners for incoming connections",
       "apple": "NWListener",
-      "bifrost": "springboard/core/src/net_connection.rs (Listener), springboard/sdk/src/network_connection.rs",
+      "bifrost": "springboard/core/src/net_connection.rs (Listener), springboard/sdk/src/network_connection.rs, springboard/sdk/src/network_listener.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Used by the shell for nearby share and control. Apps cannot listen on a port"
+      "note": "Wave 5 (w5-network, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Used by the shell for nearby share and control. Apps can now listen: sdk network_listener::Listener binds TCP or UDP with std::net (port 0, state handler, newConnectionLimit, poll-driven handlers, cancel) and builds a Bonjour ServiceAdvertiser from its Service; host unit tests only, TLS listeners refused, not yet checked on Midget"
     },
     {
       "feature": "Service discovery on the local network",
@@ -108,7 +108,6 @@
   ],
   "gaps": [
     "No app-facing raw TCP or UDP connection API (NWConnection, NWParameters, NWEndpoint)",
-    "No app-facing listener API (NWListener)",
     "No service discovery (NWBrowser, mDNS or DNS-SD); the shell's UDP beacon is private",
     "No QUIC, WebSocket or custom protocol framer",
     "No path monitor for app reachability or interface changes (NWPathMonitor)",
