@@ -205,11 +205,16 @@ impl EmitterContent {
     /// Runs the simulation for `seconds` in steps of at most `step`, to start with particles already in flight.
     pub fn warm_up(&mut self, seconds: f32, step: f32) {
         let step = step.max(1e-3);
-        let mut left = seconds.max(0.0);
-        while left > 0.0 {
-            let dt = left.min(step);
-            self.step(dt);
-            left -= dt;
+        let seconds = seconds.max(0.0);
+        // Whole steps are counted, not subtracted from `seconds`: taking 0.1 off 1.0 in f32 leaves a sliver that
+        // is too small to birth the last particle in `step`.
+        let whole = (seconds / step).floor() as u32;
+        for _ in 0..whole {
+            self.step(step);
+        }
+        let rest = seconds - whole as f32 * step;
+        if rest > 1e-6 {
+            self.step(rest);
         }
     }
 
