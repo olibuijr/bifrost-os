@@ -203,6 +203,11 @@ pub mod wifi_accessory_browser;
 pub mod compression;
 pub mod pixel_buffer;
 pub mod display_link;
+pub mod frame_clock;
+pub mod gpu_layer;
+pub mod offscreen;
+/// Frame-rate ranges and transitions, shared with the shell.
+pub use bifrost_ui::{frame_rate, transition};
 pub use observable::{Cancellables, Observable, Subscription};
 pub use notification::{DistributedNotificationCenter, Notification, NotificationCenter, ObserverToken};
 /// `NativeCache` parity (see `docs/bifrost-ui.md`, "Cache").

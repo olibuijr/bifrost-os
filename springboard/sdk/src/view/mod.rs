@@ -934,6 +934,7 @@ impl<S: Responder> Window<S> {
     pub fn tick(&mut self, t: f64) -> bool {
         tick_all(self.root.as_mut(), t);
         self.advance_animations(t);
+        self.fire_frame_links(t);
         self.needs_display()
     }
 
