@@ -1813,12 +1813,35 @@ copies stay inside BifrOSt until multi-MIME sources land; file representations t
   `PrintOperation::with_options`.
 - The shell does not draw either dialog yet. The app draws the panels with its own kit controls.
 
+**Printing a view** (`bifrost_app::print_pages`, host tests only, not yet checked on Midget):
+
+- `PrintableView` has `bounds()` (y down, origin top left), `knows_page_range()`, `rect_for_page(n)` and `draw(rect, &mut dyn DrawOps)`.
+  Without a page range, `paginate` cuts the bounds into tiles of the printable area divided by `PrintInfo::scaling()`, down each column
+  and then across. With one, each page shows the rect the view returns.
+- `DrawOps` is the shared set of drawing calls (fill and stroke rects, paths, text, pictures). `PdfContext` writes them as PDF content:
+  `begin_pdf_page` / `end_pdf_page` / `finish` give the pages, and `begin_view_page` maps a y-down view tile onto the printable area.
+  Text is Helvetica, font `/F0`; write the pages with the font list `["Helvetica"]`.
+- `PrintOperation::print_operation(job_name, &view, info)` is `printOperation(with:printInfo:)`;
+  `PrintOperation::pdf_operation(&view, rect, path)` is `pdfOperation(with:inside:to:)` and shows no panel.
+  `run_modal(panel, did_run)` asks `panel` to edit the `PrintInfo` when `shows_print_panel` is set, runs the job, and reports through
+  `did_run`; a cancelled panel returns `Ok(None)`. `shows_progress_panel` is a flag for the app, nothing draws it.
+- `PrintInfo` gained `scaling_factor` (read through `scaling()`, limited to 0.1 to 10.0), `job_disposition` (`Spool`, `Save`, `Preview`)
+  and `saving_path`. `Save` writes the PDF to `saving_path`; `Preview` writes it to the temporary directory and returns the path.
+- Dialog models (`bifrost_app::print_panel`): `PanelOptions` (which standard controls show) with `apply(&mut PrintInfo, &PanelRequest)`,
+  which ignores hidden controls and invalid page ranges and names them in its result, and `PageSetup` (paper, orientation, margins,
+  scale; `from_info`, `set_margins`, `set_scaling`, `apply_to`).
+- Printer: `PrinterCapabilities::paper_size_in_points(name)` and `imageable_rect(name)` (origin at the lower left, hardware margins
+  from `media-*-margin-supported`).
+- Bitmaps: `image_source::representation(&Image, FileType::Png | Jpeg, &RepProperties)` encodes a decoded picture
+  (`representation(using:properties:)`); `compression_factor` applies to JPEG.
+- Not done: the shell-drawn print and page layout sheets, text styles other than Helvetica, clip and transform calls on `DrawOps`.
+
 Decisions and gaps:
 - No `run_modal(window)` print sheet yet: the kit print sheet needs a shell-drawn sheet (proto tags 0x1a0-0x1af stay reserved for
   it). Apps choose printer and options with their own controls and call `run`.
 - Print Center's Add Printer reads the clipboard, because the SDK has no text prompt sheet yet.
 - The `PrintInfo` page range is not used by the shell sheet, which prints only the previewed page when Pages is set.
-- Only file, pages and text documents. There is no `NSView` pagination (`knowsPageRange`, `draw(page)`).
+- View printing is limited to Helvetica text, fills, paths and pictures (see below). Pages are drawn when the operation is made.
 - Without a scheduler, `available()` is false and `run` returns `PrintError::NoCups`. Whether the Midget image ships CUPS is unchecked.
 - Books: File > Print (cmd+P) prints the open PDF to the default printer; EPUB has no print rendering. wordcraft and pdfcraft are
   upstream packages with no source here, so they are not wired.

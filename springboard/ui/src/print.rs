@@ -17,6 +17,7 @@
 
 use crate::cups::{self, Client, CupsError};
 use crate::ipp::{tag, Value};
+use crate::print_pages::{self, PrintableView, Rect};
 use bifrost_render::cg::pdf::writer::{self, text_literal};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
@@ -72,6 +73,21 @@ pub enum Orientation {
     Landscape,
 }
 
+/// What happens to a finished job (`jobDisposition`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum JobDisposition {
+    /// Send the job to the printer.
+    #[default]
+    Spool,
+    /// Write the job as a PDF to [`PrintInfo::saving_path`].
+    Save,
+    /// Write the job as a PDF in the temporary directory and return its path for a viewer to open.
+    Preview,
+}
+
+/// The smallest and largest scaling factors (10% and 1000%).
+pub const SCALING_RANGE: (f32, f32) = (0.1, 10.0);
+
 /// `NativePrintInfo`. Margins are in points: top, left, bottom, right (default is 72 on each side).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PrintInfo {
@@ -81,11 +97,26 @@ pub struct PrintInfo {
     pub copies: u32,
     /// 1-based inclusive page range; `None` prints everything.
     pub pages: Option<(u32, u32)>,
+    /// How large the content prints: 1.0 is actual size, 0.5 half size. Read through [`PrintInfo::scaling`], which keeps
+    /// it inside [`SCALING_RANGE`].
+    pub scaling_factor: f32,
+    pub job_disposition: JobDisposition,
+    /// Where [`JobDisposition::Save`] writes the PDF.
+    pub saving_path: Option<PathBuf>,
 }
 
 impl Default for PrintInfo {
     fn default() -> Self {
-        PrintInfo { paper: PaperSize::A4, orientation: Orientation::Portrait, margins: [72.0; 4], copies: 1, pages: None }
+        PrintInfo {
+            paper: PaperSize::A4,
+            orientation: Orientation::Portrait,
+            margins: [72.0; 4],
+            copies: 1,
+            pages: None,
+            scaling_factor: 1.0,
+            job_disposition: JobDisposition::Spool,
+            saving_path: None,
+        }
     }
 }
 
@@ -94,6 +125,10 @@ impl PrintInfo {
     pub fn paper_size(&self) -> (f32, f32) {
         let (w, h) = self.paper.points();
         if self.orientation == Orientation::Landscape { (h, w) } else { (w, h) }
+    }
+    /// The scaling factor limited to [`SCALING_RANGE`]; a value that is not a number counts as 1.0.
+    pub fn scaling(&self) -> f32 {
+        if self.scaling_factor.is_nan() { 1.0 } else { self.scaling_factor.clamp(SCALING_RANGE.0, SCALING_RANGE.1) }
     }
     /// The printable rect (x, y, w, h) inside the margins (`imageablePageBounds`).
     pub fn imageable(&self) -> (f32, f32, f32, f32) {
@@ -230,6 +265,11 @@ pub struct PrintOperation {
     pub job_name: String,
     /// Extra job-template pairs from print dialog plug-ins; see the SDK's `print_panel::PlugIns::job_options`.
     pub options: Vec<(String, String)>,
+    /// Whether [`PrintOperation::run_modal`] asks the print panel first. On for a print operation, off for a PDF one.
+    pub shows_print_panel: bool,
+    /// Whether the app shows a progress panel while the job runs. The operation does not draw it; the flag is the app's
+    /// switch.
+    pub shows_progress_panel: bool,
 }
 
 impl PrintOperation {
@@ -243,6 +283,8 @@ impl PrintOperation {
             destination: Destination::Printer(None),
             job_name,
             options: Vec::new(),
+            shows_print_panel: true,
+            shows_progress_panel: true,
         }
     }
     /// A job that prints pages the app built. `fonts` are standard font names, `/F0`.. in the order the pages' content uses
@@ -254,6 +296,8 @@ impl PrintOperation {
             destination: Destination::Printer(None),
             job_name: job_name.into(),
             options: Vec::new(),
+            shows_print_panel: true,
+            shows_progress_panel: true,
         }
     }
     /// A job that prints `text` in Helvetica, laid out for the job's page info when it runs (see [`text_pages`]).
@@ -264,7 +308,44 @@ impl PrintOperation {
             destination: Destination::Printer(None),
             job_name: job_name.into(),
             options: Vec::new(),
+            shows_print_panel: true,
+            shows_progress_panel: true,
         }
+    }
+    /// `printOperation(with:printInfo:)`: a job that prints `view`, paginated and drawn for `info` now.
+    pub fn print_operation(job_name: impl Into<String>, view: &dyn PrintableView, info: PrintInfo) -> Self {
+        let pages = print_pages::render_pages(view, &info);
+        let mut op = PrintOperation::pages(job_name, pages, vec!["Helvetica"]);
+        op.info = info;
+        op
+    }
+    /// `pdfOperation(with:inside:to:)`: a job that writes the part of `view` inside `rect` as a one-page PDF at `to`.
+    /// It shows neither panel.
+    pub fn pdf_operation(view: &dyn PrintableView, rect: Rect, to: impl Into<PathBuf>) -> Self {
+        let page = print_pages::render_region(view, rect);
+        let mut op = PrintOperation::pages("Untitled", vec![page], vec!["Helvetica"]).to(Destination::Pdf(to.into()));
+        op.shows_print_panel = false;
+        op.shows_progress_panel = false;
+        op
+    }
+    /// `runModal(for:delegate:didRun:contextInfo:)`: when [`PrintOperation::shows_print_panel`] is set, `panel` edits the
+    /// print info and answers whether the user chose Print. Then the job runs. `did_run` gets whether it ran and
+    /// succeeded. Returns `Ok(None)` when the panel was cancelled.
+    ///
+    /// Paper and margin changes made in the panel reach a text job and the job-template attributes. The pages of a view
+    /// job were drawn when the operation was made, so change those before calling [`PrintOperation::print_operation`].
+    pub fn run_modal(
+        mut self,
+        panel: impl FnOnce(&mut PrintInfo) -> bool,
+        did_run: impl FnOnce(bool),
+    ) -> Result<Option<String>, PrintError> {
+        if self.shows_print_panel && !panel(&mut self.info) {
+            did_run(false);
+            return Ok(None);
+        }
+        let result = self.run();
+        did_run(result.is_ok());
+        result.map(Some)
     }
     pub fn with_info(mut self, info: PrintInfo) -> Self {
         self.info = info;
@@ -296,11 +377,23 @@ impl PrintOperation {
     /// Runs the job. Returns the request id (`printer-job`) for a printer, or the saved path for Save as PDF.
     pub fn run(&self) -> Result<String, PrintError> {
         let (format, data) = self.document()?;
-        match &self.destination {
-            Destination::Pdf(to) => {
-                std::fs::write(to, &data).map_err(|e| PrintError::Failed(e.to_string()))?;
-                Ok(to.to_string_lossy().into_owned())
+        let write = |to: &Path| -> Result<String, PrintError> {
+            std::fs::write(to, &data).map_err(|e| PrintError::Failed(e.to_string()))?;
+            Ok(to.to_string_lossy().into_owned())
+        };
+        match self.info.job_disposition {
+            JobDisposition::Spool => {}
+            JobDisposition::Save => {
+                let to = self.info.saving_path.as_deref().ok_or_else(|| PrintError::Failed("no saving path".into()))?;
+                return write(to);
             }
+            JobDisposition::Preview => {
+                let name: String = self.job_name.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '-').collect();
+                return write(&std::env::temp_dir().join(format!("bifrost-preview-{name}.pdf")));
+            }
+        }
+        match &self.destination {
+            Destination::Pdf(to) => write(to),
             Destination::Printer(name) => submit(&self.job_name, name.as_deref(), &self.info, &self.options, format, data),
         }
     }
@@ -473,5 +566,107 @@ mod tests {
         let text = String::from_utf8_lossy(&bytes).into_owned();
         assert!(text.contains("/MediaBox [0 0 842 595]"));
         assert!(text.contains("(hello) Tj"));
+    }
+
+    struct Square;
+
+    impl PrintableView for Square {
+        fn bounds(&self) -> Rect {
+            (0.0, 0.0, 100.0, 100.0)
+        }
+        fn draw(&self, rect: Rect, out: &mut dyn print_pages::DrawOps) {
+            out.fill_rect(rect);
+        }
+    }
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("bifrost-print-{name}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn the_scaling_factor_is_kept_inside_its_range() {
+        let at = |f: f32| PrintInfo { scaling_factor: f, ..Default::default() }.scaling();
+        assert_eq!((at(1.0), at(0.0), at(50.0), at(f32::NAN)), (1.0, 0.1, 10.0, 1.0));
+    }
+
+    #[test]
+    fn a_view_operation_draws_its_pages_for_the_info() {
+        let op = PrintOperation::print_operation("Square", &Square, PrintInfo::default());
+        assert!(op.shows_print_panel && op.shows_progress_panel);
+        let (format, bytes) = op.document().unwrap();
+        assert_eq!(format, "application/pdf");
+        assert!(String::from_utf8_lossy(&bytes).contains("/Count 1"));
+    }
+
+    #[test]
+    fn a_pdf_operation_writes_the_region_without_panels() {
+        let dir = scratch("region");
+        let op = PrintOperation::pdf_operation(&Square, (10.0, 10.0, 50.0, 40.0), dir.join("r.pdf"));
+        assert!(!op.shows_print_panel && !op.shows_progress_panel);
+        op.run().unwrap();
+        assert!(String::from_utf8_lossy(&std::fs::read(dir.join("r.pdf")).unwrap()).contains("/MediaBox [0 0 50 40]"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn save_disposition_writes_to_the_saving_path_and_needs_one() {
+        let dir = scratch("save");
+        let mut info = PrintInfo { job_disposition: JobDisposition::Save, ..Default::default() };
+        let op = PrintOperation::print_operation("Square", &Square, info.clone());
+        assert_eq!(op.run(), Err(PrintError::Failed("no saving path".into())));
+        info.saving_path = Some(dir.join("s.pdf"));
+        let op = PrintOperation::print_operation("Square", &Square, info);
+        assert_eq!(op.run(), Ok(dir.join("s.pdf").to_string_lossy().into_owned()));
+        assert!(std::fs::read(dir.join("s.pdf")).unwrap().starts_with(b"%PDF"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn preview_disposition_returns_a_temporary_pdf() {
+        let info = PrintInfo { job_disposition: JobDisposition::Preview, ..Default::default() };
+        let path = PrintOperation::print_operation("Preview test", &Square, info).run().unwrap();
+        assert!(path.ends_with("bifrost-preview-Previewtest.pdf"));
+        assert!(std::fs::read(&path).unwrap().starts_with(b"%PDF"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn run_modal_applies_the_panel_and_reports_through_did_run() {
+        let dir = scratch("modal");
+        let mut ran = None;
+        let op = PrintOperation::text("Notes", "hello").to(Destination::Pdf(dir.join("m.pdf")));
+        let r = op.run_modal(
+            |info| {
+                info.orientation = Orientation::Landscape;
+                true
+            },
+            |ok| ran = Some(ok),
+        );
+        assert!(matches!(r, Ok(Some(_))));
+        assert_eq!(ran, Some(true));
+        assert!(String::from_utf8_lossy(&std::fs::read(dir.join("m.pdf")).unwrap()).contains("/MediaBox [0 0 842 595]"));
+
+        let mut ran = None;
+        let cancelled = PrintOperation::text("Notes", "hello").to(Destination::Pdf(dir.join("n.pdf")));
+        assert_eq!(cancelled.run_modal(|_| false, |ok| ran = Some(ok)), Ok(None));
+        assert_eq!(ran, Some(false));
+        assert!(!dir.join("n.pdf").exists());
+
+        let mut asked = false;
+        let mut quiet = PrintOperation::text("Notes", "hello").to(Destination::Pdf(dir.join("q.pdf")));
+        quiet.shows_print_panel = false;
+        quiet
+            .run_modal(
+                |_| {
+                    asked = true;
+                    true
+                },
+                |_| {},
+            )
+            .unwrap();
+        assert!(!asked);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

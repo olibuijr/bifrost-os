@@ -125,6 +125,14 @@ pub struct PrinterCapabilities {
     pub duplex: Vec<DuplexMode>,
     pub color_modes: Vec<ColorMode>,
     pub status: PrinterStatus,
+    /// Unprintable border the hardware leaves on every sheet, in hundredths of a millimetre: left, bottom, right, top.
+    /// The largest `media-*-margin-supported` value of each edge, so the area inside is printable on every paper.
+    /// All zero when the printer reports none.
+    pub hardware_margins: [i32; 4],
+}
+
+fn hundredths_to_points(v: i32) -> f64 {
+    v as f64 * 72.0 / 2540.0
 }
 
 fn values<'a>(g: &'a Group, name: &str) -> impl Iterator<Item = &'a str> {
@@ -176,12 +184,32 @@ impl PrinterCapabilities {
             reasons: values(g, "printer-state-reasons").filter(|r| *r != "none").map(str::to_string).collect(),
             message: g.text("printer-state-message").unwrap_or("").to_string(),
         };
-        PrinterCapabilities { papers, default_paper, duplex, color_modes, status }
+        let edge = |name: &str| g.ints(name).into_iter().max().unwrap_or(0).max(0);
+        let hardware_margins = [
+            edge("media-left-margin-supported"),
+            edge("media-bottom-margin-supported"),
+            edge("media-right-margin-supported"),
+            edge("media-top-margin-supported"),
+        ];
+        PrinterCapabilities { papers, default_paper, duplex, color_modes, status, hardware_margins }
     }
 
     /// Printer `pageSize(forPaper:)`: finds a paper by PWG name or PPD name.
     pub fn page_size_for_paper(&self, name: &str) -> Option<&PaperSize> {
         self.papers.iter().find(|p| p.name == name || p.ppd_name() == name)
+    }
+
+    /// Printer `paperSize(forPaperName:)`: the paper's width and height in points, by PWG or PPD name.
+    pub fn paper_size_in_points(&self, name: &str) -> Option<(f64, f64)> {
+        self.page_size_for_paper(name).map(|p| (hundredths_to_points(p.width), hundredths_to_points(p.height)))
+    }
+
+    /// Printer `imageableRect(forPaper:)`: the printable rect (x, y, width, height) in points on the named paper, origin
+    /// at the lower left corner of the sheet. `None` for a paper the printer does not list.
+    pub fn imageable_rect(&self, name: &str) -> Option<(f64, f64, f64, f64)> {
+        let (w, h) = self.paper_size_in_points(name)?;
+        let [left, bottom, right, top] = self.hardware_margins.map(hundredths_to_points);
+        Some((left, bottom, (w - left - right).max(0.0), (h - bottom - top).max(0.0)))
     }
 
     pub fn supports_duplex(&self) -> bool {
@@ -264,5 +292,30 @@ mod tests {
         assert_eq!(c.duplex, vec![DuplexMode::None]);
         assert_eq!(c.color_modes, vec![ColorMode::Auto]);
         assert!(!c.supports_duplex());
+    }
+
+    #[test]
+    fn imageable_rect_subtracts_the_hardware_margins() {
+        let mut g = canned();
+        g.attributes.push(Attribute { name: "media-left-margin-supported".into(), values: vec![Value::Integer(0), Value::Integer(635)] });
+        g.attributes.push(Attribute { name: "media-right-margin-supported".into(), values: vec![Value::Integer(635)] });
+        g.attributes.push(Attribute { name: "media-top-margin-supported".into(), values: vec![Value::Integer(1270)] });
+        let c = PrinterCapabilities::from_group(&g);
+        assert_eq!(c.hardware_margins, [635, 0, 635, 1270]);
+        let (w, h) = c.paper_size_in_points("A4").unwrap();
+        assert!((w - 595.28).abs() < 0.01 && (h - 841.89).abs() < 0.01);
+        let (x, y, iw, ih) = c.imageable_rect("iso_a4_210x297mm").unwrap();
+        assert!((x - 18.0).abs() < 0.01 && y == 0.0);
+        assert!((iw - (w - 36.0)).abs() < 0.01 && (ih - (h - 36.0)).abs() < 0.01);
+        assert!(c.imageable_rect("Tabloid").is_none());
+    }
+
+    #[test]
+    fn a_printer_without_margins_prints_edge_to_edge() {
+        let c = PrinterCapabilities::from_group(&canned());
+        assert_eq!(c.hardware_margins, [0; 4]);
+        let (x, y, w, h) = c.imageable_rect("Letter").unwrap();
+        assert_eq!((x, y), (0.0, 0.0));
+        assert!((w - 612.0).abs() < 0.01 && (h - 792.0).abs() < 0.01);
     }
 }

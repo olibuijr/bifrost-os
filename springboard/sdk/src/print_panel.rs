@@ -10,6 +10,8 @@
 //! either dialog yet (see docs/bifrost-ui.md "Printing"), so an app shows its panels with its own kit controls and reads
 //! and writes values by key. Nothing here touches the system: it is a pure model with host tests.
 
+use crate::print::{Orientation, PaperSize, PrintInfo, SCALING_RANGE};
+
 /// Keys that [`PrintInfo::attributes`](crate::print::PrintInfo::attributes) already writes. A plug-in cannot set them.
 pub const RESERVED_KEYS: [&str; 4] = ["media", "orientation-requested", "copies", "page-ranges"];
 
@@ -277,6 +279,148 @@ impl PlugIns {
     }
 }
 
+/// Which standard controls the print dialog shows (`options`). A control that is hidden cannot change the print info.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PanelOptions {
+    pub shows_copies: bool,
+    pub shows_page_range: bool,
+    pub shows_paper_size: bool,
+    pub shows_orientation: bool,
+    pub shows_scaling: bool,
+    pub shows_preview: bool,
+    pub shows_print_selection: bool,
+}
+
+impl Default for PanelOptions {
+    /// Copies, page range, paper size, orientation and preview.
+    fn default() -> Self {
+        PanelOptions {
+            shows_copies: true,
+            shows_page_range: true,
+            shows_paper_size: true,
+            shows_orientation: true,
+            shows_scaling: false,
+            shows_preview: true,
+            shows_print_selection: false,
+        }
+    }
+}
+
+/// What the user set in the print dialog. `None` leaves a field as it is.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PanelRequest {
+    pub copies: Option<u32>,
+    /// `Some(None)` prints every page; `Some(Some((first, last)))` a 1-based inclusive range.
+    pub pages: Option<Option<(u32, u32)>>,
+    pub paper: Option<PaperSize>,
+    pub orientation: Option<Orientation>,
+    pub scaling: Option<f32>,
+}
+
+/// The most copies one job asks for.
+pub const MAX_COPIES: u32 = 9999;
+
+impl PanelOptions {
+    /// Writes the request into `info`. Fields whose control is hidden, and a page range that is empty or starts below 1,
+    /// are left alone and named in the result. Copies are kept from 1 to [`MAX_COPIES`] and the scaling factor inside
+    /// [`SCALING_RANGE`].
+    pub fn apply(&self, info: &mut PrintInfo, request: &PanelRequest) -> Vec<&'static str> {
+        let mut refused = Vec::new();
+        if let Some(copies) = request.copies {
+            if self.shows_copies {
+                info.copies = copies.clamp(1, MAX_COPIES);
+            } else {
+                refused.push("copies");
+            }
+        }
+        if let Some(pages) = request.pages {
+            match pages {
+                _ if !self.shows_page_range => refused.push("pages"),
+                Some((first, last)) if first < 1 || last < first => refused.push("pages"),
+                pages => info.pages = pages,
+            }
+        }
+        if let Some(paper) = request.paper {
+            if self.shows_paper_size {
+                info.paper = paper;
+            } else {
+                refused.push("paper");
+            }
+        }
+        if let Some(orientation) = request.orientation {
+            if self.shows_orientation {
+                info.orientation = orientation;
+            } else {
+                refused.push("orientation");
+            }
+        }
+        if let Some(scaling) = request.scaling {
+            if self.shows_scaling {
+                info.scaling_factor = scaling.clamp(SCALING_RANGE.0, SCALING_RANGE.1);
+            } else {
+                refused.push("scaling");
+            }
+        }
+        refused
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutError {
+    /// A margin is negative, or the margins leave no printable area on the paper.
+    Margins,
+}
+
+/// The page setup dialog's model (the page layout panel): paper, orientation, margins and scale, read from a print info and
+/// written back to it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PageSetup {
+    pub paper: PaperSize,
+    pub orientation: Orientation,
+    /// Top, left, bottom, right, in points.
+    margins: [f32; 4],
+    scaling: f32,
+}
+
+impl PageSetup {
+    pub fn from_info(info: &PrintInfo) -> Self {
+        PageSetup { paper: info.paper, orientation: info.orientation, margins: info.margins, scaling: info.scaling() }
+    }
+
+    pub fn margins(&self) -> [f32; 4] {
+        self.margins
+    }
+
+    pub fn scaling(&self) -> f32 {
+        self.scaling
+    }
+
+    /// Sets the scale, kept inside [`SCALING_RANGE`].
+    pub fn set_scaling(&mut self, scaling: f32) {
+        self.scaling = if scaling.is_nan() { 1.0 } else { scaling.clamp(SCALING_RANGE.0, SCALING_RANGE.1) };
+    }
+
+    /// Sets the margins (top, left, bottom, right) when they are not negative and leave a printable area on the current
+    /// paper and orientation. Otherwise the margins stay as they were.
+    pub fn set_margins(&mut self, margins: [f32; 4]) -> Result<(), LayoutError> {
+        let probe = PrintInfo { paper: self.paper, orientation: self.orientation, margins, ..PrintInfo::default() };
+        let (_, _, w, h) = probe.imageable();
+        if margins.iter().any(|m| !(*m >= 0.0)) || w <= 0.0 || h <= 0.0 {
+            return Err(LayoutError::Margins);
+        }
+        self.margins = margins;
+        Ok(())
+    }
+
+    /// Writes paper, orientation, margins and scale into `info`. Copies, page range and the rest are not touched.
+    pub fn apply_to(&self, info: &mut PrintInfo) {
+        info.paper = self.paper;
+        info.orientation = self.orientation;
+        info.margins = self.margins;
+        info.scaling_factor = self.scaling;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -373,5 +517,70 @@ mod tests {
         let op = PrintOperation::new("/tmp/report.pdf").with_options(p.job_options());
         assert!(op.options.contains(&("fit".to_string(), "true".to_string())));
         assert_eq!(op.options.len(), 3);
+    }
+
+    #[test]
+    fn hidden_controls_cannot_change_the_print_info() {
+        let mut info = PrintInfo::default();
+        let options = PanelOptions::default();
+        let request = PanelRequest {
+            copies: Some(3),
+            pages: Some(Some((2, 4))),
+            paper: Some(PaperSize::Letter),
+            orientation: Some(Orientation::Landscape),
+            scaling: Some(0.5),
+        };
+        assert_eq!(options.apply(&mut info, &request), vec!["scaling"], "scaling is off by default");
+        assert_eq!((info.copies, info.pages, info.paper, info.orientation), (3, Some((2, 4)), PaperSize::Letter, Orientation::Landscape));
+        assert_eq!(info.scaling_factor, 1.0);
+        let shown = PanelOptions { shows_scaling: true, ..options };
+        assert!(shown.apply(&mut info, &request).is_empty());
+        assert_eq!(info.scaling_factor, 0.5);
+        let none = PanelOptions { shows_copies: false, shows_page_range: false, shows_paper_size: false, shows_orientation: false, ..options };
+        let mut other = PrintInfo::default();
+        assert_eq!(none.apply(&mut other, &request), vec!["copies", "pages", "paper", "orientation", "scaling"]);
+        assert_eq!(other, PrintInfo::default());
+    }
+
+    #[test]
+    fn copies_and_page_range_are_checked() {
+        let mut info = PrintInfo::default();
+        let o = PanelOptions::default();
+        o.apply(&mut info, &PanelRequest { copies: Some(0), ..Default::default() });
+        assert_eq!(info.copies, 1);
+        o.apply(&mut info, &PanelRequest { copies: Some(100_000), ..Default::default() });
+        assert_eq!(info.copies, MAX_COPIES);
+        assert_eq!(o.apply(&mut info, &PanelRequest { pages: Some(Some((5, 2))), ..Default::default() }), vec!["pages"]);
+        assert_eq!(o.apply(&mut info, &PanelRequest { pages: Some(Some((0, 2))), ..Default::default() }), vec!["pages"]);
+        assert_eq!(info.pages, None);
+        o.apply(&mut info, &PanelRequest { pages: Some(Some((1, 2))), ..Default::default() });
+        o.apply(&mut info, &PanelRequest { pages: Some(None), ..Default::default() });
+        assert_eq!(info.pages, None, "Some(None) goes back to every page");
+    }
+
+    #[test]
+    fn page_layout_round_trips_through_the_print_info() {
+        let info = PrintInfo { paper: PaperSize::Legal, orientation: Orientation::Landscape, margins: [10.0, 20.0, 30.0, 40.0], scaling_factor: 2.0, copies: 4, ..Default::default() };
+        let layout = PageSetup::from_info(&info);
+        assert_eq!((layout.paper, layout.margins(), layout.scaling()), (PaperSize::Legal, [10.0, 20.0, 30.0, 40.0], 2.0));
+        let mut back = PrintInfo::default();
+        layout.apply_to(&mut back);
+        assert_eq!((back.paper, back.orientation, back.margins, back.scaling_factor), (info.paper, info.orientation, info.margins, 2.0));
+        assert_eq!(back.copies, 1, "copies belong to the print dialog");
+    }
+
+    #[test]
+    fn page_layout_refuses_margins_that_leave_no_page() {
+        let mut layout = PageSetup::from_info(&PrintInfo::default());
+        assert_eq!(layout.set_margins([-1.0, 0.0, 0.0, 0.0]), Err(LayoutError::Margins));
+        assert_eq!(layout.set_margins([0.0, 300.0, 0.0, 300.0]), Err(LayoutError::Margins), "A4 is 595 wide");
+        assert_eq!(layout.set_margins([f32::NAN, 0.0, 0.0, 0.0]), Err(LayoutError::Margins));
+        assert_eq!(layout.margins(), [72.0; 4]);
+        layout.set_margins([36.0; 4]).unwrap();
+        assert_eq!(layout.margins(), [36.0; 4]);
+        layout.set_scaling(99.0);
+        assert_eq!(layout.scaling(), 10.0);
+        layout.set_scaling(f32::NAN);
+        assert_eq!(layout.scaling(), 1.0);
     }
 }

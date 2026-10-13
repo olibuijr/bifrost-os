@@ -274,6 +274,7 @@ impl PrintSheet {
             margins: [MARGIN_PT; 4],
             copies: self.setup.copies,
             pages: None,
+            ..PrintInfo::default()
         }
     }
 
