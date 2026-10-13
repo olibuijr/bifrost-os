@@ -720,6 +720,12 @@ pub fn emoji_advance(px: f32) -> f32 {
 }
 
 impl Font<'_> {
+    /// Identity of the loaded font file (address and length of its bytes): rendered text cached under one face
+    /// is never served for another.
+    pub(crate) fn ident(&self) -> (usize, usize) {
+        (self.data.as_ptr() as usize, self.data.len())
+    }
+
     pub fn measure(&self, text: &str, px: f32) -> f32 {
         self.measure_var(text, px, &[])
     }

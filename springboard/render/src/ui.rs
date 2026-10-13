@@ -311,6 +311,54 @@ pub fn vars(pt: f32, weight: Weight) -> [Var; 2] {
     [(*b"wght", weight.wght()), (*b"opsz", pt)]
 }
 
+/// Everything a rendered string depends on: the string, the final pixel size, the scaled point size (the optical
+/// size in `vars`), the final weight, the resolved colour, the shadow, the font file and the emoji font generation.
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct TextKey {
+    text: String,
+    px: u32,
+    pt: u32,
+    weight: u8,
+    color: u32,
+    shadow: bool,
+    font: (usize, usize),
+    emoji: u32,
+}
+
+/// Rendered text kept process-wide: an LRU bounded in bytes, purged under memory pressure like the glyph cache.
+type TextImages = crate::purgeable::Cache<TextKey, std::sync::Arc<Image>>;
+
+/// Bytes of rendered text kept.
+const TEXT_IMAGE_BYTES: usize = 4 << 20;
+
+fn text_images() -> &'static TextImages {
+    static IMAGES: std::sync::OnceLock<TextImages> = std::sync::OnceLock::new();
+    IMAGES.get_or_init(|| TextImages::new(0, TEXT_IMAGE_BYTES))
+}
+
+/// `render` on a miss, the stored image on a hit. Widgets that redraw every frame (Control Center, Settings
+/// rows, the desktop) would otherwise shape and composite the same strings again each time.
+#[allow(clippy::too_many_arguments)]
+fn cached_text(font: &Font<'_>, text: &str, px: f32, pt: f32, weight: Weight, color: u32, shadow: bool, render: impl FnOnce() -> Image) -> Image {
+    let key = TextKey {
+        text: text.to_string(),
+        px: px.to_bits(),
+        pt: pt.to_bits(),
+        weight: weight as u8,
+        color,
+        shadow,
+        font: font.ident(),
+        emoji: crate::emoji::generation(),
+    };
+    let images = text_images();
+    if let Some(hit) = images.get(&key) {
+        return (*hit).clone();
+    }
+    let img = render();
+    images.set(key, std::sync::Arc::new(img.clone()), img.px.len() * 4);
+    img
+}
+
 impl Ui {
     /// A UI at `s` px per point with default text settings.
     pub fn new(font: Font<'static>, s: f32) -> Self {
@@ -348,7 +396,8 @@ impl Ui {
     pub fn styled(&self, text: &str, pt: f32, weight: Weight, color: u32, shadow: bool) -> Image {
         let (pt, weight) = (self.scaled(pt), self.weight(weight));
         let color = crate::appearance::contrast(color);
-        self.font.render_var(text, &Style { px: self.pt(pt), embolden: 0.0, color, shadow }, &vars(pt, weight))
+        let px = self.pt(pt);
+        cached_text(&self.font, text, px, pt, weight, color, shadow, || self.font.render_var(text, &Style { px, embolden: 0.0, color, shadow }, &vars(pt, weight)))
     }
 
     /// Text with user font feature settings (small caps, old-style figures, stylistic sets, kerning off, ...).
@@ -368,7 +417,8 @@ impl Ui {
     /// Dynamic Type, as on bifrost.
     pub fn chrome(&self, text: &str, pt: f32, weight: Weight, color: u32) -> Image {
         let color = crate::appearance::contrast(color);
-        self.font.render_var(text, &Style { px: self.pt(pt), embolden: 0.0, color, shadow: false }, &vars(pt, weight))
+        let px = self.pt(pt);
+        cached_text(&self.font, text, px, pt, weight, color, false, || self.font.render_var(text, &Style { px, embolden: 0.0, color, shadow: false }, &vars(pt, weight)))
     }
 
     /// Width of `text` in px, as `text` would draw it.
@@ -588,6 +638,28 @@ mod tests {
 
     fn ui() -> Ui {
         crate::tests::ui()
+    }
+
+    #[test]
+    fn cached_text_matches_a_fresh_render_and_keys_on_every_input() {
+        let ui = ui();
+        let fresh = |ui: &Ui, text: &str, pt: f32, weight: Weight, color: u32| {
+            let px = ui.pt(pt);
+            let color = crate::appearance::contrast(color);
+            ui.font.render_var(text, &crate::font::Style { px, embolden: 0.0, color, shadow: false }, &vars(pt, weight))
+        };
+        let first = ui.text("Wi-Fi", 17.0, Weight::Semibold, WHITE);
+        assert_eq!(first, ui.text("Wi-Fi", 17.0, Weight::Semibold, WHITE), "a hit returns the same pixels");
+        assert_eq!(first, fresh(&ui, "Wi-Fi", 17.0, Weight::Semibold, WHITE));
+        // every input of the render is part of the key: a different string, size, weight or colour is never a hit
+        assert_ne!(first, ui.text("Wi-Fi", 15.0, Weight::Semibold, WHITE));
+        assert_ne!(first, ui.text("Wi-Fi", 17.0, Weight::Regular, WHITE));
+        assert_ne!(first, ui.text("Wi-Fi", 17.0, Weight::Semibold, rgba(0, 0, 0, 255)));
+        assert_ne!(first, ui.text("Wi", 17.0, Weight::Semibold, WHITE));
+        // chrome text is not scaled by Dynamic Type and is cached on its own path
+        let chrome = ui.chrome("9:41", 12.0, Weight::Semibold, WHITE);
+        assert_eq!(chrome, ui.chrome("9:41", 12.0, Weight::Semibold, WHITE));
+        assert_eq!(chrome, fresh(&ui, "9:41", 12.0, Weight::Semibold, WHITE));
     }
 
     #[test]
