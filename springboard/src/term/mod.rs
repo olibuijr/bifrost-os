@@ -671,7 +671,8 @@ mod tests {
         assert_eq!(next_blink(499.9), 500.0);
         assert_eq!(next_blink(500.0), 1000.0);
         let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
-        assert!(!t.set_blink_phase(false), "a steady caret has no phase to change");
+        // the caret starts in phase "on", so the steady probe uses `true`; `false` here would move the phase before the blink is set
+        assert!(!t.set_blink_phase(true), "a steady caret has no phase to change");
         t.set_cursor(None, true);
         assert!(t.set_blink_phase(false), "the blinking caret changes phase");
         assert!(!t.set_blink_phase(false), "same phase, nothing to draw");
