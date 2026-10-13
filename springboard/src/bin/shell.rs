@@ -124,6 +124,8 @@ fn run() -> std::io::Result<()> {
     // the volume is the default output device's volume control on the audio server (connected lazily)
     // (a worker thread owns the connection: the UI thread never waits on the audio server)
     let volume_tx = spawn_volume_worker();
+    // a timer or alarm plays the chosen alert tone on the sound-effects role (a worker thread owns the player)
+    let alert_tx = spawn_alert_worker();
     // the headset jack: its input device reports plug state as switch events
     let mut headset = input::Device::by_hint(route::JACK_DEVICE_HINTS).and_then(|p| input::Device::open(&p).map_err(|e| eprintln!("springboard: headset {p}: {e}")).ok());
     let mut jack = headset.as_ref().map_or_else(route::Jack::default, |d| route::Jack::from_bits(d.switches()));
@@ -819,7 +821,12 @@ fn run() -> std::io::Result<()> {
                     }
                 }
                 // sound comes later; the full-screen alert already shows
-                Effect::Alarm => eprintln!("springboard: alarm"),
+                Effect::Alarm => match shell.alert_tone() {
+                    Some(index) => {
+                        let _ = alert_tx.send(index);
+                    }
+                    None => eprintln!("springboard: alarm (muted)"),
+                },
                 Effect::WakeAt(at) => rtc_wake(at),
                 // the shell applies the timeout itself; log it for the record
                 Effect::SystemSleepAfter(min) => sleeper.set_after(sleep::system_sleep_after(Some(&min.to_string())), t),
@@ -1347,6 +1354,42 @@ fn spawn_volume_worker() -> std::sync::mpsc::Sender<springboard::media::volume::
     });
     if let Err(e) = spawned {
         eprintln!("springboard: volume worker: {e}");
+    }
+    tx
+}
+
+/// Plays alert tones (the Settings Alert Sound index) on the sound-effects role of the audio server. A worker
+/// thread owns the player, so a tone's write never waits on the UI thread; a newer alert replaces one still waiting.
+#[cfg(target_os = "linux")]
+fn spawn_alert_worker() -> std::sync::mpsc::Sender<usize> {
+    use springboard::media::system_sound::SoundPlayer;
+    let (tx, rx) = std::sync::mpsc::channel::<usize>();
+    let spawned = std::thread::Builder::new().name("alert".into()).spawn(move || {
+        let mut player: Option<SoundPlayer> = None;
+        while let Ok(mut index) = rx.recv() {
+            while let Ok(newer) = rx.try_recv() {
+                index = newer;
+            }
+            if player.is_none() {
+                match SoundPlayer::on_sound_effects() {
+                    Ok(p) => player = Some(p),
+                    Err(e) => {
+                        eprintln!("springboard: alert sound: {e}");
+                        continue;
+                    }
+                }
+            }
+            if let Some(p) = player.as_mut() {
+                if let Err(e) = p.alert(index, 1.0) {
+                    eprintln!("springboard: alert sound: {e}");
+                    // the connection may be stale (the server restarted): reconnect on the next alert
+                    player = None;
+                }
+            }
+        }
+    });
+    if let Err(e) = spawned {
+        eprintln!("springboard: alert worker: {e}");
     }
     tx
 }
