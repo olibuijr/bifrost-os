@@ -106,6 +106,7 @@ pub const ACTIONS: &[Action] = &[
     Action::ExportAt50,
     Action::ExportAt100,
     Action::ExportAt200,
+    Action::Print,
 ];
 
 /// The toolbar buttons, in order. The rest are in the menus only.
@@ -131,7 +132,6 @@ const TOOLBAR: &[Action] = &[
     Action::Saturate,
     Action::Desaturate,
     Action::ResetColour,
-    Action::Print,
 ];
 
 impl Action {
