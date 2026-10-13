@@ -1746,6 +1746,24 @@ Gaps, decided and recorded: no `CSSearchQuery` (an app searching its own index; 
 types beyond the five above, no completion handler or error for index calls, and the panel does not draw the thumbnail yet
 (it is stored with the item). Items of an app are searched only while it is installed; they are not removed on uninstall.
 
+### Completion, errors, batches and extended attributes
+
+`bifrost_app::search_index_batch::SearchIndexLedger` is the app's model of its index (the shell index does not acknowledge
+calls). It validates like the shell and answers with `Result<(), CSIndexError>`; only accepted calls are sent.
+`CSIndexErrorCode`: `IndexUnavailableError` (ledger `close()`), `InvalidItemError` (empty or over-long identifier or domain, or
+more than `MAX_ATTRIBUTE_BYTES` of text; `item_position` names the item; nothing from that call is indexed),
+`InvalidClientStateError` (no open batch, nested `begin_batch`, state over 250 bytes), `RemoteConnectionError` (declared; the
+shell never reports it yet) and `QuotaExceeded` (a call would pass `MAX_INDEXED_ITEMS` = 1000; no silent eviction).
+`CSSearchableIndex` gets `index_searchable_items_with_completion`, `delete_searchable_items_with_completion`,
+`delete_all_searchable_items_with_completion`, `end_batch_with_client_state` and `fetch_last_client_state`; `begin_batch()` is on
+the ledger. A batch holds calls back and commits all or none; `fetch_last_client_state` returns the last committed state.
+
+`CSSearchableItemAttributeSet` also has `content_type`, `content_creation_date` and `content_modification_date` (Unix seconds),
+`author_names`, `display_name` (shown instead of `title`; a localized title still wins) and `ranking_hint`.
+`CSCustomAttributeKey::new(name, searchable)` with `custom_value(&key, value)`: searchable values are searched, others are kept
+but not. Type, authors, `YYYY-MM-DD` dates and searchable custom values are folded into the shell keywords, so `search_items`
+matches them. The wire format is unchanged. Gap: the shell does not use `ranking_hint` yet, and `RemoteConnectionError` is never raised.
+
 ## Table columns and shared panels (NSTableView, NSFontPanel, NSColorPanel parity)
 
 Code: `springboard/ui/src/table.rs`, `springboard/ui/src/panels.rs` (SDK: `bifrost_app::controls::table`, `controls::panels`). Pure models with unit tests.

@@ -16,6 +16,22 @@ use crate::Ctx;
 pub struct CustomAttribute {
     pub key: String,
     pub value: String,
+    /// `CSCustomAttributeKey.isSearchable` inverted so the default stays searchable: true keeps the value out of the keywords
+    pub unsearchable: bool,
+}
+
+/// `CSCustomAttributeKey`: an app-defined attribute name. A searchable key folds its values into the item's keywords.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CSCustomAttributeKey {
+    pub key_name: String,
+    pub searchable: bool,
+}
+
+impl CSCustomAttributeKey {
+    /// `init(keyName:searchable:searchableByDefault:unique:multiValued:)` reduced to the part the index uses.
+    pub fn new(key_name: &str, searchable: bool) -> Self {
+        CSCustomAttributeKey { key_name: key_name.into(), searchable }
+    }
 }
 
 /// A person the item relates to (a sender, an author, an attendee). The display name and the handles are
@@ -69,6 +85,32 @@ pub struct CSSearchableItemAttributeSet {
     pub persons: Vec<Person>,
     /// Title per language. When it has a text for the current locale, that text is indexed instead of `title`.
     pub title_localized: Option<LocalizedString>,
+    /// `contentType`: a type identifier such as `public.text`, searched as a keyword
+    pub content_type: String,
+    /// `contentCreationDate`: seconds since the Unix epoch (UTC), searched as `YYYY-MM-DD`
+    pub content_creation_date: Option<i64>,
+    /// `contentModificationDate`: seconds since the Unix epoch (UTC), searched as `YYYY-MM-DD`
+    pub content_modification_date: Option<i64>,
+    /// `authorNames`, searched by name
+    pub author_names: Vec<String>,
+    /// `displayName`: shown instead of `title` when not empty (a localized title still wins)
+    pub display_name: String,
+    /// `rankingHint`: a higher value ranks the item higher; kept with the item for the Search panel
+    pub ranking_hint: Option<i32>,
+}
+
+/// `YYYY-MM-DD` of a Unix timestamp (proleptic Gregorian, UTC).
+fn iso_date(secs: i64) -> String {
+    let z = secs.div_euclid(86_400) + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{y:04}-{m:02}-{d:02}")
 }
 
 impl CSSearchableItemAttributeSet {
@@ -77,7 +119,36 @@ impl CSSearchableItemAttributeSet {
     }
 
     pub fn custom_attribute(mut self, key: &str, value: &str) -> Self {
-        self.custom.push(CustomAttribute { key: key.into(), value: value.into() });
+        self.custom.push(CustomAttribute { key: key.into(), value: value.into(), unsearchable: false });
+        self
+    }
+    /// `setValue(_:forCustomKey:)`: the value is searched only when the key is searchable.
+    pub fn custom_value(mut self, key: &CSCustomAttributeKey, value: &str) -> Self {
+        self.custom.push(CustomAttribute { key: key.key_name.clone(), value: value.into(), unsearchable: !key.searchable });
+        self
+    }
+    pub fn content_type(mut self, v: &str) -> Self {
+        self.content_type = v.into();
+        self
+    }
+    pub fn content_creation_date(mut self, secs: i64) -> Self {
+        self.content_creation_date = Some(secs);
+        self
+    }
+    pub fn content_modification_date(mut self, secs: i64) -> Self {
+        self.content_modification_date = Some(secs);
+        self
+    }
+    pub fn author_names(mut self, v: &[&str]) -> Self {
+        self.author_names = v.iter().map(|s| s.to_string()).collect();
+        self
+    }
+    pub fn display_name(mut self, v: &str) -> Self {
+        self.display_name = v.into();
+        self
+    }
+    pub fn ranking_hint(mut self, v: i32) -> Self {
+        self.ranking_hint = Some(v);
         self
     }
     pub fn person(mut self, person: Person) -> Self {
@@ -109,12 +180,18 @@ impl CSSearchableItemAttributeSet {
     /// for the locale. Custom values, person names and handles are appended to the keywords, skipping empty and
     /// repeated values; the wire codec keeps only the first `MAX_KEYWORDS`, so explicit keywords come first.
     fn wire_text(&self, locale: &Locale) -> (String, Vec<String>) {
-        let title = self.title_localized.as_ref().and_then(|t| t.localized_string(locale)).filter(|t| !t.is_empty()).unwrap_or(self.title.as_str()).to_string();
+        let base = if self.display_name.is_empty() { self.title.as_str() } else { self.display_name.as_str() };
+        let title = self.title_localized.as_ref().and_then(|t| t.localized_string(locale)).filter(|t| !t.is_empty()).unwrap_or(base).to_string();
         let mut keywords = self.keywords.clone();
+        let dates = [self.content_creation_date, self.content_modification_date].map(|d| d.map(iso_date).unwrap_or_default());
         let extra = self
             .custom
             .iter()
+            .filter(|c| !c.unsearchable)
             .map(|c| c.value.as_str())
+            .chain(self.author_names.iter().map(|a| a.as_str()))
+            .chain(std::iter::once(self.content_type.as_str()))
+            .chain(dates.iter().map(|d| d.as_str()))
             .chain(self.persons.iter().flat_map(|p| std::iter::once(p.display_name.as_str()).chain(p.handles.iter().map(|h| h.as_str()))));
         for text in extra {
             if !text.is_empty() && !keywords.iter().any(|k| k.as_str() == text) {
@@ -356,6 +433,39 @@ mod tests {
         let data: &'static [u8] = Box::leak(std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/SFUI.ttf")).unwrap().into_boxed_slice());
         let cfg = Configure { w: 100, h: 100, scale: 1.0, safe_top: 0.0, safe_bottom: 0.0, dark: true, text_scale: 1.0, reduce_motion: false };
         Ctx::testing(Ui::new(Font::parse(data).unwrap(), 1.0), cfg)
+    }
+
+    #[test]
+    fn extended_attributes_round_trip_and_are_searched() {
+        let secret = CSCustomAttributeKey::new("pin", false);
+        let tag = CSCustomAttributeKey::new("tag", true);
+        let set = CSSearchableItemAttributeSet::new("Report")
+            .display_name("Q3 Report")
+            .content_type("public.text")
+            .content_creation_date(1_700_000_000)
+            .content_modification_date(0)
+            .author_names(&["Ada Lovelace"])
+            .ranking_hint(5)
+            .custom_value(&tag, "finance")
+            .custom_value(&secret, "9999");
+        assert_eq!(set.ranking_hint, Some(5));
+        assert_eq!(set.content_creation_date, Some(1_700_000_000));
+        let items = [CSSearchableItem::new("r", "docs", set), CSSearchableItem::new("o", "docs", CSSearchableItemAttributeSet::new("Other"))];
+        let ids = |q: &str| -> Vec<String> { search_items(&SearchQuery::new(q), &items).unwrap().iter().map(|i| i.unique_identifier.clone()).collect() };
+        assert_eq!(ids("lovelace"), ["r"]);
+        assert_eq!(ids("finance"), ["r"]);
+        assert_eq!(ids("public.text"), ["r"]);
+        assert_eq!(ids("2023-11-14"), ["r"]);
+        assert_eq!(ids("1970-01-01"), ["r"]);
+        assert_eq!(ids("q3"), ["r"]);
+        assert!(ids("9999").is_empty());
+    }
+
+    #[test]
+    fn iso_date_handles_epoch_and_leap_days() {
+        assert_eq!(iso_date(0), "1970-01-01");
+        assert_eq!(iso_date(951_782_400), "2000-02-29");
+        assert_eq!(iso_date(-86_400), "1969-12-31");
     }
 
     fn item(id: &str) -> CSSearchableItem {

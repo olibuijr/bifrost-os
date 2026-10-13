@@ -137,6 +137,7 @@ pub mod donation;
 pub mod donations;
 pub mod extension;
 pub mod quicksearch;
+pub mod search_index_batch;
 pub mod visual_search;
 pub mod data_scanner;
 pub mod sign_in;
