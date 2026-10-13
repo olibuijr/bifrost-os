@@ -3,16 +3,16 @@
   "doc": "https://developer.apple.com/documentation/observation",
   "macos_since": "14.0",
   "status": "partial",
-  "bifrost": "springboard/sdk/src/observable.rs (bifrost_app::observable::Observable), springboard/ui/src/observe.rs (Observable<T>), springboard/sdk/src/process_info.rs (change observers); springboard/sdk/src/observable.rs (with_observation_tracking, Observations)",
-  "summary": "BifrOSt has manual value observation: an Observable<T> that notifies subscribers only when the value changes, with Combine-style sink, map and remove_duplicates. A set made inside a subscriber is queued and delivered in order, and cancelling a subscriber during a change sticks. with_observation_tracking records the observables a closure reads and fires one on-change callback; Observable::observations pulls changes in order. It still has no @Observable macro, no tracking options or tokens, no continuous observation, and no async sequence.",
+  "bifrost": "springboard/sdk/src/observable.rs (bifrost_app::observable::Observable), springboard/ui/src/observe.rs (Observable<T>), springboard/sdk/src/process_info.rs (change observers); springboard/sdk/src/observable.rs (with_observation_tracking, Observations), springboard/sdk/src/observable_object.rs (observable_model!)",
+  "summary": "BifrOSt has manual value observation: an Observable<T> that notifies subscribers only when the value changes, with Combine-style sink, map and remove_duplicates. A set made inside a subscriber is queued and delivered in order, and cancelling a subscriber during a change sticks. with_observation_tracking records the observables a closure reads and fires one on-change callback; Observable::observations pulls changes in order. A declarative observable_model! macro gives a model struct with one change publisher, so a property write notifies the owner. It still has no derive, no tracking options or tokens, no continuous observation, and no async sequence.",
   "rea_evidence": "ev_59ddd532abf1677b1e3304c8d7443c1ffaef9a4e65513f0e7e8dd952321415d0",
   "features": [
     {
       "feature": "Observable conformance (@Observable macro)",
       "apple": "Observable() macro, Observable protocol",
-      "bifrost": "none (Rust; no macro)",
-      "status": "gap",
-      "note": "No per-type macro that synthesizes change notification for every stored property. Observable<T> wraps one whole value, not a model object's properties."
+      "bifrost": "springboard/sdk/src/observable_object.rs (observable_model! macro)",
+      "status": "partial",
+      "note": "Declarative macro: observable_model! { struct Name { field: T = init } } gives a struct whose fields are Observable<T>, all linked to one ObservableObject publisher. No derive, so no per-property opt-out (ObservationIgnored) and no computed properties. Built on parity/team-a-09; not yet verified on Midget."
     },
     {
       "feature": "Change notification on value change",
@@ -58,7 +58,7 @@
     }
   ],
   "gaps": [
-    "No @Observable macro equivalent: each Observable must be wired by hand, and with_observation_tracking tracks only SDK Observable reads.",
+    "No derive for the @Observable macro: model properties are listed in observable_model!, and there is no per-property opt-out. with_observation_tracking tracks only SDK Observable reads.",
     "No withContinuousObservation(options:apply:), ObservationTracking.Options, Event or Token: with_observation_tracking is one-shot and returns only the closure value.",
     "Observations is pull-based (try_next), not an AsyncSequence; there is no executor or suspension in the pure std model.",
     "docs/bifrost-ui.md:1435 still describes the old re-entrant set limit; that shared doc is out of scope for this change and is listed for a later update.",
