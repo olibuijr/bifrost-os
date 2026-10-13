@@ -30,6 +30,7 @@ mod jiggle;
 pub mod camera;
 pub mod magnifier;
 pub mod calendar;
+pub mod contactextras;
 pub mod contactstore;
 pub mod books;
 pub mod cache;

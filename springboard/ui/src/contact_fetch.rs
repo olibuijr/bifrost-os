@@ -14,11 +14,14 @@ pub enum Key {
     Emails,
     Address,
     Note,
+    Urls,
+    Birthday,
+    Dates,
 }
 
 impl Key {
     /// Every key, in declaration order.
-    pub const ALL: [Key; 7] = [
+    pub const ALL: [Key; 10] = [
         Key::GivenName,
         Key::FamilyName,
         Key::Organization,
@@ -26,6 +29,9 @@ impl Key {
         Key::Emails,
         Key::Address,
         Key::Note,
+        Key::Urls,
+        Key::Birthday,
+        Key::Dates,
     ];
 }
 
@@ -40,6 +46,9 @@ impl Key {
             Key::Emails => "emails",
             Key::Address => "address",
             Key::Note => "note",
+            Key::Urls => "urls",
+            Key::Birthday => "birthday",
+            Key::Dates => "dates",
         }
     }
 
@@ -54,6 +63,82 @@ impl Key {
 pub enum Value {
     Text(String),
     List(Vec<String>),
+    /// Labeled multi-values (`CNLabeledValue`): phone numbers, email addresses, URLs.
+    Labeled(Vec<LabeledValue>),
+    /// A date given as components (`birthday`).
+    Date(DateComponents),
+    /// Labeled dates (`dates`).
+    Dates(Vec<(String, DateComponents)>),
+}
+
+/// `CNLabelHome`, `CNLabelWork`, `CNLabelOther` and the phone labels. The labels are plain names, so a label the
+/// person typed is stored the same way.
+pub const LABEL_HOME: &str = "home";
+pub const LABEL_WORK: &str = "work";
+pub const LABEL_OTHER: &str = "other";
+/// `CNLabelPhoneNumberMobile`.
+pub const LABEL_PHONE_MOBILE: &str = "mobile";
+/// `CNLabelPhoneNumberMain`.
+pub const LABEL_PHONE_MAIN: &str = "main";
+
+/// One entry of a multi-value property (`CNLabeledValue`): a label, a value and an identifier that is stable within
+/// the contact.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LabeledValue {
+    pub label: String,
+    pub value: String,
+    pub identifier: String,
+}
+
+impl LabeledValue {
+    /// An entry whose identifier is derived from its position by [`LabeledValue::numbered`].
+    pub fn new(label: &str, value: &str) -> Self {
+        LabeledValue { label: label.into(), value: value.into(), identifier: String::new() }
+    }
+
+    /// The entries with identifiers `1`, `2`, ... in order, so the same list always has the same identifiers.
+    pub fn numbered(mut items: Vec<LabeledValue>) -> Vec<LabeledValue> {
+        for (i, item) in items.iter_mut().enumerate() {
+            item.identifier = (i + 1).to_string();
+        }
+        items
+    }
+}
+
+/// A date as components (`DateComponents`). A birthday may lack the year.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DateComponents {
+    pub year: Option<i32>,
+    pub month: u8,
+    pub day: u8,
+}
+
+impl DateComponents {
+    /// The components, or `None` for a month outside 1..=12 or a day outside 1..=31.
+    pub fn new(year: Option<i32>, month: u8, day: u8) -> Option<Self> {
+        ((1..=12).contains(&month) && (1..=31).contains(&day)).then_some(DateComponents { year, month, day })
+    }
+
+    /// `YYYY-MM-DD`, or `--MM-DD` without a year.
+    pub fn to_text(self) -> String {
+        match self.year {
+            Some(y) => format!("{y:04}-{:02}-{:02}", self.month, self.day),
+            None => format!("--{:02}-{:02}", self.month, self.day),
+        }
+    }
+
+    /// Reads what [`DateComponents::to_text`] wrote.
+    pub fn from_text(text: &str) -> Option<Self> {
+        let (year, rest) = match text.strip_prefix("--") {
+            Some(rest) => (None, rest.to_string()),
+            None => {
+                let (y, rest) = text.split_once('-')?;
+                (Some(y.parse().ok()?), rest.to_string())
+            }
+        };
+        let (m, d) = rest.split_once('-')?;
+        DateComponents::new(year, m.parse().ok()?, d.parse().ok()?)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -108,6 +193,9 @@ impl Record {
         let blank = match &value {
             Value::Text(text) => text.trim().is_empty(),
             Value::List(items) => items.iter().all(|item| item.trim().is_empty()),
+            Value::Labeled(items) => items.iter().all(|item| item.value.trim().is_empty()),
+            Value::Date(_) => false,
+            Value::Dates(items) => items.is_empty(),
         };
         if blank {
             self.fields.remove(&key);
@@ -236,5 +324,29 @@ mod tests {
         r.set(Key::GivenName, Value::Text("Augusta".into()));
         let p = project(&r, &Keys::new(&[Key::GivenName]).unwrap());
         assert_eq!(p.text(Key::GivenName), Ok("Augusta"));
+    }
+
+    #[test]
+    fn labeled_values_get_stable_identifiers_and_blank_lists_are_dropped() {
+        let items = LabeledValue::numbered(vec![
+            LabeledValue::new(LABEL_HOME, "a@example.com"),
+            LabeledValue::new(LABEL_WORK, "b@example.com"),
+        ]);
+        assert_eq!(items[1].identifier, "2");
+        let mut r = Record::new(1);
+        r.set(Key::Emails, Value::Labeled(items));
+        assert!(r.get(Key::Emails).is_some());
+        r.set(Key::Emails, Value::Labeled(vec![LabeledValue::new(LABEL_HOME, " ")]));
+        assert_eq!(r.get(Key::Emails), None);
+    }
+
+    #[test]
+    fn date_components_validate_and_round_trip_with_and_without_a_year() {
+        assert_eq!(DateComponents::new(Some(1815), 12, 10).unwrap().to_text(), "1815-12-10");
+        assert_eq!(DateComponents::new(None, 3, 7).unwrap().to_text(), "--03-07");
+        assert_eq!(DateComponents::from_text("--03-07"), DateComponents::new(None, 3, 7));
+        assert_eq!(DateComponents::from_text("1815-12-10"), DateComponents::new(Some(1815), 12, 10));
+        assert_eq!(DateComponents::new(None, 13, 1), None);
+        assert_eq!(DateComponents::from_text("nonsense"), None);
     }
 }

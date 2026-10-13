@@ -13,7 +13,10 @@
 //! service is `springboard/src/shell/services/contacts.rs`, and the model is `bifrost_ui::contact_access` (every
 //! contact, a picked set read-only, or none) with the records in `bifrost_ui::contact_fetch`.
 pub use crate::controls::contact_access::{Choice, Error, Status};
-pub use crate::controls::contact_fetch::{Key, Record, Value};
+pub use crate::controls::contact_fetch::{
+    DateComponents, Key, LabeledValue, Record, Value, LABEL_HOME, LABEL_OTHER, LABEL_PHONE_MAIN, LABEL_PHONE_MOBILE,
+    LABEL_WORK,
+};
 use crate::controls::contact_access::Access;
 use crate::runtime::Ctx;
 use crate::service;
@@ -63,15 +66,47 @@ pub fn decode_contacts(reply: &Json) -> Option<Vec<Record>> {
 fn decode_record(v: &Json) -> Option<Record> {
     let mut record = Record::new(v.get("id")?.as_u64()?);
     for key in Key::ALL {
-        match v.get(key.name()) {
-            Some(Json::Str(text)) => record.set(key, Value::Text(text.clone())),
-            Some(Json::Arr(items)) => {
-                record.set(key, Value::List(items.iter().filter_map(|item| item.as_str().map(str::to_string)).collect()))
+        let value = match (key, v.get(key.name())) {
+            (Key::Phones | Key::Emails | Key::Urls, Some(Json::Arr(items))) => Some(Value::Labeled(decode_labeled(items))),
+            (Key::Birthday, Some(date)) => decode_date(date).map(Value::Date),
+            (Key::Dates, Some(Json::Arr(items))) => Some(Value::Dates(
+                items.iter().filter_map(|d| Some((d.get("label")?.as_str()?.to_string(), decode_date(d)?))).collect(),
+            )),
+            (_, Some(Json::Str(text))) => Some(Value::Text(text.clone())),
+            (_, Some(Json::Arr(items))) => {
+                Some(Value::List(items.iter().filter_map(|item| item.as_str().map(str::to_string)).collect()))
             }
-            _ => {}
+            _ => None,
+        };
+        if let Some(value) = value {
+            record.set(key, value);
         }
     }
     Some(record)
+}
+
+/// Labeled entries from `{label, value, identifier?}` objects. An older reply holds plain strings: each becomes an
+/// entry with no label. Identifiers the reply lacks are numbered by position.
+fn decode_labeled(items: &[Json]) -> Vec<LabeledValue> {
+    let entries = items
+        .iter()
+        .filter_map(|item| match item {
+            Json::Str(value) => Some(LabeledValue::new("", value)),
+            Json::Obj(_) => {
+                let mut entry = LabeledValue::new(item.get("label").and_then(Json::as_str).unwrap_or(""), item.get("value")?.as_str()?);
+                entry.identifier = item.get("identifier").and_then(Json::as_str).unwrap_or("").to_string();
+                Some(entry)
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let missing = entries.iter().any(|e| e.identifier.is_empty());
+    if missing { LabeledValue::numbered(entries) } else { entries }
+}
+
+fn decode_date(v: &Json) -> Option<DateComponents> {
+    let part = |name: &str| v.get(name).and_then(Json::as_u64);
+    DateComponents::new(part("year").map(|y| y as i32), u8::try_from(part("month")?).ok()?, u8::try_from(part("day")?).ok()?)
 }
 
 /// The access an app would hold after a choice, for a test or a preview of the sheet. The shell applies the same rules.
@@ -116,7 +151,8 @@ mod tests {
         assert_eq!(people.len(), 2);
         assert_eq!(people[0].id, 1);
         assert_eq!(people[0].get(Key::GivenName), Some(&Value::Text("Ada".into())));
-        assert_eq!(people[0].get(Key::Emails), Some(&Value::List(vec!["ada@example.com".into()])));
+        let emails = Value::Labeled(vec![LabeledValue { label: "".into(), value: "ada@example.com".into(), identifier: "1".into() }]);
+        assert_eq!(people[0].get(Key::Emails), Some(&emails));
         assert_eq!(people[1].get(Key::GivenName), None);
     }
 
@@ -137,5 +173,46 @@ mod tests {
         assert_eq!(preview(Choice::All), Ok(Status::Authorized));
         assert_eq!(preview(Choice::Picked(BTreeSet::new())), Err(Error::NothingPicked));
         assert_eq!(preview(Choice::Deny), Ok(Status::Denied));
+    }
+
+    fn obj(fields: Vec<(&str, Json)>) -> Json {
+        Json::Obj(fields.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
+    }
+
+    fn entry(label: &str, value: &str, id: &str) -> Json {
+        obj(vec![("label", Json::Str(label.into())), ("value", Json::Str(value.into())), ("identifier", Json::Str(id.into()))])
+    }
+
+    #[test]
+    fn labeled_arrays_birthday_and_dates_decode() {
+        let row = obj(vec![
+            ("id", Json::Num(3.0)),
+            ("emails", Json::Arr(vec![entry("home", "a@x.is", "1"), entry("work", "b@x.is", "2")])),
+            ("birthday", obj(vec![("month", Json::Num(12.0)), ("day", Json::Num(10.0))])),
+            ("dates", Json::Arr(vec![obj(vec![("label", Json::Str("anniversary".into())), ("year", Json::Num(2001.0)), ("month", Json::Num(5.0)), ("day", Json::Num(6.0))])])),
+        ]);
+        let people = decode_contacts(&reply(vec![row])).unwrap();
+        let Some(Value::Labeled(emails)) = people[0].get(Key::Emails) else { panic!("emails") };
+        assert_eq!((emails.len(), emails[1].label.as_str(), emails[1].identifier.as_str()), (2, LABEL_WORK, "2"));
+        assert_eq!(people[0].get(Key::Birthday), Some(&Value::Date(DateComponents::new(None, 12, 10).unwrap())));
+        assert_eq!(
+            people[0].get(Key::Dates),
+            Some(&Value::Dates(vec![("anniversary".into(), DateComponents::new(Some(2001), 5, 6).unwrap())]))
+        );
+    }
+
+    #[test]
+    fn an_old_single_string_reply_decodes_to_a_one_element_list() {
+        let row = row(1, Json::Null, Json::Arr(vec![Json::Str("old@x.is".into())]));
+        let people = decode_contacts(&reply(vec![row])).unwrap();
+        let Some(Value::Labeled(emails)) = people[0].get(Key::Emails) else { panic!("emails") };
+        assert_eq!(emails.len(), 1);
+        assert_eq!(emails[0].value, "old@x.is");
+    }
+
+    #[test]
+    fn a_bad_birthday_is_left_out() {
+        let row = obj(vec![("id", Json::Num(1.0)), ("birthday", obj(vec![("month", Json::Num(13.0)), ("day", Json::Num(1.0))]))]);
+        assert_eq!(decode_contacts(&reply(vec![row])).unwrap()[0].get(Key::Birthday), None);
     }
 }
