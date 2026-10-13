@@ -132,6 +132,10 @@ impl Files {
         self.index_opened(&e);
         if e.is_dir {
             self.navigate(e.path, true)
+        } else if Self::is_archive(&e) && !self.in_bin() {
+            // opening an archive expands it next to itself
+            let dest = e.path.parent().map(Path::to_path_buf).unwrap_or_else(|| self.path.clone());
+            self.start_job("Expanding", JobKind::Extract, vec![e.path], dest);
         } else {
             let path = e.path;
             DispatchQueue::global(Qos::Utility).async_(move || {

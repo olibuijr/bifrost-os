@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- Expands .tar.xz, .tar.bz2, .tar.zst and single .gz/.bz2/.xz/.zst files through the shared archive module, the same one Files uses; xz is no longer refused.
+
 ## 0.1.0
 
 - New app Archive (`is.olibuijr.archive.desktop`): expands zip, tar and gzipped tar (.tar.gz, .tgz) archives beside

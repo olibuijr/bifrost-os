@@ -21,7 +21,7 @@ use springboard::files::{
     fs::{self, Entry, Kind, Sort},
     handoff, icons,
     tags::{sidecar_path, Tag, TagIndex},
-    trash, zip,
+    trash, archive,
 };
 use springboard::shell::clock::Wall;
 
@@ -773,7 +773,7 @@ mod tests {
         std::fs::write(dir.join("a.txt"), "hello zip").unwrap();
         let (tx, _rx) = feed();
         let cancel = AtomicBool::new(false);
-        let made = compress_now(&[dir.join("a.txt")], &dir, &cancel, &tx);
+        let made = compress_now(&[dir.join("a.txt")], &dir, archive::Format::Zip, &cancel, &tx);
         let archive = made.done.first().expect("archive written").clone();
         assert!(archive.ends_with("a.txt.zip"));
         let out = extract_now(&archive, &dir, &cancel, &tx);

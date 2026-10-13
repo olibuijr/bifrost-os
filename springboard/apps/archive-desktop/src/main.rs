@@ -53,10 +53,9 @@ fn request_for(path: &Path) -> Result<Request, String> {
     if path.is_dir() {
         return Ok(Request { op: Op::Compress, path: path.to_path_buf() });
     }
-    match archive::kind_of(&name_of(path)) {
-        // xz is accepted here so the job reports the missing decoder in the history, not a silent refusal
-        Some(_) => Ok(Request { op: Op::Expand, path: path.to_path_buf() }),
-        None => Err(format!("{} is not an archive or a folder.", name_of(path))),
+    match springboard::files::archive::is_archive(&name_of(path)) {
+        true => Ok(Request { op: Op::Expand, path: path.to_path_buf() }),
+        false => Err(format!("{} is not an archive or a folder.", name_of(path))),
     }
 }
 

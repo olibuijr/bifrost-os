@@ -7,6 +7,7 @@
 //! a frame.
 
 pub mod alert;
+pub mod archive;
 pub mod batch;
 mod draw;
 pub mod find;
@@ -977,7 +978,7 @@ impl Files {
             menu.items.retain(|a| *a != Action::NewFolder);
         }
         if let Subject::Entry(i) = subject {
-            if d.entries.get(i).is_some_and(|e| !e.is_dir && e.name.to_lowercase().ends_with(".zip")) {
+            if d.entries.get(i).is_some_and(|e| !e.is_dir && archive::is_archive(&e.name)) {
                 menu.items.insert(0, Action::Extract);
             }
         }
@@ -1026,12 +1027,12 @@ impl Files {
             (Action::Compress, Some(e)) => {
                 let into = e.path.parent().map(Path::to_path_buf).unwrap_or(dir);
                 let src = vec![e.path.clone()];
-                self.spawn_op("compress", move || zip::create(&src, &into, &mut |_, _| true).map(|_| ()));
+                self.spawn_op("compress", move || archive::create(&src, &into, archive::Format::Zip, &mut |_, _| true).map(|_| ()));
             }
             (Action::Extract, Some(e)) => {
                 let into = e.path.parent().map(Path::to_path_buf).unwrap_or(dir);
                 let src = e.path.clone();
-                self.spawn_op("extract", move || zip::extract(&src, &into, &mut |_, _| true).map(|_| ()));
+                self.spawn_op("extract", move || archive::extract(&src, &into, &mut |_, _| true).map(|_| ()));
             }
             (Action::Tag, Some(e)) => {
                 let cur = self.tags.tags(&e.path).first().copied();

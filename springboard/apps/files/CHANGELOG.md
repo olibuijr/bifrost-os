@@ -1,3 +1,7 @@
+## 1.23.0 — 2026-10-13
+
+- Opening an archive (double-click) expands it next to itself; Expand now handles zip, tar, tar.gz, tar.bz2, tar.xz, tar.zst and single .gz/.bz2/.xz/.zst files. The context menu adds Compress as TAR.GZ and Compress as TAR.XZ beside Compress (zip). The shared code is `springboard::files::archive`.
+
 ## 1.22.0 — 2026-10-12
 
 - Smart Folders: saved searches in a Smart Folders section of the sidebar. Each names a scope folder and filters it by words in the name (every word, ignoring case), item type (the same types as the search filter), a colour tag and an age in days. A smart folder lists its matches sorted by name (up to 1000), is read-only like Tags, and shows its name in the path bar and title.
