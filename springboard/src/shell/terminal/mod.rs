@@ -204,6 +204,8 @@ pub struct TerminalUi {
     pub login_shell: Option<String>,
     /// the saved window group opens when the Terminal starts
     pub group_launch: bool,
+    /// the colour profile after Basic in use (an index into `profile_table::PROFILES`); None draws the numbered theme
+    pub profile: Option<usize>,
     /// Close other tabs named running programs and waits for a second choice
     confirm_others: bool,
 }
@@ -243,6 +245,7 @@ impl Default for TerminalUi {
             mouse_reporting: true,
             login_shell: None,
             group_launch: false,
+            profile: None,
             confirm_others: false,
         }
     }
@@ -267,6 +270,10 @@ impl TerminalUi {
         self.mouse_reporting = prefs.get("terminal.mouse") != Some("0");
         self.login_shell = prefs.get(startup::SHELL_KEY).filter(|path| !path.is_empty()).map(str::to_string);
         self.group_launch = prefs.get(startup::LAUNCH_KEY) == Some("1");
+        self.profile = prefs
+            .get("terminal.profile")
+            .and_then(|value| value.parse::<usize>().ok())
+            .filter(|p| (1..profile_table::PROFILES.len()).contains(p));
     }
     pub fn next_wake(&self) -> Option<f64> {
         Some(if self.panel == Panel::Processes {

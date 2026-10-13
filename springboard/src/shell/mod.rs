@@ -4076,7 +4076,7 @@ impl Shell {
         let size = self.ui.pt(termcore::zoom::SIZES[self.terminal_ui.settings.zoom] as f32);
         match Terminal::spawn(self.mono, self.term_area(), size, argv) {
             Ok(mut term) => {
-                term.appearance(self.terminal_ui.settings.theme, size);
+                term.appearance_with(self.terminal_ui.settings.theme, self.terminal_scheme(), size);
                 term.set_cursor(Some(self.terminal_ui.cursor.shape()), self.terminal_ui.blink);
                 term.set_mouse_reporting(self.terminal_ui.mouse_reporting);
                 if let Some(dir) = dir { term.write(format!("cd '{}'\r", dir.replace('\'', "'\\''")).as_bytes()); }
@@ -4183,7 +4183,7 @@ impl Shell {
     fn draw_terminal(&mut self, s: &mut Surface, t: f64) {
         // the canvas covers the area, so only the strips around it need paint
         let (_, top, w, h) = self.term_area();
-        let bg = term::theme_background(self.terminal_ui.settings.theme);
+        let bg = self.terminal_background();
         let (w, top, bottom) = (w as usize, top as usize, (top + h) as usize);
         s.fill_rect(0, 0, w, top, bg);
         if self.term.is_some() {

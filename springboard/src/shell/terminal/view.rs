@@ -608,7 +608,7 @@ impl Shell {
                             termcore::zoom::SIZES[self.terminal_ui.settings.zoom],
                             menu_key(i).unwrap_or_default()
                         ),
-                        3 => THEMES[self.terminal_ui.settings.theme].name.into(),
+                        3 => profiles::scheme_name(self.terminal_ui.settings.theme, self.terminal_ui.profile).into(),
                         16 => self.terminal_ui.cursor.label().into(),
                         17 => String::from(if self.terminal_ui.blink { "On" } else { "Off" }),
                         18 => String::from(if self.terminal_ui.secure { "On" } else { "Off" }),

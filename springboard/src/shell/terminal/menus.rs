@@ -133,8 +133,14 @@ impl Shell {
                 self.terminal_appearance();
             }
             4 => {
-                self.terminal_ui.settings.theme =
-                    termcore::palette::next_theme(self.terminal_ui.settings.theme);
+                let (theme, profile) = profiles::next_scheme(
+                    self.terminal_ui.settings.theme,
+                    self.terminal_ui.profile,
+                    THEMES.len(),
+                    profile_table::PROFILES.len(),
+                );
+                self.terminal_ui.settings.theme = theme;
+                self.terminal_ui.profile = profile;
                 self.terminal_appearance();
             }
             5 => {

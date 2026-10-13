@@ -611,6 +611,32 @@ fn login_shell_and_launch_group_are_chosen_in_the_menu_and_reload() {
 }
 
 #[test]
+fn the_colour_theme_cycles_into_the_profiles_and_persists() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    for step in 0..3 {
+        sh.terminal_action(4, 2000.0 + step as f64);
+    }
+    assert_eq!((sh.terminal_ui.settings.theme, sh.terminal_ui.profile), (2, Some(1)));
+    assert_eq!(sh.term.as_ref().unwrap().background(), pack(0, 0, 0, 255), "Pro is white on black");
+    assert_eq!(sh.terminal_background(), pack(0, 0, 0, 255), "and so is the strip around the grid");
+    let mut reloaded = TerminalUi::default();
+    reloaded.load(&sh.prefs);
+    assert_eq!(reloaded.profile, Some(1));
+    sh.new_terminal_tab(None);
+    assert_eq!(sh.term.as_ref().unwrap().background(), pack(0, 0, 0, 255), "a new tab starts in the profile");
+    for step in 0..7 {
+        sh.terminal_action(4, 2100.0 + step as f64);
+    }
+    assert_eq!(sh.terminal_ui.profile, Some(8));
+    assert!(sh.term.iter().all(|tab| tab.background() == pack(122, 37, 30, 255)), "every tab follows");
+    sh.terminal_action(4, 2200.0);
+    assert_eq!((sh.terminal_ui.settings.theme, sh.terminal_ui.profile), (0, None));
+    let mut again = TerminalUi::default();
+    again.load(&sh.prefs);
+    assert_eq!(again.profile, None);
+}
+
+#[test]
 fn terminal_help_opens_draws_and_closes() {
     let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
     sh.terminal_menu_action(item::HELP, 2000.0);

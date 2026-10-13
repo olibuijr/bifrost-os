@@ -16,6 +16,7 @@ use termcore::cell::{attr, Cell};
 use termcore::damage::{row_hash, with_shape, RowCache};
 use termcore::keys::{encode, Key, Mods};
 pub use termcore::select::Selection;
+use termcore::palette::Theme;
 use termcore::term::{CursorShape, Term};
 use marks::Marks;
 use pty::Pty;
@@ -144,6 +145,16 @@ pub fn background() -> u32 {
     px(THEME.bg)
 }
 
+/// The theme a session draws with: its profile's colours when it has them, else the numbered theme.
+fn scheme(profile: &Option<Theme>, index: usize) -> &Theme {
+    profile.as_ref().unwrap_or(&termcore::palette::THEMES[index])
+}
+
+/// The opaque pixel of an emulator colour, for chrome around the grid.
+pub fn color_pixel(c: termcore::palette::Rgb) -> u32 {
+    px(c)
+}
+
 /// The background pixel of theme `i`, for chrome around the grid.
 pub fn theme_background(i: usize) -> u32 {
     px(termcore::palette::THEMES[i.min(termcore::palette::THEMES.len() - 1)].bg)
@@ -160,6 +171,8 @@ pub struct Terminal {
     pty: Pty,
     font_data: &'static [u8],
     theme: usize,
+    /// colours from a profile, drawn instead of `theme`'s (the theme still decides nothing but the fallback)
+    profile: Option<Theme>,
     pub unread: bool,
     /// the program rang the bell while this tab was not on screen (cleared when it is)
     pub bell: bool,
@@ -229,7 +242,7 @@ impl Terminal {
         let history = history_lines();
         let mut term = Term::new(cols, rows, history);
         term.set_default_colors(THEME.fg, THEME.bg);
-        Ok(Terminal { pty, font_data, theme: 0, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true, marks: Marks::default(), osc_carry: Vec::new(), history, custom_title: None, mouse_reporting: true })
+        Ok(Terminal { pty, font_data, theme: 0, profile: None, unread: false, bell: false, search_match: None, find: Vec::new(), term, glyphs: GlyphCache::new(font, px_size), metrics, area, canvas: blank(area), damage: RowCache::new(), outbox: Vec::new(), selection: None, cursor: None, blink: false, blink_on: true, marks: Marks::default(), osc_carry: Vec::new(), history, custom_title: None, mouse_reporting: true })
     }
 
     /// The px rect the terminal occupies.
@@ -405,7 +418,7 @@ impl Terminal {
             let marked = mark_rows[y];
             let hash = with_shape(row_hash(cells, cursor.map(|c| c.col)), shape_code(shape) | if marked { MARKED } else { 0 });
             if self.damage.update(y, hash) {
-                paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, &termcore::palette::THEMES[self.theme]), y, cells, cols, cursor);
+                paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, scheme(&self.profile, self.theme)), y, cells, cols, cursor);
                 if marked {
                     paint_mark(&mut self.canvas, &self.metrics, y, y + 1 == rows);
                 }
@@ -481,7 +494,7 @@ impl Terminal {
             let marked = mark_rows[y];
             let hash = with_shape(row_hash(cells, cursor.map(|c| c.col)), shape_code(shape) | if marked { MARKED } else { 0 });
             if self.damage.update(y, hash) {
-                paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, &termcore::palette::THEMES[self.theme]), y, cells, cols, cursor);
+                paint_row(&mut self.canvas, &mut self.glyphs, (&self.metrics, scheme(&self.profile, self.theme)), y, cells, cols, cursor);
                 if marked {
                     paint_mark(&mut self.canvas, &self.metrics, y, y + 1 == rows);
                 }
@@ -508,7 +521,7 @@ impl Terminal {
         }
     }
 
-    pub fn background(&self) -> u32 { px(termcore::palette::THEMES[self.theme].bg) }
+    pub fn background(&self) -> u32 { px(scheme(&self.profile, self.theme).bg) }
 
     /// Tab caption: the title the program set, else the running job's name, else `shell N`.
     pub fn title(&self, index: usize) -> String {
@@ -524,9 +537,15 @@ impl Terminal {
     }
 
     pub fn appearance(&mut self, theme: usize, px_size: f32) {
+        self.appearance_with(theme, None, px_size);
+    }
+
+    /// Like `appearance`, with the colours of `profile` in place of the theme's when there is one.
+    pub fn appearance_with(&mut self, theme: usize, profile: Option<Theme>, px_size: f32) {
         self.theme = theme.min(termcore::palette::THEMES.len() - 1);
-        let theme = &termcore::palette::THEMES[self.theme];
-        self.term.set_default_colors(theme.fg, theme.bg);
+        self.profile = profile;
+        let colours = scheme(&self.profile, self.theme);
+        self.term.set_default_colors(colours.fg, colours.bg);
         let font = Font::parse(self.font_data).expect("validated terminal font");
         self.metrics = Metrics::new(&font, px_size);
         self.glyphs = GlyphCache::new(font, px_size);
@@ -994,5 +1013,20 @@ mod tests {
         assert!(!t.report_mouse(press, (1, 1)), "off: the terminal keeps the click");
         t.set_mouse_reporting(true);
         assert!(t.report_mouse(press, (1, 1)));
+    }
+
+    #[test]
+    fn a_profile_replaces_the_theme_colours_until_a_theme_is_chosen_again() {
+        let mut t = Terminal::spawn(font(), (0, 0, 400, 300), 20.0, &["/bin/sh", "-c", "read x"]).unwrap();
+        let ansi = termcore::palette::THEMES[0].ansi;
+        t.appearance_with(0, Some(Theme { name: "Test", fg: (1, 2, 3), bg: (10, 20, 30), ansi }), 20.0);
+        assert_eq!(t.background(), px((10, 20, 30)));
+        t.feed(b"x");
+        t.repaint();
+        let blank_row = (t.metrics.pad + 2 * t.metrics.ch + 1) as usize;
+        assert_eq!(t.canvas.px[blank_row * t.canvas.w + 1], px((10, 20, 30)), "the grid is painted in the profile background");
+        t.appearance(1, 20.0);
+        assert_eq!(t.background(), theme_background(1), "choosing a theme drops the profile");
+        assert_eq!(color_pixel((10, 20, 30)), px((10, 20, 30)));
     }
 }
