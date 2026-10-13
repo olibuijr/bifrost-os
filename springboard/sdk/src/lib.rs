@@ -216,6 +216,8 @@ pub mod workspace;
 pub mod service;
 pub mod search_ranking;
 pub mod audio_devices;
+/// Stream formats (`StreamFormat`), the voice-take format (`pcm16`) and buffer durations (`audio_format::duration_ms`).
+pub mod audio_format;
 pub mod focus_filter;
 pub mod gamepad_service;
 pub mod distributed;
