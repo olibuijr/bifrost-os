@@ -1,0 +1,26 @@
+{
+  "framework": "Core Haptics and feedback generators",
+  "doc": "https://developer.apple.com/documentation/corehaptics",
+  "macos_since": "",
+  "status": "partial",
+  "bifrost": "springboard/sdk/src/runtime.rs, springboard/proto/src/lib.rs, springboard/core/src/force_effect.rs, springboard/core/src/rumble.rs, springboard/src/bare/pad_rumble.rs, springboard/src/bare/vibrator.rs, springboard/src/shell/services/gamepad_service.rs, springboard/sdk/src/system_sound.rs",
+  "summary": "Haptic pulse patterns and game controller rumble exist as pure models, a vibrator check drives one Settings row, and the SDK sends a one-shot haptic request. No app can build or play a haptic pattern, and the shell has no handler for the one-shot request on this branch, so the request does nothing. Core Haptics is iOS 13.0 and later per the index and is Apple's haptic motor API, not a tablet framework of its own.",
+  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+  "features": [
+    {"feature": "One-shot feedback request (UIFeedbackGenerator style)", "apple": "UIFeedbackGenerator, prepare(), impact, selection and notification generators", "bifrost": "springboard/sdk/src/runtime.rs (haptic()), springboard/proto/src/lib.rs (ToShell::Haptic, tag 0x105)", "status": "gap", "note": "the SDK sends a parameterless request; no shell code handles tag 0x105 on this branch, so the pulse is not played"},
+    {"feature": "Pulse patterns (generic, alignment, level change)", "apple": "Feedback generator styles", "bifrost": "springboard/core/src/force_effect.rs (Pattern, pulse_effect, Device)", "status": "partial", "note": "three patterns with strengths and durations in a pure model; nothing drives the device with them"},
+    {"feature": "Haptic engine connection and pattern player", "apple": "CHHapticEngine, CHHapticPatternPlayer, CHHapticAdvancedPatternPlayer", "bifrost": "none", "status": "gap", "note": "no engine object for apps; no start, stop or reset of a pattern"},
+    {"feature": "Transient and continuous events with parameter curves", "apple": "CHHapticEvent, CHHapticEventParameter, CHHapticDynamicParameter, CHHapticParameterCurve", "bifrost": "springboard/core/src/force_effect.rs (envelope and effect kinds)", "status": "gap", "note": "the force-effect model has an envelope and constant, periodic, ramp and condition effects, but no event list and no real-time parameters"},
+    {"feature": "Haptic pattern files", "apple": "AHAP files, CHHapticPattern from a file", "bifrost": "none", "status": "gap", "note": "no pattern file format"},
+    {"feature": "Audio-coupled haptics", "apple": "CHHapticAudioResourceKey, looping and volume envelope", "bifrost": "springboard/sdk/src/system_sound.rs", "status": "gap", "note": "system sounds state that they carry no vibration; no audio resource with a haptic track"},
+    {"feature": "Game controller rumble", "apple": "Playing haptics on game controllers with Core Haptics", "bifrost": "springboard/core/src/rumble.rs, springboard/src/bare/pad_rumble.rs, springboard/src/shell/services/gamepad_service.rs", "status": "partial", "note": "two-motor rumble effect uploaded to the controller's input node and played or stopped; no pattern player"},
+    {"feature": "Device has a vibrator", "apple": "Device capability (haptic engine presence)", "bifrost": "springboard/src/bare/vibrator.rs (vibrator_available), springboard/src/shell/pages.rs (Keyboard Haptics row)", "status": "partial", "note": "checks two sysfs nodes; the answer only decides whether the Keyboard Haptics switch is offered"}
+  ],
+  "gaps": [
+    "The one-shot haptic request reaches no motor: the shell has no handler for it on this branch.",
+    "No haptic engine or pattern player for apps, and no AHAP file format.",
+    "No event parameters or real-time parameter curves for apps.",
+    "No audio-coupled haptics.",
+    "The vibrator check looks only at two sysfs nodes; the tablet's motor is not tested on hardware."
+  ]
+}

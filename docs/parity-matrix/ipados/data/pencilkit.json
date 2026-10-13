@@ -1,0 +1,34 @@
+{
+  "framework": "PencilKit",
+  "doc": "https://developer.apple.com/documentation/pencilkit",
+  "macos_since": "10.15",
+  "status": "partial",
+  "bifrost": "springboard/ui/src/drawing.rs, springboard/ui/src/stylus.rs, springboard/ui/src/tool_picker.rs, springboard/ui/src/lasso.rs, springboard/ui/src/markup_drawing.rs, springboard/sdk/src/drawing_model.rs, springboard/sdk/src/markup.rs, springboard/src/shell/markup.rs, springboard/apps/freeform-desktop/src/freeform.rs, springboard/apps/notes-desktop/src/notes/sketch.rs, springboard/proto/src/touch.rs",
+  "summary": "Stroke and drawing models with ink kinds, a stylus mapping, a tool picker state, lasso selection, Bezier import and stroke slicing exist as pure models with host tests, and two editors draw strokes and save PNG files. No app can embed a canvas, reopen a drawing as strokes, or recognise handwriting, and the touch wire carries no tilt or altitude. iPadOS 13.0 and later per the index.",
+  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
+  "features": [
+    {"feature": "Canvas view capturing pen and finger input", "apple": "PKCanvasView", "bifrost": "springboard/src/shell/markup.rs (Markup::touch), springboard/apps/freeform-desktop/src/freeform.rs, springboard/apps/notes-desktop/src/notes/sketch.rs", "status": "partial", "note": "the shell editor, Freeform and Notes each take touch events and stamp strokes; no SDK canvas view, so apps cannot embed one"},
+    {"feature": "Drawing model (PKDrawing)", "apple": "PKDrawing", "bifrost": "springboard/ui/src/drawing.rs, springboard/sdk/src/drawing_model.rs, springboard/apps/notes-desktop/src/notes/sketch.rs", "status": "partial", "note": "pure drawing model; Notes saves strokes beside the picture, the shell's editor keeps strokes only in memory"},
+    {"feature": "Stroke and point model (PKStroke, PKStrokePoint)", "apple": "PKStroke, PKStrokePath, PKStrokePoint", "bifrost": "springboard/ui/src/drawing.rs (StrokePoint), springboard/src/shell/markup.rs (Stroke)", "status": "partial", "note": "StrokePoint carries position, time offset, force, altitude and azimuth in the model; the editors store x and y only"},
+    {"feature": "Ink type (PKInk)", "apple": "PKInk: type, colour, width", "bifrost": "springboard/ui/src/drawing.rs (InkKind, width_range), springboard/src/shell/markup.rs (Tool)", "status": "partial", "note": "ink kinds with width ranges in the model; the editors fix width and opacity per tool"},
+    {"feature": "Pen, marker, pencil and eraser tools (PKInkingTool, PKEraserTool)", "apple": "PKInkingTool, PKEraserTool", "bifrost": "springboard/ui/src/drawing.rs (InkKind::Pen, Marker, Pencil), springboard/src/shell/markup.rs (enum Tool), springboard/apps/freeform-desktop/src/freeform.rs", "status": "partial", "note": "the shell has four tools and Freeform three; no stroke-level eraser in Freeform"},
+    {"feature": "Tool picker (PKToolPicker)", "apple": "PKToolPicker attached to a canvas", "bifrost": "springboard/ui/src/tool_picker.rs (ToolPicker, ToolItem), springboard/src/shell/markup.rs (TOOLS)", "status": "partial", "note": "the picker state is a model; no system palette that apps attach to a canvas, and no custom tools"},
+    {"feature": "Lasso selection and transform (PKLassoTool)", "apple": "PKLassoTool", "bifrost": "springboard/ui/src/lasso.rs", "status": "partial", "note": "selection model with host tests; no move or scale of selected strokes in an editor"},
+    {"feature": "Undo for drawings", "apple": "PKCanvasView undo through the undo manager", "bifrost": "springboard/src/shell/markup.rs (undo), springboard/ui/src/undo.rs", "status": "partial", "note": "stroke-level undo in the shell editor; the undo model is not connected to the Freeform or Notes editors"},
+    {"feature": "Bezier path import", "apple": "PKStrokePath from Bezier paths", "bifrost": "springboard/ui/src/drawing.rs (Drawing::from_path)", "status": "partial", "note": "paths are flattened to polylines, so curve data is not kept"},
+    {"feature": "Stroke slicing, interpolation and animation", "apple": "PKStrokePath interpolation, slicing", "bifrost": "springboard/ui/src/drawing.rs (Stroke::slice)", "status": "partial", "note": "slicing by length fraction exists; no interpolation or animation API for apps"},
+    {"feature": "Rendering a drawing to an image", "apple": "PKDrawing image(from:scale:)", "bifrost": "springboard/apps/notes-desktop/src/notes/sketch.rs, springboard/src/shell/markup.rs", "status": "partial", "note": "PNG output from the editors; no SDK call that renders a drawing at a chosen scale"},
+    {"feature": "Pressure, tilt and stylus input", "apple": "UITouch force, altitudeAngle, azimuthAngle", "bifrost": "springboard/ui/src/stylus.rs, springboard/proto/src/touch.rs (force and contact radius flags)", "status": "partial", "note": "the digitizer mapping exists; the touch wire carries force and radius when the panel reports them but no tilt, and the editors do not use force for width"},
+    {"feature": "Handwriting recognition", "apple": "PKStrokeRecognizer", "bifrost": "none", "status": "gap", "note": "no recogniser; springboard/sdk/src/spellcheck.rs works on typed text only"},
+    {"feature": "Scribble on non-text views", "apple": "Scribble interactions on a view", "bifrost": "none", "status": "gap", "note": "no handwriting path into text fields or other views"},
+    {"feature": "Pen button and tap gestures", "apple": "Apple Pencil double tap and squeeze", "bifrost": "none", "status": "gap", "note": "no pen button or tap events reach apps"},
+    {"feature": "Serialised drawing format and ink versions", "apple": "PKDrawing data, PKContentVersion", "bifrost": "none", "status": "gap", "note": "Notes writes its own .sketch file; no versioned format is shared with apps"}
+  ],
+  "gaps": [
+    "No SDK canvas view: apps cannot capture, draw, store or reopen strokes.",
+    "The touch wire has no tilt, altitude or azimuth, and the editors do not map pressure to width.",
+    "No handwriting recognition and no Scribble-style input.",
+    "No system tool picker that apps attach to a canvas; the editors keep their own tool rows.",
+    "No pen button or tap events, and no versioned drawing format shared between apps."
+  ]
+}
