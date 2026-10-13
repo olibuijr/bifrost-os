@@ -66,12 +66,14 @@ impl AppLinks {
     }
 }
 
-/// The host (without port) and the path of an http or https address. The path defaults to `/`.
-fn split_address(url: &str) -> Option<(&str, &str)> {
+/// The host (without user info or port) and the path of an http or https address. The path defaults to `/`.
+pub fn split_address(url: &str) -> Option<(&str, &str)> {
     let rest = url.strip_prefix("https://").or_else(|| url.strip_prefix("http://"))?;
     let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     let (authority, tail) = rest.split_at(end);
-    let host = authority.split(':').next().unwrap_or("");
+    // User info comes before the last `@`; without this `https://good.example:x@evil.example/` would read as `good.example`.
+    let host_port = authority.rsplit('@').next().unwrap_or("");
+    let host = host_port.split(':').next().unwrap_or("");
     if host.is_empty() {
         return None;
     }
@@ -133,6 +135,15 @@ mod tests {
         assert_eq!(links.resolve("ftp://example.com/a"), None);
         assert_eq!(links.resolve("https:///a"), None);
         assert_eq!(links.resolve("example.com/a"), None);
+    }
+
+    #[test]
+    fn user_info_does_not_change_the_host() {
+        let mut links = AppLinks::new();
+        links.claim("example.com", "web", &[]);
+        assert_eq!(links.resolve("https://example.com:x@evil.example/a"), None);
+        assert_eq!(links.resolve("https://evil.example@example.com/a"), Some("web"));
+        assert_eq!(split_address("https://u:p@Example.com:8443/a?b#c"), Some(("Example.com", "/a")));
     }
 
     #[test]

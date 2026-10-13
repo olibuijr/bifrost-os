@@ -127,7 +127,11 @@ impl AssociationFile {
                             .filter_map(|c| {
                                 let pattern = c.str_field("/")?;
                                 let exclude = matches!(c.get("exclude"), Some(Json::Bool(true)));
-                                Some(LinkComponent { pattern, exclude })
+                                // Query and fragment rules are not evaluated. An include rule that depends on them
+                                // could match too much, so it is dropped; an exclude rule is kept as a path rule so
+                                // that doubt keeps the link in the browser.
+                                let constrained = c.get("?").is_some() || c.get("#").is_some();
+                                (exclude || !constrained).then_some(LinkComponent { pattern, exclude })
                             })
                             .collect()
                     })
@@ -176,30 +180,45 @@ fn app_id_matches(entry: &str, bundle_id: &str) -> bool {
     }
 }
 
-/// Glob match where `*` stands for any run of bytes (including none) and every other byte matches itself.
+/// Glob match where `*` stands for any run of bytes (including none), `?` for exactly one byte and every other byte
+/// matches itself. Linear in the pattern length times the text length, with no recursion, because both come from a
+/// file a remote host serves.
 fn glob(pattern: &[u8], s: &[u8]) -> bool {
-    match pattern.split_first() {
-        None => s.is_empty(),
-        Some((b'*', rest)) => (0..=s.len()).any(|i| glob(rest, &s[i..])),
-        Some((c, rest)) => s.first() == Some(c) && glob(rest, &s[1..]),
+    let (mut p, mut i) = (0, 0);
+    // Where the last `*` was seen and the text position it currently swallows up to.
+    let mut star: Option<(usize, usize)> = None;
+    while i < s.len() {
+        match pattern.get(p) {
+            Some(b'*') => {
+                star = Some((p, i));
+                p += 1;
+            }
+            Some(&c) if c == b'?' || c == s[i] => {
+                p += 1;
+                i += 1;
+            }
+            _ => match star {
+                Some((sp, si)) => {
+                    p = sp + 1;
+                    i = si + 1;
+                    star = Some((sp, si + 1));
+                }
+                None => return false,
+            },
+        }
     }
+    pattern[p..].iter().all(|&c| c == b'*')
 }
 
-/// Splits an https URL into its lowercased host and its path (`/` when empty; the query and fragment are dropped).
-/// None for other schemes and for a URL without a host.
+/// Splits an https URL into its lowercased host and its path (`/` when empty; the query, fragment, port and user info
+/// are dropped). None for other schemes and for a URL without a host. Shares the address parsing of `AppLinks`.
 pub fn split_https(url: &str) -> Option<(String, String)> {
     let (scheme, rest) = url.split_once("://")?;
     if !scheme.eq_ignore_ascii_case("https") {
         return None;
     }
-    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-    let host = &rest[..end];
-    if host.is_empty() {
-        return None;
-    }
-    let after = &rest[end..];
-    let path_end = after.find(['?', '#']).unwrap_or(after.len());
-    let path = if after[..path_end].is_empty() { "/" } else { &after[..path_end] };
+    let normalized = format!("https://{rest}");
+    let (host, path) = bifrost_core::app_links::split_address(&normalized)?;
     Some((host.to_ascii_lowercase(), path.to_string()))
 }
 
@@ -393,6 +412,36 @@ mod tests {
         assert!(!glob(b"/a/*", b"/b/x"));
         assert!(!glob(b"/a", b"/a/"));
         assert!(glob(b"/*.html", b"/x/y.html"));
+        assert!(glob(b"/a/?", b"/a/b"));
+        assert!(!glob(b"/a/?", b"/a/"));
+        assert!(!glob(b"/a/?", b"/a/bc"));
+        assert!(glob(b"/a*b*c", b"/aXbYbZc"));
+        assert!(!glob(b"/a*b*c", b"/aXbYbZ"));
+        assert!(glob(b"/a**", b"/a"));
+    }
+
+    #[test]
+    fn glob_with_many_stars_does_not_blow_up() {
+        let pattern = [b"/".as_slice(), &b"*a".repeat(200), b"b"].concat();
+        let text = [b"/".as_slice(), &b"a".repeat(2000)].concat();
+        assert!(!glob(&pattern, &text));
+    }
+
+    #[test]
+    fn query_dependent_rules_are_not_treated_as_path_rules() {
+        let f = AssociationFile::parse(r#"{"applinks":{"details":[{"appIDs":["is.olibuijr.notes"],"components":[{"/":"/a","?":{"x":"y"}},{"/":"/b","?":{"x":"y"},"exclude":true},{"/":"/*"}]}]}}"#).unwrap();
+        let patterns: Vec<_> = f.details[0].components.iter().map(|c| (c.pattern.as_str(), c.exclude)).collect();
+        assert_eq!(patterns, [("/b", true), ("/*", false)], "an include rule that needs a query is dropped, an exclude rule is kept");
+        assert_eq!(f.route("/b", &["is.olibuijr.notes"]), None);
+        assert_eq!(f.route("/c", &["is.olibuijr.notes"]), Some("is.olibuijr.notes".into()));
+    }
+
+    #[test]
+    fn non_string_app_ids_and_empty_details_are_ignored() {
+        let f = AssociationFile::parse(r#"{"applinks":{"details":[{"appIDs":[1,"","is.olibuijr.a"],"components":[]},{"appIDs":["is.olibuijr.b"],"components":[{"/":"/x"}]}]}}"#).unwrap();
+        assert_eq!(f.details.len(), 1, "a detail with no rules is dropped");
+        assert_eq!(f.details[0].app_ids, ["is.olibuijr.b"]);
+        assert_eq!(AssociationFile::parse(r#"{"applinks":{"details":{}}}"#), None);
     }
 
     #[test]
@@ -402,6 +451,8 @@ mod tests {
         assert_eq!(split_https("https://example.com?q=1"), Some(("example.com".into(), "/".into())));
         assert_eq!(split_https("http://example.com/a"), None);
         assert_eq!(split_https("https:///a"), None);
+        assert_eq!(split_https("HTTPS://Example.com:8443/a"), Some(("example.com".into(), "/a".into())));
+        assert_eq!(split_https("https://example.com:x@evil.example/a"), Some(("evil.example".into(), "/a".into())));
         assert_eq!(split_https("mailto:a@b.c"), None);
     }
 }

@@ -68,7 +68,7 @@
       "apple": "applinks: apple-app-site-association domain verification that routes https links to the app",
       "bifrost": "springboard/sdk/src/bundle_resources.rs (AssociationFile::parse, AssociationFile::route, split_https)",
       "status": "partial",
-      "note": "Pure model of the domain association file: parses the applinks details (app ids, path rules with * and exclude, and the older paths list) and routes an https path to the installed app that claims it. Not wired: the file is not fetched or verified over https and the shell does not send https links to apps yet. The browser still claims http and https by default (springboard/src/shell/defaultapps.rs builtin). built on parity/team-a-06; not yet verified on Midget."
+      "note": "Pure model of the domain association file: parses the applinks details (app ids, path rules with * and ? and exclude, and the older paths list) and routes an https path to the installed app that claims it. Query and fragment rules are not evaluated. Not wired: the file is not fetched or verified over https, nothing calls the model, and the shell does not send https links to apps yet. springboard/core/src/app_links.rs holds a separate host and prefix claim registry that is not connected to this model. The browser still claims http and https by default (springboard/src/shell/defaultapps.rs builtin). built on parity/team-a-06; not yet verified on Midget."
     }
   ],
   "gaps": [
