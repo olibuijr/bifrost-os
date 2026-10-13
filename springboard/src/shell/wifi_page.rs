@@ -184,6 +184,8 @@ pub struct Sheet {
     label: Image,
     /// set for the Other Network sheet
     other: Option<Other>,
+    /// set for a one-field prompt from another Settings pane (`forms`)
+    form: Option<super::forms::Purpose>,
 }
 
 impl Sheet {
@@ -213,8 +215,30 @@ impl Sheet {
             join_off: ui.text("Join", 17.0, Weight::Semibold, rgba(235, 235, 245, 77)),
             label: ui.text("Password", 17.0, Weight::Regular, LABEL.now()),
             other: None,
+            form: None,
             ssid,
         }
+    }
+
+    /// A one-field prompt (`forms::Prompt`): its title, message, field label and button replace the password sheet's.
+    pub fn form(ui: &Ui, w: i32, t: f64, p: super::forms::Prompt) -> Self {
+        let mut sh = Sheet::new(ui, String::new(), w, t);
+        let message = ui.fit(&p.message, 13.0, ui.pt(CARD_W_PT - 40.0));
+        sh.field = TextField::new(ui, "", 17.0, p.secure, p.max);
+        sh.field.set_text(ui, &p.initial);
+        sh.prompt = ui.text(&message, 13.0, Weight::Semibold, LABEL.now());
+        sh.title = ui.text(&p.title, 17.0, Weight::Semibold, LABEL.now());
+        sh.join = ui.text(p.ok, 17.0, Weight::Semibold, BLUE);
+        sh.join_off = ui.text(p.ok, 17.0, Weight::Semibold, rgba(235, 235, 245, 77));
+        sh.label = ui.text(p.label, 17.0, Weight::Regular, LABEL.now());
+        sh.form = Some(p.purpose);
+        sh
+    }
+
+    /// What a prompt sheet collected, once its text is acceptable.
+    pub fn form_result(&self) -> Option<(super::forms::Purpose, String)> {
+        let purpose = self.form.clone()?;
+        super::forms::acceptable(&purpose, self.field.text()).then(|| (purpose, self.field.text().to_string()))
     }
 
     pub fn password(&self) -> &str {
@@ -240,6 +264,9 @@ impl Sheet {
     }
 
     pub fn can_join(&self) -> bool {
+        if let Some(p) = &self.form {
+            return super::forms::acceptable(p, self.field.text());
+        }
         match (&self.other, self.config()) {
             (Some(o), Some(cfg)) => cfg.problem().is_none() && (!o.security.is_enterprise() || o.acknowledged),
             _ => self.field.len() >= PSK_MIN,

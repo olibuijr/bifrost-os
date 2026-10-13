@@ -65,6 +65,8 @@ pub mod usernotif;
 pub mod extras;
 pub mod spotindex;
 pub mod sharing;
+pub mod forms;
+pub mod users_page;
 pub mod workspace;
 pub mod services;
 pub mod chrome_host;

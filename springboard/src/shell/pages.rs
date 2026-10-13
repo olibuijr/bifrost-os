@@ -111,6 +111,12 @@ pub enum PageId {
     Mouse,
     /// Settings > Users & Groups (desktop): the local account, login options and password
     Users,
+    /// Users & Groups > one account (the detail is its account name)
+    UserDetail,
+    /// Users & Groups > Groups
+    Groups,
+    /// Groups > one group (the detail is its name)
+    GroupDetail,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -276,6 +282,8 @@ pub enum Command {
     /// Analytics & Diagnostics: upload the bundle to the update server
     ShareDiagnostics,
     DeleteCrashLogs,
+    /// Users & Groups: delete an account or a group
+    Account(super::users_page::Danger),
 }
 
 /// The Reduce Transparency switch: Increase Contrast turns it on and locks it (the reference desktop's
@@ -331,6 +339,8 @@ pub enum Action {
     BackgroundAgentToggle(String),
     /// Fonts: draw `role` with this font file from now on (None is the default)
     Font(FontRole, Option<String>),
+    /// Users & Groups: add, promote, set a password, edit a group (see `users_page`)
+    Users(super::users_page::Edit),
 }
 
 /// Compile-time identity of this build (build.rs supplies the git fields).
@@ -859,23 +869,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 Group::new(vec![Item::new("Swap Left and Right Buttons").switch(o.swap_buttons, Action::Toggle(Toggle::SwapButtons))]).footer("The left button becomes the secondary button and the right button the primary one."),
             ],
         ),
-        PageId::Users => {
-            let account = super::account::load();
-            page(
-                "Users & Groups",
-                false,
-                vec![
-                    Group::new(vec![Item::new(account.full_name.as_str()).value(account.username.as_str())]).header("ACCOUNT").footer("The account this computer was set up with."),
-                    Group::new(vec![
-                        Item::new("Name and Password").switch(o.login_name_password, Action::Toggle(Toggle::LoginNamePassword)),
-                        Item::new("Password Hints").switch(o.login_hints, Action::Toggle(Toggle::LoginHints)),
-                    ])
-                    .header("LOGIN OPTIONS")
-                    .footer("Choose how the login window asks for this account."),
-                    Group::new(vec![Item::new("Change Password…").tint(Tint::Dim)]).header("PASSWORD").footer("Changing the password is not available yet."),
-                ],
-            )
-        }
+        PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, &super::users_page::View::load(), m.detail, "", o),
         PageId::Fonts => fonts_page(m),
         PageId::FontPick(role) => font_pick_page(m, role),
         PageId::Dictionary => page(

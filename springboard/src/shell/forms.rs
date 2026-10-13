@@ -14,7 +14,10 @@ pub enum Purpose {
     NewUserName { admin: bool, full: String },
     /// step 3: the password
     NewUserPassword { admin: bool, full: String, name: String },
-    ChangePassword { name: String },
+    /// the installed account proves its current password first
+    CurrentPassword { name: String },
+    /// `old` is the current password when the account is the installed one
+    ChangePassword { name: String, old: Option<String> },
     NewGroup,
 }
 
@@ -50,7 +53,11 @@ impl Prompt {
     }
 
     pub fn change_password(name: &str) -> Prompt {
-        Prompt { secure: true, max: 128, ..Prompt::new(Purpose::ChangePassword { name: name.into() }, "Change Password", &format!("Enter a new password for “{name}”."), "Password", "Change") }
+        Prompt { secure: true, max: 128, ..Prompt::new(Purpose::ChangePassword { name: name.into(), old: None }, "Change Password", &format!("Enter a new password for “{name}”."), "Password", "Change") }
+    }
+
+    pub fn current_password(name: &str) -> Prompt {
+        Prompt { secure: true, max: 128, ..Prompt::new(Purpose::CurrentPassword { name: name.into() }, "Current Password", &format!("Enter the current password for “{name}”."), "Password", "Next") }
     }
 
     pub fn new_group() -> Prompt {
@@ -75,6 +82,11 @@ impl Prompt {
                 max: 128,
                 ..Prompt::new(Purpose::NewUserPassword { admin: *admin, full: full.clone(), name: text.to_string() }, "Password", &format!("Choose a password for “{text}”."), "Password", "Create")
             }),
+            Purpose::CurrentPassword { name } => Some(Prompt {
+                secure: true,
+                max: 128,
+                ..Prompt::new(Purpose::ChangePassword { name: name.clone(), old: Some(text.to_string()) }, "New Password", &format!("Enter a new password for “{name}”."), "Password", "Change")
+            }),
             _ => None,
         }
     }
@@ -87,7 +99,7 @@ pub fn acceptable(purpose: &Purpose, text: &str) -> bool {
         Purpose::LocalHostname => accounts::valid_hostname(text),
         Purpose::NewUserFull { .. } => accounts::valid_full_name(text),
         Purpose::NewUserName { .. } | Purpose::NewGroup => accounts::valid_user(text),
-        Purpose::NewUserPassword { .. } | Purpose::ChangePassword { .. } => accounts::valid_password(text),
+        Purpose::NewUserPassword { .. } | Purpose::ChangePassword { .. } | Purpose::CurrentPassword { .. } => accounts::valid_password(text),
     }
 }
 
@@ -102,7 +114,7 @@ mod tests {
         assert!(acceptable(&Purpose::LocalHostname, "living-room"));
         assert!(!acceptable(&Purpose::LocalHostname, "living room"));
         assert!(acceptable(&Purpose::NewGroup, "friends") && !acceptable(&Purpose::NewGroup, "Friends"));
-        assert!(!acceptable(&Purpose::ChangePassword { name: "kid".into() }, ""));
+        assert!(!acceptable(&Purpose::ChangePassword { name: "kid".into(), old: None }, ""));
     }
 
     #[test]

@@ -176,6 +176,11 @@ impl Client {
         self.call("user.set_password", vec![("name", privd::s(name)), ("new", privd::s(new))]).map(|_| ())
     }
 
+    /// The installed account's own password; the login service checks `old`.
+    pub fn account_set_password(&self, old: &str, new: &str) -> Result<(), ClientError> {
+        self.call("account.set_password", vec![("old", privd::s(old)), ("new", privd::s(new))]).map(|_| ())
+    }
+
     pub fn group_add(&self, name: &str) -> Result<(), ClientError> {
         self.call("group.add", vec![("name", privd::s(name))]).map(|_| ())
     }
