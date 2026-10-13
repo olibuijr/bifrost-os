@@ -366,6 +366,19 @@ impl Items {
         Some(self.add(copy))
     }
 
+    /// The items as they appear with the board magnified by `zoom` and shifted by `pan` (canvas pixels): every box
+    /// moves and scales, the text stays. The board's own items are not changed.
+    pub fn viewed(&self, zoom: f32, pan: (f32, f32)) -> Items {
+        let mut out = self.clone();
+        for i in out.list.iter_mut() {
+            i.x = i.x * zoom + pan.0;
+            i.y = i.y * zoom + pan.1;
+            i.w *= zoom;
+            i.h *= zoom;
+        }
+        out
+    }
+
     /// Sets the heights of the text boxes to fit their text at the width each has.
     pub fn fit_all(&mut self, ui: &Ui) {
         for i in self.list.iter_mut() {
@@ -688,36 +701,41 @@ fn draw_line(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, text: &str, pt: f32,
 }
 
 /// Paints every item and connector into `px`, a `cw` x `ch` canvas, over whatever is there. `pictures` holds each
-/// picture item's image already scaled to the item's size; `editing` is the item and cell that has the caret.
-pub fn paint(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, items: &Items, pictures: &HashMap<u32, Image>, editing: Option<(u32, usize)>) {
+/// picture item's image already scaled to the item's size; `editing` is the item and cell that has the caret. The
+/// items' boxes are in canvas pixels; `zoom` is how much the board is magnified, so type, padding and line weights
+/// scale with the boxes (1 draws them at their own size).
+#[allow(clippy::too_many_arguments)]
+pub fn paint(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, items: &Items, pictures: &HashMap<u32, Image>, editing: Option<(u32, usize)>, zoom: f32) {
+    let z = zoom;
     for it in items.list() {
         let r = it.rect();
         let caret_cell = editing.filter(|(id, _)| *id == it.id).map(|(_, cell)| cell);
         match it.kind {
-            Kind::Text => draw_text(px, cw, ch, ui, &it.text, TEXT_PT, Weight::Regular, it.color, r, ui.pt(PAD_PT), caret_cell.is_some()),
+            Kind::Text => draw_text(px, cw, ch, ui, &it.text, TEXT_PT * z, Weight::Regular, it.color, r, ui.pt(PAD_PT) * z, caret_cell.is_some()),
             Kind::Sticky => {
-                let off = Rect { x: r.x + ui.pt(2.0), y: r.y + ui.pt(3.0), w: r.w, h: r.h };
+                let off = Rect { x: r.x + ui.pt(2.0) * z, y: r.y + ui.pt(3.0) * z, w: r.w, h: r.h };
                 fill(px, cw, ch, off, SHADOW);
                 fill(px, cw, ch, r, it.color);
-                draw_text(px, cw, ch, ui, &it.text, NOTE_PT, Weight::Regular, INK, r, ui.pt(PAD_PT), caret_cell.is_some());
+                draw_text(px, cw, ch, ui, &it.text, NOTE_PT * z, Weight::Regular, INK, r, ui.pt(PAD_PT) * z, caret_cell.is_some());
             }
-            Kind::Table => paint_table(px, cw, ch, ui, it, caret_cell),
-            Kind::Link => paint_link(px, cw, ch, ui, it, caret_cell.is_some()),
-            Kind::File => paint_file(px, cw, ch, ui, it),
+            Kind::Table => paint_table(px, cw, ch, ui, it, caret_cell, z),
+            Kind::Link => paint_link(px, cw, ch, ui, it, caret_cell.is_some(), z),
+            Kind::File => paint_file(px, cw, ch, ui, it, z),
             Kind::Picture => match pictures.get(&it.id) {
                 Some(img) => blit(px, cw, ch, img, it.x.round() as i32, it.y.round() as i32, r),
                 None => {
                     fill(px, cw, ch, r, CARD_FILL);
                     frame(px, cw, ch, r, ui.pt(1.0).max(1.0), GRID);
-                    draw_line(px, cw, ch, ui, "Picture", CARD_TITLE_PT, Weight::Regular, SUB_INK, r.x + ui.pt(PAD_PT), r.y + ui.pt(PAD_PT), r.w - 2.0 * ui.pt(PAD_PT), r);
+                    let pad = ui.pt(PAD_PT) * z;
+                    draw_line(px, cw, ch, ui, "Picture", CARD_TITLE_PT * z, Weight::Regular, SUB_INK, r.x + pad, r.y + pad, r.w - 2.0 * pad, r);
                 }
             },
         }
     }
-    paint_connectors(px, cw, ch, ui, items, None);
+    paint_connectors(px, cw, ch, ui, items, None, z);
 }
 
-fn paint_table(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, caret_cell: Option<usize>) {
+fn paint_table(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, caret_cell: Option<usize>, z: f32) {
     let r = it.rect();
     fill(px, cw, ch, r, TABLE_FILL);
     let line = ui.pt(1.0).max(1.0);
@@ -728,7 +746,7 @@ fn paint_table(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, caret_c
             let text = it.cells.get(row * it.cols + col).map(String::as_str).unwrap_or("");
             let editing = caret_cell == Some(row * it.cols + col);
             if !text.is_empty() || editing {
-                draw_text(px, cw, ch, ui, text, CELL_PT, Weight::Regular, INK, cell, ui.pt(CELL_PAD_PT), editing);
+                draw_text(px, cw, ch, ui, text, CELL_PT * z, Weight::Regular, INK, cell, ui.pt(CELL_PAD_PT) * z, editing);
             }
         }
     }
@@ -740,46 +758,46 @@ fn paint_table(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, caret_c
     }
 }
 
-fn paint_link(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, editing: bool) {
+fn paint_link(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, editing: bool, z: f32) {
     let r = it.rect();
-    let pad = ui.pt(PAD_PT);
+    let pad = ui.pt(PAD_PT) * z;
     fill(px, cw, ch, r, LINK_FILL);
     frame(px, cw, ch, r, ui.pt(1.0).max(1.0), LINK_INK);
     if editing {
-        draw_text(px, cw, ch, ui, &it.text, CARD_SUB_PT, Weight::Regular, LINK_INK, r, pad, true);
+        draw_text(px, cw, ch, ui, &it.text, CARD_SUB_PT * z, Weight::Regular, LINK_INK, r, pad, true);
         return;
     }
     let max = r.w - 2.0 * pad;
     let host = link_host(&it.text);
     let title = if host.is_empty() { "Link".to_string() } else { host };
-    draw_line(px, cw, ch, ui, &title, CARD_TITLE_PT, Weight::Semibold, LINK_INK, r.x + pad, r.y + pad, max, r);
-    let sub_y = r.y + pad + line_height(ui, CARD_TITLE_PT);
-    draw_line(px, cw, ch, ui, &it.text, CARD_SUB_PT, Weight::Regular, SUB_INK, r.x + pad, sub_y, max, r);
+    draw_line(px, cw, ch, ui, &title, CARD_TITLE_PT * z, Weight::Semibold, LINK_INK, r.x + pad, r.y + pad, max, r);
+    let sub_y = r.y + pad + line_height(ui, CARD_TITLE_PT * z);
+    draw_line(px, cw, ch, ui, &it.text, CARD_SUB_PT * z, Weight::Regular, SUB_INK, r.x + pad, sub_y, max, r);
 }
 
-fn paint_file(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item) {
+fn paint_file(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, it: &Item, z: f32) {
     let r = it.rect();
-    let pad = ui.pt(PAD_PT);
+    let pad = ui.pt(PAD_PT) * z;
     fill(px, cw, ch, r, CARD_FILL);
     frame(px, cw, ch, r, ui.pt(1.0).max(1.0), GRID);
     let max = r.w - 2.0 * pad;
-    draw_line(px, cw, ch, ui, &it.text, CARD_TITLE_PT, Weight::Semibold, INK, r.x + pad, r.y + pad, max, r);
-    let sub_y = r.y + pad + line_height(ui, CARD_TITLE_PT);
-    draw_line(px, cw, ch, ui, &human_size(it.size), CARD_SUB_PT, Weight::Regular, SUB_INK, r.x + pad, sub_y, max, r);
+    draw_line(px, cw, ch, ui, &it.text, CARD_TITLE_PT * z, Weight::Semibold, INK, r.x + pad, r.y + pad, max, r);
+    let sub_y = r.y + pad + line_height(ui, CARD_TITLE_PT * z);
+    draw_line(px, cw, ch, ui, &human_size(it.size), CARD_SUB_PT * z, Weight::Regular, SUB_INK, r.x + pad, sub_y, max, r);
 }
 
-/// Paints the connectors; the one at index `picked` is drawn thicker.
-pub fn paint_connectors(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, items: &Items, picked: Option<usize>) {
+/// Paints the connectors; the one at index `picked` is drawn thicker. `z` is the board's magnification.
+pub fn paint_connectors(px: &mut [u32], cw: usize, ch: usize, ui: &Ui, items: &Items, picked: Option<usize>, z: f32) {
     for (n, c) in items.connectors().iter().enumerate() {
         let Some((a, b)) = items.connector_line(c) else { continue };
-        let width = ui.pt(if picked == Some(n) { 4.0 } else { 2.0 });
+        let width = ui.pt(if picked == Some(n) { 4.0 } else { 2.0 }) * z;
         ink::stroke_polyline(px, cw, ch, &[a, b], width, None, CONNECTOR_INK, 1.0);
         if c.arrow {
             let (dx, dy) = (b.0 - a.0, b.1 - a.1);
             let len = (dx * dx + dy * dy).sqrt();
             if len > 1.0 {
                 let (ux, uy) = (dx / len, dy / len);
-                let head = ui.pt(12.0).min(len);
+                let head = (ui.pt(12.0) * z).min(len);
                 let (bx, by) = (b.0 - ux * head, b.1 - uy * head);
                 let (nx, ny) = (-uy * head * 0.5, ux * head * 0.5);
                 ink::stroke_polyline(px, cw, ch, &[(bx + nx, by + ny), b, (bx - nx, by - ny)], width, None, CONNECTOR_INK, 1.0);
@@ -1062,7 +1080,7 @@ mod tests {
         let id = items.add(Item { text: "Hello".into(), ..sticky(10.0, 10.0) });
         let (cw, ch) = (200, 200);
         let mut px = vec![PAPER; cw * ch];
-        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None);
+        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, 1.0);
         assert_eq!(px[5 * cw + 5], PAPER, "outside the note stays paper");
         assert_eq!(px[105 * cw + 100], NOTE_COLORS[3], "the bottom of the note is its fill");
         let inked = (10..110).flat_map(|y| (10..110).map(move |x| (x, y))).any(|(x, y)| px[y * cw + x] != NOTE_COLORS[3]);
@@ -1077,7 +1095,7 @@ mod tests {
         items.add(Item { text: "A very long line of words that cannot all fit inside a small note at this size".into(), ..Item::new(Kind::Sticky, 10.0, 10.0, 60.0, 30.0) });
         let (cw, ch) = (200, 200);
         let mut px = vec![PAPER; cw * ch];
-        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None);
+        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, 1.0);
         // the shadow reaches 3 px below and 2 px right of the box; nothing else is painted below it
         assert!((46..ch).all(|y| (0..cw).all(|x| px[y * cw + x] == PAPER)), "no text spills below the note");
     }
@@ -1089,10 +1107,10 @@ mod tests {
         let id = items.add(Item::new(Kind::Text, 10.0, 10.0, 200.0, 40.0));
         let (cw, ch) = (240, 80);
         let mut still = vec![PAPER; cw * ch];
-        paint(&mut still, cw, ch, &ui, &items, &HashMap::new(), None);
+        paint(&mut still, cw, ch, &ui, &items, &HashMap::new(), None, 1.0);
         assert!(still.iter().all(|&p| p == PAPER), "an empty text box is invisible");
         let mut editing = vec![PAPER; cw * ch];
-        paint(&mut editing, cw, ch, &ui, &items, &HashMap::new(), Some((id, 0)));
+        paint(&mut editing, cw, ch, &ui, &items, &HashMap::new(), Some((id, 0)), 1.0);
         assert!(editing.iter().any(|&p| p != PAPER), "the caret shows while editing");
     }
 
@@ -1103,7 +1121,7 @@ mod tests {
         items.add(Item::table(10.0, 10.0, 90.0, 60.0, 2, 3));
         let (cw, ch) = (120, 100);
         let mut px = vec![PAPER; cw * ch];
-        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None);
+        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, 1.0);
         assert_eq!(px[40 * cw + 40], GRID, "the line between the first two columns at x = 40");
         assert_eq!(px[20 * cw + 20], TABLE_FILL, "a cell is white inside");
         assert_eq!(px[90 * cw + 20], PAPER, "below the table is paper");
@@ -1119,7 +1137,7 @@ mod tests {
         };
         let (cw, ch) = (420, 120);
         let mut px = vec![PAPER; cw * ch];
-        paint_connectors(&mut px, cw, ch, &ui, &items, None);
+        paint_connectors(&mut px, cw, ch, &ui, &items, None, 1.0);
         assert_ne!(px[50 * cw + 200], PAPER, "the line crosses the gap");
         assert_eq!(px[10 * cw + 200], PAPER);
     }
@@ -1150,6 +1168,33 @@ mod tests {
     }
 
     #[test]
+    fn a_viewed_copy_is_magnified_and_shifted_and_the_original_is_left_alone() {
+        let (items, a, _) = two_items();
+        let v = items.viewed(2.0, (10.0, -5.0));
+        let it = v.get(a).unwrap();
+        assert_eq!((it.x, it.y, it.w, it.h), (10.0, -5.0, 200.0, 200.0));
+        assert_eq!(items.get(a).unwrap().w, 100.0);
+        let same = items.viewed(1.0, (0.0, 0.0));
+        assert_eq!(same, items, "no zoom and no shift is the same board");
+    }
+
+    #[test]
+    fn zoomed_painting_scales_the_type_with_the_box() {
+        let ui = test_ui();
+        let ink_rows = |zoom: f32| -> usize {
+            let mut items = Items::default();
+            items.add(Item { text: "Hello".into(), color: INK, ..Item::new(Kind::Text, 4.0 * zoom, 4.0 * zoom, 200.0 * zoom, 60.0 * zoom) });
+            let (cw, ch) = (400, 300);
+            let mut px = vec![PAPER; cw * ch];
+            paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, zoom);
+            (0..ch).filter(|&y| (0..cw).any(|x| px[y * cw + x] != PAPER)).count()
+        };
+        let (small, big) = (ink_rows(1.0), ink_rows(2.0));
+        assert!(small > 0);
+        assert!(big as f32 > small as f32 * 1.6, "twice the zoom gives text about twice as tall: {small} -> {big}");
+    }
+
+    #[test]
     fn a_picture_is_blitted_at_its_place_and_a_missing_one_is_a_placeholder() {
         let ui = test_ui();
         let mut items = Items::default();
@@ -1159,11 +1204,11 @@ mod tests {
         let mut pics = HashMap::new();
         pics.insert(id, red);
         let mut px = vec![PAPER; cw * ch];
-        paint(&mut px, cw, ch, &ui, &items, &pics, None);
+        paint(&mut px, cw, ch, &ui, &items, &pics, None, 1.0);
         assert_eq!(px[20 * cw + 20], 0xFF00_00FF);
         assert_eq!(px[5 * cw + 5], PAPER);
         let mut px = vec![PAPER; cw * ch];
-        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None);
+        paint(&mut px, cw, ch, &ui, &items, &HashMap::new(), None, 1.0);
         assert_eq!(px[28 * cw + 28], CARD_FILL, "the placeholder is a card");
     }
 

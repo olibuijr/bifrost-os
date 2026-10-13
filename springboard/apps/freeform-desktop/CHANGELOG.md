@@ -8,6 +8,7 @@
 - Items move with the lasso, snap to the grid, scale from Arrange > Make Item Larger or Smaller, take the ink colour, and are part of undo, redo, duplicate, delete, the saved board, PNG and PDF export and printing.
 - Paste puts a picture or plain text from the pasteboard on the board when it holds no strokes.
 - Boards > Search Boards finds a board by title; File > Rename Board names the open one.
+- View menu: Zoom In and Zoom Out (Cmd+= and Cmd+-) from 25% to 400% about the middle of the window, Actual Size (Cmd+0) and a Hand Tool. The arrow keys move the view. The grid, the PNG and PDF exports and new items follow the view.
 - Freeform accepts pictures and text shared from other apps and puts them on a new board.
 
 ## 1.8.0 — 2026-10-13

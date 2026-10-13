@@ -197,12 +197,12 @@ impl Freeform {
         self.board_dir().map(|d| d.join("files"))
     }
 
-    /// Where an item of this size goes when the menu adds it: near the middle of the board, each new one a little
+    /// Where an item of this size goes when the menu adds it: near the middle of what is in view, each new one a little
     /// further down and right so they do not hide each other.
     fn spot(&self, ui: &Ui, w: f32, h: f32) -> (f32, f32) {
         let step = (self.items.list().len() % 6) as f32 * ui.pt(GAP_PT);
-        let (cx, cy) = (self.cw as f32 / 2.0, self.ch as f32 / 2.0);
-        ((cx - w / 2.0 + step).max(0.0), (cy - h / 2.0 + step).max(0.0))
+        let (cx, cy) = self.board_pt((self.cw as f32 / 2.0, self.ch as f32 / 2.0));
+        (cx - w / 2.0 + step, cy - h / 2.0 + step)
     }
 
     /// Where the next item of a stack goes: the left margin, below the lowest item.
@@ -402,7 +402,7 @@ impl Freeform {
             return true;
         }
         self.last_tap = None;
-        if let Some(n) = self.items.connector_at(cx, cy, ui.pt(CONNECTOR_REACH_PT)) {
+        if let Some(n) = self.items.connector_at(cx, cy, ui.pt(CONNECTOR_REACH_PT) / self.zoom) {
             self.selection = None;
             self.pick = Some(Pick::Connector(n));
             self.dirty = true;
@@ -669,6 +669,11 @@ impl Freeform {
     fn pick_key(&mut self, ui: &Ui, key: &KeyInput) -> bool {
         match (key, self.pick) {
             (KeyInput::Code(8 | 46), Some(_)) => self.delete_pick(ui),
+            (KeyInput::Code(8 | 46), None) if self.has_selection() => {
+                self.delete_selected(ui);
+                true
+            }
+            (KeyInput::Code(code @ 37..=40), _) => self.arrow_pans(ui, *code),
             (KeyInput::Code(13), Some(Pick::Item(id))) => {
                 let editable = self.items.get(id).is_some_and(|i| i.editable());
                 if editable {
@@ -704,7 +709,7 @@ impl Freeform {
             .list()
             .iter()
             .filter(|i| i.kind == ItemKind::Picture)
-            .map(|i| (i.id, i.file.clone(), i.w.round().max(1.0) as usize, i.h.round().max(1.0) as usize))
+            .map(|i| (i.id, i.file.clone(), (i.w * self.zoom).round().max(1.0) as usize, (i.h * self.zoom).round().max(1.0) as usize))
             .collect();
         self.pics.scaled.retain(|id, _| wanted.iter().any(|w| w.0 == *id));
         let dir = self.files_dir();
@@ -728,7 +733,7 @@ impl Freeform {
     /// The items alone, painted on paper at the canvas size (for the PDF and PNG exports).
     pub(super) fn items_layer(&self, ui: &Ui) -> Vec<u32> {
         let mut px = vec![PAPER; self.cw * self.ch];
-        items::paint(&mut px, self.cw, self.ch, ui, &self.items, &self.pics.scaled, None);
+        self.paint_items(&mut px, ui, None);
         px
     }
 
@@ -755,10 +760,12 @@ impl Freeform {
     pub(super) fn draw_pick(&self, s: &mut Surface, ui: &Ui, top: f32) {
         if let Some(Pick::Item(id)) = self.pick {
             if let Some(item) = self.items.get(id) {
-                self.outline(s, ui, top, item.rect());
+                self.outline(s, ui, top, self.view_rect(item.rect()));
             }
         }
         let dots = |s: &mut Surface, a: (f32, f32), b: (f32, f32)| {
+            // the ends are board points; the dots are laid on the picture
+            let (a, b) = (self.view_pt(a), self.view_pt(b));
             let d = ui.pt(bifrost_app::kit::ui::SPACE_XXS) * 1.5;
             let len = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
             let n = (len / (d * 2.0)).ceil().max(1.0) as usize;
@@ -1267,6 +1274,17 @@ mod tests {
         assert!(app.items.connectors().is_empty());
         assert_eq!(app.items.list().len(), 2);
         assert!(!app.key(&ui, &KeyInput::Code(46)), "nothing is picked now");
+    }
+
+    #[test]
+    fn backspace_deletes_the_selected_strokes_when_nothing_is_being_typed() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.model = Drawing::from_strokes(vec![Stroke { ink: Ink { kind: InkKind::Pen, color: BLACK, width: 4.0 }, points: vec![StrokePoint::at(5.0, 5.0)] }]);
+        app.selection = Some(Selection::from_indices(vec![0]));
+        assert!(app.key(&ui, &KeyInput::Code(8)));
+        assert!(app.model.is_empty());
+        assert!(!app.key(&ui, &KeyInput::Code(8)), "nothing is left to delete");
     }
 
     #[test]

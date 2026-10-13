@@ -54,6 +54,10 @@ const MENU_GRID: u32 = 30;
 const MENU_SNAP: u32 = 31;
 const MENU_SEARCH: u32 = 32;
 const MENU_RENAME_BOARD: u32 = 33;
+const MENU_ZOOM_IN: u32 = 34;
+const MENU_ZOOM_OUT: u32 = 35;
+const MENU_ACTUAL_SIZE: u32 = 36;
+const MENU_HAND: u32 = 37;
 /// Insert menu shapes: `MENU_SHAPE + index` into `SHAPES`.
 const MENU_SHAPE: u32 = 40;
 const MENU_TEXT_BOX: u32 = 50;
@@ -316,6 +320,11 @@ impl App for FreeformApp {
                 items: vec![
                     AppMenuItem::new(MENU_GRID, if flag(|c| c.grid_shown()) { "Hide Grid" } else { "Show Grid" }).key("cmd+'"),
                     AppMenuItem::new(MENU_SNAP, "Snap to Grid").checked(flag(|c| c.snapping())),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_ZOOM_IN, "Zoom In").key("cmd+=").enabled(flag(|c| c.can_zoom_in())),
+                    AppMenuItem::new(MENU_ZOOM_OUT, "Zoom Out").key("cmd+-").enabled(flag(|c| c.can_zoom_out())),
+                    AppMenuItem::new(MENU_ACTUAL_SIZE, "Actual Size").key("cmd+0").enabled(flag(|c| c.view_changed_from_plain())),
+                    AppMenuItem::new(MENU_HAND, "Hand Tool").checked(flag(|c| c.hand_tool())),
                 ],
             },
             AppMenu { title: "Boards".into(), items: board_items },
@@ -381,6 +390,10 @@ impl App for FreeformApp {
             MENU_TABLE_COLUMN => c.add_table_part(&ctx.ui, false),
             MENU_LARGER => c.scale_pick(&ctx.ui, 1.25),
             MENU_SMALLER => c.scale_pick(&ctx.ui, 0.8),
+            MENU_ZOOM_IN => c.zoom_in(&ctx.ui),
+            MENU_ZOOM_OUT => c.zoom_out(&ctx.ui),
+            MENU_ACTUAL_SIZE => c.zoom_actual(&ctx.ui),
+            MENU_HAND => c.choose_hand(&ctx.ui),
             MENU_GRID => c.toggle_grid(),
             MENU_SNAP => c.toggle_snap(),
             i if (MENU_SHAPE..MENU_SHAPE + SHAPES.len() as u32).contains(&i) => c.choose_shape(SHAPES[(i - MENU_SHAPE) as usize].0),

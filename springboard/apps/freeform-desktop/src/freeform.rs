@@ -37,8 +37,10 @@ use bifrost_app::kit::Image;
 use bifrost_app::KeyInput;
 
 mod itemtools;
+mod viewport;
 pub use itemtools::{Shared, MAX_FILE_BYTES};
 use itemtools::{ItemDrag, Linking, Pick, Pictures, Search};
+use viewport::to_board;
 
 /// The board is paper in both appearances, so a saved PNG looks the same either way.
 const PAPER: u32 = WHITE;
@@ -196,6 +198,8 @@ enum Tool {
     Sticky,
     /// Joins two items by dragging from one to the other.
     Connect,
+    /// Moves the view when the board is dragged.
+    Hand,
 }
 
 impl Tool {
@@ -332,6 +336,13 @@ pub struct Freeform {
     open_url: Option<String>,
     /// The board search, while it is open.
     search: Option<Search>,
+    /// How far the board is magnified (1 is its own size) and how far it is shifted, in canvas pixels (see `viewport`).
+    zoom: f32,
+    pan: (f32, f32),
+    /// The hand tool is dragging the view; the last pointer point (window pixels).
+    panning: Option<(f32, f32)>,
+    /// The picture must be painted again before it is next drawn (an undo or redo brought back one made at another view).
+    repaint_due: bool,
 }
 
 /// Milliseconds after the last edit that the board is written.
@@ -352,7 +363,8 @@ fn ink_width(tool: Tool) -> f32 {
         | Tool::Star
         | Tool::Text
         | Tool::Sticky
-        | Tool::Connect => 2.0 * SPACE_XS,
+        | Tool::Connect
+        | Tool::Hand => 2.0 * SPACE_XS,
         Tool::Pencil => SPACE_XS,
         Tool::Marker => 2.0 * SPACE_M,
         Tool::Eraser => 2.0 * SPACE_L,
@@ -457,6 +469,10 @@ impl Freeform {
             pics: Pictures::default(),
             open_url: None,
             search: None,
+            zoom: 1.0,
+            pan: (0.0, 0.0),
+            panning: None,
+            repaint_due: false,
         }
     }
 
@@ -487,6 +503,9 @@ impl Freeform {
         self.linking = None;
         self.last_tap = None;
         self.search = None;
+        self.zoom = 1.0;
+        self.pan = (0.0, 0.0);
+        self.panning = None;
         let Some(dir) = self.board_dir() else { return };
         if let Ok(text) = std::fs::read_to_string(dir.join("board.txt")) {
             if let Ok(model) = Drawing::from_text(&text) {
@@ -571,6 +590,7 @@ impl Freeform {
             std::mem::replace(&mut self.items, items),
         ));
         self.end_item_work();
+        self.repaint_due = true;
         self.selection = None;
         self.dirty = true;
         self.mark_changed();
@@ -587,6 +607,7 @@ impl Freeform {
             std::mem::replace(&mut self.items, items),
         ));
         self.end_item_work();
+        self.repaint_due = true;
         self.selection = None;
         self.dirty = true;
         self.mark_changed();
@@ -749,7 +770,7 @@ impl Freeform {
 
     /// The selection handle under canvas point (x, y), if any.
     fn handle_at(&self, ui: &Ui, x: f32, y: f32) -> Option<Handle> {
-        arrange::hit_handle(self.handle_box()?, ui.pt(ROTATE_GAP_PT), ui.pt(HANDLE_REACH_PT), x, y)
+        arrange::hit_handle(self.handle_box()?, ui.pt(ROTATE_GAP_PT) / self.zoom, ui.pt(HANDLE_REACH_PT) / self.zoom, x, y)
     }
 
     /// `p` moved to the nearest grid point when snapping is on.
@@ -1010,7 +1031,12 @@ impl Freeform {
 
     /// The board as the pages a PDF or a print job carries.
     fn pdf_pages(&self, ui: &Ui) -> Vec<bifrost_app::print::PdfPage> {
-        let page = pdfout::board_page(self.model.strokes(), &self.styles, self.cw, self.ch, ui.s);
+        // the page shows the board as it is in view: moved and scaled strokes, with their widths scaled too
+        let mut shown: Vec<Stroke> = self.view_strokes().strokes().to_vec();
+        for s in shown.iter_mut() {
+            s.ink.width *= self.zoom;
+        }
+        let page = pdfout::board_page(&shown, &self.styles, self.cw, self.ch, ui.s);
         if self.items.is_empty() {
             return vec![page];
         }
@@ -1176,6 +1202,13 @@ impl Freeform {
             }
             Tool::Connect => Kind::Crosshair,
             Tool::Text | Tool::Sticky => Kind::IBeam,
+            Tool::Hand => {
+                if self.panning.is_some() {
+                    Kind::ClosedHand
+                } else {
+                    Kind::OpenHand
+                }
+            }
             Tool::Eraser => Kind::DisappearingItem,
             Tool::Lasso => {
                 let (cx, cy) = self.canvas_point(ui, x, y);
@@ -1315,7 +1348,7 @@ impl Freeform {
     }
 
     fn radius(&self, ui: &Ui) -> f32 {
-        ui.pt(ink_width(self.tool) / 2.0)
+        ui.pt(ink_width(self.tool) / 2.0) * self.zoom
     }
 
     fn push_undo(&mut self) {
@@ -1387,7 +1420,9 @@ impl Freeform {
     }
 
     fn stroke_to(&mut self, ui: &Ui, x: f32, y: f32) {
+        // the disc is stamped on the picture; the stroke keeps the board point under it
         let (cx, cy) = (x, y - self.canvas_top(ui) as f32);
+        let (bx, by) = to_board(self.zoom, self.pan, (cx, cy));
         let r = self.radius(ui);
         match self.last {
             Some((lx, ly)) => {
@@ -1398,7 +1433,7 @@ impl Freeform {
             None => self.stamp(cx, cy, r),
         }
         if let Some(s) = self.current_stroke() {
-            s.points.push(StrokePoint::at(cx, cy));
+            s.points.push(StrokePoint::at(bx, by));
         }
         self.last = Some((cx, cy));
         self.dirty = true;
@@ -1409,13 +1444,24 @@ impl Freeform {
         self.sync_styles();
         self.prepare_pictures();
         let mut px = vec![PAPER; self.cw * self.ch];
-        items::paint(&mut px, self.cw, self.ch, ui, &self.items, &self.pics.scaled, self.edit);
-        style::paint_strokes(&mut px, self.cw, self.ch, self.model.strokes(), &self.styles, ui.s);
-        if let Some(p) = preview {
-            style::paint_strokes(&mut px, self.cw, self.ch, p.strokes(), &[], ui.s);
+        self.paint_items(&mut px, ui, self.edit);
+        if self.view_is_plain() {
+            style::paint_strokes(&mut px, self.cw, self.ch, self.model.strokes(), &self.styles, ui.s);
+            if let Some(p) = preview {
+                style::paint_strokes(&mut px, self.cw, self.ch, p.strokes(), &[], ui.s);
+            }
+        } else {
+            // the strokes are moved and scaled by the view; their widths scale through the points-to-pixels factor
+            let shown = self.view_strokes();
+            style::paint_strokes(&mut px, self.cw, self.ch, shown.strokes(), &self.styles, ui.s * self.zoom);
+            if let Some(p) = preview {
+                let shown = self.view_drawing(p);
+                style::paint_strokes(&mut px, self.cw, self.ch, shown.strokes(), &[], ui.s * self.zoom);
+            }
         }
         self.canvas = px;
         self.dirty = true;
+        self.repaint_due = false;
     }
 
     /// Removes the selected strokes (one undo step) and repaints.
@@ -1493,13 +1539,13 @@ impl Freeform {
             .is_some_and(|r| x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
     }
 
-    /// Converts a window point (points of the pane) on the canvas to canvas pixels.
+    /// Converts a window point (pixels of the pane) on the canvas to the board point under it.
     fn canvas_point(&self, ui: &Ui, x: f32, y: f32) -> (f32, f32) {
-        (x, y - self.canvas_top(ui) as f32)
+        to_board(self.zoom, self.pan, (x, y - self.canvas_top(ui) as f32))
     }
 
     fn gesture_active(&self) -> bool {
-        self.lassoing || self.moving.is_some() || self.shape.is_some() || self.handle.is_some() || self.item_gesture()
+        self.lassoing || self.moving.is_some() || self.shape.is_some() || self.handle.is_some() || self.item_gesture() || self.panning.is_some()
     }
 
     /// A press on the canvas starts the stroke, selection drag, lasso loop or shape of the current tool.
@@ -1518,6 +1564,7 @@ impl Freeform {
         match self.tool {
             Tool::Text | Tool::Sticky => self.text_tool_press(ui, cx, cy),
             Tool::Connect => self.connect_press(cx, cy),
+            Tool::Hand => self.panning = Some((x, y)),
             Tool::Pen | Tool::Pencil | Tool::Marker | Tool::Eraser => {
                 self.selection = None;
                 self.push_undo();
@@ -1561,6 +1608,10 @@ impl Freeform {
             self.lasso.add(cx, cy);
         } else if self.item_gesture() {
             self.item_move(ui, cx, cy);
+        } else if let Some((lx, ly)) = self.panning {
+            self.pan = (self.pan.0 + x - lx, self.pan.1 + y - ly);
+            self.panning = Some((x, y));
+            self.repaint(ui, None);
         } else if let Some((mx, my)) = self.moving {
             if let Some(sel) = self.editable() {
                 sel.transform(&mut self.model, ink::nudge(cx - mx, cy - my));
@@ -1596,6 +1647,8 @@ impl Freeform {
             self.lasso = Lasso::new();
         } else if self.item_gesture() {
             self.item_release(ui, cx, cy);
+        } else if self.panning.is_some() {
+            self.panning = None;
         } else if self.moving.is_some() {
             self.moving = None;
         } else if self.handle.is_some() {
@@ -1721,7 +1774,7 @@ impl Freeform {
             return;
         }
         let sizes: Vec<(f32, f32)> = parts.iter().map(|(_, b)| (b.w, b.h)).collect();
-        let room = (self.cw as f32 - origin.x).max(0.0);
+        let room = (self.board_pt((self.cw as f32, 0.0)).0 - origin.x).max(0.0);
         let gap = ui.pt(SPACE_M);
         let placed = FlowLayout::new(gap, gap).place_subviews(origin, (room, f32::INFINITY), &sizes);
         self.push_undo();
@@ -1753,7 +1806,7 @@ impl Freeform {
     /// so the file is sharp; otherwise the canvas itself is written.
     fn export_png(&self, ui: &Ui) -> Vec<u8> {
         let k = self.export_scale.max(1) as usize;
-        let mut big = self.model.clone();
+        let mut big = self.view_strokes();
         big.transform(Affine::scale(k as f32, k as f32));
         // the picture is painted into a bitmap context of the export size, with each stroke's look
         let mut bmp = Bitmap::new(self.cw * k, self.ch * k, PAPER);
@@ -1762,7 +1815,7 @@ impl Freeform {
             bmp.px = if k == 1 { layer } else { Image { w: self.cw, h: self.ch, px: layer }.resized(self.cw * k, self.ch * k).px };
         }
         let (w, h) = (bmp.w, bmp.h);
-        style::paint_strokes(&mut bmp.px, w, h, big.strokes(), &self.styles, ui.s * k as f32);
+        style::paint_strokes(&mut bmp.px, w, h, big.strokes(), &self.styles, ui.s * self.zoom * k as f32);
         bmp.png()
     }
 
@@ -1871,12 +1924,21 @@ impl Freeform {
 
     /// The dot grid over the board (not part of an export): one dot per grid point.
     fn draw_grid(&self, s: &mut Surface, ui: &Ui, top: i32) {
-        let step = ui.pt(GRID_PT).max(4.0);
+        let step = (ui.pt(GRID_PT) * self.zoom).max(4.0);
         let dot = ui.pt(GRID_DOT_PT).max(1.0);
         let colour = SEPARATOR_C.now();
-        let mut y = step;
+        // the dots sit on multiples of the grid step in board coordinates, so they move with the view
+        let first = |shift: f32| {
+            let at = shift.rem_euclid(step);
+            if at < 1.0 {
+                at + step
+            } else {
+                at
+            }
+        };
+        let mut y = first(self.pan.1);
         while y < self.ch as f32 {
-            let mut x = step;
+            let mut x = first(self.pan.0);
             while x < self.cw as f32 {
                 s.fill_rect(x as usize, (top as f32 + y) as usize, dot as usize, dot as usize, colour);
                 x += step;
@@ -1913,6 +1975,10 @@ impl Freeform {
         self.dirty = false;
         self.scale = ui.s;
         self.ensure_canvas(ui);
+        if self.repaint_due {
+            self.repaint(ui, None);
+            self.dirty = false;
+        }
         if self.cache.len() > 64 {
             self.cache.clear();
         }
@@ -1930,15 +1996,16 @@ impl Freeform {
             self.draw_grid(s, ui, top);
         }
         if let Some(b) = self.selection.as_ref().and_then(|sel| sel.bounds(&self.model)) {
-            self.outline(s, ui, top as f32, b);
+            self.outline(s, ui, top as f32, self.view_rect(b));
         }
         self.draw_pick(s, ui, top as f32);
         if let Some(b) = self.handle_box() {
-            self.draw_handles(s, ui, top as f32, b);
+            self.draw_handles(s, ui, top as f32, self.view_rect(b));
         }
         if self.lassoing {
             let d = ui.pt(bifrost_app::kit::ui::SPACE_XXS);
-            for &(x, y) in self.lasso.points().iter().step_by(2) {
+            for &p in self.lasso.points().iter().step_by(2) {
+                let (x, y) = self.view_pt(p);
                 s.fill_rrect(x, y + top as f32, d, d, d / 2.0, TINT);
             }
         }
