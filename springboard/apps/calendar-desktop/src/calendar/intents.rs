@@ -87,6 +87,7 @@ impl Calendar {
     /// Closes the event form, the Go to Date sheet and the search, so the calendar can show something else.
     fn leave_modes(&mut self, ui: &Ui) {
         self.goto = None;
+        self.quick_line = None;
         self.close();
         self.end_search(ui);
     }

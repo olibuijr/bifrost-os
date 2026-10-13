@@ -31,7 +31,7 @@ pub fn count_label(n: usize) -> String {
 impl Calendar {
     /// Whether the results list is showing: the field holds a query and no sheet is open.
     pub fn searching(&self) -> bool {
-        !self.search_box.is_empty() && self.editor.is_none() && self.goto.is_none()
+        !self.search_box.is_empty() && self.editor.is_none() && !self.sheet_open()
     }
 
     /// The matches for the query in the field.

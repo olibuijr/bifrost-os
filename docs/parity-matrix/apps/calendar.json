@@ -23,9 +23,9 @@
    "area": "menu",
    "apple": "PreferencesPanel.nib natural-language creation; File > New Event",
    "status": "partial",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar.rs:550",
-   "note": "Parses the pasteboard sentence; no inline quick-entry field",
-   "wire": "Add an inline quick-entry text field (toolbar + button long-press or New Event popover) in calendar/chrome.rs that feeds Calendar::new_event_from_text instead of only the pasteboard."
+   "bifrost": "springboard/apps/calendar-desktop/src/calendar/quickentry.rs:31",
+   "note": "Event > Quick Event... (Cmd+Shift+N) opens a sheet with one line; it previews the title, day, time and place read from the sentence and Add saves the event at once. File > New Event from Text still reads the pasteboard; built on parity/team-d-calendar; not yet verified on Midget",
+   "wire": "Move the line into a toolbar popover opened by the New Event button, and read notes and invitees from the sentence."
   },
   {
    "feature": "Day / Week / Month / Year views (Cmd+1..4)",

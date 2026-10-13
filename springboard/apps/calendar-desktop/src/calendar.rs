@@ -9,6 +9,7 @@ mod drag;
 pub mod exchange;
 mod lookup;
 mod goto;
+mod quickentry;
 pub mod holidays;
 pub mod ics;
 pub mod intents;
@@ -149,6 +150,9 @@ enum Target {
     SearchField,
     SearchClear,
     SearchHit(usize),
+    /// Event > Quick Event: open the sheet, and add the event it describes.
+    QuickOpen,
+    QuickAdd,
     /// A row of the calendar list: shows or hides that calendar (`overlay.rs`).
     Layer(u32),
 }
@@ -188,6 +192,8 @@ pub struct Calendar {
     editor: Option<Draft>,
     /// Go to Date: the date the sheet shows while it is open (`goto.rs`).
     goto: Option<Date>,
+    /// Quick Event: the line typed in the sheet while it is open (`quickentry.rs`).
+    quick_line: Option<bifrost_app::controls::TextField>,
     /// A press in the Day or Week grid that becomes a drag if it is held, and the drag itself (`drag.rs`).
     press: Option<drag::Press>,
     drag: Option<drag::Drag>,
@@ -295,6 +301,7 @@ impl Calendar {
             text_style: (ui.text_scale, ui.bold),
             editor: None,
             goto: None,
+            quick_line: None,
             press: None,
             drag: None,
             search_box: bifrost_app::controls::TextField::new(),
@@ -513,6 +520,9 @@ impl Calendar {
         let wp = self.w as f32 / ui.s;
         if self.goto.is_some() {
             return self.hit_goto(ui, x, y);
+        }
+        if self.quick_line.is_some() {
+            return None;
         }
         if self.searching() {
             return self.hit_results(ui, x, y);
@@ -815,7 +825,7 @@ impl Calendar {
     /// Month and Year. Not while an event is open. False when unused here.
     pub fn chord(&mut self, ui: &Ui, key: u32, mods: u32, t: f64) -> bool {
         use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META};
-        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.editor.is_some() || self.goto.is_some() {
+        if mods & (CHORD_CTRL | CHORD_META) == 0 || mods & CHORD_ALT != 0 || self.editor.is_some() || self.sheet_open() {
             return false;
         }
         let target = match key {
@@ -838,12 +848,12 @@ impl Calendar {
 
     /// Escape closes the open event editor without saving.
     pub fn escape(&mut self, ui: &Ui, t: f64) -> bool {
-        if self.editor.is_none() && self.goto.is_none() && (self.search_focused || !self.search_box.is_empty()) {
+        if self.editor.is_none() && !self.sheet_open() && (self.search_focused || !self.search_box.is_empty()) {
             self.end_search(ui);
             self.dirty = true;
             return true;
         }
-        if self.editor.is_none() && self.goto.is_none() {
+        if self.editor.is_none() && !self.sheet_open() {
             return false;
         }
         self.activate(ui, Target::Cancel, t);
@@ -896,8 +906,11 @@ impl Calendar {
             Target::Layer(id) => self.toggle_layer(id),
             Target::Cancel => {
                 self.goto = None;
+                self.quick_line = None;
                 self.close();
             }
+            Target::QuickOpen => self.open_quick(),
+            Target::QuickAdd => self.quick_add(ui, t),
             Target::GoOpen => self.open_goto(),
             Target::GoDay(_) | Target::GoMonth(_) | Target::GoYear(_) => self.goto_step(target),
             Target::GoToday => self.goto = Some(today(self.wall, t)),
@@ -980,6 +993,10 @@ impl Calendar {
 
     pub fn key(&mut self, ui: &Ui, out: Out, t: f64) {
         self.sync_overlay();
+        if self.quick_line.is_some() {
+            self.quick_key(ui, out, t);
+            return;
+        }
         if self.goto.is_some() {
             // Return accepts the date; the arrow keys step it by a day (Left, Right) or a week (Up, Down)
             let step = match out {
@@ -1199,6 +1216,8 @@ impl Calendar {
                 self.draw_editor(&mut c, ui, t);
             } else if self.goto.is_some() {
                 self.draw_goto(&mut c, ui);
+            } else if self.quick_line.is_some() {
+                self.draw_quick(&mut c, ui);
             } else if self.searching() {
                 self.draw_results(&mut c, ui);
                 self.draw_undo(&mut c, ui);
@@ -1466,10 +1485,12 @@ pub enum Command {
     Print,
     /// File > Subscribe to Calendar from Clipboard: the address on the pasteboard becomes a read-only calendar.
     Subscribe,
+    /// Event > Quick Event...: a sheet to type a sentence that becomes an event.
+    QuickEvent,
 }
 
 impl Command {
-    pub const ALL: [Command; 25] = [
+    pub const ALL: [Command; 26] = [
         Command::NewEvent,
         Command::Save,
         Command::Duplicate,
@@ -1495,6 +1516,7 @@ impl Command {
         Command::Search,
         Command::Print,
         Command::Subscribe,
+        Command::QuickEvent,
     ];
 
     pub fn id(self) -> u32 {
@@ -1532,6 +1554,7 @@ impl Command {
             Command::Search => "Search Events",
             Command::Print => "Print...",
             Command::Subscribe => "Subscribe to Calendar from Clipboard",
+            Command::QuickEvent => "Quick Event...",
         }
     }
 
@@ -1550,6 +1573,7 @@ impl Command {
             Command::GoToDate => "cmd+shift+t",
             Command::Search => "cmd+f",
             Command::Print => "cmd+p",
+            Command::QuickEvent => "cmd+shift+n",
             _ => "",
         }
     }
@@ -1560,7 +1584,7 @@ impl Calendar {
     pub fn enabled(&self, cmd: Command) -> bool {
         let editing = self.editor.is_some();
         // the Go to Date sheet is modal too
-        let busy = editing || self.goto.is_some();
+        let busy = editing || self.sheet_open();
         let saved = self.editor.as_ref().is_some_and(|d| d.existing);
         match cmd {
             Command::Save | Command::Duplicate => editing,
@@ -1625,6 +1649,7 @@ impl Calendar {
             Command::NewEventFromText => Target::Add,
             Command::GoToDate => Target::GoOpen,
             Command::Search => Target::SearchField,
+            Command::QuickEvent => Target::QuickOpen,
             // the app shows the panels and passes the file's text to `import_file` / reads `archive_text`
             Command::ZoomIn | Command::ZoomOut | Command::Import | Command::ExportArchive | Command::ImportArchive | Command::Print | Command::Subscribe => return false,
         };
@@ -1634,7 +1659,7 @@ impl Calendar {
 
     /// Whether the Settings menu can be used now (not while an event is open).
     pub fn settings_enabled(&self) -> bool {
-        self.editor.is_none() && self.goto.is_none()
+        self.editor.is_none() && !self.sheet_open()
     }
 
     /// Whether Settings menu choice `setting` is the current one (its check mark).

@@ -78,7 +78,7 @@ impl Calendar {
     pub(super) fn begin_press(&mut self, ui: &Ui, x: f32, y: f32, t: f64) {
         self.drag = None;
         self.press = None;
-        if self.editor.is_some() || self.goto.is_some() || self.searching() {
+        if self.editor.is_some() || self.sheet_open() || self.searching() {
             return;
         }
         let Some((col, minute)) = self.grid_at(ui, x, y) else { return };

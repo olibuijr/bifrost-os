@@ -1600,3 +1600,77 @@ fn holidays_and_subscribed_events_draw_in_every_view() {
     // the printed agenda lists them too
     assert!(c.print_job().1.contains("Team standup"));
 }
+
+#[test]
+fn quick_event_adds_the_event_a_sentence_describes() {
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    assert!(c.enabled(Command::QuickEvent) && c.perform(&ui, Command::QuickEvent, 0.0));
+    assert_eq!(c.quick_text(), Some(""));
+    assert!(!c.enabled(Command::NewEvent) && !c.enabled(Command::QuickEvent), "the sheet is modal");
+    type_text(&mut c, &ui, "Lunch with Ana tomorrow at 12:30");
+    let rows = c.quick_preview();
+    assert_eq!(rows[0].1, "Lunch with Ana");
+    assert_eq!(rows[1].1, "Monday, October 5, 2026");
+    assert_eq!(rows[2].1, "12:30");
+    // pasted text goes into the line too
+    assert!(c.edit_commands(Some("x")).supports(Edit::Paste) && !c.edit_commands(Some("x")).supports(Edit::Copy));
+    tap_bar(&mut c, &ui, chrome::B_QUICK, 10.0);
+    assert!(c.quick_text().is_none(), "Add closes the sheet");
+    assert_eq!(c.events.len(), 1);
+    let e = &c.events[0];
+    assert_eq!((e.title.as_str(), e.date, e.minute, e.duration), ("Lunch with Ana", date(2026, 10, 5), 750, 60));
+    assert_eq!(c.notice.as_deref(), Some("Added Lunch with Ana on 2026-10-05 at 12:30"));
+    assert_eq!(c.selected, date(2026, 10, 5));
+    assert_eq!(new(&ui, temp.file()).events.len(), 1, "saved");
+}
+
+#[test]
+fn quick_event_takes_return_paste_and_backspace_and_refuses_an_empty_sentence() {
+    use bifrost_app::Command as Edit;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::QuickEvent, 0.0);
+    c.key(&ui, Out::Enter, 1.0);
+    assert!(c.quick_text().is_some(), "the sheet stays");
+    assert_eq!(c.error.as_deref(), Some("Type what the event is, for example: Lunch tomorrow at 12:30"));
+    assert!(c.events.is_empty());
+    assert!(c.edit_command(&ui, Edit::Paste, Some("Dentist friday 3pm\nsecond line"), 2.0));
+    assert_eq!(c.quick_text(), Some("Dentist friday 3pm"));
+    assert!(c.error.is_none(), "typing clears the message");
+    c.key(&ui, Out::Backspace, 3.0);
+    assert_eq!(c.quick_text(), Some("Dentist friday 3p"));
+    type_text(&mut c, &ui, "m");
+    c.key(&ui, Out::Enter, 4.0);
+    assert!(c.quick_text().is_none());
+    assert_eq!((c.events[0].title.as_str(), c.events[0].date, c.events[0].minute), ("Dentist", date(2026, 10, 9), 15 * 60));
+}
+
+#[test]
+fn quick_event_can_be_cancelled_and_blocks_the_window_behind_it() {
+    use bifrost_app::proto::CHORD_META;
+    let temp = Temp::new();
+    let ui = crate::test_ui();
+    let mut c = new(&ui, temp.file());
+    c.perform(&ui, Command::QuickEvent, 0.0);
+    type_text(&mut c, &ui, "Never mind");
+    assert!(!c.chord(&ui, 3, CHORD_META, 1.0), "no view change behind the sheet");
+    assert!(!c.change_setting(&ui, prefs::Setting::MondayFirst));
+    tap_bar(&mut c, &ui, chrome::B_CANCEL, 2.0);
+    assert!(c.quick_text().is_none() && c.events.is_empty());
+    c.perform(&ui, Command::QuickEvent, 3.0);
+    assert_eq!(c.quick_text(), Some(""), "a fresh line each time");
+    assert!(c.escape(&ui, 4.0));
+    assert!(c.quick_text().is_none());
+    // the sheet and its field draw and are published
+    c.perform(&ui, Command::QuickEvent, 5.0);
+    type_text(&mut c, &ui, "Dentist tomorrow 3pm");
+    draw_once(&mut c, &ui);
+    assert!(c.controls(&ui).iter().any(|n| n.role == bifrost_app::controls::Role::TextField && n.label == "Quick Event" && n.value == "Dentist tomorrow 3pm"));
+    // the app's intents close it
+    intents::perform(&mut c, &ui, "show-date", &params(&[("date", "2027-01-15")])).unwrap();
+    assert!(c.quick_text().is_none());
+}

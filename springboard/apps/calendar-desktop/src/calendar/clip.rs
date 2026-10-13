@@ -106,20 +106,29 @@ impl Calendar {
                 .with(Edit::Paste, pasteboard.is_some())
                 .with(Edit::SelectAll, !field.is_empty());
         }
-        if self.search_focused {
+        if self.search_focused || self.quick_line.is_some() {
             return Commands::default().with(Edit::Paste, pasteboard.is_some());
         }
-        let have = self.goto.is_none() && self.copy_target().is_some();
+        let have = !self.sheet_open() && self.copy_target().is_some();
         Commands::default()
             .with(Edit::Cut, have)
             .with(Edit::Copy, have)
-            .with(Edit::Paste, self.goto.is_none() && pasteboard.is_some_and(pasteable))
+            .with(Edit::Paste, !self.sheet_open() && pasteboard.is_some_and(pasteable))
     }
 
     /// Runs an Edit menu command. `pasteboard` is read by the app when the command arrives. True when it did something.
     pub fn edit_command(&mut self, ui: &Ui, cmd: Edit, pasteboard: Option<&str>, t: f64) -> bool {
         self.dirty = true;
-        // the search field, when it has the cursor, takes Paste; its other commands are not offered
+        // the Quick Event line and the search field, when they have the cursor, take Paste; their other commands are not offered
+        if self.quick_line.is_some() {
+            return match (cmd, pasteboard) {
+                (Edit::Paste, Some(text)) => {
+                    self.quick_paste(text);
+                    true
+                }
+                _ => false,
+            };
+        }
         if self.search_focused && self.editor.is_none() {
             return match (cmd, pasteboard) {
                 (Edit::Paste, Some(text)) => {

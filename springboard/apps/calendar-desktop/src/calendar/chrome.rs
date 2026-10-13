@@ -46,6 +46,7 @@ const UNDO_NODE: u64 = 300;
 const EVENT_NODE: u64 = 1 << 32;
 pub(super) const B_SAVE: u32 = 14;
 pub(super) const B_GO: u32 = 15;
+pub(super) const B_QUICK: u32 = 16;
 
 /// The width the kit's `toolbar` gives each button (glyph buttons are a capsule, titled ones their label).
 fn item_w(ui: &Ui) -> impl Fn(&ToolbarItem) -> f32 + '_ {
@@ -100,6 +101,20 @@ impl Calendar {
             ));
             return bars;
         }
+        if self.quick_line.is_some() {
+            let title = "Quick Event";
+            bars.push((
+                Toolbar::new(vec![
+                    ToolbarItem::button(B_CANCEL, "Cancel"),
+                    ToolbarItem::flexible_space(),
+                    ToolbarItem::custom(B_TITLE, title, (ui.measure(title, MAC_BODY_PT, Weight::Bold) / k).ceil()),
+                    ToolbarItem::flexible_space(),
+                    ToolbarItem::button(B_QUICK, "Add"),
+                ]),
+                band(start, end - start),
+            ));
+            return bars;
+        }
         if self.goto.is_some() {
             let title = "Go to Date";
             bars.push((
@@ -146,7 +161,7 @@ impl Calendar {
     /// The search field at the right end of the band over the content (points, window coordinates). None while a sheet
     /// or the event form is open, and when the window is too narrow to fit it beside the toolbar.
     pub(super) fn search_rect(&self, ui: &Ui) -> Option<Rect> {
-        if self.editor.is_some() || self.goto.is_some() {
+        if self.editor.is_some() || self.sheet_open() {
             return None;
         }
         let k = Self::k(ui);
@@ -191,6 +206,7 @@ impl Calendar {
             B_NEXT => Target::Next,
             B_CANCEL => Target::Cancel,
             B_GO => Target::GoConfirm,
+            B_QUICK => Target::QuickAdd,
             _ => Target::Save,
         })
     }
@@ -209,6 +225,8 @@ impl Calendar {
             nodes.extend(self.editor_nodes(ui));
         } else if self.goto.is_some() {
             nodes.extend(self.goto_nodes(ui));
+        } else if self.quick_line.is_some() {
+            nodes.extend(self.quick_nodes(ui));
         } else if self.searching() {
             // the results are listed by `search_nodes`
         } else {

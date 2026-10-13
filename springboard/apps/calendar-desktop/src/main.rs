@@ -136,6 +136,7 @@ impl App for CalendarApp {
                 title: "Event".into(),
                 items: vec![
                     item(Command::NewEvent),
+                    item(Command::QuickEvent),
                     item(Command::Save),
                     item(Command::Duplicate),
                     item(Command::ExportEvent),
