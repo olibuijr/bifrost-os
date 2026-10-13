@@ -3,8 +3,8 @@
   "doc": "https://developer.apple.com/documentation/foundation",
   "macos_since": "10.0",
   "status": "partial",
-  "bifrost": "bifrost_app::locale, bifrost_app::coding, bifrost_app::attributed, bifrost_ui::calendar, bifrost_ui::format, bifrost_ui::table, bifrost_ui::diff, bifrost_ui::geometry",
-  "summary": "Locale-aware number, date, byte, measurement and list formatting, Gregorian calendar math, sort descriptors and Codable-style coding exist. Apps get no predicate or expression engine, no regex or natural-language API, no time zones, and no full Data/Decimal/UUID/IndexSet type family (Rust std covers some of it).",
+  "bifrost": "bifrost_app::locale, bifrost_app::time_zone, bifrost_app::coding, bifrost_app::attributed, bifrost_ui::calendar, bifrost_ui::format, bifrost_ui::table, bifrost_ui::diff, bifrost_ui::geometry",
+  "summary": "Locale-aware number, date, byte, measurement and list formatting, Gregorian calendar math, sort descriptors and Codable-style coding exist. Time zones exist as TimeZone (identifiers from the system tz database, offsets, daylight saving, transitions). Apps get no predicate or expression engine, no regex or natural-language API, no non-Gregorian calendars, and no full Data/Decimal/UUID/IndexSet type family (Rust std covers some of it).",
   "rea_evidence": "ev_f121193127e3dd8357738ded0ca4fc3e8cf37079a4700254b73fb29165bc71e2",
   "features": [
     {
@@ -33,7 +33,14 @@
       "apple": "Date, Calendar, DateComponents, TimeZone, DateInterval",
       "bifrost": "springboard/ui/src/calendar.rs (Gregorian Date, days_in_month, is_leap, weekday math); springboard/sdk/src/locale.rs (explicit tz_offset in DateFormatter)",
       "status": "partial",
-      "note": "Gregorian only, no time-zone database, no DateInterval; docs/bifrost-ui.md 'Locale and localization' lists these gaps"
+      "note": "Gregorian only, no DateInterval; time zones are the 'Time zones' row; docs/bifrost-ui.md 'Locale and localization' lists these gaps"
+    },
+    {
+      "feature": "Time zones",
+      "apple": "TimeZone: init(identifier:), current, autoupdatingCurrent, secondsFromGMT(for:), abbreviation(for:), isDaylightSavingTime(for:), nextDaylightSavingTimeTransition(after:), knownTimeZoneIdentifiers, localizedName(for:locale:), systemTimeZoneDidChange notification",
+      "bifrost": "springboard/sdk/src/time_zone.rs (TimeZone, NameStyle, SYSTEM_TIME_ZONE_DID_CHANGE); reads springboard/src/bare/timezone.rs (TZif files and POSIX rules from the system tz database)",
+      "status": "partial",
+      "note": "Gregorian instants only; localizedName gives English names for abbreviations in a built-in table and other locales get English too; nothing publishes the zone-change notification yet; World Clock still uses shell clock::tz city rules and the apps have not moved to TimeZone; not yet checked on Midget"
     },
     {
       "feature": "Units and Measurement",
@@ -88,7 +95,7 @@
   "gaps": [
     "Predicate and expression engine (NSPredicate, Predicate)",
     "Regular expression and natural-language text analysis API",
-    "Time zones and non-Gregorian calendars",
+    "Non-Gregorian calendars (Buddhist, Japanese, Islamic, Hebrew) and time-zone names beyond the built-in English table",
     "Progress tree (ProgressManager, Subprogress)",
     "IndexSet, ordered and counted sets, Decimal, UUID, NSNumber wrappers",
     "More unit dimensions and formatter types (duration, person name, ISO8601); languages beyond en and is"

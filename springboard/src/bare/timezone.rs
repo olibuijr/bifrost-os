@@ -91,11 +91,24 @@ impl Spec {
     }
 }
 
+/// The daylight-saving half of a POSIX rule.
+#[derive(Clone, Debug, PartialEq)]
+struct Daylight {
+    /// seconds east of UTC
+    offset: i32,
+    /// abbreviation, e.g. "CEST"
+    name: String,
+    start: Spec,
+    end: Spec,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct Rule {
     /// seconds east of UTC
     std: i32,
-    dst: Option<(i32, Spec, Spec)>,
+    /// standard-time abbreviation, e.g. "CET"
+    std_name: String,
+    dst: Option<Daylight>,
 }
 
 struct Cursor<'a> {
@@ -103,7 +116,7 @@ struct Cursor<'a> {
     i: usize,
 }
 
-impl Cursor<'_> {
+impl<'a> Cursor<'a> {
     fn peek(&self) -> Option<u8> {
         self.s.get(self.i).copied()
     }
@@ -123,19 +136,25 @@ impl Cursor<'_> {
     }
 
     /// A zone abbreviation: letters, or anything between `<` and `>`.
-    fn name(&mut self) -> Option<()> {
+    fn name(&mut self) -> Option<&'a str> {
+        let s = self.s;
         if self.eat(b'<') {
+            let start = self.i;
             while self.peek()? != b'>' {
                 self.i += 1;
             }
+            let name = std::str::from_utf8(&s[start..self.i]).ok()?;
             self.i += 1;
-            return Some(());
+            return Some(name);
         }
         let start = self.i;
         while self.peek().is_some_and(|c| c.is_ascii_alphabetic()) {
             self.i += 1;
         }
-        (self.i - start >= 3).then_some(())
+        if self.i - start < 3 {
+            return None;
+        }
+        std::str::from_utf8(&s[start..self.i]).ok()
     }
 
     /// [+-]hh[:mm[:ss]] in seconds.
@@ -174,13 +193,13 @@ impl Rule {
     /// Parses a POSIX TZ string such as `CET-1CEST,M3.5.0,M10.5.0/3`.
     fn parse(tz: &str) -> Option<Rule> {
         let mut c = Cursor { s: tz.as_bytes(), i: 0 };
-        c.name()?;
+        let std_name = c.name()?.to_string();
         let std = -c.hms()?; // POSIX counts hours west of UTC
         if c.peek().is_none() {
-            return Some(Rule { std, dst: None });
+            return Some(Rule { std, std_name, dst: None });
         }
-        c.name()?;
-        let dst = if matches!(c.peek(), Some(b',') | None) { std + 3600 } else { -c.hms()? };
+        let dst_name = c.name()?.to_string();
+        let offset = if matches!(c.peek(), Some(b',') | None) { std + 3600 } else { -c.hms()? };
         let (start, end) = if c.eat(b',') {
             let start = c.spec()?;
             c.eat(b',').then_some(())?;
@@ -188,22 +207,28 @@ impl Rule {
         } else {
             (Spec { month: 3, week: 2, wday: 0, time: 7200 }, Spec { month: 11, week: 1, wday: 0, time: 7200 })
         };
-        Some(Rule { std, dst: Some((dst, start, end)) })
+        Some(Rule { std, std_name, dst: Some(Daylight { offset, name: dst_name, start, end }) })
+    }
+
+    /// (offset east of UTC, is daylight time, abbreviation) at a Unix time.
+    fn resolve(&self, unix: i64) -> (i32, bool, &str) {
+        let Some(d) = &self.dst else { return (self.std, false, &self.std_name) };
+        let (year, ..) = civil_from_days((unix + self.std as i64).div_euclid(DAY));
+        // spring forward is stated in standard time, fall back in daylight time
+        let on = d.start.local_secs(year) - self.std as i64;
+        let off = d.end.local_secs(year) - d.offset as i64;
+        let daylight = if on < off { unix >= on && unix < off } else { !(unix >= off && unix < on) };
+        if daylight {
+            (d.offset, true, &d.name)
+        } else {
+            (self.std, false, &self.std_name)
+        }
     }
 
     /// (offset east of UTC, is daylight time) at a Unix time.
     fn at(&self, unix: i64) -> (i32, bool) {
-        let Some((dst, start, end)) = self.dst else { return (self.std, false) };
-        let (year, ..) = civil_from_days((unix + self.std as i64).div_euclid(DAY));
-        // spring forward is stated in standard time, fall back in daylight time
-        let on = start.local_secs(year) - self.std as i64;
-        let off = end.local_secs(year) - dst as i64;
-        let daylight = if on < off { unix >= on && unix < off } else { !(unix >= off && unix < on) };
-        if daylight {
-            (dst, true)
-        } else {
-            (self.std, false)
-        }
+        let (offset, daylight, _) = self.resolve(unix);
+        (offset, daylight)
     }
 }
 
@@ -217,8 +242,17 @@ pub struct Zone {
     kinds: Vec<u8>,
     /// (seconds east of UTC, is daylight time)
     types: Vec<(i32, bool)>,
+    /// abbreviation of each type, parallel to `types` ("GMT", "BST")
+    names: Vec<String>,
     /// governs everything after the last transition
     rule: Option<Rule>,
+}
+
+/// The abbreviation stored at `idx` in a TZif block of NUL-terminated strings.
+fn abbreviation_at(chars: &[u8], idx: usize) -> String {
+    let tail = chars.get(idx..).unwrap_or(&[]);
+    let end = tail.iter().position(|&c| c == 0).unwrap_or(tail.len());
+    String::from_utf8_lossy(&tail[..end]).into_owned()
 }
 
 fn be32(b: &[u8], at: usize) -> Option<u32> {
@@ -257,10 +291,14 @@ impl Zone {
         at += timecnt * wide;
         let kinds = b.get(at..at + timecnt)?.to_vec();
         at += timecnt;
+        let chars_at = at + typecnt * 6;
+        let chars = b.get(chars_at..chars_at + charcnt)?;
         let mut types = Vec::with_capacity(typecnt);
+        let mut names = Vec::with_capacity(typecnt);
         for k in 0..typecnt {
             let o = at + 6 * k;
             types.push((be32(b, o)? as i32, *b.get(o + 4)? != 0));
+            names.push(abbreviation_at(chars, *b.get(o + 5)? as usize));
         }
         at += typecnt * 6 + charcnt + leap * (wide + 4) + isstd + isut;
         if types.is_empty() || kinds.iter().any(|&k| k as usize >= types.len()) {
@@ -273,29 +311,45 @@ impl Zone {
         } else {
             None
         };
-        Some(Zone { transitions, kinds, types, rule })
+        Some(Zone { transitions, kinds, types, names, rule })
     }
 
     /// (offset east of UTC in seconds, is daylight time) at a Unix time.
     pub fn at(&self, unix: i64) -> (i32, bool) {
+        let (offset, daylight, _) = self.resolve(unix);
+        (offset, daylight)
+    }
+
+    /// The abbreviation in force at a Unix time ("GMT", "CEST", "+04").
+    pub fn abbreviation(&self, unix: i64) -> String {
+        self.resolve(unix).2.to_string()
+    }
+
+    /// (offset east of UTC in seconds, is daylight time, abbreviation) at a Unix time.
+    fn resolve(&self, unix: i64) -> (i32, bool, &str) {
         match self.transitions.last() {
             Some(&last) if unix >= last => match &self.rule {
-                Some(rule) => rule.at(unix),
-                None => self.types[*self.kinds.last().expect("kind per transition") as usize],
+                Some(rule) => rule.resolve(unix),
+                None => self.kind(*self.kinds.last().expect("kind per transition") as usize),
             },
             Some(_) => {
                 let n = self.transitions.partition_point(|&t| t <= unix);
                 // before the first transition the first standard type applies
                 match n.checked_sub(1) {
-                    Some(k) => self.types[self.kinds[k] as usize],
-                    None => self.types.iter().copied().find(|t| !t.1).unwrap_or(self.types[0]),
+                    Some(k) => self.kind(self.kinds[k] as usize),
+                    None => self.kind(self.types.iter().position(|t| !t.1).unwrap_or(0)),
                 }
             }
             None => match &self.rule {
-                Some(rule) => rule.at(unix),
-                None => self.types[0],
+                Some(rule) => rule.resolve(unix),
+                None => self.kind(0),
             },
         }
+    }
+
+    fn kind(&self, k: usize) -> (i32, bool, &str) {
+        let (offset, daylight) = self.types[k];
+        (offset, daylight, &self.names[k])
     }
 }
 
@@ -467,10 +521,17 @@ pub fn current_name() -> String {
 /// Seconds east of UTC at `unix` in the active zone; `None` when no zone
 /// database is readable (the caller falls back to libc).
 pub fn offset_at(unix: i64) -> Option<i32> {
+    with_current(|_, z| z.at(unix).0)
+}
+
+/// Runs `f` on the active zone's name and parsed data (the default zone is loaded on first use);
+/// None when no zone database is readable.
+pub fn with_current<R>(f: impl FnOnce(&str, &Zone) -> R) -> Option<R> {
     if ZONE.lock().ok()?.is_none() && !TRIED_DEFAULT.swap(true, Ordering::Relaxed) {
         set(DEFAULT);
     }
-    ZONE.lock().ok()?.as_ref().map(|(_, z)| z.at(unix).0)
+    let guard = ZONE.lock().ok()?;
+    guard.as_ref().map(|(name, zone)| f(name.as_str(), zone))
 }
 
 /// "UTC+1", "UTC-3:30" for an offset in seconds.
@@ -564,6 +625,8 @@ mod tests {
         let z = Zone::parse(&blob()).unwrap();
         assert_eq!(z.at(999), (0, false));
         assert_eq!(z.at(1000), (7200, false), "after the last transition the footer rule rules");
+        assert_eq!(z.abbreviation(999), "UTC");
+        assert_eq!(z.abbreviation(1000), "XXX", "the footer's standard abbreviation");
         assert_eq!(Zone::parse(b"nope"), None);
     }
 

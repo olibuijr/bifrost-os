@@ -1495,11 +1495,28 @@ fraction digits), `DateFormatter` (`date_style`/`time_style`, `set_date_format`,
 reads `<app>/<lang>.lproj/Localizable.strings` (comments, escapes) with `en` then the key itself as fallback; call
 `set_main_bundle` once at launch. Built-in data covers `en` and `is`; other languages format as `en`. Contract tests live in the module.
 
-Gaps: no other languages, no `.stringsdict` plural rules, no time-zone database (`tz_offset` is explicit seconds),
+Gaps: no other languages, no `.stringsdict` plural rules, no time-zone names beyond English (`tz_offset` is explicit seconds; see "Time zones" below),
 Gregorian calendar only, no unit-system auto-conversion in the measurement formatter, no binary `ByteCountFormatter`
 style. The shell does not yet publish a region key itself, so `BIFROST_REGION` is read only if set. `bifrost_ui::format`
 stays English-only for shell code and its callers are not migrated: the shell has no `Locale` plumbing yet, so moving
 them would change nothing visible.
+
+## Time zones (Foundation `TimeZone` parity)
+
+`bifrost_app::time_zone::TimeZone` mirrors Foundation's `TimeZone`. `TimeZone::new(identifier)` (`TimeZone(identifier:)`)
+returns None for a name the tz database lacks; `TimeZone::current()` is the system zone, `TimeZone::auto_updating_current()`
+reads the system zone on every query, and `TimeZone::from_seconds_from_gmt(s)` is a fixed offset (-18 to +18 hours,
+identifier `GMT+0100`). Queries take a `coding::Date` (seconds since 1970): `seconds_from_gmt`, `abbreviation`,
+`is_daylight_saving_time`, `next_daylight_saving_time_transition` (the first changing second within four years, None
+for a fixed offset). `TimeZone::known_time_zone_identifiers()` lists the database sorted. `localized_name(NameStyle, &Locale)`
+returns English names: short forms are the abbreviation in force, long forms come from a built-in table of common
+abbreviations (GMT, BST, CET, EST, PST, JST, AEST, NZST, ...) and are None for anything else. The data is the shell's
+`springboard/src/bare/timezone.rs` (TZif v1/v2 files, POSIX footer rules, abbreviations); `SYSTEM_TIME_ZONE_DID_CHANGE`
+names the zone-change notification, which nothing publishes yet.
+
+Gaps: Gregorian instants only; no names in languages other than English; the World Clock still uses its fixed city table
+(`shell/clock/tz.rs`) rather than `TimeZone`; apps have not moved to the SDK type. Tests live in `sdk/src/time_zone.rs`
+and need `/usr/share/zoneinfo`. Not yet checked on Midget.
 
 ## Login items and menu-bar extras (ServiceManagement and NSStatusItem parity)
 

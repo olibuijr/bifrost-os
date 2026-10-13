@@ -67,6 +67,7 @@ pub mod input_events;
 pub mod launch_services;
 pub mod notify_bus;
 pub mod locale;
+pub mod time_zone;
 pub mod bundle_resources;
 pub mod keychain;
 pub mod keychain_groups;
