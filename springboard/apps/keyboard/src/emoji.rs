@@ -4,7 +4,7 @@
 /// Emoji shown per screen: 3 rows of 11.
 pub const PER_PAGE: usize = 33;
 
-pub use springboard::emoji::{Category, CATEGORIES};
+pub use springboard::emoji::CATEGORIES;
 
 /// A tab of the emoji page: Recents first, then the categories.
 pub const TABS: usize = CATEGORIES.len() + 1;

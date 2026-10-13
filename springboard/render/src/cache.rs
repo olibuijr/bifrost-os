@@ -45,6 +45,7 @@ const MAX_BUDGET: usize = 32 * 1024 * 1024;
 const GEN_ENTRIES: usize = 256;
 /// Pixel bytes per generation at the default budget, before it retires, so large text (the lock clock)
 /// cannot fill the cache.
+#[cfg(test)]
 const GEN_BYTES: usize = DEFAULT_BUDGET / 2;
 
 /// The pixel budget for a screen of `w` x `h` px: two screens of RGBA text, within `MIN_BUDGET..=MAX_BUDGET`.

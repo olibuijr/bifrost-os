@@ -42,7 +42,7 @@ enum Pending {
     Password(Account),
     /// A login saved after a typed sign-in: added, or replaced when an item already exists.
     Save { account: Account, password: String },
-    Replace { account: Account, password: String },
+    Replace,
 }
 
 /// Which part of the window a press started in. Only the two lists scroll; the rest is chrome.
@@ -239,11 +239,11 @@ impl MessagesWindow {
                 Ok(_) => {}
                 Err(KeyError::DuplicateItem) => {
                     let request = passwords::update(ctx, &accounts::service(&account.homeserver), &account.user, &password);
-                    self.pending.insert(request, Pending::Replace { account, password });
+                    self.pending.insert(request, Pending::Replace);
                 }
                 Err(e) => self.model.status = format!("The password could not be saved in Passwords: {e:?}"),
             },
-            Pending::Replace { .. } => {
+            Pending::Replace => {
                 if let Err(e) = passwords::decode_password(result) {
                     self.model.status = format!("The password could not be saved in Passwords: {e:?}");
                 }
@@ -349,7 +349,6 @@ impl MessagesWindow {
                     }
                     (None, _) => self.model.status = "Only PNG, JPEG, GIF and WebP pictures can be sent".into(),
                     (_, Err(e)) => self.model.status = format!("The picture could not be read: {e}"),
-                    (Some(_), Ok(_)) => {}
                 }
                 self.dirty = true;
                 true

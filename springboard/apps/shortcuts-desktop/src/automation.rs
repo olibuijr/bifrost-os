@@ -12,7 +12,7 @@
 //!   object with `name` (read-write), `color` (read-write, a palette index) and `actions` (read-only count).
 //!   Shortcuts are found by name; the first one with a name wins.
 
-use springboard::shortcuts::{self as model, Shortcut, MAX_NAME};
+use springboard::shortcuts::{Shortcut, MAX_NAME};
 use crate::widget::PALETTE;
 use bifrost_app::actor::Actor;
 use bifrost_app::control::{RpcError, INVALID_PARAMS, METHOD_NOT_FOUND};
@@ -23,7 +23,6 @@ use bifrost_app::controls::value_query::{QueryError, ValueItem, ValueQueryResult
 use bifrost_app::controls::workflow::{Step, Workflow, WorkflowController, WorkflowError};
 use bifrost_app::intents::{self, Entity, EntityQuery, Intent, IntentResult, Param, ParamType, Snippet};
 use bifrost_core::json::Json;
-use std::path::Path;
 
 /// The entity type a shortcut parameter refers to.
 pub const SHORTCUT: &str = "Shortcut";
@@ -326,9 +325,9 @@ pub fn script_set(list: &mut Vec<Shortcut>, params: &Json) -> Result<Json, RpcEr
 mod tests {
     use super::*;
     use crate::ShortcutsApp;
-    use springboard::shortcuts::Action;
+    use springboard::shortcuts::{self as model, Action};
     use bifrost_app::App;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     fn dir(tag: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("shortcuts-automation-{}-{tag}", std::process::id()));

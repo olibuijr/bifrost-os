@@ -1081,7 +1081,7 @@ impl<'a> DrawContext<'a> {
             self.draw_shadow(cov, src, &sd);
         }
         let (alpha, mode, stride) = (self.gs.alpha, self.gs.blend, self.surf.stride);
-        let mut t = target(&mut self.surf, &mut self.layers);
+        let t = target(&mut self.surf, &mut self.layers);
         for y in y0..y1 {
             let crow = (y - cov.y) as usize * cov.w;
             let prow = (y - top) as usize * stride;
@@ -1126,7 +1126,7 @@ impl<'a> DrawContext<'a> {
         let (sw, sh, top, stride) = (self.surf.w as i32, self.surf.h as i32, self.surf.y0 as i32, self.surf.stride);
         let clip = self.gs.clip.clone();
         let [cr, cg, cb, ca] = sd.color.to_srgb().unwrap_or([0.0; 4]);
-        let mut t = target(&mut self.surf, &mut self.layers);
+        let t = target(&mut self.surf, &mut self.layers);
         for row in 0..bh {
             let y = upper + row as i32;
             if y < top || y >= sh {
