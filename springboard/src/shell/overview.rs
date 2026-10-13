@@ -10,6 +10,7 @@
 
 use super::appgrid::AppGrid;
 use super::control_center::desk_glass;
+use bifrost_ui::material_request::ShellSurface;
 use super::desk::Metrics;
 use super::ui::{Weight, CARD_BG, FIELD_BG, LABEL, LABEL_2, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, SELECTION, TINT, WHITE};
 use super::{apps, AppId, Effect, Event, Shell};
@@ -592,7 +593,7 @@ impl Overview {
         let m = sh.desk_metrics();
         // the veil: the presenter's blur under a tint, below the menu bar and above the dock
         let veil_h = g.h - m.menubar as f32 - if sh.dock_is_visible() { m.dock_bottom as f32 } else { 0.0 };
-        desk_glass(s, (0.0, m.menubar as f32, g.w, veil_h.max(1.0)), 0.0, (215.0 * p) as u32);
+        desk_glass(s, ShellSurface::OverviewVeil, (0.0, m.menubar as f32, g.w, veil_h.max(1.0)), 0.0, (215.0 * p) as u32);
         s.fill_rrect(0.0, m.menubar as f32, g.w, veil_h.max(1.0), 0.0, rgba(0, 0, 0, (60.0 * p) as u8));
         // the desktops strip slides down from the menu bar
         let slide_y = -(1.0 - p) * (g.strip_h + 10.0 * g.pt);
@@ -666,7 +667,7 @@ impl Overview {
                 let (tw, th) = sh.label(name, MAC_SUBHEAD_PT, Weight::Semibold, WHITE, |im| (im.w as f32, im.h as f32));
                 let (pw, ph) = (tw + ui.pt(20.0), th + ui.pt(8.0));
                 let (px, py) = (r.cx() - pw / 2.0, r.y + r.h + ui.pt(8.0));
-                desk_glass(s, (px, py, pw, ph), ph / 2.0, 255);
+                desk_glass(s, ShellSurface::OverviewPill, (px, py, pw, ph), ph / 2.0, 255);
                 sh.label(name, MAC_SUBHEAD_PT, Weight::Semibold, WHITE, |im| s.blit_colored(im, (px + (pw - im.w as f32) / 2.0) as i32, (py + (ph - im.h as f32) / 2.0) as i32, LABEL.now(), 255));
             }
         }
@@ -722,7 +723,7 @@ fn draw_slide(sh: &Shell, s: &mut Surface, dir: i32, start: f64, current: usize,
     // the veil enters from the far side and leaves on the near one
     let x = -(dir as f32) * w * (1.0 - 2.0 * e);
     let fade = (1.0 - (2.0 * e - 1.0).abs()).clamp(0.0, 1.0);
-    desk_glass(s, (x.max(0.0), top, (w - x.abs()).max(1.0), h.max(1.0)), 0.0, (200.0 * fade) as u32);
+    desk_glass(s, ShellSurface::OverviewVeil, (x.max(0.0), top, (w - x.abs()).max(1.0), h.max(1.0)), 0.0, (200.0 * fade) as u32);
     let name = format!("Desktop {}", current + 1);
     let a = (255.0 * fade) as u32;
     sh.label(&name, super::ui::MAC_TITLE2_PT, Weight::Semibold, WHITE, |im| {

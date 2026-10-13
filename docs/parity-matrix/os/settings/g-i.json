@@ -1,0 +1,247 @@
+{
+ "category": "settings",
+ "shard": "g-i",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GameCenterMacOSSettingsExtension.appex",
+   "category": "settings",
+   "name": "GameCenterMacOSSettingsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/GameCenterMacOSSettingsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Game Center service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GameCenterSettingsDeviceExpertExtension.appex",
+   "category": "settings",
+   "name": "GameCenterSettingsDeviceExpertExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/GameCenterSettingsDeviceExpertExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Game Center service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GameCenterSettingsSearchExtension.appex",
+   "category": "settings",
+   "name": "GameCenterSettingsSearchExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/GameCenterSettingsSearchExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Game Center service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GameControllerMacSettings.appex",
+   "category": "settings",
+   "name": "GameControllerMacSettings",
+   "path": "/System/Library/ExtensionKit/Extensions/GameControllerMacSettings.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/game_controllers_page.rs",
+   "status": "partial",
+   "note": "game controller settings",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GameControllerSettingsIntents.appex",
+   "category": "settings",
+   "name": "GameControllerSettingsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/GameControllerSettingsIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/game_controllers_page.rs",
+   "status": "partial",
+   "note": "game controller settings",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GeneralSettings.appex",
+   "category": "settings",
+   "name": "GeneralSettings",
+   "path": "/System/Library/ExtensionKit/Extensions/GeneralSettings.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "General page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GenerativePartnerSettingsExtension.appex",
+   "category": "settings",
+   "name": "GenerativePartnerSettingsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/GenerativePartnerSettingsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple generative service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/HeadphoneSettingsExtension.appex",
+   "category": "settings",
+   "name": "HeadphoneSettingsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/HeadphoneSettingsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no headphone settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/HomePrivacySettingsExtension.appex",
+   "category": "settings",
+   "name": "HomePrivacySettingsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/HomePrivacySettingsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple HomeKit privacy",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/InternationalSettingsExtension.appex",
+   "category": "settings",
+   "name": "InternationalSettingsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/InternationalSettingsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Language & Region page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/InternetAccountsSettingsExtension.appex",
+   "category": "settings",
+   "name": "InternetAccountsSettingsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/InternetAccountsSettingsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no internet accounts page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/InternetAccounts.prefPane",
+   "category": "settings",
+   "name": "InternetAccounts",
+   "path": "/System/Library/PreferencePanes/InternetAccounts.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no internet accounts page",
+   "rea": []
+  }
+ ]
+}

@@ -471,6 +471,20 @@ Devices pick the new store version up through the normal 6 h app-update check (`
 Update badge). Daily timer install: `mkdir -p ~/.config/systemd/user && cp tools/systemd/bifrost-upstream-watch.* ~/.config/systemd/user/ && systemctl --user enable --now bifrost-upstream-watch.timer`
 (the unit expects the repo at `~/Projects/bifrost-os`, on the branch you want the commits on).
 
+## Parity teams and the macOS 27 reference (2026-10-13)
+
+Parity work runs as continuous teams of 10 Haiku agents (one framework or OS area each). Agents write code and unit
+tests and commit them on their own branches without running anything; the lead reviews by reading, merges into
+`integration`, runs the workspace tests to find errors and fixes them, then dispatches the next team. Frameworks come
+from `bifrost pc parity coverage` (most gaps first); OS areas from the OS layer (`bifrost pc parity os-status`).
+
+The reference is macOS 27 Golden Gate 26A434. Its OTA payload is LZRAVEN-compressed, which no stock Linux tool
+decodes; `bifrost pc ref extract REGEX...` streams it through liblzraven and `~/Projects/macos-ref/tools/aa_stream.py`
+and writes only matching paths under `~/Projects/macos-ref/extract/ref27` (outside the repo). `bifrost pc ref index`
+writes the full file index (`ref27-index.tsv`, 484,002 entries), and `bifrost pc os-inventory` turns it into
+`docs/parity-matrix/os/`. Clean-room: values and behaviour are measured with REA and recorded in our own words
+(for example `docs/reference/materials-macos27.md`); reference files never enter the repo.
+
 ## Reinstall Midget autonomously
 
 **Default wipe: `qa-install` (owner rule, 2026-10-12).** Midget is wiped like a QA tester would: through the installer's real

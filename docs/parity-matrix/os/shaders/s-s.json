@@ -1,0 +1,91 @@
+{
+ "category": "shaders",
+ "shard": "s-s",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/Frameworks/PencilKit.framework/Versions/A/Resources/SixChannelComposite.ci.metallib",
+   "category": "shaders",
+   "name": "SixChannelComposite.ci.metallib",
+   "path": "/System/Library/Frameworks/PencilKit.framework/Versions/A/Resources/SixChannelComposite.ci.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "PencilKit",
+   "facts": {
+    "size": 3659
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/DesignLibrary.framework/SiriWaveArchive.metallib",
+   "category": "shaders",
+   "name": "SiriWaveArchive.metallib",
+   "path": "/System/Library/PrivateFrameworks/DesignLibrary.framework/SiriWaveArchive.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "DesignLibrary",
+   "facts": {
+    "size": 3347824
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SMCT.framework/Versions/A/Resources/smct.metallib",
+   "category": "shaders",
+   "name": "smct.metallib",
+   "path": "/System/Library/PrivateFrameworks/SMCT.framework/Versions/A/Resources/smct.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "SMCT",
+   "facts": {
+    "size": 20668
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/PrivateFrameworks/SkyLight.framework/Versions/A/Resources/SkyLightShaders.air64.metallib",
+   "category": "shaders",
+   "name": "SkyLightShaders.air64.metallib",
+   "path": "/System/Library/PrivateFrameworks/SkyLight.framework/Versions/A/Resources/SkyLightShaders.air64.metallib",
+   "kind": "metal library",
+   "identifier": "",
+   "version": "",
+   "owner": "SkyLight",
+   "facts": {
+    "size": 571552
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: BifrOSt writes its own shaders",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

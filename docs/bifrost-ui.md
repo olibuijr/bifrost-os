@@ -748,6 +748,12 @@ the windows behind the window. Ours, end to end:
   only when the list changes. Shell to app: `appearance::VIBRANCY` (GPU presenter, no Reduce Transparency) and
   `appearance::MATERIALS` (the shell decodes every kind and state). Without `MATERIALS` the SDK sends
   `MaterialKind::legacy()` kinds (`Sidebar`, else `Titlebar`) with the default state, which every shell decodes.
+- Window server (Apple parity: `NSVisualEffectView` behind-window sidebar material): under bifrost-wm the shell
+  sends each External window's material rects (`expand_material`, window radius growth on inner sides) as the
+  `ext-background-effect` blur region, exactly as for built-in windows; apps need no extra call beyond
+  `visual_effect` / `source_list`. Direct Wayland-surface apps do not send a region yet (gap).
+- Version guard: an app whose SDK protocol differs from the shell's (`Hello`, or packets that do not decode) is
+  stopped, logged, and its window shows "This app needs an update" instead of black (`AppHost::incompatible`).
 - Shell: `AppHost::materials` holds the list; `Shell::take_wayland_materials` turns it into window px with a
   `glass::Kind` (`Sidebar`, `Titlebar` for title bar and header, `Content` for the background materials, `Menu` for
   the floating ones) and the fixed state, and adds the Settings sidebar column.
@@ -767,9 +773,36 @@ the windows behind the window. Ours, end to end:
   modes. `widgets::vibrant_text()` says when to use it (vibrancy on, no Reduce Transparency). `source_list` draws
   labels, headers, counts and subtitles this way off the selection plate (the plate is opaque, so its text is plain).
   Apple's exact per-level vibrant values are private; the strengths above are the documented label alphas.
+- Vibrancy model (`bifrost_ui::vibrancy`, pixel math in `bifrost_render::vibrancy`, tables `ui::VIBRANT_LABEL` /
+  `VIBRANT_FILL`): `Role` (label or fill) x `Level` (primary .. quaternary, SwiftUI hierarchical `.primary` ..
+  `.quaternary`) gives a strength; `blend(light, on_material, reduce_transparency)` gives plus-lighter (Dark),
+  plus-darker (Light) or `Normal`. Labels use the label alphas (0.85 / 0.55 / 0.25 / 0.10; Light 0.50, 0.26 for
+  secondary and tertiary); fills use the system fill alphas (Dark 0.36 / 0.32 / 0.24 / 0.18, Light 0.20 / 0.16 /
+  0.12 / 0.08). `render::vibrancy::blit_image` (text, symbols) and `fill_rect` (shapes) draw on the CPU surface;
+  alpha is kept so the GPU glass path composites backdrop plus or minus the amount. `glass::Kind::allows_vibrancy`
+  is false for shell chrome (Liquid Glass) and under Reduce Transparency, where both draw the opaque colour at
+  the level's alpha. Mapping: `allowsVibrancy` = `Kind::allows_vibrancy`, `vibrantLight/vibrantDark` = the scheme
+  position, `foregroundStyle` hierarchy = `Level`. Apple's exact vibrant values are private; these are the
+  documented label and fill alphas. Not yet wired: `widgets::Vibrant` (SDK) still carries its own copy of the
+  label table and the symbol/fill call sites in `source_list` use plain colours.
 - Backdrops: every window whose materials look active (focused, or `State::Active`) gets its own backdrop of the
   windows under it; a rebuild the 30 Hz cap skipped wakes the main loop when due (`Presenter::retry_in_ms`).
-- Not matched yet: `isEmphasized`, `maskImage`, and vibrant fills (`vibrancy-fill` levels) as separate API; the
+- Model: `bifrost_ui::visual_effect` (`MaterialKind`, `BlendingMode`, `MaterialState::looks_active`,
+  `BackgroundStyle` = `interiorBackgroundStyle`, `Mask` = `maskImage` (rounded rect with per-corner `Corners`, or an
+  alpha mask), and `MaterialRequest`, the per-view request the window server consumes). The SDK draws one with
+  `widgets::visual_effect_request`. Tints per material and scheme are `MATERIAL_*` in `render/src/ui.rs`; the new ones
+  (menu, sheet, tool tip, header, content, under-window, under-page, full-screen) are derived from the measured
+  neighbours, not yet measured. `isEmphasized` changes the `.selection` tint (full accent); an inactive selection is grey.
+  Decision (2026-10-12, reconciliation): there is one model. `visual_effect::{MaterialKind, BlendingMode, MaterialState,
+  Corners, MaterialRequest}` is used by the shell (`ShellSurface::request`, `material_request.rs`, which now only names the
+  16 shell surfaces and their kinds), the wire (`proto` re-exports the same enums; `proto::Material` carries kind, rect,
+  uniform `radius`, state, `blending`, `emphasized` and optional per-corner `corners`, flags byte after the radius: bit 0
+  emphasized, bit 1 within-window, bit 2 four corner f32 follow), the SDK (`widgets::visual_effect_request` declares the
+  full request; the canvas still writes the tint with the largest corner) and the window server (`bifrost-wm`
+  `MaterialKind::from_model`). `SDK_VERSION` is 2: a version-1 app fails `Hello` and shows "This app needs an update".
+  SwiftUI `Material` maps onto kinds plus `MaterialRequest::strength` (see Glass and materials for apps).
+- Not matched yet: alpha masks on the wire (rounded rect only; an alpha mask is sent as its bounding rectangle), `strength`
+  and `glass` (Liquid Glass) on the wire, and vibrant fills (`vibrancy-fill` levels) as separate API; the
   within-window `widgets::material` blurs on the CPU (apps draw on the CPU; the presenter never sees the pixels
   under a within-window material).
 
@@ -1459,6 +1492,22 @@ Code: `springboard/sdk/src/quicklook.rs` (`bifrost_app::quicklook`), wire types 
 - **Thumbnails.** `thumbnail_path(url, size, scale)` names a PNG under `$XDG_CACHE_HOME/bifrost-quicklook`; `ThumbnailCache::best_representation` returns the cached path or asks the caller to render it, and caches it (`cache::Cache`).
 - **Gaps.** The shell does not draw the floating panel yet (the message is decoded and ignored), and no app is adopted yet (Files, PDFCraft and PhotoCraft are next). No built-in renderers: the app renders thumbnails itself (`QLThumbnailGenerator` generates from any file type). No `QLPreviewView`, `previewItemDisplayState`, transition source frames or full-screen mode, and no `QLThumbnailGenerator` update handlers (single result only).
 
+## Speech recognition requests and tasks (`SFSpeechRecognizer`, `SFSpeechRecognitionRequest`, `SFSpeechRecognitionTask`)
+
+`ui::recognition_task`, SDK `bifrost_app::speech_recognition`. Pure models, no I/O.
+
+- Authorization: `AuthorizationStatus` (`NotDetermined`, `Denied`, `Restricted`, `Authorized`) with one answer per
+  device. A second answer is refused and `restrict` overrides any answer, as `authorizationStatus` does.
+- Request: `Request` for a `Source` (`Buffer` for live audio, `Url` for a recorded file), with partial results on by
+  default, `TaskHint`, contextual strings, on-device-only recognition and an interaction identifier.
+- Task: `Recognizer::start` returns a `Task` in `Starting`, refused when not authorized or when on-device recognition
+  is required and not installed. States `Running`, `Finishing`, `Canceling`, `Completed`, as
+  `SFSpeechRecognitionTaskState`. Results reuse `recognition::Transcription` and `Session`.
+- Decisions: the recognizer that produces readings is not in this module. Partial results are dropped by the task when
+  the request turns them off. A canceled task completes with `TaskError::Canceled`.
+- Gaps: no live microphone feed from an app yet (the audio service records WAV only), no on-device model download
+  (see `speech_models`), and no result-level time codes beyond `Transcription::range`. Not tested on Midget.
+
 ## Spell checking (`NSSpellChecker`, `NSTextCheckingResult`)
 
 `bifrost_app::spellcheck`: `words(text)` tokenizer (byte ranges, keeps inner apostrophes), `Dictionary` trait (hunspell or other backends plug in), `WordList` (in-memory, edit-distance-1 suggestions), `SpellChecker` with `check_spelling`, `correction`, `guesses`, `learn_word`/`unlearn_word` (persisted in `UserDefaults` key `NSSpellChecker.learnedWords`), `ignore_word` (checker lifetime), `available_languages`, `automatically_corrects_spelling` (flag only), and `CheckingType`/`CheckingTypes` (OptionSet) with `CheckingResult`.
@@ -1562,6 +1611,22 @@ Gaps (not matched yet):
 - Hot corners and the title-bar double-click prefs are unchanged (not adjacent).
 - Nothing here was built or run when written; the unit tests in `window_fx.rs` and `apphost.rs` cover the math.
 
+
+## Disk Arbitration (DASession parity, `springboard/core/src/disk_session.rs`)
+
+Decisions, recorded for the disk-arbitration matrix rows (`docs/parity-matrix/data/disk-arbitration.json`):
+
+- A `Session` holds the last snapshot of block devices. The caller feeds it snapshots (a udev monitor is the source on
+  BifrOSt); the session diffs them with `disk_events::diff` and calls the appeared, disappeared and description-changed
+  callbacks in registration order. This matches `DARegisterDiskAppearedCallback`, `DARegisterDiskDisappearedCallback`
+  and `DARegisterDiskDescriptionChangedCallback` in shape, and `observe` returns the events it sent.
+- Gap, decided: there is no run loop or dispatch queue on the session (`DASessionScheduleWithRunLoop`,
+  `DASessionSetDispatchQueue`). Callbacks run on the thread that calls `observe`. The shell or an app schedules the
+  snapshots on its own loop. Matching a run loop needs the shared dispatch work, so it waits for that.
+- Gap, decided: the peek callback (`DARegisterDiskPeekCallback`) is not implemented.
+- Approvals and claims live on the session. `unmount` and `eject` plan commands through `disk_commands`, which checks
+  the claim, then the approval chain, then the device state. An unknown device name returns `Refusal::NoDisk`.
+- Status stays `partial` until the session is wired into the shell or the SDK and tested on Midget.
 
 ## Workspace (NSWorkspace parity, `bifrost_app::workspace`)
 
@@ -1686,3 +1751,225 @@ Tests: `restoration::tests` (`restorable_state_round_trips_through_a_relaunch`, 
 - `View::wants_tick` (scroll fling, indeterminate progress) feeds `Window::next_wake` (SDK-6).
 - Not done yet: SDK-8 to SDK-13, SDK-15, SDK-17 (the retained view kit and the direct path are kept for the
   layer-backed rebuild in `docs/graphics-architecture.md`; none of them has an app caller today).
+
+## Glass and materials for apps
+
+Module `springboard/ui/src/material_style.rs`. Views are imperative, so each SwiftUI modifier is a builder that yields
+`StyleRequest`s (rect, per-corner radii, fill, optional merge group), one per shape; `StyleRequest::to_material_request`
+makes the shared `visual_effect::MaterialRequest` the window server consumes. Mapping: ultraThin -> UnderWindowBackground,
+thin -> ContentBackground, regular -> Popover, thick -> Sheet, ultraThick -> HudWindow, bar -> HeaderView, each with
+`strength` = the level 0..4; glass sets `glass` (Regular or Clear), which the window server draws as GlassRegular or GlassClear.
+
+| SwiftUI | Ours |
+|---|---|
+| `Material` (ultraThin, thin, regular, thick, ultraThick, bar) | `Material`; `level()` 0..4 is the blur rank, `Bar` is the chrome material |
+| `.background(material, in: shape)` | `background(material, MatShape, rect)` |
+| `glassEffect(_:in:)`, `Glass.regular/clear/tint/interactive` | `glass_effect(Glass, MatShape, rect)`, `Glass::REGULAR/CLEAR`, `.tint()`, `.interactive()` |
+| `GlassEffectContainer(spacing:)` | `GlassContainer`: shapes within `spacing` merge, transitively; regular and clear do not merge by proximity; `requests()` tags merged shapes with a group |
+| `glassEffectUnion(id:)` | `GlassItem.union`: the same id always merges, near or far |
+| `glassEffectID` and morphing | `GlassIds::frame` starts a `Morph` (spring, response 0.35 s, damping 0.8, the shell's panel-reveal feel) when an id changes geometry; an interrupted morph retargets without a jump |
+| `backgroundExtensionEffect()` | `background_extension(content, bounds)` returns the edge strips to mirror and blur |
+| `.glass`, `.glassProminent` | `GlassButtonStyle`: interactive capsule; prominent is tinted with the accent |
+
+Mapping note: agent 1's shared material request was not on `integration` when this landed, so `Material` and `Fill`
+are minimal compatible definitions; `Fill::Blur(Material)` converts onto the shared type by level. Morphs interpolate a
+uniform corner radius (the largest corner), so uneven corners snap to it while moving. Not built or tested (no builds
+in this wave); not tried on Midget.
+
+## Image blur filters (Core Image blur category, SwiftUI `.blur`)
+
+`bifrost_render::blur_filters` (SDK: `bifrost_app::image_blur`) holds the blur filters with the reference parameters:
+`gaussian_blur` (`inputRadius` is the standard deviation, kernel truncated at 3 sigma), `box_blur` (`2 * round(r) + 1`),
+`motion_blur` (radius, angle counter-clockwise from +x), `zoom_blur` (centre, amount = shift in px at the farthest corner),
+`disc_blur`, `bokeh_blur` (radius, ring amount, ring size, softness; defaults 20, 0, 0.1, 1) and `masked_variable_blur`
+(radius times the mask's alpha, five interpolated gaussian levels). `Edge::Clamp` is `clampedToExtent`, `Edge::Transparent`
+fades the border. `BlurFilter::apply(&Image, Edge)` is the app entry point for an `ImageSource::decode()` result;
+`ViewBlur::new(radius_pt).opaque(bool).apply(&rendered, scale)` is `.blur(radius:opaque:)`. Gaussian and box are separable
+f32 row passes (vectorisable); disc, bokeh, motion and zoom gather taps. Bench: `glass_cost_blur_filters` (picked up by `tools/bench.py`).
+Gaps, stated rather than skipped: the output keeps the input size (the reference grows the extent); the Canvas has no offscreen
+layer, so a retained `View` cannot be blurred as a group yet (the app renders the view to an `Image` first); the filters are CPU
+only (no GPU path); the masked blur reads alpha rather than luminance. Not run on Midget (no builds in this wave).
+
+## Core Image filters for app images (composite, colour matrix, gradient)
+
+Code: `bifrost_render::effect_chain` (named colour filters and `Chain`), `bifrost_render::composite_filters` (blend
+filters, `ColorMatrix`, `gamma`, `linear_gradient`), SDK: `bifrost_app::image_filter`. The shell and apps share the
+render code; the SDK re-exports it, so there is one API.
+
+| Apple | BifrOSt |
+|---|---|
+| `CIFilter(name:)` with input keys, `CIFilter` chaining | `image_filter::Filter::named` + `FilterChain::push` / `apply(&Image)`; inputs by key with `set_clamped` and `input_range` |
+| `CIMultiplyBlendMode` and the blend filters, `CISourceOverCompositing` | `image_filter::blend(fg, bg, Blend::Multiply)`; `Blend::named` takes `sourceOver`, `multiply`, `screen`, `overlay`, `darken`, `lighten`, `colorDodge`, `colorBurn`, `hardLight`, `softLight`, `difference`, `exclusion` |
+| `CIColorMatrix` (rVector to aVector, rBias to aBias) | `image_filter::color_matrix(&Image, &ColorMatrix)`; straight RGBA in, clamped to 0..1 |
+| `CIGammaAdjust` (`inputPower`, default 1) | `image_filter::gamma(&Image, power)`; powers at or below zero act as 1 |
+| `CILinearGradient` (point0, point1, color0, color1) | `image_filter::linear_gradient(w, h, p0, p1, color0, color1)`; end colours held outside the segment |
+| `CIExposureAdjust`, `CIHueAdjust`, `CIColorControls`, `CISepiaTone`, `CIVignette`, `CIColorInvert`, `CIColorPosterize` | the named filters `exposure`, `hueRotate`, `saturation`, `contrast`, `sepia`, `vignette`, `invert`, `posterize` |
+| `filterNames(inCategory:)` | `image_filter::filter_names()`, `filters_in(Category)`, `search(query)`, `blend_names()` |
+
+Decisions: composite filters take premultiplied pixels (as `blend::composite` does); colour filters take straight RGBA
+(as `colorfx` does, and as Core Image's colour kernels unpremultiply first). Output keeps the input size. Blend math is
+the W3C separable set in `render/src/blend.rs`; the `Normal` blend is `sourceOver`.
+Gaps, stated rather than skipped: no lazy `CIImage` graph (each call runs eagerly on CPU pixels); no `CIContext` or render
+destination; `CIColorMatrix` has no per-channel bias beyond the five-vector form; no `CIColorMap` or `CIColorCube`; no
+`CIRadialGradient`, checkerboard or stripes generators; the filters are CPU only, with no GPU path. Not built or run on
+Midget in this round (unit tests written, not run). The parity matrix row for "Composite operations and blend modes" and
+"Colour adjustment" can move to partial; parity needs a Midget test.
+
+### Accessibility display options (Reduce Transparency, Increase Contrast)
+
+Settings > Accessibility > Display holds the toggles (`a11y_reduce_transparency`, `a11y_contrast`, `a11y_button_shapes` in
+`settings.ini`; Increase Contrast turns Reduce Transparency on and locks it). `AccessibilitySettings::publish` mirrors them into
+`bifrost_render::appearance`, sends them to apps in `ToApp::Appearance` flags, and writes `/run/bifrost/user/accessibility`
+for the window server (`docs/window-server.md`).
+
+Apps read them through `kit::appearance`, the mirror of NSWorkspace:
+
+| Apple | BifrOSt |
+|---|---|
+| `accessibilityDisplayShouldReduceTransparency` | `appearance::reduce_transparency()` |
+| `accessibilityDisplayShouldIncreaseContrast` | `appearance::increase_contrast()` |
+| `accessibilityDisplayShouldDifferentiateWithoutColor` | `appearance::differentiate_without_color()` (Button Shapes) |
+| `accessibilityDisplayOptionsDidChangeNotification` | `appearance::observe_display_options(f)` / `remove_observer(token)`; fires only when a value moves |
+| SwiftUI `accessibilityReduceTransparency`, `colorSchemeContrast` | `reduce_transparency()`, `color_scheme_contrast()` |
+
+`appearance::display_options()` returns all three as a `DisplayOptions`. Increase Contrast adds a material outline
+(`ui::MATERIAL_BORDER_CONTRAST`, `ui::material_border()`) and stronger separators (`SEPARATOR_CONTRAST`, `separator_now()`).
+Gap: the shell's materials do not yet all draw `material_border()`; adoption is per surface. Not built or run on Midget.
+
+## View effects and Canvas (SwiftUI drawing and Core Animation shadow parity)
+
+Code: `springboard/render/src/effects.rs` (planes, layers, shadow, mask, group opacity, blend) and
+`springboard/sdk/src/graphics_context.rs` (`Canvas`, `GraphicsContext`, `Path`). CPU, premultiplied RGBA8.
+
+| Apple | BifrOSt |
+|---|---|
+| `shadow(color:radius:x:y:)`, `shadowRadius`, `shadowOffset`, `shadowOpacity` | `effects::Shadow` + `shadow_layer(shape, Shadow)`; Gaussian, sigma = radius / 2, offset rounded to whole pixels; colour alpha is the opacity |
+| shadow spread / `shadowPath` | `Shadow.spread` (round dilate/erode); any shape plane is the path |
+| `cornerCurve = .continuous` | `CornerCurve::Continuous` in `rrect_cover` / `rrect_plane` (superellipse n=5, reach 1.28 r); `Circular` for the plain curve |
+| `mask(alignment:_:)`, `clipShape` | `Layer::mask(&Plane)` multiplies alpha by anti-aliased coverage; `GraphicsContext::clip(path)` |
+| `compositingGroup()`, `opacity` | `Layer::draw_group(src, opacity, mode, dx, dy)` flattens the group first; `GraphicsContext::draw_layer` |
+| `blendMode` | `blend::Mode` (separable modes) via `composite` |
+| `Canvas`, `GraphicsContext` fill, stroke, draw image, draw text, transforms, clip, opacity, blend, layers, shadow | `Canvas::draw`, `GraphicsContext::{fill, stroke, draw_image, draw_text, translate, scale, rotate, clip, set_opacity, set_blend_mode, add_shadow, draw_layer, save, restore}` |
+
+Gaps, decided: no hue/saturation/brightness/colour-matrix filters on views, no variable `blur` modifier in this module (glass blur lives in `render/src/glass.rs`); strokes have round joins and caps only, no dashes or miter limit; `draw_image` and `draw_text` take axis-aligned transforms only; no gradients/shading in `GraphicsContext` yet (use `render::gradient`); no resolved symbols or child views; view-tree integration (`.shadow()` style modifiers on widgets) is not wired because `sdk/src/widgets.rs` is owned by another wave. Not built or run in this round; tests are unrun golden-pixel tests (`effects.rs`, `graphics_context.rs`).
+
+## CallKit: incoming-call card and default calling app (`CXCallUpdate`, `CXAnswerCallAction`, default calling app)
+
+Pure models in `springboard/ui/src/call_ui.rs` and `springboard/ui/src/call_apps.rs`, re-exported by the SDK as
+`bifrost_app::calling_ui` and `bifrost_app::calling_apps` (the call controller itself is `bifrost_app::calling`, from
+`call.rs`). Host unit tests only; not wired into the shell and not yet run on the VM or Midget, so the matrix rows stay `partial`.
+
+- Incoming-call card: `CallUpdate` mirrors `CXCallUpdate` (handle, caller name, video, and hold, group and DTMF support, all
+  defaulting to supported). A blank caller name falls back to the handle value. `IncomingCard::for_call` builds the card for a
+  ringing call only; the presentation is a banner while the screen is in use and full screen while it is locked.
+  Decline sends `CallAction::End` and Answer sends `CallAction::Answer`, the same requests `CXEndCallAction` and
+  `CXAnswerCallAction` produce.
+- Decided gaps: no PushKit-style VoIP push wake-up and no ringtone or vibration (the shell and audio service own them); the
+  presentation depends on a caller-supplied `screen_locked` flag until the shell reports lock state to the model.
+- Default calling app: `CallingApps` keeps the apps that registered for calling, in registration order, and one default.
+  Only a registered app can be chosen. Unregistering the default clears it. The Settings page that lets the user pick the
+  default is not built yet (the decision is recorded here; the page belongs to the shell).
+
+## Core MIDI (`bifrost_app::midi`)
+
+The MIDI models are shared by the shell, the MIDI daemon and apps. `bifrost_midi` owns them; `sdk/src/midi.rs` re-exports
+`clock`, `endpoints`, `events`, `hub`, `thru` and `ump` so an app uses the same `Hub`, `Registry`, `Ump` and `MidiEvent` types as
+the server. Apple parity: the vocabulary follows MIDI Services (clients, virtual sources and destinations, source connections,
+received packets with host-clock timestamps). Decided: the SDK exposes the pure models only. An app does not open a device here;
+the daemon owns the hub and delivers to apps.
+
+Gaps, decided: no SDK facade that talks to the running daemon yet (apps cannot send to hardware through the SDK until the
+daemon exposes a control socket); MIDI-CI discovery and network sessions remain gaps. Not built or run in this round; the
+tests in `sdk/src/midi.rs` are unrun.
+
+## AVFAudio: AVAudioPlayer shape and the node graph (`bifrost_app::audio_player`, `bifrost_app::audio_engine`)
+
+Apple reference: `AVAudioPlayer` (volume, `setVolume(_:fadeDuration:)`, `pan`, `rate`, `numberOfLoops`, `currentTime`,
+`duration`) and `AVAudioEngine` (attach, connect, taps). Decisions, made in this round:
+
+- `ui/src/audio_player.rs` (`AudioPlayer`) is the pure model: play, pause, stop, volume with a linear fade, stereo pan,
+  rate 0.5 to 2 by linear interpolation, loops (0 once, N extra, -1 until stopped), seek and `render` of stereo blocks.
+  Pan uses the equal-power law of `panner.rs`. A mono source is placed by the pan; a stereo source keeps both channels
+  and the pan scales each side (a balance). Rate keeps the source sample rate and does not change `duration`. Pause keeps
+  the time; stop keeps the time too; a player that finishes stops and rewinds to 0. Out-of-range values are refused,
+  not clamped. The `enableRate` switch of AVAudioPlayer is not modelled: the rate always applies.
+- `audio/engine` (`bifrost-audio-engine`, `Engine`) is the node graph: players, mixer, units, connections, detach and
+  taps (`attach_tap`), offline and device rendering. The SDK now re-exports it as `bifrost_app::audio_engine`. The older
+  pure model in `ui/src/audio_engine.rs` is superseded by it; the shell may use either until it is removed.
+- Not done here: the player is not yet connected to the audio service (`audiod`), so pan, rate and fade do not reach the
+  speaker; apps still play through `bifrost_app::audio` (queue, volume, mute). Session categories, interruptions and
+  speech stay gaps. Verify the audio path on Midget before any row is `parity`.
+
+Tests: unit tests in `ui/src/audio_player.rs` (not run in this round).
+
+## Image analysis: subject lifting and Visual Look Up (`bifrost_app::image_analysis`)
+
+Models: `springboard/ui/src/subject_lift.rs` (subjects, hit test, highlight, cutout) and
+`springboard/ui/src/visual_lookup.rs` (`AnalysisTypes`, `look_up`). The SDK re-exports both from
+`springboard/sdk/src/image_analysis.rs`. The shape follows `ImageAnalysisInteraction` (`subjects`,
+`highlightedSubjects`, `analysisTypes`, the Look Up action).
+
+Decisions:
+
+- A subject is an id, an 8-bit alpha mask in image pixels, and its tight bounds. A pixel belongs to the
+  subject at alpha 128 or more (`SUBJECT_THRESHOLD`). A subject with no such pixel is refused.
+- Hit testing is topmost-first: a later subject is on top of an earlier one. Duplicate ids are dropped.
+- A cutout keeps soft edges: alpha = mask alpha times image alpha, cropped to the subject bounds.
+- `look_up` builds a request only when `AnalysisTypes` includes `VISUAL_LOOK_UP`. It returns the id,
+  bounds and cutout. The lookup service itself is not in the repo.
+
+Gaps still open: no segmentation model (the masks come from the caller), no lookup service, no image view
+that draws the subject highlight or the Look Up button, and no text recognition. Matrix rows
+"Subject lifting and background removal" and "Visual Look Up" are `partial` at best until the model runs
+on a device with a segmenter.
+
+## AVKit: route picker button and display management (`AVRoutePickerView`, display criteria)
+
+Pure models in `springboard/ui/src/route_picker_view.rs` and `springboard/ui/src/display_manager.rs`, re-exported by the SDK
+through `bifrost_app::controls` (the SDK re-exports the whole `bifrost_ui` crate). Host unit tests only; not wired into the
+shell or the video path, and not yet run on the VM or Midget, so the matrix rows stay `partial` (never `parity`).
+
+- Route picker button: `RoutePickerView` mirrors the button's style (`System`, `Inactive`, `Active`), its highlight rule, and the
+  will-begin and did-end delegate events for the routing menu. The rows of the menu come from `route_picker.rs`, which already
+  exists; this model does not choose routes. Decided: the button is unbordered unless an app sets `bordered`.
+- Display management: `DisplayManager` takes the criteria a playing app asks for (refresh rate and dynamic range, the shape of
+  the display criteria) and picks the supported mode with the same dynamic range whose rate is closest to the content rate
+  (ties go to the higher rate, so content is not slowed down). Rates within 0.05 Hz are the same rate. A switch is pending
+  until `finish_switch`; requests that match the current mode return `Keep`.
+- Decided gaps: nothing switches the panel yet (the video path owns it); HDR is only a dynamic range flag, with no HDR metadata
+  or tone mapping; there is no user setting that turns mode switching off; route selection still lacks an AirPlay and nearby
+  receiver source on the shell side.
+
+## StoreKit parity round (product kinds and promoted purchases)
+
+Built as pure models in `springboard/ui/src/` (shared by the shell and the SDK through `bifrost_app::controls`). Not run or
+built in this round; the unit tests in `product.rs`, `promotion.rs` and `springboard/src/shell/store/api.rs` are unrun.
+Status stays partial until a test on Midget.
+
+- `product::ProductType` (Product kinds: consumable, non-consumable, non-renewing, auto-renewable). The store catalogue
+  reads `product_type` (`StoreApp::product_type`); an unknown or missing kind is `None`. Decision: consumables are never
+  restorable and only consumables repeat.
+- `promotion::PurchaseIntents` (purchase intents from a promoted product). Decision: first in, first out, no duplicate
+  product while it waits, at most 16 waiting (`MAX_PENDING`). `promotion::in_display_order` gives the promoted list order.
+  Gap: the store does not send intents yet, so the queue has no producer and no SDK call that reads it.
+- Not decided here: sync of transactions and subscription management (App Store interactions) stay gaps; they need a
+  store account service that BifrOSt does not have yet.
+
+## Drawing canvas models (reference pencil-canvas parity, `bifrost_app::drawing`, `tool_picker`, `lasso`)
+
+Shared models in `springboard/ui/src/drawing.rs`, `tool_picker.rs` and `lasso.rs`, re-exported by the SDK as
+`bifrost_app::drawing`, `bifrost_app::tool_picker` and `bifrost_app::lasso`. Pure state and geometry; the shell and
+apps draw and capture touch.
+
+- **Vector eraser.** `Drawing::erase_strokes_at(x, y, radius)` removes each stroke with a segment inside the radius, as
+  a whole, and returns the count. Decision: the bitmap eraser stays a caller concern (`tool_picker::EraserKind::Bitmap`
+  is only a choice on the picker).
+- **Image render.** `Drawing::image(rect, scale)` returns a `Raster` of 0xAARRGGBB pixels, painted in stroke order with
+  source-over blending. Decision: per-point opacity, pressure and marker blend modes are not rendered yet; colour alpha
+  and width are. Empty, non-finite or over `2^26` pixel requests give an empty raster.
+- **Tool picker.** `ToolPicker::new()` gives the default items (pen, marker, pencil, bitmap and vector eraser, lasso);
+  `with_items` takes a custom set. `current_ink` gives the ink for a new stroke. Widths clamp to `width_range`.
+  Decision: observers are not modelled; callers read `selected()` after each event.
+- **Gaps.** No serialised format beyond the text form in `drawing.rs`; no handwriting recognition or Scribble; no
+  ruler; no stroke-level bitmap eraser. Parity rows stay partial until the shell and apps use these models and a
+  Midget test passes.

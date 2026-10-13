@@ -80,3 +80,24 @@ Sources in `goldengate_refimages/`: `Finder-Menu`, `Desktop`, `Spotlight-Search-
 | Notification Center | cards 343 wide, radius 23, 12 pt apart, a 15 pt semibold "Notification Center" heading and a close button above the list; widgets use the same width and radius; "Edit Widgets" pill below |
 | Login | large light clock (about 110 pt digits) with the date above it, user list at the bottom centre: 45 pt avatar and a 14 pt semibold name per row, no card |
 | Mission Control | a strip of desktops across the top (170 tall, 144 x 90 thumbnails with a label under each, a plus at the trailing end); windows below keep their traffic lights |
+
+## Pane inventory against the reference (macOS 27)
+
+Checked against the settings extensions and preference panes in the reference index (`ExtensionKit/Extensions/*.appex`,
+`PreferencePanes/*.prefPane`). Names and structure only; nothing is copied.
+
+| Reference pane | BifrOSt | Status |
+|---|---|---|
+| Displays, Wallpaper, Screen Saver, Appearance, Dock, Desktop, Expose | Display, Wallpaper, Screen Saver, Appearance, Home Screen & Dock, Overview | present |
+| Network, Wi-Fi, Bluetooth, VPN, Sound, Notifications, Focus, Screen Time | present | present |
+| Sharing (hub) | `PageId::Sharing`: Nearby Share and AirPlay & Handoff | added |
+| Lock Screen | `PageId::LockScreen`: Passcode, Lock After Inactivity, Screen Saver | added (links only) |
+| Software Update, Date & Time, Language & Region, Login Items, Default Apps, Fonts, Keyboard, Game Controllers, Storage, Backup | present | present |
+| Privacy & Security, Passwords, Accessibility, Battery | present | present |
+| Trackpad, Mouse | none | gap: needs pointer prefs (tracking speed, natural scroll, tap to click) in `Options` |
+| Users & Groups | none | gap: needs the account and login options data |
+| Printers & Scanners | none | gap: needs a print service |
+| Spotlight, Siri | none | gap: needs search and assistant prefs |
+| Startup Disk, Time Machine (as Backup), Internet Accounts, Wallet, Family, Profiles, Extensions | none or Backup only | gap: no backing service yet |
+
+The Lock Screen and Sharing rows add no new state; they group controls that already have a page.

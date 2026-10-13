@@ -1,0 +1,127 @@
+{
+ "category": "settings",
+ "shard": "j-l",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/KeyboardSettings.appex",
+   "category": "settings",
+   "name": "KeyboardSettings",
+   "path": "/System/Library/ExtensionKit/Extensions/KeyboardSettings.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Keyboard page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/KeyboardSettingsIntents.appex",
+   "category": "settings",
+   "name": "KeyboardSettingsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/KeyboardSettingsIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/LoginItems.appex",
+   "category": "settings",
+   "name": "LoginItems",
+   "path": "/System/Library/ExtensionKit/Extensions/LoginItems.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/login_items_page.rs",
+   "status": "partial",
+   "note": "Login Items page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/LoginItemsIntentsExtension.appex",
+   "category": "settings",
+   "name": "LoginItemsIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/LoginItemsIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Keyboard.prefPane",
+   "category": "settings",
+   "name": "Keyboard",
+   "path": "/System/Library/PreferencePanes/Keyboard.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Keyboard page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Localization.prefPane",
+   "category": "settings",
+   "name": "Localization",
+   "path": "/System/Library/PreferencePanes/Localization.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Language & Region page",
+   "rea": []
+  }
+ ]
+}

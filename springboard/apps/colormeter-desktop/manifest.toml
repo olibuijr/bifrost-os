@@ -1,0 +1,12 @@
+id = "is.olibuijr.colormeter.desktop"
+name = "Digital Color Meter"
+version = "0.1.0"
+exec = "bifrost-colormeter"
+icon = "icon.png"
+min_shell = "0.6.5"
+summary = "Reads the colour under the pointer: a magnified view, the pixel value in sRGB, Display P3 and Generic RGB, and copy as text or swatch."
+category = "Utilities"
+architecture = "x86_64-linux"
+kind = "system-app"
+permissions = ["screen"]
+window = "full-size"

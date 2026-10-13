@@ -42,10 +42,12 @@ use bifrost_layers::layer::{ContentsId, LayerContents, Material};
 use bifrost_layers::tree::PresentedLayer;
 use bifrost_layers::Color;
 
-use crate::background_effect::blur_region;
+use crate::bifrost_material::effective_regions;
+use crate::material_filter::Tone;
+use crate::material_kind::{budgeted_blur, premultiply, MaterialSpec, Resolved};
 use crate::render_server::compose::{self, Glass as GlassMat, SceneNode};
 use crate::render_server::import::{dmabuf_to_gpu, Importer};
-use crate::render_server::material::{device_region, window_shadow, ShadowSpec, SATURATION};
+use crate::render_server::material::{device_region, window_shadow, ShadowSpec};
 use crate::render_server::server::Server;
 use crate::state::WmState;
 
@@ -57,6 +59,31 @@ pub const GLASS_BLUR: f32 = 20.0;
 
 /// Tint over the glass (straight RGBA): a white veil at 25 %, like the shell's panels.
 pub const GLASS_TINT: [f32; 4] = [1.0, 1.0, 1.0, 0.25];
+
+/// The nodes of one material region of a window whose surface origin is `origin` (pure): one node per rectangle,
+/// a blurred glass node when the material is active behind the window, else the opaque plate. The blur radius is
+/// lowered to the frame-time budget, and the rounded outline applies when the region is a single rectangle.
+pub fn material_nodes(spec: &MaterialSpec, origin: Point<i32, Logical>, scale: f32, window_active: bool, dark: bool) -> Vec<SceneNode> {
+    let resolved = crate::material_kind::resolve(spec, window_active, dark);
+    let radius = if spec.rects.len() == 1 { spec.mask_radius() } else { 0.0 };
+    spec.rects
+        .iter()
+        .map(|r| {
+            let rect = [(origin.x + r.loc.x) as f32, (origin.y + r.loc.y) as f32, r.size.w as f32, r.size.h as f32];
+            let mut n = SceneNode::solid(rect, [0.0; 4]);
+            n.scale = scale;
+            n.corner_radius = radius;
+            match resolved {
+                Resolved::Glass { blur, saturation, tone, tint, .. } => {
+                    let blur = budgeted_blur(blur, (rect[2] * scale).ceil() as u32, (rect[3] * scale).ceil() as u32, scale);
+                    n.material = Some(GlassMat { blur, tint: premultiply(tint), saturation, tone });
+                }
+                Resolved::Plate(c) => n.color = premultiply(c),
+            }
+            n
+        })
+        .collect()
+}
 
 /// Premultiplies a straight colour.
 fn premult(c: Color) -> [f32; 4] {
@@ -141,7 +168,7 @@ pub fn layer_nodes(pl: &PresentedLayer, bound: &dyn Fn(ContentsId) -> Option<u64
     // glass: a transparent node whose material blurs what is behind the layer
     if let Material::Glass { blur, tint, saturation } = l.material {
         let mut n = node(full, [0.0; 4], radius);
-        n.material = Some(GlassMat { blur, tint: premult(tint), saturation });
+        n.material = Some(GlassMat { blur, tint: premult(tint), saturation, tone: Tone::NONE });
         out.push(n);
     }
 
@@ -280,15 +307,9 @@ pub fn build(state: &WmState, output: &Output, t: f64, server: &mut Server) -> V
         shadow.shadow = Some(window_shadow(shadow_rect, WINDOW_RADIUS * scale, active, scale));
         out.push(shadow);
 
-        // glass behind the regions the window asks to blur
-        for r in blur_region(&wl) {
-            let mut g = SceneNode::solid(
-                [(origin.x + r.loc.x) as f32, (origin.y + r.loc.y) as f32, r.size.w as f32, r.size.h as f32],
-                [0.0; 4],
-            );
-            g.scale = scale;
-            g.material = Some(GlassMat { blur: GLASS_BLUR, tint: premult(Color { r: GLASS_TINT[0], g: GLASS_TINT[1], b: GLASS_TINT[2], a: GLASS_TINT[3] }), saturation: SATURATION });
-            out.push(g);
+        // materials behind the regions the window asks for (a kind per region, or the plain blur)
+        for spec in effective_regions(&wl) {
+            out.extend(material_nodes(&spec, origin, scale, active, state.material_dark));
         }
 
         surface_nodes(importer, &wl, origin, scale, WINDOW_RADIUS, &mut out);
@@ -373,6 +394,7 @@ impl DamageHistory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::render_server::material::SATURATION;
     use bifrost_layers::layer::{Border, Shadow};
     use bifrost_layers::{Affine, Layer, LayerId, Point as LPoint, Rect};
 

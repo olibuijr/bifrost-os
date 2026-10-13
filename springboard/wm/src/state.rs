@@ -61,6 +61,10 @@ pub struct WmState {
 
     /// `ext-background-effect-v1` (live glass); the renderer reads each surface's blur region.
     pub background_effect: smithay::reexports::wayland_server::backend::GlobalId,
+    /// `bifrost_material_v1` (materials with a kind per region).
+    pub bifrost_material: smithay::reexports::wayland_server::backend::GlobalId,
+    /// The appearance materials follow: Dark unless `BIFROST_WM_APPEARANCE=light`.
+    pub material_dark: bool,
     pub lock_state: smithay::wayland::session_lock::SessionLockManagerState,
     /// A session lock is held: only `lock_surface` is drawn and takes input.
     pub locked: bool,
@@ -139,6 +143,8 @@ impl WmState {
             drm_syncobj_state: None,
             on_vblank: None,
             background_effect: crate::background_effect::init(&dh),
+            bifrost_material: crate::bifrost_material::init(&dh),
+            material_dark: std::env::var("BIFROST_WM_APPEARANCE").map(|v| v != "light").unwrap_or(true),
             lock_state: smithay::wayland::session_lock::SessionLockManagerState::new::<WmState, _>(&dh, |_| true),
             locked: false,
             lock_surface: None,

@@ -1,0 +1,11 @@
+id = "is.olibuijr.screenshot.desktop"
+name = "Screenshot"
+version = "0.1.0"
+exec = "bifrost-screenshot"
+icon = "icon.png"
+min_shell = "0.5.4"
+summary = "Captures the screen, a window or a selection, and records the screen, with a timer and a floating thumbnail."
+category = "Utilities"
+architecture = "x86_64-linux"
+permissions = ["storage"]
+window = "full-size"

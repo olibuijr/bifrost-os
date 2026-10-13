@@ -1,0 +1,110 @@
+//! Activity Monitor as an installed BifrOSt app: the processes of this machine, with CPU, memory, energy, disk and
+//! network readings from `/proc`. The window is `window.rs` and `draw.rs`; the readings are `sample.rs`, and the
+//! table's rows and the graph history are `model.rs`. Quitting sends SIGTERM, and only to processes of this user.
+
+#[allow(dead_code)]
+mod draw;
+#[allow(dead_code)]
+mod model;
+#[allow(dead_code)]
+mod sample;
+#[allow(dead_code)]
+mod window;
+
+use bifrost_app::controls::Node;
+use bifrost_app::kit::{Damage, Surface};
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
+use window::{Monitor, MENU_FIND, MENU_QUIT};
+
+struct ActivityApp {
+    monitor: Option<Monitor>,
+}
+
+impl App for ActivityApp {
+    fn id(&self) -> &str {
+        "is.olibuijr.activity.desktop"
+    }
+
+    fn configure(&mut self, ctx: &Ctx) {
+        ctx.enable_sudden_termination(); // keeps no unsaved state
+        let (w, h) = (ctx.cfg.w as f32, ctx.cfg.h as f32);
+        match &mut self.monitor {
+            Some(m) => m.resize(w, h),
+            None => self.monitor = Some(Monitor::new(w, h)),
+        }
+    }
+
+    fn event(&mut self, ctx: &Ctx, ev: Input) -> bool {
+        let Some(m) = &mut self.monitor else { return false };
+        let changed = match ev {
+            Input::Touch { kind, x, y, t, .. } => m.touch(&ctx.ui, kind, x, y, t),
+            Input::Key(KeyInput::Text(text)) => m.text(&text),
+            Input::Key(KeyInput::Code(code)) => m.key(code),
+            // a published toolbar control (accessibility, `bifrost pc midget tap-window`): a click at its centre
+            Input::Activate(id) => {
+                let Some(node) = m.controls(&ctx.ui).into_iter().find(|n| n.id == id && n.enabled) else { return false };
+                let x = ctx.ui.pt(node.bounds.x + node.bounds.w / 2.0);
+                let y = ctx.ui.pt(node.bounds.y + node.bounds.h / 2.0);
+                let t = bifrost_app::proto::sys::now_ms();
+                m.touch(&ctx.ui, TouchKind::Down, x, y, t);
+                m.touch(&ctx.ui, TouchKind::Up, x, y, t)
+            }
+            _ => false,
+        };
+        ctx.wants_keyboard(m.search_focused);
+        changed
+    }
+
+    fn tick(&mut self, _ctx: &Ctx, t: f64) -> bool {
+        self.monitor.as_mut().map_or(false, |m| m.tick(t))
+    }
+
+    fn next_wake(&self, t: f64) -> Option<f64> {
+        self.monitor.as_ref().map(|m| m.next_wake(t))
+    }
+
+    fn controls(&self, ctx: &Ctx) -> Vec<Node> {
+        self.monitor.as_ref().map_or_else(Vec::new, |m| m.controls(&ctx.ui))
+    }
+
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        let Some(m) = &self.monitor else { return Vec::new() };
+        vec![AppMenu {
+            title: "Process".into(),
+            items: vec![
+                AppMenuItem::new(MENU_QUIT, "Quit Process").enabled(m.can_quit_selected()),
+                AppMenuItem::separator(),
+                AppMenuItem::new(MENU_FIND, "Find Process").key("cmd+f"),
+            ],
+        }]
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        let Some(m) = &mut self.monitor else { return false };
+        match id {
+            MENU_QUIT => {
+                m.quit_selected();
+                true
+            }
+            MENU_FIND => {
+                m.focus_search();
+                ctx.wants_keyboard(true);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
+        if let Some(m) = &mut self.monitor {
+            m.draw(&ctx.ui, s);
+        }
+        let mut d = Damage::new(s.w, s.h);
+        d.all();
+        d
+    }
+}
+
+fn main() {
+    bifrost_app::run(ActivityApp { monitor: None });
+}

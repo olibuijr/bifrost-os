@@ -1,0 +1,647 @@
+{
+ "category": "system-ui",
+ "shard": "m-o",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/CoreServices/MDMMigrationTrampoline.app",
+   "category": "system-ui",
+   "name": "MDMMigrationTrampoline",
+   "path": "/System/Library/CoreServices/MDMMigrationTrampoline.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "device management migration",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/MTLReplayer.app",
+   "category": "system-ui",
+   "name": "MTLReplayer",
+   "path": "/System/Library/CoreServices/MTLReplayer.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/ManagedClient.app",
+   "category": "system-ui",
+   "name": "ManagedClient",
+   "path": "/System/Library/CoreServices/ManagedClient.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/MediaRemoteUI.app",
+   "category": "system-ui",
+   "name": "MediaRemoteUI",
+   "path": "/System/Library/CoreServices/MediaRemoteUI.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/music/nowplaying.rs",
+   "status": "partial",
+   "note": "now playing",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/MediaRemoteUIService.app",
+   "category": "system-ui",
+   "name": "MediaRemoteUIService",
+   "path": "/System/Library/CoreServices/MediaRemoteUIService.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/services/now_playing.rs",
+   "status": "partial",
+   "note": "now playing service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Medical Imaging Calibrator.app",
+   "category": "system-ui",
+   "name": "Medical Imaging Calibrator",
+   "path": "/System/Library/CoreServices/Medical Imaging Calibrator.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple hardware display calibration",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Memory Slot Utility.app",
+   "category": "system-ui",
+   "name": "Memory Slot Utility",
+   "path": "/System/Library/CoreServices/Memory Slot Utility.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple hardware memory diagnostics",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/MenuBarAgent.app",
+   "category": "system-ui",
+   "name": "MenuBarAgent",
+   "path": "/System/Library/CoreServices/MenuBarAgent.app",
+   "kind": "core service agent",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/desktop_bar.rs",
+   "status": "partial",
+   "note": "menu bar and menu extras",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/MusicRecognitionMac.app",
+   "category": "system-ui",
+   "name": "MusicRecognitionMac",
+   "path": "/System/Library/CoreServices/MusicRecognitionMac.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "song recognition, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/NetAuthAgent.app",
+   "category": "system-ui",
+   "name": "NetAuthAgent",
+   "path": "/System/Library/CoreServices/NetAuthAgent.app",
+   "kind": "core service agent",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "network authentication agent, the Linux base supplies 802.1X",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/NotificationCenter.app",
+   "category": "system-ui",
+   "name": "NotificationCenter",
+   "path": "/System/Library/CoreServices/NotificationCenter.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/notify/center.rs",
+   "status": "partial",
+   "note": "notification centre",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/NowPlayingTouchUI.app",
+   "category": "system-ui",
+   "name": "NowPlayingTouchUI",
+   "path": "/System/Library/CoreServices/NowPlayingTouchUI.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "touch-only now playing UI",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/OBEXAgent.app",
+   "category": "system-ui",
+   "name": "OBEXAgent",
+   "path": "/System/Library/CoreServices/OBEXAgent.app",
+   "kind": "core service agent",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/OSDUIHelper.app",
+   "category": "system-ui",
+   "name": "OSDUIHelper",
+   "path": "/System/Library/CoreServices/OSDUIHelper.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/volume_hud.rs",
+   "status": "partial",
+   "note": "volume and brightness HUD",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/MADViewServiceExtension.appex",
+   "category": "system-ui",
+   "name": "MADViewServiceExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/MADViewServiceExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Maps view service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/MKRemoteUI.appex",
+   "category": "system-ui",
+   "name": "MKRemoteUI",
+   "path": "/System/Library/ExtensionKit/Extensions/MKRemoteUI.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Maps remote UI",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/MacMailSearchLogProcessor.appex",
+   "category": "system-ui",
+   "name": "MacMailSearchLogProcessor",
+   "path": "/System/Library/ExtensionKit/Extensions/MacMailSearchLogProcessor.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Mail search log",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/MailDiagnosticExtension.appex",
+   "category": "system-ui",
+   "name": "MailDiagnosticExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/MailDiagnosticExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Mail diagnostics",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/MapsIntents.appex",
+   "category": "system-ui",
+   "name": "MapsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/MapsIntents.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/MediaMLExtension.appex",
+   "category": "system-ui",
+   "name": "MediaMLExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/MediaMLExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/MediaRemoteAppIntentsExtension.appex",
+   "category": "system-ui",
+   "name": "MediaRemoteAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/MediaRemoteAppIntentsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/MessagesAnalyticsWorker.appex",
+   "category": "system-ui",
+   "name": "MessagesAnalyticsWorker",
+   "path": "/System/Library/ExtensionKit/Extensions/MessagesAnalyticsWorker.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Monterey.appex",
+   "category": "system-ui",
+   "name": "Monterey",
+   "path": "/System/Library/ExtensionKit/Extensions/Monterey.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/NewDeviceOutreachIntents_macOS.appex",
+   "category": "system-ui",
+   "name": "NewDeviceOutreachIntents_macOS",
+   "path": "/System/Library/ExtensionKit/Extensions/NewDeviceOutreachIntents_macOS.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple new device outreach",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/NullPoster.appex",
+   "category": "system-ui",
+   "name": "NullPoster",
+   "path": "/System/Library/ExtensionKit/Extensions/NullPoster.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/OBCEngagePlugin.appex",
+   "category": "system-ui",
+   "name": "OBCEngagePlugin",
+   "path": "/System/Library/ExtensionKit/Extensions/OBCEngagePlugin.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple diagnostics and telemetry",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/ODDFeatureDigestsExtension.appex",
+   "category": "system-ui",
+   "name": "ODDFeatureDigestsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/ODDFeatureDigestsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple diagnostics and telemetry",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/ODDIExperimentationExtension.appex",
+   "category": "system-ui",
+   "name": "ODDIExperimentationExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/ODDIExperimentationExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/ODDIMetricsExtension.appex",
+   "category": "system-ui",
+   "name": "ODDIMetricsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/ODDIMetricsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/ODDIPoirotExperimentationExtension.appex",
+   "category": "system-ui",
+   "name": "ODDIPoirotExperimentationExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/ODDIPoirotExperimentationExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/ODDIPoirotMetricsExtension.appex",
+   "category": "system-ui",
+   "name": "ODDIPoirotMetricsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/ODDIPoirotMetricsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/OfficeThumbnailExtension.appex",
+   "category": "system-ui",
+   "name": "OfficeThumbnailExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/OfficeThumbnailExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  }
+ ]
+}

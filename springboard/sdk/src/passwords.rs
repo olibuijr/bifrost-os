@@ -42,6 +42,16 @@ pub fn remove(ctx: &Ctx, site: &str, account: &str) -> u32 {
     keychain_groups::delete(ctx, GROUP, site, account)
 }
 
+/// Lists every login in the group, with no passwords. Answer: [`decode_list`].
+pub fn list(ctx: &Ctx) -> u32 {
+    keychain_groups::list(ctx, GROUP)
+}
+
+/// Decodes the answer to [`list`]; `None` when the answer is an error or not a list.
+pub fn decode_list(result: &Result<Json, String>) -> Option<Vec<keychain_groups::Row>> {
+    keychain_groups::decode_list(result)
+}
+
 /// Decodes the answer to [`fill`] (or to [`save`] and [`update`], where the password is empty). A password that is
 /// not text is `Error::Param`.
 pub fn decode_password(result: &Result<Json, String>) -> Result<String, Error> {

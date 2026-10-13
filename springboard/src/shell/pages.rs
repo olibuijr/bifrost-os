@@ -9,7 +9,7 @@ use super::icons::Icon;
 use super::row_glyphs::Glyph;
 use super::low_battery::last_charged;
 use super::list::{Accessory, Ends, Group, Item, Spec, Tint};
-use super::options::{Options, AUTO_LOCK, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES};
+use super::options::{speed_slider, Options, AUTO_LOCK, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES, TRACKPAD_SECONDARY};
 use super::{Info, WifiAction};
 use bifrost_render::fontprefs::{FontRole, Installed};
 use bifrost_ui::capture_access::Media;
@@ -101,6 +101,16 @@ pub enum PageId {
     Shortcuts,
     /// Overview (desktop): how windows are grouped and when desktops switch
     Overview,
+    /// Sharing (desktop): the hub for Nearby Share and AirPlay & Handoff
+    Sharing,
+    /// Lock Screen: the passcode, inactivity lock and screen saver in one place (links to their own pages)
+    LockScreen,
+    /// Settings > Trackpad (desktop): tracking speed, tap to click, secondary click, natural scrolling and gestures
+    Trackpad,
+    /// Settings > Mouse (desktop): tracking and scrolling speed, natural scrolling, swapped buttons
+    Mouse,
+    /// Settings > Users & Groups (desktop): the local account, login options and password
+    Users,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -163,6 +173,16 @@ pub enum Toggle {
     Permission(Media, usize),
     /// App Permissions > Location: the app at this index may use location while it is in use
     Location(usize),
+    /// Mouse and Trackpad: natural scrolling (the wheel and fingers move the content the way a touch screen does)
+    NaturalScroll,
+    /// Trackpad > Tap to Click
+    TapToClick,
+    /// Mouse > Swap Left and Right Buttons
+    SwapButtons,
+    /// Users & Groups > Login Options: name and password fields at sign-in
+    LoginNamePassword,
+    /// Users & Groups > Login Options: password hints at sign-in
+    LoginHints,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -203,6 +223,8 @@ pub enum Pick {
     ScreenSaverStart(usize),
     /// Settings > Screen Saver > Preview: the saver starts full screen (the shell does it, see `Settings::take_screensaver_preview`)
     ScreenSaverPreview,
+    /// Trackpad > Secondary Click: index into `TRACKPAD_SECONDARY`
+    TrackpadSecondary(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -217,6 +239,12 @@ pub enum Slider {
     LiquidGlass,
     /// Desktop & Dock > Magnification size, 0..1
     DockMagnify,
+    /// Mouse > Tracking Speed (see `options::speed_from_slider`)
+    MouseSpeed,
+    /// Mouse > Scrolling Speed
+    MouseScroll,
+    /// Trackpad > Tracking Speed
+    TrackpadSpeed,
 }
 
 /// Something that asks for confirmation first.
@@ -299,6 +327,8 @@ pub enum Action {
     GameController(super::game_controllers_page::Edit),
     /// Login Items: start this app (id) one place earlier
     LoginItemMove(String),
+    /// Login Items & Extensions: turn an app's background agent on or off (the switch in ALLOW IN THE BACKGROUND)
+    BackgroundAgentToggle(String),
     /// Fonts: draw `role` with this font file from now on (None is the default)
     Font(FontRole, Option<String>),
 }
@@ -339,6 +369,8 @@ pub struct Model<'a> {
     pub login_items: &'a [(String, String)],
     /// the Login Items page: (app id, name) of each registration waiting for approval
     pub login_pending: &'a [(String, String)],
+    /// the background agents and app extensions of the Login Items & Extensions page
+    pub ext: &'a super::login_items_page::LoginExtensions,
     /// the Fonts pages: each role's default and override, and the font library
     pub fonts: &'a FontsView,
     /// Settings > Sound: the device lists from the audio object model
@@ -401,6 +433,14 @@ pub fn about(info: &Info) -> Vec<Vec<(&'static str, String)>> {
         ],
         vec![("Capacity", gb(info.storage_total)), ("Available", gb(info.storage_free))],
         vec![("Wi-Fi Address", dash(&info.mac)), ("IP Address", dash(&info.ip)), ("Kernel", dash(&info.kernel)), ("Uptime", uptime(info.uptime_min))],
+        // this machine's own facts (read once from /proc and /sys, see `bifrost_core::sysinfo`)
+        {
+            let this = bifrost_core::sysinfo::Summary::this_machine();
+            vec![
+                ("Graphics", if this.graphics.is_empty() { dash("") } else { this.graphics.join("; ") }),
+                ("Operating System", dash(&format!("{} {}", this.os_name, this.os_version))),
+            ]
+        },
     ]
 }
 
@@ -498,12 +538,17 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     Item::new("Display & Brightness").icon(Icon::Display).link(PageId::Display),
                     Item::new("Home Screen & Dock").icon(Icon::HomeScreen).link(PageId::HomeScreen),
                     Item::new("Overview").icon(Icon::HomeScreen).link(PageId::Overview),
+                    Item::new("Sharing").icon(Icon::Wifi).link(PageId::Sharing),
                     Item::new("Keyboard Shortcuts").icon(Icon::General).link(PageId::Shortcuts),
+                    Item::new("Trackpad").icon(Icon::General).link(PageId::Trackpad),
+                    Item::new("Mouse").icon(Icon::General).link(PageId::Mouse),
+                    Item::new("Users & Groups").icon(Icon::Passcode).link(PageId::Users),
                     Item::new("Accessibility").icon(Icon::Accessibility).link(PageId::Accessibility),
                     Item::new("Wallpaper").icon(Icon::Wallpaper).value(m.wallpaper.as_str()).link(PageId::Wallpaper),
                     Item::new("Screen Saver").icon(Icon::Wallpaper).value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver),
                     Item::new("Battery").icon(Icon::Battery).value(battery_level(info)).link(PageId::Battery),
                     Item::new("Privacy").icon(Icon::Privacy).link(PageId::Privacy),
+                    Item::new("Lock Screen").icon(Icon::Passcode).link(PageId::LockScreen),
                     Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode),
                     Item::new("Passwords").icon(Icon::Passcode).link(PageId::Passwords),
                 ]),
@@ -673,7 +718,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         Item::new("Language & Region").glyph(Glyph::Language).link(PageId::Language),
                         Item::new("Dictionary").glyph(Glyph::Dictionary).link(PageId::Dictionary),
                         Item::new("Default Apps").glyph(Glyph::DefaultApps).link(PageId::DefaultApps),
-                        Item::new("Login Items").glyph(Glyph::DefaultApps).link(PageId::LoginItems),
+                        Item::new("Login Items & Extensions").glyph(Glyph::DefaultApps).link(PageId::LoginItems),
                         Item::new("Game Controllers").link(PageId::GameControllers),
                     ]),
                     Group::new(vec![Item::new("Legal & Regulatory").glyph(Glyph::Info).link(PageId::Legal)]),
@@ -693,8 +738,28 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Nearby => page(
             "Nearby Share",
             false,
-            vec![Group::new(["Receiving Off", "Contacts Only", "Everyone"].iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.nearby, Action::Pick(Pick::Nearby(i)))).collect())
+            vec![Group::new(NEARBY_CHOICES.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.nearby, Action::Pick(Pick::Nearby(i)))).collect())
                 .footer("Nearby Share lets you share instantly with devices nearby. You can be discoverable to receive from everyone or only from devices you have already seen nearby.")],
+        ),
+        PageId::Sharing => page(
+            "Sharing",
+            false,
+            vec![Group::new(vec![
+                Item::new("Nearby Share").glyph(Glyph::Nearby).value(NEARBY_CHOICES.get(o.nearby).copied().unwrap_or(NEARBY_CHOICES[0])).link(PageId::Nearby),
+                Item::new("AirPlay & Handoff").value(if o.handoff { "Handoff On" } else { "Handoff Off" }).link(PageId::AirPlayHandoff),
+            ])
+            .footer("Choose who can share files with this computer nearby, and whether your other devices can pick up work from it.")],
+        ),
+        PageId::LockScreen => page(
+            "Lock Screen",
+            false,
+            vec![
+                Group::new(vec![Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode)])
+                    .footer("A passcode is asked for before the screen opens again after it locks."),
+                Group::new(vec![Item::new("Lock After Inactivity").value(o.auto_lock_label()).link(PageId::AutoLock)]),
+                Group::new(vec![Item::new("Screen Saver").value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver)])
+                    .footer("The screen saver can start after a while without input, and then the lock applies as usual."),
+            ],
         ),
         PageId::AirPlayHandoff => page(
             "AirPlay & Handoff",
@@ -719,7 +784,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 .collect(),
         ),
         PageId::LoginItems => page(
-            "Login Items",
+            "Login Items & Extensions",
             false,
             {
                 // an app that asked to open at login waits here until the user allows it (SMAppService: requiresApproval)
@@ -741,6 +806,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     .footer("These apps start when you log in. Choose one to remove it. An app adds itself with SMAppService and can be removed here at any time."),
                 );
                 groups.extend(super::login_items_page::order_group(m.login_items));
+                groups.extend(super::login_items_page::background_group(m.ext));
+                groups.extend(super::login_items_page::extension_groups(m.ext));
                 groups
             },
         ),
@@ -766,6 +833,49 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     .footer("Actions when you swipe your finger from a bottom corner."),
             ],
         ),
+        PageId::Trackpad => page(
+            "Trackpad",
+            false,
+            vec![
+                Group::new(vec![Item::slider(Ends::Speed, speed_slider(o.trackpad_speed), Action::Slider(Slider::TrackpadSpeed))]).header("TRACKING SPEED"),
+                Group::new(vec![Item::new("Tap to Click").switch(o.tap_to_click, Action::Toggle(Toggle::TapToClick))]).footer("A light tap on the trackpad clicks."),
+                Group::new(TRACKPAD_SECONDARY.iter().enumerate().map(|(i, l)| Item::new(*l).check(i == o.trackpad_secondary, Action::Pick(Pick::TrackpadSecondary(i)))).collect()).header("SECONDARY CLICK"),
+                Group::new(vec![Item::new("Natural Scrolling").switch(o.natural_scroll, Action::Toggle(Toggle::NaturalScroll))]).footer("The content moves with your fingers, as it does on a touch screen."),
+                Group::new(vec![
+                    Item::new("Four & Five Finger Swipe").value(on_off(o.four_finger)).link(PageId::Gestures),
+                    Item::new("Swipe From Corner").value(on_off(o.corner_swipe)).link(PageId::Gestures),
+                ])
+                .header("GESTURES")
+                .footer("Gestures are set in General › Gestures."),
+            ],
+        ),
+        PageId::Mouse => page(
+            "Mouse",
+            false,
+            vec![
+                Group::new(vec![Item::slider(Ends::Speed, speed_slider(o.mouse_speed), Action::Slider(Slider::MouseSpeed))]).header("TRACKING SPEED"),
+                Group::new(vec![Item::slider(Ends::Speed, speed_slider(o.mouse_scroll), Action::Slider(Slider::MouseScroll))]).header("SCROLLING SPEED"),
+                Group::new(vec![Item::new("Natural Scrolling").switch(o.natural_scroll, Action::Toggle(Toggle::NaturalScroll))]).footer("The content moves with the wheel, as it does on a touch screen."),
+                Group::new(vec![Item::new("Swap Left and Right Buttons").switch(o.swap_buttons, Action::Toggle(Toggle::SwapButtons))]).footer("The left button becomes the secondary button and the right button the primary one."),
+            ],
+        ),
+        PageId::Users => {
+            let account = super::account::load();
+            page(
+                "Users & Groups",
+                false,
+                vec![
+                    Group::new(vec![Item::new(account.full_name.as_str()).value(account.username.as_str())]).header("ACCOUNT").footer("The account this computer was set up with."),
+                    Group::new(vec![
+                        Item::new("Name and Password").switch(o.login_name_password, Action::Toggle(Toggle::LoginNamePassword)),
+                        Item::new("Password Hints").switch(o.login_hints, Action::Toggle(Toggle::LoginHints)),
+                    ])
+                    .header("LOGIN OPTIONS")
+                    .footer("Choose how the login window asks for this account."),
+                    Group::new(vec![Item::new("Change Password…").tint(Tint::Dim)]).header("PASSWORD").footer("Changing the password is not available yet."),
+                ],
+            )
+        }
         PageId::Fonts => fonts_page(m),
         PageId::FontPick(role) => font_pick_page(m, role),
         PageId::Dictionary => page(
@@ -1066,6 +1176,8 @@ pub const MINIMIZE_EFFECTS: [&str; 2] = ["Funnel Effect", "Scale Effect"];
 pub const CORNER_ACTIONS: [&str; 6] = ["None", "Overview", "Apps Grid", "Show Desktop", "Lock Screen", "Search"];
 pub const CORNER_NAMES: [&str; 4] = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"];
 pub const SIDEBAR_ICON_SIZES: [&str; 3] = ["Small", "Medium", "Large"];
+/// Nearby Share: who may send to this computer (index is `Options::nearby`).
+pub const NEARBY_CHOICES: [&str; 3] = ["Receiving Off", "Contacts Only", "Everyone"];
 pub const SCROLL_BAR_MODES: [&str; 3] = ["Automatically Based on Mouse or Trackpad", "When Scrolling", "Always"];
 
 pub const DOCK_MAGNIFY_PREF: &str = "dock_magnify";
@@ -1339,7 +1451,7 @@ mod tests {
     }
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND }
+        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND }
     }
 
     #[test]
@@ -1408,11 +1520,12 @@ mod tests {
         let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
         assert_eq!(labels[..3], ["Airplane Mode", "Wi-Fi", "Bluetooth"]);
         assert_eq!(labels[3..7], ["Notifications", "Sounds", "Focus", "Screen Time"]);
-        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Keyboard Shortcuts", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Passcode", "Passwords", "Developer"]);
+        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Keyboard Shortcuts", "Trackpad", "Mouse", "Users & Groups", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Lock Screen", "Passcode", "Passwords", "Developer"]);
         assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
-        assert_eq!(s.groups[2].items[8].value, "Lake Day");
-        assert_eq!(s.groups[2].items[9].value, "Never", "the screen saver is off by default");
-        assert_eq!(s.groups[2].items[10].value, "63%");
+        // Sharing, Trackpad, Mouse and Users & Groups sit before Wallpaper
+        assert_eq!(s.groups[2].items[12].value, "Lake Day");
+        assert_eq!(s.groups[2].items[13].value, "Never", "the screen saver is off by default");
+        assert_eq!(s.groups[2].items[14].value, "63%");
         assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(false));
         assert_eq!(s.groups[1].items[0].action, Action::Push(PageId::Notifications));
         let off = Model { wifi_on: false, airplane: true, ..model(&info, &opts) };
@@ -1509,6 +1622,29 @@ mod tests {
         info.brightness_supported = true;
         let s = desktop_display(&model(&info, &opts));
         assert!(matches!(s.groups[1].items[0].body, super::super::list::Body::Slider { ends: Ends::Brightness, .. }));
+    }
+
+    #[test]
+    fn sharing_and_lock_screen_are_reachable_from_the_root_and_link_their_controls() {
+        let info = info();
+        let mut opts = Options::default();
+        let root = spec(PageId::Root, &model(&info, &opts));
+        let items: Vec<&Item> = root.groups.iter().flat_map(|g| &g.items).collect();
+        assert!(items.iter().any(|i| i.action == Action::Push(PageId::Sharing)), "Sharing is in the root list");
+        assert!(items.iter().any(|i| i.action == Action::Push(PageId::LockScreen)), "Lock Screen is in the root list");
+
+        let sharing = spec(PageId::Sharing, &model(&info, &opts));
+        assert_eq!(sharing.groups[0].items[0].action, Action::Push(PageId::Nearby));
+        assert_eq!(sharing.groups[0].items[0].value, NEARBY_CHOICES[opts.nearby.min(NEARBY_CHOICES.len() - 1)]);
+        assert_eq!(sharing.groups[0].items[1].action, Action::Push(PageId::AirPlayHandoff), "AirPlay & Handoff is reachable, not an orphan page");
+        opts.handoff = true;
+        assert_eq!(spec(PageId::Sharing, &model(&info, &opts)).groups[0].items[1].value, "Handoff On");
+
+        let lock = spec(PageId::LockScreen, &model(&info, &opts));
+        assert_eq!(lock.groups[0].items[0].action, Action::Push(PageId::Passcode));
+        assert_eq!(lock.groups[1].items[0].action, Action::Push(PageId::AutoLock));
+        assert_eq!(lock.groups[1].items[0].value, opts.auto_lock_label());
+        assert_eq!(lock.groups[2].items[0].action, Action::Push(PageId::ScreenSaver));
     }
 
     #[test]

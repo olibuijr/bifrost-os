@@ -1,0 +1,28 @@
+{
+ "category": "drivers",
+ "shard": "p-r",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/KernelKit/System/Library/Extensions/pthread.kext",
+   "category": "drivers",
+   "name": "pthread",
+   "path": "/System/KernelKit/System/Library/Extensions/pthread.kext",
+   "kind": "kext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

@@ -87,6 +87,8 @@ impl Shell {
   let d=self.desk.as_mut().unwrap();
   if d.dock_vis_anim.as_ref().is_some_and(|a|a.done(now)){let hide=d.dock_vis_anim.as_ref().is_some_and(|a|a.to<0.5);if hide{d.dock_visible=false;}d.dock_vis_anim=None;self.dirty=true;}
  }
+ /// Whether a dock list entry is an app the user keeps in the Dock (not the Apps icon, Trash, a minimized window or a recent).
+ pub(super) fn dock_removable(&self,entry:usize)->bool{entry!=apps().len()&&entry!=DOCK_TRASH&&dock_min_index(entry).is_none()&&self.dock_section(entry)==0}
  pub(super) fn dock_reorder(&mut self,from:usize,to:usize,after:bool){let Some(key)=self.dock_app_key(from)else{return;};let target=self.dock_app_key(to);let d=self.desk.as_mut().unwrap();d.dock_preferences.pinned.retain(|s|s!=&key);let at=target.and_then(|key|d.dock_preferences.pinned.iter().position(|s|s==&key)).map(|at|at+after as usize).unwrap_or(d.dock_preferences.pinned.len());d.dock_preferences.pinned.insert(at.min(d.dock_preferences.pinned.len()),key);d.dock_preferences.save(&self.data_dir);self.dirty=true;}
  pub(super) fn dock_is_visible(&self)->bool{self.desk.as_ref().is_some_and(|d|!d.dock_preferences.autohide||d.dock_visible)}
  pub(super) fn dock_overlay_rect(&self)->Rect {let m=self.desk_metrics();let (_,bar,_)=self.desk_dock(&m);if self.dock_is_visible(){bar}else{let p=self.ui.pt(3.) as i32;match self.dock_preferences().position {Position::Bottom=>Rect{x:0,y:self.h-p,w:self.w,h:p},Position::Left=>Rect{x:0,y:m.menubar,w:p,h:self.h-m.menubar},Position::Right=>Rect{x:self.w-p,y:m.menubar,w:p,h:self.h-m.menubar}}}}
@@ -98,6 +100,12 @@ pub(super) const DOCK_MIN_BASE:usize=usize::MAX-1;
 const DOCK_MIN_SPAN:usize=4096;
 /// The window index a minimized-window entry stands for.
 pub(super) fn dock_min_index(entry:usize)->Option<usize>{(entry<=DOCK_MIN_BASE&&entry>DOCK_MIN_BASE-DOCK_MIN_SPAN).then(||DOCK_MIN_BASE-entry)}
+/// How far (px) past the dock capsule a dragged icon must be released to leave the Dock.
+pub(super) fn dock_drag_off(bar:Rect,x:f32,y:f32,reach:f32)->bool{
+ let dx=(bar.x as f32-x).max(0.).max(x-(bar.x+bar.w) as f32);
+ let dy=(bar.y as f32-y).max(0.).max(y-(bar.y+bar.h) as f32);
+ (dx*dx+dy*dy).sqrt()>=reach.max(0.)
+}
 /// A launch bounce gives up after this long even if no window maps.
 const BOUNCE_MAX_S:f64=10.;
 /// Pointer magnification: 1 at the pointer, 0 at `radius` and beyond, a cosine in between.
@@ -278,5 +286,16 @@ fn dock_reveal(d:&mut super::desk::Desk,now:f64){
   assert_eq!(bounce_lift(3.,0.,3.,0.5,48),0,"stops at the end of the window");
   assert_eq!(bounce_lift(1.,2.,3.,0.5,48),0,"not before the window opens");
   assert_eq!(bounce_lift(1.,0.,3.,0.,48),0,"no bounce under Reduce Motion");
+ }
+
+ #[test]
+ fn dock_drag_off_needs_the_reach_past_the_capsule() {
+  let bar=Rect{x:100,y:500,w:200,h:60};
+  assert!(!dock_drag_off(bar,150.,520.,40.),"inside the capsule stays in the Dock");
+  assert!(!dock_drag_off(bar,150.,470.,40.),"30 px above is still near the Dock");
+  assert!(dock_drag_off(bar,150.,400.,40.),"well above the Dock leaves it");
+  assert!(dock_drag_off(bar,40.,520.,40.),"60 px left of the capsule leaves it");
+  assert!(!dock_drag_off(bar,80.,520.,40.),"20 px left is still near the Dock");
+  assert!(!dock_drag_off(bar,300.,520.,40.),"exactly at the right edge is inside");
  }
 }

@@ -1,0 +1,28 @@
+{
+ "category": "drivers",
+ "shard": "j-l",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/KernelKit/System/Library/Extensions/Libm.kext",
+   "category": "drivers",
+   "name": "Libm",
+   "path": "/System/KernelKit/System/Library/Extensions/Libm.kext",
+   "kind": "kext",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "heuristic: hardware driver, kernel side",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}

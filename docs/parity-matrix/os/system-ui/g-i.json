@@ -1,0 +1,607 @@
+{
+ "category": "system-ui",
+ "shard": "g-i",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/CoreServices/Game Center.app",
+   "category": "system-ui",
+   "name": "Game Center",
+   "path": "/System/Library/CoreServices/Game Center.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Game Center service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/GameOverlayUI.app",
+   "category": "system-ui",
+   "name": "GameOverlayUI",
+   "path": "/System/Library/CoreServices/GameOverlayUI.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no game overlay",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/GameTrampoline.app",
+   "category": "system-ui",
+   "name": "GameTrampoline",
+   "path": "/System/Library/CoreServices/GameTrampoline.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/IOUIAgent.app",
+   "category": "system-ui",
+   "name": "IOUIAgent",
+   "path": "/System/Library/CoreServices/IOUIAgent.app",
+   "kind": "core service agent",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "os",
+   "note": "IO device UI agent, the Linux base handles device prompts",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Image Events.app",
+   "category": "system-ui",
+   "name": "Image Events",
+   "path": "/System/Library/CoreServices/Image Events.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Install Command Line Developer Tools.app",
+   "category": "system-ui",
+   "name": "Install Command Line Developer Tools",
+   "path": "/System/Library/CoreServices/Install Command Line Developer Tools.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple developer tools installer",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Install in Progress.app",
+   "category": "system-ui",
+   "name": "Install in Progress",
+   "path": "/System/Library/CoreServices/Install in Progress.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "installer progress UI in the installer, not in the desktop",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Installer Progress.app",
+   "category": "system-ui",
+   "name": "Installer Progress",
+   "path": "/System/Library/CoreServices/Installer Progress.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "installer progress UI in the installer, not in the desktop",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/Installer.app",
+   "category": "system-ui",
+   "name": "Installer",
+   "path": "/System/Library/CoreServices/Installer.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "the native installer is not a desktop component",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/iCloud+.app",
+   "category": "system-ui",
+   "name": "iCloud+",
+   "path": "/System/Library/CoreServices/iCloud+.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/CoreServices/iCloud.app",
+   "category": "system-ui",
+   "name": "iCloud",
+   "path": "/System/Library/CoreServices/iCloud.app",
+   "kind": "core service",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iCloud service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GMSSELFIngestor.appex",
+   "category": "system-ui",
+   "name": "GMSSELFIngestor",
+   "path": "/System/Library/ExtensionKit/Extensions/GMSSELFIngestor.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GPNonUIExtension.appex",
+   "category": "system-ui",
+   "name": "GPNonUIExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/GPNonUIExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GPUIExtension.appex",
+   "category": "system-ui",
+   "name": "GPUIExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/GPUIExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GameCenterDiagnosticExtension.appex",
+   "category": "system-ui",
+   "name": "GameCenterDiagnosticExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/GameCenterDiagnosticExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GameCenterMessageExtension.appex",
+   "category": "system-ui",
+   "name": "GameCenterMessageExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/GameCenterMessageExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GenerativeAssistantExtension.appex",
+   "category": "system-ui",
+   "name": "GenerativeAssistantExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/GenerativeAssistantExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GenerativeExperiencesSafetyInferenceProvider.appex",
+   "category": "system-ui",
+   "name": "GenerativeExperiencesSafetyInferenceProvider",
+   "path": "/System/Library/ExtensionKit/Extensions/GenerativeExperiencesSafetyInferenceProvider.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GenerativePartnerPrototypeExtension.appex",
+   "category": "system-ui",
+   "name": "GenerativePartnerPrototypeExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/GenerativePartnerPrototypeExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/GradientBackgroundPosterExtension.appex",
+   "category": "system-ui",
+   "name": "GradientBackgroundPosterExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/GradientBackgroundPosterExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Hello.appex",
+   "category": "system-ui",
+   "name": "Hello",
+   "path": "/System/Library/ExtensionKit/Extensions/Hello.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple onboarding",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/HomeAppIntentsExtension.appex",
+   "category": "system-ui",
+   "name": "HomeAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/HomeAppIntentsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/HostInferenceProviderService.appex",
+   "category": "system-ui",
+   "name": "HostInferenceProviderService",
+   "path": "/System/Library/ExtensionKit/Extensions/HostInferenceProviderService.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/IFTelemetrySELFIngestor.appex",
+   "category": "system-ui",
+   "name": "IFTelemetrySELFIngestor",
+   "path": "/System/Library/ExtensionKit/Extensions/IFTelemetrySELFIngestor.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/IFTranscriptSELFIngestor.appex",
+   "category": "system-ui",
+   "name": "IFTranscriptSELFIngestor",
+   "path": "/System/Library/ExtensionKit/Extensions/IFTranscriptSELFIngestor.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/ImageThumbnailExtension.appex",
+   "category": "system-ui",
+   "name": "ImageThumbnailExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/ImageThumbnailExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "reviewed: no BifrOSt counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/InferenceProviderService.appex",
+   "category": "system-ui",
+   "name": "InferenceProviderService",
+   "path": "/System/Library/ExtensionKit/Extensions/InferenceProviderService.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/IntelligenceFlowAppIntentsExtension.appex",
+   "category": "system-ui",
+   "name": "IntelligenceFlowAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/IntelligenceFlowAppIntentsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/IntelligencePlatformDataActionsAppIntentsExtension.appex",
+   "category": "system-ui",
+   "name": "IntelligencePlatformDataActionsAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/IntelligencePlatformDataActionsAppIntentsExtension.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/iLifeSlideshows.appex",
+   "category": "system-ui",
+   "name": "iLifeSlideshows",
+   "path": "/System/Library/ExtensionKit/Extensions/iLifeSlideshows.appex",
+   "kind": "system extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple iLife slideshow",
+   "rea": []
+  }
+ ]
+}

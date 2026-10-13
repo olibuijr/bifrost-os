@@ -79,18 +79,45 @@ pub const CONTROL_PRESSED: Pair = Pair::new(pack(84, 84, 88, 255), pack(206, 206
 /// Control outlines in the current scheme (Show Borders, menus).
 pub const HAIRLINE_C: Pair = Pair::new(pack(84, 84, 88, 255), pack(200, 200, 204, 255));
 /// System materials, straight alpha (premultiply at use): sidebar, title bar, popover, HUD tints.
-pub const MATERIAL_SIDEBAR: Pair = Pair::new(pack(24, 24, 27, 190), pack(236, 236, 236, 200));
-pub const MATERIAL_TITLEBAR: Pair = Pair::new(pack(28, 28, 30, 200), pack(246, 246, 246, 205));
-pub const MATERIAL_POPOVER: Pair = Pair::new(pack(28, 28, 30, 236), pack(246, 246, 246, 238));
-pub const MATERIAL_HUD: Pair = Pair::new(pack(12, 12, 14, 170), pack(12, 12, 14, 170));
+pub const MATERIAL_SIDEBAR: Pair = Pair::new(pack(46, 46, 46, 190), pack(231, 231, 231, 200));
+pub const MATERIAL_TITLEBAR: Pair = Pair::new(pack(35, 35, 35, 200), pack(255, 255, 255, 205));
+pub const MATERIAL_POPOVER: Pair = Pair::new(pack(46, 46, 46, 236), pack(243, 243, 243, 238));
+pub const MATERIAL_HUD: Pair = Pair::new(pack(37, 37, 37, 170), pack(37, 37, 37, 170));
 /// `.windowBackground`, `.contentBackground`, `.underWindowBackground`, `.underPageBackground`: nearly opaque.
-pub const MATERIAL_WINDOW: Pair = Pair::new(pack(30, 30, 32, 228), pack(240, 240, 240, 228));
+pub const MATERIAL_WINDOW: Pair = Pair::new(pack(37, 37, 37, 228), pack(247, 247, 247, 228));
 /// `.selection`: the accent at material strength (straight alpha, as the other `MATERIAL_*`).
 pub const MATERIAL_SELECTION: Pair = Pair::new(pack(14, 100, 196, 200), pack(0, 112, 245, 200));
-/// The opaque colours of the materials when Reduce Transparency is on.
-pub const MATERIAL_SIDEBAR_SOLID: Pair = Pair::new(pack(20, 20, 22, 255), pack(235, 235, 235, 255));
-pub const MATERIAL_TITLEBAR_SOLID: Pair = Pair::new(pack(28, 28, 30, 255), pack(246, 246, 246, 255));
-pub const MATERIAL_HUD_SOLID: Pair = Pair::new(pack(12, 12, 14, 255), pack(12, 12, 14, 255));
+/// Remaining `NSVisualEffectView.Material` tints (straight alpha). Measured: each grey is the material's recipe (blur,
+/// saturation, brightness, luminance mapping; `docs/reference/materials-macos27.md`) applied to a neutral backdrop of
+/// luma 0.15 in Dark and 0.85 in Light, the flat stand-in for the live blur where the shell cannot sample one. The
+/// alpha keeps the earlier designed strength. Which recipe each material takes is in the document (some mappings are
+/// inferred from the recipe names).
+pub const MATERIAL_MENU: Pair = Pair::new(pack(46, 46, 46, 226), pack(243, 243, 243, 230));
+pub const MATERIAL_SHEET: Pair = Pair::new(pack(46, 46, 46, 232), pack(243, 243, 243, 234));
+pub const MATERIAL_TOOLTIP: Pair = Pair::new(pack(37, 37, 37, 238), pack(247, 247, 247, 240));
+pub const MATERIAL_HEADER: Pair = Pair::new(pack(35, 35, 35, 214), pack(255, 255, 255, 214));
+pub const MATERIAL_CONTENT: Pair = Pair::new(pack(37, 37, 37, 240), pack(247, 247, 247, 240));
+pub const MATERIAL_UNDER_WINDOW: Pair = Pair::new(pack(50, 50, 50, 214), pack(223, 223, 223, 214));
+pub const MATERIAL_UNDER_PAGE: Pair = Pair::new(pack(46, 46, 46, 232), pack(231, 231, 231, 232));
+pub const MATERIAL_FULLSCREEN: Pair = Pair::new(pack(37, 37, 37, 190), pack(37, 37, 37, 190));
+/// `.selection` when `isEmphasized` (the full accent) and when the material looks inactive (neutral grey).
+pub const MATERIAL_SELECTION_EMPHASIZED: Pair = Pair::new(pack(14, 100, 196, 255), pack(0, 112, 245, 255));
+pub const MATERIAL_SELECTION_INACTIVE: Pair = Pair::new(pack(70, 70, 74, 200), pack(200, 200, 204, 200));
+/// The opaque colours of the materials when Reduce Transparency is on (the Reduce Transparency recipe for the title bar).
+pub const MATERIAL_SIDEBAR_SOLID: Pair = Pair::new(pack(46, 46, 46, 255), pack(231, 231, 231, 255));
+pub const MATERIAL_TITLEBAR_SOLID: Pair = Pair::new(pack(35, 35, 35, 255), pack(255, 255, 255, 255));
+pub const MATERIAL_HUD_SOLID: Pair = Pair::new(pack(37, 37, 37, 255), pack(37, 37, 37, 255));
+/// Increase Contrast: the outline a material (sidebar, title bar, popover, HUD) gets, and the stronger separator.
+pub const MATERIAL_BORDER_CONTRAST: Pair = Pair::new(pack(150, 150, 156, 255), pack(110, 110, 116, 255));
+pub const SEPARATOR_CONTRAST: Pair = Pair::new(pack(110, 110, 114, 255), pack(140, 140, 146, 255));
+/// The material outline colour now: `Some` only while Increase Contrast is on.
+pub fn material_border() -> Option<u32> {
+    crate::appearance::increase_contrast().then(|| MATERIAL_BORDER_CONTRAST.now())
+}
+/// Separator colour that follows Increase Contrast.
+pub fn separator_now() -> u32 {
+    if crate::appearance::increase_contrast() { SEPARATOR_CONTRAST.now() } else { SEPARATOR_C.now() }
+}
 /// Window frame: focused and background title areas.
 pub const WINDOW_FRAME_FOCUSED: Pair = Pair::new(pack(52, 52, 55, 255), pack(236, 236, 236, 255));
 pub const WINDOW_FRAME_BLURRED: Pair = Pair::new(pack(40, 40, 43, 255), pack(246, 246, 246, 255));
@@ -716,6 +743,7 @@ mod appearance_guard {
         ("shell/desk.rs", "desktop backdrop and dock placeholder tiles"),
         ("shell/desktop_bar.rs", "blur base under translucent materials"),
         ("shell/camera/", "camera viewfinder is always black"),
+        ("apps/photobooth-desktop/", "camera viewfinder is always black"),
         ("shell/photos/", "full-screen photo viewer and camera tile are black, as in Photos"),
         ("apps/clock-desktop/src/clock/", "translucent scrims (night shade, sheet dimming) over the clock faces"),
         ("shell/magnifier.rs", "magnifier viewfinder"),
@@ -763,3 +791,10 @@ mod appearance_guard {
         assert!(bad.is_empty(), "dark-only BLACK/CELL fill; use ui::system / DETAIL_BG / CARD_BG with .now() (or allowlist with a reason):\n{}", bad.join("\n"));
     }
 }
+
+/// Vibrant strengths over a material (`NSAppearance` vibrant dark / light; SwiftUI hierarchical `.primary` ..
+/// `.quaternary`): [Dark, Light] x [primary, secondary, tertiary, quaternary]. Labels follow the label colours'
+/// alphas. Mirrors `bifrost_ui::vibrancy::strength` (`Role::Label`).
+pub const VIBRANT_LABEL: [[f32; 4]; 2] = [[0.85, 0.55, 0.25, 0.10], [0.85, 0.50, 0.26, 0.10]];
+/// Vibrant fills (`fillColor` .. `quaternarySystemFill` alphas), same layout. Mirrors `Role::Fill`.
+pub const VIBRANT_FILL: [[f32; 4]; 2] = [[0.36, 0.32, 0.24, 0.18], [0.20, 0.16, 0.12, 0.08]];

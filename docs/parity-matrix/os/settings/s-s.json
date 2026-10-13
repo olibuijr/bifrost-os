@@ -1,0 +1,947 @@
+{
+ "category": "settings",
+ "shard": "s-s",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Applications/System Settings.app/Contents/PlugIns/SettingsImportExtension.appex",
+   "category": "settings",
+   "name": "SettingsImportExtension",
+   "path": "/System/Applications/System Settings.app/Contents/PlugIns/SettingsImportExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "System Settings",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no settings import from another system",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/ScreenTimeAppIntentsExtension.appex",
+   "category": "settings",
+   "name": "ScreenTimeAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/ScreenTimeAppIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/ScreenTimePreferencesExtension.appex",
+   "category": "settings",
+   "name": "ScreenTimePreferencesExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/ScreenTimePreferencesExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/screentime/page.rs",
+   "status": "partial",
+   "note": "Screen Time page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/ScreenTimeSettingsResponseExtension.appex",
+   "category": "settings",
+   "name": "ScreenTimeSettingsResponseExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/ScreenTimeSettingsResponseExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/screentime/page.rs",
+   "status": "partial",
+   "note": "Screen Time page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SecurityImprovementsExtension.appex",
+   "category": "settings",
+   "name": "SecurityImprovementsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SecurityImprovementsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "security improvements, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SecurityPrivacyExtension.appex",
+   "category": "settings",
+   "name": "SecurityPrivacyExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SecurityPrivacyExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Privacy page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SecurityPrivacyIntentsExtension.appex",
+   "category": "settings",
+   "name": "SecurityPrivacyIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SecurityPrivacyIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SettingsSystemExtensionController.appex",
+   "category": "settings",
+   "name": "SettingsSystemExtensionController",
+   "path": "/System/Library/ExtensionKit/Extensions/SettingsSystemExtensionController.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "settings controller, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Sharing.appex",
+   "category": "settings",
+   "name": "Sharing",
+   "path": "/System/Library/ExtensionKit/Extensions/Sharing.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "the share sheet exists (shell/share); no sharing settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SharingIntents.appex",
+   "category": "settings",
+   "name": "SharingIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/SharingIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriAttentionAndInvocationExtension.appex",
+   "category": "settings",
+   "name": "SiriAttentionAndInvocationExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriAttentionAndInvocationExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "Siri invocation settings, no Siri settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriAutoEvalPlugin.appex",
+   "category": "settings",
+   "name": "SiriAutoEvalPlugin",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriAutoEvalPlugin.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Siri evaluation service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriCoreMetricsWorker.appex",
+   "category": "settings",
+   "name": "SiriCoreMetricsWorker",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriCoreMetricsWorker.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriCrisisAppIntentsExtension.appex",
+   "category": "settings",
+   "name": "SiriCrisisAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriCrisisAppIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriGeoAppIntentExtension.appex",
+   "category": "settings",
+   "name": "SiriGeoAppIntentExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriGeoAppIntentExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriInferenceRuntimeDiagnostics.appex",
+   "category": "settings",
+   "name": "SiriInferenceRuntimeDiagnostics",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriInferenceRuntimeDiagnostics.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriMessagesAppIntentsExtension.appex",
+   "category": "settings",
+   "name": "SiriMessagesAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriMessagesAppIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriNotebookAppIntentsExtension.appex",
+   "category": "settings",
+   "name": "SiriNotebookAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriNotebookAppIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriNotificationsAppIntentsExtension.appex",
+   "category": "settings",
+   "name": "SiriNotificationsAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriNotificationsAppIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriPhoneAppIntentsExtension.appex",
+   "category": "settings",
+   "name": "SiriPhoneAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriPhoneAppIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriPhotosAppIntentsExtension.appex",
+   "category": "settings",
+   "name": "SiriPhotosAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriPhotosAppIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriPlaybackControlAppIntentsExtension.appex",
+   "category": "settings",
+   "name": "SiriPlaybackControlAppIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriPlaybackControlAppIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriPreferenceExtension.appex",
+   "category": "settings",
+   "name": "SiriPreferenceExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriPreferenceExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "assistant app exists, no Siri settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriSetupSettingsIntents.appex",
+   "category": "settings",
+   "name": "SiriSetupSettingsIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriSetupSettingsIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriSuggestionsLightHousePlugin.appex",
+   "category": "settings",
+   "name": "SiriSuggestionsLightHousePlugin",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriSuggestionsLightHousePlugin.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Siri suggestions service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriTurnRestatementExtension.appex",
+   "category": "settings",
+   "name": "SiriTurnRestatementExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriTurnRestatementExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "Siri settings, no Siri settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriUploadWorker.appex",
+   "category": "settings",
+   "name": "SiriUploadWorker",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriUploadWorker.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple service or hardware with no PC counterpart",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriUserSegmentation.appex",
+   "category": "settings",
+   "name": "SiriUserSegmentation",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriUserSegmentation.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple Siri user segmentation service",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SiriVideoAppIntents.appex",
+   "category": "settings",
+   "name": "SiriVideoAppIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/SiriVideoAppIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SoftwareUpdateSettingsExtension.appex",
+   "category": "settings",
+   "name": "SoftwareUpdateSettingsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SoftwareUpdateSettingsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/update.rs",
+   "status": "partial",
+   "note": "Software Update",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SoftwareUpdateSettingsExtensionIntents.appex",
+   "category": "settings",
+   "name": "SoftwareUpdateSettingsExtensionIntents",
+   "path": "/System/Library/ExtensionKit/Extensions/SoftwareUpdateSettingsExtensionIntents.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Sound.appex",
+   "category": "settings",
+   "name": "Sound",
+   "path": "/System/Library/ExtensionKit/Extensions/Sound.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/sound_page.rs",
+   "status": "partial",
+   "note": "Sound page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SoundIntentsExtension.appex",
+   "category": "settings",
+   "name": "SoundIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SoundIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SpotlightPreferenceExtension.appex",
+   "category": "settings",
+   "name": "SpotlightPreferenceExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SpotlightPreferenceExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "status": "partial",
+   "note": "search and index; no Spotlight settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/SpotlightSettingsIntentsExtension.appex",
+   "category": "settings",
+   "name": "SpotlightSettingsIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/SpotlightSettingsIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/Storage.appex",
+   "category": "settings",
+   "name": "Storage",
+   "path": "/System/Library/ExtensionKit/Extensions/Storage.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/storage_page.rs",
+   "status": "partial",
+   "note": "Storage page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/StorageDESDXC.appex",
+   "category": "settings",
+   "name": "StorageDESDXC",
+   "path": "/System/Library/ExtensionKit/Extensions/StorageDESDXC.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "encrypted disk settings, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/StorageDESSD.appex",
+   "category": "settings",
+   "name": "StorageDESSD",
+   "path": "/System/Library/ExtensionKit/Extensions/StorageDESSD.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "encrypted disk settings, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/ExtensionKit/Extensions/StorageSettingsIntentsExtension.appex",
+   "category": "settings",
+   "name": "StorageSettingsIntentsExtension",
+   "path": "/System/Library/ExtensionKit/Extensions/StorageSettingsIntentsExtension.appex",
+   "kind": "settings extension",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "App Intents plumbing for this feature, no counterpart yet",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/ScreenTime.prefPane",
+   "category": "settings",
+   "name": "ScreenTime",
+   "path": "/System/Library/PreferencePanes/ScreenTime.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/screentime/page.rs",
+   "status": "partial",
+   "note": "Screen Time page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Security.prefPane",
+   "category": "settings",
+   "name": "Security",
+   "path": "/System/Library/PreferencePanes/Security.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/pages.rs",
+   "status": "partial",
+   "note": "Privacy page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/SharingPref.prefPane",
+   "category": "settings",
+   "name": "SharingPref",
+   "path": "/System/Library/PreferencePanes/SharingPref.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "the share sheet exists (shell/share); no sharing settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/SoftwareUpdate.prefPane",
+   "category": "settings",
+   "name": "SoftwareUpdate",
+   "path": "/System/Library/PreferencePanes/SoftwareUpdate.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/update.rs",
+   "status": "partial",
+   "note": "Software Update",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Sound.prefPane",
+   "category": "settings",
+   "name": "Sound",
+   "path": "/System/Library/PreferencePanes/Sound.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/sound_page.rs",
+   "status": "partial",
+   "note": "Sound page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Speech.prefPane",
+   "category": "settings",
+   "name": "Speech",
+   "path": "/System/Library/PreferencePanes/Speech.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "no speech settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/Spotlight.prefPane",
+   "category": "settings",
+   "name": "Spotlight",
+   "path": "/System/Library/PreferencePanes/Spotlight.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "springboard/src/shell/quicksearch.rs",
+   "status": "partial",
+   "note": "search and index; no Spotlight settings page",
+   "rea": []
+  },
+  {
+   "id": "path:/System/Library/PreferencePanes/StartupDisk.prefPane",
+   "category": "settings",
+   "name": "StartupDisk",
+   "path": "/System/Library/PreferencePanes/StartupDisk.prefPane",
+   "kind": "settings pane",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "n/a",
+   "note": "Apple boot picker, PC uses the firmware boot menu",
+   "rea": []
+  }
+ ]
+}

@@ -1,0 +1,49 @@
+{
+ "category": "input-methods",
+ "shard": "p-r",
+ "source": "macOS 27.0.1 Golden Gate 26A434",
+ "entries": [
+  {
+   "id": "path:/System/Library/Input Methods/PluginIM.app",
+   "category": "input-methods",
+   "name": "PluginIM",
+   "path": "/System/Library/Input Methods/PluginIM.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  },
+  {
+   "id": "path:/System/Library/Input Methods/PressAndHold.app",
+   "category": "input-methods",
+   "name": "PressAndHold",
+   "path": "/System/Library/Input Methods/PressAndHold.app",
+   "kind": "input method",
+   "identifier": "",
+   "version": "",
+   "owner": "",
+   "facts": {
+    "size": 0
+   },
+   "description": "",
+   "role": "",
+   "doc": "",
+   "bifrost": "",
+   "status": "gap",
+   "note": "heuristic: no counterpart yet",
+   "rea": [],
+   "method": "heuristic"
+  }
+ ]
+}
