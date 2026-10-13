@@ -72,6 +72,10 @@ struct Owner {
     push: bool,
 }
 
+/// A store file's identity: its modification time and its length. Both are kept because `write_atomic` renames a new
+/// file into place, and two saves in one timestamp tick leave the time unchanged, so the length tells them apart.
+type Stamp = (SystemTime, u64);
+
 /// The shell state the bus watches for system names.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Seen {
@@ -79,10 +83,10 @@ struct Seen {
     locked: bool,
     /// Wi-Fi or a wired link is up.
     reachable: bool,
-    /// The contacts file's modification time, `None` when there is no file.
-    contacts: Option<SystemTime>,
-    /// The events file's modification time, `None` when there is no file.
-    calendar: Option<SystemTime>,
+    /// The contacts file's stamp, `None` when there is no file.
+    contacts: Option<Stamp>,
+    /// The events file's stamp, `None` when there is no file.
+    calendar: Option<Stamp>,
 }
 
 #[derive(Default)]
@@ -92,8 +96,8 @@ pub struct NotifyBus {
     last: Option<Seen>,
     /// The shell time of the last stat of the store files, `None` before the first tick.
     stat_at: Option<f64>,
-    /// The store files' modification times as of `stat_at`: contacts, then calendar.
-    stores: (Option<SystemTime>, Option<SystemTime>),
+    /// The store files' stamps as of `stat_at`: contacts, then calendar.
+    stores: (Option<Stamp>, Option<Stamp>),
 }
 
 impl NotifyBus {
@@ -265,9 +269,10 @@ fn is_system(name: &str) -> bool {
     name.starts_with(SYSTEM_PREFIX)
 }
 
-/// The modification time of the file at `path`; `None` when it is missing or unreadable.
-fn stamp(path: &Path) -> Option<SystemTime> {
-    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+/// The stamp of the file at `path`; `None` when it is missing or unreadable.
+fn stamp(path: &Path) -> Option<Stamp> {
+    let meta = std::fs::metadata(path).ok()?;
+    Some((meta.modified().ok()?, meta.len()))
 }
 
 fn obj(fields: Vec<(&str, Json)>) -> Json {
@@ -329,10 +334,14 @@ mod tests {
         Seen { light: false, locked: false, reachable: true, contacts: None, calendar: None }
     }
 
+    /// A file last written at `secs` after the epoch, `len` bytes long.
+    fn file(secs: u64, len: u64) -> Option<Stamp> {
+        Some((UNIX_EPOCH + Duration::from_secs(secs), len))
+    }
+
     /// A quiet shell whose store files were last written at the given seconds after the epoch.
     fn stores(contacts: Option<u64>, calendar: Option<u64>) -> Seen {
-        let at = |secs: u64| Some(UNIX_EPOCH + Duration::from_secs(secs));
-        Seen { contacts: contacts.and_then(at), calendar: calendar.and_then(at), ..quiet() }
+        Seen { contacts: contacts.and_then(|secs| file(secs, 0)), calendar: calendar.and_then(|secs| file(secs, 0)), ..quiet() }
     }
 
     /// A pushed token for `app` on `name`, put in place without the access gate. The calendar permission comes from an
@@ -541,6 +550,16 @@ mod tests {
         assert_eq!(event_names(&mut bus), vec![(Some("app.b".to_string()), CALENDAR_CHANGE.to_string())]);
         bus.system_changes(stores(Some(2), Some(3)));
         assert!(bus.deliver().is_empty(), "an unchanged store posts nothing");
+    }
+
+    #[test]
+    fn a_second_save_in_the_same_timestamp_tick_is_a_change() {
+        let mut bus = NotifyBus::default();
+        answer_prompt("app.a", Choice::All).unwrap();
+        bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).unwrap();
+        bus.system_changes(Seen { contacts: file(7, 100), ..quiet() });
+        bus.system_changes(Seen { contacts: file(7, 120), ..quiet() });
+        assert_eq!(event_names(&mut bus).len(), 1, "same mtime, new length");
     }
 
     #[test]
