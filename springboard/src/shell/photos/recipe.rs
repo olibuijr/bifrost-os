@@ -29,7 +29,7 @@ pub fn encode(e: &Edit) -> String {
     let aspect = name(&ASPECTS, e.aspect);
     let filter = name(&FILTERS, e.filter);
     format!(
-        "turns={};aspect={};zoom={};cx={};cy={};straighten={};filter={};brightness={};contrast={};exposure={};saturation={};warmth={};blur={};vignette={}",
+        "turns={};aspect={};zoom={};cx={};cy={};straighten={};filter={};brightness={};contrast={};exposure={};saturation={};warmth={};blur={};vignette={};fliph={};flipv={};auto={}",
         e.turns,
         aspect,
         e.crop_zoom,
@@ -43,7 +43,10 @@ pub fn encode(e: &Edit) -> String {
         e.saturation,
         e.warmth,
         e.blur,
-        e.vignette
+        e.vignette,
+        u8::from(e.flip_h),
+        u8::from(e.flip_v),
+        u8::from(e.auto)
     )
 }
 
@@ -71,6 +74,9 @@ pub fn decode(text: &str) -> Option<Edit> {
             "warmth" => e.warmth = number(value)?,
             "blur" => e.blur = number(value)?,
             "vignette" => e.vignette = number(value)?,
+            "fliph" => e.flip_h = value == "1",
+            "flipv" => e.flip_v = value == "1",
+            "auto" => e.auto = value == "1",
             _ => {}
         }
     }
@@ -109,6 +115,9 @@ mod tests {
             warmth: 0.5,
             blur: 0.4,
             vignette: 1.0,
+            flip_h: true,
+            flip_v: false,
+            auto: true,
         };
         assert_eq!(decode(&encode(&e)), Some(e));
         assert_eq!(decode(&encode(&Edit::default())), Some(Edit::default()));

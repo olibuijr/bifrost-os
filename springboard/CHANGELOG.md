@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## Unreleased
+
+- Photos: the editor has a Tools page with Rotate Left, Flip Horizontal, Flip Vertical, Auto Enhance (a tone stretch) and a luminance histogram, all kept in the saved edit. Tap the selection title to Select All or Deselect All. The grid has four zoom levels (8, 5, 3 and 2 columns), remembered. The share sheet can Duplicate a photo (its edit and rating come along). The Info sheet rates a photo with stars and can Hide it into a Hidden album that is kept out of All Photos, Recents, Favorites and Screenshots.
+
 ## 0.7.25 — 2026-10-13
 
 - Window server: labwc is gone. bifrost-wm is the only window server; after three quick exits it restarts in safe mode (GLES, no direct apps, no chrome clients), then recovery takes over. bifrost-wm has the global shortcuts (Spotlight on Super+Space, Super+A, Alt+Tab, Alt+F4, Ctrl+Super arrows to tile) and real screen capture (screencopy and ext-image-copy: the scene rendered offscreen and read back as RGBA, so screenshots show the wallpaper and the right colours). The shell's own live-backdrop blur, which only served labwc, is removed: the window server blurs the real scene behind every material.

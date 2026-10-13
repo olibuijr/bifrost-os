@@ -67,6 +67,20 @@ fn taken_at(path: &Path, offset: i32) -> Option<i64> {
     super::exif::taken_unix(&super::exif::parse(&head)?.taken?, offset)
 }
 
+/// Duplicate: copies the picture at `path` beside it as `name 2.ext`, `name 3.ext`... and returns the copy's path.
+/// Nothing is overwritten.
+pub fn duplicate(path: &Path) -> std::io::Result<PathBuf> {
+    let dir = path.parent().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "no folder"))?;
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "no file name"))?;
+    let mut source = std::fs::File::open(path)?;
+    let (copy, mut out) = crate::net::share::create_unique(dir, &name)?;
+    if let Err(e) = std::io::copy(&mut source, &mut out) {
+        let _ = std::fs::remove_file(&copy);
+        return Err(e);
+    }
+    Ok(copy)
+}
+
 /// Every picture under `dirs` (hidden entries skipped), oldest first.
 pub fn scan(dirs: &[PathBuf]) -> Vec<Photo> {
     scan_at(dirs, 0)
@@ -212,6 +226,19 @@ pub(crate) mod tests {
         std::fs::write(path, crate::cg::imageio::tests::png_bytes(4, 4, [10, 20, 30, 255])).unwrap();
         let f = std::fs::File::options().write(true).open(path).unwrap();
         f.set_modified(UNIX_EPOCH + Duration::from_secs(unix as u64)).unwrap();
+    }
+
+    #[test]
+    fn duplicate_makes_numbered_copies_and_keeps_the_original() {
+        let dir = scratch("duplicate-file");
+        let a = dir.join("IMG_1.png");
+        picture(&a, 1_790_000_000);
+        let one = duplicate(&a).unwrap();
+        assert_eq!(one, dir.join("IMG_1 2.png"));
+        assert_eq!(duplicate(&a).unwrap(), dir.join("IMG_1 3.png"));
+        assert_eq!(std::fs::read(&a).unwrap(), std::fs::read(&one).unwrap());
+        assert!(duplicate(&dir.join("missing.png")).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

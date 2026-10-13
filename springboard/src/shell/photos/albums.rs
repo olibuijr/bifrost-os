@@ -173,6 +173,25 @@ impl Selection {
         self.paths = photos.iter().map(|p| p.path.clone()).collect();
     }
 
+    /// Select All, or Deselect All when every photo of `photos` is already selected. True when all are selected now.
+    pub fn toggle_all(&mut self, photos: &[Photo]) -> bool {
+        if !photos.is_empty() && photos.iter().all(|p| self.contains(&p.path)) {
+            self.paths.clear();
+            false
+        } else {
+            self.select_all(photos);
+            !photos.is_empty()
+        }
+    }
+
+    /// Selects the photos between `from` and `to` (indexes into `photos`, either order), keeping what was selected.
+    pub fn select_range(&mut self, photos: &[Photo], from: usize, to: usize) {
+        let (a, b) = (from.min(to), from.max(to));
+        for p in photos.iter().skip(a).take(b + 1 - a) {
+            self.paths.insert(p.path.clone());
+        }
+    }
+
     /// Forgets paths that are no longer in `photos`.
     pub fn retain_in(&mut self, photos: &[Photo]) {
         let keep: BTreeSet<&Path> = photos.iter().map(|p| p.path.as_path()).collect();
@@ -266,5 +285,25 @@ mod tests {
         assert_eq!(s.len(), 2);
         s.end();
         assert!(!s.active && s.is_empty());
+    }
+
+    #[test]
+    fn select_all_toggles_and_ranges_extend() {
+        let photos = [photo("a", 1), photo("b", 2), photo("c", 3), photo("d", 4)];
+        let mut s = Selection::default();
+        s.begin();
+        assert!(s.toggle_all(&photos) && s.len() == 4);
+        assert!(!s.toggle_all(&photos) && s.is_empty(), "a second call deselects");
+        s.toggle(&photos[0].path);
+        assert!(s.toggle_all(&photos) && s.len() == 4, "a partial selection completes");
+        assert!(!s.toggle_all(&[]) && s.len() == 4, "nothing to select");
+        s.end();
+        s.begin();
+        s.select_range(&photos, 3, 1);
+        assert_eq!(s.paths(), [photos[1].path.clone(), photos[2].path.clone(), photos[3].path.clone()]);
+        s.select_range(&photos, 0, 0);
+        assert_eq!(s.len(), 4, "the range adds to the selection");
+        s.select_range(&photos, 9, 12);
+        assert_eq!(s.len(), 4, "a range past the end adds nothing");
     }
 }

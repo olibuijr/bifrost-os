@@ -51,8 +51,8 @@
    "area": "toolbar",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Edit > Select All / Deselect All",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/mod.rs:1246",
-   "note": "tap-to-select only; no Select All / Deselect All, no shift-range",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1348",
+   "note": "Select All / Deselect All: tap the selection title (Selection::toggle_all, albums.rs); select_range is modelled and tested but no shift-range gesture and no menu item or cmd+A (the built-in app has no key path)",
    "wire": "Add select_all/deselect_all on the selection state in mod.rs and expose Edit > Select All (cmd+A) / Deselect All (cmd+shift+A) through the shell app menu while Photos is frontmost"
   },
   {
@@ -122,9 +122,9 @@
    "feature": "Grid zoom bigger / smaller",
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib View > Zoom In / Zoom Out",
-   "status": "gap",
-   "bifrost": "",
-   "note": "column count fixed by cols() (mod.rs:553)",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:70",
+   "note": "four zoom levels (8, 5, 3, 2 columns) on the existing +/- buttons, remembered in photos.ini; no cmd+= / cmd+- menu items and no pinch on the grid",
    "wire": "Make cols() read a zoom level pref; bind cmd+= / cmd+- and pinch on the grid"
   },
   {
@@ -258,17 +258,17 @@
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Rotate Left/Right, Flip Horizontal/Vertical",
    "status": "partial",
-   "bifrost": "springboard/src/shell/photos/mod.rs:1307",
-   "note": "crop/aspect/straighten/rotate exist; no flip, rotate one direction, no menu items",
+   "bifrost": "springboard/src/shell/photos/mod.rs:181",
+   "note": "Tools page of the editor: Rotate Left, Flip Horizontal, Flip Vertical (edit.rs flip_h/flip_v, saved in the recipe); no shell menu items (cmd+R)",
    "wire": "Add flip_h/flip_v to Edit in edit.rs with buttons in the Crop pane; add Rotate Left / Rotate Right (cmd+R / cmd+opt+R) shell menu items"
   },
   {
    "feature": "Auto Enhance",
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Auto Enhance",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/edit.rs:429",
+   "note": "histogram-stretch pass (edit.rs auto_range/auto_enhance) behind an Auto Enhance toggle on the Tools page, saved in the recipe; no Image menu item",
    "wire": "Add an auto-levels pass (histogram stretch) in edit.rs and an Auto button in the Adjust pane"
   },
   {
@@ -293,27 +293,27 @@
    "feature": "Duplicate photo",
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Duplicate",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/library.rs:72",
+   "note": "Share sheet > Duplicate copies the file as 'name 2.ext' and carries the edit and rating (mod.rs:2330); no Image menu item",
    "wire": "Copy the file with a numbered suffix in the library dir and rescan"
   },
   {
    "feature": "Hide photo and Hidden album with password unlock",
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Hide Photo; View > Show Hidden Photo Album; IPXGeneralPreferences.nib Use Password to Unlock",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:1395",
+   "note": "Info sheet > Hide Photo moves a photo out of All Photos and the smart albums into a Hidden album that lists once it has photos; no password unlock gate and no View > Show Hidden Photo Album toggle",
    "wire": "Add a hidden flag in prefs and a Hidden collection excluded from All Photos, gated by the shell auth sheet"
   },
   {
    "feature": "Star rating",
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib Image > Star Rating",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/stars.rs:1",
+   "note": "five-star row in the Info sheet (tap the same star to clear), stored in photos.ini; no keys 0-5 in the viewer, no menu, no rating filter",
    "wire": "Add a rating to the sidecar, keys 0-5 in the viewer, and a rating row in Info"
   },
   {
@@ -473,9 +473,9 @@
    "feature": "Show Histogram",
    "area": "menu",
    "apple": "Photos.app/Contents/Resources/Base.lproj/MainMenu.nib View > Show Histogram",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shell/photos/mod.rs:2443",
+   "note": "luminance histogram (edit.rs:387) drawn on the editor's Tools page; no View menu toggle, no per-channel view",
    "wire": "Compute a luminance histogram in edit.rs and draw it in the Adjust pane"
   },
   {

@@ -16,6 +16,7 @@ pub mod library;
 pub mod models;
 pub mod recipe;
 pub mod slideshow;
+pub mod stars;
 pub mod thumbs;
 pub mod viewer;
 pub mod zoom;
@@ -66,7 +67,9 @@ const EMPTY_BUTTON_H_PT: f32 = 28.5;
 const SHEET_ROW_PT: f32 = 56.0;
 const SHEET_W_PT: f32 = 260.0;
 /// Columns the zoom buttons step through (fewer = bigger).
-const ZOOMS: [usize; 2] = [5, 3];
+const ZOOMS: [usize; 4] = [8, 5, 3, 2];
+/// The level the grid starts at (index into `ZOOMS`).
+const ZOOM_DEFAULT: usize = 1;
 const WORKERS: usize = 2;
 /// Screen-fitted pictures kept decoded: the current one and its neighbours,
 /// never more than `FULL_MAX` whatever their size (keeps memory use bounded).
@@ -109,6 +112,8 @@ pub enum Target {
     SortOrder,
     ZoomIn,
     ZoomOut,
+    /// Select All / Deselect All while selecting
+    SelectAll,
     Back,
     /// the picture in the viewer
     Photo,
@@ -140,6 +145,12 @@ pub enum Target {
     SelShare,
     SelDelete,
     Info,
+    /// a star of the Info sheet's rating row
+    Rate(u8),
+    /// the Info sheet's Hide Photo / Unhide Photo row
+    InfoHide,
+    /// the share sheet's Duplicate row
+    SheetDuplicate,
     /// the Info sheet's Revert to Original row
     InfoRevert,
     Edit,
@@ -150,6 +161,8 @@ pub enum Target {
     EditFilter(Filter),
     EditRevert,
     EditPane(EditPane),
+    /// a button of the Tools page
+    EditTool(Tool),
     Slide(Slider),
 }
 
@@ -159,16 +172,59 @@ pub enum EditPane {
     Adjust,
     Effects,
     Crop,
+    /// buttons rather than sliders: rotate left, flips, Auto Enhance and the histogram
+    Tools,
+}
+
+/// The buttons of the Tools page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Tool {
+    RotateLeft,
+    FlipHorizontal,
+    FlipVertical,
+    AutoEnhance,
+}
+
+impl Tool {
+    pub fn label(self) -> &'static str {
+        match self {
+            Tool::RotateLeft => "Rotate Left",
+            Tool::FlipHorizontal => "Flip Horizontal",
+            Tool::FlipVertical => "Flip Vertical",
+            Tool::AutoEnhance => "Auto Enhance",
+        }
+    }
+
+    /// Does the tool in `edit` show as on (the flips and Auto Enhance toggle).
+    pub fn is_on(self, edit: &Edit) -> bool {
+        match self {
+            Tool::RotateLeft => false,
+            Tool::FlipHorizontal => edit.flip_h,
+            Tool::FlipVertical => edit.flip_v,
+            Tool::AutoEnhance => edit.auto,
+        }
+    }
+
+    /// Runs the tool on `edit`.
+    pub fn apply(self, edit: &mut Edit) {
+        match self {
+            Tool::RotateLeft => edit.rotate(false),
+            Tool::FlipHorizontal => edit.flip_h = !edit.flip_h,
+            Tool::FlipVertical => edit.flip_v = !edit.flip_v,
+            Tool::AutoEnhance => edit.auto = !edit.auto,
+        }
+    }
 }
 
 impl EditPane {
-    pub const ALL: [EditPane; 3] = [EditPane::Adjust, EditPane::Effects, EditPane::Crop];
+    pub const ALL: [EditPane; 4] = [EditPane::Adjust, EditPane::Effects, EditPane::Crop, EditPane::Tools];
 
     pub fn label(self) -> &'static str {
         match self {
             EditPane::Adjust => "Adjust",
             EditPane::Effects => "Effects",
             EditPane::Crop => "Crop",
+            EditPane::Tools => "Tools",
         }
     }
 
@@ -178,6 +234,7 @@ impl EditPane {
             EditPane::Adjust => &[Slider::Brightness, Slider::Contrast, Slider::Exposure, Slider::Saturation, Slider::Warmth],
             EditPane::Effects => &[Slider::Blur, Slider::Vignette],
             EditPane::Crop => &[Slider::Straighten, Slider::Crop],
+            EditPane::Tools => &[],
         }
     }
 }
@@ -240,6 +297,8 @@ pub enum Album {
     Favorites,
     Screenshots,
     Trash,
+    /// photos hidden from All Photos; listed in the picker once there is one
+    Hidden,
     /// a user album: index into the album list
     User(u8),
 }
@@ -256,6 +315,7 @@ impl Album {
             Self::Favorites => "Favorites",
             Self::Screenshots => "Screenshots",
             Self::Trash => "Recently Deleted",
+            Self::Hidden => "Hidden",
             Self::User(_) => "Album",
         }
     }
@@ -275,11 +335,14 @@ struct Editor {
     edit: Edit,
     preview: Image,
     pane: EditPane,
+    /// the luminance histogram of the preview
+    hist: [u32; edit::HISTOGRAM_BINS],
 }
 
 impl Editor {
     fn refresh(&mut self) {
         self.preview = self.edit.apply(&self.src);
+        self.hist = edit::histogram(&self.preview);
     }
 }
 
@@ -302,6 +365,10 @@ pub struct Photos {
     gen: u64,
     scanning: bool,
     all: Vec<Photo>,
+    /// `all` without the hidden photos: what All Photos and the smart albums draw from
+    visible: Vec<Photo>,
+    /// the hidden photos (the Hidden album)
+    hidden: Vec<Photo>,
     favorites: Vec<Photo>,
     trash: Vec<Photo>,
     recents: Vec<Photo>,
@@ -399,6 +466,8 @@ impl Photos {
             gen: 0,
             scanning: false,
             all: vec![],
+            visible: vec![],
+            hidden: vec![],
             favorites: vec![],
             trash: vec![],
             recents: vec![],
@@ -414,9 +483,9 @@ impl Photos {
             album_menu: false,
             newest_first: false,
             sections: vec![],
-            grid: Grid::build(&[], ZOOMS[0], w as f32, GAP_PX, ui.pt(HEADER_PT)),
+            grid: Grid::build(&[], ZOOMS[ZOOM_DEFAULT], w as f32, GAP_PX, ui.pt(HEADER_PT)),
             scroll: Scroller::new(),
-            cols: ZOOMS[0],
+            cols: ZOOMS[ZOOM_DEFAULT],
             offset,
             disk: DiskCache::new(data.join(THUMB_DIR), thumbs::MAX_FILES),
             thumbs: MemCache::new(thumbs::MEM_BUDGET),
@@ -448,6 +517,9 @@ impl Photos {
             data,
         };
         p.newest_first = p.prefs.get("sort") == Some("newest");
+        if let Some(c) = p.prefs.get_parsed::<usize>("cols").filter(|c| ZOOMS.contains(c)) {
+            p.cols = c;
+        }
         p.rescan();
         Ok(p)
     }
@@ -490,7 +562,8 @@ impl Photos {
     /// The photos of `album` before the date filter.
     fn album_list(&self, album: Album) -> &[Photo] {
         match album {
-            Album::All => &self.all,
+            Album::All => &self.visible,
+            Album::Hidden => &self.hidden,
             Album::Recents => &self.recents,
             Album::Favorites => &self.favorites,
             Album::Screenshots => &self.screenshots,
@@ -502,8 +575,20 @@ impl Photos {
     /// The albums the picker lists: the fixed ones, then the user's.
     fn menu_albums(&self) -> Vec<Album> {
         let mut v = vec![Album::All, Album::Recents, Album::Favorites, Album::Screenshots, Album::Trash];
+        if !self.hidden.is_empty() {
+            v.push(Album::Hidden);
+        }
         v.extend((0..self.user_albums.len()).map(|i| Album::User(i as u8)));
         v
+    }
+
+    /// Is `p` hidden from All Photos.
+    pub fn is_hidden(&self, p: &Photo) -> bool {
+        self.prefs.get(&format!("hide:{}", p.path.display())) == Some("1")
+    }
+
+    fn set_hidden(&mut self, p: &Photo, on: bool) {
+        let _ = self.pref_set(&format!("hide:{}", p.path.display()), if on { "1" } else { "" });
     }
 
     fn album_title(&self, album: Album) -> String {
@@ -633,17 +718,23 @@ impl Photos {
     /// Recomputes the albums, the filtered view, the sections and the grid.
     fn rebuild(&mut self, ui: &Ui) {
         let now = unix_now();
-        self.favorites = models::smart_album(SmartAlbum::Favourites, &self.all, |p| self.is_favourite(p), now);
+        let (hidden, visible): (Vec<Photo>, Vec<Photo>) = self.all.iter().cloned().partition(|p| self.is_hidden(p));
+        self.hidden = hidden;
+        self.visible = visible;
+        if self.album == Album::Hidden && self.hidden.is_empty() {
+            self.album = Album::All;
+        }
+        self.favorites = models::smart_album(SmartAlbum::Favourites, &self.visible, |p| self.is_favourite(p), now);
         self.fav_paths = self.all.iter().chain(&self.trash).filter(|p| self.is_favourite(p)).map(|p| p.path.clone()).collect();
         self.user_albums = (0..MAX_USER_ALBUMS)
             .filter_map(|i| {
                 let name = self.prefs.get(&format!("ua.{i}.name")).filter(|n| !n.is_empty())?.to_string();
                 Some((i, name))
             })
-            .map(|(i, name)| (name, self.all.iter().filter(|p| self.in_user_album(i, p)).cloned().collect()))
+            .map(|(i, name)| (name, self.visible.iter().filter(|p| self.in_user_album(i, p)).cloned().collect()))
             .collect();
-        self.recents = models::smart_album(SmartAlbum::RecentlyAdded, &self.all, |p| self.is_favourite(p), now);
-        self.screenshots = models::smart_album(SmartAlbum::Screenshots, &self.all, |p| self.is_favourite(p), now);
+        self.recents = models::smart_album(SmartAlbum::RecentlyAdded, &self.visible, |p| self.is_favourite(p), now);
+        self.screenshots = models::smart_album(SmartAlbum::Screenshots, &self.visible, |p| self.is_favourite(p), now);
         let view = {
             let base = self.album_list(self.album);
             let filtered = match &self.filter {
@@ -1036,7 +1127,7 @@ impl Photos {
                 return Some(Target::Select);
             }
             if (x - self.w as f32 / 2.0).abs() <= ui.pt(100.0) {
-                return Some(Target::Filter);
+                return Some(if self.selection.active { Target::SelectAll } else { Target::Filter });
             }
         }
         None
@@ -1132,10 +1223,20 @@ impl Photos {
         };
         if let Some(sheet) = self.sheet {
             if sheet == Sheet::Info {
+                let rated = 2 * usize::from(self.info_has_rating());
+                if self.info_has_rating() {
+                    let (rect, (x0, x1)) = self.info_rating_row(ui);
+                    if within(x, y, rect) {
+                        return Some(stars::star_at(x, x0, x1).map_or(Target::SheetCancel, Target::Rate));
+                    }
+                    if within(x, y, self.info_hide_row(ui)) {
+                        return Some(Target::InfoHide);
+                    }
+                }
                 if self.info_revert {
                     let (sx, sy, sw, _) = self.sheet_rect(ui, Sheet::Info);
                     let row = ui.pt(INFO_ROW_PT);
-                    if within(x, y, (sx, sy + row * (self.info.len() + 1) as f32, sw, row)) {
+                    if within(x, y, (sx, sy + row * (self.info.len() + 1 + rated) as f32, sw, row)) {
                         return Some(Target::InfoRevert);
                     }
                 }
@@ -1152,7 +1253,8 @@ impl Photos {
                 (Sheet::Share, 1) => Target::SheetCopy,
                 (Sheet::Share, 2) => Target::SheetFiles,
                 (Sheet::Share, 3) => Target::SheetNearby,
-                (Sheet::Share, 4) | (Sheet::Delete, 0) => Target::SheetAction,
+                (Sheet::Share, 4) => Target::SheetDuplicate,
+                (Sheet::Share, 5) | (Sheet::Delete, 0) => Target::SheetAction,
                 _ => Target::SheetCancel,
             });
         }
@@ -1243,6 +1345,11 @@ impl Photos {
             }
             Target::OpenCamera => self.camera_req = true,
             Target::Filter => self.cycle_filter(ui),
+            Target::SelectAll => {
+                let all = self.view.clone();
+                self.selection.toggle_all(&all);
+                self.confirm_purge = false;
+            }
             Target::Select => {
                 if self.selection.active {
                     self.selection.end();
@@ -1279,6 +1386,27 @@ impl Photos {
                     self.sheet = Some(Sheet::Info);
                 }
             }
+            Target::Rate(n) => {
+                if let Some(p) = self.viewing().cloned() {
+                    let next = stars::after_tap(self.rating(&p), n);
+                    self.set_rating(&p, next);
+                }
+            }
+            Target::InfoHide => {
+                if let Some(p) = self.viewing().cloned() {
+                    let anchor = self.viewer_anchor();
+                    let on = !self.is_hidden(&p);
+                    self.set_hidden(&p, on);
+                    self.sheet = None;
+                    self.rebuild(ui);
+                    // the photo has left this album's grid (or come back to it): the viewer lands on its neighbour
+                    self.restore_viewer(anchor);
+                }
+            }
+            Target::SheetDuplicate => {
+                self.sheet = None;
+                self.duplicate_current();
+            }
             Target::InfoRevert => {
                 self.info_revert = false;
                 self.sheet = None;
@@ -1296,7 +1424,7 @@ impl Photos {
                         if let Some(src) = src {
                             self.sheet = None;
                             let edit = self.recipe(&p).unwrap_or_default();
-                            let mut ed = Editor { photo: p, preview: src.clone(), src, edit, pane: EditPane::Adjust };
+                            let mut ed = Editor { photo: p, preview: src.clone(), src, edit, pane: EditPane::Adjust, hist: [0; edit::HISTOGRAM_BINS] };
                             ed.refresh();
                             self.editor = Some(ed);
                         }
@@ -1325,6 +1453,12 @@ impl Photos {
             Target::EditRevert => {
                 if let Some(ed) = &mut self.editor {
                     ed.edit = Edit::default();
+                    ed.refresh();
+                }
+            }
+            Target::EditTool(tool) => {
+                if let Some(ed) = &mut self.editor {
+                    tool.apply(&mut ed.edit);
                     ed.refresh();
                 }
             }
@@ -1375,11 +1509,12 @@ impl Photos {
                 }
             }
             Target::ZoomIn | Target::ZoomOut => {
-                let i = ZOOMS.iter().position(|&c| c == self.cols).unwrap_or(0);
+                let i = ZOOMS.iter().position(|&c| c == self.cols).unwrap_or(ZOOM_DEFAULT);
                 let next = if target == Target::ZoomIn { (i + 1).min(ZOOMS.len() - 1) } else { i.saturating_sub(1) };
                 if ZOOMS[next] != self.cols {
                     let k = if self.grid.height > 0.0 { self.scroll.offset() / self.grid.height } else { 0.0 };
                     self.cols = ZOOMS[next];
+                    let _ = self.pref_set("cols", &self.cols.to_string());
                     self.rebuild(ui);
                     self.scroll.jump_to(k * self.grid.height);
                 }
@@ -1601,6 +1736,11 @@ impl Photos {
             },
             1 => Filter::ALL.get((x / (w / Filter::ALL.len() as f32)) as usize).map(|&f| Target::EditFilter(f)),
             2 => EditPane::ALL.get((x / (w / EditPane::ALL.len() as f32)) as usize).map(|&p| Target::EditPane(p)),
+            row if pane == EditPane::Tools => match row {
+                3 => [Tool::RotateLeft, Tool::FlipHorizontal, Tool::FlipVertical].get((x / (w / 3.0)) as usize).map(|&t| Target::EditTool(t)),
+                4 => Some(Target::EditTool(Tool::AutoEnhance)),
+                _ => None,
+            },
             row => pane.sliders().get(row - 3).map(|&s| Target::Slide(s)),
         }
     }
@@ -1644,7 +1784,36 @@ impl Photos {
 
     fn info_size(&self, ui: &Ui) -> (f32, f32) {
         let revert = usize::from(self.info_revert);
-        (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * (self.info.len() + 1 + revert) as f32)
+        (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * (self.info.len() + 1 + 2 * usize::from(self.info_has_rating()) + revert) as f32)
+    }
+
+    /// The Info sheet's Hide Photo row (x, y, w, h), under the rating row.
+    fn info_hide_row(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let ((x, y, w, h), _) = self.info_rating_row(ui);
+        (x, y + h, w, h)
+    }
+
+    /// The Info sheet has a rating row and a Hide Photo row for every photo that is not in Recently Deleted.
+    fn info_has_rating(&self) -> bool {
+        self.album != Album::Trash
+    }
+
+    /// The Info sheet's rating row (x, y, w, h) and the span (x0, x1) its five stars share.
+    fn info_rating_row(&self, ui: &Ui) -> ((f32, f32, f32, f32), (f32, f32)) {
+        let (sx, sy, sw, _) = self.sheet_rect(ui, Sheet::Info);
+        let row = ui.pt(INFO_ROW_PT);
+        let rect = (sx, sy + row * (self.info.len() + 1) as f32, sw, row);
+        (rect, (sx + sw - ui.pt(16.0) - ui.pt(32.0) * stars::MAX_STARS as f32, sx + sw - ui.pt(16.0)))
+    }
+
+    /// The star rating of `p` (0 = none).
+    pub fn rating(&self, p: &Photo) -> u8 {
+        self.prefs.get(&format!("rate:{}", p.path.display())).map_or(0, stars::parse)
+    }
+
+    fn set_rating(&mut self, p: &Photo, rating: u8) {
+        let value = if rating == 0 { String::new() } else { rating.to_string() };
+        let _ = self.pref_set(&format!("rate:{}", p.path.display()), &value);
     }
 
     /// The saved edit of `p`, when it has one (an unedited photo has none).
@@ -1787,6 +1956,7 @@ impl Photos {
                     (Album::Favorites, _) => ("No Favorites", "Tap the heart on a photo to add it to Favorites."),
                     (Album::Screenshots, _) => ("No Screenshots", "Screenshots you take appear here."),
                     (Album::Trash, _) => ("No Recently Deleted Photos", "Deleted photos wait here for 30 days."),
+                    (Album::Hidden, _) => ("No Hidden Photos", "Photos you hide from All Photos appear here."),
                     (Album::User(_), _) => ("No Photos", "Open a photo and tap Album to add it here."),
                 };
                 self.label(s, ui, title, 22.0, Weight::Bold, WHITE, cx, cy - ui.pt(14.0));
@@ -1806,7 +1976,8 @@ impl Photos {
         } else {
             self.filter.as_ref().map_or_else(|| if blank { "Library".to_string() } else { self.album_title(self.album) }, |f| f.0.clone())
         };
-        self.label(s, ui, &title, 17.0, Weight::Semibold, if self.filter.is_some() && !self.selection.active { BLUE } else { WHITE }, self.w as f32 / 2.0, mid);
+        let title_color = if self.selection.active { dim_blue(self.pressed, Target::SelectAll) } else if self.filter.is_some() { BLUE } else { WHITE };
+        self.label(s, ui, &title, 17.0, Weight::Semibold, title_color, self.w as f32 / 2.0, mid);
         if blank {
             let tint = if pressed == Some(Target::Album) { rgba(10, 132, 255, 140) } else { BLUE };
             let (x, t) = (ui.pt(22.5), ui.pt(2.2));
@@ -2023,8 +2194,34 @@ impl Photos {
             let tx = (x + w - ui.pt(16.0)) as i32 - tw;
             s.blit(text, tx.max((x + ui.pt(100.0)) as i32), cy as i32 - th / 2, 255, 255);
         }
-        if self.info_revert {
+        let rated = 2 * usize::from(self.info_has_rating());
+        if rated == 2 {
             let cy = y + row * (rows.len() + 1) as f32 + row / 2.0;
+            s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
+            self.label_left(s, ui, "Rating", 14.0, Weight::Regular, SECONDARY, x + ui.pt(16.0), cy);
+            let have = self.viewing().map_or(0, |p| self.rating(p));
+            let (_, (x0, x1)) = self.info_rating_row(ui);
+            let slot = (x1 - x0) / stars::MAX_STARS as f32;
+            let r = ui.pt(11.0);
+            for i in 0..stars::MAX_STARS {
+                let (scx, on) = (x0 + slot * (i as f32 + 0.5), i < have);
+                let (inner, t) = (0.5, ui.pt(1.4));
+                let pad = r + 2.0;
+                glyphs::paint(s, (scx - pad, cy - pad, 2.0 * pad, 2.0 * pad), if on { BLUE } else { SECONDARY }, move |px, py| {
+                    let d = stars::star_distance(px - scx, py - cy, r, inner);
+                    if on { d } else { d.abs() - t / 2.0 }
+                });
+            }
+        }
+        if rated == 2 {
+            let cy = y + row * (rows.len() + 2) as f32 + row / 2.0;
+            s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
+            let hidden = self.viewing().is_some_and(|p| self.is_hidden(p));
+            let color = if self.pressed == Some(Target::InfoHide) { crate::gfx::scale(BLUE, 140) } else { BLUE };
+            self.label(s, ui, if hidden { "Unhide Photo" } else { "Hide Photo" }, 15.0, Weight::Regular, color, x + w / 2.0, cy);
+        }
+        if self.info_revert {
+            let cy = y + row * (rows.len() + 1 + rated) as f32 + row / 2.0;
             s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
             let color = if self.pressed == Some(Target::InfoRevert) { crate::gfx::scale(BLUE, 140) } else { BLUE };
             self.label(s, ui, "Revert to Original", 15.0, Weight::Regular, color, x + w / 2.0, cy);
@@ -2080,6 +2277,27 @@ impl Photos {
             let kx = edit::slider_pos(slider.value(&cur), x0, x1, lo, hi);
             s.fill_rrect(kx - ui.pt(5.0), cy - ui.pt(11.0), ui.pt(10.0), ui.pt(22.0), flat(ui), WHITE);
         }
+        if pane == EditPane::Tools {
+            let third = w / 3.0;
+            for (i, t) in [Tool::RotateLeft, Tool::FlipHorizontal, Tool::FlipVertical].into_iter().enumerate() {
+                let color = if t.is_on(&cur) { BLUE } else { WHITE };
+                self.label(s, ui, t.label(), 15.0, if t.is_on(&cur) { Weight::Semibold } else { Weight::Regular }, tint(Target::EditTool(t), color), third * (i as f32 + 0.5), panel + row * 3.5);
+            }
+            let auto = Tool::AutoEnhance;
+            let color = if auto.is_on(&cur) { BLUE } else { WHITE };
+            self.label(s, ui, auto.label(), 15.0, if auto.is_on(&cur) { Weight::Semibold } else { Weight::Regular }, tint(Target::EditTool(auto), color), w / 2.0, panel + row * 4.5);
+            // the histogram fills the rows below the buttons
+            if let Some(ed) = &self.editor {
+                let (hx, hy, hw, hh) = (m, panel + row * 5.0 + ui.pt(6.0), w - 2.0 * m, row * 3.0 - ui.pt(12.0));
+                s.fill_rrect(hx, hy, hw, hh, flat(ui), rgba(255, 255, 255, 20));
+                for (bx, h) in histogram_columns(&ed.hist, hw as usize / 2).into_iter().enumerate() {
+                    let bar = (h * hh) as usize;
+                    if bar > 0 {
+                        s.fill_rect(hx as usize + bx * 2, (hy + hh) as usize - bar, 2, bar, WHITE);
+                    }
+                }
+            }
+        }
     }
 
     /// Vertical centre of the slideshow's play/pause row.
@@ -2107,6 +2325,24 @@ impl Photos {
     }
 
     /// Share › Save to Files: a copy of the picture in the Files folder.
+    /// Duplicate: copies the open photo next to the original under a numbered name (its edit and rating come
+    /// along) and rescans so the copy shows.
+    fn duplicate_current(&mut self) {
+        let Some(p) = self.viewing().cloned() else { return };
+        match library::duplicate(&p.path) {
+            Ok(copy) => {
+                let (from, to) = (p.path.display().to_string(), copy.display().to_string());
+                for key in ["edit", "rate"] {
+                    if let Some(v) = self.prefs.get(&format!("{key}:{from}")).map(str::to_string).filter(|v| !v.is_empty()) {
+                        let _ = self.pref_set(&format!("{key}:{to}"), &v);
+                    }
+                }
+                self.rescan();
+            }
+            Err(e) => eprintln!("photos: could not duplicate {}: {e}", p.name()),
+        }
+    }
+
     fn save_to_files(&mut self) {
         let Some(p) = self.viewing().cloned() else { return };
         let dir = self.data.join("Files");
@@ -2188,7 +2424,7 @@ impl Photos {
         let row = h / rows as f32;
         let mut at = y + row / 2.0;
         if sheet == Sheet::Share {
-            for (text, t) in [("Slideshow", Target::SheetSlideshow), ("Copy", Target::SheetCopy), ("Save to Files", Target::SheetFiles), ("Send Nearby", Target::SheetNearby)] {
+            for (text, t) in [("Slideshow", Target::SheetSlideshow), ("Copy", Target::SheetCopy), ("Save to Files", Target::SheetFiles), ("Send Nearby", Target::SheetNearby), ("Duplicate", Target::SheetDuplicate)] {
                 self.label(s, ui, text, 20.0, Weight::Regular, dim(BLUE, t), cx, at);
                 at += row;
             }
@@ -2198,11 +2434,26 @@ impl Photos {
     }
 }
 
+/// Blue, dimmed while `target` is the pressed one.
+fn dim_blue(pressed: Option<Target>, target: Target) -> u32 {
+    if pressed == Some(target) { rgba(10, 132, 255, 140) } else { BLUE }
+}
+
+/// The histogram squeezed into `columns` bars with heights 0..=1 (the tallest bar is 1). `columns` of 0 gives none.
+pub fn histogram_columns(bins: &[u32; edit::HISTOGRAM_BINS], columns: usize) -> Vec<f32> {
+    if columns == 0 {
+        return Vec::new();
+    }
+    let sums: Vec<u64> = (0..columns).map(|c| bins[c * bins.len() / columns..((c + 1) * bins.len() / columns).max(c * bins.len() / columns + 1).min(bins.len())].iter().map(|&b| b as u64).sum()).collect();
+    let max = sums.iter().copied().max().unwrap_or(0).max(1) as f32;
+    sums.into_iter().map(|v| v as f32 / max).collect()
+}
+
 /// Rows in a sheet: the share sheet lists Slideshow, Copy, Save to Files,
-/// Send Nearby, Set as Wallpaper and Cancel.
+/// Send Nearby, Duplicate, Set as Wallpaper and Cancel.
 fn sheet_rows(sheet: Sheet) -> usize {
     if sheet == Sheet::Share {
-        6
+        7
     } else {
         2
     }
@@ -2431,9 +2682,16 @@ mod tests {
         assert_eq!(p.cols(), 3);
         assert!((p.scroll.offset() / p.grid.height - k).abs() < 0.05);
         tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 22.0), nav_mid(&ui), 200.0);
-        assert_eq!(p.cols(), 3, "no further zoom level");
+        assert_eq!(p.cols(), 2);
+        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 22.0), nav_mid(&ui), 250.0);
+        assert_eq!(p.cols(), 2, "no further zoom level");
+        assert_eq!(p.prefs.get("cols"), Some("2"), "the level is remembered");
         tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 74.0), nav_mid(&ui), 300.0);
+        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 74.0), nav_mid(&ui), 350.0);
         assert_eq!(p.cols(), 5);
+        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 74.0), nav_mid(&ui), 400.0);
+        tap(&mut p, &ui, 1200.0 - ui.pt(MARGIN_PT + 74.0), nav_mid(&ui), 450.0);
+        assert_eq!(p.cols(), 8, "more, smaller thumbnails");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -2536,7 +2794,7 @@ mod tests {
         assert_eq!(p.sheet, Some(Sheet::Share));
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 4.5 / 6.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 5.5 / 7.0, 1100.0);
         pump_until(&mut p, &ui, |p| !p.effects.is_empty());
         assert_eq!(p.take_effects(), vec![Effect::Wallpaper("custom-1".into())]);
         let raw = std::fs::read(dir.join("wallpapers/custom-1.raw")).unwrap();
@@ -2550,6 +2808,79 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_copies_the_photo_with_its_edit_and_rating() {
+        let (mut p, dir, ui) = photos("duplicate", 1);
+        p.open_viewer(0);
+        let photo = p.photos()[0].clone();
+        p.set_recipe(&photo, Edit { turns: 1, ..Edit::default() });
+        p.set_rating(&photo, 4);
+        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
+        tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
+        frame(&mut p, &ui);
+        let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 4.5 / 7.0, 1100.0);
+        assert_eq!(p.sheet, None);
+        pump_until(&mut p, &ui, |p| !p.scanning && p.all.len() == 2);
+        let copy = dir.join("Pictures/IMG_0000 2.png");
+        assert!(copy.exists() && dir.join("Pictures/IMG_0000.png").exists());
+        let dup = p.all.iter().find(|q| q.path == copy).cloned().expect("the copy is in the library");
+        assert_eq!(p.rating(&dup), 4);
+        assert_eq!(p.recipe(&dup).map(|e| e.turns), Some(1));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_info_sheet_rates_with_stars() {
+        let (mut p, dir, ui) = photos("rating", 1);
+        p.open_viewer(0);
+        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
+        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
+        frame(&mut p, &ui);
+        let photo = p.photos()[0].clone();
+        assert_eq!(p.rating(&photo), 0);
+        let ((rx, ry, _, rh), (x0, x1)) = p.info_rating_row(&ui);
+        let star = |n: f32| x0 + (x1 - x0) * (n - 0.5) / 5.0;
+        tap(&mut p, &ui, star(4.0), ry + rh / 2.0, 1100.0);
+        assert_eq!(p.sheet, Some(Sheet::Info), "the sheet stays open");
+        assert_eq!(p.rating(&photo), 4);
+        frame(&mut p, &ui);
+        tap(&mut p, &ui, star(4.0), ry + rh / 2.0, 1200.0);
+        assert_eq!(p.rating(&photo), 0, "the same star clears it");
+        tap(&mut p, &ui, star(1.0), ry + rh / 2.0, 1300.0);
+        assert_eq!(p.rating(&photo), 1);
+        assert!(rx < x0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hiding_a_photo_moves_it_from_all_photos_to_the_hidden_album() {
+        let (mut p, dir, ui) = photos("hidden", 3);
+        p.open_viewer(0);
+        let photo = p.photos()[0].clone();
+        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
+        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
+        frame(&mut p, &ui);
+        let (hx, hy, hw, hh) = p.info_hide_row(&ui);
+        tap(&mut p, &ui, hx + hw / 2.0, hy + hh / 2.0, 1100.0);
+        assert!(p.is_hidden(&photo));
+        assert_eq!((p.visible.len(), p.hidden.len(), p.all.len()), (2, 1, 3));
+        assert!(!p.album_list(Album::All).iter().any(|q| q.path == photo.path));
+        assert!(p.menu_albums().contains(&Album::Hidden));
+        assert!(!p.favorites.iter().chain(&p.recents).any(|q| q.path == photo.path));
+        p.viewer = None;
+        p.select_album(&ui, Album::Hidden);
+        assert_eq!(p.photos().len(), 1);
+        p.open_viewer(0);
+        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1200.0);
+        frame(&mut p, &ui);
+        let (hx, hy, hw, hh) = p.info_hide_row(&ui);
+        tap(&mut p, &ui, hx + hw / 2.0, hy + hh / 2.0, 1300.0);
+        assert_eq!((p.visible.len(), p.hidden.len()), (3, 0));
+        assert_eq!(p.album(), Album::All, "an empty Hidden album closes");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn send_nearby_hands_the_photo_path_to_the_shell() {
         let (mut p, dir, ui) = photos("nearby", 1);
         p.open_viewer(0);
@@ -2557,7 +2888,7 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 3.5 / 6.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 3.5 / 7.0, 1100.0);
         assert_eq!(p.sheet, None);
         assert_eq!(p.take_share(), p.photos().first().map(|q| q.path.clone()));
         assert_eq!(p.take_share(), None);
@@ -2572,7 +2903,7 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh / 12.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh / 14.0, 1100.0);
         assert!(p.slideshow.is_some());
         p.activate(&ui, Target::ShowPlay, 1200.0);
         assert!(p.slideshow.as_ref().unwrap().paused);
@@ -2696,6 +3027,17 @@ mod tests {
     }
 
     #[test]
+    fn tapping_the_selection_title_selects_and_deselects_everything() {
+        let (mut p, dir, ui) = photos("selectall", 4);
+        tap(&mut p, &ui, select_button(&ui), nav_mid(&ui), 1000.0);
+        tap(&mut p, &ui, 600.0, nav_mid(&ui), 1100.0);
+        assert_eq!(p.selection.len(), 4);
+        tap(&mut p, &ui, 600.0, nav_mid(&ui), 1200.0);
+        assert!(p.selection.is_empty() && p.selection.active, "Deselect All keeps selecting");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn permanent_multi_delete_asks_twice() {
         let (mut p, dir, ui) = photos("purge2", 2);
         p.delete(&ui, &p.photos()[0].clone());
@@ -2755,7 +3097,7 @@ mod tests {
         tap(&mut p, &ui, x1, top + row * 3.5, 2300.0);
         assert_eq!(p.editor.as_ref().map(|e| e.edit.brightness), Some(1.0));
         // the Effects tab: its first slider is blur, and the right end is the full radius
-        tap(&mut p, &ui, 1200.0 / 3.0 * 1.5, top + row * 2.5, 2350.0);
+        tap(&mut p, &ui, 1200.0 / 4.0 * 1.5, top + row * 2.5, 2350.0);
         assert_eq!(p.editor.as_ref().map(|e| e.pane), Some(EditPane::Effects));
         tap(&mut p, &ui, x1, top + row * 3.5, 2360.0);
         assert_eq!(p.editor.as_ref().map(|e| (e.edit.blur, e.edit.brightness)), Some((1.0, 1.0)));
@@ -2775,6 +3117,43 @@ mod tests {
         tap(&mut p, &ui, 100.0, ui.pt(STATUS_PT) + 5.0, 3200.0);
         assert!(p.editor.is_none() && p.viewer.is_some());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_tools_page_flips_rotates_and_enhances() {
+        let (mut p, dir, ui) = photos("tools", 1);
+        p.open_viewer(0);
+        p.tick(&ui, 1000.0);
+        pump_until(&mut p, &ui, |p| p.full.len() == 1);
+        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
+        tap(&mut p, &ui, 1200.0 * 0.69, cy, 2000.0);
+        let (row, top) = (ui.pt(EDIT_ROW_PT), p.edit_panel_top(&ui));
+        tap(&mut p, &ui, 1200.0 / 4.0 * 3.5, top + row * 2.5, 2100.0);
+        assert_eq!(p.editor.as_ref().map(|e| e.pane), Some(EditPane::Tools));
+        tap(&mut p, &ui, 1200.0 / 6.0, top + row * 3.5, 2200.0);
+        assert_eq!(p.editor.as_ref().map(|e| e.edit.turns), Some(3), "Rotate Left is a quarter back");
+        tap(&mut p, &ui, 600.0, top + row * 3.5, 2300.0);
+        tap(&mut p, &ui, 1000.0, top + row * 3.5, 2400.0);
+        tap(&mut p, &ui, 600.0, top + row * 4.5, 2500.0);
+        let e = p.editor.as_ref().map(|e| e.edit).unwrap();
+        assert!(e.flip_h && e.flip_v && e.auto);
+        tap(&mut p, &ui, 600.0, top + row * 3.5, 2600.0);
+        assert_eq!(p.editor.as_ref().map(|e| e.edit.flip_h), Some(false), "a second tap turns the flip off");
+        assert!(p.editor.as_ref().is_some_and(|e| e.hist.iter().sum::<u32>() > 0), "the histogram follows the preview");
+        frame(&mut p, &ui);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn histogram_columns_scale_to_the_tallest() {
+        let mut bins = [0u32; edit::HISTOGRAM_BINS];
+        bins[0] = 10;
+        bins[255] = 5;
+        let cols = histogram_columns(&bins, 128);
+        assert_eq!((cols.len(), cols[0], cols[127]), (128, 1.0, 0.5));
+        assert!(histogram_columns(&bins, 0).is_empty());
+        assert_eq!(histogram_columns(&bins, 256).len(), 256);
+        assert_eq!(histogram_columns(&[0; edit::HISTOGRAM_BINS], 4), vec![0.0; 4]);
     }
 
     #[test]

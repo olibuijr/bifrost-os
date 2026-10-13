@@ -189,6 +189,12 @@ pub struct Edit {
     pub blur: f32,
     /// 0..=1: darkens the corners
     pub vignette: f32,
+    /// mirrored left to right after the rotation
+    pub flip_h: bool,
+    /// mirrored top to bottom after the rotation
+    pub flip_v: bool,
+    /// stretch the tones to the full range (Auto Enhance), worked out from the cropped picture
+    pub auto: bool,
 }
 
 impl Default for Edit {
@@ -207,6 +213,9 @@ impl Default for Edit {
             warmth: 0.0,
             blur: 0.0,
             vignette: 0.0,
+            flip_h: false,
+            flip_v: false,
+            auto: false,
         }
     }
 }
@@ -225,6 +234,9 @@ impl Edit {
             && self.warmth == 0.0
             && self.blur == 0.0
             && self.vignette == 0.0
+            && !self.flip_h
+            && !self.flip_v
+            && !self.auto
     }
 
     /// Turns a quarter clockwise (or back).
@@ -247,12 +259,21 @@ impl Edit {
     /// The edited picture.
     pub fn apply(&self, img: &Image) -> Image {
         let mut out = rotate(img, self.turns);
+        if self.flip_h {
+            out = mirror(&out);
+        }
+        if self.flip_v {
+            out = flip_vertical(&out);
+        }
         if self.straighten != 0.0 {
             out = straighten(&out, self.straighten);
         }
         let (x, y, w, h) = crop_rect(out.w, out.h, self.aspect, self.crop_zoom, self.crop_center);
         if (w, h) != (out.w, out.h) {
             out = out.crop(x, y, w, h);
+        }
+        if self.auto {
+            auto_enhance(&mut out);
         }
         self.filter.apply(&mut out);
         blur(&mut out, blur_radius(self.blur));
@@ -345,6 +366,76 @@ pub fn rotate(img: &Image, turns: u8) -> Image {
             }
             out
         }
+    }
+}
+
+/// Mirrors top to bottom.
+pub fn flip_vertical(img: &Image) -> Image {
+    let w = img.w.max(1);
+    let mut out = img.clone();
+    for (y, row) in img.px.chunks(w).enumerate() {
+        let to = img.h - 1 - y;
+        out.px[to * w..to * w + row.len()].copy_from_slice(row);
+    }
+    out
+}
+
+/// Bins of the luminance histogram.
+pub const HISTOGRAM_BINS: usize = 256;
+
+/// The luminance histogram of the picture: how many pixels have each grey level (0.299 R + 0.587 G + 0.114 B).
+pub fn histogram(img: &Image) -> [u32; HISTOGRAM_BINS] {
+    let mut bins = [0u32; HISTOGRAM_BINS];
+    for p in &img.px {
+        let (r, g, b) = (*p as u8 as u32, (*p >> 8) as u8 as u32, (*p >> 16) as u8 as u32);
+        bins[((299 * r + 587 * g + 114 * b) / 1000).min(255) as usize] += 1;
+    }
+    bins
+}
+
+/// The share of the pixels cut off at each end of the histogram by Auto Enhance, in thousandths.
+const AUTO_CLIP_PERMILLE: u64 = 5;
+
+/// The grey levels `(low, high)` Auto Enhance maps to black and white: the ends of the histogram with
+/// the darkest and the lightest half percent left out. None when the picture is empty or already
+/// spans nearly everything (or is too flat to stretch).
+pub fn auto_range(bins: &[u32; HISTOGRAM_BINS]) -> Option<(u8, u8)> {
+    let total: u64 = bins.iter().map(|&b| b as u64).sum();
+    if total == 0 {
+        return None;
+    }
+    let cut = total * AUTO_CLIP_PERMILLE / 1000;
+    let (mut seen, mut low) = (0u64, 0usize);
+    for (i, &b) in bins.iter().enumerate() {
+        seen += b as u64;
+        if seen > cut {
+            low = i;
+            break;
+        }
+    }
+    let (mut seen, mut high) = (0u64, HISTOGRAM_BINS - 1);
+    for (i, &b) in bins.iter().enumerate().rev() {
+        seen += b as u64;
+        if seen > cut {
+            high = i;
+            break;
+        }
+    }
+    (high > low && high - low >= 16 && !(low == 0 && high == 255)).then_some((low as u8, high as u8))
+}
+
+/// Stretches the picture's tones so `auto_range` becomes black to white. Every channel moves by the same
+/// table, so hues stay; alpha is kept.
+pub fn auto_enhance(img: &mut Image) {
+    let Some((low, high)) = auto_range(&histogram(img)) else { return };
+    let span = (high - low) as f32;
+    let mut t = [0u8; 256];
+    for (i, v) in t.iter_mut().enumerate() {
+        *v = ((i as f32 - low as f32) * 255.0 / span).round().clamp(0.0, 255.0) as u8;
+    }
+    for p in &mut img.px {
+        let (r, g, b, a) = (*p as u8, (*p >> 8) as u8, (*p >> 16) as u8, (*p >> 24) as u8);
+        *p = crate::gfx::pack(t[r as usize], t[g as usize], t[b as usize], a);
     }
 }
 
@@ -639,5 +730,54 @@ mod tests {
         assert_eq!(out.px[0], pack(255, 255, 239, 255));
         assert!(!Edit { filter: Filter::Sepia, ..Edit::default() }.is_identity());
         assert_eq!(Filter::Sepia.label(), "Sepia");
+    }
+
+    #[test]
+    fn flips_mirror_one_axis_each() {
+        let img = grid(3, 2);
+        assert_eq!(at(&mirror(&img), 0, 0), (2, 0));
+        let v = flip_vertical(&img);
+        assert_eq!((v.w, v.h), (3, 2));
+        assert_eq!(at(&v, 0, 0), (0, 1), "the bottom row comes first");
+        assert_eq!(at(&v, 2, 1), (2, 0));
+        assert_eq!(flip_vertical(&v), img);
+        let e = Edit { flip_h: true, ..Edit::default() };
+        assert!(!e.is_identity());
+        assert_eq!(at(&e.apply(&img), 0, 0), (2, 0));
+        let both = Edit { flip_h: true, flip_v: true, ..Edit::default() }.apply(&img);
+        assert_eq!(both, rotate(&img, 2), "both flips are a half turn");
+        assert!(!Edit { flip_v: true, ..Edit::default() }.is_identity());
+    }
+
+    #[test]
+    fn the_histogram_counts_grey_levels() {
+        let img = Image { w: 4, h: 1, px: vec![pack(0, 0, 0, 255), pack(255, 255, 255, 255), pack(255, 255, 255, 255), pack(100, 100, 100, 255)] };
+        let h = histogram(&img);
+        assert_eq!((h[0], h[255], h[100]), (1, 2, 1));
+        assert_eq!(h.iter().sum::<u32>(), 4);
+        assert_eq!(histogram(&Image::new(0, 0)).iter().sum::<u32>(), 0);
+    }
+
+    #[test]
+    fn auto_enhance_stretches_a_flat_picture_and_leaves_a_full_one() {
+        // greys 100..=150 only
+        let flat: Vec<u32> = (0..=50).map(|v| pack(100 + v, 100 + v, 100 + v, 255)).collect();
+        let mut img = Image { w: flat.len(), h: 1, px: flat };
+        let (low, high) = auto_range(&histogram(&img)).unwrap();
+        assert!(low >= 100 && high <= 150 && high - low >= 40);
+        auto_enhance(&mut img);
+        assert_eq!(img.px[0] as u8, 0, "the darkest tone becomes black");
+        assert_eq!(img.px[50] as u8, 255, "the lightest becomes white");
+        assert_eq!(img.px[0] >> 24, 255, "alpha kept");
+        let mut full = Image { w: 2, h: 1, px: vec![pack(0, 0, 0, 255), pack(255, 255, 255, 255)] };
+        let before = full.clone();
+        auto_enhance(&mut full);
+        assert_eq!(full, before, "nothing to stretch");
+        assert_eq!(auto_range(&[0; HISTOGRAM_BINS]), None, "empty picture");
+        let mut one = Image { w: 4, h: 1, px: vec![pack(90, 90, 90, 255); 4] };
+        let same = one.clone();
+        auto_enhance(&mut one);
+        assert_eq!(one, same, "a single tone is not stretched");
+        assert!(!Edit { auto: true, ..Edit::default() }.is_identity());
     }
 }
