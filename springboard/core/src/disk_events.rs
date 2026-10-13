@@ -34,12 +34,15 @@ pub fn diff(prev: &[Disk], next: &[Disk]) -> Vec<DiskEvent> {
         }
     }
     for (&name, &disk) in &after {
-        match before.get(name) {
-            None => out.push(DiskEvent::Appeared(disk.clone())),
-            Some(&old) if old != disk => {
-                out.push(DiskEvent::DescriptionChanged { before: old.clone(), after: disk.clone() })
+        if !before.contains_key(name) {
+            out.push(DiskEvent::Appeared(disk.clone()));
+        }
+    }
+    for (&name, &disk) in &after {
+        if let Some(&old) = before.get(name) {
+            if old != disk {
+                out.push(DiskEvent::DescriptionChanged { before: old.clone(), after: disk.clone() });
             }
-            Some(_) => {}
         }
     }
     out

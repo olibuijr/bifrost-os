@@ -153,10 +153,10 @@ const LEVEL_COMMANDS: &[CommandSpec] = &[CommandSpec {
 }];
 
 static CLUSTERS: [ClusterSpec; 4] = [
-    ClusterSpec { id: DESCRIPTOR, name: "Descriptor", attributes: DESCRIPTOR_ATTRIBUTES, commands: &[] },
     ClusterSpec { id: IDENTIFY, name: "Identify", attributes: IDENTIFY_ATTRIBUTES, commands: IDENTIFY_COMMANDS },
     ClusterSpec { id: ON_OFF, name: "OnOff", attributes: ON_OFF_ATTRIBUTES, commands: ON_OFF_COMMANDS },
     ClusterSpec { id: LEVEL_CONTROL, name: "LevelControl", attributes: LEVEL_ATTRIBUTES, commands: LEVEL_COMMANDS },
+    ClusterSpec { id: DESCRIPTOR, name: "Descriptor", attributes: DESCRIPTOR_ATTRIBUTES, commands: &[] },
 ];
 
 /// Every cluster in the model, in ID order.

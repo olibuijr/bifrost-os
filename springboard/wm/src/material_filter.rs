@@ -123,7 +123,8 @@ mod tests {
     #[test]
     fn saturation_one_is_identity_and_zero_is_the_luma() {
         let c = [0.8, 0.4, 0.2];
-        assert_eq!(saturate(c, 1.0), c);
+        let same = saturate(c, 1.0);
+        assert!((0..3).all(|i| near(same[i], c[i])), "saturation 1 keeps the colour (within float rounding): {same:?}");
         let l = luma(c);
         let g = saturate(c, 0.0);
         assert!(g.iter().all(|&v| near(v, l)));

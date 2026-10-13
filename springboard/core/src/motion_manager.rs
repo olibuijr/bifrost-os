@@ -286,9 +286,10 @@ mod tests {
         let mut m = MotionManager::new(both());
         assert!(m.set_accelerometer_update_interval(0.05));
         assert!((m.accelerometer_update_interval() - 0.05).abs() < 1e-12);
-        // below the fastest rate is raised to it
-        assert!(m.set_accelerometer_update_interval(0.0));
+        // zero is not a positive interval: refused, the old value stays
+        assert!(!m.set_accelerometer_update_interval(0.0));
         assert_eq!(m.accelerometer_update_interval(), 0.05, "zero is refused and keeps the old value");
+        // a positive value below the fastest rate is raised to it
         assert!(m.set_gyroscope_update_interval(1e-9));
         assert_eq!(m.gyroscope_update_interval(), MIN_UPDATE_INTERVAL);
         // refused values keep the old interval

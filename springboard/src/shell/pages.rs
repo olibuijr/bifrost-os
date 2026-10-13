@@ -1436,11 +1436,12 @@ mod tests {
         let labels: Vec<&str> = s.groups.iter().flat_map(|g| g.items.iter().map(|i| i.label.as_str())).collect();
         assert_eq!(labels[..3], ["Airplane Mode", "Wi-Fi", "Bluetooth"]);
         assert_eq!(labels[3..7], ["Notifications", "Sounds", "Focus", "Screen Time"]);
-        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Keyboard Shortcuts", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Passcode", "Passwords", "Developer"]);
+        assert_eq!(labels[7..], ["General", "Control Centre", "Menu Bar", "Display & Brightness", "Home Screen & Dock", "Overview", "Sharing", "Keyboard Shortcuts", "Accessibility", "Wallpaper", "Screen Saver", "Battery", "Privacy", "Lock Screen", "Passcode", "Passwords", "Developer"]);
         assert_eq!(s.groups[0].items[1].value, "WIFI-5G");
-        assert_eq!(s.groups[2].items[8].value, "Lake Day");
-        assert_eq!(s.groups[2].items[9].value, "Never", "the screen saver is off by default");
-        assert_eq!(s.groups[2].items[10].value, "63%");
+        // Sharing sits before Wallpaper since the Sharing pane landed
+        assert_eq!(s.groups[2].items[9].value, "Lake Day");
+        assert_eq!(s.groups[2].items[10].value, "Never", "the screen saver is off by default");
+        assert_eq!(s.groups[2].items[11].value, "63%");
         assert_eq!(s.groups[0].items[0].accessory, Accessory::Switch(false));
         assert_eq!(s.groups[1].items[0].action, Action::Push(PageId::Notifications));
         let off = Model { wifi_on: false, airplane: true, ..model(&info, &opts) };
