@@ -417,6 +417,8 @@ fn run() -> std::io::Result<()> {
         #[cfg(feature = "desktop-wayland")]
         if wayland && disp.wayland_lock(shell.is_locked())? { shell.force_full_redraw(); }
         #[cfg(feature = "desktop-wayland")]
+        if wayland { disp.wayland_output_modes()?; }
+        #[cfg(feature = "desktop-wayland")]
         if wayland {
             if let Some((wp, x)) = shell.desktop_wallpaper_once() { disp.wayland_wallpaper(wp, x); }
             if disp.wayland_gpu_active() { shell.note_wallpaper_uploaded(); }

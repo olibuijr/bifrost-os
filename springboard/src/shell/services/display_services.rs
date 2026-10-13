@@ -6,9 +6,12 @@
 //! Methods (JSON parameters):
 //! - `list {kind}` answers the displays: `active` (default) or `online`.
 //! - `main {}` and `info {id}` answer one display; `modes {id}` answers its mode list.
-//! - `set_mode {id, width, height, refresh_hz}` needs the `display-config` permission. The shell does not own the
-//!   output mode in a desktop session (the compositor does), so a mode other than the current one is recorded as the
-//!   requested mode and answered `{applied: false, pending: true}`; asking for the current mode answers `applied: true`.
+//! - `set_mode {id, width, height, refresh_hz}` needs the `display-config` permission. The output mode belongs to the
+//!   window server (desktop session), so the shell hands the change to it over the output-management client
+//!   ([`MODE_REQUEST`], sent by `bare::wayland`). The answer is definite and at once: `{applied: true}` when the mode is
+//!   already the current one, else `{applied: false, requested: true}` and the outcome arrives as the `mode_changed`
+//!   event. An applied change is kept only when the person calls `keep_mode`; otherwise it reverts after
+//!   [`CONFIRM_SECS`] (`mode_reverted` event), and `revert_mode` reverts it at once.
 //! - `set_rotation` and `mirror` fail: the output is a single panel the shell does not rotate or mirror.
 //! - `capture {id}` answers the screen as `{width, height, png}` (PNG as base64) once the person authorized screen
 //!   recording for the app; the first call queues the Allow / Don't Allow sheet and fails.
@@ -24,6 +27,7 @@ use bifrost_ui::capture_access::{Media, Status};
 use bifrost_ui::display_info::*;
 use bifrost_ui::wire_json::*;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Mutex;
 
 pub const SERVICE: &str = "display";
 pub const EVENT_RECONFIGURED: &str = "reconfigured";
@@ -34,6 +38,50 @@ pub const DISPLAY_ID: DisplayId = 1;
 
 /// The refresh rate of the current output mode in hertz, reported by the compositor connection (0 until it is known).
 pub static OUTPUT_REFRESH_HZ: AtomicU32 = AtomicU32::new(0);
+/// How long an applied display change waits for the person to keep it before it goes back.
+pub const CONFIRM_SECS: f64 = 15.0;
+
+/// An output mode the shell asks the window server for. `refresh_mhz` is in millihertz; 0 takes the fastest refresh
+/// the window server has at that size.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ModeRequest {
+    pub width: u32,
+    pub height: u32,
+    pub refresh_mhz: i32,
+}
+
+/// The request waiting for the Wayland output client to send it (taken once).
+pub static MODE_REQUEST: Mutex<Option<ModeRequest>> = Mutex::new(None);
+/// The window server's answer to the last request sent: `Some(true)` applied, `Some(false)` refused, `None` while it
+/// is out or nothing was sent. Taken once by the service's tick.
+pub static MODE_RESULT: Mutex<Option<bool>> = Mutex::new(None);
+
+/// The request for `target`, with the refresh `hz` the person chose (0 keeps the target's own).
+pub fn mode_request(target: &DisplayMode, hz: f32) -> ModeRequest {
+    let hz = if hz > 0.0 { hz } else { target.refresh_hz };
+    ModeRequest { width: target.pixel_width, height: target.pixel_height, refresh_mhz: (hz * 1000.0).round() as i32 }
+}
+
+/// An applied display change waiting to be kept: the mode it replaced, and the time it goes back.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Confirm {
+    pub previous: DisplayMode,
+    pub until: f64,
+}
+
+impl Confirm {
+    pub fn start(previous: DisplayMode, now: f64) -> Self {
+        Confirm { previous, until: now + CONFIRM_SECS }
+    }
+
+    pub fn expired(&self, now: f64) -> bool {
+        now >= self.until
+    }
+}
+
+fn post(slot: &Mutex<Option<ModeRequest>>, request: Option<ModeRequest>) {
+    *slot.lock().unwrap_or_else(|e| e.into_inner()) = request;
+}
 
 /// What the display's sysfs entry says.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -153,11 +201,20 @@ pub struct DisplayServices {
     hardware: Option<((i32, i32), Hardware)>,
     /// The list last reported, to tell a change from a quiet tick.
     last: Option<Vec<DisplayInfo>>,
-    /// The mode `set_mode` asked for last.
-    requested: Option<DisplayMode>,
+    /// A change asked for and not answered yet: the mode it replaces.
+    asked: Option<DisplayMode>,
+    /// An applied change waiting for the person to keep it.
+    confirm: Option<Confirm>,
+    /// A revert asked for and not answered yet.
+    reverting: bool,
 }
 
 impl DisplayServices {
+    /// Asks the window server for `target`, with the refresh `hz` (0: the target's own).
+    fn ask(&mut self, target: DisplayMode, hz: f32) {
+        post(&MODE_REQUEST, Some(mode_request(&target, hz)));
+    }
+
     fn current(&mut self, shell: &Shell) -> Vec<DisplayInfo> {
         let key = (shell.w, shell.h);
         if self.hardware.as_ref().map(|h| h.0) != Some(key) {
@@ -214,11 +271,31 @@ impl SystemService for DisplayServices {
                 let (w, h) = (u32_of(params, "width").ok_or("set_mode needs width")?, u32_of(params, "height").ok_or("set_mode needs height")?);
                 let hz = f32_of(params, "refresh_hz").unwrap_or(0.0);
                 let want = d.modes.iter().find(|m| m.pixel_width == w && m.pixel_height == h).copied().ok_or_else(|| format!("display: no {w}x{h} mode"))?;
-                let applied = want.pixel_width == d.mode.pixel_width && want.pixel_height == d.mode.pixel_height && (hz == 0.0 || (hz - d.mode.refresh_hz).abs() < 0.5);
-                if !applied {
-                    self.requested = Some(DisplayMode { refresh_hz: if hz > 0.0 { hz } else { want.refresh_hz }, ..want });
+                let current = want.pixel_width == d.mode.pixel_width && want.pixel_height == d.mode.pixel_height && (hz == 0.0 || (hz - d.mode.refresh_hz).abs() < 0.5);
+                if current {
+                    return Ok(obj(vec![("applied", Json::Bool(true)), ("requested", Json::Bool(false))]));
                 }
-                Ok(obj(vec![("applied", Json::Bool(applied)), ("pending", Json::Bool(!applied))]))
+                if self.asked.is_some() || self.reverting || self.confirm.is_some() {
+                    return Err("display: a mode change is already under way; keep or revert it first".into());
+                }
+                self.asked = Some(d.mode);
+                self.ask(want, hz);
+                Ok(obj(vec![("applied", Json::Bool(false)), ("requested", Json::Bool(true))]))
+            }
+            "keep_mode" | "revert_mode" => {
+                if !app_has_permission(app_id, PERMISSION_CONFIG) {
+                    return Err(format!("display: {method} needs the {PERMISSION_CONFIG} permission"));
+                }
+                if method == "keep_mode" {
+                    return match self.confirm.take() {
+                        Some(_) => Ok(obj(vec![("kept", Json::Bool(true))])),
+                        None => Err("display: no display change to keep".into()),
+                    };
+                }
+                let Some(c) = self.confirm.take() else { return Err("display: no display change to revert".into()) };
+                self.reverting = true;
+                self.ask(c.previous, 0.0);
+                Ok(obj(vec![("reverting", Json::Bool(true))]))
             }
             "set_rotation" | "mirror" => Err(format!("display: {method} is not available: the shell drives one panel it does not rotate or mirror")),
             "capture" => {
@@ -232,7 +309,7 @@ impl SystemService for DisplayServices {
         }
     }
 
-    fn tick(&mut self, shell: &mut Shell, _t: f64) -> Vec<Event> {
+    fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
         let now = self.current(shell);
         let changes = match &self.last {
             Some(prev) => diff(prev, &now),
@@ -243,12 +320,47 @@ impl SystemService for DisplayServices {
             ("displays", list_to_json(&now)),
         ]);
         self.last = Some(now);
-        if changes.is_empty() {
-            Vec::new()
-        } else {
-            vec![Event { app: None, event: EVENT_RECONFIGURED.into(), body }]
+        let mut events = Vec::new();
+        if !changes.is_empty() {
+            events.push(Event { app: None, event: EVENT_RECONFIGURED.into(), body });
         }
+        // the window server's answer to the last request
+        let answer = MODE_RESULT.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(ok) = answer {
+            if let Some(previous) = self.asked.take() {
+                if ok {
+                    self.confirm = Some(Confirm::start(previous, t));
+                }
+                events.push(mode_event(MODE_CHANGED, ok, ok));
+            } else if self.reverting {
+                self.reverting = false;
+                events.push(mode_event(MODE_REVERTED, ok, false));
+            }
+        }
+        // an applied change the person did not keep goes back
+        if self.confirm.is_some_and(|c| c.expired(t)) {
+            if let Some(c) = self.confirm.take() {
+                self.reverting = true;
+                self.ask(c.previous, 0.0);
+                events.push(mode_event(MODE_REVERTING, true, false));
+            }
+        }
+        events
     }
+}
+
+/// The event names of a mode change: `mode_changed` (applied or refused), `mode_reverting` (the revert was asked for,
+/// after the confirmation timed out) and `mode_reverted` (the window server answered the revert).
+pub const MODE_CHANGED: &str = "mode_changed";
+pub const MODE_REVERTING: &str = "mode_reverting";
+pub const MODE_REVERTED: &str = "mode_reverted";
+
+fn mode_event(name: &str, applied: bool, with_revert_in: bool) -> Event {
+    let mut fields = vec![("applied", Json::Bool(applied))];
+    if with_revert_in {
+        fields.push(("revert_in", num(CONFIRM_SECS)));
+    }
+    Event { app: None, event: name.into(), body: obj(fields) }
 }
 
 /// Lets a call through only when the person authorized screen recording for the app. The first call of an app that
@@ -346,6 +458,34 @@ mod tests {
         assert_eq!(changes.len(), 1);
         assert!(changes[0].1.contains(ChangeFlags::SET_MODE));
         assert!(diff(&before, &before).is_empty());
+    }
+
+    #[test]
+    fn a_request_names_the_size_and_the_chosen_or_fastest_refresh() {
+        let target = DisplayMode { width: 1280, height: 800, pixel_width: 2560, pixel_height: 1600, refresh_hz: 60.0, usable: true };
+        assert_eq!(mode_request(&target, 0.0), ModeRequest { width: 2560, height: 1600, refresh_mhz: 60_000 });
+        assert_eq!(mode_request(&target, 59.94).refresh_mhz, 59_940);
+        let fastest = DisplayMode { refresh_hz: 0.0, ..target };
+        assert_eq!(mode_request(&fastest, 0.0).refresh_mhz, 0, "0 lets the window server pick its fastest refresh");
+    }
+
+    #[test]
+    fn an_applied_change_is_kept_for_fifteen_seconds_and_then_goes_back() {
+        let previous = DisplayMode { width: 1280, height: 800, pixel_width: 1280, pixel_height: 800, refresh_hz: 60.0, usable: true };
+        let c = Confirm::start(previous, 100.0);
+        assert_eq!(CONFIRM_SECS, 15.0);
+        assert!(!c.expired(114.9));
+        assert!(c.expired(115.0));
+        assert_eq!(c.previous, previous);
+    }
+
+    #[test]
+    fn mode_events_say_whether_a_revert_is_offered() {
+        let e = mode_event(MODE_CHANGED, true, true);
+        assert_eq!(e.event, "mode_changed");
+        assert_eq!(e.body.get("revert_in").and_then(|v| v.number()), Some(15.0));
+        let refused = mode_event(MODE_CHANGED, false, false);
+        assert!(refused.body.get("revert_in").is_none());
     }
 
     #[test]

@@ -742,6 +742,12 @@ impl Display {
         if let Some(w)=self.wayland.as_mut(){w.lock(wanted)?;return Ok(w.needs_redraw());}
         Ok(false)
     }
+    /// Sends the shell's pending output mode request to the window server (see `wayland::Display::output_modes`).
+    #[cfg(feature = "desktop-wayland")]
+    pub fn wayland_output_modes(&mut self) -> io::Result<()> {
+        if let Some(w)=&mut self.wayland { w.output_modes()?; }
+        Ok(())
+    }
     #[cfg(feature = "desktop-wayland")]
     pub fn wayland_inputs(&mut self, out: &mut Vec<super::input::Event>) {
         if let Some(w) = &mut self.wayland { w.inputs(out); }
