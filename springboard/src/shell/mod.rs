@@ -1529,7 +1529,7 @@ impl Shell {
             due.add(Some(w));
         }
         if let Some(w) = self.input_hud.next_wake(t).filter(|_| self.screen_on) {
-            due = Some(due.map_or(w, |d| d.min(w)));
+            due.add(Some(w));
         }
         let app_wake = if self.screen_on {
             match self.screen {
