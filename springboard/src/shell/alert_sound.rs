@@ -90,7 +90,9 @@ mod tests {
     fn pulse_is_silent_between_its_pulses() {
         let p = pcm(2, 1.0);
         let at = |ms: f32| p[(RATE as f32 * ms / 1000.0) as usize];
-        assert!(at(60.0).abs() > 0, "first pulse sounds");
+        // A 1 kHz tone has a zero crossing at every whole millisecond, so 60 ms alone can read silent; look at a window.
+        let sounds = (RATE as f32 * 40.0 / 1000.0) as usize..(RATE as f32 * 80.0 / 1000.0) as usize;
+        assert!(p[sounds].iter().any(|s| s.abs() > 0), "first pulse sounds");
         assert_eq!(at(180.0), 0, "gap after the first pulse");
     }
 }
