@@ -1674,6 +1674,9 @@ impl Calculator {
             Some(Target::Decimal) => Some(BAR_DECIMAL),
             Some(Target::ShowConvert) | Some(Target::LeaveConvert) => Some(BAR_CONVERT),
             Some(Target::Scientific) => Some(if self.sci_active(ui) { BAR_BASIC } else { BAR_SCIENTIFIC }),
+            Some(Target::Mode(Mode::Basic)) => Some(BAR_BASIC),
+            Some(Target::Mode(Mode::Scientific)) => Some(BAR_SCIENTIFIC),
+            Some(Target::Mode(Mode::Programmer)) => Some(BAR_PROGRAMMER),
             _ => None,
         };
         chrome::toolbar(s, ui, self.bar_bounds(ui), &self.bar(ui), pressed);
@@ -1684,6 +1687,8 @@ mod menu;
 
 #[cfg(test)]
 mod convert_tests;
+#[cfg(test)]
+mod mode_tests;
 
 #[cfg(test)]
 mod tests {

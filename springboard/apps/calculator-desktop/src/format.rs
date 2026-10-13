@@ -214,6 +214,7 @@ pub fn display(value: f64, locale: Locale) -> String {
 }
 
 /// `value` as shown on the display in `style`.
+#[cfg(test)]
 pub fn display_styled(value: f64, locale: Locale, style: Style) -> String {
     localize_with(&format_styled(value, style), locale, style.thousands)
 }

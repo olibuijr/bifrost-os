@@ -59,6 +59,7 @@ fn parse_entry(entry: &str) -> f64 {
 
 impl Rpn {
     /// The committed stack, X last (an entry still being typed is not in it).
+    #[cfg(test)]
     pub fn stack(&self) -> &[f64] {
         &self.stack
     }

@@ -12,23 +12,12 @@ pub enum Base {
 }
 
 impl Base {
-    pub const ALL: [Base; 4] = [Base::Bin, Base::Oct, Base::Dec, Base::Hex];
-
     pub fn radix(self) -> u32 {
         match self {
             Base::Bin => 2,
             Base::Oct => 8,
             Base::Dec => 10,
             Base::Hex => 16,
-        }
-    }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Base::Bin => "BIN",
-            Base::Oct => "OCT",
-            Base::Dec => "DEC",
-            Base::Hex => "HEX",
         }
     }
 }
@@ -135,6 +124,7 @@ impl Programmer {
     }
 
     /// The value as an unsigned word.
+    #[cfg(test)]
     pub fn value(&self) -> u64 {
         self.value
     }
@@ -223,15 +213,6 @@ impl Programmer {
         self.value = (value as i64 as u64) & self.mask();
         self.fresh = true;
         true
-    }
-
-    /// The value as a plain number for Copy and the history: signed in decimal, unsigned otherwise.
-    pub fn as_f64(&self) -> f64 {
-        if self.base == Base::Dec {
-            self.signed() as f64
-        } else {
-            self.value as f64
-        }
     }
 
     fn apply(&self, op: BinOp, left: u64, right: u64) -> Option<u64> {
@@ -641,6 +622,5 @@ mod tests {
         p.press(PKey::SetBits(8));
         assert!(p.set_value(300.0));
         assert_eq!(p.value(), 44);
-        assert_eq!(p.as_f64(), 44.0);
     }
 }
