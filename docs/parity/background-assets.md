@@ -52,3 +52,13 @@ Both are declared in `springboard/ui/src/lib.rs`. Tests sit in each module (7 in
 - No install-size enforcement on disk, and no restrictions before first launch.
 - No mock server for testing packs locally.
 - Apple-hosted packs and App Store Connect upload stay `n/a`: the PC App Store has no hosted asset service.
+
+## Managed download queue (parity/team-a-01)
+
+`springboard/ui/src/managed_download.rs` adds `ManagedDownloads`, a pure queue for downloads the system may start on an app's behalf:
+
+- `request(pack, bytes, priority)` queues a pack. A duplicate id is refused, and so is a pack larger than the daily budget. A failed pack can be requested again.
+- `next_ready(Conditions)` returns the pack that may start now. Packs start in priority order, with request order for ties. While the app is running, any queued pack may start if the network is available. While it is not running, a pack starts only on an unmetered connection and only if it fits the daily byte budget.
+- `start`, `finish` and `fail` move a pack through `Queued`, `Downloading`, `Done` and `Failed`. A pack gets `MAX_ATTEMPTS` (3) attempts. `finish` charges its bytes to today's budget, and `reset_day` clears the budget.
+
+The queue has host unit tests. Nothing in the shell calls it yet, so no download starts while an app is closed. Wiring it to a background service and to `download_task` in `springboard/sdk/src/url.rs` is the next step.

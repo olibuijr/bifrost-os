@@ -87,9 +87,9 @@
     {
       "feature": "Constants, structures and enumerations",
       "apple": "GKGameModelMaxScore, GKGameModelMinScore, GKBox, GKQuad, GKTriangle, GKMeshGraphTriangulationMode, GKRTreeSplitStrategy",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Value types depend on the spatial, graph and strategist rows, which are all missing."
+      "bifrost": "springboard/ui/src/gameplay_values.rs",
+      "status": "partial",
+      "note": "built on parity/team-a-01; not yet verified on Midget. GKGameModelMaxScore and MinScore, GKBox (Box3), GKQuad (Quad), GKTriangle (Triangle), GKMeshGraphTriangulationMode (TriangulationMode) and GKRTreeSplitStrategy (SplitStrategy). The spatial, graph and strategist rows do not use them yet."
     }
   ],
   "gaps": [

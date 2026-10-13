@@ -4,7 +4,7 @@
   "macos_since": "13.0",
   "status": "partial",
   "bifrost": "springboard/sdk/src/url.rs (download_task), springboard/src/shell/update.rs (OS updater only)",
-  "summary": "Apps can download a file to disk with progress and cancel through the URLSession counterpart. There is no asset-pack API, no manifest, no download scheduling while the app is not running, and no app-store-hosted assets.",
+  "summary": "Apps can download a file to disk with progress and cancel through the URLSession counterpart. A pure managed download queue (springboard/ui/src/managed_download.rs) models scheduling while the app is not running, but no shell service drives it yet; there is no app-store-hosted asset service.",
   "rea_evidence": "ev_180740ee1a0ec65ffc7ac09c38e751b28c444a300d607a50e6185f472c5efe0c",
   "features": [
     {
@@ -17,9 +17,9 @@
     {
       "feature": "System-scheduled downloads while the app is not running (ManagedDownloaderExtension, BAAppGroupID, BAHasManagedAssetPacks)",
       "apple": "ManagedDownloaderExtension, BAAppGroupID, BAHasManagedAssetPacks",
-      "bifrost": "none for apps; the OS updater downloads only system updates in springboard/src/shell/update.rs",
-      "status": "gap",
-      "note": "the updater is not exposed to apps"
+      "bifrost": "springboard/ui/src/managed_download.rs (ManagedDownloads); springboard/ui/src/assetpack.rs",
+      "status": "partial",
+      "note": "built on parity/team-a-01; not yet verified on Midget. Pure queue model: priority order, background starts only on an unmetered connection, a daily byte budget for background starts, three attempts per pack. Not driven by a background service in the shell yet, so nothing starts while the app is closed."
     },
     {
       "feature": "Apple-hosted packs and App Store Connect upload",
