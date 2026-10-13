@@ -37,6 +37,8 @@ def na_reason(name, path, m):
     for cls in m.get("na_names", {}).values():
         if isinstance(cls, dict) and name in cls.get("names", []):
             return cls["reason"]
+    if isinstance(m.get("commands", {}).get(name), str):
+        return None  # an explicit rename/mapping beats the generic daemon patterns
     for pat in m.get("na_patterns", []):
         if path.startswith(pat["path_prefix"]) and re.search(pat["name_regex"], name):
             return pat["reason"]
@@ -84,7 +86,8 @@ def build_plan(rows, m):
 
 def batch_script(plan):
     """One script for all probes; each prints `@@INDEX<TAB>STATE<TAB>PATH`."""
-    lines = ["#!/bin/sh"]
+    # Arch keeps Perl core/vendor scripts and ssh helpers off the non-login ssh PATH
+    lines = ["#!/bin/sh", 'PATH="$PATH:/usr/bin/core_perl:/usr/bin/vendor_perl:/usr/bin/site_perl"; export PATH']
     for i, item in enumerate(plan):
         lines.append(f"printf '@@%s\\t' {i}; ( {item['probe']} ) 2>/dev/null || printf 'FAIL\\t\\n'")
     return "\n".join(lines) + "\n"

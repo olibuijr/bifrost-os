@@ -1,0 +1,187 @@
+# Arch packages providing the commands that os_cli_map.json maps to Linux tools Midget does not ship yet.
+# One comment line per package naming the os/cli rows it covers (macOS name -> command when renamed).
+# Candidate list for the lead; packaging/arch/runtime-packages.txt is not edited by this file.
+# alsa-utils: afplay->aplay
+alsa-utils
+# apache: ab, apachectl, dbmmanage, fcgistarter, htcacheclean, htdbm, htdigest, htpasswd, httpd, httxt2dbm, logresolve, rotatelogs
+apache
+# at: at, atrun->atd, batch
+at
+# audit: audit->auditctl, auditreduce->ausearch, praudit->aureport
+audit
+# avahi: dns-sd->avahi-browse, mDNSResponder->avahi-daemon
+avahi
+# bc: bc
+bc
+# bind: ddns-confgen, delv, dig, host, nslookup, nsupdate
+bind
+# bubblewrap: sandbox-exec->bwrap
+bubblewrap
+# chrony: sntp->chronyc, sntpd->chronyd
+chrony
+# cifs-utils: mount_smbfs->mount.cifs
+cifs-utils
+# cpio: cpio
+cpio
+# cronie: cron->crond, crontab
+cronie
+# cups: cancel, cupsaccept, cupsctl, cupsd, cupsfilter, cupstestppd, ippeveprinter, ippfind, ipptool, lp, lpadmin, lpc, lpinfo, lpmove, lpoptions, lpq, lpr, lprm, lpstat, ppdc, ppdhtml, ppdi, ppdmerge, ppdpo
+cups
+# cups-filters: getPPDVersion->cups-browsed
+cups-filters
+# dash: dash
+dash
+# davfs2: mount_webdav->mount.davfs
+davfs2
+# db: db_archive, db_checkpoint, db_codegen, db_deadlock, db_dump, db_hotbackup, db_load, db_printlog, db_recover, db_stat, db_upgrade, db_verify
+db
+# diffstat: diffstat
+diffstat
+# dnsmasq: bootpd->dnsmasq, dhcp6d->dnsmasq
+dnsmasq
+# ed: ed
+ed
+# efibootmgr: nvram->efibootmgr
+efibootmgr
+# expect: expect
+expect
+# ffmpeg: afconvert->ffmpeg, avconvert->ffmpeg, avmediainfo->ffprobe, avmetareadwrite->ffprobe
+ffmpeg
+# fping: fping
+fping
+# gdb: gcore
+gdb
+# gettext: xgettext.pl->xgettext
+gettext
+# glib2: trash->gio
+glib2
+# gptfdisk: gpt->sgdisk
+gptfdisk
+# groff: soelim
+groff
+# imagemagick: sips->magick
+imagemagick
+# iotop: iotop
+iotop
+# iperf3: iperf3-darwin->iperf3
+iperf3
+# ipp-usb: ippusbd->ipp-usb
+ipp-usb
+# iproute2: rdma_ctl->rdma
+iproute2
+# jdk-openjdk: jar
+jdk-openjdk
+# jq: jq
+jq
+# krb5: kcc->klist, kgetcred->kvno
+krb5
+# ksh: ksh
+ksh
+# less: less, lessecho, lesskey
+less
+# libicns: iconutil->png2icns, tiff2icns->png2icns
+libicns
+# libsecret: security->secret-tool
+libsecret
+# libtiff: tiffutil->tiffinfo
+libtiff
+# libxml2: xpath->xmllint
+libxml2
+# libxslt: xslt-config, xsltproc
+libxslt
+# lsof: lsof
+lsof
+# man-db: apropos, makewhatis->mandb, makewhatis.local->mandb
+man-db
+# mandoc: demandoc, mandoc
+mandoc
+# mg: mg
+mg
+# nano: pico->nano
+nano
+# ncompress: compress
+ncompress
+# net-snmp: agentxtrap, fixproc, ipcount, mib2c, mib2c-update, net-snmp-cert, net-snmp-config, net-snmp-create-v3-user, snmp-bridge-mib, snmpbulkget, snmpbulkwalk, snmpconf, snmpd, snmpdelta, snmpdf, snmpget, snmpgetnext, snmpnetstat, snmpset, snmpstatus, snmptable, snmptest, snmptranslate, snmptrap, snmptrapd, snmpusm, snmpvacm, snmpwalk, tkmib, traptoemail
+net-snmp
+# nethogs: nettop->nethogs
+nethogs
+# nfs-utils: gssd->rpc.gssd, mount_nfs->mount.nfs, nfs4mapid->nfsidmap, nfsd->rpc.nfsd, nfsstat, rpc.statd, showmount
+nfs-utils
+# openbsd-netcat: nc
+openbsd-netcat
+# openldap: ldapcompare, ldapdelete, ldapexop, ldapmodify, ldapmodrdn, ldappasswd, ldapsearch, ldapurl, ldapwhoami, slapd
+openldap
+# pandoc-cli: textutil->pandoc
+pandoc-cli
+# patch: patch
+patch
+# pcsc-tools: pcsctest->pcsc_scan
+pcsc-tools
+# perf: sample->perf, sampleproc->perf, spindump->perf
+perf
+# perl: config_data, corelist, cpan, enc2xs, encguess, h2ph, h2xs, instmodsh, json_pp, libnetcfg, perl5.34->perl, perlbug, perldoc, perlivp, piconv, pl2pm, pod2html, pod2man, pod2text, pod2usage, podchecker, prove, ptar, ptardiff, ptargrep, shasum, splain, streamzip, xsubpp, zipdetails
+perl
+# picocom: cu->picocom
+picocom
+# plocate: locate, locate.updatedb->updatedb
+plocate
+# postfix: postalias, postcat, postconf, postdrop, postfix, postkick, postlock, postlog, postmap, postmulti, postqueue, postsuper, sendmail
+postfix
+# powertop: powermetrics->powertop
+powertop
+# ppp: chat
+ppp
+# procps-ng: meminfo->free
+procps-ng
+# quota-tools: edquota, quota, quotacheck, quotaoff, repquota, rpc.rquotad, setquota
+quota-tools
+# rdma-core: ibv_devices, ibv_devinfo, ibv_uc_pingpong
+rdma-core
+# rpcbind: rpcbind, rpcinfo
+rpcbind
+# rsync: rsync
+rsync
+# ruby: bundle, bundler, erb, gem, irb, rake, rdoc, ri, ruby
+ruby
+# s-nail: mail->mailx
+s-nail
+# samba: smbd, smbutil->smbclient
+samba
+# screen: screen
+screen
+# sharutils: b64decode->uudecode, b64encode->uuencode, shar
+sharutils
+# sox: afinfo->soxi
+sox
+# strace: dtruss->strace
+strace
+# sysstat: iostat
+sysstat
+# tcpdump: tcpdump
+tcpdump
+# tcsh: csh
+tcsh
+# tftp-hpa: tftp, tftpd->in.tftpd
+tftp-hpa
+# tidy: tidy
+tidy
+# tk: wish8.5->wish
+tk
+# traceroute: traceroute, traceroute6
+traceroute
+# unzip: funzip, unzip, unzipsfx, zipgrep
+unzip
+# valgrind: leaks->valgrind
+valgrind
+# vim: vim, vimtutor, xxd
+vim
+# which: which
+which
+# whois: whois
+whois
+# xdg-utils: uttype->xdg-mime
+xdg-utils
+# zip: zip, zipcloak, zipnote, zipsplit
+zip
+# zsh: zsh
+zsh
