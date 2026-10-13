@@ -20,6 +20,8 @@
   camera, exposure and location. Tools > Show Location Info shows the place a picture was taken. Tools > Show Magnifier
   enlarges the picture under the pointer.
 - File > New from Clipboard (Cmd+N) opens a picture from the clipboard.
+- Tools > Adjust Size (Cmd+Option+I) resamples a picture: type a width, a width x height or a percentage in the status
+  line and press Return. File > JPEG Quality chooses High, Medium or Low for exported JPEGs.
 
 ## 0.7.0
 

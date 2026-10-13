@@ -143,6 +143,12 @@ pub enum Action {
     FindNext,
     FindPrevious,
     ShowSearch,
+    /// Tools > Adjust Size: the status line takes a width, a size or a percentage and the picture is resampled to it.
+    AdjustSize,
+    /// File > JPEG Quality: how hard an exported JPEG is compressed.
+    QualityHigh,
+    QualityMedium,
+    QualityLow,
 }
 
 /// Every action. A menu item's id is its index here.
@@ -208,6 +214,10 @@ pub const ACTIONS: &[Action] = &[
     Action::FindNext,
     Action::FindPrevious,
     Action::ShowSearch,
+    Action::AdjustSize,
+    Action::QualityHigh,
+    Action::QualityMedium,
+    Action::QualityLow,
     Action::UseTool(Tool::Oval),
     Action::UseTool(Tool::Line),
     Action::UseTool(Tool::Arrow),
@@ -314,6 +324,10 @@ impl Action {
             Action::FindNext => "Find Next",
             Action::FindPrevious => "Find Previous",
             Action::ShowSearch => "Search Results",
+            Action::AdjustSize => "Adjust Size\u{2026}",
+            Action::QualityHigh => "JPEG Quality: High",
+            Action::QualityMedium => "JPEG Quality: Medium",
+            Action::QualityLow => "JPEG Quality: Low",
             Action::UseTool(Tool::Oval) => "Oval",
             Action::UseTool(Tool::Line) => "Line",
             Action::UseTool(Tool::Arrow) => "Arrow",
@@ -331,6 +345,16 @@ impl Action {
             Action::ExportAt50 => Some(0.5),
             Action::ExportAt100 => Some(1.0),
             Action::ExportAt200 => Some(2.0),
+            _ => None,
+        }
+    }
+
+    /// The JPEG quality of a quality action.
+    pub fn jpeg_quality(self) -> Option<u8> {
+        match self {
+            Action::QualityHigh => Some(90),
+            Action::QualityMedium => Some(75),
+            Action::QualityLow => Some(50),
             _ => None,
         }
     }
@@ -1033,6 +1057,14 @@ mod tests {
             assert!(!Action::toolbar().contains(&a), "{a:?}");
             assert_eq!(Action::from_id(a.id()), Some(a));
         }
+    }
+
+    #[test]
+    fn jpeg_qualities_get_lower_from_high_to_low() {
+        let q = |a: Action| a.jpeg_quality().expect("a quality action");
+        assert!(q(Action::QualityHigh) > q(Action::QualityMedium) && q(Action::QualityMedium) > q(Action::QualityLow));
+        assert_eq!(Action::ExportJpeg.jpeg_quality(), None);
+        assert!(ACTIONS.contains(&Action::AdjustSize));
     }
 
     #[test]

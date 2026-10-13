@@ -111,6 +111,10 @@ struct Viewer {
     finding: Option<String>,
     query: String,
     found: Vec<find::Hit>,
+    /// The size being typed after Tools > Adjust Size.
+    resizing: Option<String>,
+    /// The quality of an exported JPEG, 1 to 100.
+    jpeg_quality: u8,
 }
 
 impl Viewer {
@@ -144,6 +148,8 @@ impl Viewer {
             finding: None,
             query: String::new(),
             found: Vec::new(),
+            resizing: None,
+            jpeg_quality: export::JPEG_QUALITY,
         }
     }
 
@@ -218,6 +224,7 @@ impl Viewer {
         self.trail = Trail::default();
         self.goto = None;
         self.finding = None;
+        self.resizing = None;
         self.found.clear();
         self.query.clear();
         self.mode = Mode::Page;
@@ -637,11 +644,79 @@ impl Viewer {
                 self.start_find();
                 true
             }
+            Action::AdjustSize => {
+                self.start_resize();
+                true
+            }
             Action::FindNext | Action::FindPrevious => {
                 self.find_step(action == Action::FindNext);
                 true
             }
             _ => self.track(|v| v.act_edit(ui, lay, action)),
+        }
+    }
+
+    /// Tools > Adjust Size: the status line takes the new size. Only a picture can be resampled.
+    fn start_resize(&mut self) {
+        if !self.doc.as_ref().is_some_and(|d| !d.is_pdf) {
+            self.status = "Adjust Size works on pictures, not PDFs.".into();
+            return;
+        }
+        self.stop_editing();
+        self.resizing = Some(String::new());
+        self.show_resizing();
+    }
+
+    /// Shows the current size and what has been typed after Adjust Size in the status line.
+    fn show_resizing(&mut self) {
+        let (w, h) = self.doc.as_ref().and_then(|d| d.sizes.first().copied()).unwrap_or((0, 0));
+        self.status = format!("Adjust Size ({w} x {h}): {}|  width, width x height or percent", self.resizing.as_deref().unwrap_or(""));
+    }
+
+    /// A key while the new size is being typed.
+    fn key_resize(&mut self, key: &KeyInput) -> bool {
+        match key {
+            KeyInput::Text(t) => {
+                if let Some(r) = &mut self.resizing {
+                    r.extend(t.chars().filter(|c| c.is_ascii_digit() || matches!(c, 'x' | 'X' | '%' | '.' | ' ')));
+                }
+            }
+            KeyInput::Code(8) => {
+                if let Some(r) = &mut self.resizing {
+                    r.pop();
+                }
+            }
+            KeyInput::Code(13) => {
+                let text = self.resizing.take().unwrap_or_default();
+                self.status.clear();
+                if !text.trim().is_empty() {
+                    self.track(|v| v.resize_to(&text));
+                }
+                return true;
+            }
+            KeyInput::Code(27) => {
+                self.resizing = None;
+                self.status.clear();
+                return true;
+            }
+            _ => return false,
+        }
+        self.show_resizing();
+        true
+    }
+
+    /// Resamples the picture to the size `text` names (see `pixels::parse_size`).
+    fn resize_to(&mut self, text: &str) {
+        let Some(doc) = &mut self.doc else { return };
+        let Some(picture) = doc.picture_rc() else { return };
+        match pixels::parse_size(text, picture.w, picture.h) {
+            Some((w, h)) if (w, h) != (picture.w, picture.h) => {
+                doc.replace_picture(Rc::new(picture.resized(w, h)));
+                self.selection = None;
+                self.status = format!("Resized to {w} x {h}");
+            }
+            Some(_) => self.status = "The picture already has that size.".into(),
+            None => self.status = format!("\u{201c}{}\u{201d} is not a size the picture can be resampled to.", text.trim()),
         }
     }
 
@@ -980,9 +1055,15 @@ impl Viewer {
             | Action::NewFromClipboard
             | Action::Find
             | Action::FindNext
-            | Action::FindPrevious => {}
+            | Action::FindPrevious
+            | Action::AdjustSize => {}
+            Action::QualityHigh | Action::QualityMedium | Action::QualityLow => {
+                if let Some(quality) = action.jpeg_quality() {
+                    self.jpeg_quality = quality;
+                }
+            }
             Action::ExportPng => self.export_raster(Raster::Png),
-            Action::ExportJpeg => self.export_raster(Raster::Jpeg),
+            Action::ExportJpeg => self.export_raster(Raster::Jpeg(self.jpeg_quality)),
             Action::ExportPdf => self.export_pdf(),
             Action::ExportAt25 | Action::ExportAt50 | Action::ExportAt100 | Action::ExportAt200 => {
                 if let Some(scale) = action.export_scale() {
@@ -1290,6 +1371,9 @@ impl Viewer {
         if self.finding.is_some() {
             return self.key_find(&key);
         }
+        if self.resizing.is_some() {
+            return self.key_resize(&key);
+        }
         if self.mode == Mode::Contact && key == KeyInput::Code(27) {
             self.mode = Mode::Page;
             return true;
@@ -1386,6 +1470,7 @@ fn item_labelled(action: Action, label: &str, enabled: bool, checked: bool) -> A
         Action::Inspector => m.key("cmd+i"),
         Action::ContactSheet => m.key("cmd+2"),
         Action::Slideshow => m.key("cmd+shift+f"),
+        Action::AdjustSize => m.key("cmd+alt+i"),
         Action::ZoomIn => m.key("cmd+="),
         Action::ZoomOut => m.key("cmd+-"),
         Action::ActualSize => m.key("cmd+0"),
@@ -1452,6 +1537,7 @@ impl App for Viewer {
             item(Action::Crop, is_picture && has_selection, false),
             item(Action::FlipHorizontal, is_picture, false),
             item(Action::FlipVertical, is_picture, false),
+            item(Action::AdjustSize, is_picture, false),
             item(Action::RemoveBackground, is_picture, false),
             AppMenuItem::separator(),
             item_labelled(Action::ToggleMagnifier, if self.loupe_on { "Hide Magnifier" } else { "Show Magnifier" }, open, self.loupe_on),
@@ -1478,6 +1564,10 @@ impl App for Viewer {
         file_items.extend([item(Action::ExportPng, open, false), item(Action::ExportJpeg, open, false)]);
         file_items.push(AppMenuItem::separator());
         file_items.extend(scale_items);
+        file_items.push(AppMenuItem::separator());
+        file_items.extend(
+            [Action::QualityHigh, Action::QualityMedium, Action::QualityLow].map(|a| item(a, open, a.jpeg_quality() == Some(self.jpeg_quality))),
+        );
         file_items.push(AppMenuItem::separator());
         file_items.push(item(Action::ExportPdf, pdf, false));
         file_items.push(AppMenuItem::separator());
@@ -1798,6 +1888,37 @@ mod tests {
         assert!(v.key_find(&KeyInput::Code(27)));
         assert!(v.finding.is_none() && v.status.is_empty());
         assert!(!v.key_find(&KeyInput::Code(65)));
+    }
+
+    #[test]
+    fn adjust_size_resamples_the_picture_and_can_be_undone() {
+        let mut v = viewer_with(Image { w: 4, h: 2, px: vec![pack(9, 9, 9, 255); 8] });
+        v.start_resize();
+        assert!(v.resizing.is_some() && v.status.contains("4 x 2"), "{}", v.status);
+        assert!(v.key_resize(&KeyInput::Text("8 junk".into())));
+        assert_eq!(v.resizing.as_deref(), Some("8 "), "only digits, x, percent, dot and space are taken");
+        assert!(v.key_resize(&KeyInput::Code(13)));
+        assert!(v.resizing.is_none());
+        let doc = v.doc.as_ref().unwrap();
+        assert_eq!(doc.sizes, vec![(8, 4)]);
+        assert_eq!((doc.picture_rc().unwrap().w, doc.picture_rc().unwrap().h), (8, 4));
+        assert!(v.status.contains("8 x 4"));
+        undo(&mut v);
+        assert_eq!(v.doc.as_ref().unwrap().sizes, vec![(4, 2)]);
+        // text that is not a size changes nothing and says so
+        v.start_resize();
+        v.key_resize(&KeyInput::Text("0".into()));
+        v.key_resize(&KeyInput::Code(13));
+        assert!(v.status.contains("not a size"), "{}", v.status);
+        assert_eq!(v.doc.as_ref().unwrap().sizes, vec![(4, 2)]);
+        cleanup(&v);
+    }
+
+    #[test]
+    fn a_pdf_is_not_resampled() {
+        let mut v = Viewer::new();
+        v.start_resize();
+        assert!(v.resizing.is_none() && v.status.contains("pictures"));
     }
 
     #[test]

@@ -12,21 +12,22 @@ use springboard::cg::pdf::draw;
 use springboard::shell::camera::jpeg;
 use std::path::{Path, PathBuf};
 
-/// The quality of an exported JPEG.
-const JPEG_QUALITY: u8 = 90;
+/// The quality of an exported JPEG unless File > JPEG Quality says otherwise.
+pub const JPEG_QUALITY: u8 = 90;
 
 /// The picture formats an export writes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Raster {
     Png,
-    Jpeg,
+    /// A JPEG at this quality, 1 to 100.
+    Jpeg(u8),
 }
 
 impl Raster {
     pub fn ext(self) -> &'static str {
         match self {
             Raster::Png => "png",
-            Raster::Jpeg => "jpg",
+            Raster::Jpeg(_) => "jpg",
         }
     }
 }
@@ -58,7 +59,7 @@ pub fn write_image(img: &Image, raster: Raster, target: &Path) -> Result<(), Str
     let unencoded = || "The picture could not be encoded.".to_string();
     let bytes = match raster {
         Raster::Png => encode_png(img.w, img.h, &pixels::to_straight_rgba(img), &PngOptions::default()).ok_or_else(unencoded)?,
-        Raster::Jpeg => {
+        Raster::Jpeg(quality) => {
             let flat;
             let opaque = if pixels::has_alpha(img) {
                 flat = pixels::flatten_on_white(img);
@@ -66,7 +67,7 @@ pub fn write_image(img: &Image, raster: Raster, target: &Path) -> Result<(), Str
             } else {
                 img
             };
-            let encoded = jpeg::encode_pixels(opaque.w, opaque.h, &opaque.px, JPEG_QUALITY, None);
+            let encoded = jpeg::encode_pixels(opaque.w, opaque.h, &opaque.px, quality.clamp(1, 100), None);
             if encoded.is_empty() {
                 return Err(unencoded());
             }
@@ -100,7 +101,7 @@ mod tests {
     #[test]
     fn exports_are_named_beside_the_document() {
         assert_eq!(target(Path::new("/a/b.pdf"), "pdf"), PathBuf::from("/a/b-markup.pdf"));
-        assert_eq!(target(Path::new("/a/b.png"), Raster::Jpeg.ext()), PathBuf::from("/a/b-markup.jpg"));
+        assert_eq!(target(Path::new("/a/b.png"), Raster::Jpeg(JPEG_QUALITY).ext()), PathBuf::from("/a/b-markup.jpg"));
         assert_eq!(target(Path::new("/a/b.png"), Raster::Png.ext()), PathBuf::from("/a/b-markup.png"));
     }
 
@@ -126,8 +127,30 @@ mod tests {
         // IHDR colour type 6 is RGBA
         assert_eq!(bytes[25], 6);
         let jpg = dir.join("a.jpg");
-        write_image(&img, Raster::Jpeg, &jpg).expect("a jpeg");
+        write_image(&img, Raster::Jpeg(JPEG_QUALITY), &jpg).expect("a jpeg");
         assert_eq!(&std::fs::read(&jpg).expect("the file")[..2], &[0xff, 0xd8]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_lower_jpeg_quality_writes_a_smaller_file() {
+        let dir = std::env::temp_dir().join(format!("viewer-quality-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("a folder");
+        // a deterministic noisy picture, which a JPEG cannot squeeze without losing quality
+        let mut seed = 12345u32;
+        let px = (0..48 * 48)
+            .map(|_| {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                0xff00_0000 | (seed >> 8)
+            })
+            .collect();
+        let img = Image { w: 48, h: 48, px };
+        let size = |quality: u8| {
+            let path = dir.join(format!("q{quality}.jpg"));
+            write_image(&img, Raster::Jpeg(quality), &path).expect("a jpeg");
+            std::fs::metadata(&path).expect("the file").len()
+        };
+        assert!(size(30) < size(95));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

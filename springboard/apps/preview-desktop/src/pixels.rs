@@ -202,6 +202,38 @@ pub fn remove_background(img: &Image, tol: u8) -> Image {
     clear_connected(img, &seeds, reference, tol)
 }
 
+/// The longest side Adjust Size makes, and the most pixels it makes.
+pub const MAX_SIDE: usize = 16_384;
+pub const MAX_PIXELS: usize = 64_000_000;
+
+/// The size Adjust Size makes of a `w` by `h` picture from the text typed for it. The text is a width alone (`800`, the
+/// height follows the shape), a height alone (`x600`), both (`800x600`, spaces allowed), or a percentage of the
+/// current size (`50%`). None when the text is not a size, or the result is empty or larger than `MAX_SIDE` and
+/// `MAX_PIXELS` allow.
+pub fn parse_size(text: &str, w: usize, h: usize) -> Option<(usize, usize)> {
+    if w == 0 || h == 0 {
+        return None;
+    }
+    let text: String = text.chars().filter(|c| !c.is_whitespace()).collect::<String>().to_lowercase();
+    let (nw, nh) = if let Some(percent) = text.strip_suffix('%') {
+        let scale = percent.parse::<f64>().ok().filter(|p| p.is_finite() && *p > 0.0)? / 100.0;
+        ((w as f64 * scale).round() as usize, (h as f64 * scale).round() as usize)
+    } else if let Some((a, b)) = text.split_once('x') {
+        let side = |t: &str| if t.is_empty() { Some(None) } else { t.parse::<usize>().ok().map(Some) };
+        match (side(a)?, side(b)?) {
+            (Some(a), Some(b)) => (a, b),
+            (Some(a), None) => (a, ((h as f64 * a as f64 / w as f64).round() as usize).max(1)),
+            (None, Some(b)) => (((w as f64 * b as f64 / h as f64).round() as usize).max(1), b),
+            (None, None) => return None,
+        }
+    } else {
+        let a = text.parse::<usize>().ok()?;
+        (a, ((h as f64 * a as f64 / w as f64).round() as usize).max(1))
+    };
+    let fits = nw >= 1 && nh >= 1 && nw <= MAX_SIDE && nh <= MAX_SIDE && nw.checked_mul(nh)? <= MAX_PIXELS;
+    fits.then_some((nw, nh))
+}
+
 /// Whether any pixel is not fully opaque.
 pub fn has_alpha(img: &Image) -> bool {
     img.px.iter().any(|&p| p >> 24 != 255)
@@ -381,5 +413,28 @@ mod tests {
         assert_eq!(flat.px[2], RED);
         assert_eq!(flat.px[1] >> 24, 255);
         assert!(!has_alpha(&flat));
+    }
+
+    #[test]
+    fn typed_sizes_keep_the_shape_unless_both_sides_are_given() {
+        assert_eq!(parse_size("800", 400, 300), Some((800, 600)));
+        assert_eq!(parse_size(" 200 x 50 ", 400, 300), Some((200, 50)));
+        assert_eq!(parse_size("x150", 400, 300), Some((200, 150)));
+        assert_eq!(parse_size("200x", 400, 300), Some((200, 150)));
+        assert_eq!(parse_size("50%", 400, 301), Some((200, 151)));
+        assert_eq!(parse_size("12.5 %", 400, 300), Some((50, 38)));
+        assert_eq!(parse_size("200X100", 400, 300), Some((200, 100)));
+    }
+
+    #[test]
+    fn sizes_that_are_not_sizes_or_are_too_large_are_refused() {
+        for text in ["", "x", "abc", "0", "0x10", "-5", "1e3", "%", "0%", "10x10x10"] {
+            assert_eq!(parse_size(text, 400, 300), None, "{text:?}");
+        }
+        assert_eq!(parse_size("20000", 400, 300), None, "past the longest side");
+        assert_eq!(parse_size("16000x16000", 400, 300), None, "past the most pixels");
+        assert_eq!(parse_size("100", 0, 0), None);
+        // a thin picture keeps at least one pixel on its short side
+        assert_eq!(parse_size("1", 1000, 10), Some((1, 1)));
     }
 }

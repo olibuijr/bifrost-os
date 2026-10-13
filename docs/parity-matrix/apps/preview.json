@@ -50,9 +50,9 @@
       "feature": "Export options (quality, more formats, PDF encryption)",
       "area": "panel",
       "apple": "MainMenu.nib File > Export As sheet",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Fixed formats, no quality slider, no password",
+      "status": "partial",
+      "bifrost": "springboard/apps/preview-desktop/src/export.rs:58",
+      "note": "File > JPEG Quality (High 90, Medium 75, Low 50) sets the compression of an exported JPEG, and PNG export keeps transparency. No quality slider, no other formats, no PDF password; built on parity/team-d-preview; not yet verified on Midget",
       "wire": "Add an export sheet with format popup, JPEG quality and PDF password (encrypt via the PDF writer used by pdfmarks.rs); open it from Export As in main.rs:618"
     },
     {
@@ -177,8 +177,8 @@
       "area": "panel",
       "apple": "MainMenu.nib Tools > Adjust Size",
       "status": "partial",
-      "bifrost": "springboard/apps/preview-desktop/src/main.rs:614",
-      "note": "Export-at-scale only; no width/height sheet",
+      "bifrost": "springboard/apps/preview-desktop/src/main.rs:660",
+      "note": "Tools > Adjust Size (Cmd+Option+I): the width, the width x height or a percentage is typed in the status line and the picture is resampled in place (bilinear), undoable. A single side keeps the shape; it is not a sheet with live fields; built on parity/team-d-preview; not yet verified on Midget",
       "wire": "Add an Adjust Size sheet (width, height, keep ratio) that writes the resized picture; Tools menu"
     },
     {
