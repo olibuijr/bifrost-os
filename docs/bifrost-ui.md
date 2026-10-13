@@ -1986,3 +1986,12 @@ apps draw and capture touch.
 - **Gaps.** No serialised format beyond the text form in `drawing.rs`; no handwriting recognition or Scribble; no
   ruler; no stroke-level bitmap eraser. Parity rows stay partial until the shell and apps use these models and a
   Midget test passes.
+
+## Contacts access and fetch (`bifrost_app::contacts`, the `contacts` service)
+
+Apps read the person's contacts only after the person allows it. `access` and `request` report the status (`not_determined`,
+`restricted`, `denied`, `authorized`, `limited`); `fetch` returns the named fields (`given_name`, `family_name`,
+`organization`, `phones`, `emails`, `address`, `note`) of each readable contact, sorted by name, with an optional text
+query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
+shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
+restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
