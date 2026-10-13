@@ -161,9 +161,9 @@
    "feature": "Show in file manager",
    "area": "menu",
    "apple": "File > Show in file manager",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Not done: the workspace API reveals document grants, not paths; a mount point has no grant yet.",
+   "status": "partial",
+   "bifrost": "springboard/apps/diskutil-desktop/src/main.rs:MENU_SHOW_IN_FILES",
+   "note": "File > Show in Files (cmd+shift+R) opens the mount point as a file:// URL via ctx.open_url (actions::mount_url, tested). Needs a check on the lab machine.",
    "wire": "Add a menu item opening the selected mount point in the Files app via shell open."
   },
   {

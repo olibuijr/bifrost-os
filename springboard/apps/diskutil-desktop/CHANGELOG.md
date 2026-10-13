@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- File > Show in Files (cmd+shift+R) opens the selected volume's mount point in the file manager.
+
 ## 0.4.0
 
 - Menus: File (Get Info, Mount, Unmount, Eject with shortcuts), View (Show Only Volumes, Show All Devices) and Disk (Erase, Run First Aid, the erase format, Partition into 2 to 4 equal parts) join the Image menu.
