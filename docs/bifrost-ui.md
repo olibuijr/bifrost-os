@@ -1366,6 +1366,33 @@ process once. Gaps: no relinquish or `savePresentedItemChanges` negotiation, no 
 change on both paths), no versions or iCloud coordination, advisory only (uncoordinated processes are not blocked),
 presenters only learn of changes inside folders the app's `FSEventStream` watches. Tests: `file_coordination::tests`.
 
+## FileManager (Foundation file system, `bifrost_app::file_manager`)
+
+`NativeFileManager` (`springboard/sdk/src/file_manager.rs`) is the SDK's FileManager. Item operations: `item_kind`,
+`file_exists`, `attributes_of_item`, `contents_of_directory`, `subpaths_of_directory`, `create_directory`, `copy_item`
+(refuses an existing destination), `move_item` (renames, or copies and removes across file systems), `remove_item`
+(a link removes only the link). Documents:
+- `write_atomically(path, bytes)` is `Data.write(to:options: .atomic)`. It delegates to `bifrost_core::fsutil::write_atomic`
+  (temporary sibling, sync, rename). Unlike `fsutil`, it does not create a missing parent directory; it returns
+  `NotFound`, as `Data.write` does.
+- `replace_item_at(original, new_item, backup_item_name)` is `replaceItemAt(_:withItemAt:backupItemName:options:)`. The
+  old item is renamed aside first, the new one moved into its place, and the old one is put back if the move fails.
+  With a backup name the old item stays beside it (an older backup of that name is replaced); without one it is deleted.
+  It returns the placed path.
+- `url_for(SearchPathDirectory, appropriate_for, create)` is `url(for:in:appropriateFor:create:)`, and `urls_for` is
+  `urls(for:in:)`. The directories are `Desktop`, `Downloads`, `Documents`, `ApplicationSupport` (`$XDG_DATA_HOME`
+  or `~/.local/share`), `Caches` (`$XDG_CACHE_HOME` or `~/.cache`) and `ItemReplacement`, which needs `appropriate_for`
+  and is placed beside that item so the replacement stays a rename. The base is `$HOME`; the XDG values are used only
+  when absolute.
+- `temporary_directory()` is `temporaryDirectory` (`env::temp_dir()`).
+- `enumerator(at, DirectoryEnumerationOptions)` is `enumerator(at:includingPropertiesForKeys:options:)`. The options
+  are `skips_hidden_files` (dot names and everything below them) and `skips_subdirectory_descendants`. Items are
+  full paths, depth first, names sorted, and links are never entered. The tree is read when the enumerator is created.
+
+Gaps: no `FileWrapper`, bookmarks or security-scoped URLs, no `usingNewMetadataOnly` or `withoutDeletingBackupItem`
+options, no resource keys on the enumerator, and no `~/Library` folders (Linux XDG locations are used). Tests:
+`file_manager::tests` (run with `cargo test -p bifrost-app file_manager`).
+
 ## Host statistics and ProcessInfo (Foundation/Mach parity)
 
 One implementation, `bifrost_core::host` (re-exported as `bifrost_app::host`), serves the shell and the SDK. Every call
