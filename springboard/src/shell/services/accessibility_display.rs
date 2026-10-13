@@ -5,7 +5,7 @@
 //!
 //! Methods (params are ignored): `options()` returns an object with `increase_contrast`, `reduce_transparency`,
 //! `differentiate_without_color`, `invert_colors`, `reduce_motion` and `dim_flashing_lights` (all booleans), the
-//! `NSWorkspace` display options; `get()` returns `true` or `false`. The service pushes `changed` to every app with the
+//! Workspace display options; `get()` returns `true` or `false`. The service pushes `changed` to every app with the
 //! new flag as its body, once per change (not on the first tick, when no app is running yet).
 use super::{Event, Shell, SystemService};
 use bifrost_core::json::Json;
@@ -21,7 +21,7 @@ pub const METHOD_OPTIONS: &str = "options";
 /// The event pushed when any display accommodation changes. Its body is the same object `options` returns.
 pub const EVENT_OPTIONS_CHANGED: &str = "options_changed";
 
-/// The display accommodations apps can read, as `NSWorkspace` names them.
+/// The display accommodations apps can read, named after the Workspace accessibility display flags.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DisplayOptions {
     pub increase_contrast: bool,

@@ -27,7 +27,7 @@ pub const METHOD_OPTIONS: &str = "options";
 /// The event the shell pushes when any display accommodation changes. Its body is the `options` object.
 pub const EVENT_OPTIONS_CHANGED: &str = "options_changed";
 
-/// The display accommodations, as `NSWorkspace` names them (`accessibilityDisplayShouldIncreaseContrast`, ...).
+/// The display accommodations, named after the Workspace accessibility display flags (`accessibilityDisplayShouldIncreaseContrast`, ...).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DisplayOptions {
     pub increase_contrast: bool,
