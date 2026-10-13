@@ -3,6 +3,7 @@
 
 pub mod open;
 pub mod pasteboard;
+pub mod tmutil;
 
 /// Prints `msg` to stderr prefixed with the tool name and exits with `code`.
 pub fn die(tool: &str, msg: &str, code: i32) -> ! {
