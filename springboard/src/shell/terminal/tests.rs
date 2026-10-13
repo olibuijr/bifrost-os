@@ -381,6 +381,18 @@ fn secure_keyboard_entry_keeps_shell_shortcuts_out_of_the_terminal() {
 }
 
 #[test]
+fn window_group_saves_tab_folders_and_opens_them_as_tabs() {
+    let mut sh = terminal(&["/bin/sh", "-c", "read x"]);
+    sh.terminal_menu_action(23, 2000.0);
+    assert_eq!(sh.terminal_ui.message, "No window group saved");
+    sh.terminal_menu_action(22, 2100.0);
+    assert!(sh.terminal_ui.message.starts_with("Saved "), "{}", sh.terminal_ui.message);
+    let saved = groups::decode(sh.prefs.get(groups::KEY).unwrap_or(""));
+    sh.terminal_menu_action(23, 2200.0);
+    assert_eq!(sh.term.len(), 1 + saved.len(), "one new tab per saved folder");
+}
+
+#[test]
 fn cursor_style_and_blink_persist_and_reload() {
     let mut sh = terminal(&["/bin/sh"]);
     assert_eq!(MENU[16], "Cursor style");

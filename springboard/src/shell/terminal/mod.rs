@@ -29,6 +29,7 @@ pub mod layout;
 mod command;
 mod control;
 mod find;
+mod groups;
 mod input;
 mod links;
 mod menus;

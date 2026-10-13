@@ -226,6 +226,8 @@ impl Shell {
             }
             18 => self.terminal_toggle_secure(),
             19 => self.terminal_open_command(t),
+            22 => self.terminal_save_group(),
+            23 => self.terminal_open_group(t),
             // The first web link in the selection opens in the browser.
             15 => {
                 let link = self
