@@ -1138,3 +1138,5 @@ pub mod material_style;
 pub mod thumb_service;
 pub mod auth_prompt;
 pub mod video_info;
+
+pub mod sk_action;
