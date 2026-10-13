@@ -4,7 +4,7 @@ use super::{obj, read_frame, reply_err, reply_ok, s, write_frame, Gate, PErr, Pe
 use bifrost_core::json::{self, Json};
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd};
-use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -29,7 +29,6 @@ struct Ucred {
 extern "C" {
     fn getsockopt(fd: i32, level: i32, name: i32, val: *mut Ucred, len: *mut u32) -> i32;
     fn geteuid() -> u32;
-    fn umask(mask: u32) -> u32;
     fn chown(path: *const std::os::raw::c_char, uid: u32, gid: u32) -> i32;
 }
 
@@ -188,24 +187,31 @@ fn serve_conn(mut stream: UnixStream, gate: Arc<dyn Gate>, exec: Arc<dyn Exec>, 
 }
 
 /// Binds `path` as a socket owned by root with `mode` (and `gid` as group when given).
+///
+/// The socket is made inside a private staging directory (mode 0700) and renamed into place, so it is never
+/// reachable with the default creation mode. This does not touch the process umask: `umask` is process-wide, and
+/// changing it here raced with other threads creating directories (the tests run in parallel) and made their
+/// directories unsearchable.
 fn bind(path: &Path, mode: u32, gid: Option<u32>) -> io::Result<UnixListener> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent)?;
     let _ = std::fs::remove_file(path);
-    // SAFETY: umask only changes this process's creation mask.
-    let old = unsafe { umask(0o177) };
-    let l = UnixListener::bind(path);
-    unsafe { umask(old) };
-    let l = l?;
+    let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+    let stage = parent.join(format!(".{name}.stage"));
+    let _ = std::fs::remove_dir_all(&stage);
+    std::fs::DirBuilder::new().mode(0o700).create(&stage)?;
+    let staged = stage.join("s");
+    let l = UnixListener::bind(&staged)?;
     if let Some(g) = gid {
-        let c = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).map_err(io::Error::other)?;
+        let c = std::ffi::CString::new(staged.as_os_str().as_encoded_bytes()).map_err(io::Error::other)?;
         // SAFETY: `c` is a valid NUL-terminated path.
         if unsafe { chown(c.as_ptr(), 0, g) } != 0 {
             return Err(io::Error::last_os_error());
         }
     }
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))?;
+    std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(mode))?;
+    std::fs::rename(&staged, path)?;
+    let _ = std::fs::remove_dir(&stage);
     Ok(l)
 }
 
