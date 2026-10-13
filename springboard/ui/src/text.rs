@@ -800,6 +800,8 @@ pub struct TextEditor {
     pub buf: TextBuffer,
     undo: UndoManager<TextBuffer>,
     typing: bool,
+    /// `allowsUndo`: when off, edits are applied but not recorded.
+    allows_undo: bool,
     /// The compose method's state (`compose_method`): the armed apostrophe, the kana being composed and an open list.
     compose: Composer,
 }
@@ -827,10 +829,10 @@ impl compose_method::ComposeTarget for Editing<'_> {
 
 impl TextEditor {
     pub fn new(limit: usize) -> Self {
-        TextEditor { buf: TextBuffer::new(), undo: UndoManager::new(limit), typing: false, compose: Composer::default() }
+        TextEditor { buf: TextBuffer::new(), undo: UndoManager::new(limit), typing: false, allows_undo: true, compose: Composer::default() }
     }
     pub fn with_text(text: &str, limit: usize) -> Self {
-        TextEditor { buf: TextBuffer::from_text(text), undo: UndoManager::new(limit), typing: false, compose: Composer::default() }
+        TextEditor { buf: TextBuffer::from_text(text), undo: UndoManager::new(limit), typing: false, allows_undo: true, compose: Composer::default() }
     }
 
     /// Types `text` the way a typed key is typed: through the compose method, so an apostrophe and a letter with
@@ -881,6 +883,46 @@ impl TextEditor {
     fn drop_composition(&mut self) {
         self.compose = Composer::default();
     }
+    /// `allowsUndo`.
+    pub fn allows_undo(&self) -> bool {
+        self.allows_undo
+    }
+    /// `setAllowsUndo:`. Turning it off drops the history.
+    pub fn set_allows_undo(&mut self, on: bool) {
+        self.allows_undo = on;
+        if !on {
+            self.end_typing();
+            self.undo.clear();
+        }
+    }
+    /// Replaces `range` with `new` as one undo step named `name` (find-bar replace).
+    pub fn replace_range(&mut self, range: Range<usize>, new: &str, name: &str) -> bool {
+        self.end_composition();
+        let e = self.buf.replace_range(range, new);
+        self.record(e, name, Kind::Other)
+    }
+    /// Replaces every range (sorted, disjoint) with `new` as one undo step. Returns how many were replaced.
+    pub fn replace_ranges(&mut self, ranges: &[Range<usize>], new: &str, name: &str) -> usize {
+        self.end_composition();
+        self.end_typing();
+        if self.allows_undo {
+            self.undo.begin_group(name);
+        }
+        let mut n = 0;
+        for r in ranges.iter().rev() {
+            if let Some(e) = self.buf.replace_range(r.clone(), new) {
+                n += 1;
+                if self.allows_undo {
+                    let (a, b) = (e.clone(), e);
+                    self.undo.register(name, move |t| t.revert(&a), move |t| t.reapply(&b));
+                }
+            }
+        }
+        if self.allows_undo {
+            self.undo.end_group();
+        }
+        n
+    }
     pub fn undo_manager(&self) -> &UndoManager<TextBuffer> {
         &self.undo
     }
@@ -894,6 +936,9 @@ impl TextEditor {
 
     fn record(&mut self, edit: Option<Edit>, name: &str, kind: Kind) -> bool {
         let Some(e) = edit else { return false };
+        if !self.allows_undo {
+            return true;
+        }
         match kind {
             Kind::Typing => {
                 if !self.typing {

@@ -13,6 +13,7 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use crate::text::TextEditor;
+use crate::textfind::{Options as FindOptions, TextFinder};
 use crate::textmetrics::{CharTable, FontMetrics, GlyphSource};
 use crate::typeset::{Typesetter, TypesetterOptions};
 
@@ -35,7 +36,16 @@ pub struct TextView {
     scroll_y: f32,
     /// The x (points) that vertical movement tries to keep. Cleared by any move or edit that is not vertical.
     goal_x: Option<f32>,
+    rich_text: bool,
+    uses_find_bar: bool,
+    find_bar_visible: bool,
+    finder: TextFinder,
+    /// The spelling hook (`NSSpellChecker`): the misspelled byte ranges of a text.
+    spell_check: Option<SpellHook>,
 }
+
+/// A spelling check: the misspelled byte ranges of the text it is given.
+pub type SpellHook = Box<dyn Fn(&str) -> Vec<Range<usize>>>;
 
 /// Word wrap of the whole text with the typesetter (line break opportunities, hanging spaces, long words split between
 /// characters). Returns one byte range per visual line, in order. An empty paragraph is an empty line. A line excludes
@@ -109,7 +119,14 @@ pub fn byte_at(text: &str, line: &Range<usize>, x: f32, measure: &dyn Fn(&str) -
 impl TextView {
     /// A view of `text`, wrapped to `width` points, with lines `line_height` points apart and `viewport` points tall.
     pub fn new(text: &str, width: f32, line_height: f32, viewport: f32) -> Self {
-        TextView { editor: TextEditor::with_text(text, UNDO_LEVELS), width, line_height, viewport, scroll_y: 0.0, goal_x: None }
+        TextView { editor: TextEditor::with_text(text, UNDO_LEVELS), width, line_height, viewport, scroll_y: 0.0,
+            goal_x: None,
+            rich_text: false,
+            uses_find_bar: true,
+            find_bar_visible: false,
+            finder: TextFinder::new(FindOptions::default()),
+            spell_check: None,
+        }
     }
 
     pub fn text(&self) -> &str {
@@ -248,6 +265,131 @@ impl TextView {
         let changed = self.editor.perform(crate::text::EditCommand::DeleteBackward, false);
         self.scroll_to_caret(measure);
         changed
+    }
+
+    /// `isRichText`: whether attributes (paragraph styles, lists, attachments) apply. A plain view ignores them.
+    pub fn is_rich_text(&self) -> bool {
+        self.rich_text
+    }
+
+    pub fn set_rich_text(&mut self, on: bool) {
+        self.rich_text = on;
+    }
+
+    /// `allowsUndo`.
+    pub fn allows_undo(&self) -> bool {
+        self.editor.allows_undo()
+    }
+
+    pub fn set_allows_undo(&mut self, on: bool) {
+        self.editor.set_allows_undo(on);
+    }
+
+    /// `usesFindBar`: the find bar (on) or the find panel (off).
+    pub fn uses_find_bar(&self) -> bool {
+        self.uses_find_bar
+    }
+
+    pub fn set_uses_find_bar(&mut self, on: bool) {
+        self.uses_find_bar = on;
+        if !on {
+            self.find_bar_visible = false;
+        }
+    }
+
+    pub fn find_bar_visible(&self) -> bool {
+        self.find_bar_visible
+    }
+
+    /// Shows the find bar (`performFindPanelAction:` with show). False when the view does not use the find bar.
+    pub fn show_find_bar(&mut self) -> bool {
+        if !self.uses_find_bar {
+            return false;
+        }
+        self.find_bar_visible = true;
+        true
+    }
+
+    pub fn hide_find_bar(&mut self) {
+        self.find_bar_visible = false;
+    }
+
+    /// The find bar's model: query, matches, counter.
+    pub fn finder(&self) -> &TextFinder {
+        &self.finder
+    }
+
+    pub fn set_find_options(&mut self, options: FindOptions) {
+        let text = self.editor.buf.text().to_string();
+        self.finder.set_options(&text, options);
+    }
+
+    /// Incremental search: sets the query and selects the first match at or after the start of the selection.
+    pub fn set_find_query(&mut self, query: &str, measure: &dyn Fn(&str) -> f32) -> Option<Range<usize>> {
+        let text = self.editor.buf.text().to_string();
+        self.finder.set_query(&text, query);
+        let from = self.editor.buf.selection().start;
+        let r = self.finder.find_next(from);
+        self.select_found(r, measure)
+    }
+
+    /// Next match after the selection, wrapping at the end.
+    pub fn find_next(&mut self, measure: &dyn Fn(&str) -> f32) -> Option<Range<usize>> {
+        let text = self.editor.buf.text().to_string();
+        self.finder.refresh(&text);
+        let from = self.editor.buf.selection().end;
+        let r = self.finder.find_next(from);
+        self.select_found(r, measure)
+    }
+
+    /// Previous match before the selection, wrapping at the start.
+    pub fn find_previous(&mut self, measure: &dyn Fn(&str) -> f32) -> Option<Range<usize>> {
+        let text = self.editor.buf.text().to_string();
+        self.finder.refresh(&text);
+        let from = self.editor.buf.selection().start;
+        let r = self.finder.find_previous(from);
+        self.select_found(r, measure)
+    }
+
+    fn select_found(&mut self, r: Option<Range<usize>>, measure: &dyn Fn(&str) -> f32) -> Option<Range<usize>> {
+        let r = r?;
+        self.editor.buf.set_selection(r.start, r.end);
+        self.goal_x = None;
+        self.scroll_to_caret(measure);
+        Some(r)
+    }
+
+    /// Replaces the selected match with `with` (one undo step). False when the selection is not the current match.
+    pub fn replace_current(&mut self, with: &str) -> bool {
+        let sel = self.editor.buf.selection();
+        if self.finder.selected() != Some(sel.clone()) {
+            return false;
+        }
+        let done = self.editor.replace_range(sel, with, "Replace");
+        let text = self.editor.buf.text().to_string();
+        self.finder.refresh(&text);
+        done
+    }
+
+    /// Replaces every match with `with` (one undo step). Returns how many were replaced.
+    pub fn replace_all(&mut self, with: &str) -> usize {
+        let text = self.editor.buf.text().to_string();
+        self.finder.refresh(&text);
+        let ranges = self.finder.matches().to_vec();
+        let n = self.editor.replace_ranges(&ranges, with, "Replace All");
+        let text = self.editor.buf.text().to_string();
+        self.finder.refresh(&text);
+        n
+    }
+
+    /// Installs the spelling hook (`NSSpellChecker` integration).
+    pub fn set_spell_checker(&mut self, hook: Option<SpellHook>) {
+        self.spell_check = hook;
+    }
+
+    /// The misspelled ranges of the text, empty without a hook.
+    pub fn misspelled_ranges(&self) -> Vec<Range<usize>> {
+        self.spell_check.as_ref().map(|h| h(self.editor.buf.text())).unwrap_or_default()
     }
 
     /// The selection as highlight pieces, one per visual line the selection touches. A wrap's consumed space is not
