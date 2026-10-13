@@ -30,6 +30,7 @@ const KEY_C: u16 = 46;
 const KEY_V: u16 = 47;
 const KEY_M: u16 = 50;
 const KEY_COMMA: u16 = 51;
+const KEY_F5: u16 = 63;
 const KEY_LEFTSHIFT: u16 = 42;
 const KEY_RIGHTSHIFT: u16 = 54;
 const KEY_LEFTALT: u16 = 56;
@@ -118,6 +119,8 @@ pub enum Shortcut {
     ReaderRotor(bool),
     /// Ctrl+Alt+Space: the screen reader presses the element under its cursor
     ReaderActivate,
+    /// Option+Cmd+F5: switches the features chosen for the Accessibility Shortcut (`accessibility::shortcut`)
+    AccessibilityShortcut,
 }
 
 impl Shortcut {
@@ -130,7 +133,7 @@ impl Shortcut {
             Shortcut::SelectAll => "SelectAll",
             Shortcut::Undo => "Undo",
             Shortcut::Redo => "Redo",
-            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate => return None,
+            Shortcut::Term(_) | Shortcut::QuickSearch | Shortcut::AppSwitch | Shortcut::Back | Shortcut::Home | Shortcut::Close | Shortcut::Minimize | Shortcut::Settings | Shortcut::FullScreen | Shortcut::Tile(_) | Shortcut::CycleWindow | Shortcut::InputSource | Shortcut::ReaderStep(_) | Shortcut::ReaderRotor(_) | Shortcut::ReaderActivate | Shortcut::AccessibilityShortcut => return None,
         }))
     }
 }
@@ -237,6 +240,7 @@ impl HwKeys {
             KEY_LEFT | KEY_RIGHT if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderStep(code == KEY_RIGHT)),
             KEY_UP | KEY_DOWN if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderRotor(code == KEY_DOWN)),
             KEY_SPACE if ctrl && alt && !meta && self.shift == 0 => Some(Shortcut::ReaderActivate),
+            KEY_F5 if meta && alt && !ctrl && self.shift == 0 => Some(Shortcut::AccessibilityShortcut),
             KEY_COMMA if meta && !ctrl && !alt && self.shift == 0 => Some(Shortcut::Settings),
             KEY_C | KEY_X | KEY_V | KEY_A if (ctrl || meta) && !alt && self.shift == 0 => Some(match code {
                 KEY_C => Shortcut::Copy,
@@ -614,6 +618,10 @@ impl Shell {
             Shortcut::ReaderStep(forward) if self.screen_reader_on() => self.reader_step(forward, t),
             Shortcut::ReaderRotor(forward) if self.screen_reader_on() => self.reader_rotor(forward, t),
             Shortcut::ReaderActivate if self.screen_reader_on() => self.reader_activate(t),
+            Shortcut::AccessibilityShortcut => {
+                self.accessibility_shortcut();
+                vec![]
+            }
             Shortcut::FullScreen if self.desk_active() && !self.is_locked() => {
                 if let Some(i) = self.desk.as_ref().and_then(|d| d.front().and_then(|w| d.index_of(w.app))) {
                     self.desk_zoom_window(i);
@@ -750,6 +758,7 @@ mod tests {
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_DOWN), Some(Shortcut::ReaderRotor(true)));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_UP), Some(Shortcut::ReaderRotor(false)));
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL, KEY_LEFTALT], KEY_SPACE), Some(Shortcut::ReaderActivate));
+        assert_eq!(chord(&mut k, &[KEY_LEFTMETA, KEY_LEFTALT], KEY_F5), Some(Shortcut::AccessibilityShortcut), "Option+Cmd+F5");
         assert_eq!(chord(&mut k, &[KEY_LEFTCTRL], KEY_SPACE), Some(Shortcut::InputSource));
         assert_eq!(chord(&mut k, &[KEY_LEFTALT], KEY_RIGHT), None, "Alt alone is not the cursor");
     }

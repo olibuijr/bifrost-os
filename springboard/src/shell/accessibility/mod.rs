@@ -14,6 +14,8 @@ use super::prefs::Prefs;
 pub mod actions;
 pub mod banner;
 pub mod reader;
+pub mod shortcut;
+pub mod speech;
 pub mod tree;
 pub mod walk;
 

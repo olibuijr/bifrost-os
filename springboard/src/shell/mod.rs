@@ -620,6 +620,8 @@ pub struct Shell {
     low_monitor: low_battery::Monitor,
     /// the announcement banner: the text apps post with `announce`, shown at the top of the screen for a few seconds
     announce: accessibility::banner::Banner,
+    /// the speech engine that speaks the announcements while the screen reader is on (`accessibility::speech`)
+    speech: accessibility::speech::Speaker,
     /// the screen reader's cursor over the front Settings page (`accessibility::reader`)
     reader: accessibility::reader::Reader,
     battery_checked: f64,
@@ -866,6 +868,7 @@ impl Shell {
             permission_sheet: None,
             low_monitor: low_battery::Monitor::default(),
             announce: Default::default(),
+            speech: accessibility::speech::Speaker::detect(),
             reader: Default::default(),
             battery_checked: f64::NEG_INFINITY,
             dirty: true,

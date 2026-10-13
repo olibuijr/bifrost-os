@@ -38,16 +38,19 @@ impl Banner {
         self.queue.post(text, politeness)
     }
 
-    /// Takes the next announcement once the one on screen has been up for `SHOW_MS`.
-    pub fn tick(&mut self, t: f64) {
+    /// Takes the next announcement once the one on screen has been up for `SHOW_MS`. Returns true when a new text
+    /// came on screen this tick (the screen reader speaks it then).
+    pub fn tick(&mut self, t: f64) -> bool {
         if self.current.as_ref().is_some_and(|(_, until)| t >= *until) {
             self.current = None;
         }
         if self.current.is_none() {
             if let Some(a) = self.queue.take_next() {
                 self.current = Some((a.text, t + SHOW_MS));
+                return true;
             }
         }
+        false
     }
 
     /// The text on screen now.
@@ -69,7 +72,17 @@ impl Shell {
                 self.announce.post(&text, priority);
             }
         }
-        self.announce.tick(t);
+        let started = self.announce.tick(t);
+        // Spoken only while the screen reader is on; the engine is silent when none is installed.
+        if self.screen_reader_on() {
+            if started {
+                if let Some(text) = self.announce.shown().map(str::to_string) {
+                    self.speech.say(&text);
+                }
+            }
+        } else {
+            self.speech.stop();
+        }
     }
 
     /// Whether the frame must repaint everything under the banner.
