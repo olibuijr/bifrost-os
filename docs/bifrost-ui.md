@@ -2316,3 +2316,22 @@ Honest limits: no GPS hardware and no Wi-Fi positioning. A fix is a manual locat
 (`location.manual.*`, 100 m) or an IP lookup that is off by default (`location.ip.enabled`, `location.ip.endpoint`, about
 25 km); altitude is always absent; reverse geocoding knows only those places within 50 km, not a worldwide gazetteer;
 no heading, regions or background updates. Host-tested only; the rows stay partial until checked on Midget.
+
+## Core Image: distortion, stylize, halftone, tile and the filter catalogue (`bifrost_render`)
+
+CPU filters on `gfx::Image` (premultiplied RGBA in a `u32`), host-tested, not yet verified on Midget, so the
+`core-image.json` rows stay `partial`. Parameter names follow the reference input keys.
+
+- `distortion_filters`: `twirl`, `vortex`, `pinch`, `bump` (center, radius, angle or scale) and `glass`
+  (texture-slope displacement). Backwards warp with bilinear sampling; zero strength is the identity.
+- `stylize_filters`: `unsharp_mask`, `sharpen_luminance`, `bloom`, `gloom`, `pixellate`, `crystallize`,
+  `pointillize`.
+- `halftone_tile_filters`: `screen` (`Screen::Dot|Line|Circular|Hatched`, `ScreenParams` center, angle, width,
+  sharpness), `cmyk_halftone`, `affine_tile`, `op_tile`, `kaleidoscope`.
+- `filter_catalogue`: `filter_names(category)`, `attributes(name)`, `default_value(name, key)` for every
+  filter built, with the `CICategory...` constants.
+
+Decision and gaps: `CIDetector` stays a gap (the only QR decoder is in the shell crate, no face, rectangle or
+text detection exists). `CIRenderDestination` and depth effects stay gaps (need the CIImage/CIContext model).
+Perspective and triangle tiles, displacement, circle splash and torus lens are not built. Falloffs are linear
+in the distance from the centre, which may differ from the reference curve; check on Midget before promoting.

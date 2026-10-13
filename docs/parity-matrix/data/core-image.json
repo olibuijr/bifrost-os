@@ -82,7 +82,7 @@
       "apple": "CIDetector, CIFaceFeature, CIRectangleFeature, CITextFeature, CIQRCodeFeature, CIQRCodeDescriptor and the other barcode descriptors",
       "bifrost": "springboard/ui/src/detect.rs (data detectors for text, not image detection)",
       "status": "gap",
-      "note": "No face, rectangle, text or barcode detection on images. The data detector works on text only"
+      "note": "No face, rectangle, text or barcode detection on images. The data detector works on text only Sprint 3: left gap. The only QR decoder is springboard/src/shell/camera/qr.rs (shell crate, not reachable from render); no face, rectangle or text detection exists."
     },
     {
       "feature": "Generators and gradients (checkerboard, stripes, linear and radial gradient, QR and barcode generators)",
@@ -96,42 +96,42 @@
       "apple": "CIRenderDestination, CIRenderTask, CIRenderInfo, CIImageAccumulator",
       "bifrost": "springboard/src/gpu/mod.rs (presenter for shell frames)",
       "status": "gap",
-      "note": "Frames reach the screen through the shell presenter. No app API for rendering filtered frames to a destination"
+      "note": "Frames reach the screen through the shell presenter. No app API for rendering filtered frames to a destination Sprint 3: left gap; needs the CIImage/CIContext model (lazy_image.rs) wired to a destination, not CPU filter math."
     },
     {
       "feature": "Distortion effects (twirl, pinch, bump, vortex, glass distortion, displacement, circle splash, torus lens)",
       "apple": "CITwirlDistortion, CIPinchDistortion, CIBumpDistortion, CIVortexDistortion, CIGlassDistortion, CIDisplacementDistortion, CICircleSplashDistortion, CITorusLensDistortion, CIHoleDistortion, CILightTunnel",
-      "bifrost": "springboard/render/src/kernel.rs (custom kernel model only; no built-in distortion filters)",
-      "status": "gap",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+      "bifrost": "springboard/render/src/distortion_filters.rs",
+      "status": "partial",
+      "note": "CPU twirl, vortex, pinch, bump and glass distortion built with host unit tests (sprint 3); displacement, circle splash and torus lens are still missing. Not yet tested on Midget."
     },
     {
       "feature": "Sharpen filters (sharpen luminance, unsharp mask)",
       "apple": "CISharpenLuminance, CIUnsharpMask",
-      "bifrost": "springboard/render/src/filter.rs (convolution; no sharpen filter)",
-      "status": "gap",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+      "bifrost": "springboard/render/src/stylize_filters.rs",
+      "status": "partial",
+      "note": "CPU sharpen luminance and unsharp mask built with host unit tests; not yet tested on Midget."
     },
     {
       "feature": "Stylize filters (bloom, gloom, crystallize, pixellate, pointillize, edges, comic, highlight and shadow, spot light, depth of field)",
       "apple": "CIBloom, CIGloom, CICrystallize, CIPixellate, CIPointillize, CIEdges, CIEdgeWork, CIComicEffect, CIHighlightShadowAdjust, CISpotLight, CIDepthOfField, CILineOverlay",
-      "bifrost": "springboard/render/src/colorfx.rs (colour effects only)",
-      "status": "gap",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+      "bifrost": "springboard/render/src/stylize_filters.rs",
+      "status": "partial",
+      "note": "CPU bloom, gloom, crystallize, pixellate and pointillize built with host unit tests; edges, comic, highlight and shadow, spot light and depth of field are still missing. Not yet tested on Midget."
     },
     {
       "feature": "Halftone effects (dot, line, circular and hatched screens, CMYK halftone)",
       "apple": "CIDotScreen, CILineScreen, CICircularScreen, CIHatchedScreen, CICMYKHalftone",
-      "bifrost": "springboard/render/src/bayer.rs (ordered dithering, not halftone screens)",
-      "status": "gap",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+      "bifrost": "springboard/render/src/halftone_tile_filters.rs",
+      "status": "partial",
+      "note": "CPU dot, line, circular and hatched screens and CMYK halftone built with host unit tests; not yet tested on Midget."
     },
     {
       "feature": "Tile effects (kaleidoscope, op tile, affine, perspective, triangle and parallelogram tiles)",
       "apple": "CIKaleidoscope, CIOpTile, CIAffineTile, CIPerspectiveTile, CITriangleTile, CIParallelogramTile, CIFourfoldReflectedTile, CISixfoldRotatedTile",
-      "bifrost": "springboard/render/src/pattern.rs (pattern fills, no tile filters)",
-      "status": "gap",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+      "bifrost": "springboard/render/src/halftone_tile_filters.rs",
+      "status": "partial",
+      "note": "CPU kaleidoscope, op tile and affine tile built with host unit tests; perspective, triangle and parallelogram tiles are still missing. Not yet tested on Midget."
     },
     {
       "feature": "Transition filters (dissolve, swipe, bars swipe, copy machine, flash, mod, page curl, ripple, accordion fold)",
@@ -164,9 +164,9 @@
     {
       "feature": "Built-in filter catalogue (every filter by name, category and input keys)",
       "apple": "CIFilter.filterNames(inCategory:), CIFilter.attributes, CIFilterBuiltins",
-      "bifrost": "springboard/render/src/effect_chain.rs (a few named effects); springboard/gfx2d/src/shapes.rs (GPU shapes, no filter catalogue)",
-      "status": "gap",
-      "note": "Per-shader inventory pending: the full list comes from macOS 27 Golden Gate 26A434 (InstallAssistant.pkg, extraction in docs/macos-os-inventory.md)."
+      "bifrost": "springboard/render/src/filter_catalogue.rs",
+      "status": "partial",
+      "note": "Registry of the 28 built filters by reference name with category and input keys, filter_names(category) and attributes. Covers only filters that exist; not wired to a CIFilter object. Not yet tested on Midget."
     }
   ],
   "gaps": [
