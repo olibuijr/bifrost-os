@@ -272,9 +272,10 @@ mod tests {
 
     #[test]
     fn the_footer_button_is_get_started_on_the_last_screen() {
-        let last = window(Step::Done).items();
-        assert_eq!(last.last().map(|i| i.label.as_str()), Some("Get Started"));
-        assert_eq!(window(Step::Cloud).items().last().map(|i| i.label.as_str()), Some("Continue"));
+        // the footer button is the Next item; option chips (such as Cloud's Sign In / Later) come after it in the list
+        let footer = |step| window(step).items().into_iter().find(|i| i.act == Act::Next).map(|i| i.label);
+        assert_eq!(footer(Step::Done).as_deref(), Some("Get Started"));
+        assert_eq!(footer(Step::Cloud).as_deref(), Some("Continue"));
     }
 
     #[test]
