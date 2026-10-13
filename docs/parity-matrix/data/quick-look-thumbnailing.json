@@ -24,14 +24,14 @@
     {
       "feature": "Thumbnail representation types (icon, low quality, thumbnail)",
       "apple": "QLThumbnailRepresentation, QLThumbnailRepresentationType",
-      "bifrost": "springboard/ui/src/preview.rs (Representation), springboard/ui/src/thumbnail.rs (Progressive), springboard/src/shell/services/thumb_providers.rs (RepresentationType, tiers)",
+      "bifrost": "springboard/ui/src/preview.rs (Representation), springboard/sdk/src/thumbnails.rs (Progressive), springboard/src/shell/services/thumb_providers.rs (RepresentationType, tiers)",
       "status": "partial",
       "note": "RepresentationType (icon, lowQualityThumbnail, thumbnail) and tiers() limit what a request produces; not yet read from the service request or drawn per tier. Needs a Midget check."
     },
     {
       "feature": "Progressive or updated thumbnails",
       "apple": "QLThumbnailGenerator update handler, generateThumbnail(for:completionHandler:)",
-      "bifrost": "springboard/ui/src/thumbnail.rs (Progressive)",
+      "bifrost": "springboard/sdk/src/thumbnails.rs (Progressive)",
       "status": "partial",
       "note": "Wave 2 (theme-35, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Single synchronous result per call. docs/bifrost-ui.md states the same gap."
     },
@@ -45,7 +45,7 @@
     {
       "feature": "Custom file type thumbnail extension (QLThumbnailProvider)",
       "apple": "QLThumbnailProvider, QLFileThumbnailRequest, QLThumbnailReply",
-      "bifrost": "springboard/ui/src/thumbnail.rs (FileThumbnailRequest, springboard/sdk/src/peek.rs",
+      "bifrost": "springboard/sdk/src/thumbnails.rs (FileThumbnailRequest, springboard/sdk/src/peek.rs",
       "status": "partial",
       "note": "Wave 2 (theme-35, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No extension point lets an app register a thumbnail generator for another app's file type, and the system does not ask apps for thumbnails of their files."
     },
@@ -66,7 +66,7 @@
     {
       "feature": "Error reporting for thumbnail generation",
       "apple": "QLThumbnailError, QLThumbnailError.Code, QLThumbnailErrorDomain",
-      "bifrost": "springboard/ui/src/thumbnail.rs (ThumbnailError)",
+      "bifrost": "springboard/sdk/src/thumbnails.rs (ThumbnailError)",
       "status": "partial",
       "note": "Wave 2 (theme-35, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. A failed render returns None. No error domain or codes."
     }
