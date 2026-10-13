@@ -23,6 +23,7 @@ pub mod fontfallback;
 pub mod fontinfo;
 pub mod fontobj;
 pub mod kern;
+pub mod shape_ot;
 pub mod filter;
 pub mod integral;
 pub mod mesh;

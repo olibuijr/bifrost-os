@@ -5,6 +5,15 @@
 use crate::cff::{Cff, Sink};
 use crate::gfx::{pack, scale, Image};
 use crate::gvar::{self, Axis, Gvar};
+use crate::shape_ot::{self, Features, OtLayout, ShapeOptions};
+
+/// One glyph placed by the shaper: advance and offsets in font units (offset y is up).
+struct PlacedGlyph {
+    gid: u16,
+    advance: f32,
+    dx: f32,
+    dy: f32,
+}
 
 /// A variation setting: axis tag and value in user units, e.g. (b"wght", 590).
 pub type Var = ([u8; 4], f32);
@@ -34,6 +43,7 @@ pub struct Font<'a> {
     underline_position: f32,
     underline_thickness: f32,
     cache: GlyphCache,
+    ot: std::sync::OnceLock<crate::shape_ot::OtLayout<'a>>,
 }
 
 /// Vertical metrics of a font at one size, in px (`NativeFontMetrics`). Descent is positive, as the platform
@@ -169,6 +179,7 @@ impl<'a> Font<'a> {
             ascent: i16_at(data, hhea + 4)? as f32,
             descent: i16_at(data, hhea + 6)? as f32,
             cache: GlyphCache::new(0, CACHE_BYTES),
+            ot: std::sync::OnceLock::new(),
         })
     }
 
@@ -668,23 +679,44 @@ impl Font<'_> {
         self.measure_var(text, px, &[])
     }
 
-    /// Width in px at a variation instance.
+    /// Width in px at a variation instance, shaped with the default features (kerning, ligatures).
     pub fn measure_var(&self, text: &str, px: f32, vars: &[Var]) -> f32 {
+        self.measure_feat(text, px, vars, &Features::new())
+    }
+
+    /// Width in px with user feature settings.
+    pub fn measure_feat(&self, text: &str, px: f32, vars: &[Var], features: &Features) -> f32 {
         let segs = self.emoji_segments(text);
         if segs.iter().any(|s| s.1) {
-            return segs.iter().map(|&(t, e)| if e { emoji_advance(px) } else { self.measure_var(t, px, vars) }).sum();
+            return segs.iter().map(|&(t, e)| if e { emoji_advance(px) } else { self.measure_feat(t, px, vars, features) }).sum();
         }
         if let Some((faces, runs)) = crate::fontfallback::runs(self, text) {
             return runs.iter().map(|&(f, t)| f.map_or_else(|| self.measure_plain(t, px, vars), |i| faces[i].measure_plain(t, px, vars))).sum();
         }
-        self.measure_plain(text, px, vars)
+        self.measure_shaped(text, px, vars, features)
     }
 
     /// Width with no emoji or fallback handling: every character takes this face's own glyph.
     pub(crate) fn measure_plain(&self, text: &str, px: f32, vars: &[Var]) -> f32 {
+        self.measure_shaped(text, px, vars, &Features::new())
+    }
+
+    fn measure_shaped(&self, text: &str, px: f32, vars: &[Var], features: &Features) -> f32 {
         let norm = self.normalized(vars);
         let k = px / self.upem;
-        text.chars().map(|c| self.advance_at(self.glyph(c), &norm) * k).sum()
+        self.shaped(text, &norm, features).iter().map(|g| g.advance * k).sum()
+    }
+
+    /// The glyph ids with advances (font units) and offsets for `text`: shaped when the font has layout tables,
+    /// one glyph per character otherwise.
+    fn shaped(&self, text: &str, norm: &[f32], features: &Features) -> Vec<PlacedGlyph> {
+        let layout = self.ot.get_or_init(|| OtLayout::from_sfnt(self.data));
+        if layout.is_trivial() {
+            return text.chars().map(|c| { let gid = self.glyph(c); PlacedGlyph { gid, advance: self.advance_at(gid, norm), dx: 0.0, dy: 0.0 } }).collect();
+        }
+        let opts = ShapeOptions { script: shape_ot::detect_script(text), language: None, features, coords: norm };
+        let out = layout.shape_text(text, &|c| self.glyph(c), &|g| self.advance_at(g, norm).round() as i32, &opts);
+        out.iter().map(|g| PlacedGlyph { gid: g.gid, advance: g.x_advance as f32, dx: g.x_offset as f32, dy: g.y_offset as f32 }).collect()
     }
 
     /// Runs of `text`, emoji clusters (drawn from the color emoji font) flagged true.
@@ -761,8 +793,13 @@ impl Font<'_> {
         self.render_var(text, st, &[])
     }
 
-    /// Renders at a variation instance, e.g. `&[(*b"wght", 590.0), (*b"opsz", 17.0)]`.
+    /// Renders at a variation instance, e.g. `&[(*b"wght", 590.0), (*b"opsz", 17.0)]`, with default features.
     pub fn render_var(&self, text: &str, st: &Style, vars: &[Var]) -> Image {
+        self.render_feat(text, st, vars, &Features::new())
+    }
+
+    /// Renders with user feature settings.
+    pub fn render_feat(&self, text: &str, st: &Style, vars: &[Var], features: &Features) -> Image {
         let segs = self.emoji_segments(text);
         if segs.iter().any(|s| s.1) {
             return self.render_mixed(&segs, st, vars);
@@ -770,13 +807,18 @@ impl Font<'_> {
         if let Some((faces, runs)) = crate::fontfallback::runs(self, text) {
             return self.render_fallback(&faces, &runs, st, vars);
         }
-        self.render_plain(text, st, vars)
+        self.render_shaped(text, st, vars, features)
     }
 
-    /// Renders with this face's own glyphs only (no emoji or fallback handling).
+    /// Renders with this face's own glyphs only (no emoji or fallback handling), default features.
     pub(crate) fn render_plain(&self, text: &str, st: &Style, vars: &[Var]) -> Image {
-        let gids: Vec<u16> = text.chars().map(|c| self.glyph(c)).collect();
-        self.render_glyphs(&gids, st, &self.normalized(vars))
+        self.render_shaped(text, st, vars, &Features::new())
+    }
+
+    fn render_shaped(&self, text: &str, st: &Style, vars: &[Var], features: &Features) -> Image {
+        let norm = self.normalized(vars);
+        let placed = self.shaped(text, &norm, features);
+        self.render_placed(&placed, st, &norm, true)
     }
 
     /// Text whose runs come from different faces, laid on one baseline.
@@ -830,16 +872,24 @@ impl Font<'_> {
     /// `cached`: compose glyph masks (subpixel positions quantized to 1/16 px);
     /// otherwise rasterize the whole string exactly (reference path).
     fn render_with(&self, gids: &[u16], st: &Style, norm: &[f32], cached: bool) -> Image {
+        let placed: Vec<PlacedGlyph> = gids.iter().map(|&gid| PlacedGlyph { gid, advance: self.advance_at(gid, norm), dx: 0.0, dy: 0.0 }).collect();
+        self.render_placed(&placed, st, norm, cached)
+    }
+
+    fn render_placed(&self, placed: &[PlacedGlyph], st: &Style, norm: &[f32], cached: bool) -> Image {
         let k = st.px / self.upem;
         let pad = 2 + st.embolden.ceil() as usize + if st.shadow { (st.px / 8.0).ceil() as usize } else { 0 };
-        let advances: Vec<f32> = gids.iter().map(|&g| self.advance_at(g, norm) * k).collect();
+        let gids: Vec<u16> = placed.iter().map(|g| g.gid).collect();
+        let gids = &gids[..];
+        let advances: Vec<f32> = placed.iter().map(|g| g.advance * k).collect();
+        let offs: Vec<(f32, f32)> = placed.iter().map(|g| (g.dx * k, g.dy * k)).collect();
         let w = advances.iter().sum::<f32>().ceil() as usize + 2 * pad;
         let h = ((self.ascent - self.descent) * k).ceil() as usize + 2 * pad;
         let baseline = pad as f32 + self.ascent * k;
         let mut cov = if cached {
-            self.compose(gids, &advances, st.px, pad as f32, baseline, w, h, norm)
+            self.compose(gids, &advances, &offs, st.px, pad as f32, baseline, w, h, norm)
         } else {
-            self.raster_string(gids, &advances, k, pad as f32, baseline, w, h, norm)
+            self.raster_string(gids, &advances, &offs, k, pad as f32, baseline, w, h, norm)
         };
         let bold = st.embolden.round() as usize;
         if bold > 0 {
@@ -866,11 +916,12 @@ impl Font<'_> {
         img
     }
 
-    fn raster_string(&self, gids: &[u16], advances: &[f32], k: f32, pad: f32, baseline: f32, w: usize, h: usize, norm: &[f32]) -> Vec<u8> {
+    fn raster_string(&self, gids: &[u16], advances: &[f32], offs: &[(f32, f32)], k: f32, pad: f32, baseline: f32, w: usize, h: usize, norm: &[f32]) -> Vec<u8> {
         let mut lines = Vec::new();
         let mut pen = pad;
-        for (&gid, adv) in gids.iter().zip(advances) {
-            let m = Affine([k, 0.0, 0.0, -k, pen, baseline]);
+        for (n, (&gid, adv)) in gids.iter().zip(advances).enumerate() {
+            let (ox, oy) = offs.get(n).copied().unwrap_or((0.0, 0.0));
+            let m = Affine([k, 0.0, 0.0, -k, pen + ox, baseline - oy]);
             self.outline(gid, m, &mut lines, 0, norm);
             pen += adv;
         }
@@ -920,7 +971,7 @@ impl Font<'_> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn compose(&self, gids: &[u16], advances: &[f32], px: f32, pad: f32, baseline: f32, w: usize, h: usize, norm: &[f32]) -> Vec<u8> {
+    fn compose(&self, gids: &[u16], advances: &[f32], offs: &[(f32, f32)], px: f32, pad: f32, baseline: f32, w: usize, h: usize, norm: &[f32]) -> Vec<u8> {
         let split = |v: f32| {
             let mut i = v.floor();
             let mut q = ((v - i) * SUBPIXEL).round();
@@ -930,11 +981,12 @@ impl Font<'_> {
             }
             (i as i32, q as u8)
         };
-        let (by, qy) = split(baseline);
         let mut cov = vec![0u8; w * h];
         let mut pen = pad;
-        for (&gid, adv) in gids.iter().zip(advances) {
-            let (bx, qx) = split(pen);
+        for (n, (&gid, adv)) in gids.iter().zip(advances).enumerate() {
+            let (ox, oy) = offs.get(n).copied().unwrap_or((0.0, 0.0));
+            let (bx, qx) = split(pen + ox);
+            let (by, qy) = split(baseline - oy);
             pen += adv;
             let m = self.cached_mask(gid, px, qx, qy, norm);
             for row in 0..m.h {
