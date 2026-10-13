@@ -2066,3 +2066,28 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## Text view and TextKit 2 layout (AppKit Text, `bifrost-ui`)
+
+Pure models with host tests (`springboard/ui/tests/text_view.rs`). Nothing is drawn by a shell widget yet, and none of it is
+checked on Midget, so the `appkit-text` rows stay `partial`.
+
+| Apple | BifrOSt (`bifrost_ui::...`) | Notes |
+|---|---|---|
+| `NSTextContentStorage` | `text_layout_manager::TextContentStorage` | Text plus a paragraph style and optional list item per paragraph (attribute runs, so they shift with edits) and attachments at `U+FFFC` characters. `set_paragraph_attrs`, `paragraphs`, `list_markers`, `insert_attachment`. The last empty paragraph cannot hold attributes. |
+| `NSTextLayoutManager`, `NSTextLayoutFragment`, `NSTextLineFragment` | `TextLayoutManager`, `TextLayoutFragment`, `TextLineFragment` | `ensure_layout` caches per paragraph; `relaid_paragraphs` lists what an edit laid out again. `x_of`, `offset_at_x`, `offset_at_point` for carets and hit tests. |
+| `NSTextContainer` | `textlayout::TextContainer` | Width and `line_fragment_padding` drive the wrap; exclusion paths are not applied by the layout manager yet. |
+| `NSParagraphStyle` | `paragraph::ParagraphStyle` | Honoured by layout: alignment, `first_line_head_indent`, `head_indent`, `tail_indent`, `line_spacing`, `paragraph_spacing(_before)`, line height multiple and limits, `tab_stops` (left-aligned only, default interval past the last stop), `line_break_mode` (word and character wrap; clip and truncation modes keep one line). Justification and base direction are not laid out. |
+| `NSTextList` | `textlist::List`, `text_layout_manager::ListItem` | Markers renumber on edit, restart after a plain paragraph, nest by level. |
+| `NSTextTable`, `NSTextTableBlock` | `text_table::TextTable`, `TextTableBlock` | Absolute, percentage and auto columns, row and column spans, padding; the caller supplies each cell's content height. Borders and cell backgrounds are not modelled. |
+| `NSTextAttachment` | `text_attachment::TextAttachment` | Glyph size from `bounds` or the image, shrunk to the container width; the line grows to the tallest attachment. |
+| `NSTextSelection`, `NSTextSelectionNavigation` | `TextSelection::moved` with `Direction` and `Granularity` | Character, word, line (visual) and paragraph; up and down keep the x position (`goal_x`); at the first or last line a vertical move goes to the text edge. |
+| `NSTextView` | `textview::TextView` | Adds `is_rich_text`, `allows_undo`, `uses_find_bar`, `show_find_bar`, `set_find_query` (incremental), `find_next`, `find_previous`, `replace_current`, `replace_all` (one undo step), `set_spell_checker` and `misspelled_ranges`. |
+| `NSTextFinder` | `textfind::TextFinder` | Case and whole-word options; wraps in both directions. No regular expressions. |
+| `NSSpellChecker` | `textview::SpellHook` | A closure returning misspelled ranges; the shell's `text` service is the intended provider. |
+
+Typing coalesces into one undo step (`TextEditor`); a newline or a caret move ends the step. `TextEditor::set_allows_undo(false)`
+applies edits without recording them, `replace_range` and `replace_ranges` record find-bar replacements.
+
+Open: draw the view in the SDK (caret, selection, find bar, list markers, attachments), exclusion paths in the layout manager,
+right and centre tab stops, justification, bidirectional text, carry paragraph styles in `bifrost_app::attributed`, and Midget checks.

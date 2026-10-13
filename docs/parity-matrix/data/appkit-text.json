@@ -12,7 +12,7 @@
       "apple": "NSAttributedString, NSTextView rich mode",
       "bifrost": "springboard/sdk/src/attributed.rs (AttributedString, RichTextView, RTF and HTML)",
       "status": "partial",
-      "note": "bold, italic, size class, colour token, underline, strikethrough, link only; no paragraph styles, text attachments, lists or tables"
+      "note": "bold, italic, size class, colour token, underline, strikethrough, link only; no paragraph styles, text attachments, lists or tables; the ui layer now has paragraph styles, lists and attachments per paragraph (text_layout_manager.rs), not yet carried by bifrost_app::attributed"
     },
     {
       "feature": "Text Display: single-line text field and editing model",
@@ -24,9 +24,9 @@
     {
       "feature": "Text Display: multi-line text view widget",
       "apple": "NSTextView, NSScrollView text container",
-      "bifrost": "springboard/ui/src/textview.rs; wired: springboard/apps/voicememos-desktop/src/voicememos.rs (notes card: draw_notes, notes_key, notes_place) on bifrost_app::controls::textview::TextView; sidecar in src/store.rs",
+      "bifrost": "springboard/ui/src/textview.rs; wired: springboard/apps/voicememos-desktop/src/voicememos.rs (notes card: draw_notes, notes_key, notes_place) on bifrost_app::controls::textview::TextView; sidecar in src/store.rs; springboard/ui/src/text_layout_manager.rs (layout, selection navigation)",
       "status": "partial",
-      "note": "Wave 6 (b14, main): pure model with host unit tests; not wired into apps or the shell, not yet tested on Midget. docs/bifrost-ui.md states there is no multi-line text_view widget in the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "TextView adds isRichText, allowsUndo, usesFindBar, incremental find, next, previous, replace and replace all (one undo step), and a spelling hook; typing coalesces into one undo step. Host unit and integration tests (springboard/ui/tests/text_view.rs); not yet drawn by a shell widget or checked on Midget, so the row stays partial."
     },
     {
       "feature": "Text Display: spell checking",
@@ -52,16 +52,16 @@
     {
       "feature": "TextKit: storage, layout manager, containers",
       "apple": "NSTextStorage, NSLayoutManager, NSTextContainer, NSTextLayoutManager",
-      "bifrost": "springboard/ui/src/textlayout.rs",
+      "bifrost": "springboard/ui/src/textlayout.rs; springboard/ui/src/text_layout_manager.rs (TextContentStorage, TextLayoutManager, TextLayoutFragment, TextLineFragment)",
       "status": "partial",
-      "note": "Wave 5 (theme-03, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no glyph-level layout API for apps; layout is per widget"
+      "note": "Content storage with per-paragraph attributes, a layout manager with per-paragraph cached fragments (an edit lays out only the touched paragraphs), wrapping at the container width with head, tail and first-line indents, alignment, line and paragraph spacing, line height limits, tab stops (left only) and line break modes. Host unit and integration tests (springboard/ui/tests/text_view.rs); not yet drawn by a shell widget or checked on Midget, so the row stays partial."
     },
     {
       "feature": "TextKit: custom layout, text attachments, text lists, find bar",
       "apple": "NSTextAttachment, NSTextList, NSTextFinder",
-      "bifrost": "springboard/ui/src/textfind.rs, springboard/ui/src/textlist.rs; wired: springboard/apps/notes-desktop/src/notes/mod.rs (start_replacing, replace_one, replace_all, draw_replacing); springboard/apps/notes-desktop/src/notes/parity.rs (find_ranges, replace_ranges)",
+      "bifrost": "springboard/ui/src/textfind.rs, springboard/ui/src/textlist.rs; wired: springboard/apps/notes-desktop/src/notes/mod.rs (start_replacing, replace_one, replace_all, draw_replacing); springboard/apps/notes-desktop/src/notes/parity.rs (find_ranges, replace_ranges); springboard/ui/src/text_attachment.rs, text_table.rs, textlist.rs (renumbering), textfind.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "Text attachments size their glyph run (fitted to the container), numbered and bullet lists renumber on edit with nesting, text tables lay out cells with column spans and row spans, selection navigation by character, word, line and paragraph with a goal x, find bar model with case and whole word options. Right and centre tab stops lay out as left stops; no hyphenation, no multiple selections, no text table borders drawn. Host unit and integration tests (springboard/ui/tests/text_view.rs); not yet drawn by a shell widget or checked on Midget, so the row stays partial."
     },
     {
       "feature": "Fonts: font panel",
@@ -93,11 +93,11 @@
     }
   ],
   "gaps": [
-    "Multi-line text view widget (NSTextView)",
-    "TextKit layout manager and text containers",
-    "Paragraph styles, text lists, tables and attachments in attributed text",
+    "Multi-line text view widget (NSTextView) (model, find bar and layout exist; no shell widget draws them yet)",
+    "TextKit layout manager and text containers (layout manager exists on the ui layer; no glyph generation, no custom fragment providers)",
+    "Paragraph styles, text lists, tables and attachments in attributed text (modelled in bifrost-ui; attributed strings in the SDK do not carry them yet)",
     "Writing Tools integration for text views",
-    "Text finder (find bar)",
+    "Text finder (find bar) (find bar model and view wiring exist; no drawn find bar, no regex)",
     "Font descriptors and font collections"
   ]
 }
