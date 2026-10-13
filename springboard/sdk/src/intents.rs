@@ -34,6 +34,12 @@ pub enum ParamType {
     Double,
     /// `Currencies`: an object `{"amount": <finite number>, "code": "<ISO 4217 code, three capitals>"}`
     Currency,
+    /// `Placemarks`: an object `{"latitude": degrees, "longitude": degrees, "name": text?}`
+    Placemark,
+    /// `Measurements`: an object `{"value": <finite number>, "unit": text}`; the unit is free text such as `km`
+    Measurement,
+    /// `IntentFile`: an object `{"path": text}` that names a file the app opens itself
+    File,
 }
 
 impl ParamType {
@@ -49,6 +55,9 @@ impl ParamType {
             ParamType::Enum(cases) => format!("enum({})", cases.join("|")),
             ParamType::Double => "double".into(),
             ParamType::Currency => "currency".into(),
+            ParamType::Placemark => "placemark".into(),
+            ParamType::Measurement => "measurement".into(),
+            ParamType::File => "file".into(),
         }
     }
     pub fn parse(s: &str) -> Option<ParamType> {
@@ -60,6 +69,9 @@ impl ParamType {
             "url" => ParamType::Url,
             "double" => ParamType::Double,
             "currency" => ParamType::Currency,
+            "placemark" => ParamType::Placemark,
+            "measurement" => ParamType::Measurement,
+            "file" => ParamType::File,
             t if t.starts_with("enum(") => {
                 let inner = t.strip_prefix("enum(")?.strip_suffix(')')?;
                 let cases: Vec<String> = inner.split('|').map(|c| c.trim().to_string()).collect();
@@ -93,6 +105,18 @@ impl ParamType {
             (ParamType::Currency, Json::Obj(_)) => {
                 v.get("amount").and_then(|a| a.number()).is_some_and(f64::is_finite) && v.get("code").and_then(|c| c.as_str()).is_some_and(is_currency_code)
             }
+            (ParamType::Placemark, Json::Obj(_)) => {
+                let degrees = |k: &str, max: f64| v.get(k).and_then(|c| c.number()).is_some_and(|c| c.abs() <= max);
+                let name_ok = match v.get("name") {
+                    None | Some(Json::Null) => true,
+                    Some(n) => n.as_str().is_some(),
+                };
+                degrees("latitude", 90.0) && degrees("longitude", 180.0) && name_ok
+            }
+            (ParamType::Measurement, Json::Obj(_)) => {
+                v.get("value").and_then(|a| a.number()).is_some_and(f64::is_finite) && v.get("unit").and_then(|u| u.as_str()).is_some_and(|u| !u.trim().is_empty())
+            }
+            (ParamType::File, Json::Obj(_)) => v.get("path").and_then(|p| p.as_str()).is_some_and(|p| !p.is_empty()),
             _ => false,
         }
     }
@@ -685,6 +709,31 @@ mod tests {
         assert!(!ParamType::Currency.accepts(&money(Json::Num(f64::INFINITY), "USD")), "amount is finite");
         assert!(!ParamType::Currency.accepts(&Json::Obj(vec![("code".into(), Json::Str("USD".into()))])), "amount is required");
         assert!(!ParamType::Currency.accepts(&Json::Str("ISK 12".into())), "a bare string is not a currency");
+    }
+
+    #[test]
+    fn placemark_measurement_and_file_parameters_check_their_fields() {
+        let obj = |pairs: &[(&str, Json)]| Json::Obj(pairs.iter().map(|(k, v)| ((*k).to_string(), v.clone())).collect());
+        let at = obj(&[("latitude", Json::Num(64.15)), ("longitude", Json::Num(-21.94)), ("name", Json::Str("Reykjavik".into()))]);
+        assert!(ParamType::Placemark.accepts(&at));
+        assert!(ParamType::Placemark.accepts(&obj(&[("latitude", Json::Num(-90.0)), ("longitude", Json::Num(180.0))])), "bounds are inclusive");
+        assert!(!ParamType::Placemark.accepts(&obj(&[("latitude", Json::Num(91.0)), ("longitude", Json::Num(0.0))])));
+        assert!(!ParamType::Placemark.accepts(&obj(&[("latitude", Json::Num(0.0))])), "longitude is required");
+        assert!(!ParamType::Placemark.accepts(&obj(&[("latitude", Json::Num(0.0)), ("longitude", Json::Num(0.0)), ("name", Json::Num(1.0))])));
+
+        let km = obj(&[("value", Json::Num(4.2)), ("unit", Json::Str("km".into()))]);
+        assert!(ParamType::Measurement.accepts(&km));
+        assert!(!ParamType::Measurement.accepts(&obj(&[("value", Json::Num(4.2)), ("unit", Json::Str(" ".into()))])));
+        assert!(!ParamType::Measurement.accepts(&obj(&[("value", Json::Num(f64::NAN)), ("unit", Json::Str("km".into()))])));
+
+        assert!(ParamType::File.accepts(&obj(&[("path", Json::Str("/home/a/report.pdf".into()))])));
+        assert!(!ParamType::File.accepts(&obj(&[("path", Json::Str(String::new()))])));
+        assert!(!ParamType::File.accepts(&Json::Str("/home/a/report.pdf".into())), "a bare string is not a file");
+
+        for (text, ty) in [("placemark", ParamType::Placemark), ("measurement", ParamType::Measurement), ("file", ParamType::File)] {
+            assert_eq!(ParamType::parse(text), Some(ty.clone()));
+            assert_eq!(ty.name(), text);
+        }
     }
 
     #[test]
