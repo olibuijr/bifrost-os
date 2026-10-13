@@ -31,6 +31,7 @@ pub mod state;
 pub mod sync;
 pub mod tiling;
 pub mod transform;
+pub mod touch;
 pub mod wm;
 #[cfg(feature = "xwayland")]
 pub mod xwayland;

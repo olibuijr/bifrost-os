@@ -63,6 +63,20 @@ change. `delegate_pointer_gestures!` serves the global, created by `register_pro
   constraint is active the absolute pointer does not move (`motion_locked`). A `cursor_position_hint` from a
   locked client moves the pointer to the hint.
 
+### Touchscreen (`touch.rs`)
+
+- The seat has the touch capability while a touchscreen exists (`touch_device_added` and `touch_device_removed`, called
+  from the libinput `DeviceAdded` and `DeviceRemoved` events). Losing the last one cancels every contact.
+- Down, motion, up, cancel and frame go through Smithay's touch handle to the surface under the first contact of each
+  finger; later fingers follow the same surface until all are up. Surface-local coordinates are the logical position
+  minus the surface origin.
+- A device position is normalized to 0..1 (libinput scales by the device range), passed through
+  `touch::output_transform(output)` (identity until the output rotation work lands), then scaled to the output's
+  logical rectangle by the pure `touch::to_logical`.
+- A client that never bound `wl_touch` gets a pointer from the first contact: absolute motion, left button press at
+  touch down and release at lift, then a leave. A cancelled press is dragged far outside the surface before the release
+  so toolkits do not count it as a click. Other fingers do not move that pointer.
+
 ## Mapping to the contract
 
 | Contract item | Where |

@@ -152,9 +152,17 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
         match event {
             // a new device takes the shell's pointer and trackpad settings (input.rs)
             InputEvent::DeviceAdded { mut device } => {
-                crate::input::configure_device(&mut device, &crate::input::InputPrefs::load(&crate::input::prefs_path()))
+                crate::input::configure_device(&mut device, &crate::input::InputPrefs::load(&crate::input::prefs_path()));
+                // the seat advertises touch while a touchscreen is present (touch.rs)
+                if device.has_capability(smithay::reexports::input::DeviceCapability::Touch) {
+                    state.touch_device_added();
+                }
             }
-            InputEvent::DeviceRemoved { .. } => {}
+            InputEvent::DeviceRemoved { device } => {
+                if device.has_capability(smithay::reexports::input::DeviceCapability::Touch) {
+                    state.touch_device_removed();
+                }
+            }
             event => state.process_input_event(event),
         }
     })?;
