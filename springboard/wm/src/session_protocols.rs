@@ -67,7 +67,7 @@ use smithay::{
             Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, New, Resource, WEnum,
         },
     },
-    utils::{Physical, Size, Transform, SERIAL_COUNTER},
+    utils::{Transform, SERIAL_COUNTER},
     wayland::{
         compositor::with_states,
         cursor_shape::CursorShapeManagerState,
@@ -189,13 +189,12 @@ pub fn clamp_region(output: (i32, i32), req: Rect) -> Option<Rect> {
 /// The size of an output as clients see it, in pixels: the mode turned by the output transform (a panel rotated by 90
 /// degrees shows a portrait image). Captures, their regions and their buffers are in this orientation.
 pub fn capture_size(mode: (i32, i32), transform: Transform) -> (i32, i32) {
-    let s = transform.transform_size(Size::<i32, Physical>::from(mode));
-    (s.w, s.h)
+    crate::transform::logical_size(mode, transform)
 }
 
 /// `capture_size` of an output; `None` before it has a mode.
 fn output_capture_size(out: &Output) -> Option<(i32, i32)> {
-    out.current_mode().map(|m| capture_size((m.size.w, m.size.h), out.current_transform()))
+    crate::transform::output_size(out)
 }
 
 /// Bytes per row of a 32-bit shm buffer (XRGB8888 or ARGB8888).

@@ -64,6 +64,11 @@ would make a root process the server for every untrusted app, so it stays out.
 - It opens the GPU without resetting connectors and keeps the mode the CRTC already shows (the loader's, or the
   learned `video=` mode), so the loader's modeset stays the boot's only one, as the former compositor's `reuseOutputMode` did.
   Only without an active mode does it pick the native size at its fastest refresh. `BIFROST_WM_MODE=WxH@R` overrides.
+- Rotation: `BIFROST_ROTATION`, else the first line of `/etc/bifrost/rotation`, names the output transform (`normal`,
+  `90`, `180`, `270`, `flipped`, `flipped-90`, `flipped-180`, `flipped-270`). It is set on the output, so a 1200x1920
+  panel with `90` shows a 1920x1200 desktop to clients, the layer map, the lock surface and captures. The Vulkan
+  scanout does not rotate, so a rotated output stays on the GLES scanout. `transform.rs` holds the point and
+  rectangle mapping between the desktop and the panel for absolute input (touch).
 - With `BIFROST_BOOT_FADE` it shows the loader's frame (`bootsplash::paint`, the shell's own file) from its first
   scanout, holds it until the shell's first desktop frame (`$XDG_RUNTIME_DIR/shell-ready`), then cross-fades over
   450 ms with the loader's smoothstep, writing the `desktop-first-ui` and `desktop-faded` marks. The compositor owns
