@@ -26,7 +26,7 @@
    "apple": "safeAreaInsets, safeAreaLayoutGuide",
    "bifrost": "springboard/sdk/src/layout.rs",
    "status": "partial",
-   "note": "top inset only (status bar on a handheld); no bottom inset for the home indicator and no side insets for rounded corners"
+   "note": "Layout carries a top inset (Configure.safe_top) and a bottom inset (Configure.safe_bottom, which the shell fills with the home zone plus keyboard height on a handheld); no side insets for rounded corners and no safe-area layout guide object"
   },
   {
    "feature": "Reserved regions",

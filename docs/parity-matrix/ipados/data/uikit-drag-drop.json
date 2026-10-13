@@ -66,9 +66,9 @@
   {
    "feature": "Text drag and drop",
    "apple": "text view drag and drop customization",
-   "bifrost": "springboard/ui/src/textview.rs",
+   "bifrost": "none",
    "status": "gap",
-   "note": "text selection is not draggable"
+   "note": "text selection in springboard/ui/src/textview.rs is not draggable"
   },
   {
    "feature": "Pasteboard",

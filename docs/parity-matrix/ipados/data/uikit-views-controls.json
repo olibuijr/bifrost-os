@@ -124,7 +124,7 @@
    "apple": "UILargeContentViewerInteraction",
    "bifrost": "none",
    "status": "gap",
-   "note": "accessibility aid for large text sizes; depends on dynamic type, which does not exist yet"
+   "note": "accessibility aid for large text sizes; needs content size categories with accessibility sizes; only a continuous text scale exists (Configure.text_scale)"
   },
   {
    "feature": "Private click measurement",

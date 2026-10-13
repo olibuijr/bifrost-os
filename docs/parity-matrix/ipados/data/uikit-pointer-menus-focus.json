@@ -94,9 +94,9 @@
   {
    "feature": "Pencil interactions",
    "apple": "UIPencilInteraction (double tap, squeeze), hover pose",
-   "bifrost": "springboard/ui/src/stylus.rs",
+   "bifrost": "none",
    "status": "gap",
-   "note": "stylus samples exist; the pen's side button and tap gestures are not delivered to apps"
+   "note": "stylus samples exist (springboard/ui/src/stylus.rs); the pen's side button and tap gestures are not delivered to apps"
   },
   {
    "feature": "Quick actions",

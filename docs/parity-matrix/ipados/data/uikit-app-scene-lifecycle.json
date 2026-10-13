@@ -61,7 +61,7 @@
    "apple": "UIStatusBarManager, prefersStatusBarHidden, prefersHomeIndicatorAutoHidden",
    "bifrost": "springboard/sdk/src/layout.rs",
    "status": "partial",
-   "note": "top_inset exposes the top safe inset; apps cannot hide the status bar or the home indicator"
+   "note": "Layout exposes the top and bottom safe insets; apps cannot hide the status bar or the home indicator"
   },
   {
    "feature": "Interface orientation",

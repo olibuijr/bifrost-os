@@ -82,7 +82,7 @@
    "apple": "automatic row heights, Dynamic Type",
    "bifrost": "springboard/ui/src/typeset.rs",
    "status": "partial",
-   "note": "text measure is available; no self-sizing pass and no dynamic type"
+   "note": "text measure is available; no self-sizing pass; rows do not re-measure when the text scale changes"
   },
   {
    "feature": "Focus in lists",

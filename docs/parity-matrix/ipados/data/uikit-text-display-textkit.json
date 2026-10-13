@@ -4,7 +4,7 @@
  "macos_since": "",
  "status": "partial",
  "bifrost": "springboard/ui/src/text_layout_manager.rs, springboard/ui/src/textlayout.rs, springboard/sdk/src/attributed.rs, springboard/sdk/src/richlayout.rs, springboard/ui/src/writing_assist.rs",
- "summary": "Attributed strings, a TextKit 2 style layout model, paragraph styles, lists, tables, attachments, a find bar model, spell checking and writing assistance models exist. Dynamic type scaling, handwriting recognition, the text formatting controller and a text view in the SDK that joins these are missing.",
+ "summary": "Attributed strings, a TextKit 2 style layout model, paragraph styles, lists, tables, attachments, a find bar model, spell checking and writing assistance models exist. Content size categories, handwriting recognition, the text formatting controller and a text view in the SDK that joins these are missing.",
  "rea_evidence": "not captured: tools/parity/rea-page.sh reported 'no CDP browser on 127.0.0.1:9333 (run: tools/parity/rea-page.sh --start)'; facts are from tools/parity/docc.py",
  "features": [
   {
@@ -61,7 +61,7 @@
    "apple": "UIFont, UIFontDescriptor, UIFontMetrics, scaling fonts automatically",
    "bifrost": "springboard/sdk/src/font_descriptor.rs, springboard/render/src/fontobj.rs, springboard/render/src/ui.rs",
    "status": "partial",
-   "note": "descriptor matching and a type scale; no dynamic type content size categories and no UIFontMetrics scaling, which touch UIs rely on for accessibility"
+   "note": "descriptor matching and a type scale; Ui::text_scale (0.85 to 1.3) scales every text size, but there are no content size categories and no per-style font metrics scaling, which touch UIs rely on for accessibility"
   },
   {
    "feature": "Vertical text and bidi",
@@ -121,7 +121,7 @@
   }
  ],
  "gaps": [
-  "Dynamic type: content size categories and font metrics scaling",
+  "Content size categories and per-style font metrics scaling on top of the global text scale",
   "SDK text view that joins the layout manager, selection UI and text input client",
   "Handwriting recognition for stylus input",
   "Text formatting popover"
