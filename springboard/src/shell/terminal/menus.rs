@@ -49,8 +49,17 @@ impl Shell {
                         Panel::Shell => self.terminal_apply_shell(t),
                         _ => self.terminal_apply_colors(t),
                     }
+                } else if matches!(out, Out::Named("Escape")) {
+                    self.terminal_ui.entry = None;
+                    self.terminal_close_panel(t);
                 } else if let Some(field) = &mut self.terminal_ui.entry {
                     field.edit(&self.ui, out, t);
+                }
+                true
+            }
+            Panel::Help => {
+                if matches!(out, Out::Named("Escape")) {
+                    self.terminal_close_panel(t);
                 }
                 true
             }

@@ -673,6 +673,6 @@ fn terminal_help_opens_draws_and_closes() {
     assert_eq!(sh.terminal_ui.panel, Panel::Help);
     let mut img = crate::gfx::Image::new(sh.w as usize, sh.h as usize);
     sh.draw_terminal(&mut Surface { w: img.w, h: img.h, stride: img.w, px: &mut img.px, y0: 0 }, 2100.0);
-    sh.terminal_close_panel(2200.0);
-    assert_eq!(sh.terminal_ui.panel, Panel::None);
+    assert!(sh.terminal_panel_input(&Out::Named("Escape"), 2200.0), "the help takes the key");
+    assert_eq!(sh.terminal_ui.panel, Panel::None, "Escape closes it");
 }
