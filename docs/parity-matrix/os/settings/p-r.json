@@ -118,9 +118,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no printer settings page",
+   "bifrost": "springboard/src/shell/print_scan_page.rs",
+   "status": "partial",
+   "note": "Same Print & Scan page; see PrintAndScan.",
    "rea": []
   },
   {
@@ -198,9 +198,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no printer settings page",
+   "bifrost": "springboard/src/shell/print_scan_page.rs",
+   "status": "partial",
+   "note": "Same Print & Scan page; see PrintAndScan.",
    "rea": []
   },
   {
@@ -218,9 +218,9 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "no printer settings page",
+   "bifrost": "springboard/src/shell/print_scan_page.rs",
+   "status": "partial",
+   "note": "Print & Scan page: printers from the local scheduler, default printer, add by address, scanners listed. Missing: printer options and supplies, sharing a printer, default paper size, scanning UI. Host only.",
    "rea": []
   },
   {

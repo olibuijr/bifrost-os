@@ -2257,3 +2257,16 @@ The `thumbnails` service (`shell/services/thumbnails.rs`) draws by content type 
 - **Archives** (`thumbs::cards::PackageProvider`): zip and plain tar get a card with the format badge and the entry count (`thumb_providers::archive_entries`); other formats keep the icon with a badge.
 - **Representation types**: `thumb_providers::RepresentationType` (`icon`, `lowQualityThumbnail`, `thumbnail`, Apple's `QLThumbnailRepresentation.RepresentationType`) and `tiers(types, px)` decide which tiers a request produces. Not yet carried by the service request; `QLThumbnailProvider.provideThumbnail(for:_:)` and `QLFileThumbnailRequest` are not built (no third-party provider extension point).
 - Parity rows stay `partial` until checked on Midget; Office stays as the embedded-picture case only.
+
+## System Settings: Mouse pane (`springboard/src/shell/mouse_page.rs`)
+
+The Mouse pane is its own page (`PageId::Mouse`, `x-apple.systempreferences:com.apple.Mouse-Settings.extension`), separate from Trackpad.
+Rows: Tracking Speed, Pointer Acceleration, Scrolling Speed, Double-Click Speed, Natural Scrolling and Secondary Click
+(Click on Right Side / Click on Left Side). Constants (`DOUBLE_CLICK_RANGE_MS`, `SECONDARY_BUTTON`) and the slider mapping live in
+`mouse_page.rs`; `Options` stores `mouse_speed`, `mouse_scroll`, `double_click_ms`, `mouse_accel` and `swap_buttons` (settings keys
+`mouse_speed`, `mouse_scroll_speed`, `double_click_ms`, `mouse_acceleration`, `swap_buttons`). Tap to Click and the two-finger secondary
+click stay on Trackpad only. Gaps: Pointer Acceleration and Double-Click Speed are stored but not yet read by the input layer or the
+shell's double-click detection (`pointer_prefs::Tuning` has no field for them); Natural Scrolling is one setting shared with Trackpad,
+where Apple keeps one per device. Audit of the other panes (Trackpad, Print & Scan, Sharing, Internet Accounts, Users & Groups): the
+pages exist (`pages.rs`, `print_scan_page.rs`, `sharing_page.rs`, `internet_accounts_page.rs`, `users_page.rs`); their parity rows are
+`partial` with the missing parts listed, none `parity` until checked on Midget.
