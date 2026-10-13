@@ -425,7 +425,8 @@ mod tests {
         assert_eq!(process(&opts(Command::Lint), &input), Ok(Produced::Lint));
         assert!(process(&opts(Command::Lint), b"<dict>").is_err());
         let Ok(Produced::Text(t)) = process(&opts(Command::Print), &input) else { panic!("print") };
-        assert!(t.contains("\"AppName\" => Notes;"), "{t}");
+        // Word-like keys and values print bare (the core codec's `quote_word` rule), so `AppName` and `Notes` are unquoted.
+        assert!(t.contains("AppName => Notes;"), "{t}");
         let Ok(Produced::Bytes(json)) = process(&opts(Command::Convert(Format::Json)), &input) else { panic!("json") };
         assert!(String::from_utf8(json).unwrap().starts_with("{\"AppName\":\"Notes\""));
         assert!(process(&opts(Command::Convert(Format::Binary1)), &input).is_err());
