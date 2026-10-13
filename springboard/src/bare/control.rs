@@ -42,6 +42,13 @@ pub enum Request {
     Shot(usize),
     /// `capture select|window|screen`: opens the screenshot toolbar's capture session with that pick (`screencapture -i -w`)
     Capture(String),
+    /// `rec start [screen|x,y,w,h] [file]`: starts a screen recording of the whole screen or of an area in screen pixels,
+    /// into `file` (percent-encoded) or else a dated file on the Desktop
+    RecStart { area: Option<(u32, u32, u32, u32)>, file: Option<String> },
+    /// `rec stop`: ends the recording and answers with its file
+    RecStop,
+    /// `rec status`: `idle`, or `recording <file>`
+    RecStatus,
     Tap(f32, f32),
     Context(f32,f32),
     Hover(f32,f32),
@@ -129,6 +136,16 @@ pub fn pct_decode(s: &str) -> String {
     String::from_utf8_lossy(&o).into_owned()
 }
 
+/// Parses `x,y,w,h` in screen pixels: a width and height of at least one pixel.
+pub fn parse_area(s: &str) -> Result<(u32, u32, u32, u32), String> {
+    let p: Vec<u32> = s.split(',').map(|v| v.parse::<u32>()).collect::<Result<_, _>>().map_err(|_| format!("the area is x,y,w,h, not {s}"))?;
+    match p[..] {
+        [x, y, w, h] if w > 0 && h > 0 => Ok((x, y, w, h)),
+        [_, _, _, _] => Err("the area needs a width and height of at least one pixel".into()),
+        _ => Err(format!("the area is x,y,w,h, not {s}")),
+    }
+}
+
 pub fn parse(line: &str) -> Result<Request, String> {
     if let Some(rest) = line.trim().strip_prefix("term ") {
         let mut w = rest.split_whitespace();
@@ -189,6 +206,22 @@ pub fn parse(line: &str) -> Result<Request, String> {
                 _ => Err("usage: ax action <address or name> :: <action name>".into()),
             },
             _ => Err("usage: ax list [prefix] | ax press <address or name> | ax actions <element> | ax action <element> :: <name>".into()),
+        },
+        Some("rec") => match w.get(1).copied() {
+            Some("start") if w.len() <= 4 => {
+                let mut rest: Vec<&str> = w[2..].to_vec();
+                let mut area = None;
+                if rest.first().is_some_and(|a| a.contains(',')) {
+                    area = Some(parse_area(rest.remove(0))?);
+                } else if rest.first() == Some(&"screen") {
+                    rest.remove(0);
+                }
+                let file = rest.first().map(|f| pct_decode(f));
+                Ok(Request::RecStart { area, file })
+            }
+            Some("stop") if w.len() == 2 => Ok(Request::RecStop),
+            Some("status") if w.len() == 2 => Ok(Request::RecStatus),
+            _ => Err("usage: rec start [screen|x,y,w,h] [file] | rec stop | rec status".into()),
         },
         Some("state") => Ok(Request::State),
         Some("version") => Ok(Request::Version),
@@ -347,6 +380,15 @@ mod tests {
         assert_eq!(parse("shot 2\n"), Ok(Request::Shot(2)));
         assert_eq!(parse("shot"), Ok(Request::Shot(1)));
         assert_eq!(parse("capture window\n"), Ok(Request::Capture("window".into())));
+        assert_eq!(parse("rec start"), Ok(Request::RecStart { area: None, file: None }));
+        assert_eq!(parse("rec start screen"), Ok(Request::RecStart { area: None, file: None }));
+        assert_eq!(parse("rec start 10,20,300,200 /tmp/a%20b.mov"), Ok(Request::RecStart { area: Some((10, 20, 300, 200)), file: Some("/tmp/a b.mov".into()) }));
+        assert_eq!(parse("rec start screen clip.mov"), Ok(Request::RecStart { area: None, file: Some("clip.mov".into()) }));
+        assert_eq!(parse("rec stop"), Ok(Request::RecStop));
+        assert_eq!(parse("rec status"), Ok(Request::RecStatus));
+        assert!(parse("rec start 1,2,0,4").is_err(), "an empty area is refused");
+        assert!(parse("rec start 1,2,3").is_err());
+        assert!(parse("rec pause").is_err());
         assert!(parse("capture movie\n").is_err(), "only select, window and screen");
         assert_eq!(parse("tap 10 20.5"), Ok(Request::Tap(10.0, 20.5)));
         assert_eq!(parse("swipe 1 2 3 4"), Ok(Request::Swipe { from: (1.0, 2.0), to: (3.0, 4.0), ms: 300.0 }));

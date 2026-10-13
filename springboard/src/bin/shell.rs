@@ -460,7 +460,7 @@ fn run() -> std::io::Result<()> {
         timeout = timeout.min(inputs.next_scan().map_or(i32::MAX, |at| (at - now).ceil().max(0.0) as i32));
         // the pointer's wheel ease and right-click hold, key auto-repeat, and the cursor hiding
         let hide_cursor = (inputs.has_pointer() && cursor.is_shown()).then_some(last_motion + springboard::gfx::cursor::HIDE_MS).filter(|at| *at > now);
-        for due in inputs.deadline().into_iter().chain(key_repeat.deadline()).chain(hide_cursor).chain(sleeper.deadline()).chain(synthetic.front().map(|s| s.0)).chain(shell.next_wake(now)).chain(chord.deadline()).chain(power_key.deadline()).chain(boost.deadline()).chain(brightness_unsaved.map(|at| at + BRIGHTNESS_SAVE_MS)) {
+        for due in inputs.deadline().into_iter().chain(key_repeat.deadline()).chain(hide_cursor).chain(sleeper.deadline()).chain(synthetic.front().map(|s| s.0)).chain(shell.next_wake(now)).chain(shell.recording_wake()).chain(chord.deadline()).chain(power_key.deadline()).chain(boost.deadline()).chain(brightness_unsaved.map(|at| at + BRIGHTNESS_SAVE_MS)) {
             timeout = timeout.min((due - now).ceil().max(0.0) as i32);
         }
         // fixed slots first: touch, keys, display, control; then the shell's
@@ -559,6 +559,15 @@ fn run() -> std::io::Result<()> {
                 let body: Vec<u8> = match req {
                     _ if refused => b"error: locked\n".to_vec(),
                     Ok(Request::Shot(k)) => control::snapshot(&frame, fw, fh, k),
+                    Ok(Request::RecStart { area, file }) => match shell.recording_start(area, file, t) {
+                        Ok(path) => format!("ok {}\n", path.display()).into_bytes(),
+                        Err(e) => format!("error: {e}\n").into_bytes(),
+                    },
+                    Ok(Request::RecStop) => match shell.recording_stop() {
+                        Ok(path) => format!("ok {}\n", path.display()).into_bytes(),
+                        Err(e) => format!("error: {e}\n").into_bytes(),
+                    },
+                    Ok(Request::RecStatus) => shell.recording_status().into_bytes(),
                     Ok(Request::Capture(mode)) => match shell.capture_request(&mode) {
                         Ok(()) => b"ok\n".to_vec(),
                         Err(e) => format!("error: {e}\n").into_bytes(),
@@ -642,6 +651,8 @@ fn run() -> std::io::Result<()> {
                 control::reply(stream, &body);
             }
         }
+        // a screen recording takes its due frame here, once per pass
+        shell.recording_tick(t);
         while synthetic.front().is_some_and(|s| s.0 <= t) {
             let (_, phase, x, y) = synthetic.pop_front().unwrap();
             let e = match phase {
