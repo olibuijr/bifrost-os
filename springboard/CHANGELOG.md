@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- SDK: `UserFonts::system_object`, `mono_object` and `library_object` return the user's Settings > Fonts choice (or a
+  library match) as an app-facing `FontObject` at a size, so apps draw and measure with the shell's face.
 - Software Update: `softwareupdate --schedule` prints whether the background checks run; `--schedule on|off` switches them.
   Manual checks (`softwareupdate -l`, Settings > Check) still run. The switch is one file in the shell data folder that the
   update agent and the shell's own checker both read.
