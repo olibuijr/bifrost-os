@@ -558,7 +558,7 @@ mod tests {
         // the operation id is the big-endian u16 after the 2-byte version
         assert_eq!(&sent[0][2..4], &op::HOLD_JOB.to_be_bytes());
         assert_eq!(&sent[1][2..4], &op::RELEASE_JOB.to_be_bytes());
-        assert!(sent[0].windows(4).any(|w| w == 7i32.to_be_bytes()));
+        assert!(sent[0].windows(4).any(|w| w == 7i32.to_be_bytes().as_slice()));
     }
 
     #[test]
