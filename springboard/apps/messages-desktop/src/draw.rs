@@ -68,6 +68,8 @@ pub enum Hit {
     CancelCompose,
     /// A reaction chip under a message: tapping it adds or takes back the user's own reaction.
     Chip { msg: String, key: String },
+    /// The quoted line of a reply, by the id of the message it quotes: tapping it scrolls to that message.
+    Quote(String),
     /// A button of the sheet or panel that is open.
     Overlay(OverlayAction),
     /// A field of the sign-in sheet.
@@ -325,6 +327,9 @@ impl MessagesWindow {
         if let Some(c) = self.chips.iter().find(|c| inside(c.rect, x, y)) {
             return Hit::Chip { msg: c.msg.clone(), key: c.key.clone() };
         }
+        if let Some((_, target)) = self.quotes.iter().find(|(r, _)| inside(*r, x, y)) {
+            return Hit::Quote(target.clone());
+        }
         if inside(lay.sidebar(), x, y) {
             let index = ((y - lay.header + self.room_scroll.offset()) / lay.row).floor();
             if index >= 0.0 {
@@ -352,6 +357,16 @@ impl MessagesWindow {
     /// The message bubble under (`x`, `y`), by event id, from the last frame.
     pub fn message_at(&self, x: f32, y: f32) -> Option<String> {
         self.bubbles.iter().find(|(r, _)| inside(*r, x, y)).map(|(_, id)| id.clone())
+    }
+
+    /// The scroll offset that puts the message `id` at the top of the timeline, from the rows as they are laid out now.
+    /// `None` when the message is not in the room on screen.
+    pub fn message_offset(&self, ui: &Ui, id: &str) -> Option<f32> {
+        let lay = self.layout(ui);
+        let rows = self.timeline_rows(ui, &lay);
+        let heights: Vec<f32> = rows.iter().map(|r| r.height).collect();
+        let index = rows.iter().position(|r| r.id == id)?;
+        Some(rows_height_before(&heights, lay.bubble_gap, index))
     }
 
     /// The panel that is open over the window, with its buttons. `None` when no panel is open.
@@ -471,6 +486,7 @@ impl MessagesWindow {
         s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
         self.bubbles.clear();
         self.chips.clear();
+        self.quotes.clear();
         self.draw_sidebar(s, ui, &lay);
         self.draw_timeline(s, ui, &lay);
         self.draw_header(s, ui, &lay);
@@ -642,6 +658,9 @@ impl MessagesWindow {
             let mut ly = by + lay.bubble_pad;
             if let Some(quote) = &row.quote {
                 put(s, &mut self.labels, ui, quote, MAC_FOOTNOTE_PT, Weight::Regular, faint, x + lay.bubble_pad, ly);
+                if let Some(target) = &row.quote_target {
+                    self.quotes.push(([x, ly, bw, lay.foot], target.clone()));
+                }
                 ly += lay.foot;
             }
             for line in &row.lines {
@@ -688,6 +707,7 @@ impl MessagesWindow {
                 let quote = m.reply_to.as_ref().and_then(|id| room.quote(id)).map(|(who, what)| {
                     fit(ui, &format!("{who}: {what}"), MAC_FOOTNOTE_PT, Weight::Regular, text_w)
                 });
+                let quote_target = quote.as_ref().and(m.reply_to.clone());
                 let mut widest = lines.iter().map(|l| ui.measure(l, MAC_BODY_PT, Weight::Regular)).fold(0.0, f32::max);
                 if let Some(q) = &quote {
                     widest = widest.max(ui.measure(q, MAC_FOOTNOTE_PT, Weight::Regular));
@@ -716,6 +736,7 @@ impl MessagesWindow {
                     head,
                     sender,
                     quote,
+                    quote_target,
                     edited: m.edited,
                     lines,
                     widest,
@@ -879,6 +900,8 @@ struct TimelineRow {
     sender: Option<String>,
     /// The line quoting the message this one answers.
     quote: Option<String>,
+    /// The id of the message the quote line is about, when the line is shown.
+    quote_target: Option<String>,
     edited: bool,
     lines: Vec<String>,
     widest: f32,
@@ -923,6 +946,12 @@ pub fn room_tags(pinned: bool, muted: bool) -> String {
 /// The height of a day heading: its line and the space around it.
 fn day_height(lay: &Layout) -> f32 {
     lay.foot + 2.0 * lay.gap
+}
+
+/// The height of the timeline rows before row `index`, each followed by `gap`: how far the content has to scroll for
+/// that row to sit at the top.
+pub fn rows_height_before(heights: &[f32], gap: f32, index: usize) -> f32 {
+    heights.iter().take(index).map(|h| h + gap).sum()
 }
 
 /// The height the typing line takes at the foot of the timeline.
@@ -1200,6 +1229,14 @@ mod tests {
         assert_eq!(room_tags(true, false), "Pinned");
         assert_eq!(room_tags(false, true), "Alerts hidden");
         assert!(room_tags(true, true).contains("Pinned"));
+    }
+
+    #[test]
+    fn a_row_scrolls_to_the_top_past_the_rows_before_it() {
+        let heights = [30.0, 50.0, 20.0];
+        assert_eq!(rows_height_before(&heights, 8.0, 0), 0.0);
+        assert_eq!(rows_height_before(&heights, 8.0, 2), 38.0 + 58.0);
+        assert_eq!(rows_height_before(&heights, 8.0, 9), 38.0 + 58.0 + 28.0, "past the end counts every row");
     }
 
     #[test]

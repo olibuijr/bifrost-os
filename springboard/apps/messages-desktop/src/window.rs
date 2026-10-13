@@ -115,6 +115,8 @@ pub struct MessagesWindow {
     /// The bubbles and reaction chips of the last frame, for taps and the context menu.
     pub bubbles: Vec<(Rect, String)>,
     pub chips: Vec<ChipHit>,
+    /// The quoted lines of replies in the last frame, with the id of the message each one quotes.
+    pub quotes: Vec<(Rect, String)>,
     pub w: u32,
     pub h: u32,
     pub room_scroll: Scroller,
@@ -160,6 +162,7 @@ impl MessagesWindow {
             ctx_target: None,
             bubbles: Vec::new(),
             chips: Vec::new(),
+            quotes: Vec::new(),
             w: 0,
             h: 0,
             room_scroll: Scroller::new(),
@@ -523,6 +526,13 @@ impl MessagesWindow {
         sync::spawn(self.tx.clone(), self.wake(), move || sync::set_marked_unread(api, room, marked));
     }
 
+    /// Scrolls the timeline to the message `id`, the one a reply quotes.
+    fn jump_to_message(&mut self, ui: &Ui, id: &str) {
+        let Some(offset) = self.message_offset(ui, id) else { return };
+        self.stick_bottom = false;
+        self.timeline_scroll.jump_to(offset);
+    }
+
     fn open_emoji(&mut self, message: Option<String>) {
         if self.model.selected.is_some() {
             self.model.open_emoji(message);
@@ -865,6 +875,7 @@ impl MessagesWindow {
             Hit::EmojiButton => self.open_emoji(None),
             Hit::CancelCompose => self.model.cancel_compose(),
             Hit::Chip { msg, key } => self.react(&msg, &key),
+            Hit::Quote(target) => self.jump_to_message(&ctx.ui, &target),
             Hit::Overlay(action) => self.overlay_action(ctx, action),
             Hit::Field(i) => {
                 if let Some(sign) = self.model.sign_in.as_mut() {
