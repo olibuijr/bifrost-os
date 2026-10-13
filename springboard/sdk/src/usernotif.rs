@@ -10,6 +10,13 @@ pub use crate::proto::{NotifAction, NotifCategory, NotifRequest, NotifSettings, 
 use crate::proto::ToShell;
 use crate::Ctx;
 
+/// The play and pause button of a media notification card: its frame, tint and visibility, and the play or pause glyph.
+/// [`MediaControl`](media::MediaControl) holds that state; the app starts or stops its playback on a tap and calls
+/// `media_play` or `media_pause`, and the glyph follows that state.
+pub mod media {
+    pub use bifrost_ui::notifmedia::{Command, Glyph, MediaControl};
+}
+
 /// `UNNotificationResponse`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Response {
@@ -194,5 +201,19 @@ mod tests {
             Event::Response(Response { id: "id".into(), action: NOTIF_DEFAULT_ACTION.into(), text: "typed".into(), thread: "th".into(), category: "cat".into() })
         );
         assert_ne!(NOTIF_DEFAULT_ACTION, NOTIF_DISMISS_ACTION);
+    }
+
+    #[test]
+    fn media_button_asks_for_the_opposite_of_the_playing_state() {
+        use super::media::{Command, Glyph, MediaControl};
+        let frame = bifrost_ui::Rect { x: 10.0, y: 10.0, w: 20.0, h: 20.0 };
+        let mut control = MediaControl::new(frame);
+        assert_eq!(control.tap(15.0, 15.0), None, "a hidden button takes no tap");
+        control.show();
+        assert_eq!(control.tap(15.0, 15.0), Some(Command::Play));
+        assert_eq!(control.tap(0.0, 0.0), None, "a tap outside the frame is not the button");
+        control.media_play();
+        assert_eq!(control.glyph(), Some(Glyph::Pause));
+        assert_eq!(control.tap(15.0, 15.0), Some(Command::Pause));
     }
 }
