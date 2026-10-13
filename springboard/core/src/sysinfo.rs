@@ -19,6 +19,7 @@ pub struct Roots {
     pub usb: PathBuf,
     pub drm: PathBuf,
     pub net: PathBuf,
+    pub proc_net: PathBuf,
     pub power: PathBuf,
     pub block: PathBuf,
     pub apps: PathBuf,
@@ -36,6 +37,7 @@ impl Roots {
             usb: "/sys/bus/usb/devices".into(),
             drm: "/sys/class/drm".into(),
             net: "/sys/class/net".into(),
+            proc_net: "/proc/net".into(),
             power: "/sys/class/power_supply".into(),
             block: "/sys/block".into(),
             apps: "/var/lib/springboard/apps".into(),
@@ -301,19 +303,63 @@ pub struct NetInterface {
     /// "up", "down" or "unknown".
     pub state: String,
     pub wireless: bool,
+    /// Global and site-local IPv6 addresses, as eight groups of hex (link-local ones are left out).
+    pub addresses: Vec<String>,
+    /// Whether this interface carries the default route.
+    pub default_route: bool,
 }
 
-/// Reads `/sys/class/net`, without the loopback device.
-pub fn read_net(dir: &Path) -> Vec<NetInterface> {
+/// Reads `/sys/class/net` for the links, and `proc_net` (`/proc/net`) for their addresses and the default route.
+/// The loopback device is left out.
+pub fn read_net(dir: &Path, proc_net: &Path) -> Vec<NetInterface> {
+    let v6 = parse_if_inet6(&read_trim_text(&proc_net.join("if_inet6")));
+    let default = parse_default_route(&read_trim_text(&proc_net.join("route")));
     entries(dir)
         .into_iter()
         .filter(|name| name != "lo")
         .map(|name| {
             let path = dir.join(&name);
             let wireless = path.join("wireless").exists() || path.join("phy80211").exists();
-            NetInterface { mac: read_trim(&path.join("address")), state: read_trim(&path.join("operstate")), wireless, name }
+            let addresses = v6.iter().filter(|(dev, _)| *dev == name).map(|(_, addr)| addr.clone()).collect();
+            let default_route = default.as_deref() == Some(name.as_str());
+            NetInterface { mac: read_trim(&path.join("address")), state: read_trim(&path.join("operstate")), wireless, addresses, default_route, name }
         })
         .collect()
+}
+
+/// `/proc/net/if_inet6` lines: "<32 hex digits> <index> <prefix> <scope> <flags> <device>". Returns (device, address)
+/// for every address that is not link-local (scope 0x20).
+pub fn parse_if_inet6(text: &str) -> Vec<(String, String)> {
+    text.lines()
+        .filter_map(|line| {
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            let (hex, scope, dev) = match fields.as_slice() {
+                [hex, _, _, scope, _, dev] => (*hex, *scope, *dev),
+                _ => return None,
+            };
+            if hex.len() != 32 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) || scope == "20" {
+                return None;
+            }
+            let groups: Vec<String> = (0..8)
+                .map(|i| {
+                    let group = hex[i * 4..i * 4 + 4].trim_start_matches('0');
+                    if group.is_empty() { "0".to_string() } else { group.to_string() }
+                })
+                .collect();
+            Some((dev.to_string(), groups.join(":")))
+        })
+        .collect()
+}
+
+/// The device of the default route in `/proc/net/route` (destination and mask both 00000000).
+pub fn parse_default_route(text: &str) -> Option<String> {
+    text.lines().skip(1).find_map(|line| {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        match fields.as_slice() {
+            [dev, dest, _, _, _, _, _, mask, ..] if *dest == "00000000" && *mask == "00000000" => Some(dev.to_string()),
+            _ => None,
+        }
+    })
 }
 
 // ---------------------------------------------------------------- power
@@ -484,7 +530,7 @@ impl Report {
             pci: read_pci(&roots.pci),
             usb: read_usb(&roots.usb),
             displays: read_displays(&roots.drm),
-            net: read_net(&roots.net),
+            net: read_net(&roots.net, &roots.proc_net),
             power: read_power(&roots.power),
             disks: read_disks(&roots.block),
             os_name,
@@ -601,6 +647,30 @@ mod tests {
         assert_eq!(compare_versions("1.10.0", "1.9.2"), Ordering::Greater);
         assert_eq!(compare_versions("2.0", "2.0"), Ordering::Equal);
         assert_eq!(compare_versions("0.9", "0.10"), Ordering::Less);
+    }
+
+    #[test]
+    fn ipv6_addresses_skip_link_local_and_compress_zero_groups() {
+        let text = "fe800000000000000000000000000001 02 40 20 80 eth0\n\
+                    20010db8000000000000000000000042 02 40 00 80 eth0\n\
+                    20010db8000000010000000000000007 03 40 00 80 wlan0\n";
+        assert_eq!(
+            parse_if_inet6(text),
+            vec![
+                ("eth0".to_string(), "2001:db8:0:0:0:0:0:42".to_string()),
+                ("wlan0".to_string(), "2001:db8:0:1:0:0:0:7".to_string()),
+            ]
+        );
+        assert!(parse_if_inet6("not a table\n").is_empty());
+    }
+
+    #[test]
+    fn the_default_route_names_its_device() {
+        let text = "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n\
+                    wlan0\t0001A8C0\t00000000\t0001\t0\t0\t600\t00FFFFFF\t0\t0\t0\n\
+                    eth0\t00000000\t0101A8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0\n";
+        assert_eq!(parse_default_route(text).as_deref(), Some("eth0"));
+        assert_eq!(parse_default_route("Iface\tDestination\n"), None);
     }
 
     #[test]
