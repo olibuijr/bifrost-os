@@ -834,8 +834,8 @@ the windows behind the window. Ours, end to end:
   position, `foregroundStyle` hierarchy = `Level`. Apple's exact vibrant values are private; these are the
   documented label and fill alphas. Not yet wired: `widgets::Vibrant` (SDK) still carries its own copy of the
   label table and the symbol/fill call sites in `source_list` use plain colours.
-- Backdrops: every window whose materials look active (focused, or `State::Active`) gets its own backdrop of the
-  windows under it; a rebuild the 30 Hz cap skipped wakes the main loop when due (`Presenter::retry_in_ms`).
+- Backdrops: the shell keeps no live backdrop. Client windows send materials to the window server, which blurs the
+  real scene; without the material protocol they draw `Kind::inactive()` plates. Shell chrome blurs the wallpaper.
 - Model: `bifrost_ui::visual_effect` (`MaterialKind`, `BlendingMode`, `MaterialState::looks_active`,
   `BackgroundStyle` = `interiorBackgroundStyle`, `Mask` = `maskImage` (rounded rect with per-corner `Corners`, or an
   alpha mask), and `MaterialRequest`, the per-view request the window server consumes). The SDK draws one with

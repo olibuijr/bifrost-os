@@ -90,7 +90,7 @@ struct State {
     layer: Option<layer::ZwlrLayerShellV1>, surface: Option<wl_surface::WlSurface>,
     chrome:HashMap<u32,ChromeWindow>, chrome_target:Option<u32>, chrome_configured:bool,
     slots: Vec<Slot>, size: (u32,u32), configured: bool, closed: bool, main: MainMap, starved: Starved,
-    pending: bool, desktop_flip: Option<f64>, glass_retry: bool, inputs: Vec<Event>, xy: (f32,f32), pressed: bool,
+    pending: bool, desktop_flip: Option<f64>, inputs: Vec<Event>, xy: (f32,f32), pressed: bool,
     dmabuf: Option<dmabuf::ZwpLinuxDmabufV1>, dmabuf_formats: Vec<(u32,u64)>, gpu_slots: HashMap<u32,Vec<GpuSlot>>,
 }
 /// The GPU presenter and what it needs between frames.
@@ -414,8 +414,10 @@ impl Display {
                 }
                 let (back,glass)=match self.state.materials.get(&id) {
                     Some(_) if wm_blur => (Backdrop::None,Vec::new()),
-                    Some(m) => (Backdrop::GlassOnly{x:w.frame.x-margin,y:w.frame.y-margin,active:focused},
-                        m.iter().map(|r|Glass{x:r.x+w.frame.x as f32,y:r.y+w.frame.y as f32,..*r}).collect()),
+                    // safe mode: no compositor with the material protocol, so nothing can blur the scene behind the
+                    // window; its materials are the inactive opaque plate (`kind.inactive()`), never a blur
+                    Some(m) => (Backdrop::GlassOnly{x:w.frame.x-margin,y:w.frame.y-margin,active:false},
+                        m.iter().map(|r|Glass{x:r.x+w.frame.x as f32,y:r.y+w.frame.y as f32,active:Some(false),..*r}).collect()),
                     None => (Backdrop::None,Vec::new()),
                 };
                 // a hidden window keeps its pending damage and is drawn when it shows again
@@ -429,34 +431,6 @@ impl Display {
                 w.surface.frame(&qh,false); w.surface.commit(); s.busy=true;
             }
             if let Some(why)=g.p.failure().map(str::to_owned) { self.fall_back(&why); return Ok(()); }
-            // live materials: tell the presenter which windows sit behind the glass (z order, content origin)
-            let stack:Vec<(u32,i32,i32)>=self.state.z.iter().filter_map(|id|self.state.windows.get(id).filter(|w|w.configured).map(|w|(GPU_WINDOW+*id,w.frame.x,w.frame.y))).collect();
-            g.p.set_window_stack(stack);
-            if g.p.take_live_changed() {
-                // glass shapes pick up the new backdrop: the shell surfaces owe those shapes (the content is untouched)
-                let rects:Vec<[f32;4]>=g.glass.iter().map(|r|[r.x,r.y,r.w,r.h]).collect();
-                g.p.owe_rects(GPU_BG,&rects);
-                // chrome layer surfaces (menus, panels) draw the same glass list: they owe the part over them
-                for c in self.state.chrome.values_mut() {
-                    let (cx,cy,cw,ch)=(c.frame.x as f32,c.frame.y as f32,c.frame.width as f32,c.frame.height as f32);
-                    for r in &rects {
-                        let (x0,y0)=(r[0].max(cx),r[1].max(cy));
-                        let (x1,y1)=((r[0]+r[2]).min(cx+cw),(r[1]+r[3]).min(cy+ch));
-                        if x1>x0 && y1>y0 { c.pending.add((x0-cx) as i32,(y0-cy) as i32,(x1-x0).ceil() as i32,(y1-y0).ceil() as i32); }
-                    }
-                }
-                self.state.pending=true;
-            }
-            // a window under a vibrant window changed: that window's materials blur it, so they owe a redraw
-            for key in g.p.take_under_changed() {
-                let Some(id)=key.checked_sub(GPU_WINDOW) else {continue};
-                if let (Some(m),Some(w))=(self.state.materials.get(&id),self.state.windows.get(&id)) {
-                    let o=w.margin as f32;
-                    let rects:Vec<[f32;4]>=m.iter().map(|r|[r.x+o,r.y+o,r.w,r.h]).collect();
-                    g.p.owe_rects(key,&rects);
-                    self.state.pending=true;
-                }
-            }
             return Ok(());
         }
         for w in self.state.windows.values_mut() {
@@ -607,18 +581,8 @@ fn place_chrome(l:&surface::ZwlrLayerSurfaceV1,frame:&ChromeFrame,screen:(u32,u3
             let _ = self.render_chrome();
             let _ = self.conn.flush();
         }
-        // a backdrop rebuild the 30 Hz cap skipped is due: owe the glass that samples it and ask for a frame
-        if self.gpu.as_mut().is_some_and(|g| g.p.retry_now()) {
-            self.state.glass_retry = true;
-            let _ = self.render_windows();
-            let _ = self.conn.flush();
-        }
         out.append(&mut self.state.inputs);
     }
-    /// Ms until a skipped glass backdrop rebuild is due (a one-shot timeout for the main loop).
-    pub fn glass_wake_ms(&self) -> Option<i32> { self.gpu.as_ref().and_then(|g| g.p.retry_in_ms()) }
-    /// True once after a glass retry: the shell draws a frame so the desktop's glass is presented.
-    pub fn take_glass_retry(&mut self) -> bool { std::mem::take(&mut self.state.glass_retry) }
     /// The wallpaper the GPU draws under the desktop (uploaded and blurred once per change).
     pub fn wallpaper(&mut self, wp: crate::gfx::View, x: i32) {
         if let Some(g) = &mut self.gpu { g.p.set_wallpaper(wp, x, 0); }
@@ -768,8 +732,8 @@ fn mark_first_frame() {
 impl Dispatch<wl_registry::WlRegistry, ()> for State {
     fn event(s: &mut Self, reg: &wl_registry::WlRegistry, e: wl_registry::Event, _: &(), _: &Connection, q: &QueueHandle<Self>) {
         if let wl_registry::Event::Global { name,interface,version } = e { match interface.as_str() {
-            "bifrost_material_manager_v1" if wm_materials_enabled() => s.mat_manager=Some(reg.bind(name,1,q,())),
-            "ext_background_effect_manager_v1" if wm_materials_enabled() => s.bg_manager=Some(reg.bind(name,1,q,())),
+            "bifrost_material_manager_v1" => s.mat_manager=Some(reg.bind(name,1,q,())),
+            "ext_background_effect_manager_v1" => s.bg_manager=Some(reg.bind(name,1,q,())),
             "zwlr_foreign_toplevel_manager_v1" => s.foreign_manager=Some(reg.bind(name,version.min(3),q,())),
             "ext_idle_notifier_v1" => s.idle_notifier=Some(reg.bind(name,version.min(2),q,())),
             "zwlr_output_power_manager_v1" => s.power_manager=Some(reg.bind(name,1,q,())),
@@ -1285,9 +1249,6 @@ impl Dispatch<foreign_handle::ZwlrForeignToplevelHandleV1, ()> for State {
         }}
     }
 }
-
-/// Switch for the window-server material path (default on; `BIFROST_WM_MATERIALS=0` keeps the shell's own blur).
-fn wm_materials_enabled() -> bool { std::env::var("BIFROST_WM_MATERIALS").ok().as_deref() != Some("0") }
 
 /// A window's material rects as blur-region rectangles in surface pixels (x, y, w, h): the materials are
 /// window-local and the surface starts `margin` px before the content (the shadow margin). The window's screen

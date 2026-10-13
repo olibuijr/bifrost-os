@@ -31,17 +31,9 @@ not set (every drawable is ARGB), so the compositor blends every window. Chrome 
 3. Surfaces whose content rect is smaller than the drawable (framed windows): the drawable is cleared to
    transparent and only the content and shadow are drawn, so no slab comes from there once (1) is fixed.
 
-**Live materials (new).** The presenter keeps the windows' content textures, so it can compose the real
-backdrop: `Presenter::set_window_stack` (z order and content origins, fed from `Wayland::windows`) lets
-`rebuild_live` render wallpaper plus every window content into a 1/4-size base, then a dual-Kawase pyramid
-(3 down, 2 up) whose last texture is what bar, dock and menus sample. It rebuilds at most once per change
-(`live_dirty`, set by window damage, moves, stack changes and effects), only when a shell surface that owes
-glass draws. After a rebuild `take_live_changed` makes the shell surfaces owe their glass rects
-(`owe_rects`, no content upload) and `take_flush` lets `present` run with empty content damage. Saturation
-boost is the existing glass shader (`bifrost_render::glass::VIBRANCY`); tint stays on the CPU content. Window
-sidebar vibrancy still samples the static wallpaper blur (a window must not blur itself). Without windows,
-or with `set_live(false)`, the static pyramid is used, so Intel software paths work unchanged. Reduce
-Transparency already turns glass off at the source.
+**Live materials (removed, sprint 6 T4).** The presenter once composed a live backdrop from the windows' content
+textures. That path is deleted: shell chrome blurs the static wallpaper pyramid, and client windows get their blur from
+the window server. Reduce Transparency turns glass off at the source.
 
 **Window effects (new).** `Presenter::set_fx(id, Fx)` applies scale, alpha, a shift and a shadow factor to a
 window's content inside its fixed drawable; `shell/window_fx.rs` computes `Fx` for open (0.9 to 1 plus fade),
@@ -159,16 +151,15 @@ only an external app open, 9.2 ms with Settings open (`tools/bench.py --midget`,
 
 ## Live blur by compositor (2026-10-12)
 
-The presenter's live backdrop (`Presenter::set_window_stack`, `under`, `Backdrop::*`) serves the labwc path only and
-sees wallpaper plus the shell's own windows; other clients' toplevels are neither sampled nor drawn by the shell.
-Under bifrost-wm the shell sends ext-background-effect blur regions and the window server blurs the real scene
-(`docs/window-server.md`, "Live blur per compositor path"). Switch: `BIFROST_WM_MATERIALS=0`.
+The presenter has no live backdrop. Under bifrost-wm the shell sends material and ext-background-effect blur regions and
+the window server blurs the real scene (`docs/window-server.md`, "Live blur per compositor path"). Without the material
+protocol (safe mode) client windows draw the inactive opaque plate.
 
 ## Presenter pacing, buffer reuse and fallback (round 75)
 
 **Pacing.** Desktop frames are paced by the compositor: each commit requests a `wl_surface.frame` callback and the
 next frame is drawn when it arrives (`present`, `state.pending`), so no frame is drawn on a timer and nothing spins.
-The 33 ms backdrop cap (`retry_in_ms`) is a one-shot wake-up, not a poll. On Mesa, implicit dma-buf fencing means a
+On Mesa, implicit dma-buf fencing means a
 pass only needs `glFlush`. The non-Mesa path (`BIFROST_GPU_WAIT=1`, NVIDIA) still blocks once per pass on an EGL
 fence; a native fence fd or a server-side wait would remove that stall (follow-up).
 
