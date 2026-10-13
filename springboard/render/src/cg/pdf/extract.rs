@@ -1,10 +1,11 @@
-//! Content-stream interpretation: walks a page's operators and records the
-//! text lines (with baseline and size) and images in drawing order.
+//! Text extraction: walks a page's operators and records the text lines
+//! (with baseline and size) and images in drawing order, for reflowed reading.
 
 use super::doc::Doc;
 use super::font::Font;
 use super::image;
 use super::obj::{Dict, Obj, Parser};
+use super::page::Page;
 use crate::gfx::Image;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -60,27 +61,11 @@ impl<'a> Extractor<'a> {
         Extractor { doc, fonts: HashMap::new(), images: HashMap::new(), uses: HashMap::new(), emitted: 0, pieces: vec![] }
     }
 
-    /// Interprets one page (its `Contents` with the given resources).
-    pub fn page(&mut self, page: &Dict, resources: &Dict) {
+    /// Interprets one page.
+    pub fn page(&mut self, page: &Page) {
         self.pieces.push(Piece::Page);
-        let data = self.contents(page);
-        self.run(&data, resources, 0);
-    }
-
-    fn contents(&self, page: &Dict) -> Vec<u8> {
-        let mut out = vec![];
-        let c = self.doc.field(page, "Contents");
-        let list: Vec<Obj> = match c {
-            Obj::Array(a) => a,
-            other => vec![other],
-        };
-        for o in list {
-            if let Obj::Stream(s) = self.doc.get(&o) {
-                out.extend_from_slice(&self.doc.decode(&s).0);
-                out.push(b'\n');
-            }
-        }
-        out
+        let data = page.contents(self.doc);
+        self.run(&data, &page.resources, 0);
     }
 
     fn font(&mut self, res: &Dict, name: &str) -> Option<Rc<Font>> {
@@ -315,17 +300,14 @@ fn td(st: &mut Ts, tx: f32, ty: f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shell::books::engine::pdf::doc::tests::tiny_pdf;
+    use crate::cg::pdf::doc::tests::tiny_pdf;
+    use crate::cg::pdf::page::pages;
 
     fn lines(content: &str) -> Vec<(f32, String)> {
         let doc = Doc::open(tiny_pdf(content)).unwrap();
-        let cat = doc.catalog().unwrap();
-        let pages = doc.field(&cat, "Pages");
-        let kids = doc.field(pages.dict().unwrap(), "Kids");
-        let page = doc.get(&kids.array().unwrap()[0]);
-        let res = doc.field(pages.dict().unwrap(), "Resources");
+        let list = pages(&doc);
         let mut x = Extractor::new(&doc);
-        x.page(page.dict().unwrap(), res.dict().unwrap());
+        x.page(&list[0]);
         x.pieces.iter().filter_map(|p| if let Piece::Line { y, text, .. } = p { Some((*y, text.clone())) } else { None }).collect()
     }
 

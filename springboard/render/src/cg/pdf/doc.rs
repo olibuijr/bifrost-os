@@ -2,8 +2,10 @@
 //! streams, lazy object loading, stream filters, and a scan-based rebuild
 //! for files whose xref is damaged.
 
+use super::crypt::Crypt;
+use super::filter;
+use super::inflate;
 use super::obj::{is_ws, Dict, Obj, Parser, Stream};
-use crate::shell::books::engine::inflate;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
@@ -13,6 +15,8 @@ enum Entry {
     Offset(usize),
     /// (object stream number, index inside it)
     InStream(u32, usize),
+    /// freed in a later update: hides any older definition
+    Free,
 }
 
 pub struct Doc {
@@ -22,6 +26,8 @@ pub struct Doc {
     cache: RefCell<HashMap<u32, Obj>>,
     objstms: RefCell<HashMap<u32, Rc<Vec<(u32, Obj)>>>>,
     loading: RefCell<HashSet<u32>>,
+    crypt: Option<Crypt>,
+    encrypt_obj: Option<u32>,
 }
 
 fn find(hay: &[u8], needle: &[u8], from: usize) -> Option<usize> {
@@ -43,13 +49,14 @@ impl Doc {
         if find(&data[..data.len().min(1024)], b"%PDF-", 0).is_none() {
             return Err("not a PDF file".into());
         }
-        let mut doc = Doc { data, xref: HashMap::new(), trailer: Dict::new(), cache: Default::default(), objstms: Default::default(), loading: Default::default() };
+        let mut doc = Doc { data, xref: HashMap::new(), trailer: Dict::new(), cache: Default::default(), objstms: Default::default(), loading: Default::default(), crypt: None, encrypt_obj: None };
         let ok = doc.read_xref_chain().is_some() && doc.catalog().is_some();
         if !ok {
             doc.rebuild();
         }
-        if doc.trailer.contains_key("Encrypt") {
-            return Err("this PDF is encrypted".into());
+        doc.setup_crypt()?;
+        if !ok && doc.crypt.is_some() {
+            doc.rebuild();
         }
         if doc.catalog().is_none() {
             return Err("damaged PDF: no document catalog".into());
@@ -62,6 +69,55 @@ impl Doc {
             Obj::Dict(d) => Some(d),
             _ => None,
         }
+    }
+
+    /// Reads the Encrypt dictionary (if any) and starts decrypting objects with the empty user password.
+    fn setup_crypt(&mut self) -> Result<(), String> {
+        let Some(e) = self.trailer.get("Encrypt").cloned() else { return Ok(()) };
+        self.encrypt_obj = if let Obj::Ref(n, _) = e { Some(n) } else { None };
+        let Obj::Dict(enc) = self.get(&e) else { return Err("this PDF is encrypted in a way this reader cannot open (bad Encrypt dictionary)".into()) };
+        // resolve one level of references (CF entries and strings may be indirect)
+        let mut flat = enc.clone();
+        for (k, v) in enc.iter() {
+            flat.insert(k.clone(), self.get(v));
+        }
+        let id0 = match self.trailer.get("ID").map(|o| self.get(o)) {
+            Some(Obj::Array(a)) => match a.first().map(|o| self.get(o)) {
+                Some(Obj::Str(s)) => s,
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
+        };
+        let crypt = Crypt::open(&flat, &id0)?;
+        // everything loaded so far was read in the clear; forget it
+        let keep = self.encrypt_obj.and_then(|n| self.cache.borrow().get(&n).cloned().map(|o| (n, o)));
+        self.cache.borrow_mut().clear();
+        self.objstms.borrow_mut().clear();
+        if let Some((n, o)) = keep {
+            self.cache.borrow_mut().insert(n, o);
+        }
+        self.crypt = Some(crypt);
+        Ok(())
+    }
+
+    pub fn is_encrypted(&self) -> bool {
+        self.crypt.is_some()
+    }
+
+    /// The `%PDF-x.y` header version, e.g. `"1.7"`.
+    pub fn version(&self) -> String {
+        let head = &self.data[..self.data.len().min(1024)];
+        match find(head, b"%PDF-", 0) {
+            Some(p) => String::from_utf8_lossy(&head[p + 5..(p + 8).min(head.len())]).trim().to_string(),
+            None => String::new(),
+        }
+    }
+
+    /// Object numbers that have a definition in the file.
+    pub fn object_numbers(&self) -> Vec<u32> {
+        let mut v: Vec<u32> = self.xref.iter().filter(|(_, e)| !matches!(e, Entry::Free)).map(|(n, _)| *n).collect();
+        v.sort_unstable();
+        v
     }
 
     // --- cross references ---
@@ -123,6 +179,8 @@ impl Doc {
                             let kind = p.parse(false)?;
                             if kind.is_op("n") && o > 0 {
                                 out.push(((start + i) as u32, Entry::Offset(o as usize)));
+                            } else if kind.is_op("f") && start + i > 0 {
+                                out.push(((start + i) as u32, Entry::Free));
                             }
                         }
                     }
@@ -133,7 +191,7 @@ impl Doc {
             Some((out, trailer))
         } else {
             // an xref stream: "N G obj << ... >> stream"
-            let s = match self.parse_indirect_at(off)?.1 {
+            let s = match self.parse_indirect_at(off)?.2 {
                 Obj::Stream(s) => s,
                 _ => return None,
             };
@@ -171,6 +229,7 @@ impl Doc {
                     match kind {
                         1 => out.push((num, Entry::Offset(a as usize))),
                         2 => out.push((num, Entry::InStream(a as u32, b as usize))),
+                        0 if num > 0 => out.push((num, Entry::Free)),
                         _ => {}
                     }
                 }
@@ -266,10 +325,10 @@ impl Doc {
     // --- objects ---
 
     /// Parses `N G obj ... endobj` at `off`, returning the number and object.
-    fn parse_indirect_at(&self, off: usize) -> Option<(u32, Obj)> {
+    fn parse_indirect_at(&self, off: usize) -> Option<(u32, u16, Obj)> {
         let mut p = Parser::new(&self.data, off);
         let num = p.parse(false)?.int()? as u32;
-        p.parse(false)?.int()?;
+        let gen = p.parse(false)?.int()? as u16;
         if !p.parse(false)?.is_op("obj") {
             return None;
         }
@@ -294,10 +353,10 @@ impl Doc {
                     .or_else(|| find(&self.data, b"endstream", s).map(|e| trim_eol(&self.data, s, e)))
                     .unwrap_or(self.data.len());
                 let data = self.data[s..end.max(s)].to_vec();
-                return Some((num, Obj::Stream(Rc::new(Stream { dict: dict.clone(), data }))));
+                return Some((num, gen, Obj::Stream(Rc::new(Stream { dict: dict.clone(), data }))));
             }
         }
-        Some((num, o))
+        Some((num, gen, o))
     }
 
     fn after_is_endstream(&self, at: usize) -> bool {
@@ -334,6 +393,48 @@ impl Doc {
         rc
     }
 
+    /// Decrypts the strings and stream bytes of a freshly parsed object.
+    fn decrypt_loaded(&self, num: u32, gen: u16, o: Obj) -> Obj {
+        let Some(c) = &self.crypt else { return o };
+        if Some(num) == self.encrypt_obj {
+            return o;
+        }
+        match o {
+            Obj::Stream(s) => {
+                let ty = s.dict.get("Type").and_then(Obj::name);
+                let mut dict = s.dict.clone();
+                for v in dict.values_mut() {
+                    c.object(num, gen, v);
+                }
+                let skip = ty == Some("XRef") || (ty == Some("Metadata") && !c.encrypt_metadata) || self.has_identity_crypt(&s.dict);
+                let data = if skip { s.data.clone() } else { c.stream(num, gen, &s.data) };
+                Obj::Stream(Rc::new(Stream { dict, data }))
+            }
+            mut other => {
+                c.object(num, gen, &mut other);
+                other
+            }
+        }
+    }
+
+    fn has_identity_crypt(&self, d: &Dict) -> bool {
+        let filters: Vec<Obj> = match d.get("Filter") {
+            Some(Obj::Array(a)) => a.clone(),
+            Some(o) => vec![o.clone()],
+            None => vec![],
+        };
+        let Some(i) = filters.iter().position(|f| f.name() == Some("Crypt")) else { return false };
+        let parm = match d.get("DecodeParms").or_else(|| d.get("DP")) {
+            Some(Obj::Array(a)) => a.get(i).cloned(),
+            Some(o) => Some(o.clone()),
+            None => None,
+        };
+        match parm.as_ref().and_then(|p| p.dict()).and_then(|p| p.get("Name")).and_then(Obj::name) {
+            Some(n) => n == "Identity",
+            None => true,
+        }
+    }
+
     /// Loads indirect object `num` (Null when missing).
     pub fn load(&self, num: u32) -> Obj {
         if let Some(o) = self.cache.borrow().get(&num) {
@@ -343,7 +444,11 @@ impl Doc {
             return Obj::Null;
         }
         let o = match self.xref.get(&num).copied() {
-            Some(Entry::Offset(off)) => self.parse_indirect_at(off).filter(|(n, _)| *n == num).map(|(_, o)| o).unwrap_or(Obj::Null),
+            Some(Entry::Offset(off)) => match self.parse_indirect_at(off).filter(|(n, _, _)| *n == num) {
+                Some((_, gen, o)) => self.decrypt_loaded(num, gen, o),
+                None => Obj::Null,
+            },
+            Some(Entry::Free) => Obj::Null,
             Some(Entry::InStream(stm, idx)) => {
                 let list = self.object_stream(stm);
                 match list.get(idx) {
@@ -377,6 +482,11 @@ impl Doc {
 
     // --- streams ---
 
+    fn predict(&self, data: Vec<u8>, parm: &Dict) -> Vec<u8> {
+        let g = |k: &str, d: i64| self.field(parm, k).int().unwrap_or(d);
+        filter::predictor(data, g("Predictor", 1), g("Colors", 1), g("BitsPerComponent", 8), g("Columns", 1))
+    }
+
     /// Decodes a stream's filters. The second value names an image filter
     /// (DCTDecode, JPXDecode, CCITTFaxDecode, JBIG2Decode) that was left
     /// undone, in which case the bytes are still in that format.
@@ -395,11 +505,11 @@ impl Doc {
         for (i, f) in filters.iter().enumerate() {
             let parm = parms.get(i).cloned().unwrap_or_default();
             data = match f.as_str() {
-                "FlateDecode" | "Fl" => predictor(inflate::zlib_lenient(&data), &parm, self),
-                "LZWDecode" | "LZW" => predictor(lzw(&data, self.field(&parm, "EarlyChange").int().unwrap_or(1) != 0), &parm, self),
-                "ASCIIHexDecode" | "AHx" => ascii_hex(&data),
-                "ASCII85Decode" | "A85" => ascii85(&data),
-                "RunLengthDecode" | "RL" => run_length(&data),
+                "FlateDecode" | "Fl" => self.predict(inflate::zlib_lenient(&data), &parm),
+                "LZWDecode" | "LZW" => self.predict(filter::lzw(&data, self.field(&parm, "EarlyChange").int().unwrap_or(1) != 0), &parm),
+                "ASCIIHexDecode" | "AHx" => filter::ascii_hex(&data),
+                "ASCII85Decode" | "A85" => filter::ascii85(&data),
+                "RunLengthDecode" | "RL" => filter::run_length(&data),
                 "Crypt" => data,
                 "DCTDecode" | "DCT" => return (data, Some("DCTDecode".into())),
                 other => return (data, Some(other.to_string())),
@@ -417,193 +527,6 @@ fn trim_eol(d: &[u8], start: usize, mut end: usize) -> usize {
         end -= 1;
     }
     end
-}
-
-fn predictor(data: Vec<u8>, parm: &Dict, doc: &Doc) -> Vec<u8> {
-    let pred = doc.field(parm, "Predictor").int().unwrap_or(1);
-    if pred < 2 {
-        return data;
-    }
-    let colors = doc.field(parm, "Colors").int().unwrap_or(1).max(1) as usize;
-    let bpc = doc.field(parm, "BitsPerComponent").int().unwrap_or(8).max(1) as usize;
-    let columns = doc.field(parm, "Columns").int().unwrap_or(1).max(1) as usize;
-    let bpp = (colors * bpc).div_ceil(8).max(1);
-    let row = (colors * bpc * columns).div_ceil(8);
-    if pred == 2 {
-        // TIFF predictor, byte samples only
-        if bpc != 8 {
-            return data;
-        }
-        let mut out = data;
-        for r in out.chunks_mut(row) {
-            for i in colors..r.len() {
-                r[i] = r[i].wrapping_add(r[i - colors]);
-            }
-        }
-        return out;
-    }
-    // PNG predictors: each row starts with its filter type
-    let mut out = Vec::with_capacity(data.len());
-    let mut prev = vec![0u8; row];
-    for chunk in data.chunks(row + 1) {
-        let kind = chunk[0];
-        let mut cur: Vec<u8> = chunk[1..].to_vec();
-        cur.resize(row, 0);
-        for i in 0..row {
-            let a = if i >= bpp { cur[i - bpp] as i32 } else { 0 };
-            let b = prev[i] as i32;
-            let c = if i >= bpp { prev[i - bpp] as i32 } else { 0 };
-            let add = match kind {
-                1 => a,
-                2 => b,
-                3 => (a + b) / 2,
-                4 => {
-                    let p = a + b - c;
-                    let (pa, pb, pc) = ((p - a).abs(), (p - b).abs(), (p - c).abs());
-                    if pa <= pb && pa <= pc {
-                        a
-                    } else if pb <= pc {
-                        b
-                    } else {
-                        c
-                    }
-                }
-                _ => 0,
-            };
-            cur[i] = cur[i].wrapping_add(add as u8);
-        }
-        out.extend_from_slice(&cur);
-        prev = cur;
-    }
-    out
-}
-
-fn ascii_hex(d: &[u8]) -> Vec<u8> {
-    let mut out = vec![];
-    let mut hi = None;
-    for &c in d {
-        if c == b'>' {
-            break;
-        }
-        let Some(v) = (c as char).to_digit(16) else { continue };
-        match hi.take() {
-            Some(h) => out.push((h << 4 | v) as u8),
-            None => hi = Some(v),
-        }
-    }
-    if let Some(h) = hi {
-        out.push((h << 4) as u8);
-    }
-    out
-}
-
-fn ascii85(d: &[u8]) -> Vec<u8> {
-    let mut out = vec![];
-    let mut group = [0u32; 5];
-    let mut n = 0;
-    let mut i = 0;
-    while i < d.len() {
-        let c = d[i];
-        i += 1;
-        match c {
-            b'~' => break,
-            b'z' if n == 0 => out.extend_from_slice(&[0; 4]),
-            b'!'..=b'u' => {
-                group[n] = (c - b'!') as u32;
-                n += 1;
-                if n == 5 {
-                    let v = group.iter().fold(0u32, |a, &g| a.wrapping_mul(85).wrapping_add(g));
-                    out.extend_from_slice(&v.to_be_bytes());
-                    n = 0;
-                }
-            }
-            _ => {}
-        }
-    }
-    if n > 1 {
-        for g in group.iter_mut().skip(n) {
-            *g = 84;
-        }
-        let v = group.iter().fold(0u32, |a, &g| a.wrapping_mul(85).wrapping_add(g));
-        out.extend_from_slice(&v.to_be_bytes()[..n - 1]);
-    }
-    out
-}
-
-fn run_length(d: &[u8]) -> Vec<u8> {
-    let mut out = vec![];
-    let mut i = 0;
-    while i < d.len() {
-        let n = d[i] as usize;
-        i += 1;
-        if n == 128 {
-            break;
-        }
-        if n < 128 {
-            let end = (i + n + 1).min(d.len());
-            out.extend_from_slice(&d[i..end]);
-            i = end;
-        } else if let Some(&b) = d.get(i) {
-            out.extend(std::iter::repeat(b).take(257 - n));
-            i += 1;
-        }
-    }
-    out
-}
-
-fn lzw(d: &[u8], early: bool) -> Vec<u8> {
-    let mut out: Vec<u8> = vec![];
-    let mut table: Vec<Vec<u8>> = vec![];
-    let reset = |t: &mut Vec<Vec<u8>>| {
-        t.clear();
-        t.extend((0..=255u8).map(|b| vec![b]));
-        t.push(vec![]); // 256 clear
-        t.push(vec![]); // 257 end
-    };
-    reset(&mut table);
-    let (mut bits, mut acc, mut width) = (0u32, 0u32, 9u32);
-    let mut prev: Option<Vec<u8>> = None;
-    for &byte in d {
-        acc = acc << 8 | byte as u32;
-        bits += 8;
-        while bits >= width {
-            let code = (acc >> (bits - width)) & ((1 << width) - 1);
-            bits -= width;
-            if code == 256 {
-                reset(&mut table);
-                width = 9;
-                prev = None;
-                continue;
-            }
-            if code == 257 {
-                return out;
-            }
-            let entry = if (code as usize) < table.len() {
-                table[code as usize].clone()
-            } else if let Some(p) = &prev {
-                let mut e = p.clone();
-                e.push(p[0]);
-                e
-            } else {
-                return out;
-            };
-            out.extend_from_slice(&entry);
-            if let Some(p) = prev.take() {
-                let mut e = p;
-                e.push(entry[0]);
-                table.push(e);
-            }
-            prev = Some(entry);
-            let size = table.len() + usize::from(early);
-            width = match size {
-                0..=511 => 9,
-                512..=1023 => 10,
-                1024..=2047 => 11,
-                _ => 12,
-            };
-        }
-    }
-    out
 }
 
 #[cfg(test)]
@@ -683,25 +606,5 @@ pub(crate) mod tests {
         let doc = Doc::open(out).unwrap();
         assert_eq!(doc.catalog().unwrap()["Pages"], Obj::Ref(2, 0));
         assert_eq!(doc.get(&Obj::Ref(2, 0)).dict().unwrap()["Count"], Obj::Int(0));
-    }
-
-    #[test]
-    fn filters() {
-        assert_eq!(ascii_hex(b"48 65 6C6c 6F>"), b"Hello");
-        assert_eq!(ascii85(b"87cURDZ~>"), b"Hello");
-        assert_eq!(run_length(&[2, b'a', b'b', b'c', 254, b'z', 128]), b"abczzz");
-        // LZW: the PDF spec's example
-        let enc = [0x80, 0x0B, 0x60, 0x50, 0x22, 0x0C, 0x0C, 0x85, 0x01];
-        assert_eq!(lzw(&enc, true), [45, 45, 45, 45, 45, 65, 45, 45, 45, 66]);
-    }
-
-    #[test]
-    fn png_up_predictor() {
-        let doc = Doc::open(tiny_pdf("")).unwrap();
-        let mut parm = Dict::new();
-        parm.insert("Predictor".into(), Obj::Int(12));
-        parm.insert("Columns".into(), Obj::Int(3));
-        let out = predictor(vec![2, 1, 2, 3, 2, 1, 1, 1], &parm, &doc);
-        assert_eq!(out, [1, 2, 3, 2, 3, 4]);
     }
 }

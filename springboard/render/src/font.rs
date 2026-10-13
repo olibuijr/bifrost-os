@@ -145,20 +145,26 @@ impl<'a> Font<'a> {
         let head = find(b"head")?;
         let hhea = find(b"hhea")?;
         let maxp = find(b"maxp")?;
-        let cmap_table = find(b"cmap")?;
-        // prefer a full-Unicode (format 12) subtable, else BMP format 4
+        // prefer a full-Unicode (format 12) subtable, else BMP format 4; a symbol table (3, 0) is the last resort
+        // and a font without any cmap still parses (PDF subsets drop it), with every character lookup missing
         let mut cmap = None;
-        for i in 0..u16_at(data, cmap_table + 2)? as usize {
-            let rec = cmap_table + 4 + 8 * i;
-            let (pid, eid) = (u16_at(data, rec)?, u16_at(data, rec + 2)?);
-            let off = cmap_table + u32_at(data, rec + 4)? as usize;
-            let format = u16_at(data, off)?;
-            let unicode = pid == 0 || (pid == 3 && (eid == 1 || eid == 10));
-            if unicode && (format == 12 || (format == 4 && cmap.is_none())) {
-                cmap = Some((off, format));
+        let mut symbol = None;
+        if let Some(cmap_table) = find(b"cmap") {
+            for i in 0..u16_at(data, cmap_table + 2).unwrap_or(0) as usize {
+                let rec = cmap_table + 4 + 8 * i;
+                let (Some(pid), Some(eid)) = (u16_at(data, rec), u16_at(data, rec + 2)) else { break };
+                let Some(off) = u32_at(data, rec + 4).map(|o| cmap_table + o as usize) else { break };
+                let Some(format) = u16_at(data, off) else { continue };
+                let unicode = pid == 0 || (pid == 3 && (eid == 1 || eid == 10));
+                if unicode && (format == 12 || (format == 4 && cmap.is_none())) {
+                    cmap = Some((off, format));
+                }
+                if pid == 3 && eid == 0 && format == 4 && symbol.is_none() {
+                    symbol = Some((off, format));
+                }
             }
         }
-        let (cmap, cmap_format) = cmap?;
+        let (cmap, cmap_format) = cmap.or(symbol).unwrap_or((0, 0));
         let cff = find(b"CFF ").and_then(|o| Cff::parse(data.get(o..)?));
         let (glyf, loca) = match cff {
             Some(_) => (0, 0),
@@ -205,7 +211,46 @@ impl<'a> Font<'a> {
         self.cff.as_ref()?.glyph_named(name)
     }
 
+    /// The glyph for a raw character code in the font's own cmap (0 when missing).
+    pub fn glyph_code(&self, code: u32) -> u16 {
+        self.lookup(code).unwrap_or(0)
+    }
+
+    /// A symbolic font's glyph for a single-byte code: symbol cmaps place codes at 0xF000 or 0xF100.
+    pub fn glyph_symbolic(&self, code: u8) -> u16 {
+        for base in [0xF000u32, 0, 0xF100] {
+            let g = self.glyph_code(base + code as u32);
+            if g != 0 {
+                return g;
+            }
+        }
+        0
+    }
+
+    pub fn has_cmap(&self) -> bool {
+        self.cmap_format != 0
+    }
+
+    pub fn num_glyphs(&self) -> u16 {
+        self.num_glyphs
+    }
+
+    /// The glyph outline as flattened line segments in font units, y up.
+    pub fn outline_lines(&self, gid: u16) -> Vec<((f32, f32), (f32, f32))> {
+        let mut lines = Vec::new();
+        self.outline(gid, Affine([1.0, 0.0, 0.0, 1.0, 0.0, 0.0]), &mut lines, 0, &[]);
+        lines.into_iter().map(|(a, b)| ((a.x, a.y), (b.x, b.y))).collect()
+    }
+
+    /// The CFF program behind an OpenType font, if any.
+    pub fn cff(&self) -> Option<&Cff<'a>> {
+        self.cff.as_ref()
+    }
+
     fn lookup(&self, c: u32) -> Option<u16> {
+        if self.cmap_format == 0 {
+            return None;
+        }
         let d = self.data;
         let t = self.cmap;
         if self.cmap_format == 12 {
