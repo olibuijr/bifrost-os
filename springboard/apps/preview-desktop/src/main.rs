@@ -18,7 +18,7 @@ use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, KeyInput, TouchKind};
 use canvas::{Action, Layout, PictureCache, Scene, Side, Tool};
 use document::Document;
 use export::Raster;
-use model::{Adjust, Mark, MarkKind, Norm, View, Zoom, HIGHLIGHT, MARK_BLUE};
+use model::{Adjust, History, Mark, MarkKind, Norm, Snapshot, Trail, View, Zoom, HIGHLIGHT, MARK_BLUE};
 use pdfjob::{Inbox, Job, Reply};
 use springboard::shell::books::engine;
 use std::path::{Path, PathBuf};
@@ -59,6 +59,14 @@ struct Viewer {
     /// The last message: an open error, a save or an export result.
     status: String,
     cache: Option<PictureCache>,
+    /// Undo and redo of the document's edits.
+    history: History,
+    /// The pages visited, for Go > Back and Forward.
+    trail: Trail,
+    /// The page number being typed after Go > Go to Page.
+    goto: Option<String>,
+    /// Whether the thumbnails and outline sidebar is shown.
+    sidebar: bool,
 }
 
 impl Viewer {
@@ -76,7 +84,54 @@ impl Viewer {
             editing: None,
             status: String::new(),
             cache: None,
+            history: History::default(),
+            trail: Trail::default(),
+            goto: None,
+            sidebar: true,
         }
+    }
+
+    /// The window layout: the sidebar takes no room while it is hidden.
+    fn layout(&self, ui: &Ui, w: i32, h: i32) -> Layout {
+        let mut lay = Layout::new(ui, w, h);
+        if !self.sidebar {
+            lay.side = 0;
+        }
+        lay
+    }
+
+    /// The document's editable state, or None with no document.
+    fn snapshot(&self) -> Option<Snapshot> {
+        let doc = self.doc.as_ref()?;
+        Some(Snapshot { marks: doc.marks.clone(), order: doc.order.clone(), turns: doc.turns.clone(), adjust: self.adjust })
+    }
+
+    /// Puts a state from the undo history back.
+    fn restore(&mut self, state: Snapshot) {
+        self.editing = None;
+        if let Some(doc) = &mut self.doc {
+            doc.marks = state.marks;
+            doc.order = state.order;
+            doc.turns = state.turns;
+        }
+        self.adjust = state.adjust;
+        let count = self.doc.as_ref().map_or(0, |d| d.count());
+        let keep = self.view.page;
+        self.view.go(keep, count);
+        self.sync_turn();
+        self.save();
+    }
+
+    /// Runs an edit and, when it changed the document, records the state before it for Undo.
+    fn track<R>(&mut self, edit: impl FnOnce(&mut Viewer) -> R) -> R {
+        let before = self.snapshot();
+        let out = edit(self);
+        if let Some(before) = before {
+            if self.snapshot().as_ref() != Some(&before) {
+                self.history.record(before);
+            }
+        }
+        out
     }
 
     fn open_path(&mut self, path: &Path) {
@@ -86,6 +141,9 @@ impl Viewer {
         self.cache = None;
         self.view = View::default();
         self.side = Side::Pages;
+        self.history = History::default();
+        self.trail = Trail::default();
+        self.goto = None;
         self.status.clear();
         if matches!(engine::format_of(path), Some(engine::Format::Pdf)) {
             let (jobs, inbox) = pdfjob::spawn(path.to_path_buf());
@@ -148,6 +206,7 @@ impl Viewer {
     fn save(&self) {
         if let Some(doc) = &self.doc {
             let _ = document::save_marks(&self.data_dir, &doc.path, &doc.marks);
+            let _ = document::save_bookmarks(&self.data_dir, &doc.path, &doc.bookmarks);
         }
     }
 
@@ -209,12 +268,83 @@ impl Viewer {
         (canvas::rows_height(&self.side_rows(ui)) - (lay.h - lay.bar)).max(0) as f32
     }
 
-    fn go_page(&mut self, page: usize) {
+    /// Shows `page` without noting the move in the trail.
+    fn jump(&mut self, page: usize) {
         let count = self.doc.as_ref().map_or(0, |d| d.count());
         if self.view.go(page, count) {
             self.stop_editing();
         }
         self.sync_turn();
+    }
+
+    /// Shows `page` and notes where the view came from, for Go > Back.
+    fn go_page(&mut self, page: usize) {
+        let from = self.view.page;
+        self.jump(page);
+        if self.view.page != from {
+            self.trail.visit(from);
+        }
+    }
+
+    /// Shows what has been typed after Go to Page in the status line.
+    fn show_goto(&mut self) {
+        self.status = format!("Go to page: {}|", self.goto.as_deref().unwrap_or(""));
+    }
+
+    /// A key while a page number is being typed.
+    fn key_goto(&mut self, key: &KeyInput) -> bool {
+        match key {
+            KeyInput::Text(t) => {
+                let digits: String = t.chars().filter(|c| c.is_ascii_digit()).collect();
+                if let Some(g) = &mut self.goto {
+                    g.push_str(&digits);
+                }
+            }
+            KeyInput::Code(8) => {
+                if let Some(g) = &mut self.goto {
+                    g.pop();
+                }
+            }
+            KeyInput::Code(13) => {
+                let text = self.goto.take().unwrap_or_default();
+                let count = self.doc.as_ref().map_or(0, |d| d.count());
+                self.status.clear();
+                match model::parse_page(&text, count) {
+                    Some(page) => self.go_page(page),
+                    None if !text.is_empty() => self.status = format!("There is no page {text}."),
+                    None => {}
+                }
+                return true;
+            }
+            KeyInput::Code(27) => {
+                self.goto = None;
+                self.status.clear();
+                return true;
+            }
+            _ => return false,
+        }
+        self.show_goto();
+        true
+    }
+
+    /// Toggles the bookmark on the shown page.
+    fn toggle_bookmark(&mut self) {
+        let Some(src) = self.src() else { return };
+        let shown = self.view.page + 1;
+        if let Some(doc) = &mut self.doc {
+            let on = model::toggle_bookmark(&mut doc.bookmarks, src);
+            self.status = if on { format!("Bookmarked page {shown}") } else { format!("Removed the bookmark on page {shown}") };
+        }
+        self.save();
+    }
+
+    /// Goes to the next or previous bookmarked page.
+    fn go_bookmark(&mut self, forward: bool) {
+        let places = self.doc.as_ref().map(|d| d.bookmark_places()).unwrap_or_default();
+        match model::neighbour(&places, self.view.page, forward) {
+            Some(page) => self.go_page(page),
+            None => self.status = "There is no bookmark that way.".into(),
+        }
     }
 
     /// Ends the note being typed. A note left empty is removed.
@@ -240,13 +370,69 @@ impl Viewer {
         }
     }
 
-    fn act(&mut self, _ui: &Ui, lay: &Layout, action: Action) -> bool {
+    /// Does what a menu item or toolbar button says. Edits are recorded for Undo; Undo, Redo and Go are not edits.
+    fn act(&mut self, ui: &Ui, lay: &Layout, action: Action) -> bool {
+        match action {
+            Action::Undo | Action::Redo => {
+                self.stop_editing();
+                let Some(current) = self.snapshot() else { return false };
+                let state = if action == Action::Undo { self.history.undo(current) } else { self.history.redo(current) };
+                if let Some(state) = state {
+                    self.restore(state);
+                }
+                true
+            }
+            Action::GoBack | Action::GoForward => {
+                let current = self.view.page;
+                let page = if action == Action::GoBack { self.trail.back(current) } else { self.trail.forward(current) };
+                if let Some(page) = page {
+                    self.jump(page);
+                }
+                true
+            }
+            Action::FirstPage => {
+                self.go_page(0);
+                true
+            }
+            Action::LastPage => {
+                let count = self.doc.as_ref().map_or(0, |d| d.count());
+                self.go_page(count.saturating_sub(1));
+                true
+            }
+            Action::GoToPage => {
+                if self.doc.is_some() {
+                    self.stop_editing();
+                    self.goto = Some(String::new());
+                    self.show_goto();
+                }
+                true
+            }
+            Action::AddBookmark => {
+                self.toggle_bookmark();
+                true
+            }
+            Action::NextBookmark | Action::PreviousBookmark => {
+                self.go_bookmark(action == Action::NextBookmark);
+                true
+            }
+            Action::ToggleSidebar => {
+                self.sidebar = !self.sidebar;
+                true
+            }
+            _ => self.track(|v| v.act_edit(ui, lay, action)),
+        }
+    }
+
+    /// The actions that change the document or the view, run inside `track`.
+    fn act_edit(&mut self, _ui: &Ui, lay: &Layout, action: Action) -> bool {
         match action {
             Action::Previous | Action::Next => {
                 let delta = if action == Action::Previous { -1 } else { 1 };
                 let count = self.doc.as_ref().map_or(0, |d| d.count());
+                let from = self.view.page;
                 if count > 0 && self.view.step(delta, count) {
                     self.stop_editing();
+                    self.trail.visit(from);
                 }
                 self.sync_turn();
             }
@@ -295,6 +481,18 @@ impl Viewer {
             Action::Desaturate => self.adjust.saturation = (self.adjust.saturation - 0.25).clamp(0.0, 2.0),
             Action::ResetColour => self.adjust = Adjust::default(),
             Action::Print => self.print(),
+            Action::RevertToOriginal => self.revert(),
+            Action::Undo
+            | Action::Redo
+            | Action::GoBack
+            | Action::GoForward
+            | Action::FirstPage
+            | Action::LastPage
+            | Action::GoToPage
+            | Action::AddBookmark
+            | Action::NextBookmark
+            | Action::PreviousBookmark
+            | Action::ToggleSidebar => {}
             Action::ExportPng => self.export_raster(Raster::Png),
             Action::ExportJpeg => self.export_raster(Raster::Jpeg),
             Action::ExportPdf => self.export_pdf(),
@@ -305,6 +503,23 @@ impl Viewer {
             }
         }
         true
+    }
+
+    /// File > Revert to Original: drops the markup, restores the page order and turns and resets the colour.
+    fn revert(&mut self) {
+        self.editing = None;
+        if let Some(doc) = &mut self.doc {
+            let n = doc.sizes.len();
+            doc.marks.clear();
+            doc.order = (0..n).collect();
+            doc.turns = vec![0; n];
+        }
+        self.adjust = Adjust::default();
+        let count = self.doc.as_ref().map_or(0, |d| d.count());
+        let keep = self.view.page;
+        self.view.go(keep, count);
+        self.sync_turn();
+        self.save();
     }
 
     /// Prints the document as it is marked up: a PDF's edited copy (the worker writes and sends it), or a picture's
@@ -365,11 +580,15 @@ impl Viewer {
     }
 
     fn touch(&mut self, ui: &Ui, width: i32, height: i32, kind: TouchKind, x: f32, y: f32) -> bool {
-        let lay = Layout::new(ui, width, height);
+        let lay = self.layout(ui, width, height);
         match kind {
-            TouchKind::Down => self.touch_down(ui, &lay, x, y),
+            TouchKind::Down => {
+                // a press ends the note being typed (an empty note is dropped) before the edit is recorded
+                self.stop_editing();
+                self.track(|v| v.touch_down(ui, &lay, x, y))
+            }
             TouchKind::Move => self.touch_move(ui, &lay, x, y),
-            TouchKind::Up | TouchKind::Cancel => self.touch_up(&lay, x, y),
+            TouchKind::Up | TouchKind::Cancel => self.track(|v| v.touch_up(&lay, x, y)),
         }
     }
 
@@ -497,6 +716,9 @@ impl Viewer {
     }
 
     fn key(&mut self, ctx: &Ctx, key: KeyInput) -> bool {
+        if self.goto.is_some() {
+            return self.key_goto(&key);
+        }
         match &key {
             KeyInput::Text(text) => {
                 let Some(i) = self.editing else { return false };
@@ -527,7 +749,7 @@ impl Viewer {
 
     fn key_page(&mut self, ctx: &Ctx, action: Action) -> bool {
         let (w, h) = self.size(ctx);
-        let lay = Layout::new(&ctx.ui, w, h);
+        let lay = self.layout(&ctx.ui, w, h);
         self.act(&ctx.ui, &lay, action)
     }
 
@@ -583,6 +805,12 @@ fn item(action: Action, enabled: bool, checked: bool) -> AppMenuItem {
         Action::RotateRight => m.key("cmd+r"),
         Action::ExportPng => m.key("cmd+shift+e"),
         Action::Print => m.key("cmd+p"),
+        Action::Undo => m.key("cmd+z"),
+        Action::Redo => m.key("cmd+shift+z"),
+        Action::GoBack => m.key("cmd+alt+b"),
+        Action::GoForward => m.key("cmd+alt+f"),
+        Action::GoToPage => m.key("cmd+alt+g"),
+        Action::AddBookmark => m.key("cmd+d"),
         _ => m,
     };
     m
@@ -606,6 +834,7 @@ impl App for Viewer {
         // rotation needs a page with a picture to turn
         let picture = self.doc.as_ref().and_then(|d| d.page_size(self.view.page)).is_some();
         let count = self.doc.as_ref().map_or(0, |d| d.count());
+        let bookmarks = self.doc.as_ref().map(|d| d.bookmark_places()).unwrap_or_default();
         let outline = self.doc.as_ref().is_some_and(|d| pdf && !d.outline.is_empty());
         let tool_items: Vec<AppMenuItem> = [Tool::Pan, Tool::Highlight, Tool::Note, Tool::Rect, Tool::Rounded, Tool::Sign]
             .into_iter()
@@ -621,8 +850,15 @@ impl App for Viewer {
         file_items.extend(scale_items);
         file_items.push(AppMenuItem::separator());
         file_items.push(item(Action::ExportPdf, pdf, false));
+        file_items.push(AppMenuItem::separator());
+        file_items.push(item(Action::RevertToOriginal, open, false));
+        let sidebar_label = if self.sidebar { "Hide Sidebar" } else { "Show Sidebar" };
         vec![
             AppMenu { title: "File".into(), items: file_items },
+            AppMenu {
+                title: "Edit".into(),
+                items: vec![item(Action::Undo, self.history.can_undo(), false), item(Action::Redo, self.history.can_redo(), false)],
+            },
             AppMenu {
                 title: "View".into(),
                 items: vec![
@@ -634,11 +870,26 @@ impl App for Viewer {
                     item(Action::RotateLeft, picture, false),
                     item(Action::RotateRight, picture, false),
                     AppMenuItem::separator(),
-                    item(Action::Previous, count > 1 && self.view.page > 0, false),
-                    item(Action::Next, count > 1 && self.view.page + 1 < count, false),
-                    AppMenuItem::separator(),
+                    AppMenuItem::new(Action::ToggleSidebar.id(), sidebar_label).key("cmd+alt+s").enabled(open),
                     item(Action::ShowPages, open, self.side == Side::Pages),
                     item(Action::ShowOutline, outline, self.side == Side::Outline),
+                ],
+            },
+            AppMenu {
+                title: "Go".into(),
+                items: vec![
+                    item(Action::Previous, count > 1 && self.view.page > 0, false),
+                    item(Action::Next, count > 1 && self.view.page + 1 < count, false),
+                    item(Action::FirstPage, count > 1 && self.view.page > 0, false),
+                    item(Action::LastPage, count > 1 && self.view.page + 1 < count, false),
+                    item(Action::GoToPage, count > 1, false),
+                    AppMenuItem::separator(),
+                    item(Action::GoBack, self.trail.can_back(), false),
+                    item(Action::GoForward, self.trail.can_forward(), false),
+                    AppMenuItem::separator(),
+                    item(Action::AddBookmark, open, self.src().is_some_and(|s| self.doc.as_ref().is_some_and(|d| d.bookmarks.contains(&s)))),
+                    item(Action::PreviousBookmark, !bookmarks.is_empty(), false),
+                    item(Action::NextBookmark, !bookmarks.is_empty(), false),
                 ],
             },
             AppMenu {
@@ -665,7 +916,7 @@ impl App for Viewer {
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         let Some(action) = Action::from_id(id) else { return false };
-        let lay = Layout::new(&ctx.ui, ctx.cfg.w as i32, ctx.cfg.h as i32);
+        let lay = self.layout(&ctx.ui, ctx.cfg.w as i32, ctx.cfg.h as i32);
         self.act(&ctx.ui, &lay, action)
     }
 
@@ -697,7 +948,7 @@ impl App for Viewer {
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
-        let lay = Layout::new(&ctx.ui, s.w as i32, s.h as i32);
+        let lay = self.layout(&ctx.ui, s.w as i32, s.h as i32);
         let draft = self.draft(&lay);
         let scene = Scene {
             doc: self.doc.as_ref(),

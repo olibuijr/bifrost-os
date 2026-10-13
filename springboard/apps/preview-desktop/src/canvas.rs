@@ -71,6 +71,24 @@ pub enum Action {
     ExportAt200,
     /// File > Print: the file as opened goes to the default printer. Menu only, not a toolbar button.
     Print,
+    /// Edit > Undo and Redo: the document's edits (markup, page order, turns, colour).
+    Undo,
+    Redo,
+    /// File > Revert to Original: drops all markup, restores page order and turns, resets colour.
+    RevertToOriginal,
+    /// Go > Back and Forward through the pages visited.
+    GoBack,
+    GoForward,
+    FirstPage,
+    LastPage,
+    /// Go > Go to Page: the status line takes a page number.
+    GoToPage,
+    /// Go > Add Bookmark toggles a bookmark on the shown page.
+    AddBookmark,
+    NextBookmark,
+    PreviousBookmark,
+    /// View > Hide Sidebar / Show Sidebar.
+    ToggleSidebar,
 }
 
 /// Every action. A menu item's id is its index here.
@@ -107,6 +125,18 @@ pub const ACTIONS: &[Action] = &[
     Action::ExportAt100,
     Action::ExportAt200,
     Action::Print,
+    Action::Undo,
+    Action::Redo,
+    Action::RevertToOriginal,
+    Action::GoBack,
+    Action::GoForward,
+    Action::FirstPage,
+    Action::LastPage,
+    Action::GoToPage,
+    Action::AddBookmark,
+    Action::NextBookmark,
+    Action::PreviousBookmark,
+    Action::ToggleSidebar,
 ];
 
 /// The toolbar buttons, in order. The rest are in the menus only.
@@ -177,6 +207,18 @@ impl Action {
             Action::ExportAt100 => "Export at 100%",
             Action::ExportAt200 => "Export at 200%",
             Action::Print => "Print\u{2026}",
+            Action::Undo => "Undo",
+            Action::Redo => "Redo",
+            Action::RevertToOriginal => "Revert to Original",
+            Action::GoBack => "Back",
+            Action::GoForward => "Forward",
+            Action::FirstPage => "First Page",
+            Action::LastPage => "Last Page",
+            Action::GoToPage => "Go to Page\u{2026}",
+            Action::AddBookmark => "Add Bookmark",
+            Action::NextBookmark => "Next Bookmark",
+            Action::PreviousBookmark => "Previous Bookmark",
+            Action::ToggleSidebar => "Hide Sidebar",
         }
     }
 
@@ -597,6 +639,16 @@ mod tests {
     fn every_toolbar_button_is_a_menu_action() {
         for a in Action::toolbar() {
             assert!(ACTIONS.contains(a), "{a:?}");
+        }
+    }
+
+    #[test]
+    fn edit_and_go_actions_are_menu_only_and_keep_the_old_ids() {
+        assert_eq!(Action::Print.id(), 31);
+        assert_eq!(Action::Undo.id(), 32);
+        for a in [Action::Undo, Action::Redo, Action::GoBack, Action::GoToPage, Action::AddBookmark, Action::ToggleSidebar] {
+            assert!(!Action::toolbar().contains(&a), "{a:?}");
+            assert_eq!(Action::from_id(a.id()), Some(a));
         }
     }
 

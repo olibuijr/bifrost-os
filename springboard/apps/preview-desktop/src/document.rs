@@ -45,6 +45,8 @@ pub struct Document {
     pub marks: Vec<Mark>,
     /// The PDF outline, in reading order. Empty for a picture.
     pub outline: Vec<Outline>,
+    /// The bookmarked source pages, kept beside the markup.
+    pub bookmarks: Vec<usize>,
     source: Source,
     /// The pictures and thumbnails drawn so far, by key.
     drawn: RefCell<HashMap<Key, Rc<Image>>>,
@@ -65,6 +67,7 @@ impl Document {
             turns: vec![0; n],
             marks: load_marks(data_dir, path),
             outline,
+            bookmarks: load_bookmarks(data_dir, path),
             source,
             drawn: RefCell::new(HashMap::new()),
             asked: RefCell::new(HashSet::new()),
@@ -109,6 +112,11 @@ impl Document {
                 *t = quarters % 4;
             }
         }
+    }
+
+    /// The shown places of the bookmarked pages, in no particular order (a deleted page has none).
+    pub fn bookmark_places(&self) -> Vec<usize> {
+        self.bookmarks.iter().filter_map(|&s| self.display_of(s)).collect()
     }
 
     /// Moves shown page `page` by `delta` places. Returns the page's new place (unchanged when it cannot move).
@@ -248,6 +256,31 @@ pub fn save_marks(data_dir: &Path, path: &Path, marks: &[Mark]) -> std::io::Resu
     std::fs::write(file, model::to_sidecar(marks))
 }
 
+/// The bookmarks file for `path` under `data_dir`.
+fn bookmarks_path(data_dir: &Path, path: &Path) -> PathBuf {
+    sidecar_path(data_dir, path).with_extension("bookmarks")
+}
+
+/// The bookmarked source pages saved for `path`. A missing or unreadable file gives none.
+pub fn load_bookmarks(data_dir: &Path, path: &Path) -> Vec<usize> {
+    std::fs::read_to_string(bookmarks_path(data_dir, path)).map(|t| model::parse_bookmarks(&t)).unwrap_or_default()
+}
+
+/// Saves the bookmarks for `path`. With none left the file is removed.
+pub fn save_bookmarks(data_dir: &Path, path: &Path, pages: &[usize]) -> std::io::Result<()> {
+    let file = bookmarks_path(data_dir, path);
+    if pages.is_empty() {
+        return match std::fs::remove_file(&file) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        };
+    }
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(file, model::to_bookmarks(pages))
+}
+
 /// `img` with the colour adjustments applied. Returns a copy unchanged when nothing is set.
 pub fn adjusted(img: &Image, adjust: &Adjust) -> Image {
     let mut chain = FilterChain::new();
@@ -314,6 +347,31 @@ mod tests {
         doc.move_page(0, 1);
         assert_eq!(doc.turn_of(1), 1);
         assert_eq!(doc.turn_of(0), 0);
+    }
+
+    #[test]
+    fn bookmarks_follow_the_shown_places_of_their_pages() {
+        let mut doc = picture_doc(4, 4);
+        doc.sizes = vec![(4, 4), (4, 4), (4, 4)];
+        doc.order = vec![2, 0, 1];
+        doc.bookmarks = vec![0, 2];
+        let mut places = doc.bookmark_places();
+        places.sort();
+        assert_eq!(places, vec![0, 1]);
+        doc.delete_page(0);
+        assert_eq!(doc.bookmark_places(), vec![0]);
+    }
+
+    #[test]
+    fn bookmarks_are_saved_beside_the_markup_and_removed_when_empty() {
+        let dir = std::env::temp_dir().join(format!("viewer-bookmarks-{}", std::process::id()));
+        let path = Path::new("/a/b.pdf");
+        save_bookmarks(&dir, path, &[3, 1]).expect("saved");
+        assert_eq!(load_bookmarks(&dir, path), vec![3, 1]);
+        save_bookmarks(&dir, path, &[]).expect("removed");
+        assert!(load_bookmarks(&dir, path).is_empty());
+        save_bookmarks(&dir, path, &[]).expect("removing nothing is fine");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
