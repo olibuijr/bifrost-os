@@ -316,6 +316,8 @@ impl Shell {
         for r in [self.cc_desk_rect(),self.center_desk_rect()].into_iter().flatten() {let (x,y,w,h)=r;v.push(((x-g).max(0.) as i32,(y-g).max(0.) as i32,(w+2.*g) as i32,(h+2.*g) as i32));}
         if let Some(((x,y,w,h),_))=self.quicksearch.desk_overlay(&self.ui,self.w){v.push((x as i32,y as i32,w as i32,h as i32));}
         if self.perf.enabled||self.perf_drawn{let (x,y,w,h)=self.perf_rect();let g=self.ui.pt(2.) as i32;v.push((x as i32-g,y as i32-g,w as i32+2*g,h as i32+2*g));}
+        // the tablet's on-screen keyboard, from a pixel above its top edge down to the bottom of the screen
+        if self.desk_keyboard_visible(){let top=(self.kb_top() as i32-self.ui.pt(2.) as i32).max(0);v.push((0,top,self.w,self.h-top));}
         Some(v)
     }
     pub(super) fn draw_desktop_bar(&self,s:&mut Surface) {

@@ -3179,6 +3179,19 @@ takes touch input uses `recognizer`, which tracks several fingers by id.
 Not done yet: the shell's own system gestures still use `src/shell/gestures.rs` directly; moving them onto
 recognizers is a separate step.
 
+## Form factor and on-screen keyboard policy (`bifrost_ui::form_factor`, `bifrost_app::FormFactor`)
+
+One shell and one SDK serve a desktop and a touch tablet. `FormFactor` is `Desktop` or `Tablet`, read once from
+`BIFROST_FORM` or the plain-word file `/etc/bifrost/form`, default `Desktop` (`FormFactor::resolve` is the pure form of
+the lookup). The shell passes `BIFROST_FORM` to sandboxed apps, and `bifrost_app::is_touch_tablet()` answers whether the
+app runs on a touch tablet.
+
+Keyboard policy (`FormFactor::allows_onscreen_keyboard`): a desktop never raises the on-screen keyboard on the windowed
+desktop UI; a tablet raises it for text fields with or without that UI, and keeps it down while a hardware keyboard is
+attached (`Shell::set_hardware_keyboard`). Tapping outside a field dismisses it as before. A desktop also sets
+`keyboard::set_disabled(true)` for the session; a tablet does not. Apps get `BIFROST_HARDWARE_KEYBOARD=1` only on a
+desktop.
+
 ## Module index: modules without their own section
 
 Every module below exists in the crate named and had no mention in this document. Each line is the first sentence of the
