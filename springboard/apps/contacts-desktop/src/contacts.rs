@@ -36,6 +36,7 @@ use crate::dupes;
 use crate::exchange;
 use crate::extras::{self, Extra, Extras, ValueKind};
 use crate::printing;
+use crate::smart::{self, Condition, Rule, RuleField, UserList};
 use crate::textimport;
 use crate::group_file;
 use crate::history::History;
@@ -65,6 +66,12 @@ const BAR_SETTINGS: u32 = 16;
 /// Merge the duplicates of the open card, and merge every group of duplicates (Possible Duplicates list).
 const BAR_MERGE: u32 = 17;
 const BAR_MERGE_ALL: u32 = 18;
+/// Smart list editor: edit the shown list. A new list is started from the File menu.
+const BAR_EDIT_LIST: u32 = 23;
+/// Selection mode (started from the Card menu): make a group of the chosen contacts, merge them, and leave it.
+const BAR_GROUP_SELECTION: u32 = 20;
+const BAR_MERGE_SELECTION: u32 = 21;
+const BAR_SELECT_DONE: u32 = 22;
 /// Ids of the app's main-menu items (File and View; the shell's Edit, Window and Help are not the app's).
 const MENU_IMPORT: u32 = 1;
 const MENU_EXPORT_V3: u32 = 2;
@@ -79,6 +86,13 @@ const MENU_PRINT_LABELS: u32 = 10;
 const MENU_EXPORT_PDF: u32 = 11;
 /// File > Refresh Accounts: the CardDAV sync lives in `main.rs`, which answers this item.
 pub const MENU_REFRESH: u32 = 12;
+/// Select Contacts, New Group From Selection and Merge Selected Cards.
+const MENU_SELECT: u32 = 13;
+const MENU_GROUP_SELECTION: u32 = 14;
+const MENU_MERGE_SELECTION: u32 = 15;
+/// File > New Smart List and Edit Smart List.
+const MENU_NEW_LIST: u32 = 16;
+const MENU_EDIT_LIST: u32 = 17;
 /// The Card menu.
 const MENU_MY_CARD: u32 = 20;
 const MENU_GO_MY_CARD: u32 = 21;
@@ -101,6 +115,9 @@ const LIST_SMART: u32 = 110;
 const LIST_SMART_LAST: u32 = LIST_SMART + crate::smart::Smart::ALL.len() as u32 - 1;
 /// Group `n` is the sidebar row `LIST_GROUP + n`; groups number from 1 and there are at most 1000 of them.
 const LIST_GROUP: u32 = 1000;
+/// The person's smart list `n` (its place in the saved lists) is the sidebar row `LIST_USER + n`.
+const LIST_USER: u32 = 2100;
+const LIST_USER_LAST: u32 = LIST_USER + smart::MAX_LISTS as u32 - 1;
 const GROUPS_FILE: &str = "groups.txt";
 const DISPLAY_FILE: &str = "display.txt";
 /// Extra phone numbers, emails and addresses, beside the contacts file (see `extras.rs`).
@@ -111,8 +128,10 @@ const DETAILS_FILE: &str = "details.txt";
 const ARCHIVE_FILE: &str = "contacts.bcarchive";
 /// The first line of a contacts file.
 const CONTACTS_HEADER: &str = "springboard-contacts-v1";
+/// The person's smart lists, beside the contacts file (see `group_file.rs`).
+const SMART_FILE: &str = "smartlists.txt";
 /// The data files of the Contacts folder besides the contacts file; the contacts archive holds them all.
-const ARCHIVED_FILES: [&str; 4] = [VALUES_FILE, GROUPS_FILE, DISPLAY_FILE, DETAILS_FILE];
+const ARCHIVED_FILES: [&str; 5] = [VALUES_FILE, GROUPS_FILE, DISPLAY_FILE, DETAILS_FILE, SMART_FILE];
 
 /// What the list shows. Every filter but `All` narrows the list to a set of contact identifiers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -127,6 +146,8 @@ enum Filter {
     LastImport,
     /// A built-in smart group: the contacts whose fields match its rule.
     Smart(crate::smart::Smart),
+    /// One of the person's smart lists, by its place in the saved lists.
+    UserList(usize),
     Group(u64),
 }
 
@@ -140,6 +161,7 @@ impl Filter {
             Filter::Duplicates => LIST_DUPLICATES,
             Filter::LastImport => LIST_LAST_IMPORT,
             Filter::Smart(s) => LIST_SMART + s.index() as u32,
+            Filter::UserList(n) => LIST_USER + n as u32,
             Filter::Group(g) => LIST_GROUP + g as u32,
         }
     }
@@ -155,6 +177,7 @@ impl Filter {
                 Some(s) => Filter::Smart(s),
                 None => Filter::All,
             },
+            id if (LIST_USER..=LIST_USER_LAST).contains(&id) => Filter::UserList((id - LIST_USER) as usize),
             id if id > LIST_GROUP => Filter::Group((id - LIST_GROUP) as u64),
             _ => Filter::All,
         }
@@ -165,6 +188,7 @@ impl Filter {
 fn sidebar_node(id: u64) -> bool {
     (LIST_ALL as u64..=LIST_SMART_LAST as u64).contains(&id)
         || (LIST_GROUP as u64 + 1..=LIST_GROUP as u64 + 1000).contains(&id)
+        || (LIST_USER as u64..=LIST_USER_LAST as u64).contains(&id)
 }
 
 /// Accessibility ids of the rows and card or form controls (see `controls`). Bar and sidebar ids stay below 200.
@@ -197,6 +221,15 @@ fn copy_node(k: usize) -> u64 {
         NODE_COPY_MORE + k as u64
     }
 }
+/// The smart list editor: the name field, the match mode row, Add Rule and Delete List, then four controls per rule.
+const NODE_SMART_NAME: u64 = 500;
+const NODE_SMART_ANY: u64 = 501;
+const NODE_SMART_ADD: u64 = 502;
+const NODE_SMART_DELETE: u64 = 503;
+const NODE_SMART_FIELD: u64 = 510;
+const NODE_SMART_CONDITION: u64 = 520;
+const NODE_SMART_VALUE: u64 = 530;
+const NODE_SMART_REMOVE: u64 = 540;
 const ROW_NODE: u64 = 10_000;
 
 /// Windows at least this wide (points) open with the lists sidebar shown, as the stock Contacts app does.
@@ -218,6 +251,9 @@ const RENAME: usize = 8;
 /// Focus index of the first card field (Add Field): field `Detail::ALL[n]` has the index `DETAIL_BASE + n`.
 const DETAIL_BASE: usize = 10;
 const N_DETAILS: usize = Detail::ALL.len();
+/// Focus indexes of the smart list editor: the name, then the value field of rule `n` at `SMART_VALUE + n`.
+const SMART_NAME: usize = 30;
+const SMART_VALUE: usize = 40;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Screen {
@@ -227,6 +263,8 @@ enum Screen {
     Editor(Option<u64>),
     /// Display settings (the sort order of the list), in the detail pane.
     Settings,
+    /// The smart list editor, in the detail pane: the list being edited, or `None` for a new one.
+    SmartEditor(Option<usize>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -252,6 +290,14 @@ enum Target {
     Setting(Setting),
     /// The Mark as Company row of the edit form.
     CompanyToggle,
+    /// The smart list editor: the match mode row, the field and condition buttons and the remove button of a rule, Add
+    /// Rule, and Delete List.
+    SmartAny,
+    SmartField(usize),
+    SmartCondition(usize),
+    SmartRemove(usize),
+    SmartAdd,
+    SmartDelete,
     List,
     Content,
 }
@@ -453,6 +499,33 @@ struct SettingsLayout {
     height: f32,
 }
 
+/// One rule in the smart list editor: its field and condition, and the text of its value.
+struct RuleDraft {
+    field: RuleField,
+    condition: Condition,
+    value: TextField,
+}
+
+/// One rule row of the smart list editor, scroll applied, in window points.
+struct SmartRow {
+    field: Rect,
+    condition: Rect,
+    value: Rect,
+    remove: Rect,
+}
+
+/// The smart list editor, scroll applied, in window points.
+struct SmartLayout {
+    title_y: f32,
+    name: Rect,
+    any: Rect,
+    rules: Vec<SmartRow>,
+    add: Option<Rect>,
+    delete: Option<Rect>,
+    cancel: Option<Rect>,
+    height: f32,
+}
+
 /// The edit form, scroll applied, in window points.
 struct EditLayout {
     avatar: (f32, f32, f32),
@@ -530,6 +603,16 @@ pub struct Contacts {
     edit_company: bool,
     /// Restore from Archive was chosen once and replaces the address book on the second choice.
     confirm_restore: bool,
+    /// Selection mode: a press on a row marks it instead of opening it. The list has no Shift or Command click, so
+    /// several contacts are chosen this way.
+    selecting: bool,
+    selection: BTreeSet<u64>,
+    /// The person's smart lists (`smartlists.txt`).
+    lists: Vec<UserList>,
+    /// The smart list editor: the list's name, whether any rule may match, and the rules.
+    smart_name: TextField,
+    smart_any: bool,
+    smart_rules: Vec<RuleDraft>,
     error: Option<String>,
     toast_until: Option<f64>,
     labels: TextCache,
@@ -578,6 +661,12 @@ impl Contacts {
         card_details.retain(|id| live.contains(&id));
         let load_failed = load_failed || details_error.is_some();
         let error = error.or(details_error);
+        let (lists, lists_error) = match group_file::load_lists(&path.with_file_name(SMART_FILE)) {
+            Ok(lists) => (lists, None),
+            Err(e) => (Vec::new(), Some(format!("Unable to load smart lists: {e}"))),
+        };
+        let load_failed = load_failed || lists_error.is_some();
+        let error = error.or(lists_error);
         contacts.sort_by(|a, b| names::compare(a.display_name(), b.display_name()).then(a.id.cmp(&b.id)));
         let history = History::new(&contacts);
         let mut app = Self {
@@ -621,6 +710,12 @@ impl Contacts {
             detail_shown: [false; N_DETAILS],
             edit_company: false,
             confirm_restore: false,
+            selecting: false,
+            selection: BTreeSet::new(),
+            lists,
+            smart_name: TextField::new(),
+            smart_any: false,
+            smart_rules: Vec::new(),
             error: error.or(groups_error),
             toast_until: None,
             labels: TextCache::default(),
@@ -641,8 +736,13 @@ impl Contacts {
         (!self.load_failed).then_some(self.contacts.as_slice())
     }
 
-    /// True while the editor is open: its edits are not saved yet.
+    /// True while a form is open, the contact editor or the smart list editor: its edits are not saved yet.
     pub fn editing(&self) -> bool {
+        matches!(self.screen, Screen::Editor(_) | Screen::SmartEditor(_))
+    }
+
+    /// True while the contact editor is open.
+    fn editing_contact(&self) -> bool {
         matches!(self.screen, Screen::Editor(_))
     }
 
@@ -677,6 +777,7 @@ impl Contacts {
             Screen::Detail(id) => format!("detail:{id}"),
             Screen::Editor(id) => format!("editor:{}", id.map_or_else(|| "new".into(), |id| id.to_string())),
             Screen::Settings => "settings".into(),
+            Screen::SmartEditor(n) => format!("smart-editor:{}", n.map_or_else(|| "new".into(), |n| n.to_string())),
         };
         format!(
             "contacts_screen={screen}\ncontacts_count={}\ncontacts_shown={}\ncontacts_sidebar={}\ncontacts_confirm_delete={}\ncontacts_error={}\n",
@@ -733,6 +834,13 @@ impl Contacts {
             items.push(ToolbarItem::button(BAR_FINISH, "Done"));
             return Toolbar::new(items);
         }
+        if self.selecting {
+            items.push(ToolbarItem::flexible_space());
+            items.push(ToolbarItem::button(BAR_GROUP_SELECTION, "Group Selection").enabled(groups_ok && !self.selection.is_empty()));
+            items.push(ToolbarItem::button(BAR_MERGE_SELECTION, "Merge").enabled(groups_ok && self.selection.len() >= 2));
+            items.push(ToolbarItem::button(BAR_SELECT_DONE, "Done"));
+            return Toolbar::new(items);
+        }
         items.push(ToolbarItem::flexible_space());
         if let Filter::Group(_) = self.filter {
             items.push(ToolbarItem::button(BAR_ADD_PEOPLE, "Add People").enabled(groups_ok));
@@ -741,6 +849,9 @@ impl Contacts {
         }
         if self.filter == Filter::Duplicates {
             items.push(ToolbarItem::button(BAR_MERGE_ALL, "Merge All").enabled(groups_ok));
+        }
+        if matches!(self.filter, Filter::UserList(_)) {
+            items.push(ToolbarItem::button(BAR_EDIT_LIST, "Edit List").enabled(!self.load_failed));
         }
         items.push(ToolbarItem::button(BAR_IMPORT, "Import").enabled(!self.load_failed));
         items.push(ToolbarItem::button(BAR_EXPORT, "Export 3.0").enabled(!self.load_failed));
@@ -770,7 +881,7 @@ impl Contacts {
                 }
                 items.push(ToolbarItem::button(BAR_EDIT, "Edit").enabled(!self.load_failed));
             }
-            Screen::Editor(_) => {
+            Screen::Editor(_) | Screen::SmartEditor(_) => {
                 items.push(ToolbarItem::button(BAR_CANCEL, "Cancel"));
                 items.push(ToolbarItem::button(BAR_DONE, "Done"));
             }
@@ -811,6 +922,9 @@ impl Contacts {
         rows.push((0, "Smart Groups".to_string(), ""));
         for s in crate::smart::Smart::ALL {
             rows.push((LIST_SMART + s.index() as u32, s.title().to_string(), s.symbol()));
+        }
+        for (n, list) in self.lists.iter().enumerate() {
+            rows.push((LIST_USER + n as u32, list.name.clone(), "list.bullet"));
         }
         rows.push((0, "Groups".to_string(), ""));
         for &id in &self.group_ids {
@@ -946,6 +1060,7 @@ impl Contacts {
             Screen::Detail(_) => self.card_layout(ui).height,
             Screen::Editor(_) => self.edit_layout(ui).height,
             Screen::Settings => self.settings_layout().height,
+            Screen::SmartEditor(_) => self.smart_layout().height,
         };
         self.scroll.set_max(height - self.h);
     }
@@ -981,6 +1096,202 @@ impl Contacts {
         }
     }
 
+    /// The smart list editor, scroll applied, in window points.
+    fn smart_layout(&self) -> SmartLayout {
+        let (x, cw) = self.column();
+        let off = self.scroll.offset();
+        let title_y = UNIFIED_BAR_PT + SPACE_XL - off;
+        let mut y = UNIFIED_BAR_PT + 3.0 * SPACE_XL - off;
+        let name = rect(x, y, cw, FIELD_ROW);
+        y += FIELD_ROW + SPACE_S;
+        let any = rect(x, y, cw, FIELD_ROW);
+        y += FIELD_ROW + SPACE_M;
+        let gap = SPACE_XS;
+        let field_w = (cw * 0.2).clamp(70.0, 110.0);
+        let condition_w = (cw * 0.28).clamp(100.0, 150.0);
+        let remove_w = FIELD_ROW;
+        let mut rules = Vec::new();
+        for _ in &self.smart_rules {
+            let value_x = x + field_w + condition_w + 2.0 * gap;
+            let value_w = (x + cw - remove_w - gap - value_x).max(40.0);
+            rules.push(SmartRow {
+                field: rect(x, y, field_w, FIELD_ROW),
+                condition: rect(x + field_w + gap, y, condition_w, FIELD_ROW),
+                value: rect(value_x, y, value_w, FIELD_ROW),
+                remove: rect(x + cw - remove_w, y, remove_w, FIELD_ROW),
+            });
+            y += FIELD_ROW + SPACE_S;
+        }
+        let add = (self.smart_rules.len() < smart::MAX_RULES).then(|| rect(x, y, cw, FIELD_ROW));
+        if add.is_some() {
+            y += FIELD_ROW + SPACE_S;
+        }
+        y += SPACE_M;
+        let (mut delete, mut cancel) = (None, None);
+        if matches!(self.screen, Screen::SmartEditor(Some(_))) {
+            delete = Some(rect(x, y, cw, BUTTON_ROW));
+            y += BUTTON_ROW + m::CARD_GAP;
+            if self.confirm_delete {
+                cancel = Some(rect(x, y, cw, BUTTON_ROW));
+                y += BUTTON_ROW + m::CARD_GAP;
+            }
+        }
+        SmartLayout { title_y, name, any, rules, add, delete, cancel, height: y + off + SPACE_XL }
+    }
+
+    /// The smart list editor's text fields in the order Tab visits them: the name, then the value of each rule that
+    /// compares with one.
+    fn smart_focus_order(&self) -> Vec<usize> {
+        let mut order = vec![SMART_NAME];
+        order.extend(self.smart_rules.iter().enumerate().filter(|(_, r)| r.condition.needs_value()).map(|(n, _)| SMART_VALUE + n));
+        order
+    }
+
+    /// File > New Smart List: opens the editor on an empty list with one rule.
+    fn new_list(&mut self, ui: &Ui) {
+        if self.load_failed || self.editing() || self.renaming.is_some() || self.picking.is_some() {
+            return;
+        }
+        if self.lists.len() >= smart::MAX_LISTS {
+            self.status = Some(format!("A person can make at most {} smart lists", smart::MAX_LISTS));
+            self.dirty = true;
+            return;
+        }
+        self.smart_name.clear();
+        self.smart_any = false;
+        self.smart_rules = vec![RuleDraft { field: RuleField::Name, condition: Condition::Contains, value: TextField::new() }];
+        self.open_smart_editor(ui, None);
+    }
+
+    /// File > Edit Smart List: opens the editor on the smart list the sidebar shows.
+    fn edit_list(&mut self, ui: &Ui) {
+        let Filter::UserList(n) = self.filter else { return };
+        if self.load_failed || self.editing() || self.renaming.is_some() || self.picking.is_some() {
+            return;
+        }
+        let Some(list) = self.lists.get(n) else { return };
+        self.smart_name.clear();
+        self.smart_name.push_str(&list.name);
+        self.smart_any = list.any;
+        self.smart_rules = list
+            .rules
+            .iter()
+            .map(|rule| {
+                let mut value = TextField::new();
+                value.push_str(&rule.value);
+                RuleDraft { field: rule.field, condition: rule.condition, value }
+            })
+            .collect();
+        self.open_smart_editor(ui, Some(n));
+    }
+
+    fn open_smart_editor(&mut self, ui: &Ui, which: Option<usize>) {
+        self.screen = Screen::SmartEditor(which);
+        self.error = None;
+        self.status = None;
+        self.confirm_delete = false;
+        self.scroll.jump_top();
+        self.fit_scroll(ui);
+        self.focus_field(SMART_NAME);
+    }
+
+    /// Done in the smart list editor: checks the list, saves the lists file and shows the list.
+    fn save_smart(&mut self, ui: &Ui) {
+        let Screen::SmartEditor(which) = self.screen else { return };
+        if self.load_failed {
+            return;
+        }
+        let list = UserList {
+            name: self.smart_name.trim().to_string(),
+            any: self.smart_any,
+            rules: self
+                .smart_rules
+                .iter()
+                .map(|r| Rule { field: r.field, condition: r.condition, value: if r.condition.needs_value() { r.value.trim().to_string() } else { String::new() } })
+                .collect(),
+        };
+        if !list.valid() {
+            self.error = Some("A smart list needs a name, and each rule that compares needs a value".into());
+            self.dirty = true;
+            return;
+        }
+        let mut lists = self.lists.clone();
+        let at = match which {
+            Some(n) if n < lists.len() => {
+                lists[n] = list;
+                n
+            }
+            _ => {
+                lists.push(list);
+                lists.len() - 1
+            }
+        };
+        match group_file::save_lists(&self.path.with_file_name(SMART_FILE), &lists) {
+            Ok(()) => {
+                self.lists = lists;
+                self.error = None;
+                self.filter = Filter::UserList(at);
+                self.sidebar_shown = true;
+                self.list_scroll.jump_top();
+                self.close_detail(ui);
+                self.rebuild(ui);
+            }
+            Err(e) => {
+                self.error = Some(format!("Unable to save the smart list: {e}"));
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// Deletes the smart list the editor is on. The first press asks, the second deletes.
+    fn delete_list(&mut self, ui: &Ui) {
+        let Screen::SmartEditor(Some(n)) = self.screen else { return };
+        if self.load_failed || n >= self.lists.len() {
+            return;
+        }
+        if !self.confirm_delete {
+            self.confirm_delete = true;
+            self.fit_scroll(ui);
+            return;
+        }
+        let mut lists = self.lists.clone();
+        lists.remove(n);
+        match group_file::save_lists(&self.path.with_file_name(SMART_FILE), &lists) {
+            Ok(()) => {
+                self.lists = lists;
+                self.error = None;
+                self.filter = Filter::All;
+                self.list_scroll.jump_top();
+                self.close_detail(ui);
+                self.rebuild(ui);
+            }
+            Err(e) => {
+                self.error = Some(format!("Unable to delete the smart list: {e}"));
+                self.dirty = true;
+            }
+        }
+    }
+
+    /// Adds an empty rule to the smart list editor.
+    fn add_rule(&mut self, ui: &Ui) {
+        if self.smart_rules.len() >= smart::MAX_RULES {
+            return;
+        }
+        self.smart_rules.push(RuleDraft { field: RuleField::Name, condition: Condition::Contains, value: TextField::new() });
+        self.fit_scroll(ui);
+        self.focus_field(SMART_VALUE + self.smart_rules.len() - 1);
+    }
+
+    /// Takes rule `n` out of the smart list editor. A list keeps at least one rule.
+    fn remove_rule(&mut self, ui: &Ui, n: usize) {
+        if self.smart_rules.len() <= 1 || n >= self.smart_rules.len() {
+            return;
+        }
+        self.smart_rules.remove(n);
+        self.focus = None;
+        self.fit_scroll(ui);
+    }
+
     // ---- model ----
 
     /// The folder beside the contacts file that holds `name` (Import or Export).
@@ -1000,6 +1311,7 @@ impl Contacts {
             Filter::Recent => Some(self.history.changed_this_session()),
             Filter::Duplicates => Some(dupes::duplicate_ids(&self.contacts)),
             Filter::LastImport => Some(self.last_import_ids()),
+            Filter::UserList(n) => Some(self.lists.get(n).map(|list| list.ids(&self.contacts, &self.extras)).unwrap_or_default()),
             Filter::Smart(smart) => Some(smart.ids(&self.contacts)),
             Filter::Group(group) => Some(
                 self.groups
@@ -1226,6 +1538,7 @@ impl Contacts {
                     self.write_details();
                 }
                 self.forget_in_prefs(&[id]);
+                self.selection.remove(&id);
                 self.close_detail(ui);
                 self.rebuild(ui);
             }
@@ -1459,7 +1772,7 @@ impl Contacts {
         let groups_ok = ready && !self.groups_failed;
         let sidebar = if self.sidebar_shown { "Hide Sidebar" } else { "Show Sidebar" };
         let open = matches!(self.screen, Screen::Detail(_));
-        let on_card = open || self.editing();
+        let on_card = open || self.editing_contact();
         let company = match self.screen {
             Screen::Detail(id) => self.details.is_company(id),
             Screen::Editor(_) => self.edit_company,
@@ -1482,6 +1795,10 @@ impl Contacts {
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_DUPLICATES, "Look for Duplicates"),
             AppMenuItem::new(MENU_MERGE, "Merge Duplicates").enabled(groups_ok && open && self.filter == Filter::Duplicates),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_SELECT, "Select Contacts").enabled(ready && !self.editing() && !self.contacts.is_empty()),
+            AppMenuItem::new(MENU_GROUP_SELECTION, "New Group From Selection").enabled(groups_ok && self.selecting && !self.selection.is_empty()),
+            AppMenuItem::new(MENU_MERGE_SELECTION, "Merge Selected Cards").enabled(groups_ok && self.selecting && self.selection.len() >= 2),
         ]);
         vec![
             AppMenu {
@@ -1489,6 +1806,9 @@ impl Contacts {
                 items: vec![
                     AppMenuItem::new(MENU_IMPORT, "Import Contacts...").enabled(ready),
                     AppMenuItem::new(MENU_RESTORE_ARCHIVE, "Restore from Archive...").enabled(ready),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_NEW_LIST, "New Smart List...").enabled(ready),
+                    AppMenuItem::new(MENU_EDIT_LIST, "Edit Smart List...").enabled(ready && matches!(self.filter, Filter::UserList(_))),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_EXPORT_V3, "Export vCard 3.0...").enabled(ready),
                     AppMenuItem::new(MENU_EXPORT_V4, "Export vCard 4.0...").enabled(ready),
@@ -1542,6 +1862,11 @@ impl Contacts {
             MENU_NEXT => self.step_card(ui, true),
             MENU_PREVIOUS => self.step_card(ui, false),
             MENU_MERGE => self.merge_duplicates(ui, false),
+            MENU_NEW_LIST => self.new_list(ui),
+            MENU_EDIT_LIST => self.edit_list(ui),
+            MENU_SELECT => self.start_selecting(ui),
+            MENU_GROUP_SELECTION => self.group_selection(ui),
+            MENU_MERGE_SELECTION => self.merge_selection(ui),
             id if (MENU_FIELD..MENU_FIELD + N_DETAILS as u32).contains(&id) => self.add_field(ui, Detail::ALL[(id - MENU_FIELD) as usize]),
             _ => return false,
         }
@@ -1561,6 +1886,67 @@ impl Contacts {
         self.list_scroll.jump_top();
         self.close_detail(ui);
         self.rebuild(ui);
+    }
+
+    /// Card > Select Contacts: a press on a row marks it instead of opening it. The list has no Shift or Command click,
+    /// so several contacts are chosen this way.
+    fn start_selecting(&mut self, ui: &Ui) {
+        if self.load_failed || self.editing() || self.renaming.is_some() || self.picking.is_some() {
+            return;
+        }
+        self.selecting = true;
+        self.selection.clear();
+        self.close_detail(ui);
+        self.status = Some("Click the contacts to choose, then Group Selection or Merge".into());
+        self.dirty = true;
+    }
+
+    /// Leaves selection mode and forgets the choice.
+    fn stop_selecting(&mut self) {
+        self.selecting = false;
+        self.selection.clear();
+        self.status = None;
+        self.dirty = true;
+    }
+
+    /// Card > New Group From Selection: makes a group of the chosen contacts and shows it.
+    fn group_selection(&mut self, ui: &Ui) {
+        if self.load_failed || self.groups_failed || self.selection.is_empty() {
+            return;
+        }
+        let name = format!("Group {}", self.groups.len() + 1);
+        match self.groups.add(&name, None) {
+            Ok(id) => {
+                for contact in &self.selection {
+                    let _ = self.groups.add_member(id, *contact);
+                }
+                let count = self.selection.len();
+                self.group_ids.push(id);
+                self.stop_selecting();
+                self.error = None;
+                self.filter = Filter::Group(id);
+                self.save_groups();
+                self.list_scroll.jump_top();
+                self.rebuild(ui);
+                self.status = Some(format!("Made {name} from {count} contacts"));
+            }
+            Err(e) => self.error = Some(format!("Unable to add a group: {e:?}")),
+        }
+    }
+
+    /// Card > Merge Selected Cards: folds the chosen contacts into the first of them (the lowest identifier).
+    fn merge_selection(&mut self, ui: &Ui) {
+        if self.load_failed || self.groups_failed {
+            return;
+        }
+        let ids: Vec<u64> = self.selection.iter().copied().filter(|id| self.contacts.iter().any(|c| c.id == *id)).collect();
+        if ids.len() < 2 {
+            self.status = Some("Choose at least two contacts to merge".into());
+            self.dirty = true;
+            return;
+        }
+        self.stop_selecting();
+        self.merge_groups(ui, &[ids], None);
     }
 
     /// Adds the open contact to the group the list shows, or takes it out when it is already a member.
@@ -2022,7 +2408,7 @@ impl Contacts {
         if let Screen::Detail(id) = self.screen {
             self.edit_contact(ui, Some(id));
         }
-        if !self.editing() {
+        if !self.editing_contact() {
             self.status = Some("Open a card first, then choose Add Field".into());
             self.dirty = true;
             return;
@@ -2049,12 +2435,18 @@ impl Contacts {
         } else {
             found.into_iter().filter(|group| open.is_some_and(|id| group.contains(&id))).collect()
         };
+        self.merge_groups(ui, &chosen, open);
+    }
+
+    /// Folds each group of cards (identifiers, the first one stays) into its first card and saves the result. `open` is
+    /// the card on show, which is shown again when it was merged.
+    fn merge_groups(&mut self, ui: &Ui, chosen: &[Vec<u64>], open: Option<u64>) {
         let mut contacts = self.contacts.clone();
         let mut values = self.extras.clone();
         let mut cards = self.details.clone();
         let mut merges = Vec::new();
         let mut dropped = 0;
-        for group in &chosen {
+        for group in chosen {
             let Some(merged) = dupes::merge(&contacts, &values, &cards, group) else { continue };
             if let Some(slot) = contacts.iter_mut().find(|c| c.id == merged.keep.id) {
                 *slot = merged.keep.clone();
@@ -2121,11 +2513,12 @@ impl Contacts {
         if dropped > 0 {
             status.push_str(&format!("; {dropped} values did not fit and were left out"));
         }
-        self.status = Some(status);
         self.rebuild(ui);
         if let Some(keep) = reopen {
             self.open_detail(ui, keep);
         }
+        // opening a card clears the status line, so the summary is set last
+        self.status = Some(status);
     }
 
     // ---- intents and the control socket ----
@@ -2300,6 +2693,38 @@ impl Contacts {
                     return Some(Target::Setting(*setting));
                 }
             }
+            Screen::SmartEditor(_) => {
+                let l = self.smart_layout();
+                if l.delete.is_some_and(|d| d.contains(x, y)) {
+                    return Some(Target::SmartDelete);
+                }
+                if l.cancel.is_some_and(|c| c.contains(x, y)) {
+                    return Some(Target::CancelDelete);
+                }
+                if l.name.contains(x, y) {
+                    return Some(Target::Field(SMART_NAME));
+                }
+                if l.any.contains(x, y) {
+                    return Some(Target::SmartAny);
+                }
+                for (n, row) in l.rules.iter().enumerate() {
+                    if row.remove.contains(x, y) {
+                        return Some(Target::SmartRemove(n));
+                    }
+                    if row.field.contains(x, y) {
+                        return Some(Target::SmartField(n));
+                    }
+                    if row.condition.contains(x, y) {
+                        return Some(Target::SmartCondition(n));
+                    }
+                    if row.value.contains(x, y) && self.smart_rules[n].condition.needs_value() {
+                        return Some(Target::Field(SMART_VALUE + n));
+                    }
+                }
+                if l.add.is_some_and(|a| a.contains(x, y)) {
+                    return Some(Target::SmartAdd);
+                }
+            }
         }
         Some(Target::Content)
     }
@@ -2333,6 +2758,9 @@ impl Contacts {
             }
             BAR_MERGE => self.merge_duplicates(ui, false),
             BAR_MERGE_ALL => self.merge_duplicates(ui, true),
+            BAR_GROUP_SELECTION => self.group_selection(ui),
+            BAR_MERGE_SELECTION => self.merge_selection(ui),
+            BAR_SELECT_DONE => self.stop_selecting(),
             BAR_SIDEBAR => {
                 self.sidebar_shown = !self.sidebar_shown;
                 self.fit_scroll(ui);
@@ -2348,10 +2776,13 @@ impl Contacts {
                 if self.screen == Screen::Settings {
                     self.screen = Screen::List;
                     self.fit_scroll(ui);
+                } else if matches!(self.screen, Screen::SmartEditor(_)) {
+                    self.save_smart(ui);
                 } else {
                     self.save_editor(ui);
                 }
             }
+            BAR_EDIT_LIST => self.edit_list(ui),
             BAR_IMPORT => self.import_vcards(ui),
             BAR_EXPORT => self.export_vcards(exchange::Version::V3),
             BAR_EXPORT_V4 => self.export_vcards(exchange::Version::V4),
@@ -2377,6 +2808,16 @@ impl Contacts {
             NODE_COPY_CONTACT => Target::CopyContact,
             NODE_SORT => Target::Sort,
             NODE_COMPANY => Target::CompanyToggle,
+            NODE_SMART_NAME => Target::Field(SMART_NAME),
+            NODE_SMART_ANY => Target::SmartAny,
+            NODE_SMART_ADD => Target::SmartAdd,
+            NODE_SMART_DELETE => Target::SmartDelete,
+            _ if (NODE_SMART_FIELD..NODE_SMART_FIELD + smart::MAX_RULES as u64).contains(&id) => Target::SmartField((id - NODE_SMART_FIELD) as usize),
+            _ if (NODE_SMART_CONDITION..NODE_SMART_CONDITION + smart::MAX_RULES as u64).contains(&id) => {
+                Target::SmartCondition((id - NODE_SMART_CONDITION) as usize)
+            }
+            _ if (NODE_SMART_VALUE..NODE_SMART_VALUE + smart::MAX_RULES as u64).contains(&id) => Target::Field(SMART_VALUE + (id - NODE_SMART_VALUE) as usize),
+            _ if (NODE_SMART_REMOVE..NODE_SMART_REMOVE + smart::MAX_RULES as u64).contains(&id) => Target::SmartRemove((id - NODE_SMART_REMOVE) as usize),
             _ if (NODE_SETTING..NODE_SETTING + Setting::all().len() as u64).contains(&id) => {
                 Target::Setting(Setting::all()[(id - NODE_SETTING) as usize])
             }
@@ -2425,6 +2866,12 @@ impl Contacts {
             Target::Row(i) => {
                 if self.picking.is_some() {
                     self.pick_person(ui, i);
+                } else if self.selecting {
+                    if let Some(id) = self.rows.get(i).map(|row| self.contacts[row.contact].id) {
+                        if !self.selection.remove(&id) {
+                            self.selection.insert(id);
+                        }
+                    }
                 } else if let Some(row) = self.rows.get(i) {
                     let id = self.contacts[row.contact].id;
                     self.open_detail(ui, id);
@@ -2479,6 +2926,23 @@ impl Contacts {
             }
             Target::CompanyToggle => self.toggle_company(ui),
             Target::Setting(setting) => self.toggle_setting(setting),
+            Target::SmartAny => self.smart_any = !self.smart_any,
+            Target::SmartField(n) => {
+                if let Some(rule) = self.smart_rules.get_mut(n) {
+                    rule.field = rule.field.next();
+                }
+            }
+            Target::SmartCondition(n) => {
+                if let Some(rule) = self.smart_rules.get_mut(n) {
+                    rule.condition = rule.condition.next();
+                    if !rule.condition.needs_value() && self.focus == Some(SMART_VALUE + n) {
+                        self.focus = None;
+                    }
+                }
+            }
+            Target::SmartRemove(n) => self.remove_rule(ui, n),
+            Target::SmartAdd => self.add_rule(ui),
+            Target::SmartDelete => self.delete_list(ui),
             Target::AddRow(k) => {
                 self.shown[k] = true;
                 self.fit_scroll(ui);
@@ -2497,6 +2961,8 @@ impl Contacts {
             RENAME => Some(&mut self.rename),
             0..=5 => Some(&mut self.fields[i]),
             _ if (DETAIL_BASE..DETAIL_BASE + N_DETAILS).contains(&i) => Some(&mut self.detail_fields[i - DETAIL_BASE]),
+            SMART_NAME => Some(&mut self.smart_name),
+            _ if (SMART_VALUE..SMART_VALUE + smart::MAX_RULES).contains(&i) => self.smart_rules.get_mut(i - SMART_VALUE).map(|rule| &mut rule.value),
             _ => None,
         }
     }
@@ -2519,6 +2985,8 @@ impl Contacts {
             } else if matches!(out, Out::Hide | Out::Named("Escape")) && self.screen == Screen::Settings {
                 self.screen = Screen::List;
                 self.fit_scroll(ui);
+            } else if matches!(out, Out::Hide | Out::Named("Escape")) && self.selecting {
+                self.stop_selecting();
             }
             return;
         };
@@ -2561,7 +3029,14 @@ impl Contacts {
             self.fit_scroll(ui);
             return;
         }
-        if (i < 6 || i >= DETAIL_BASE) && matches!(out, Out::Enter | Out::Named("Tab")) {
+        if (i == SMART_NAME || i >= SMART_VALUE) && matches!(out, Out::Enter | Out::Named("Tab")) {
+            let order = self.smart_focus_order();
+            if let Some(j) = order.iter().position(|&f| f == i).and_then(|at| order.get(at + 1)) {
+                self.focus_field(*j);
+            }
+            return;
+        }
+        if (i < 6 || (DETAIL_BASE..DETAIL_BASE + N_DETAILS).contains(&i)) && matches!(out, Out::Enter | Out::Named("Tab")) {
             let order = self.focus_order();
             if let Some(j) = order.iter().position(|&f| f == i).and_then(|at| order.get(at + 1)) {
                 self.focus_field(*j);
@@ -2572,7 +3047,17 @@ impl Contacts {
             self.focus = None;
             return;
         }
-        let max = if i < 3 { store::MAX_NAME } else if i < 6 || i >= DETAIL_BASE { store::MAX_VALUE } else { 160 };
+        let max = if i < 3 {
+            store::MAX_NAME
+        } else if i < 6 || (DETAIL_BASE..DETAIL_BASE + N_DETAILS).contains(&i) {
+            store::MAX_VALUE
+        } else if i == SMART_NAME {
+            smart::MAX_NAME
+        } else if i >= SMART_VALUE {
+            smart::MAX_VALUE
+        } else {
+            160
+        };
         let Some(field) = self.field_mut(i) else { return };
         match out {
             Out::Text(s) => {
@@ -2598,6 +3083,10 @@ impl Contacts {
             Some(RENAME) => self.rename.commands(clip),
             Some(i) if i < 6 => self.fields[i].commands(clip),
             Some(i) if (DETAIL_BASE..DETAIL_BASE + N_DETAILS).contains(&i) => self.detail_fields[i - DETAIL_BASE].commands(clip),
+            Some(SMART_NAME) => self.smart_name.commands(clip),
+            Some(i) if (SMART_VALUE..SMART_VALUE + smart::MAX_RULES).contains(&i) => {
+                self.smart_rules.get(i - SMART_VALUE).map(|rule| rule.value.commands(clip)).unwrap_or_default()
+            }
             _ => Commands::default(),
         }
     }
@@ -2649,8 +3138,10 @@ impl Contacts {
             if r.y + r.h < self.list_top() || r.y > self.list_bottom() {
                 continue;
             }
-            let label = self.title_of(&self.contacts[self.rows[i].contact]);
-            nodes.push(Node { id: ROW_NODE + i as u64, role: Role::Row, label, value: String::new(), bounds: r, enabled: true });
+            let contact = &self.contacts[self.rows[i].contact];
+            let label = self.title_of(contact);
+            let value = if self.selecting && self.selection.contains(&contact.id) { "selected" } else { "" };
+            nodes.push(Node { id: ROW_NODE + i as u64, role: Role::Row, label, value: value.into(), bounds: r, enabled: true });
         }
         let button = |id: u64, label: &str, bounds: Rect| Node { id, role: Role::Button, label: label.into(), value: String::new(), bounds, enabled: true };
         match self.screen {
@@ -2719,6 +3210,31 @@ impl Contacts {
                 for (n, (setting, bounds)) in l.switches.iter().enumerate() {
                     let value = if self.setting_on(*setting) { "on" } else { "off" };
                     nodes.push(Node { id: NODE_SETTING + n as u64, role: Role::Button, label: setting.title(), value: value.into(), bounds: *bounds, enabled: true });
+                }
+            }
+            Screen::SmartEditor(_) => {
+                let l = self.smart_layout();
+                nodes.push(Node { id: NODE_SMART_NAME, role: Role::TextField, label: "List name".into(), value: self.smart_name.to_string(), bounds: l.name, enabled: true });
+                let mode = if self.smart_any { "any rule" } else { "all rules" };
+                nodes.push(Node { id: NODE_SMART_ANY, role: Role::Button, label: "Contacts match".into(), value: mode.into(), bounds: l.any, enabled: true });
+                for (n, (row, rule)) in l.rules.iter().zip(&self.smart_rules).enumerate() {
+                    let n = n as u64;
+                    nodes.push(Node { id: NODE_SMART_FIELD + n, role: Role::Button, label: "Rule field".into(), value: rule.field.title().into(), bounds: row.field, enabled: true });
+                    nodes.push(Node { id: NODE_SMART_CONDITION + n, role: Role::Button, label: "Rule condition".into(), value: rule.condition.title().into(), bounds: row.condition, enabled: true });
+                    if rule.condition.needs_value() {
+                        nodes.push(Node { id: NODE_SMART_VALUE + n, role: Role::TextField, label: "Rule value".into(), value: rule.value.to_string(), bounds: row.value, enabled: true });
+                    }
+                    nodes.push(Node { id: NODE_SMART_REMOVE + n, role: Role::Button, label: "Remove rule".into(), value: String::new(), bounds: row.remove, enabled: self.smart_rules.len() > 1 });
+                }
+                if let Some(a) = l.add {
+                    nodes.push(button(NODE_SMART_ADD, "add rule", a));
+                }
+                if let Some(d) = l.delete {
+                    let delete = if self.confirm_delete { "Confirm Delete Smart List" } else { "Delete Smart List" };
+                    nodes.push(button(NODE_SMART_DELETE, delete, d));
+                }
+                if let Some(c) = l.cancel {
+                    nodes.push(button(NODE_CANCEL, "Cancel", c));
                 }
             }
         }
@@ -2846,7 +3362,9 @@ impl Contacts {
                 if let Some(letter) = self.rows[i].section {
                     self.text(&mut content, ui, &letter.to_string(), MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now(), r.x + SPACE_S, r.y - HEADER / 2.0);
                 }
-                let selected = self.screen == Screen::Detail(contact.id) || self.screen == Screen::Editor(Some(contact.id));
+                let selected = self.screen == Screen::Detail(contact.id)
+                    || self.screen == Screen::Editor(Some(contact.id))
+                    || (self.selecting && self.selection.contains(&contact.id));
                 if selected {
                     Self::fill(&mut content, ui, r, m::SELECTION_RADIUS, SELECTION.now());
                 }
@@ -2921,6 +3439,47 @@ impl Contacts {
             let state = if self.setting_on(*setting) { "On" } else { "Off" };
             let width = ui.measure(state, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0);
             self.text(s, ui, state, MAC_BODY_PT, Weight::Regular, LINK, row.x + row.w - SPACE_L - width, row.y + row.h / 2.0);
+        }
+    }
+
+    /// The smart list editor: the name, the match mode, one row per rule, and Add Rule.
+    fn draw_smart_editor(&mut self, s: &mut Surface, ui: &Ui) {
+        let (x, cw) = self.column();
+        let l = self.smart_layout();
+        let title = if matches!(self.screen, Screen::SmartEditor(Some(_))) { "Edit Smart List" } else { "New Smart List" };
+        self.centre_text(s, ui, title, MAC_TITLE1_PT, Weight::Semibold, LABEL.now(), x + cw / 2.0, l.title_y);
+        widgets::text_field(s, ui, &self.smart_name, l.name, "List name", self.focus == Some(SMART_NAME));
+        let any = l.any;
+        Self::fill(s, ui, any, m::CARD_RADIUS, CARD_BG.now());
+        self.text(s, ui, "Contacts match", MAC_BODY_PT, Weight::Regular, LABEL.now(), any.x + SPACE_L, any.y + any.h / 2.0);
+        let mode = if self.smart_any { "Any Rule" } else { "All Rules" };
+        let mode_w = ui.measure(mode, MAC_BODY_PT, Weight::Regular) / ui.pt(1.0);
+        self.text(s, ui, mode, MAC_BODY_PT, Weight::Regular, LINK, any.x + any.w - SPACE_L - mode_w, any.y + any.h / 2.0);
+        for (n, row) in l.rules.iter().enumerate() {
+            let (field, condition) = (self.smart_rules[n].field, self.smart_rules[n].condition);
+            for (cell, label) in [(row.field, field.title()), (row.condition, condition.title())] {
+                Self::fill(s, ui, cell, m::CARD_RADIUS, CARD_BG.now());
+                let text = ui.fit(label, MAC_CALLOUT_PT, ui.pt(cell.w - 2.0 * SPACE_S));
+                self.text(s, ui, &text, MAC_CALLOUT_PT, Weight::Regular, LINK, cell.x + SPACE_S, cell.y + cell.h / 2.0);
+            }
+            if condition.needs_value() {
+                widgets::text_field(s, ui, &self.smart_rules[n].value, row.value, "Value", self.focus == Some(SMART_VALUE + n));
+            }
+            if self.smart_rules.len() > 1 {
+                let r = row.remove;
+                glyph(s, ui, "xmark", rect(r.x + SPACE_S, r.y + SPACE_S, r.w - 2.0 * SPACE_S, r.h - 2.0 * SPACE_S), LINK);
+            }
+        }
+        if let Some(r) = l.add {
+            let g = MAC_BODY_PT + SPACE_XS;
+            glyph(s, ui, "plus", rect(r.x + SPACE_XS, r.y + (r.h - g) / 2.0, g, g), LINK);
+            self.text(s, ui, "add rule", MAC_BODY_PT, Weight::Regular, LINK, r.x + g + SPACE_M, r.y + r.h / 2.0);
+        }
+        if let Some(d) = l.delete {
+            self.button_row(s, ui, d, if self.confirm_delete { "Confirm Delete Smart List" } else { "Delete Smart List" }, DESTRUCTIVE);
+        }
+        if let Some(c) = l.cancel {
+            self.button_row(s, ui, c, "Cancel", LINK);
         }
     }
 
@@ -3050,6 +3609,7 @@ impl Contacts {
             Screen::Detail(_) => self.draw_detail(s, ui, t),
             Screen::Editor(_) => self.draw_editor(s, ui, t),
             Screen::Settings => self.draw_settings(s, ui),
+            Screen::SmartEditor(_) => self.draw_smart_editor(s, ui),
         }
         // the list column and the sidebar are opaque columns left of the detail pane
         s.fill_rect(0, 0, dx as usize, s.h, CONTENT_BG.now());
@@ -3332,8 +3892,8 @@ mod tests {
         assert_eq!(menus.iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), ["File", "View", "Card"]);
         assert_eq!(
             menus[0].items.iter().filter(|i| !i.separator).count(),
-            9,
-            "import, restore, export 3.0, 4.0 and archive, print, labels, PDF, refresh"
+            11,
+            "import, restore, new and edit smart list, export 3.0, 4.0 and archive, print, labels, PDF, refresh"
         );
         assert_eq!(menus[1].items[0].title, "Hide Sidebar", "the sidebar starts shown on a wide window");
         assert!(menus[1].items[2].checked, "first name first is the default");
@@ -3610,6 +4170,144 @@ BEGIN:VCARD\r\nVERSION:4.0\r\nFN:Bo Berg\r\nN:Berg;Bo;;;\r\nEND:VCARD\r\n",
         app.merge_duplicates(&ui, true);
         assert_eq!(store::load(&path).iter().map(|c| c.id).collect::<Vec<_>>(), vec![1, 3, 5]);
         assert!(app.status.as_deref().unwrap().starts_with("Merged 2 duplicate cards into 2 cards"), "{:?}", app.status);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn a_smart_list_is_made_in_the_editor_shown_in_the_sidebar_edited_and_deleted() {
+        let path = file_with(
+            "smart-ui",
+            &[Contact { company: "Acme".into(), ..contact(1, "Anna As") }, contact(2, "Bo Berg"), Contact { company: "Acme Ltd".into(), ..contact(3, "Cara Cole") }],
+        );
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        assert!(app.menu_action(&ui, MENU_NEW_LIST));
+        assert_eq!(app.screen, Screen::SmartEditor(None));
+        assert_eq!(app.focus, Some(SMART_NAME));
+        assert!(app.editing(), "an open smart list editor counts as unsaved work");
+        app.key(&ui, Out::Text("Acme people".into()), 0.0);
+        app.activate(&ui, Target::SmartField(0), 0.0, 0.0, 0.0);
+        assert_eq!(app.smart_rules[0].field, RuleField::Company);
+        app.activate(&ui, Target::Field(SMART_VALUE), 0.0, 0.0, 0.0);
+        assert_eq!(app.focus, Some(SMART_VALUE));
+        app.key(&ui, Out::Text("acme".into()), 0.0);
+        app.bar(&ui, BAR_DONE);
+        assert!(app.error.is_none(), "{:?}", app.error);
+        assert_eq!(app.screen, Screen::List);
+        assert_eq!(app.filter, Filter::UserList(0));
+        assert_eq!(app.listed().iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), ["Anna As", "Cara Cole"]);
+        assert!(app.sidebar_rows().iter().any(|row| row.0 == LIST_USER && row.1 == "Acme people"));
+        assert_eq!(Filter::from_sidebar_id(LIST_USER), Filter::UserList(0));
+        assert!(sidebar_node(LIST_USER as u64));
+        assert_eq!(group_file::load_lists(&path.with_file_name(SMART_FILE)).unwrap().len(), 1);
+        assert_eq!(Contacts::new(&ui, 1200, 780, path.clone()).lists, app.lists, "the list is there after a restart");
+
+        assert!(app.menu_action(&ui, MENU_EDIT_LIST));
+        assert_eq!(app.screen, Screen::SmartEditor(Some(0)));
+        assert_eq!(&*app.smart_name, "Acme people");
+        assert_eq!(&*app.smart_rules[0].value, "acme");
+        assert!(app.activate_control(&ui, NODE_SMART_ADD));
+        assert_eq!(app.smart_rules.len(), 2);
+        assert_eq!(app.focus, Some(SMART_VALUE + 1), "the new rule's value is ready to type");
+        app.key(&ui, Out::Text("bo".into()), 0.0);
+        assert!(app.activate_control(&ui, NODE_SMART_ANY));
+        assert!(app.smart_any);
+        app.bar(&ui, BAR_DONE);
+        assert_eq!(app.listed().iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), ["Anna As", "Bo Berg", "Cara Cole"], "any rule");
+
+        assert!(app.menu_action(&ui, MENU_EDIT_LIST));
+        app.activate(&ui, Target::SmartRemove(1), 0.0, 0.0, 0.0);
+        assert_eq!(app.smart_rules.len(), 1);
+        app.activate(&ui, Target::SmartRemove(0), 0.0, 0.0, 0.0);
+        assert_eq!(app.smart_rules.len(), 1, "a list keeps its last rule");
+        app.activate(&ui, Target::SmartDelete, 0.0, 0.0, 0.0);
+        assert!(app.confirm_delete, "the first press asks");
+        assert_eq!(app.lists.len(), 1);
+        app.activate(&ui, Target::SmartDelete, 0.0, 0.0, 0.0);
+        assert!(app.lists.is_empty());
+        assert_eq!(app.filter, Filter::All);
+        assert_eq!(app.screen, Screen::List);
+        assert!(group_file::load_lists(&path.with_file_name(SMART_FILE)).unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn a_smart_list_without_a_name_or_a_value_is_refused_and_tab_skips_rules_without_a_value() {
+        let path = file_with("smart-ui-bad", &[contact(1, "Anna As")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        app.new_list(&ui);
+        app.bar(&ui, BAR_DONE);
+        assert!(app.error.as_deref().unwrap().contains("needs a name"), "{:?}", app.error);
+        assert_eq!(app.screen, Screen::SmartEditor(None), "the editor stays open");
+        app.key(&ui, Out::Text("Friends".into()), 0.0);
+        app.bar(&ui, BAR_DONE);
+        assert!(app.error.is_some(), "the rule has no value yet");
+        app.add_rule(&ui);
+        app.smart_rules[1].condition = Condition::IsSet;
+        assert_eq!(app.smart_focus_order(), vec![SMART_NAME, SMART_VALUE], "a rule that needs no value is skipped");
+        app.focus_field(SMART_NAME);
+        app.key(&ui, Out::Named("Tab"), 0.0);
+        assert_eq!(app.focus, Some(SMART_VALUE));
+        app.key(&ui, Out::Text("an".into()), 0.0);
+        app.key(&ui, Out::Named("Escape"), 0.0);
+        assert_eq!(app.screen, Screen::List, "Escape leaves the editor without saving");
+        assert!(app.lists.is_empty());
+        assert!(!path.with_file_name(SMART_FILE).exists());
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn selection_mode_marks_rows_instead_of_opening_them_and_makes_a_group() {
+        let path = file_with("select", &[contact(1, "Anna As"), contact(2, "Bo Berg"), contact(3, "Cara Cole")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        assert!(app.menu_action(&ui, MENU_SELECT));
+        assert!(app.selecting);
+        app.activate(&ui, Target::Row(0), 0.0, 0.0, 0.0);
+        app.activate(&ui, Target::Row(1), 0.0, 0.0, 0.0);
+        assert_eq!(app.screen, Screen::List, "a press only marks the row");
+        assert_eq!(app.selection, BTreeSet::from([1, 2]));
+        assert_eq!(app.controls(&ui).iter().filter(|n| n.value == "selected").count(), 2, "assistive technology sees the marks");
+        app.activate(&ui, Target::Row(1), 0.0, 0.0, 0.0);
+        assert_eq!(app.selection, BTreeSet::from([1]), "a second press takes the mark off");
+        app.activate(&ui, Target::Row(1), 0.0, 0.0, 0.0);
+        let bar: Vec<String> = app.list_bar().items.iter().filter(|i| i.id != 0 && i.id != BAR_SIDEBAR).map(|i| i.label.clone()).collect();
+        assert_eq!(bar, ["Group Selection", "Merge", "Done"]);
+        assert!(app.menu_action(&ui, MENU_GROUP_SELECTION));
+        assert!(!app.selecting && app.selection.is_empty());
+        assert_eq!(app.filter, Filter::Group(1));
+        assert_eq!(app.groups.members(1, false).unwrap(), vec![1, 2]);
+        assert_eq!(app.status.as_deref(), Some("Made Group 1 from 2 contacts"));
+        let (saved, ids) = group_file::load(&path.with_file_name(GROUPS_FILE)).unwrap();
+        assert_eq!(saved.members(ids[0], false).unwrap(), vec![1, 2]);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn selected_cards_merge_into_the_first_and_escape_leaves_selection_mode() {
+        let path = file_with(
+            "select-merge",
+            &[Contact { email: "a@x.is".into(), ..contact(1, "Anna As") }, Contact { phone: "555 0100".into(), ..contact(2, "Bo Berg") }, contact(3, "Cara Cole")],
+        );
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        app.menu_action(&ui, MENU_SELECT);
+        app.activate(&ui, Target::Row(0), 0.0, 0.0, 0.0);
+        app.menu_action(&ui, MENU_MERGE_SELECTION);
+        assert_eq!(app.status.as_deref(), Some("Choose at least two contacts to merge"));
+        assert!(app.selecting, "the choice is kept");
+        app.activate(&ui, Target::Row(1), 0.0, 0.0, 0.0);
+        assert!(app.menu_action(&ui, MENU_MERGE_SELECTION));
+        assert!(app.error.is_none(), "{:?}", app.error);
+        assert!(!app.selecting);
+        let saved = store::load(&path);
+        assert_eq!(saved.iter().map(|c| c.id).collect::<Vec<_>>(), vec![1, 3]);
+        let kept = saved.iter().find(|c| c.id == 1).unwrap();
+        assert_eq!((kept.name.as_str(), kept.phone.as_str(), kept.email.as_str()), ("Anna As", "555 0100", "a@x.is"));
+        app.menu_action(&ui, MENU_SELECT);
+        app.key(&ui, Out::Named("Escape"), 0.0);
+        assert!(!app.selecting);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 

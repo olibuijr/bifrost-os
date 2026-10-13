@@ -24,6 +24,11 @@
 - Last Import in the sidebar lists the contacts the most recent file import added; it is kept between runs.
 - Settings: Prefer Nicknames, Include Notes in vCards (exports can leave the notes out) and the card template, the fields a
   new card's form shows. The Settings screen scrolls.
+- Smart lists you make: File > New Smart List opens an editor with a name, up to six rules (a field, a condition such as
+  contains, is, begins with or is set, and a value) and a choice between all rules and any rule. The lists appear under
+  Smart Groups in the sidebar; Edit List changes or deletes one. They are saved in `smartlists.txt`.
+- Card > Select Contacts: a press on a row marks it instead of opening it. New Group From Selection makes a group of the
+  marked contacts, and Merge Selected Cards folds them into the first.
 - File > Refresh Accounts starts the CardDAV sync at once.
 - Intents for the shell and the control socket: `view-card`, `create-contact` and `search-contacts`.
 
