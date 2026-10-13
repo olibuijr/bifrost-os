@@ -59,9 +59,9 @@
    "area": "document",
    "apple": "Info.plist CFBundleDocumentTypes; File > Import to Notes, Import Markdown; ICMImportNotesAccessoryView",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/main.rs:146",
-   "note": "Only plain text / Markdown via the open panel",
-   "wire": "Extend the import in main.rs:146 to accept public.html, public.rtf and a folder import; convert HTML/RTF to Markdown in a new notes/import.rs (strip tags, map bold/italic/lists/headings), and show an import summary sheet listing skipped files (the error log panel)."
+   "bifrost": "springboard/apps/notes-desktop/src/notes/import.rs:7",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "HTML and RTF files are converted; no folder or archive import, no RTFD or other note apps, and no import summary sheet listing skipped files."
   },
   {
    "feature": "Export / share as Markdown, text, PDF",
@@ -104,54 +104,54 @@
    "area": "menu",
    "apple": "MainMenu: Format > Title/Heading/Subheading/Body/Monostyled/Block Quote",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1479",
-   "note": "Title/Heading/Subheading/Body only, from the More menu",
-   "wire": "Add md::Block::Mono and md::Block::Quote (fenced line / \"> \" prefix) to the markdown classifier, render them (mono font, quote bar) in the editor, and add both to the Aa style popover and a Format app menu in main.rs main_menu."
+   "bifrost": "springboard/src/shell/md.rs:29",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "Monostyled draws in the code colour, not a monospaced face; the Aa button still cycles Title, Heading and Body, the styles are in the Format menu."
   },
   {
    "feature": "Character styles: bold, italic, underline, strikethrough, highlight, text colour",
    "area": "menu",
    "apple": "MainMenu: Format > Font > Bold/Italic/Underline/Strikethrough; Highlight",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:119",
-   "note": "Bold, italic, inline code buttons only",
-   "wire": "Add Fmt::Strike (~~), Fmt::Underline and Fmt::Highlight (==) to FMT_BUTTONS and the md renderer; wire Cmd+B/I/U and Cmd+Shift+X chords in main.rs and a Format menu."
+   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1743",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "Underline and highlight are written as ++ and == marks that other Markdown readers do not know; no text colour."
   },
   {
    "feature": "Lists: bulleted, dashed, numbered, checklist",
    "area": "toolbar",
    "apple": "MainMenu: Format > Bulleted/Dashed/Numbered List, Checklist; toolbar checklist",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/chrome.rs:146",
-   "note": "No dashed list",
-   "wire": "Add md::Block::Dashed and a Dashed List item in the style popover and Format menu."
+   "bifrost": "springboard/src/shell/md.rs:27",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "The dashed list is written with an en dash and a space, which other Markdown readers show as plain text."
   },
   {
    "feature": "Checklist: mark all, unmark all, move ticked to bottom, automatic sorting",
    "area": "menu",
    "apple": "MainMenu: Format > Checklist More; Settings: Automatically sort ticked items",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1464",
-   "note": "Move-to-bottom and clear completed exist; no Mark All / Unmark All",
-   "wire": "Add Act::CheckAll / Act::UncheckAll in open_editor_menu (notes/mod.rs:1469) flipping every Check block in the note."
+   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1625",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "Mark All does not honour Move Checked to Bottom; automatic sorting stays a list menu setting."
   },
   {
    "feature": "Indentation: increase, decrease, move list item up/down",
    "area": "menu",
    "apple": "MainMenu: Format > Indentation; Format > Move Item",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Tab / Shift+Tab on a list line in the editor key handler adds/removes indent; Ctrl+Cmd+Up/Down swaps the line with its neighbour; add Format menu items."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1633",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "Indentation applies to list lines only (bullets, dashes, numbers, checkboxes), at most four levels; verify on Midget that Tab, Shift+Tab and Ctrl+Cmd+Up/Down reach the app as keys; plain paragraphs are not indented."
   },
   {
    "feature": "Tables: insert, add/delete rows and columns, convert to text",
    "area": "menu",
    "apple": "MainMenu: Format > Table, Convert to Text",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1844",
-   "note": "Insert only",
-   "wire": "Add a table context menu when the caret is in a pipe table: add row above/below, column left/right, delete row/column, convert to text; pure functions on the table text in a new notes/table.rs."
+   "bifrost": "springboard/apps/notes-desktop/src/notes/table.rs:199",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "Tables are drawn as text lines, not a grid, and there is no row or column selection."
   },
   {
    "feature": "Attachments: photo, sketch, any file, audio recording",
@@ -185,18 +185,18 @@
    "area": "menu",
    "apple": "MainMenu: View > Sort By; Settings: Sort notes by",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/store.rs:81",
-   "note": "Sort keys exist; no ascending/descending choice",
-   "wire": "Add a direction flag to Prefs (notes/store.rs:187) and Newest First / Oldest First items in open_list_menu."
+   "bifrost": "springboard/apps/notes-desktop/src/notes/store.rs:120",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "Newest First and Oldest First apply to the two date sorts; the title sort always runs A to Z."
   },
   {
    "feature": "Group notes by date",
    "area": "view",
    "apple": "MainMenu: View > Group by Date; Settings: Group notes by date",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Section the note list into Today / Previous 7 Days / Previous 30 Days / month headers when sorted by date; Prefs flag + list menu toggle."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:550",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "Sections are Today, Previous 7 Days, Previous 30 Days and months; no per-section collapse, and search and the title sort show no sections."
   },
   {
    "feature": "Gallery view",
@@ -220,10 +220,10 @@
    "feature": "Tags: inline #tags, tag browser, tag filter",
    "area": "view",
    "apple": "TagCollectionViewItem; TagSelectionDetailHeaderCellView; View > Use Tags",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Tags in text are not parsed",
-   "wire": "Parse #words in notes/store.rs, add a Tags section to the sidebar (chrome.rs:233) with a tag chip grid; selecting tags filters the list."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/store.rs:150",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "Tags are listed in the sidebar and the list menu and filter one at a time; no tag chip grid, no multi-tag filter, no completion while typing."
   },
   {
    "feature": "Locked notes (password)",
@@ -257,18 +257,18 @@
    "area": "integration",
    "apple": "Settings: Always resume to last Quick Note",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/main.rs:135",
-   "note": "New Quick Note exists; no resume option",
-   "wire": "Add a resume_quick pref and reopen the last quick note id from the status item handler in main.rs."
+   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1361",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "Verify on Midget that the menu bar extra entries open the window and reopen the last quick note."
   },
   {
    "feature": "Links: add link, smart links",
    "area": "menu",
    "apple": "MainMenu: Edit > Add Link; Substitutions > Smart Links",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:432",
-   "note": "Links detected and tappable; no Add Link dialog",
-   "wire": "Add Link... (Cmd+K) sheet that wraps the selection as [text](url) in the editor."
+   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1937",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "The address prompt is a card over the list column, not a sheet; no smart links to other notes."
   },
   {
    "feature": "Spelling and grammar",
@@ -284,9 +284,9 @@
    "area": "menu",
    "apple": "MainMenu: Edit > Copy as Markdown, Paste as Markdown",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/system.rs:27",
-   "note": "Copy puts Markdown and RTF on the pasteboard; no explicit paste variants",
-   "wire": "Add Edit menu items Copy as Markdown / Paste as Markdown / Paste and Match Style in main_menu, the last stripping formatting."
+   "bifrost": "springboard/apps/notes-desktop/src/main.rs:389",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "Paste and Match Style removes the Markdown marks of the pasteboard text; the items are in the Note menu because the Edit menu belongs to the shell."
   },
   {
    "feature": "Collapsible sections under headings",
@@ -338,9 +338,9 @@
    "area": "intent",
    "apple": "NSUserActivityTypes note and folder intents",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/main.rs:288",
-   "note": "Create/new/search exist; no open note or open folder",
-   "wire": "Add open-note and open-folder intents in main.rs intents() calling restore with the view."
+   "bifrost": "springboard/apps/notes-desktop/src/main.rs:449",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "Open Note matches by title or id and Open Folder by name; no note or folder entities for a Shortcuts picker."
   },
   {
    "feature": "Widget and search index",
@@ -356,18 +356,18 @@
    "area": "menu",
    "apple": "MainMenu: File > Recent Notes",
    "status": "partial",
-   "bifrost": "springboard/apps/notes-desktop/src/notes/system.rs:102",
-   "note": "Recent titles feed the widget only",
-   "wire": "Add a Recent Notes submenu in main_menu built from recent_titles."
+   "bifrost": "springboard/apps/notes-desktop/src/main.rs:305",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "The five newest notes; not offered in the dock menu."
   },
   {
    "feature": "Math results (calculations in text)",
    "area": "menu",
    "apple": "MainMenu: Edit > Math Results",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Evaluate lines ending with \"=\" via a small expression parser and show the result inline; Edit menu toggle."
+   "status": "partial",
+   "bifrost": "springboard/apps/notes-desktop/src/notes/mod.rs:1685",
+   "note": "built on parity/team-d-notes; not yet verified on Midget",
+   "wire": "The answer is written into the note as text after the \"=\"; no inline non-editable result, no units, variables or percentages."
   },
   {
    "feature": "Undo and redo",
