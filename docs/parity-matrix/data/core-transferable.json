@@ -59,15 +59,15 @@
     {
       "feature": "Proxy representation and transfer visibility",
       "apple": "ProxyRepresentation, TransferRepresentationVisibility",
-      "bifrost": "springboard/sdk/src/transfer.rs; wired: springboard/sdk/src/transfer.rs (pasteboard_item hides OwnProcess representations)",
+      "bifrost": "springboard/sdk/src/transfer.rs (Representations::proxy_of, Visibility)",
       "status": "partial",
-      "note": "Visibility All, Team and OwnProcess filter exports; proxy_of forwards another Transferable's bytes representations with the stricter visibility. Host tests only; verify on Midget."
+      "note": "Visibility All, Team and OwnProcess filter exports; proxy_of forwards another Transferable's bytes and file representations with the stricter visibility, and an export-only forward stays export-only. Built on parity/team-k-core-transferable; not yet verified on Midget."
     }
   ],
   "gaps": [
     "Transferable and TransferRepresentation exist in the SDK (Sprint 10) but are not yet adopted by apps; verify on Midget before marking parity.",
     "The Wayland clipboard publishes only one rich type at a time (springboard/src/shell/pasteboard.rs:33), so typed pasteboard data does not reach other apps in full.",
     "Shell follow-up: springboard/src/shell/pasteboard.rs publishes one type to the Wayland selection and keeps items flat; it needs multi-MIME data sources and item grouping so the SDK's multi-representation writes (NativePasteboard::write_items) reach other apps in full, plus file promises for file representations.",
-    "proxy_of does not forward the proxied type's file representations; no derive-style CodableRepresentation (encoders are passed as functions)."
+    "no derive-style CodableRepresentation (encoders are passed as functions); a proc-macro crate would be needed."
   ]
 }
