@@ -15,6 +15,13 @@
       "note": "shared session, data_task, download_task with progress, streaming bytes, redirects up to 5; no upload tasks, background sessions, delegates or configurations"
     },
     {
+      "feature": "URL Loading: background sessions and download resume data",
+      "apple": "URLSessionConfiguration.background(withIdentifier:), isDiscretionary, sessionSendsLaunchEvents, URLSessionDownloadTask.cancel(byProducingResumeData:), URLSession.downloadTask(withResumeData:), URLSessionDownloadDelegate, NSURLSessionDownloadTaskResumeData",
+      "bifrost": "springboard/sdk/src/url_background.rs (BackgroundConfiguration, ResumeData, BackgroundSession, DownloadDelegate)",
+      "status": "partial",
+      "note": "persisted task table per session identifier, Range/If-Range resume, 200 restarts from zero, didWriteData/didFinishDownloadingTo; host unit tests only, not wired into apps, no relaunch events; verify on Midget for parity."
+    },
+    {
       "feature": "URL Loading: caching",
       "apple": "URLCache, CachePolicy",
       "bifrost": "springboard/sdk/src/url.rs (URLCache); wired: springboard/apps/news-desktop/src/feed_cache.rs (plan, stored_from, max_age_of, validators_of, Conditional)",
@@ -96,7 +103,7 @@
     "Bonjour/mDNS discovery and advertising",
     "WebSocket and stream tasks",
     "Cookie storage, credentials and auth challenges in URLSession",
-    "Upload tasks, background sessions, disk URLCache",
+    "Upload tasks, disk URLCache",
     "General XPC-style service connections",
     "OperationQueue, RunLoop and Timer-style scheduling",
     "Stream and Port abstractions"

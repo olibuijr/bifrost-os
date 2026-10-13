@@ -168,6 +168,7 @@ pub mod save_sync;
 pub mod file_provider;
 pub mod file_manager;
 pub mod url;
+pub mod url_background;
 pub mod multipart;
 pub mod social;
 pub mod url_components;
