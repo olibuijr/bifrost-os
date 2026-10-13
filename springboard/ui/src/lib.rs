@@ -584,6 +584,7 @@ pub mod regex;
 pub mod format;
 pub mod region;
 pub mod gesture;
+pub mod recognizer;
 pub mod identity;
 pub mod directory_node;
 pub mod directory_query;
