@@ -660,6 +660,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bifrost-messages"
+version = "0.1.0"
+dependencies = [
+ "bifrost-app",
+ "bifrost-core",
+ "springboard",
+]
+
+[[package]]
 name = "bifrost-mcp"
 version = "0.5.0"
 dependencies = [

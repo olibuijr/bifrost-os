@@ -468,6 +468,13 @@ impl Client {
         self.send("POST", url, extra, Some(body.to_vec()), limit)
     }
 
+    /// Any method with caller-supplied headers (name, value) and an optional body, for APIs that send a bearer token
+    /// (Matrix uses GET, PUT and POST).
+    pub fn request_with_headers(&self, method: &str, url: &str, headers: &[(&str, &str)], body: Option<&[u8]>, limit: usize) -> io::Result<Response> {
+        let extra = headers.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        self.send(method, url, extra, body.map(<[u8]>::to_vec), limit)
+    }
+
     fn send(&self, method: &str, url: &str, extra: Vec<(String, String)>, body: Option<Vec<u8>>, limit: usize) -> io::Result<Response> {
         let (mut method, mut url, mut body) = (method.to_string(), url.to_string(), body);
         for _ in 0..=MAX_REDIRECTS {

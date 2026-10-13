@@ -1,0 +1,12 @@
+//! Messages: Matrix chat as a BifrOSt desktop app. [`protocol`] is the wire format (URLs, bodies and answers, parsed from
+//! JSON), [`api`] makes the calls over the shell's HTTPS client, [`accounts`] keeps the homeserver logins in the shared
+//! passwords group, [`model`] holds the rooms and timelines, [`sync`] runs the jobs on their own threads, and [`window`]
+//! and [`draw`] are the live window.
+
+pub mod accounts;
+pub mod api;
+pub mod draw;
+pub mod model;
+pub mod protocol;
+pub mod sync;
+pub mod window;
