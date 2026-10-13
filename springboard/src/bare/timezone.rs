@@ -225,7 +225,8 @@ impl Rule {
         }
     }
 
-    /// (offset east of UTC, is daylight time) at a Unix time.
+    /// (offset east of UTC, is daylight time) at a Unix time. Tests only: callers resolve through `Zone`.
+    #[cfg(test)]
     fn at(&self, unix: i64) -> (i32, bool) {
         let (offset, daylight, _) = self.resolve(unix);
         (offset, daylight)
