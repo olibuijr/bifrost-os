@@ -207,7 +207,7 @@ mod tests {
     }
 
     #[test]
-    fn property_selectors_are_apples_four_char_codes() {
+    fn property_selectors_are_four_char_codes() {
         assert_eq!(PROPERTY_PROCESS_OBJECT_LIST, 0x7072_7323);
         assert_eq!(PROPERTY_TAP_LIST, 0x7470_7323);
         assert_eq!(list_request().get("property").and_then(|p| p.number()), Some(PROPERTY_PROCESS_OBJECT_LIST as f64));

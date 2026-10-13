@@ -1,6 +1,6 @@
 //! `SFSpeechRecognizer` and its requests: speech to text over a pluggable [`RecognitionBackend`].
 //!
-//! BifrOSt has no on-device recognizer yet. This module owns the Apple-shaped surface: authorization, availability,
+//! BifrOSt has no on-device recognizer yet. This module owns the reference-shaped surface: authorization, availability,
 //! requests, tasks and results with segments. A backend turns time-coded audio ([`AnalyzerInput`]) into hypotheses.
 //! The task is driven by the caller: [`SFSpeechRecognitionTask::pump`] drains the audio appended so far, so there is
 //! no thread and no hidden clock. Recognition never starts before the person allowed it.
@@ -94,7 +94,7 @@ pub struct SFSpeechAudioBufferRecognitionRequest {
 }
 
 impl SFSpeechAudioBufferRecognitionRequest {
-    /// A request that reports partial results, as Apple's default does.
+    /// A request that reports partial results, as the reference default does.
     pub fn new() -> Self {
         Self { queue: Rc::default(), should_report_partial_results: true }
     }

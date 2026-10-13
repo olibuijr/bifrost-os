@@ -1,13 +1,13 @@
 //! Settings > Mouse: the pointer choices of a desktop with a mouse, apart from the Trackpad pane. Tracking and
 //! scrolling speed, double-click speed, pointer acceleration, natural scrolling and which side is the secondary
-//! button. Tap to Click and the two-finger secondary click belong to the Trackpad pane only. The pane opens by
-//! `x-apple.systempreferences:com.apple.Mouse-Settings.extension`.
+//! button. Tap to Click and the two-finger secondary click belong to the Trackpad pane only. The pane's settings link is
+//! `SETTINGS_URL`.
 use super::list::{Ends, Group, Item};
 use super::options::{speed_slider, Options};
 use super::pages::{Action, Pick, Slider, Toggle};
 
 /// Settings URL of the pane.
-pub const SETTINGS_URL: &str = "x-apple.systempreferences:com.apple.Mouse-Settings.extension";
+pub const SETTINGS_URL: &str = "bifrost-settings:mouse";
 /// Longest and shortest gap between two clicks that still make a double-click, in ms.
 pub const DOUBLE_CLICK_RANGE_MS: (u32, u32) = (200, 900);
 /// The gap a new account starts with.

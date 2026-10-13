@@ -103,7 +103,7 @@ impl<S: Read + Write> Session<S> {
     }
 
     /// Messages of the selected mailbox that match `criteria` (IMAP search keys, see [`crate::search::Query::imap_criteria`]),
-    /// as UIDs in the server's order.
+    /// as UID values in the server's order.
     pub fn search(&mut self, criteria: &str) -> Result<Vec<u32>, String> {
         let untagged = self.run(&format!("UID SEARCH {criteria}"))?;
         Ok(untagged.iter().find_map(|line| imap::parse_search(line)).unwrap_or_default())
