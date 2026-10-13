@@ -4,7 +4,7 @@
   "macos_since": "10.0",
   "status": "partial",
   "bifrost": "bifrost_app::pasteboard, bifrost_app::print, bifrost_app::workspace, springboard/src/shell/atspi/, springboard/src/shell/magnifier.rs",
-  "summary": "Application Services is mostly legacy Carbon C API (Apple Event Manager, ColorSync, Speech Synthesis, PDEPlugIn, HIShape, Translation). BifrOSt covers the pasteboard, the accessibility tree (AT-SPI2 instead of AXUIElement), and printing through CUPS; ColorSync, speech synthesis and the print-plug-in and shape APIs have no counterpart. A pure ICC matrix/TRC profile model (springboard/ui/src/colour_profile.rs) converts RGB values between profiles through XYZ.",
+  "summary": "Application Services is mostly legacy Carbon C API (Apple Event Manager, ColorSync, Speech Synthesis, PDEPlugIn, HIShape, Translation). BifrOSt covers the pasteboard, the accessibility tree (AT-SPI2 instead of AXUIElement), and printing through CUPS; colour profile conversion exists in the render crate (springboard/render/src/cg/color.rs) but not as an app API; speech synthesis and the print-plug-in and shape APIs have no counterpart.",
   "rea_evidence": "ev_aa67df2e51e2916455b18b5705ec62cb03dcae34a55905e84b9fc3290a9c1ff9",
   "features": [
     {
@@ -59,9 +59,9 @@
     {
       "feature": "ColorSync Manager (profiles, transforms, CMM)",
       "apple": "ColorSyncProfile, ColorSyncMutableProfile, ColorSyncTransform, ColorSyncCMM",
-      "bifrost": "springboard/ui/src/colour_profile.rs",
+      "bifrost": "springboard/render/src/cg/color.rs (ColorSpace::from_icc, ColorConversionInfo), springboard/render/src/icc.rs",
       "status": "partial",
-      "note": "built on parity/team-a-10; not yet verified on Midget. Parses ICC matrix/TRC RGB profiles (XYZ primaries, curv and para tone curves) and converts colour values between two profiles through XYZ. No CMM, no profile lookup, no chromatic adaptation, no LUT profiles, and no SDK API for apps."
+      "note": "Pure model in the render crate with host unit tests; not yet verified on Midget. Reads ICC matrix/TRC RGB and grey profiles and converts colours between spaces through XYZ with rendering intents. No CMM, no LUT (A2B/B2A) profiles, no display profile handling, and no SDK API for apps."
     },
     {
       "feature": "Speech Synthesis Manager",
@@ -95,7 +95,7 @@
   "gaps": [
     "Accessibility text: selected text, visible range, text markers and caret events are not exposed through the AT-SPI bridge.",
     "Accessibility announcements (live regions) and custom actions beyond press.",
-    "ColorSync: no SDK profile or transform API for apps. springboard/ui/src/colour_profile.rs converts between matrix/TRC RGB profiles, but there is no profile lookup, no chromatic adaptation and no LUT-based (A2B/B2A) profile support.",
+    "ColorSync: springboard/render/src/cg/color.rs converts between matrix/TRC profiles, but there is no SDK profile or transform API for apps, no LUT-based profile support and no CMM.",
     "Speech synthesis: no SDK voice or speech channel API.",
     "Core Printing: no shell-drawn print sheet, no view pagination, and no print panel plug-in mechanism.",
     "HIShape: no shape or region type with boolean operations.",
