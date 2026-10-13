@@ -124,8 +124,8 @@ fn run() -> std::io::Result<()> {
     // the volume is the default output device's volume control on the audio server (connected lazily)
     // (a worker thread owns the connection: the UI thread never waits on the audio server)
     let volume_tx = spawn_volume_worker();
-    // a timer or alarm plays the chosen alert tone on the sound-effects role (a worker thread owns the player)
-    let alert_tx = spawn_alert_worker();
+    // key clicks and the alert tone of a timer or alarm play on the sound-effects role (a worker thread owns the player)
+    let sound_tx = spawn_sound_worker();
     // the headset jack: its input device reports plug state as switch events
     let mut headset = input::Device::by_hint(route::JACK_DEVICE_HINTS).and_then(|p| input::Device::open(&p).map_err(|e| eprintln!("springboard: headset {p}: {e}")).ok());
     let mut jack = headset.as_ref().map_or_else(route::Jack::default, |d| route::Jack::from_bits(d.switches()));
@@ -818,8 +818,12 @@ fn run() -> std::io::Result<()> {
                     sleeper.screen_off(t);
                 }
                 Effect::SleepSystem => sleeper.sleep_now(t),
-                // key clicks are not played yet (no sound unless the user asks for it)
-                Effect::KeyClick(_) => {}
+                // a click is queued for the sound worker, so the UI thread never waits on the speaker; muted is silent
+                Effect::KeyClick(c) => {
+                    if !vol.muted() {
+                        let _ = sound_tx.send(Sound::Click(c));
+                    }
+                }
                 #[cfg(feature = "desktop-wayland")]
                 #[cfg(feature="desktop-wayland")]
                 Effect::ForeignWindowMaximize(id,maximized)=>{if let Err(e)=disp.wayland_foreign_maximize(id,maximized){eprintln!("desktop maximize: {e}");}}
@@ -869,7 +873,7 @@ fn run() -> std::io::Result<()> {
                 // sound comes later; the full-screen alert already shows
                 Effect::Alarm => match shell.alert_tone() {
                     Some(index) => {
-                        let _ = alert_tx.send(index);
+                        let _ = sound_tx.send(Sound::Alert(index));
                     }
                     None => eprintln!("springboard: alarm (muted)"),
                 },
@@ -1411,12 +1415,14 @@ fn spawn_volume_worker() -> std::sync::mpsc::Sender<springboard::media::volume::
     let (tx, rx) = std::sync::mpsc::channel::<springboard::media::volume::Volume>();
     let spawned = std::thread::Builder::new().name("volume".into()).spawn(move || {
         let mut dev: Option<bifrost_audio_hal::Device> = None;
+        // the device scalar last applied: a change walks from it, so the device never jumps
+        let mut at: Option<f32> = None;
         // newest level wins: a slider drag while the server is slow collapses to one write
         while let Ok(mut v) = rx.recv() {
             while let Ok(newer) = rx.try_recv() {
                 v = newer;
             }
-            apply_volume(v, &mut dev);
+            apply_volume(v, &mut dev, &mut at);
         }
     });
     if let Err(e) = spawned {
@@ -1425,55 +1431,100 @@ fn spawn_volume_worker() -> std::sync::mpsc::Sender<springboard::media::volume::
     tx
 }
 
-/// Plays alert tones (the Settings Alert Sound index) on the sound-effects role of the audio server. A worker
-/// thread owns the player, so a tone's write never waits on the UI thread; a newer alert replaces one still waiting.
+/// A sound the shell plays on the sound-effects role: a key click, or the alert tone at this index into
+/// `options::ALERT_SOUNDS`.
 #[cfg(target_os = "linux")]
-fn spawn_alert_worker() -> std::sync::mpsc::Sender<usize> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Sound {
+    Click(springboard::shell::kb_clicks::Click),
+    Alert(usize),
+}
+
+/// Plays key clicks and alert tones on the sound-effects role of the audio server. One worker thread owns the
+/// player, so a write never waits on the UI thread. Each batch of waiting sounds collapses to its newest alert and
+/// at most one click: a fast typist does not queue a tail of clicks behind the speaker, and an alert wins over a click.
+#[cfg(target_os = "linux")]
+fn spawn_sound_worker() -> std::sync::mpsc::Sender<Sound> {
     use springboard::media::system_sound::SoundPlayer;
-    let (tx, rx) = std::sync::mpsc::channel::<usize>();
-    let spawned = std::thread::Builder::new().name("alert".into()).spawn(move || {
+    let (tx, rx) = std::sync::mpsc::channel::<Sound>();
+    let spawned = std::thread::Builder::new().name("sound".into()).spawn(move || {
         let mut player: Option<SoundPlayer> = None;
-        while let Ok(mut index) = rx.recv() {
-            while let Ok(newer) = rx.try_recv() {
-                index = newer;
+        while let Ok(first) = rx.recv() {
+            let (mut alert, mut click) = (None, None);
+            let mut next = Some(first);
+            while let Some(s) = next {
+                match s {
+                    Sound::Alert(i) => alert = Some(i),
+                    Sound::Click(c) => click = Some(c),
+                }
+                next = rx.try_recv().ok();
             }
             if player.is_none() {
                 match SoundPlayer::on_sound_effects() {
                     Ok(p) => player = Some(p),
                     Err(e) => {
-                        eprintln!("springboard: alert sound: {e}");
+                        eprintln!("springboard: sound: {e}");
                         continue;
                     }
                 }
             }
-            if let Some(p) = player.as_mut() {
-                if let Err(e) = p.alert(index, 1.0) {
-                    eprintln!("springboard: alert sound: {e}");
-                    // the connection may be stale (the server restarted): reconnect on the next alert
-                    player = None;
-                }
+            let Some(p) = player.as_mut() else { continue };
+            let played = match (alert, click) {
+                (Some(index), _) => p.alert(index, 1.0),
+                (None, Some(c)) => p.click(c, 1.0),
+                (None, None) => Ok(()),
+            };
+            if let Err(e) = played {
+                eprintln!("springboard: sound: {e}");
+                // the connection may be stale (the server restarted): reconnect on the next sound
+                player = None;
             }
         }
     });
     if let Err(e) = spawned {
-        eprintln!("springboard: alert worker: {e}");
+        eprintln!("springboard: sound worker: {e}");
     }
     tx
 }
 
+/// The pause between two device-volume steps of a change (`volume::ramp_path`): 8 steps take about 24 ms.
 #[cfg(target_os = "linux")]
-fn apply_volume(v: springboard::media::volume::Volume, dev: &mut Option<bifrost_audio_hal::Device>) {
-    use springboard::media::volume::{default_output, software_gain, VolumeTarget};
+const VOLUME_STEP: std::time::Duration = std::time::Duration::from_millis(3);
+
+/// Applies `v` to the device, walking the scalar from `*at` (the last level applied) in `RAMP_STEPS` steps, so a
+/// change is never a jump the ear hears as a click. The final step also sets the mute.
+#[cfg(target_os = "linux")]
+fn apply_volume(v: springboard::media::volume::Volume, dev: &mut Option<bifrost_audio_hal::Device>, at: &mut Option<f32>) {
+    use springboard::media::volume::{default_output, ramp_path, software_gain, VolumeTarget, RAMP_STEPS};
     if dev.is_none() {
         *dev = default_output();
     }
+    let steps = ramp_path(*at, v.level(), RAMP_STEPS);
+    for s in &steps[..steps.len().saturating_sub(1)] {
+        std::thread::sleep(VOLUME_STEP);
+        let Some(d) = dev.as_ref() else { break };
+        if let Err(e) = d.set_scalar(*s) {
+            // the connection may be stale (the server restarted): reconnect on the next change
+            *dev = None;
+            *at = None;
+            eprintln!("springboard: volume: {e:?}");
+            return;
+        }
+    }
     let pct = v.level() * 100.0;
     match v.apply(dev.as_ref().map(|d| d as &dyn VolumeTarget)) {
-        Ok(Some(s)) => eprintln!("springboard: volume {pct:.0}% -> device {s:.3}"),
-        Ok(None) => eprintln!("springboard: volume {pct:.0}% (no audio server; software gain {:.3})", software_gain()),
+        Ok(Some(s)) => {
+            *at = Some(s);
+            eprintln!("springboard: volume {pct:.0}% -> device {s:.3}");
+        }
+        Ok(None) => {
+            *at = None;
+            eprintln!("springboard: volume {pct:.0}% (no audio server; software gain {:.3})", software_gain());
+        }
         Err(e) => {
             // the connection may be stale (the server restarted): reconnect on the next change
             *dev = None;
+            *at = None;
             eprintln!("springboard: volume {pct:.0}%: {e} (software gain {:.3})", software_gain());
         }
     }

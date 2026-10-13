@@ -111,6 +111,21 @@ pub fn scale(samples: &mut [i16], gain: f32) {
     }
 }
 
+/// Device-scalar steps a volume change walks through (`ramp_path`).
+pub const RAMP_STEPS: u32 = 8;
+
+/// The device scalars a change from `from` to `to` passes through, `RAMP_STEPS` equal steps, the last exactly `to`.
+/// A device that jumps between levels is heard as a click, so the worker walks this path instead. `from` None (the
+/// device level is not known yet) or no change at all gives just `[to]`.
+pub fn ramp_path(from: Option<f32>, to: f32, steps: u32) -> Vec<f32> {
+    let Some(from) = from.filter(|f| f.is_finite()) else { return vec![to] };
+    if (from - to).abs() < 1e-6 {
+        return vec![to];
+    }
+    let steps = steps.max(1);
+    (1..=steps).map(|i| if i == steps { to } else { from + (to - from) * i as f32 / steps as f32 }).collect()
+}
+
 /// Where a volume level is applied: the volume and mute controls of an output device.
 pub trait VolumeTarget {
     fn set_scalar(&self, scalar: f32) -> Result<(), AudioError>;
@@ -246,6 +261,24 @@ mod tests {
         assert_eq!(Volume::at_step(11).pref(), "0.688");
         assert_eq!(Volume::from_pref(Some(&Volume::at_step(11).pref())).step(), 11);
         assert_eq!(Volume::from_pref(Some("3")).level(), 1.0);
+    }
+
+    #[test]
+    fn ramp_path_walks_to_the_target_in_equal_steps() {
+        let p = ramp_path(Some(0.0), 0.5, 4);
+        assert_eq!(p, vec![0.125, 0.25, 0.375, 0.5]);
+        assert_eq!(*ramp_path(Some(0.9), 0.1, RAMP_STEPS).last().unwrap(), 0.1);
+        assert_eq!(ramp_path(Some(0.9), 0.1, RAMP_STEPS).len(), RAMP_STEPS as usize);
+        let down = ramp_path(Some(1.0), 0.0, 2);
+        assert_eq!(down, vec![0.5, 0.0]);
+    }
+
+    #[test]
+    fn ramp_path_jumps_when_nothing_to_walk() {
+        assert_eq!(ramp_path(None, 0.4, RAMP_STEPS), vec![0.4]);
+        assert_eq!(ramp_path(Some(f32::NAN), 0.4, RAMP_STEPS), vec![0.4]);
+        assert_eq!(ramp_path(Some(0.4), 0.4, RAMP_STEPS), vec![0.4]);
+        assert_eq!(ramp_path(Some(0.0), 1.0, 0), vec![1.0], "zero steps still lands on the target");
     }
 
     #[test]
