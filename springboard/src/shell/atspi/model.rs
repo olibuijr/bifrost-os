@@ -278,7 +278,7 @@ pub fn key_path(k: Key) -> String {
     }
 }
 
-/// The slot of the pseudo-application that holds the shell's own chrome (menu bar, dock, Spotlight). Apps use slots below it.
+/// The slot of the pseudo-application that holds the shell's own chrome (menu bar, dock, search field). Apps use slots below it.
 pub const CHROME_SLOT: u8 = 250;
 
 /// The shell chrome as an application snapshot, so a screen reader reads the menu bar, the dock and the search field like any app.
