@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.15.0 — 2026-10-13
+
+- Note > Print... (Cmd+P) prints the open note as plain text in Helvetica, wrapped to the page, through the shared print
+  operation. The job is submitted on its own thread.
+
 ## 1.14.1 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
