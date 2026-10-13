@@ -144,6 +144,7 @@ pub fn sheet_layout(ui: &Ui, w: f32, h: f32, sheet: &Sheet) -> SheetLayout {
     let form = match sheet {
         Sheet::Setup(form) | Sheet::Search(form) => form,
         Sheet::Compose(compose) => &compose.form,
+        Sheet::Mailbox(sheet) => &sheet.form,
     };
     let pad = ui.pt(SHEET_PAD_PT);
     let head = ui.pt(SHEET_HEAD_PT);
@@ -537,6 +538,8 @@ impl MailWindow {
             Sheet::Search(form) => ("Find", "Search", form),
             Sheet::Setup(form) => ("Add Account", "Add Account", form),
             Sheet::Compose(compose) => (if compose.in_reply_to.is_some() { "Reply" } else { "New Message" }, "Send", &compose.form),
+            Sheet::Mailbox(sheet) if sheet.rename_from.is_some() => ("Rename Mailbox", "Rename", &sheet.form),
+            Sheet::Mailbox(sheet) => ("New Mailbox", "Create", &sheet.form),
         };
         put_centred(s, &mut self.labels, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), px_ + pw / 2.0, py + ui.pt(SHEET_HEAD_PT) / 2.0);
 

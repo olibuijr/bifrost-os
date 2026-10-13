@@ -13,6 +13,8 @@ pub struct Summary {
     pub subject: String,
     pub from: String,
     pub to: String,
+    pub cc: String,
+    pub reply_to: String,
     pub date: String,
 }
 
@@ -62,7 +64,39 @@ impl Summary {
             subject: get("subject").map(decode_words).unwrap_or_default(),
             from: get("from").map(decode_words).unwrap_or_default(),
             to: get("to").map(decode_words).unwrap_or_default(),
+            cc: get("cc").map(decode_words).unwrap_or_default(),
+            reply_to: get("reply-to").map(decode_words).unwrap_or_default(),
             date: get("date").unwrap_or_default().to_string(),
+        }
+    }
+}
+
+/// How urgent the sender marks a message (Message > Set Priority). It is sent as `X-Priority` and `Importance`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Priority {
+    High,
+    #[default]
+    Normal,
+    Low,
+}
+
+impl Priority {
+    pub const ALL: [Priority; 3] = [Priority::High, Priority::Normal, Priority::Low];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Priority::High => "High",
+            Priority::Normal => "Normal",
+            Priority::Low => "Low",
+        }
+    }
+
+    /// The header lines for this priority, each ending in CRLF. Normal sends none.
+    fn headers(self) -> &'static str {
+        match self {
+            Priority::High => "X-Priority: 1 (Highest)\r\nImportance: high\r\n",
+            Priority::Normal => "",
+            Priority::Low => "X-Priority: 5 (Lowest)\r\nImportance: low\r\n",
         }
     }
 }
@@ -73,6 +107,10 @@ pub struct Draft {
     pub from: String,
     pub to: Vec<String>,
     pub cc: Vec<String>,
+    /// Blind copies: they get the message but are named in no header.
+    pub bcc: Vec<String>,
+    pub reply_to: Vec<String>,
+    pub priority: Priority,
     pub subject: String,
     pub body: String,
     /// The Message-ID being answered, when this is a reply.
@@ -128,7 +166,7 @@ impl Draft {
         if self.to.is_empty() {
             return Err("add at least one recipient".into());
         }
-        for addr in self.to.iter().chain(self.cc.iter()) {
+        for addr in self.to.iter().chain(&self.cc).chain(&self.bcc).chain(&self.reply_to) {
             if !valid_address(addr) {
                 return Err(format!("{addr} is not a valid address"));
             }
@@ -140,7 +178,11 @@ impl Draft {
         if !self.cc.is_empty() {
             out.push_str(&format!("Cc: {}\r\n", self.cc.join(", ")));
         }
+        if !self.reply_to.is_empty() {
+            out.push_str(&format!("Reply-To: {}\r\n", self.reply_to.join(", ")));
+        }
         out.push_str(&format!("Subject: {}\r\n", encode_subject(&self.subject)));
+        out.push_str(self.priority.headers());
         out.push_str(&format!("Message-ID: {message_id}\r\n"));
         if let Some(parent) = &self.in_reply_to {
             out.push_str(&format!("In-Reply-To: {parent}\r\n"));
@@ -160,9 +202,9 @@ impl Draft {
         Ok(out)
     }
 
-    /// Every address the message goes to, for the SMTP RCPT commands.
+    /// Every address the message goes to (To, Cc and Bcc), for the SMTP RCPT commands.
     pub fn envelope_recipients(&self) -> Vec<&str> {
-        self.to.iter().chain(self.cc.iter()).map(String::as_str).collect()
+        self.to.iter().chain(&self.cc).chain(&self.bcc).map(String::as_str).collect()
     }
 }
 
@@ -182,18 +224,110 @@ pub fn reply_draft(original: &Summary, from: &str) -> Draft {
     } else {
         format!("Re: {}", original.subject)
     };
-    let mut references = original.references.clone();
-    if references.is_empty() {
-        references = original.in_reply_to.clone();
-    }
+    let references = reply_references(original);
+    let target = if original.reply_to.trim().is_empty() { &original.from } else { &original.reply_to };
     Draft {
         from: from.to_string(),
-        to: vec![address_of(&original.from).to_string()],
+        to: vec![address_of(target).to_string()],
         subject,
         in_reply_to: original.message_id.clone(),
         references,
         ..Draft::default()
     }
+}
+
+/// Splits an address list on commas and semicolons that are outside quotes and angle brackets, so a display name such
+/// as `"Smith, Ana" <ana@example.com>` stays whole. Empty parts are dropped.
+pub fn split_addresses(list: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut current = String::new();
+    let (mut quoted, mut angle) = (false, false);
+    for c in list.chars() {
+        match c {
+            '"' => {
+                quoted = !quoted;
+                current.push(c);
+            }
+            '<' if !quoted => {
+                angle = true;
+                current.push(c);
+            }
+            '>' if !quoted => {
+                angle = false;
+                current.push(c);
+            }
+            ',' | ';' if !quoted && !angle => {
+                let part = current.trim();
+                if !part.is_empty() {
+                    out.push(part.to_string());
+                }
+                current.clear();
+            }
+            _ => current.push(c),
+        }
+    }
+    let part = current.trim();
+    if !part.is_empty() {
+        out.push(part.to_string());
+    }
+    out
+}
+
+/// The threading headers a reply carries: References of the original (or its In-Reply-To) and its Message-ID.
+fn reply_references(original: &Summary) -> Vec<String> {
+    if original.references.is_empty() {
+        original.in_reply_to.clone()
+    } else {
+        original.references.clone()
+    }
+}
+
+/// Reply All (Message > Reply All): the sender (or the Reply-To address) and everyone else in To go to To, everyone in
+/// Cc stays in Cc. `own` (the user's address) is left out, and no address appears twice.
+pub fn reply_all_draft(original: &Summary, own: &str) -> Draft {
+    let mut draft = reply_draft(original, own);
+    let mut seen: Vec<String> = vec![own.to_ascii_lowercase()];
+    let mut take = |list: Vec<String>| -> Vec<String> {
+        let mut kept = Vec::new();
+        for entry in list {
+            let addr = address_of(&entry).to_string();
+            let key = addr.to_ascii_lowercase();
+            if !addr.is_empty() && !seen.contains(&key) {
+                seen.push(key);
+                kept.push(addr);
+            }
+        }
+        kept
+    };
+    let first = if original.reply_to.trim().is_empty() { split_addresses(&original.from) } else { split_addresses(&original.reply_to) };
+    let mut to = take(first);
+    to.extend(take(split_addresses(&original.to)));
+    draft.to = to;
+    draft.cc = take(split_addresses(&original.cc));
+    draft
+}
+
+/// Forward (Message > Forward): the original's headers and text quoted under a `Fwd:` subject, with no recipient. It
+/// starts a new conversation, so it carries no threading headers.
+pub fn forward_draft(original: &Summary, from: &str, text: &str) -> Draft {
+    let subject = if original.subject.to_ascii_lowercase().starts_with("fwd:") {
+        original.subject.clone()
+    } else {
+        format!("Fwd: {}", original.subject)
+    };
+    let mut body = String::from("\n\n---------- Forwarded message ----------\n");
+    body.push_str(&format!("From: {}\nDate: {}\nSubject: {}\nTo: {}\n", original.from, original.date, original.subject, original.to));
+    if !original.cc.is_empty() {
+        body.push_str(&format!("Cc: {}\n", original.cc));
+    }
+    body.push('\n');
+    body.push_str(text);
+    Draft { from: from.to_string(), subject, body, ..Draft::default() }
+}
+
+/// Paste as Quotation (Edit menu): every line of `text` starts with `> ` (an empty line with `>`).
+pub fn quote_text(text: &str) -> String {
+    text.lines().map(|line| if line.is_empty() { ">".to_string() } else { format!("> {line}") }).collect::<Vec<_>>().join("\n")
 }
 
 /// The Subject value: leading plain-ASCII words stay readable ("Re: "), the rest from the first word that needs it is
@@ -267,5 +401,70 @@ mod tests {
         draft.to = vec!["you@example.com".into()];
         draft.from = "bad".into();
         assert!(draft.render("<x@y>", 0).is_err());
+    }
+
+    fn summary(extra: &str) -> Summary {
+        Summary::from_headers(&format!("Message-ID: <m@x>\r\nSubject: Plan\r\nFrom: \"Smith, Ana\" <ana@example.com>\r\nTo: me@example.com, Bo <bo@example.com>\r\n{extra}\r\n"))
+    }
+
+    #[test]
+    fn address_lists_split_outside_quotes_and_brackets() {
+        assert_eq!(split_addresses("\"Smith, Ana\" <a@x>, b@x; c@x ,"), vec!["\"Smith, Ana\" <a@x>", "b@x", "c@x"]);
+        assert!(split_addresses("  ").is_empty());
+    }
+
+    #[test]
+    fn reply_all_keeps_everyone_once_and_leaves_the_user_out() {
+        let original = summary("Cc: Cy <cy@example.com>, BO@example.com, me@example.com\r\n");
+        let draft = reply_all_draft(&original, "Me@example.com");
+        assert_eq!(draft.to, vec!["ana@example.com", "bo@example.com"]);
+        assert_eq!(draft.cc, vec!["cy@example.com"]);
+        assert_eq!(draft.in_reply_to.as_deref(), Some("<m@x>"));
+        assert_eq!(draft.subject, "Re: Plan");
+    }
+
+    #[test]
+    fn a_reply_goes_to_the_reply_to_address_when_there_is_one() {
+        let original = summary("Reply-To: list@example.com\r\n");
+        assert_eq!(reply_draft(&original, "me@example.com").to, vec!["list@example.com"]);
+        assert_eq!(reply_all_draft(&original, "me@example.com").to, vec!["list@example.com", "bo@example.com"]);
+    }
+
+    #[test]
+    fn a_forward_quotes_the_original_under_a_fwd_subject() {
+        let draft = forward_draft(&summary(""), "me@example.com", "Hello");
+        assert_eq!(draft.subject, "Fwd: Plan");
+        assert!(draft.to.is_empty() && draft.in_reply_to.is_none());
+        assert!(draft.body.contains("---------- Forwarded message ----------\nFrom: \"Smith, Ana\" <ana@example.com>"));
+        assert!(draft.body.ends_with("\n\nHello"));
+        let again = forward_draft(&Summary { subject: "Fwd: Plan".into(), ..Summary::default() }, "me@example.com", "");
+        assert_eq!(again.subject, "Fwd: Plan");
+    }
+
+    #[test]
+    fn bcc_is_sent_but_never_named_and_priority_and_reply_to_are_headers() {
+        let draft = Draft {
+            from: "me@example.com".into(),
+            to: vec!["a@example.com".into()],
+            cc: vec!["c@example.com".into()],
+            bcc: vec!["secret@example.com".into()],
+            reply_to: vec!["back@example.com".into()],
+            priority: Priority::High,
+            ..Draft::default()
+        };
+        let text = draft.render("<x@y>", 0).unwrap();
+        assert!(!text.contains("secret@example.com"));
+        assert!(text.contains("Cc: c@example.com\r\n") && text.contains("Reply-To: back@example.com\r\n"));
+        assert!(text.contains("X-Priority: 1 (Highest)\r\nImportance: high\r\n"));
+        assert_eq!(draft.envelope_recipients(), vec!["a@example.com", "c@example.com", "secret@example.com"]);
+        let plain = Draft { priority: Priority::Normal, ..draft.clone() }.render("<x@y>", 0).unwrap();
+        assert!(!plain.contains("X-Priority"));
+        assert!(Draft { bcc: vec!["bad".into()], ..draft }.render("<x@y>", 0).is_err());
+    }
+
+    #[test]
+    fn a_quotation_prefixes_every_line() {
+        assert_eq!(quote_text("one\n\ntwo"), "> one\n>\n> two");
+        assert_eq!(quote_text(""), "");
     }
 }

@@ -102,6 +102,30 @@ impl<S: Read + Write> Session<S> {
         self.run(&format!("UID EXPUNGE {uid}")).map(|_| ())
     }
 
+    /// Copies one message to `mailbox` and leaves the original where it is (Message > Copy To).
+    pub fn copy_to(&mut self, uid: u32, mailbox: &str) -> Result<(), String> {
+        self.run(&format!("UID COPY {uid} {}", imap::quote(mailbox))).map(|_| ())
+    }
+
+    /// Erases every message of the selected mailbox: all are marked `\Deleted` and expunged (Mailbox > Erase Deleted
+    /// Items, Erase Junk Mail).
+    pub fn erase_all(&mut self) -> Result<(), String> {
+        self.run("STORE 1:* +FLAGS.SILENT (\\Deleted)")?;
+        self.run("EXPUNGE").map(|_| ())
+    }
+
+    pub fn create_mailbox(&mut self, name: &str) -> Result<(), String> {
+        self.run(&format!("CREATE {}", imap::quote(name))).map(|_| ())
+    }
+
+    pub fn rename_mailbox(&mut self, from: &str, to: &str) -> Result<(), String> {
+        self.run(&format!("RENAME {} {}", imap::quote(from), imap::quote(to))).map(|_| ())
+    }
+
+    pub fn delete_mailbox(&mut self, name: &str) -> Result<(), String> {
+        self.run(&format!("DELETE {}", imap::quote(name))).map(|_| ())
+    }
+
     /// Messages of the selected mailbox that match `criteria` (IMAP search keys, see [`crate::search::Query::imap_criteria`]),
     /// as UID values in the server's order.
     pub fn search(&mut self, criteria: &str) -> Result<Vec<u32>, String> {
@@ -315,6 +339,21 @@ mod tests {
         let mut s = session("* LIST (\\HasNoChildren) \"/\" \"INBOX\"\r\n* LIST (\\Noselect) \"/\" \"Work\"\r\n* LIST (\\Sent) \"/\" \"Sent\"\r\nA001 OK done\r\n");
         let names: Vec<String> = s.list().unwrap().into_iter().map(|m| m.name).collect();
         assert_eq!(names, vec!["INBOX", "Sent"]);
+    }
+
+    #[test]
+    fn copy_erase_and_mailbox_commands_are_sent_as_imap_writes_them() {
+        let mut s = session("A001 OK done\r\nA002 OK done\r\nA003 OK done\r\nA004 OK done\r\nA005 OK done\r\nA006 OK done\r\nA007 OK done\r\n");
+        s.copy_to(5, "Work").unwrap();
+        s.erase_all().unwrap();
+        s.create_mailbox("Receipts").unwrap();
+        s.rename_mailbox("Receipts", "Bills").unwrap();
+        s.delete_mailbox("Bills").unwrap();
+        let sent = s.lines.into_inner().sent();
+        assert_eq!(
+            sent,
+            "A001 UID COPY 5 \"Work\"\r\nA002 STORE 1:* +FLAGS.SILENT (\\Deleted)\r\nA003 EXPUNGE\r\nA004 CREATE \"Receipts\"\r\nA005 RENAME \"Receipts\" \"Bills\"\r\nA006 DELETE \"Bills\"\r\n"
+        );
     }
 
     #[test]

@@ -27,8 +27,18 @@ pub struct Listing {
 pub enum Change {
     /// Sets or clears one flag (Seen, Flagged, ...).
     Flag { flag: Flag, on: bool },
-    /// Moves the message to another mailbox of the account (Archive, Trash).
+    /// Moves the message to another mailbox of the account (Archive, Trash, Junk, Move To).
     Move { to: String },
+    /// Copies the message to another mailbox of the account (Copy To).
+    Copy { to: String },
+    /// Erases every message of the mailbox (Erase Deleted Items, Erase Junk Mail). The job's UID is 0.
+    EraseAll,
+    /// Creates the mailbox named `name`. The job's UID is 0 and its mailbox is not used.
+    Create { name: String },
+    /// Renames the job's mailbox to `to` (UID 0).
+    Rename { to: String },
+    /// Deletes the job's mailbox with the messages in it (UID 0).
+    Delete,
 }
 
 /// The answer of one job. Each carries the account id so the window can tell which account it belongs to.
@@ -112,10 +122,20 @@ pub fn change(transport: &dyn Transport, account: &Account, password: &str, mail
 fn apply_change(transport: &dyn Transport, account: &Account, password: &str, mailbox: &str, uid: u32, action: &Change) -> Result<(), String> {
     let mut session = session::connect(transport, accounts::incoming(account)?)?;
     session.login(&account.username, password)?;
-    session.select(mailbox)?;
     match action {
-        Change::Flag { flag, on } => session.set_flag(uid, *flag, *on)?,
-        Change::Move { to } => session.move_to(uid, to)?,
+        Change::Create { name } => session.create_mailbox(name)?,
+        Change::Rename { to } => session.rename_mailbox(mailbox, to)?,
+        Change::Delete => session.delete_mailbox(mailbox)?,
+        _ => {
+            session.select(mailbox)?;
+            match action {
+                Change::Flag { flag, on } => session.set_flag(uid, *flag, *on)?,
+                Change::Move { to } => session.move_to(uid, to)?,
+                Change::Copy { to } => session.copy_to(uid, to)?,
+                Change::EraseAll => session.erase_all()?,
+                Change::Create { .. } | Change::Rename { .. } | Change::Delete => {}
+            }
+        }
     }
     session.logout();
     Ok(())
@@ -123,7 +143,7 @@ fn apply_change(transport: &dyn Transport, account: &Account, password: &str, ma
 
 /// Sends a rendered message (`text`, from [`Draft::render`]) to every recipient of `draft`.
 pub fn send(transport: Arc<dyn Transport>, account: Account, password: String, draft: Draft, text: String) -> Event {
-    let recipients: Vec<String> = draft.to.iter().chain(draft.cc.iter()).cloned().collect();
+    let recipients: Vec<String> = draft.envelope_recipients().into_iter().map(str::to_string).collect();
     let result = accounts::outgoing(&account)
         .and_then(|server| submit::send(transport.as_ref(), server, &account.username, &password, &draft.from, &recipients, &text));
     Event::Sent { account: account.id, result }

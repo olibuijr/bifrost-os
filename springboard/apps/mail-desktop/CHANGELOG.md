@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0 — 2026-10-13
+
+- Compose has Cc, Bcc and Reply-To fields (View > Cc, Bcc and Reply-To Address Field show or hide them, in the open
+  sheet too). Bcc addresses get the message but are named in no header; Reply-To is sent as a header. Message > Set
+  Priority sends `X-Priority` and `Importance`.
+- Message > Reply All (Cmd+Opt+R) answers the sender (or the Reply-To address) and everyone else, once each, without the
+  user's own address; Cc stays in Cc. A plain Reply now goes to the Reply-To address when the message has one.
+- Message > Forward (Cmd+Shift+F) quotes the original headers and text under a `Fwd:` subject.
+- Message > Move to Junk, Move To and Copy To (a submenu of the account's mailboxes; Copy To uses IMAP COPY) and Move
+  Again.
+- Mailbox > New Mailbox, Rename Mailbox, Delete Mailbox (IMAP CREATE, RENAME, DELETE), Erase Deleted Items and Erase
+  Junk Mail (STORE `\Deleted` then EXPUNGE).
+- View > Sort By (Date Received, From, To, Subject; ascending or descending) and View > Filter (All, Unread, Flagged,
+  Replied). View > Collapse or Expand Conversation, Expand All and Collapse All fold the threaded view to the first
+  message of each conversation.
+- Edit > Paste as Quotation (Cmd+Opt+V) puts `> ` before each pasted line in the open message.
+
 ## 0.6.0 — 2026-10-13
 
 - Find (Cmd+F) searches the server: the shown mailbox is searched with IMAP `UID SEARCH` (from:, to:, subject:, body:
