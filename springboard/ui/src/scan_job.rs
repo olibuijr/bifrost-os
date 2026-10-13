@@ -57,6 +57,56 @@ impl DocumentFormat {
             DocumentFormat::Pdf => "pdf",
         }
     }
+
+    /// The name shown for the format in a scan window.
+    pub fn label(self) -> &'static str {
+        match self {
+            DocumentFormat::Jpeg => "JPEG",
+            DocumentFormat::Png => "PNG",
+            DocumentFormat::Tiff => "TIFF",
+            DocumentFormat::Pdf => "PDF",
+        }
+    }
+
+    /// The next format in the order JPEG, PNG, TIFF, PDF, then JPEG again.
+    pub fn next(self) -> DocumentFormat {
+        match self {
+            DocumentFormat::Jpeg => DocumentFormat::Png,
+            DocumentFormat::Png => DocumentFormat::Tiff,
+            DocumentFormat::Tiff => DocumentFormat::Pdf,
+            DocumentFormat::Pdf => DocumentFormat::Jpeg,
+        }
+    }
+}
+
+/// The colour modes a scan can take.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ColorMode {
+    Color,
+    Gray,
+    Lineart,
+}
+
+impl ColorMode {
+    pub const ALL: [ColorMode; 3] = [ColorMode::Color, ColorMode::Gray, ColorMode::Lineart];
+
+    /// The name shown in a scan window.
+    pub fn label(self) -> &'static str {
+        match self {
+            ColorMode::Color => "Colour",
+            ColorMode::Gray => "Greyscale",
+            ColorMode::Lineart => "Black & White",
+        }
+    }
+
+    /// The next mode in the order Colour, Greyscale, Black & White, then Colour again.
+    pub fn next(self) -> ColorMode {
+        match self {
+            ColorMode::Color => ColorMode::Gray,
+            ColorMode::Gray => ColorMode::Lineart,
+            ColorMode::Lineart => ColorMode::Color,
+        }
+    }
 }
 
 /// The two jobs a scanner runs.
@@ -91,6 +141,7 @@ pub enum ScanError {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ScanSettings {
     pub resolution_dpi: u32,
+    pub color: ColorMode,
     pub transfer_mode: TransferMode,
     pub format: DocumentFormat,
     pub document_name: String,
@@ -103,6 +154,7 @@ impl Default for ScanSettings {
     fn default() -> Self {
         ScanSettings {
             resolution_dpi: 300,
+            color: ColorMode::Color,
             transfer_mode: TransferMode::FileBased,
             format: DocumentFormat::Jpeg,
             document_name: "Scan".to_string(),
