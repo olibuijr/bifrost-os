@@ -10,26 +10,26 @@ use std::sync::{Arc, Mutex};
 /// Music red.
 pub const MUSIC_RED: u32 = pack(250, 36, 60, 255);
 
-/// Fills a convex or concave polygon, 4x4 supersampled, even-odd rule.
+/// Fills a convex or concave polygon with the even-odd rule, antialiased by `bifrost_ui::raster`.
 pub fn fill_poly(s: &mut Surface, pts: &[(f32, f32)], color: u32) {
-    let inside = |px: f32, py: f32| {
-        let mut odd = false;
-        for i in 0..pts.len() {
-            let ((ax, ay), (bx, by)) = (pts[i], pts[(i + 1) % pts.len()]);
-            if (ay > py) != (by > py) && px < ax + (py - ay) * (bx - ax) / (by - ay) {
-                odd = !odd;
-            }
-        }
-        odd
-    };
+    if pts.len() < 3 || pts.iter().any(|p| !p.0.is_finite() || !p.1.is_finite()) {
+        return;
+    }
     let (x0, x1) = pts.iter().fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p.0), b.max(p.0)));
     let (y0, y1) = pts.iter().fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p.1), b.max(p.1)));
-    for py in (y0.max(0.0) as usize).max(s.y0)..(y1.ceil().max(0.0) as usize).min(s.h) {
-        for px in (x0.max(0.0) as usize)..(x1.ceil().max(0.0) as usize).min(s.w) {
-            let hits = (0..16).filter(|i| inside(px as f32 + (i % 4) as f32 / 4.0 + 0.125, py as f32 + (i / 4) as f32 / 4.0 + 0.125)).count();
-            if hits > 0 {
+    let (ox, oy) = (x0.floor().max(0.0) as usize, y0.floor().max(0.0) as usize);
+    let (ex, ey) = ((x1.ceil().max(0.0) as usize).min(s.w), (y1.ceil().max(0.0) as usize).min(s.h));
+    if ex <= ox || ey <= oy {
+        return;
+    }
+    let local: Vec<(f32, f32)> = pts.iter().map(|p| (p.0 - ox as f32, p.1 - oy as f32)).collect();
+    let cov = bifrost_ui::raster::fill_polygons(&[local], bifrost_ui::raster::FillRule::EvenOdd, ex - ox, ey - oy);
+    for py in oy.max(s.y0)..ey {
+        for px in ox..ex {
+            let c = cov.at(px - ox, py - oy);
+            if c != 0 {
                 let d = s.at(px, py);
-                *d = over(*d, scale(color, (hits * 255 / 16) as u32));
+                *d = over(*d, scale(color, c as u32));
             }
         }
     }
