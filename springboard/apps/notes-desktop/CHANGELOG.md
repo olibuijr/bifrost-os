@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.15.0 — 2026-10-13
+
+- Services: text sent from another app (New Note With Selection in the Services menu, or the share sheet) opens as a new note in the editor.
+
 ## 1.14.1 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

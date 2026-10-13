@@ -327,6 +327,14 @@ impl App for NotesApp {
                 };
                 n.chord(&ctx.ui, KEY_Z, mods, bifrost_app::proto::sys::now_ms())
             }
+            // text sent from another app (Services, the share sheet): a new note holding it, opened in the editor
+            Input::Open(url) => match bifrost_app::share::text_from_url(&url) {
+                Some(text) => {
+                    n.import_note(&ctx.ui, &text, bifrost_app::proto::sys::now_ms());
+                    true
+                }
+                None => false,
+            },
             Input::Key(k) => {
                 if let Some((key, mods)) = k.as_chord() {
                     use bifrost_app::proto::{CHORD_ALT, CHORD_CTRL, CHORD_META, CHORD_SHIFT};

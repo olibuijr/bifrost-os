@@ -274,6 +274,11 @@ impl App for DictionaryApp {
         match ev {
             Input::Touch { kind, x, y, t, .. } => self.touch(ctx, kind, x, y, t),
             Input::Key(key) => self.key(&key),
+            // a word another app sent with Services (Look Up in Dictionary) or the share sheet: looked up at once
+            Input::Open(url) => match bifrost_app::share::text_from_url(&url) {
+                Some(text) => self.look_up(&text),
+                None => false,
+            },
             Input::Command(Command::Copy) => {
                 self.copy_definition(ctx);
                 false

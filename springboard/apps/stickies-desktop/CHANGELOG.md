@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+
+- Services: Make New Sticky Note in the Services menu, or text sent by the share sheet, opens as a new sticky note holding it.
+
 ## 0.2.0
 
 - Duplicate Sticky Note (cmd+d): the copy sits offset from the original and takes focus.

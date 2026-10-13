@@ -94,6 +94,17 @@ impl StickiesApp {
         self.changed()
     }
 
+    /// A new note holding `text`, placed as New Note places it (text another app sent with Services or the share sheet).
+    fn new_note_with(&mut self, text: &str) -> bool {
+        let Some(board) = &mut self.board else { return false };
+        let (x, y) = Self::cascade_position(board);
+        let id = board.new_note(x, y, Self::now());
+        if let Some(note) = board.find_mut(id) {
+            note.type_text(text, Self::now());
+        }
+        self.changed()
+    }
+
     fn touch(&mut self, ctx: &Ctx, kind: TouchKind, x: f32, y: f32) -> bool {
         let (px, py) = Self::to_points(ctx, x, y);
         match kind {
@@ -264,6 +275,11 @@ impl App for StickiesApp {
         let changed = match ev {
             Input::Touch { kind, x, y, .. } => self.touch(ctx, kind, x, y),
             Input::Key(key) => self.key(&key),
+            // text sent from another app (Services, the share sheet): a new sticky note holding it
+            Input::Open(url) => match bifrost_app::share::text_from_url(&url) {
+                Some(text) => self.new_note_with(&text),
+                None => false,
+            },
             Input::Command(Command::Copy) => {
                 if let Some(note) = self.board.as_ref().and_then(|b| b.focused()) {
                     ctx.set_pasteboard_string(&note.text);

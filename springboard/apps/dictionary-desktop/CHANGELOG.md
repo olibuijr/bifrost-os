@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- Services: Look Up in Dictionary in the Services menu, or a word sent by the share sheet, is looked up at once.
+
 ## 0.1.0
 
 - New app: Dictionary. Reads StarDict dictionaries (.ifo, .idx, .dict) from the app's dictionaries folder and the system's stardict folder.
