@@ -24,10 +24,10 @@
    "feature": "Cc, Bcc and Reply-To address fields",
    "area": "view",
    "apple": "MainMenu View > Bcc/Cc/Reply-To Address Field",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Compose has To only",
-   "wire": "Add Cc/Bcc/Reply-To fields to open_compose (state.rs:365), carry them in Draft (message.rs) and the RCPT list in submit.rs; add View menu toggles in window.rs menu_items"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/state.rs:open_draft",
+   "note": "Fields shown from View menu toggles; Bcc kept out of headers (message.rs Draft::render). Not saved across runs.",
+   "wire": ""
   },
   {
    "feature": "Send message",
@@ -51,19 +51,19 @@
    "feature": "Reply All",
    "area": "menu",
    "apple": "Message > Reply All",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add message::reply_all_draft that takes every To/Cc address except the user's own; add MENU_REPLY_ALL to window.rs menu_items and a toolbar button in draw.rs toolbar_items"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/message.rs:reply_all_draft",
+   "note": "Menu item only (Message > Reply All); no toolbar button yet.",
+   "wire": ""
   },
   {
    "feature": "Forward, Forward as Attachment, Redirect",
    "area": "menu",
    "apple": "Message > Forward, Forward as Attachment, Redirect",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add forward_draft that quotes the body under a 'Fwd:' subject and re-attaches the files (multipart in submit.rs); Redirect keeps the original From and adds Resent- headers; add Message menu items and a toolbar Forward button"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/message.rs:forward_draft",
+   "note": "Forward quotes the text under Fwd:. Forward as Attachment and Redirect are not done; the original files are not re-attached.",
+   "wire": ""
   },
   {
    "feature": "Rich text formatting (bold/italic/underline, fonts, colours, alignment, lists, indentation)",
@@ -168,19 +168,19 @@
    "feature": "Move To / Copy To mailbox, Move Again",
    "area": "menu",
    "apple": "Message > Move to, Copy to, Move Again",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Archive and Trash are the only targets",
-   "wire": "Add a submenu over mail.mailboxes that calls move_open with the chosen name (window.rs:607); use IMAP COPY for Copy To; keep the last target for Move Again; let rows be dragged onto sidebar mailboxes"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:menu_items",
+   "note": "Move To, Copy To and Move Again in the Message menu. Dragging rows onto the sidebar is not done.",
+   "wire": ""
   },
   {
    "feature": "Move to Junk and junk filtering",
    "area": "menu",
    "apple": "Message > Move to Junk; Junk settings",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a Move to Junk item backed by a JUNK_NAMES list like ARCHIVE_NAMES in state.rs, and set the $Junk keyword"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/window.rs:menu_items",
+   "note": "Move to Junk moves to the account Junk mailbox (state.rs JUNK_NAMES). The $Junk keyword and junk filtering are not done.",
+   "wire": ""
   },
   {
    "feature": "Remind Me, follow-up, Send Later",
@@ -204,10 +204,10 @@
    "feature": "Set priority",
    "area": "menu",
    "apple": "Message > Set Priority",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add an X-Priority header to the submit draft and a priority choice in compose"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/message.rs:Priority",
+   "note": "Priority menu on the compose sheet sends X-Priority and Importance.",
+   "wire": ""
   },
   {
    "feature": "Remove attachments",
@@ -241,27 +241,27 @@
    "area": "view",
    "apple": "View > Organize by Conversation, Expand/Collapse All Conversations",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:440",
-   "note": "Threaded view toggle exists; threads cannot be collapsed",
-   "wire": "Make thread groups collapsible in state.visible_lines with a disclosure hit target in draw.rs; add Expand/Collapse All items"
+   "bifrost": "springboard/apps/mail-desktop/src/state.rs:collapse_all",
+   "note": "Collapse and expand through View menu items (one conversation or all); no disclosure triangle in the row yet.",
+   "wire": ""
   },
   {
    "feature": "Sort messages by field and order",
    "area": "view",
    "apple": "View > Sort By",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Always newest first",
-   "wire": "Keep a sort key and order in Mail, apply them in visible_rows (state.rs:389), and add a View > Sort By submenu"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/state.rs:visible_rows",
+   "note": "View > Sort By with Date Received, From, To, Subject and direction. Size and other keys are not done.",
+   "wire": ""
   },
   {
    "feature": "Filter the message list (unread, flagged, attachments)",
    "area": "view",
    "apple": "View > Filter",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a Filter enum to Mail applied in visible_rows, plus a toolbar filter button"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/state.rs:Filter",
+   "note": "View > Filter: All, Unread, Flagged, Replied. Attachments filter and a toolbar button are not done.",
+   "wire": ""
   },
   {
    "feature": "Mailbox search",
@@ -312,10 +312,10 @@
    "feature": "New, rename and delete mailbox",
    "area": "menu",
    "apple": "Mailbox > New Mailbox, Rename, Delete",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add IMAP CREATE/RENAME/DELETE to imap.rs, Mailbox menu items and a new-mailbox sheet"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/sync.rs:Change",
+   "note": "Mailbox menu items and a name sheet; IMAP CREATE, RENAME, DELETE.",
+   "wire": ""
   },
   {
    "feature": "Smart mailboxes",
@@ -339,10 +339,10 @@
    "feature": "Erase deleted items and junk",
    "area": "menu",
    "apple": "Mailbox > Erase Deleted Items, Erase Junk Mail",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Empty Trash or Junk with STORE \\Deleted plus EXPUNGE in imap.rs, from the Mailbox menu"
+   "status": "partial",
+   "bifrost": "springboard/apps/mail-desktop/src/session.rs:erase_all",
+   "note": "Mailbox > Erase Deleted Items and Erase Junk Mail.",
+   "wire": ""
   },
   {
    "feature": "Import and export mailboxes (mbox)",
@@ -457,9 +457,9 @@
    "area": "menu",
    "apple": "Edit > Paste as Quotation",
    "status": "partial",
-   "bifrost": "springboard/apps/mail-desktop/src/window.rs:400",
-   "note": "Plain paste only",
-   "wire": "Add Paste as Quotation that prefixes '> ' before form.type_text"
+   "bifrost": "springboard/apps/mail-desktop/src/message.rs:quote_text",
+   "note": "Edit > Paste as Quotation. Paste and Match Style is not done (compose is plain text).",
+   "wire": ""
   },
   {
    "feature": "Spelling and grammar, substitutions, speech",

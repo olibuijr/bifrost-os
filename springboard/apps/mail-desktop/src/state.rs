@@ -4,12 +4,12 @@
 
 use crate::body::Attachment;
 use crate::flags::{Flag, Flags};
-use crate::message::{self, Draft, Summary};
+use crate::message::{self, Draft, Priority, Summary};
 use crate::search::{Doc, Query};
 use crate::session::Listed;
 use crate::threads::{self, Node};
 use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Security, Server};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub const INBOX: &str = "INBOX";
 /// Most message texts kept at once. Past this the lowest UID values (the oldest mail) are dropped; a dropped text is
@@ -27,6 +27,64 @@ pub struct Line {
 /// The mailbox names Archive and Trash are looked up under, in order (providers name them differently).
 pub const ARCHIVE_NAMES: [&str; 4] = ["Archive", "Archives", "All Mail", "[Gmail]/All Mail"];
 pub const TRASH_NAMES: [&str; 4] = ["Trash", "Deleted Items", "Deleted Messages", "[Gmail]/Trash"];
+pub const JUNK_NAMES: [&str; 5] = ["Junk", "Junk E-mail", "Junk Email", "Spam", "[Gmail]/Spam"];
+
+/// The compose fields in the order they are shown. Cc, Bcc and Reply-To are optional (View menu).
+const COMPOSE_ORDER: [&str; 6] = ["To", "Cc", "Bcc", "Reply-To", "Subject", "Message"];
+
+/// What the message list is ordered by (View > Sort By). Date is the order the messages arrived in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SortKey {
+    Date,
+    From,
+    To,
+    Subject,
+}
+
+impl SortKey {
+    pub const ALL: [SortKey; 4] = [SortKey::Date, SortKey::From, SortKey::To, SortKey::Subject];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            SortKey::Date => "Date Received",
+            SortKey::From => "From",
+            SortKey::To => "To",
+            SortKey::Subject => "Subject",
+        }
+    }
+}
+
+/// Which messages the list shows (View > Filter).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Filter {
+    #[default]
+    All,
+    Unread,
+    Flagged,
+    Replied,
+}
+
+impl Filter {
+    pub const ALL: [Filter; 4] = [Filter::All, Filter::Unread, Filter::Flagged, Filter::Replied];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Filter::All => "All Messages",
+            Filter::Unread => "Unread",
+            Filter::Flagged => "Flagged",
+            Filter::Replied => "Replied",
+        }
+    }
+
+    pub fn matches(self, flags: Flags) -> bool {
+        match self {
+            Filter::All => true,
+            Filter::Unread => !flags.contains(Flag::Seen),
+            Filter::Flagged => flags.contains(Flag::Flagged),
+            Filter::Replied => flags.contains(Flag::Answered),
+        }
+    }
+}
 /// The IMAP ports that start TLS at once; the other standard ports start with STARTTLS.
 const IMAP_TLS_PORT: u16 = 993;
 const SMTP_TLS_PORT: u16 = 465;
@@ -102,6 +160,44 @@ pub struct Compose {
     pub form: Form,
     pub in_reply_to: Option<String>,
     pub references: Vec<String>,
+    pub priority: Priority,
+}
+
+impl Compose {
+    /// Shows or hides one of the optional address fields (Cc, Bcc, Reply-To), keeping the others and the typed text.
+    pub fn set_field(&mut self, label: &'static str, hint: &'static str, shown: bool) {
+        let at = self.form.fields.iter().position(|f| f.label == label);
+        match (at, shown) {
+            (None, true) => {
+                let rank = COMPOSE_ORDER.iter().position(|l| *l == label).unwrap_or(0);
+                let before = self
+                    .form
+                    .fields
+                    .iter()
+                    .take_while(|f| COMPOSE_ORDER.iter().position(|l| *l == f.label).is_some_and(|r| r < rank))
+                    .count();
+                self.form.fields.insert(before, Field::new(label, hint, ""));
+                if self.form.focus >= before {
+                    self.form.focus += 1;
+                }
+            }
+            (Some(index), false) => {
+                self.form.fields.remove(index);
+                if self.form.focus > index {
+                    self.form.focus -= 1;
+                }
+                self.form.focus = self.form.focus.min(self.form.fields.len().saturating_sub(1));
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The sheet that names a mailbox: a new one, or `rename_from` under a new name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MailboxSheet {
+    pub form: Form,
+    pub rename_from: Option<String>,
 }
 
 /// The sheet over the window, if one is open.
@@ -111,6 +207,8 @@ pub enum Sheet {
     Compose(Compose),
     /// The Find sheet: one field, the search text.
     Search(Form),
+    /// New Mailbox and Rename Mailbox.
+    Mailbox(MailboxSheet),
 }
 
 /// A message that arrived since the last listing of the inbox, for a notification.
@@ -165,6 +263,19 @@ pub struct Mail {
     /// The messages the server found for the applied search in the shown mailbox (`SEARCH` on the server), newest
     /// first. None until the server answers; the list then shows the loaded rows that match.
     pub found: Option<Vec<Row>>,
+    /// The list order (View > Sort By): the key, and whether it runs ascending (oldest first for Date, A to Z otherwise).
+    pub sort: SortKey,
+    pub ascending: bool,
+    /// Which messages the list shows (View > Filter).
+    pub filter: Filter,
+    /// Conversations folded to their first message in the threaded view, by the UID of that first message.
+    pub collapsed: HashSet<u32>,
+    /// The mailbox the last Move To went to, for Move Again.
+    pub last_target: Option<String>,
+    /// Which optional address fields a new message shows (View > Cc/Bcc/Reply-To Address Field).
+    pub show_cc: bool,
+    pub show_bcc: bool,
+    pub show_reply_to: bool,
 }
 
 impl Mail {
@@ -185,6 +296,14 @@ impl Mail {
             threaded: false,
             attachments: HashMap::new(),
             found: None,
+            sort: SortKey::Date,
+            ascending: false,
+            filter: Filter::All,
+            collapsed: HashSet::new(),
+            last_target: None,
+            show_cc: true,
+            show_bcc: false,
+            show_reply_to: false,
         }
     }
 
@@ -213,6 +332,7 @@ impl Mail {
         self.attachments.clear();
         self.found = None;
         self.open = None;
+        self.collapsed.clear();
     }
 
     /// Takes the result of a listing. Returns the notices for new inbox messages. The rows change only when the listing
@@ -294,10 +414,24 @@ impl Mail {
     /// conversation is listed together, the newest conversation first, in tree order inside it (`threads::arrange`):
     /// a reply sits under the message it answers, indented by its depth.
     pub fn visible_lines(&self) -> Vec<Line> {
-        let rows = self.visible_rows();
         if !self.threaded {
-            return rows.into_iter().map(|row| Line { row, thread: 1, depth: 0 }).collect();
+            return self.visible_rows().into_iter().map(|row| Line { row, thread: 1, depth: 0 }).collect();
         }
+        let mut lines = Vec::new();
+        for conversation in self.conversations() {
+            let folded = conversation.len() > 1 && conversation.first().is_some_and(|l| self.collapsed.contains(&l.row.uid));
+            if folded {
+                lines.extend(conversation.into_iter().take(1));
+            } else {
+                lines.extend(conversation);
+            }
+        }
+        lines
+    }
+
+    /// The threaded view's conversations, each in tree order, whether folded or not.
+    fn conversations(&self) -> Vec<Vec<Line>> {
+        let rows = self.visible_rows();
         let nodes: Vec<Node> = rows
             .iter()
             .map(|r| Node {
@@ -307,13 +441,58 @@ impl Mail {
                 subject: r.summary.subject.clone(),
             })
             .collect();
-        let mut lines = Vec::with_capacity(rows.len());
+        let mut conversations = Vec::new();
         for group in threads::group(&nodes) {
-            for (i, depth) in threads::arrange(&nodes, &group) {
-                lines.push(Line { row: rows[i].clone(), thread: group.len(), depth });
+            let lines: Vec<Line> = threads::arrange(&nodes, &group)
+                .into_iter()
+                .map(|(i, depth)| Line { row: rows[i].clone(), thread: group.len(), depth })
+                .collect();
+            conversations.push(lines);
+        }
+        conversations
+    }
+
+    /// True when the conversation that holds message `uid` is folded to its first message.
+    pub fn is_folded(&self, uid: u32) -> bool {
+        self.conversations().iter().any(|c| c.len() > 1 && c.iter().any(|l| l.row.uid == uid) && c.first().is_some_and(|l| self.collapsed.contains(&l.row.uid)))
+    }
+
+    /// Folds or unfolds the conversation that holds message `uid` (View > Collapse or Expand Conversation). A message
+    /// alone in its conversation has nothing to fold.
+    pub fn toggle_conversation(&mut self, uid: u32) {
+        let first = self
+            .conversations()
+            .into_iter()
+            .find(|c| c.len() > 1 && c.iter().any(|l| l.row.uid == uid))
+            .and_then(|c| c.first().map(|l| l.row.uid));
+        if let Some(first) = first {
+            if !self.collapsed.remove(&first) {
+                self.collapsed.insert(first);
             }
         }
-        lines
+    }
+
+    /// Folds every conversation of more than one message (View > Collapse All Conversations).
+    pub fn collapse_all(&mut self) {
+        self.collapsed = self.conversations().into_iter().filter(|c| c.len() > 1).filter_map(|c| c.first().map(|l| l.row.uid)).collect();
+    }
+
+    /// Unfolds every conversation (View > Expand All Conversations).
+    pub fn expand_all(&mut self) {
+        self.collapsed.clear();
+    }
+
+    /// Orders the list by `key`. Picking a new key starts newest first for Date and A to Z for the others; picking the
+    /// key already in use keeps the direction.
+    pub fn sort_by(&mut self, key: SortKey) {
+        if self.sort != key {
+            self.sort = key;
+            self.ascending = key != SortKey::Date;
+        }
+    }
+
+    pub fn set_ascending(&mut self, ascending: bool) {
+        self.ascending = ascending;
     }
 
     /// The first of `candidates` the account has as a mailbox (names match without case), for Archive and Trash.
@@ -362,13 +541,92 @@ impl Mail {
             Some(original) => message::reply_draft(original, &from),
             None => Draft { from, ..Draft::default() },
         };
-        let mut form = Form::new(vec![
-            Field::new("To", "name@example.com, other@example.com", &draft.to.join(", ")),
-            Field::new("Subject", "", &draft.subject),
-            Field::new("Message", "", &draft.body),
-        ]);
-        form.focus_on(if draft.to.is_empty() { 0 } else { 2 });
-        self.sheet = Some(Sheet::Compose(Compose { form, in_reply_to: draft.in_reply_to, references: draft.references }));
+        self.open_draft(draft);
+    }
+
+    /// Reply All: the sender and the other recipients of `original`, minus the user's own address.
+    pub fn open_reply_all(&mut self, original: &Summary) {
+        let own = self.current().map(|a| a.email.clone()).unwrap_or_default();
+        self.open_draft(message::reply_all_draft(original, &own));
+    }
+
+    /// Forward: `text` (the decoded body of `original`) quoted under a `Fwd:` subject.
+    pub fn open_forward(&mut self, original: &Summary, text: &str) {
+        let own = self.current().map(|a| a.email.clone()).unwrap_or_default();
+        self.open_draft(message::forward_draft(original, &own, text));
+    }
+
+    /// A compose sheet that starts from `draft`. Cc, Bcc and Reply-To are shown when the View menu asks for them or
+    /// when the draft already has addresses there. The cursor goes to the recipient field when there is none yet,
+    /// otherwise to the message body.
+    pub fn open_draft(&mut self, draft: Draft) {
+        let mut fields = vec![Field::new("To", "name@example.com, other@example.com", &draft.to.join(", "))];
+        if self.show_cc || !draft.cc.is_empty() {
+            fields.push(Field::new("Cc", "", &draft.cc.join(", ")));
+        }
+        if self.show_bcc || !draft.bcc.is_empty() {
+            fields.push(Field::new("Bcc", "", &draft.bcc.join(", ")));
+        }
+        if self.show_reply_to || !draft.reply_to.is_empty() {
+            fields.push(Field::new("Reply-To", "", &draft.reply_to.join(", ")));
+        }
+        fields.push(Field::new("Subject", "", &draft.subject));
+        fields.push(Field::new("Message", "", &draft.body));
+        let last = fields.len() - 1;
+        let mut form = Form::new(fields);
+        form.focus_on(if draft.to.is_empty() { 0 } else { last });
+        self.sheet = Some(Sheet::Compose(Compose { form, in_reply_to: draft.in_reply_to, references: draft.references, priority: draft.priority }));
+    }
+
+    /// Shows or hides an optional address field of new messages and of the compose sheet that is open.
+    pub fn set_address_field(&mut self, label: &'static str, shown: bool) {
+        match label {
+            "Cc" => self.show_cc = shown,
+            "Bcc" => self.show_bcc = shown,
+            _ => self.show_reply_to = shown,
+        }
+        if let Some(Sheet::Compose(compose)) = &mut self.sheet {
+            compose.set_field(label, "", shown);
+        }
+    }
+
+    /// Sets the open message's priority (Message > Set Priority).
+    pub fn set_priority(&mut self, priority: Priority) {
+        if let Some(Sheet::Compose(compose)) = &mut self.sheet {
+            compose.priority = priority;
+        }
+    }
+
+    /// New Mailbox: a sheet that asks for the name.
+    pub fn open_new_mailbox(&mut self) {
+        self.sheet = Some(Sheet::Mailbox(MailboxSheet { form: Form::new(vec![Field::new("Name", "Work/Receipts", "")]), rename_from: None }));
+    }
+
+    /// Rename Mailbox: a sheet with the shown mailbox's name. The inbox cannot be renamed; None is returned then.
+    pub fn open_rename_mailbox(&mut self) -> Option<()> {
+        if self.mailbox.eq_ignore_ascii_case(INBOX) {
+            return None;
+        }
+        let name = self.mailbox.clone();
+        self.sheet = Some(Sheet::Mailbox(MailboxSheet { form: Form::new(vec![Field::new("Name", "", &name)]), rename_from: Some(name) }));
+        Some(())
+    }
+
+    /// The mailboxes a message of the shown mailbox can move or copy to: every other mailbox of the account.
+    pub fn move_targets(&self) -> Vec<String> {
+        self.mailboxes.iter().filter(|m| **m != self.mailbox).cloned().collect()
+    }
+
+    /// The mailbox name a sheet's form asks for, checked: not empty, no line breaks, and not already a mailbox.
+    pub fn new_mailbox_name(&self, form: &Form, rename_from: Option<&str>) -> Result<String, String> {
+        let name = form.value("Name").trim().to_string();
+        if name.is_empty() || name.contains(['\r', '\n']) {
+            return Err("Enter a name for the mailbox".into());
+        }
+        if self.mailboxes.iter().any(|m| m.eq_ignore_ascii_case(&name) && rename_from != Some(m.as_str())) {
+            return Err(format!("There is already a mailbox named {name}"));
+        }
+        Ok(name)
     }
 
     /// The Find sheet, with the search applied so far.
@@ -387,6 +645,27 @@ impl Mail {
     /// every message of the mailbox). Otherwise the loaded rows that match the search, newest first: bodies are searched
     /// when they are loaded, and a message whose body is not loaded matches on its headers only.
     pub fn visible_rows(&self) -> Vec<Row> {
+        let mut rows = self.matching_rows();
+        rows.retain(|row| self.filter.matches(row.flags));
+        let text = |row: &Row| match self.sort {
+            SortKey::Date => String::new(),
+            SortKey::From => row.summary.from.to_lowercase(),
+            SortKey::To => row.summary.to.to_lowercase(),
+            SortKey::Subject => row.summary.subject.to_lowercase(),
+        };
+        rows.sort_by(|a, b| {
+            let order = text(a).cmp(&text(b)).then(a.uid.cmp(&b.uid));
+            if self.ascending {
+                order
+            } else {
+                order.reverse()
+            }
+        });
+        rows
+    }
+
+    /// The rows the search keeps, before the filter and the sort.
+    fn matching_rows(&self) -> Vec<Row> {
         if let Some(found) = &self.found {
             return found.clone();
         }
@@ -447,21 +726,17 @@ impl Mail {
     /// The draft a compose sheet describes, from the shown account. Recipients are split on commas and semicolons.
     pub fn draft_from(&self, compose: &Compose) -> Result<Draft, String> {
         let from = self.current().map(|a| a.email.clone()).ok_or("Add an account first")?;
-        let to: Vec<String> = compose
-            .form
-            .value("To")
-            .split([',', ';'])
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string)
-            .collect();
+        let to = message::split_addresses(compose.form.value("To"));
         if to.is_empty() {
             return Err("Add at least one recipient".into());
         }
         Ok(Draft {
             from,
             to,
-            cc: Vec::new(),
+            cc: message::split_addresses(compose.form.value("Cc")),
+            bcc: message::split_addresses(compose.form.value("Bcc")),
+            reply_to: message::split_addresses(compose.form.value("Reply-To")),
+            priority: compose.priority,
             subject: compose.form.value("Subject").to_string(),
             body: compose.form.value("Message").to_string(),
             in_reply_to: compose.in_reply_to.clone(),
@@ -770,11 +1045,151 @@ mod tests {
             Field::new("Subject", "", "Hi"),
             Field::new("Message", "", "Body"),
         ]);
-        let draft = mail.draft_from(&Compose { form, in_reply_to: None, references: vec![] }).unwrap();
+        let draft = mail.draft_from(&Compose { form, in_reply_to: None, references: vec![], priority: Priority::Normal }).unwrap();
         assert_eq!(draft.to, vec!["ana@example.com", "bo@example.com"]);
         assert_eq!(draft.from, "olibuijr@example.com");
         let empty = Form::new(vec![Field::new("To", "", " ")]);
-        assert!(mail.draft_from(&Compose { form: empty, in_reply_to: None, references: vec![] }).is_err());
+        assert!(mail.draft_from(&Compose { form: empty, in_reply_to: None, references: vec![], priority: Priority::Normal }).is_err());
+    }
+
+    fn compose_of(mail: &Mail) -> &Compose {
+        match &mail.sheet {
+            Some(Sheet::Compose(c)) => c,
+            other => panic!("expected a compose sheet, got {other:?}"),
+        }
+    }
+
+    fn labels(compose: &Compose) -> Vec<&'static str> {
+        compose.form.fields.iter().map(|f| f.label).collect()
+    }
+
+    #[test]
+    fn cc_bcc_and_reply_to_fields_follow_the_view_menu_and_reach_the_draft() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.open_compose(None);
+        assert_eq!(labels(compose_of(&mail)), vec!["To", "Cc", "Subject", "Message"]);
+        mail.set_address_field("Bcc", true);
+        mail.set_address_field("Reply-To", true);
+        assert_eq!(labels(compose_of(&mail)), vec!["To", "Cc", "Bcc", "Reply-To", "Subject", "Message"]);
+        if let Some(Sheet::Compose(c)) = &mut mail.sheet {
+            c.form.focus_on(2);
+            c.form.type_text("hidden@example.com");
+            c.form.focus_on(0);
+            c.form.type_text("ana@example.com");
+            c.form.focus_on(3);
+            c.form.type_text("back@example.com");
+            c.priority = Priority::Low;
+        }
+        let draft = mail.draft_from(compose_of(&mail)).unwrap();
+        assert_eq!((draft.bcc, draft.reply_to, draft.priority), (vec!["hidden@example.com".to_string()], vec!["back@example.com".to_string()], Priority::Low));
+        mail.set_address_field("Cc", false);
+        mail.set_address_field("Bcc", false);
+        assert_eq!(labels(compose_of(&mail)), vec!["To", "Reply-To", "Subject", "Message"]);
+        mail.open_compose(None);
+        assert_eq!(labels(compose_of(&mail)), vec!["To", "Reply-To", "Subject", "Message"], "the choice is kept for the next message");
+    }
+
+    #[test]
+    fn reply_all_and_forward_open_compose_sheets() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let original = Summary::from_headers("Message-ID: <a@x>\r\nSubject: Plan\r\nFrom: Ana <ana@example.com>\r\nTo: olibuijr@example.com, bo@example.com\r\nCc: cy@example.com\r\n\r\n");
+        mail.open_reply_all(&original);
+        let c = compose_of(&mail);
+        assert_eq!(c.form.value("To"), "ana@example.com, bo@example.com");
+        assert_eq!(c.form.value("Cc"), "cy@example.com");
+        assert_eq!(c.in_reply_to.as_deref(), Some("<a@x>"));
+        mail.open_forward(&original, "Hello");
+        let c = compose_of(&mail);
+        assert_eq!(c.form.value("Subject"), "Fwd: Plan");
+        assert_eq!(c.form.focus, 0, "a forward starts at the recipient");
+        assert!(c.form.value("Message").ends_with("Hello"));
+        assert_eq!(c.in_reply_to, None);
+    }
+
+    fn mail_with_mixed_rows() -> Mail {
+        let mut mail = Mail::new(vec![account("work")]);
+        let header = |subject: &str, from: &str| format!("Subject: {subject}\r\nFrom: {from}\r\n\r\n");
+        let rows = vec![
+            Listed { uid: 1, flags: Flags::empty().with(Flag::Seen, true), header: header("Banana", "Cy <cy@example.com>") },
+            Listed { uid: 2, flags: Flags::empty().with(Flag::Flagged, true), header: header("avocado", "Bo <bo@example.com>") },
+            Listed { uid: 3, flags: Flags::empty().with(Flag::Seen, true).with(Flag::Answered, true), header: header("Cherry", "Ana <ana@example.com>") },
+        ];
+        mail.apply_listing("work", INBOX, vec![], rows);
+        mail
+    }
+
+    fn uids(mail: &Mail) -> Vec<u32> {
+        mail.visible_rows().iter().map(|r| r.uid).collect()
+    }
+
+    #[test]
+    fn the_list_sorts_by_key_and_direction() {
+        let mut mail = mail_with_mixed_rows();
+        assert_eq!(uids(&mail), vec![3, 2, 1], "newest first by default");
+        mail.set_ascending(true);
+        assert_eq!(uids(&mail), vec![1, 2, 3]);
+        mail.sort_by(SortKey::Subject);
+        assert_eq!(uids(&mail), vec![2, 1, 3], "A to Z without case");
+        mail.set_ascending(false);
+        assert_eq!(uids(&mail), vec![3, 1, 2]);
+        mail.sort_by(SortKey::From);
+        assert_eq!(uids(&mail), vec![3, 2, 1], "a new key starts A to Z: Ana, Bo, Cy");
+        mail.set_ascending(false);
+        assert_eq!(uids(&mail), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn the_filter_keeps_unread_flagged_or_replied_messages() {
+        let mut mail = mail_with_mixed_rows();
+        mail.filter = Filter::Unread;
+        assert_eq!(uids(&mail), vec![2]);
+        mail.filter = Filter::Flagged;
+        assert_eq!(uids(&mail), vec![2]);
+        mail.filter = Filter::Replied;
+        assert_eq!(uids(&mail), vec![3]);
+        mail.filter = Filter::All;
+        assert_eq!(uids(&mail).len(), 3);
+    }
+
+    #[test]
+    fn conversations_fold_and_unfold() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let plan = "Message-ID: <a@x>\r\nSubject: Plan\r\nFrom: Ana <ana@example.com>\r\n\r\n";
+        let reply = "Message-ID: <b@x>\r\nIn-Reply-To: <a@x>\r\nSubject: Re: Plan\r\nFrom: Bo <bo@example.com>\r\n\r\n";
+        let lone = "Message-ID: <c@x>\r\nSubject: Lunch\r\nFrom: Cy <cy@example.com>\r\n\r\n";
+        let rows = vec![(1, plan), (2, lone), (3, reply)].into_iter().map(|(uid, h)| Listed { uid, flags: Flags::empty(), header: h.to_string() }).collect();
+        mail.apply_listing("work", INBOX, vec![], rows);
+        mail.threaded = true;
+        let shown = |m: &Mail| m.visible_lines().iter().map(|l| l.row.uid).collect::<Vec<_>>();
+        assert_eq!(shown(&mail), vec![1, 3, 2]);
+        mail.toggle_conversation(3);
+        assert_eq!(shown(&mail), vec![1, 2], "only the first message of the folded conversation");
+        assert_eq!(mail.visible_lines()[0].thread, 2, "the count still says two");
+        assert!(mail.is_folded(3) && !mail.is_folded(2));
+        mail.toggle_conversation(2);
+        assert_eq!(shown(&mail), vec![1, 2], "a message alone has nothing to fold");
+        mail.expand_all();
+        assert_eq!(shown(&mail), vec![1, 3, 2]);
+        mail.collapse_all();
+        assert_eq!(shown(&mail), vec![1, 2]);
+    }
+
+    #[test]
+    fn mailbox_sheets_check_the_name() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.mailboxes = vec!["INBOX".into(), "Sent".into(), "Work".into()];
+        mail.show_mailbox("Work");
+        assert_eq!(mail.move_targets(), vec!["INBOX", "Sent"]);
+        mail.open_new_mailbox();
+        let Some(Sheet::Mailbox(sheet)) = mail.sheet.clone() else { panic!("expected the mailbox sheet") };
+        assert!(mail.new_mailbox_name(&sheet.form, None).is_err(), "empty");
+        let named = |name: &str| Form::new(vec![Field::new("Name", "", name)]);
+        assert!(mail.new_mailbox_name(&named("sent"), None).is_err(), "taken, without case");
+        assert_eq!(mail.new_mailbox_name(&named(" Bills "), None).unwrap(), "Bills");
+        assert_eq!(mail.new_mailbox_name(&named("Work"), Some("Work")).unwrap(), "Work", "renaming to itself is allowed");
+        assert!(mail.open_rename_mailbox().is_some());
+        mail.show_mailbox(INBOX);
+        assert!(mail.open_rename_mailbox().is_none(), "the inbox keeps its name");
     }
 
     #[test]
