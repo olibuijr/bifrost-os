@@ -2679,3 +2679,18 @@ arithmetic is shared with `x25519`; the hash is `bifrost_core::sha512`.
 - `CryptoKitError::IncorrectKeySize` for keys that are not 32 bytes.
 
 Still missing: P256, P384, P521. Status is partial until checked on Midget.
+
+## Preference panes: pane links (`bifrost_ui::pane_link`, `NSPreferencePane` deep links)
+
+A System Settings pane is opened by an `x-apple.systempreferences:` link: the pane identifier, and an optional anchor
+after `?` for a row inside the pane (for example `…security?Privacy_Camera`). `pane_url(identifier, anchor)` builds the
+link and returns `None` unless both parts are plain tokens (letters, digits, `.`, `-`, `_`). `parse_pane_url(url)`
+reads a link back into a `PaneLink { identifier, anchor }`, splitting at the first `?`, and refuses other schemes, an
+empty identifier and an empty or malformed anchor. The pane lifecycle (`NSPreferencePane` will and did select, should
+and will and did unselect) stays in `bifrost_ui::pane`; links do not change it.
+
+Gaps: the shell has no link router, so no link opens the Settings app or a pane yet. Settings pages have no identifier
+table: the macOS 27 pane identifiers are not in `docs/parity-matrix/os/settings`, and only `com.apple.preference.displays`
+is evidenced (as a LaunchAgent name in `docs/parity-matrix/os/daemons/a-c.json`). Add identifiers with their evidence
+before wiring them. The scheme name is allowlisted in `tools/check-names-allow.txt`. Parity: `Preference Panes`,
+"Pane links" row in `docs/parity-matrix/data/preference-panes.json` (partial).

@@ -592,6 +592,7 @@ pub mod trust;
 pub mod focus;
 pub mod focus_filter;
 pub mod pane;
+pub mod pane_link;
 pub mod panner;
 pub mod param_view;
 pub mod uttype;
