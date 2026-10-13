@@ -81,6 +81,17 @@ impl Query {
         Query { terms }
     }
 
+    /// The server-side form of the query: IMAP search keys, every term ANDed. A term with no field matches any of the
+    /// four fields. None for an empty query. Text that is not ASCII is sent under `CHARSET UTF-8`.
+    pub fn imap_criteria(&self) -> Option<String> {
+        if self.terms.is_empty() {
+            return None;
+        }
+        let charset = if self.terms.iter().all(|t| t.text.is_ascii()) { "" } else { "CHARSET UTF-8 " };
+        let keys: Vec<String> = self.terms.iter().map(term_criteria).collect();
+        Some(format!("{charset}{}", keys.join(" ")))
+    }
+
     /// An empty query matches every message.
     pub fn matches(&self, doc: &Doc) -> bool {
         self.terms.iter().all(|term| {
@@ -96,9 +107,42 @@ impl Query {
     }
 }
 
+/// One term as an IMAP search key. The text is quoted, so a space or a quote in it cannot add keys.
+fn term_criteria(term: &Term) -> String {
+    let text = crate::imap::quote(&term.text);
+    match term.field {
+        Some(Field::From) => format!("FROM {text}"),
+        Some(Field::To) => format!("TO {text}"),
+        Some(Field::Subject) => format!("SUBJECT {text}"),
+        Some(Field::Body) => format!("BODY {text}"),
+        None => any_of(&[format!("FROM {text}"), format!("TO {text}"), format!("SUBJECT {text}"), format!("BODY {text}")]),
+    }
+}
+
+/// IMAP's `OR` takes exactly two keys, so n keys nest to the right: `OR a OR b c` matches a, b or c.
+fn any_of(keys: &[String]) -> String {
+    match keys {
+        [] => String::new(),
+        [one] => one.clone(),
+        [first, rest @ ..] => format!("OR {first} {}", any_of(rest)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_server_criteria_follow_the_fields() {
+        assert_eq!(Query::parse("").imap_criteria(), None);
+        assert_eq!(Query::parse("from:ana subject:\"fundur á\"").imap_criteria().as_deref(), Some("CHARSET UTF-8 FROM \"ana\" SUBJECT \"fundur á\""));
+        assert_eq!(Query::parse("from:ana subject:fundur").imap_criteria().as_deref(), Some("FROM \"ana\" SUBJECT \"fundur\""));
+        assert_eq!(
+            Query::parse("plain").imap_criteria().as_deref(),
+            Some("OR FROM \"plain\" OR TO \"plain\" OR SUBJECT \"plain\" BODY \"plain\"")
+        );
+        assert_eq!(Query::parse("body:x").imap_criteria().as_deref(), Some("BODY \"x\""));
+    }
 
     fn doc() -> Doc<'static> {
         Doc { from: "Ana <ana@example.com>", to: "bo@example.com", subject: "Fundur á morgun", body: "Sjáumst kl. 10" }

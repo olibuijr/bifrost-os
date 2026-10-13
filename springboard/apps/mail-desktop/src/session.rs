@@ -102,6 +102,61 @@ impl<S: Read + Write> Session<S> {
         self.run(&format!("UID EXPUNGE {uid}")).map(|_| ())
     }
 
+    /// Messages of the selected mailbox that match `criteria` (IMAP search keys, see [`crate::search::Query::imap_criteria`]),
+    /// as UIDs in the server's order.
+    pub fn search(&mut self, criteria: &str) -> Result<Vec<u32>, String> {
+        let untagged = self.run(&format!("UID SEARCH {criteria}"))?;
+        Ok(untagged.iter().find_map(|line| imap::parse_search(line)).unwrap_or_default())
+    }
+
+    /// The capability names the server advertises (CAPABILITY), for example `IDLE`.
+    pub fn capabilities(&mut self) -> Result<Vec<String>, String> {
+        let untagged = self.run(&imap::capability())?;
+        let names = untagged
+            .iter()
+            .find_map(|line| line.strip_prefix("CAPABILITY ").map(|rest| rest.split_whitespace().map(str::to_string).collect::<Vec<String>>()));
+        Ok(names.unwrap_or_default())
+    }
+
+    /// Waits in IDLE (RFC 2177) until the selected mailbox reports a new message, then ends IDLE. Other untagged
+    /// updates (flags, expunges, keep-alives) keep it waiting. A `BYE` or a refused IDLE is an error.
+    pub fn idle(&mut self) -> Result<(), String> {
+        self.tag += 1;
+        let tag = imap::tag(self.tag);
+        self.lines.send(&imap::command(&tag, &imap::idle())).map_err(io_text)?;
+        loop {
+            let line = self.response_line()?;
+            match imap::parse_line(&line) {
+                Reply::Continuation(_) => break,
+                Reply::Tagged { tag: got, text, .. } if got == tag => return Err(text),
+                _ => {}
+            }
+        }
+        loop {
+            let line = self.response_line()?;
+            if let Reply::Untagged(rest) = imap::parse_line(&line) {
+                if rest.starts_with("BYE") {
+                    return Err(rest);
+                }
+                if imap::is_new_message(&rest) {
+                    break;
+                }
+            }
+        }
+        self.lines.send(imap::IDLE_DONE).map_err(io_text)?;
+        loop {
+            let line = self.response_line()?;
+            if let Reply::Tagged { tag: got, status, text } = imap::parse_line(&line) {
+                if got == tag {
+                    return match status {
+                        Status::Ok => Ok(()),
+                        _ => Err(text),
+                    };
+                }
+            }
+        }
+    }
+
     pub fn logout(&mut self) {
         let _ = self.run(&imap::logout());
     }
@@ -289,6 +344,36 @@ mod tests {
     fn latin1_literals_map_one_char_per_byte() {
         assert_eq!(literal_text(b"\xe1"), "\"\u{e1}\"");
         assert_eq!(literal_text("á".as_bytes()), "\"á\"");
+    }
+
+    #[test]
+    fn search_returns_the_matching_uids() {
+        let mut s = session("* SEARCH 2 5\r\nA001 OK done\r\n");
+        assert_eq!(s.search("FROM \"ana\"").unwrap(), vec![2, 5]);
+        assert!(s.lines.into_inner().sent().starts_with("A001 UID SEARCH FROM \"ana\"\r\n"));
+    }
+
+    #[test]
+    fn capabilities_are_read_from_the_capability_line() {
+        let mut s = session("* CAPABILITY IMAP4rev1 IDLE UIDPLUS\r\nA001 OK done\r\n");
+        assert_eq!(s.capabilities().unwrap(), vec!["IMAP4rev1", "IDLE", "UIDPLUS"]);
+    }
+
+    #[test]
+    fn idle_waits_for_a_new_message_then_sends_done() {
+        let mut s = session("+ idling\r\n* 3 FETCH (FLAGS (\\Seen))\r\n* 4 EXISTS\r\nA001 OK IDLE terminated\r\n");
+        s.idle().unwrap();
+        let sent = s.lines.into_inner().sent();
+        assert!(sent.starts_with("A001 IDLE\r\n"));
+        assert!(sent.ends_with("DONE\r\n"));
+    }
+
+    #[test]
+    fn idle_refused_or_ended_by_the_server_is_an_error() {
+        let mut s = session("A001 BAD IDLE not allowed\r\n");
+        assert_eq!(s.idle().unwrap_err(), "IDLE not allowed");
+        let mut s = session("+ idling\r\n* BYE logout\r\n");
+        assert_eq!(s.idle().unwrap_err(), "BYE logout");
     }
 
     #[test]
