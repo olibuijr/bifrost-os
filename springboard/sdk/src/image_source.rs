@@ -5,6 +5,7 @@
 use bifrost_render::gfx::Image;
 use bifrost_render::cg::imageio::{self, MAX_SIDE};
 use bifrost_render::imgdec;
+use bifrost_render::pixel_layout::unpremultiply;
 pub use bifrost_render::cg::imageio::Format;
 
 /// Why a picture could not be read, decoded or made into a thumbnail.
@@ -75,6 +76,37 @@ impl<'a> ImageSource<'a> {
     pub fn thumbnail(&self, max_w: usize, max_h: usize) -> Result<Image, SourceError> {
         self.thumbnail_size(max_w, max_h)?;
         Ok(imgdec::contain(&self.decode()?, max_w, max_h))
+    }
+}
+
+/// A file type a bitmap can be written as (`representation(using:properties:)`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileType {
+    Png,
+    Jpeg,
+}
+
+/// Encoder properties. `compression_factor` is 0.0 (smallest file) to 1.0 (best quality) and applies to JPEG only;
+/// it defaults to 0.8.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct RepProperties {
+    pub compression_factor: Option<f32>,
+}
+
+/// Encodes a decoded picture as `file_type`. Transparent pixels are un-premultiplied for PNG and composited over
+/// white for JPEG. `None` when the picture has no pixels or the encoder refuses it.
+pub fn representation(image: &Image, file_type: FileType, props: &RepProperties) -> Option<Vec<u8>> {
+    use bifrost_render::cg::imageio::encode::{encode_jpeg, encode_png, JpegOptions, PngOptions};
+    if image.w == 0 || image.h == 0 || image.px.len() < image.w * image.h {
+        return None;
+    }
+    let rgba: Vec<u8> = image.px.iter().take(image.w * image.h).flat_map(|&p| unpremultiply(p)).collect();
+    match file_type {
+        FileType::Png => encode_png(image.w, image.h, &rgba, &PngOptions::default()),
+        FileType::Jpeg => {
+            let quality = (props.compression_factor.unwrap_or(0.8).clamp(0.0, 1.0) * 99.0).round() as u8 + 1;
+            encode_jpeg(image.w, image.h, &rgba, &JpegOptions { quality, ..JpegOptions::default() })
+        }
     }
 }
 
@@ -155,5 +187,37 @@ mod tests {
         let bytes = png_header(1, 1);
         let src = ImageSource::new(&bytes).unwrap();
         assert_eq!(src.decode().err(), Some(SourceError::Undecodable));
+    }
+
+    fn checker() -> Image {
+        // 4 x 4, opaque red and blue squares (R in the low byte, alpha in the high byte)
+        let px = (0..16).map(|i| if (i % 4 + i / 4) % 2 == 0 { 0xFF00_00FF } else { 0xFFFF_0000 }).collect();
+        Image { w: 4, h: 4, px }
+    }
+
+    #[test]
+    fn png_representation_round_trips_the_pixels() {
+        let img = checker();
+        let bytes = representation(&img, FileType::Png, &RepProperties::default()).unwrap();
+        let back = ImageSource::new(&bytes).unwrap();
+        assert_eq!((back.format(), back.size()), (Format::Png, (4, 4)));
+        assert_eq!(back.decode().unwrap().px, img.px);
+    }
+
+    #[test]
+    fn jpeg_representation_decodes_and_quality_changes_the_size() {
+        let img = checker();
+        let low = representation(&img, FileType::Jpeg, &RepProperties { compression_factor: Some(0.0) }).unwrap();
+        let high = representation(&img, FileType::Jpeg, &RepProperties { compression_factor: Some(1.0) }).unwrap();
+        assert_eq!(ImageSource::new(&high).unwrap().size(), (4, 4));
+        assert!(high.len() > low.len());
+    }
+
+    #[test]
+    fn an_empty_picture_has_no_representation() {
+        let empty = Image { w: 0, h: 0, px: Vec::new() };
+        assert_eq!(representation(&empty, FileType::Png, &RepProperties::default()), None);
+        let short = Image { w: 2, h: 2, px: vec![0; 3] };
+        assert_eq!(representation(&short, FileType::Jpeg, &RepProperties::default()), None);
     }
 }
