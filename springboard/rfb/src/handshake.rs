@@ -33,7 +33,7 @@ pub fn parse_version(b: &[u8]) -> Result<Version, Error> {
         return Err(Error::Protocol("not an RFB server".into()));
     }
     let num = |s: &[u8]| -> Result<u8, Error> {
-        std::str::from_utf8(s).ok().and_then(|t| t.parse::<u16>().ok()).filter(|n| *n < 1000).map(|n| n as u8).ok_or_else(|| Error::Protocol("bad version number".into()))
+        std::str::from_utf8(s).ok().and_then(|t| t.parse::<u16>().ok()).filter(|n| *n <= 255).map(|n| n as u8).ok_or_else(|| Error::Protocol("bad version number".into()))
     };
     Ok(Version { major: num(&b[4..7])?, minor: num(&b[8..11])? })
 }

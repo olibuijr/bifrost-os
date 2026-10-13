@@ -182,7 +182,7 @@ mod tests {
     fn client_messages_have_the_wire_layout() {
         assert_eq!(set_pixel_format(&PixelFormat::VIEWER)[..4], [0, 0, 0, 0]);
         assert_eq!(set_pixel_format(&PixelFormat::VIEWER).len(), 20);
-        assert_eq!(set_encodings(&[0, -223]), vec![2, 0, 0, 2, 0, 0, 0, 0, 0xff, 0xff, 0x2d, 0x21]);
+        assert_eq!(set_encodings(&[0, -223]), vec![2, 0, 0, 2, 0, 0, 0, 0, 0xff, 0xff, 0xff, 0x21]);
         assert_eq!(update_request(true, 1, 2, 3, 4), vec![3, 1, 0, 1, 0, 2, 0, 3, 0, 4]);
         assert_eq!(key_event(true, 0x61), vec![4, 1, 0, 0, 0, 0, 0, 0x61]);
         assert_eq!(pointer_event(4, 0x0100, 0x0002), vec![5, 4, 1, 0, 0, 2]);
