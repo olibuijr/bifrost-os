@@ -306,7 +306,16 @@ mod tests {
         s.place(9);
         let fs = s.enter_full_screen(4);
         assert!(s.remove_desktop(three));
-        assert_eq!(s.active(), two, "the view moves off a removed desktop");
+        // Entering full screen shows the full-screen space, so the view was not on the removed desktop and stays on
+        // the full-screen window; the view moving off a removed desktop is checked on its own below.
+        assert_eq!(s.active(), fs, "a full-screen view stays up when its home desktop goes");
+
+        let mut plain = Spaces::new();
+        let p2 = plain.add_desktop();
+        let p3 = plain.add_desktop();
+        plain.switch_to(p3);
+        assert!(plain.remove_desktop(p3));
+        assert_eq!(plain.active(), p2, "the view moves off a removed desktop");
         assert_eq!(s.space_of(9), Some(two));
         assert_eq!(s.kind(fs), Some(Kind::FullScreen { window: 4, home: two }));
     }
