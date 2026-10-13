@@ -152,9 +152,15 @@ impl Viewer {
             Action::Saturate => self.adjust.saturation = (self.adjust.saturation + 0.25).clamp(0.0, 2.0),
             Action::Desaturate => self.adjust.saturation = (self.adjust.saturation - 0.25).clamp(0.0, 2.0),
             Action::ResetColour => self.adjust = Adjust::default(),
-            Action::ExportPng => {
+            Action::ExportPng | Action::ExportJpeg => {
                 if let Some(doc) = &self.doc {
-                    self.status = match document::export_png(doc, self.view.page, self.view.quarters, &self.adjust) {
+                    let (page, quarters) = (self.view.page, self.view.quarters);
+                    let result = if action == Action::ExportPng {
+                        document::export_png(doc, page, quarters, &self.adjust)
+                    } else {
+                        document::export_jpeg(doc, page, quarters, &self.adjust)
+                    };
+                    self.status = match result {
                         Ok(path) => format!("Exported {}", path.display()),
                         Err(e) => format!("Export failed: {e}"),
                     };
@@ -346,13 +352,18 @@ impl App for Viewer {
 
     fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
         let open = self.doc.is_some();
+        // rotation needs a page with a picture to turn
+        let picture = self.doc.as_ref().and_then(|d| d.page_size(self.view.page)).is_some();
         let count = self.doc.as_ref().map_or(0, |d| d.count());
         let tool_items: Vec<AppMenuItem> = [Tool::Pan, Tool::Highlight, Tool::Note, Tool::Rect, Tool::Rounded]
             .into_iter()
             .map(|t| item(Action::UseTool(t), open, self.tool == t))
             .collect();
         vec![
-            AppMenu { title: "File".into(), items: vec![item(Action::ExportPng, open, false)] },
+            AppMenu {
+                title: "File".into(),
+                items: vec![item(Action::ExportPng, open, false), item(Action::ExportJpeg, open, false)],
+            },
             AppMenu {
                 title: "View".into(),
                 items: vec![

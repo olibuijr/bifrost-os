@@ -48,10 +48,11 @@ pub enum Action {
     Desaturate,
     ResetColour,
     ExportPng,
+    ExportJpeg,
 }
 
 /// Every action, in toolbar order. A menu item's id is its index here.
-pub const ACTIONS: [Action; 19] = [
+pub const ACTIONS: [Action; 20] = [
     Action::Previous,
     Action::Next,
     Action::ZoomOut,
@@ -71,6 +72,7 @@ pub const ACTIONS: [Action; 19] = [
     Action::Desaturate,
     Action::ResetColour,
     Action::ExportPng,
+    Action::ExportJpeg,
 ];
 
 impl Action {
@@ -103,11 +105,12 @@ impl Action {
             Action::Desaturate => "Desaturate",
             Action::ResetColour => "Reset Colour",
             Action::ExportPng => "Export PNG",
+            Action::ExportJpeg => "Export JPEG",
         }
     }
 
     /// The toolbar buttons, in the order of `ACTIONS`.
-    pub fn toolbar() -> [Action; 19] {
+    pub fn toolbar() -> [Action; 20] {
         ACTIONS
     }
 }
@@ -157,12 +160,9 @@ pub fn rows(ui: &Ui, doc: &Document) -> Vec<(i32, i32)> {
     let gap = ui.pt(ui::SPACE_S) as i32;
     let label = ui.pt(ui::MAC_FOOTNOTE_PT * 1.6) as i32;
     let mut y = gap;
-    let mut out = Vec::with_capacity(doc.pages.len());
-    for page in &doc.pages {
-        let box_h = match &page.thumb {
-            Some(t) => t.h as i32,
-            None => (THUMB_W as f32 * 1.3) as i32,
-        };
+    let mut out = Vec::with_capacity(doc.count());
+    for i in 0..doc.count() {
+        let box_h = doc.thumb_box(i).map_or((THUMB_W as f32 * 1.3) as i32, |(_, h)| h as i32);
         let h = box_h + label + gap;
         out.push((y, h));
         y += h;
@@ -353,7 +353,7 @@ fn draw_sidebar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
     let Some(doc) = scene.doc else { return };
     let rows = rows(ui, doc);
     let pad = ui.pt(ui::SPACE_S) as i32;
-    for (i, (page, (top, h))) in doc.pages.iter().zip(rows.iter()).enumerate() {
+    for (i, &(top, h)) in rows.iter().enumerate() {
         let y = lay.bar + top - scene.view.sidebar_scroll as i32;
         if y + h < lay.bar || y > lay.h {
             continue;
@@ -361,21 +361,19 @@ fn draw_sidebar(s: &mut Surface, ui: &Ui, lay: &Layout, scene: &Scene) {
         if i == scene.view.page {
             s.fill_rrect(pad as f32 / 2.0, (y + pad / 2) as f32, (lay.side - pad) as f32, (h - pad) as f32, ui.pt(ui::SPACE_S), ui::SIDEBAR_SELECTED);
         }
-        match &page.thumb {
+        // only the thumbnails of visible rows are drawn; each is kept after its first draw
+        let (bw, bh) = doc.thumb_box(i).unwrap_or((THUMB_W, (THUMB_W as f32 * 1.3) as usize));
+        match doc.thumb(i) {
             Some(t) => {
                 let x = (lay.side - t.w as i32) / 2;
-                s.blit(t, x, y + pad, 255, 255);
+                s.blit(&t, x, y + pad, 255, 255);
             }
             None => {
-                let bh = (THUMB_W as f32 * 1.3) as i32;
-                let x = (lay.side - THUMB_W as i32) / 2;
-                fill(s, x, y + pad, THUMB_W as i32, bh, ui::FILL);
+                let x = (lay.side - bw as i32) / 2;
+                fill(s, x, y + pad, bw as i32, bh as i32, ui::FILL);
             }
         }
-        let box_h = match &page.thumb {
-            Some(t) => t.h as i32,
-            None => (THUMB_W as f32 * 1.3) as i32,
-        };
+        let box_h = bh as i32;
         let text = format!("{}", i + 1);
         let img = ui.text(&text, ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::WHITE);
         let tw = ui.measure(&text, ui::MAC_FOOTNOTE_PT, Weight::Regular) as i32;
