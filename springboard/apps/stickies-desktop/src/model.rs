@@ -154,10 +154,12 @@ pub enum Arrange {
     Content,
     Created,
     Modified,
+    Location,
 }
 
 impl Arrange {
-    pub const ALL: [Arrange; 4] = [Arrange::Colour, Arrange::Content, Arrange::Created, Arrange::Modified];
+    pub const ALL: [Arrange; 5] =
+        [Arrange::Colour, Arrange::Content, Arrange::Created, Arrange::Modified, Arrange::Location];
 
     pub fn title(self) -> &'static str {
         match self {
@@ -165,6 +167,7 @@ impl Arrange {
             Arrange::Content => "Content",
             Arrange::Created => "Date Created",
             Arrange::Modified => "Date Modified",
+            Arrange::Location => "Location",
         }
     }
 }
@@ -614,6 +617,8 @@ impl Board {
             Arrange::Content => self.notes.sort_by_key(|n| n.title().to_lowercase()),
             Arrange::Created => self.notes.sort_by_key(|n| n.created),
             Arrange::Modified => self.notes.sort_by_key(|n| n.modified),
+            // reading order of where the notes sit now: top to bottom, then left to right
+            Arrange::Location => self.notes.sort_by(|a, b| a.y.total_cmp(&b.y).then(a.x.total_cmp(&b.x))),
         }
         let (mut x, mut y, mut row_h) = (ARRANGE_MARGIN_PT, ARRANGE_MARGIN_PT, 0.0f32);
         for n in &mut self.notes {
@@ -1081,6 +1086,17 @@ mod tests {
         assert!(b.notes.iter().all(|n| n.x == ARRANGE_MARGIN_PT));
         assert!(b.notes[1].y > b.notes[0].y);
         assert!(!Board::default().arrange(Arrange::Colour, 100.0));
+    }
+
+    #[test]
+    fn arrange_by_location_follows_reading_order() {
+        let mut b = Board::default();
+        let low = b.add_text("low", 10.0, 400.0, 1);
+        let right = b.add_text("right", 300.0, 50.0, 2);
+        let left = b.add_text("left", 20.0, 50.0, 3);
+        assert!(b.arrange(Arrange::Location, 2000.0));
+        let order: Vec<u64> = b.notes.iter().map(|n| n.id).collect();
+        assert_eq!(order, vec![left, right, low]);
     }
 
     #[test]

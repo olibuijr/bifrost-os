@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- Window > Arrange By Location orders the notes by where they sit now (top to bottom, then left to right) and lays them out in rows.
+
 ## 0.3.0
 
 - A caret and a selection in every note: typing goes in at the caret, click to place it, drag to select, double-press to select a word, arrow keys, Home, End and forward Delete. Cut, Copy, Paste and Select All work on the selection.
