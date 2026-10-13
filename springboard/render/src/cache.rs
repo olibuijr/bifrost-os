@@ -5,19 +5,54 @@ use crate::ui::{Ui, Weight};
 use crate::gfx::{Image, Surface};
 use std::collections::HashMap;
 
+/// Style of an entry: pt x10, weight, colour.
+type StyleKey = (u32, u8, u32);
+
+/// One generation of entries: a hit never allocates a key.
+#[derive(Default)]
+struct Generation {
+    map: HashMap<StyleKey, HashMap<String, Image>>,
+    count: usize,
+    bytes: usize,
+}
+
+impl Generation {
+    fn get(&self, style: StyleKey, text: &str) -> Option<&Image> {
+        self.map.get(&style)?.get(text)
+    }
+
+    /// Removes and returns an entry, so it can move to the newer generation.
+    fn take(&mut self, style: StyleKey, text: &str) -> Option<Image> {
+        let img = self.map.get_mut(&style)?.remove(text)?;
+        self.count -= 1;
+        self.bytes -= img.px.len() * 4;
+        Some(img)
+    }
+
+    fn insert(&mut self, style: StyleKey, text: &str, img: Image) {
+        self.count += 1;
+        self.bytes += img.px.len() * 4;
+        self.map.entry(style).or_default().insert(text.to_string(), img);
+    }
+}
+
+/// Two generations, so a bounded cache keeps the strings in use rather than starting over
+/// when it fills: `young` takes new renders, `old` holds the previous generation. A hit in `old` moves
+/// the entry to `young`; a full `young` retires `old` and becomes the new `old`.
 #[derive(Default)]
 pub struct TextCache {
-    /// style (pt x10, weight, colour) -> text -> image, so a hit never allocates a key
-    map: HashMap<(u32, u8, u32), HashMap<String, Image>>,
-    count: usize,
+    young: Generation,
+    old: Generation,
     /// `emoji::generation()` the entries were rendered under
     emoji_gen: u32,
     /// `Ui::text_epoch()` the entries were rendered under
     epoch: u64,
 }
 
-/// Entries kept before the cache starts over (like the glyph cache).
-const MAX_ENTRIES: usize = 512;
+/// Entries per generation (the cache holds at most twice this).
+const GEN_ENTRIES: usize = 256;
+/// Pixel bytes per generation before it retires, so large text (the lock clock) cannot fill the cache.
+const GEN_BYTES: usize = 4 << 20;
 
 impl TextCache {
     /// `text` at `pt` points in `weight` and `color`, rendering on a miss.
@@ -31,14 +66,17 @@ impl TextCache {
             self.clear();
         }
         let style = ((pt * 10.0) as u32, weight as u8, color);
-        if !self.map.get(&style).is_some_and(|m| m.contains_key(text)) {
-            if self.count >= MAX_ENTRIES {
-                self.clear();
+        if self.young.get(style, text).is_none() {
+            let img = match self.old.take(style, text) {
+                Some(img) => img,
+                None => ui.text(text, pt, weight, color),
+            };
+            if self.young.count >= GEN_ENTRIES || self.young.bytes >= GEN_BYTES {
+                self.old = std::mem::take(&mut self.young);
             }
-            self.map.entry(style).or_default().insert(text.to_string(), ui.text(text, pt, weight, color));
-            self.count += 1;
+            self.young.insert(style, text, img);
         }
-        &self.map[&style][text]
+        self.young.get(style, text).expect("the entry was just inserted")
     }
 
     /// Draws `text` one cached glyph at a time, for strings that change
@@ -67,16 +105,16 @@ impl TextCache {
 
     /// Drops everything cached (after a density or theme change).
     pub fn clear(&mut self) {
-        self.map.clear();
-        self.count = 0;
+        self.young = Generation::default();
+        self.old = Generation::default();
     }
 
     pub fn len(&self) -> usize {
-        self.count
+        self.young.count + self.old.count
     }
 
     pub fn is_empty(&self) -> bool {
-        self.count == 0
+        self.len() == 0
     }
 }
 
@@ -148,10 +186,37 @@ mod tests {
         let _emoji = crate::tests::emoji_lock();
         let ui = crate::tests::ui();
         let mut c = TextCache::default();
-        for i in 0..MAX_ENTRIES + 10 {
+        for i in 0..2 * GEN_ENTRIES + 10 {
             c.get(&ui, &i.to_string(), 12.0, Weight::Regular, WHITE);
         }
-        assert!(c.len() <= MAX_ENTRIES);
+        assert!(c.len() <= 2 * GEN_ENTRIES);
         assert!(!c.is_empty());
+    }
+
+    #[test]
+    fn a_full_cache_keeps_the_strings_in_use() {
+        let _emoji = crate::tests::emoji_lock();
+        let ui = crate::tests::ui();
+        let mut c = TextCache::default();
+        // a hot string is touched between every cold render, so it survives each retirement of a generation
+        for i in 0..4 * GEN_ENTRIES {
+            c.get(&ui, "hot", 12.0, Weight::Regular, WHITE);
+            c.get(&ui, &i.to_string(), 12.0, Weight::Regular, WHITE);
+        }
+        assert!(c.len() <= 2 * GEN_ENTRIES, "{}", c.len());
+        let holds = |g: &Generation, text: &str| g.map.values().any(|m| m.contains_key(text));
+        assert!(holds(&c.young, "hot") || holds(&c.old, "hot"), "the hot string was rendered again and again");
+    }
+
+    #[test]
+    fn large_images_are_bounded_by_bytes() {
+        let _emoji = crate::tests::emoji_lock();
+        let ui = crate::tests::ui();
+        let mut c = TextCache::default();
+        for i in 0..40 {
+            c.get(&ui, &format!("{i}"), 300.0, Weight::Regular, WHITE);
+        }
+        assert!(c.young.bytes < GEN_BYTES + GEN_BYTES / 2 && c.old.bytes < GEN_BYTES + GEN_BYTES / 2, "{} {}", c.young.bytes, c.old.bytes);
+        assert!(c.len() < 40, "the byte budget retired a generation");
     }
 }
