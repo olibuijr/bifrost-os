@@ -6,6 +6,7 @@ mod console;
 mod cursor;
 mod diagnostics;
 mod draw;
+mod export;
 mod identity;
 mod model;
 mod security;
@@ -20,8 +21,9 @@ use bifrost_app::kit::{Damage, Surface};
 use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, TouchKind};
 use bifrost_app::power_service;
 use bifrost_core::json::Json;
-use console::{Console, View, MENU_AFTER, MENU_CLEAR, MENU_COPY, MENU_DEBUG, MENU_DELETE_SEARCH, MENU_FIND, MENU_INFO, MENU_SAVE_SEARCH, MENU_STREAM, MENU_SUBSYSTEM};
+use console::{Console, View, MENU_AFTER, MENU_CLEAR, MENU_COPY, MENU_DEBUG, MENU_DELETE_SEARCH, MENU_FIND, MENU_INFO, MENU_SAVE_MESSAGES, MENU_SAVE_SEARCH, MENU_STREAM, MENU_SUBSYSTEM};
 use services::PowerNote;
+use std::path::PathBuf;
 
 struct ConsoleApp {
     console: Option<Console>,
@@ -152,6 +154,7 @@ impl App for ConsoleApp {
                 AppMenuItem::new(MENU_SUBSYSTEM, "Show Only This Subsystem").enabled(c.selected_entry().is_some_and(|e| !e.subsystem.is_empty())),
                 AppMenuItem::separator(),
                 AppMenuItem::new(MENU_COPY, "Copy Message").enabled(c.selected_entry().is_some()),
+                AppMenuItem::new(MENU_SAVE_MESSAGES, "Save Messages...").enabled(!c.visible.is_empty()),
             ],
         }]
     }
@@ -160,6 +163,13 @@ impl App for ConsoleApp {
         if id == MENU_COPY {
             self.copy_selected(ctx);
             return false;
+        }
+        if id == MENU_SAVE_MESSAGES {
+            let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
+            if let Some(c) = &mut self.console {
+                c.save_messages(&home, bifrost_app::testing::unix_secs());
+            }
+            return true;
         }
         let Some(c) = &mut self.console else { return false };
         let changed = c.menu(id);
