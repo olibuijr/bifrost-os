@@ -1,0 +1,181 @@
+{
+  "app": "Find My",
+  "bifrost_app": "none (no BifrOSt app)",
+  "evidence": [
+    "ref27/System/Applications/FindMy.app/Contents/Info.plist via bifrost pc ref extract (URL schemes grenada, findmyfriends, fmf1, findmy, fmip1; user activities LocateDeviceIntent, LocateIntent, PlaySoundIntent, ToggleLocationSharingIntent; contacts and location usage strings; regulatory privacy disclosure keys for camera, contacts, location; extension FindMyNotificationsService.appex)",
+    "ref27/System/Applications/FindMy.app/Contents/PlugIns/FindMyNotificationsService.appex (the only other file in the bundle; the UI is in private frameworks, so the feature list also follows the shipped app's documented behaviour)",
+    "No BifrOSt source: grep of springboard for the feature finds only springboard/docs/parity/windows-spaces.md (unrelated)"
+  ],
+  "summary": {
+    "features": 18,
+    "parity": 0,
+    "partial": 0,
+    "gap": 15,
+    "n/a": 3,
+    "coverage_pct": 0.0
+  },
+  "features": [
+    {
+      "feature": "App exists",
+      "area": "app",
+      "apple": "Find My app with People, Devices, Items and Me tabs",
+      "status": "gap",
+      "bifrost": "",
+      "note": "BifrOSt has no such app and no listing in the app list.",
+      "wire": "Create springboard/apps/findmy-desktop (new crate; copy the layout of apps/weather-desktop: manifest.toml, Cargo.toml, src/main.rs, src/window.rs) with a source_list sidebar (People, Devices, Items) and a map pane using the bifrost-maps model crate (apps/maps-desktop), registered in the shell app list."
+    },
+    {
+      "feature": "Devices tab: locate own devices",
+      "area": "devices",
+      "apple": "List of the account's devices with last known location on a map and battery state",
+      "status": "gap",
+      "bifrost": "",
+      "note": "Devices sign in to BifrOSt Account (bifrost-cloud) but report no location.",
+      "wire": "Add POST /api/cloud/devices/{id}/location (latitude, longitude, accuracy, battery, timestamp) and GET /api/cloud/devices to ~/Projects/bifrost-cloud, have the shell upload its location when a location service exists, and list them in the app."
+    },
+    {
+      "feature": "Play a sound on a device",
+      "area": "devices",
+      "apple": "Play Sound (PlaySoundIntent) to find a nearby device",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No remote commands to a device.",
+      "wire": "Add a command queue to the cloud device record (play_sound, lock, erase) polled by the shell's cloud sync, and a Play Sound button in the device card; honour the no-unasked-sound rule by requiring the person to press the button."
+    },
+    {
+      "feature": "Lost mode",
+      "area": "devices",
+      "apple": "Mark as lost with a contact message and lock",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No remote lock.",
+      "wire": "Add a lost flag and message to the cloud device record; the shell lock screen shows the message and phone number when the flag is set."
+    },
+    {
+      "feature": "Erase a device remotely",
+      "area": "devices",
+      "apple": "Erase This Device",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No remote erase.",
+      "wire": "Add an erase command to the queue; the shell confirms the signed command and runs the factory reset path of the installer."
+    },
+    {
+      "feature": "Directions to a device",
+      "area": "devices",
+      "apple": "Directions button opens the maps app",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No maps window and no device positions.",
+      "wire": "Open the Maps app with a route request (the maps: URL scheme from the Maps inventory) to the device position."
+    },
+    {
+      "feature": "Notify when found",
+      "area": "devices",
+      "apple": "Notify When Found and Notify When Left Behind",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No notification pipeline from the cloud.",
+      "wire": "Add push-style long polling from the shell to the cloud device endpoint and post a shell notification on the event."
+    },
+    {
+      "feature": "People tab: share location",
+      "area": "people",
+      "apple": "Share location with contacts for an hour, a day or indefinitely (ToggleLocationSharingIntent)",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No location sharing.",
+      "wire": "Add share grants (from, to, until) to the cloud account API and a Share My Location sheet that picks Contacts entries by BifrOSt Account address."
+    },
+    {
+      "feature": "People tab: follow friends",
+      "area": "people",
+      "apple": "Friends on a map with distance, and notifications when someone arrives or leaves",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No friend locations.",
+      "wire": "Return granted friends' latest positions from the cloud API and draw them as pins with name and distance; add Notify Me rules (arrives, leaves) per friend."
+    },
+    {
+      "feature": "Items tab: tracked accessories",
+      "area": "items",
+      "apple": "Tags and accessories on the finding network with separation alerts",
+      "status": "n/a",
+      "bifrost": "",
+      "note": "Needs the vendor's crowd-sourced finding network and tag hardware, which BifrOSt has no equivalent of.",
+      "wire": ""
+    },
+    {
+      "feature": "Offline finding",
+      "area": "devices",
+      "apple": "Locate a device that is off or offline through nearby devices",
+      "status": "n/a",
+      "bifrost": "",
+      "note": "Depends on the vendor's finding network.",
+      "wire": ""
+    },
+    {
+      "feature": "Activation lock",
+      "area": "devices",
+      "apple": "Device stays tied to the account after an erase",
+      "status": "n/a",
+      "bifrost": "",
+      "note": "Hardware and boot-chain feature; the installer has no such attestation.",
+      "wire": ""
+    },
+    {
+      "feature": "Me tab: this device and location settings",
+      "area": "settings",
+      "apple": "Share My Location switch, device name, location services state (NSLocationWhenInUseUsageDescription)",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No settings page.",
+      "wire": "Add a Me page with the share switch, this device's name from BifrOSt Account and the location authorization state."
+    },
+    {
+      "feature": "Contacts access",
+      "area": "privacy",
+      "apple": "Contacts permission for sharing (NSContactsUsageDescription)",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No consent flow in an app that does not exist.",
+      "wire": "Ask for the contacts permission with the shell's permission prompt when the person opens Share My Location."
+    },
+    {
+      "feature": "User activities and intents",
+      "area": "system",
+      "apple": "LocateDeviceIntent, LocateIntent, PlaySoundIntent, ToggleLocationSharingIntent",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No automation.",
+      "wire": "Expose locate, play_sound and share as app control methods (bifrost-app-control)."
+    },
+    {
+      "feature": "URL schemes",
+      "area": "system",
+      "apple": "findmy:, findmyfriends:, fmf1:, fmip1:, grenada: schemes",
+      "status": "gap",
+      "bifrost": "",
+      "note": "None registered.",
+      "wire": "Register a findmy: scheme in the new manifest that opens a device or person by id."
+    },
+    {
+      "feature": "Notifications service extension",
+      "area": "system",
+      "apple": "FindMyNotificationsService app extension delivers alerts",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No extension model for notifications from an app.",
+      "wire": "Deliver through the shell notification centre from the cloud poll in the new app's background helper."
+    },
+    {
+      "feature": "Onboarding and privacy disclosure",
+      "area": "privacy",
+      "apple": "First-run onboarding bundle and privacy disclosure",
+      "status": "gap",
+      "bifrost": "",
+      "note": "None.",
+      "wire": "Add a first-run sheet that explains what is uploaded (device position, battery) and links the BifrOSt Account privacy page."
+    }
+  ]
+}

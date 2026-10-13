@@ -7,6 +7,7 @@ Source of the Apple macOS 27 SDK vs BifrOSt matrix. The generated page is `docs/
 |---|---|
 | `index.json` | Every framework the official documentation lists with macOS availability (`bifrost pc parity refresh-index`) |
 | `data/<slug>.json` | One framework (or one part of AppKit, Foundation, SwiftUI, AVFoundation): status, summary, feature rows, gaps, REA evidence id |
+| `apps/<slug>.json` | One reference app's feature inventory against its BifrOSt app: rows `feature, area, apple, status, bifrost, note, wire` (`bifrost pc parity apps`) |
 | `agent-brief.md` | The brief agents follow to fill or refresh a data file (official docs via `tools/parity/docc.py`, REA via `tools/parity/rea-page.sh`) |
 
 Statuses: `parity`, `partial`, `os`, `gap`, `n/a` (definitions in `agent-brief.md`). Coverage per framework: applicable rows
@@ -18,6 +19,20 @@ frameworks not yet assessed.
 
 When a feature ships, edit its row in `data/<slug>.json` (status, BifrOSt path, note), run `bifrost pc parity check` and
 `build`, and update the published database (see the skill).
+
+## App inventories (`apps`)
+
+`apps/<slug>.json` holds `app`, `bifrost_app`, `evidence` and `features`; an optional `summary` must match the rows. A row's `status`
+is `parity`, `partial`, `gap` or `n/a` (strict: parity only when it works as the reference does); `bifrost` is a `file:line` in
+this repo (empty for a gap); `wire` says what to implement and where, and is required on every `gap` and `partial` row.
+Coverage: parity 1, partial 0.5, gap 0, `n/a` left out.
+
+- `bifrost pc parity apps` one line per app, lowest coverage first: app, BifrOSt app, features, parity/partial/gap/n/a, coverage %.
+- `bifrost pc parity apps --gaps APP` the gap and partial rows of one app with their wire text (APP is a slug or name, or a unique part of one).
+- `bifrost pc parity apps --json` (also with `--gaps APP`) the same data as JSON.
+- `bifrost pc parity check` also validates every `apps/*.json` (required keys, statuses, wire text, summary, cited paths exist).
+
+Tests: `python3 -m unittest discover -s tools/parity`.
 
 ## OS layer: command-line tools (`verify os-cli`)
 
