@@ -32,7 +32,18 @@ CPU only, operating on an 8-bit single-channel `Plane`:
 - Erode and dilate take no structuring-element values, and no edge mode other than clamp.
 - Still missing: integral images, region statistics (mean, variance, min and max), image arithmetic,
   reductions, convolution (Sobel, Laplacian, median), Lanczos scaling, neural network and recurrent layers,
-  matrix kernels, and the kernel base-class abstraction.
+  matrix kernels, and keyed archiving of kernels. The base trait exists (see below); the binary kernel base does not.
+
+## Kernel base trait (team A4)
+
+- `springboard/render/src/kernel.rs`: `UnaryImageKernel` is the base of a kernel that reads one image and writes
+  one of the same size (`label`, `encode`). It is the counterpart of MPSUnaryImageKernel. `ColorMap` adapts a
+  straight-colour function to it, and `run_chain` runs a list of unary kernels in order, returning None when a
+  kernel does not return one pixel per source pixel.
+- Official references: https://developer.apple.com/documentation/metalperformanceshaders/mpsunaryimagekernel ,
+  https://developer.apple.com/documentation/metalperformanceshaders/mpskernel
+- Built on parity/team-a-04; not yet verified on Midget. The tests in `kernel.rs` (module `tests`) were written but
+  not run in this round.
 - No GPU path. The official classes run as compute kernels; `filter.rs` runs on the CPU.
 - Verification has not been run in this round (no build, per the stage rules). The unit tests in
   `filter.rs` (10 tests) are the next thing to run.
