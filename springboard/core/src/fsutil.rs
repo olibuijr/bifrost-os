@@ -22,13 +22,13 @@ pub fn write_atomic(path: &Path, bytes: impl AsRef<[u8]>) -> io::Result<()> {
 
 fn replace_from(path: &Path, tmp: &Path, bytes: &[u8]) -> io::Result<()> {
     let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
-    let mut f = fs::OpenOptions::new().write(true).create_new(true).open(&tmp)?;
+    let mut f = fs::OpenOptions::new().write(true).create_new(true).open(tmp)?;
     let written = (|| {
         f.write_all(bytes)?;
         f.sync_all()
     })();
-    if let Err(e) = written.and_then(|()| fs::rename(&tmp, path)) {
-        let _ = fs::remove_file(&tmp);
+    if let Err(e) = written.and_then(|()| fs::rename(tmp, path)) {
+        let _ = fs::remove_file(tmp);
         return Err(e);
     }
     // Best effort: not every filesystem lets a directory be opened and synced.

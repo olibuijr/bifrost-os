@@ -108,7 +108,7 @@ pub fn decode(data: &[u8]) -> Option<Decoded> {
         return None;
     }
     let mut rgba8 = Vec::with_capacity(w * h * 4);
-    for c in px.chunks_exact(3).take(w * h) {
+    for c in px.as_chunks::<3>().0.iter().take(w * h) {
         rgba8.extend([c[0], c[1], c[2], 255]);
     }
     Some(Decoded { frames: vec![Frame { w, h, rgba8, rgba16: None, delay_ms: 0 }], props: vec![props], loop_count: None })

@@ -38,7 +38,7 @@ fn box_mean(src: &[f64], w: usize, h: usize, r: usize) -> Vec<f64> {
 /// `None` when the plane sizes differ or the diameter is zero or even.
 pub fn guided_filter(guide: &[f32], src: &[f32], width: usize, height: usize, diameter: usize, epsilon: f32) -> Option<Vec<f32>> {
     let n = width.checked_mul(height)?;
-    if guide.len() != n || src.len() != n || diameter == 0 || diameter % 2 == 0 {
+    if guide.len() != n || src.len() != n || diameter == 0 || diameter.is_multiple_of(2) {
         return None;
     }
     let r = diameter / 2;

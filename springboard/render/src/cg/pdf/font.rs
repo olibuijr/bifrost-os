@@ -265,30 +265,22 @@ impl Font {
                         }
                     }
                 }
-                "begincidrange" => loop {
-                    let Some(Obj::Str(lo)) = p.parse(false) else { break };
+                "begincidrange" => while let Some(Obj::Str(lo)) = p.parse(false) {
                     let Some(Obj::Str(hi)) = p.parse(false) else { break };
                     let Some(cid) = p.parse(false).and_then(|o| o.int()) else { break };
                     self.cid_ranges.push((code_of(&lo), code_of(&hi), cid.max(0) as u32));
                 },
-                "begincidchar" => loop {
-                    let Some(Obj::Str(c)) = p.parse(false) else { break };
+                "begincidchar" => while let Some(Obj::Str(c)) = p.parse(false) {
                     let Some(cid) = p.parse(false).and_then(|o| o.int()) else { break };
                     let c = code_of(&c);
                     self.cid_ranges.push((c, c, cid.max(0) as u32));
                 },
-                "beginbfchar" => loop {
-                    match p.parse(false) {
-                        Some(Obj::Str(src)) => {
-                            if let Some(Obj::Str(dst)) = p.parse(false) {
-                                self.uni.insert(code_of(&src), utf16be(&dst));
-                            }
-                        }
-                        _ => break,
+                "beginbfchar" => while let Some(Obj::Str(src)) = p.parse(false) {
+                    if let Some(Obj::Str(dst)) = p.parse(false) {
+                        self.uni.insert(code_of(&src), utf16be(&dst));
                     }
                 },
-                "beginbfrange" => loop {
-                    let Some(Obj::Str(lo)) = p.parse(false) else { break };
+                "beginbfrange" => while let Some(Obj::Str(lo)) = p.parse(false) {
                     let Some(Obj::Str(hi)) = p.parse(false) else { break };
                     let (lo, hi) = (code_of(&lo), code_of(&hi));
                     match p.parse(false) {

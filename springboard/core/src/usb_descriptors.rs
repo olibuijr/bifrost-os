@@ -368,11 +368,11 @@ pub struct DeviceMatch {
 
 impl DeviceMatch {
     pub fn matches(&self, d: &DeviceDescriptor) -> bool {
-        self.vendor_id.map_or(true, |v| v == d.vendor_id)
-            && self.product_id.map_or(true, |p| p == d.product_id)
-            && self.class.map_or(true, |c| c == d.class)
-            && self.subclass.map_or(true, |s| s == d.subclass)
-            && self.protocol.map_or(true, |p| p == d.protocol)
+        self.vendor_id.is_none_or( |v| v == d.vendor_id)
+            && self.product_id.is_none_or( |p| p == d.product_id)
+            && self.class.is_none_or( |c| c == d.class)
+            && self.subclass.is_none_or( |s| s == d.subclass)
+            && self.protocol.is_none_or( |p| p == d.protocol)
     }
 }
 
@@ -386,9 +386,9 @@ pub struct InterfaceMatch {
 
 impl InterfaceMatch {
     pub fn matches(&self, i: &InterfaceDescriptor) -> bool {
-        self.class.map_or(true, |c| c == i.class)
-            && self.subclass.map_or(true, |s| s == i.subclass)
-            && self.protocol.map_or(true, |p| p == i.protocol)
+        self.class.is_none_or( |c| c == i.class)
+            && self.subclass.is_none_or( |s| s == i.subclass)
+            && self.protocol.is_none_or( |p| p == i.protocol)
     }
 }
 

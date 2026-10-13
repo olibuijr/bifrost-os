@@ -3,6 +3,8 @@
 //! report them. Names are the reference `CI...` names. `CIDetector` and `CIRenderDestination` have
 //! no CPU filter here: the QR decoder lives in the shell crate, so detectors stay a gap.
 
+use std::f32::consts::PI;
+
 pub const CATEGORY_DISTORTION: &str = "CICategoryDistortionEffect";
 pub const CATEGORY_SHARPEN: &str = "CICategorySharpen";
 pub const CATEGORY_STYLIZE: &str = "CICategoryStylize";
@@ -33,10 +35,10 @@ const fn a(key: &'static str, default: f32, min: f32, max: f32) -> Attribute {
 }
 
 const RADIUS: Attribute = a("inputRadius", 300.0, 0.0, 1000.0);
-const ANGLE: Attribute = a("inputAngle", 0.0, -3.14159, 3.14159);
+const ANGLE: Attribute = a("inputAngle", 0.0, -PI, PI);
 
 static FILTERS: &[FilterInfo] = &[
-    FilterInfo { name: "CITwirlDistortion", category: CATEGORY_DISTORTION, attributes: &[RADIUS, a("inputAngle", 3.14159, -12.566, 12.566)] },
+    FilterInfo { name: "CITwirlDistortion", category: CATEGORY_DISTORTION, attributes: &[RADIUS, a("inputAngle", PI, -12.566, 12.566)] },
     FilterInfo { name: "CIVortexDistortion", category: CATEGORY_DISTORTION, attributes: &[a("inputRadius", 300.0, 0.0, 800.0), a("inputAngle", 56.5487, -94.2478, 94.2478)] },
     FilterInfo { name: "CIPinchDistortion", category: CATEGORY_DISTORTION, attributes: &[a("inputRadius", 300.0, 0.0, 2000.0), a("inputScale", 0.5, 0.0, 1.0)] },
     FilterInfo { name: "CIBumpDistortion", category: CATEGORY_DISTORTION, attributes: &[a("inputRadius", 300.0, 0.0, 600.0), a("inputScale", 0.5, -1.0, 1.0)] },
@@ -58,7 +60,7 @@ static FILTERS: &[FilterInfo] = &[
     FilterInfo { name: "CIAffineTile", category: CATEGORY_TILE, attributes: &[] },
     FilterInfo { name: "CIGaussianBlur", category: CATEGORY_BLUR, attributes: &[a("inputRadius", 10.0, 0.0, 100.0)] },
     FilterInfo { name: "CIBoxBlur", category: CATEGORY_BLUR, attributes: &[a("inputRadius", 10.0, 1.0, 100.0)] },
-    FilterInfo { name: "CIMotionBlur", category: CATEGORY_BLUR, attributes: &[a("inputRadius", 20.0, 0.0, 100.0), a("inputAngle", 0.0, -3.14159, 3.14159)] },
+    FilterInfo { name: "CIMotionBlur", category: CATEGORY_BLUR, attributes: &[a("inputRadius", 20.0, 0.0, 100.0), a("inputAngle", 0.0, -PI, PI)] },
     FilterInfo { name: "CIZoomBlur", category: CATEGORY_BLUR, attributes: &[a("inputAmount", 20.0, 0.0, 200.0)] },
     FilterInfo { name: "CIDiscBlur", category: CATEGORY_BLUR, attributes: &[a("inputRadius", 8.0, 0.0, 50.0)] },
     FilterInfo { name: "CISourceOverCompositing", category: CATEGORY_COMPOSITE, attributes: &[] },
@@ -73,7 +75,7 @@ pub fn all_filter_names() -> Vec<&'static str> {
 
 /// `CIFilter.filterNames(inCategory:)`: the filters in `category`; `None` lists them all.
 pub fn filter_names(category: Option<&str>) -> Vec<&'static str> {
-    FILTERS.iter().filter(|f| category.map_or(true, |c| f.category == c)).map(|f| f.name).collect()
+    FILTERS.iter().filter(|f| category.is_none_or(|c| f.category == c)).map(|f| f.name).collect()
 }
 
 /// `CIFilter.attributes` for the filter called `name`.

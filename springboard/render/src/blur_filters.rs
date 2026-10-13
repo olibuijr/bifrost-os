@@ -40,7 +40,7 @@ fn unpack(img: &Image) -> Vec<f32> {
 
 fn pack(w: usize, h: usize, f: &[f32]) -> Image {
     let mut out = Image::new(w, h);
-    for (d, c) in out.px.iter_mut().zip(f.chunks_exact(4)) {
+    for (d, c) in out.px.iter_mut().zip(f.as_chunks::<4>().0.iter()) {
         let q = |v: f32| (v + 0.5).clamp(0.0, 255.0) as u32;
         let a = q(c[3]);
         *d = q(c[0]).min(a) | q(c[1]).min(a) << 8 | q(c[2]).min(a) << 16 | a << 24;

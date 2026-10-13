@@ -126,7 +126,7 @@ pub fn run_length(d: &[u8]) -> Vec<u8> {
             out.extend_from_slice(&d[i..end]);
             i = end;
         } else if let Some(&b) = d.get(i) {
-            out.extend(std::iter::repeat(b).take(257 - n));
+            out.extend(std::iter::repeat_n(b, 257 - n));
             i += 1;
         }
     }

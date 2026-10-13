@@ -83,10 +83,8 @@ fn parse_sudo(body: &str) -> Option<SessionEvent> {
 fn parse_ssh(body: &str) -> Option<SessionEvent> {
     let (accepted, rest) = if let Some(r) = body.strip_prefix("Accepted ") {
         (true, r)
-    } else if let Some(r) = body.strip_prefix("Failed ") {
-        (false, r)
     } else {
-        return None;
+        (false, body.strip_prefix("Failed ")?)
     };
     let (method, rest) = rest.split_once(" for ")?;
     let rest = rest.strip_prefix("invalid user ").unwrap_or(rest);
@@ -109,10 +107,8 @@ fn parse_session(body: &str, service: Service) -> Option<SessionEvent> {
     let rest = body.strip_prefix(prefix.as_str())?;
     let (opened, rest) = if let Some(r) = rest.strip_prefix("session opened for user ") {
         (true, r)
-    } else if let Some(r) = rest.strip_prefix("session closed for user ") {
-        (false, r)
     } else {
-        return None;
+        (false, rest.strip_prefix("session closed for user ")?)
     };
     let user = rest.split(['(', ' ']).next().unwrap_or("");
     if user.is_empty() {

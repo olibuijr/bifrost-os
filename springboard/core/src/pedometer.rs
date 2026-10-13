@@ -108,7 +108,7 @@ impl Pedometer {
 
     /// The steps taken from `from` to `to`, both ends included. Zero when `from` is after `to`.
     pub fn steps_between(&self, from: f64, to: f64) -> usize {
-        if !(from <= to) {
+        if !matches!(from.partial_cmp(&to), Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)) {
             return 0;
         }
         let lo = self.steps.partition_point(|&s| s < from);

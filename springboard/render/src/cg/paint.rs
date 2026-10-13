@@ -329,7 +329,7 @@ fn valid_domain(d: (f32, f32)) -> bool {
 impl Function {
     /// A sampled function. `None` for an invalid domain, no outputs, or fewer than two samples per output.
     pub fn sampled(domain: (f32, f32), outputs: usize, samples: Vec<f32>) -> Option<Function> {
-        if !valid_domain(domain) || outputs == 0 || samples.len() < 2 * outputs || samples.len() % outputs != 0 {
+        if !valid_domain(domain) || outputs == 0 || samples.len() < 2 * outputs || !samples.len().is_multiple_of(outputs) {
             return None;
         }
         Some(Function::Sampled { domain, outputs, samples })
@@ -451,6 +451,7 @@ impl Shading {
         Shading::new(ShadingKind::Axial { start, end }, space, function, extend_start, extend_end)
     }
 
+    #[allow(clippy::too_many_arguments)] // two circles plus extend flags mirror the PDF radial shading dictionary
     pub fn radial(
         space: &ColorSpace,
         start_center: (f32, f32),
@@ -728,6 +729,7 @@ impl Paint {
 
     /// Paints the paint over the device rectangle `x0..x1` by `y0..y1` with no mask, user space equal to device
     /// space.
+    #[allow(clippy::too_many_arguments)] // destination, device rectangle, blend and alpha; a struct would add noise
     pub fn fill_rect(&self, dst: &mut Surface, x0: i32, y0: i32, x1: i32, y1: i32, blend: BlendMode, alpha: f32) {
         let a255 = (alpha.clamp(0.0, 1.0) * 255.0 + 0.5) as u32;
         let (x0, x1) = (x0.max(0), x1.min(dst.w as i32));

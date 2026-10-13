@@ -63,8 +63,8 @@ pub fn euclidean_distance(src: &Plane, search_limit: Option<f32>) -> Vec<f32> {
     let mut out = vec![0.0f64; h.max(w)];
 
     for x in 0..w {
-        for y in 0..h {
-            line[y] = if src.pixels[y * w + x] != 0 { 0.0 } else { big };
+        for (y, l) in line.iter_mut().take(h).enumerate() {
+            *l = if src.pixels[y * w + x] != 0 { 0.0 } else { big };
         }
         squared_1d(&line[..h], &mut out[..h]);
         for y in 0..h {
@@ -89,7 +89,7 @@ pub fn euclidean_distance(src: &Plane, search_limit: Option<f32>) -> Vec<f32> {
             } else {
                 sq.sqrt()
             };
-            let inside = limit_sq.map_or(true, |lim| sq <= lim);
+            let inside = limit_sq.is_none_or(|lim| sq <= lim);
             result[y * w + x] = if inside && d.is_finite() { d as f32 } else { f32::INFINITY };
         }
     }

@@ -154,7 +154,7 @@ fn probe(path: &Path) -> Option<Face> {
     let mut recs = vec![0u8; 16 * n];
     f.read_exact(&mut recs).ok()?;
     let table = |tag: &[u8; 4]| {
-        recs.chunks_exact(16).find(|r| &r[..4] == tag).map(|r| (u32::from_be_bytes([r[8], r[9], r[10], r[11]]) as u64, u32::from_be_bytes([r[12], r[13], r[14], r[15]]) as usize))
+        recs.as_chunks::<16>().0.iter().find(|r| &r[..4] == tag).map(|r| (u32::from_be_bytes([r[8], r[9], r[10], r[11]]) as u64, u32::from_be_bytes([r[12], r[13], r[14], r[15]]) as usize))
     };
     let has = |tag: &[u8; 4]| table(tag).is_some();
     if !(has(b"head") && has(b"hhea") && has(b"maxp") && has(b"cmap") && (has(b"CFF ") || (has(b"glyf") && has(b"loca")))) {
@@ -193,7 +193,7 @@ fn name_string(t: &[u8], id: u16) -> Option<String> {
         let (len, off) = (u16_at(r + 8)? as usize, u16_at(r + 10)? as usize);
         let Some(raw) = t.get(strings + off..strings + off + len) else { continue };
         let (rank, text) = match platform {
-            0 | 3 => (if platform == 3 && lang == 0x409 { 0 } else { 1 }, String::from_utf16_lossy(&raw.chunks_exact(2).map(|c| u16::from_be_bytes([c[0], c[1]])).collect::<Vec<_>>())),
+            0 | 3 => (if platform == 3 && lang == 0x409 { 0 } else { 1 }, String::from_utf16_lossy(&raw.as_chunks::<2>().0.iter().map(|c| u16::from_be_bytes([c[0], c[1]])).collect::<Vec<_>>())),
             1 => (2, raw.iter().map(|&b| b as char).collect()),
             _ => continue,
         };

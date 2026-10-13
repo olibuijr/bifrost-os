@@ -197,7 +197,7 @@ impl<'a> Extractor<'a> {
                 let mut i = p.pos;
                 while i + 2 <= d.len() {
                     let ws_before = i == 0 || super::obj::is_ws(d[i - 1]);
-                    let ws_after = d.get(i + 2).map_or(true, |&c| super::obj::is_ws(c));
+                    let ws_after = d.get(i + 2).is_none_or(|&c| super::obj::is_ws(c));
                     if ws_before && &d[i..(i + 2).min(d.len())] == b"EI" && ws_after {
                         break;
                     }

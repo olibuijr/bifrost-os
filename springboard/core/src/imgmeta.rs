@@ -7,6 +7,7 @@
 //!   resource id `0x0404`;
 //! - the IPTC-IIM stream itself: `0x1C record dataset length value` datasets, where record 2
 //!   is the application record (caption, keywords, by-line and so on).
+//!
 //! This module parses and writes those bytes. It reads no files, decodes no pixels and opens no
 //! socket: the caller hands it the segment payloads it already has.
 

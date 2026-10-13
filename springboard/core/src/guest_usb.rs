@@ -39,9 +39,9 @@ pub struct Rule {
 
 impl Rule {
     pub fn matches(&self, dev: &UsbDevice) -> bool {
-        self.vendor.map_or(true, |v| v == dev.vendor)
-            && self.product.map_or(true, |p| p == dev.product)
-            && self.class.map_or(true, |c| c == dev.class)
+        self.vendor.is_none_or( |v| v == dev.vendor)
+            && self.product.is_none_or( |p| p == dev.product)
+            && self.class.is_none_or( |c| c == dev.class)
     }
 }
 

@@ -50,7 +50,7 @@ impl AttributePath {
 }
 
 fn field_matches(pattern: Option<u32>, value: u32) -> bool {
-    pattern.map_or(true, |p| p == value)
+    pattern.is_none_or( |p| p == value)
 }
 
 fn covered_by(inner: Option<u32>, outer: Option<u32>) -> bool {

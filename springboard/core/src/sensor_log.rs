@@ -49,7 +49,7 @@ impl<T: Clone> SensorLog<T> {
 
     /// The samples taken from `from` to `to`, both ends included, oldest first. Empty when `from` is after `to`.
     pub fn between(&self, from: f64, to: f64) -> Vec<(f64, T)> {
-        if !(from <= to) {
+        if !matches!(from.partial_cmp(&to), Some(std::cmp::Ordering::Less | std::cmp::Ordering::Equal)) {
             return Vec::new();
         }
         let start = self.samples.partition_point(|(t, _)| *t < from);

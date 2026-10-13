@@ -137,7 +137,7 @@ impl PdfImage {
 
     /// True when every pixel is opaque.
     pub fn is_opaque(&self) -> bool {
-        self.rgba.chunks_exact(4).all(|p| p[3] == 255)
+        self.rgba.as_chunks::<4>().0.iter().all(|p| p[3] == 255)
     }
 }
 

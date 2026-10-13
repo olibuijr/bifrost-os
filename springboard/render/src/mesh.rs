@@ -155,8 +155,8 @@ impl Primitive {
     pub fn accepts_count(self, count: usize) -> bool {
         match self {
             Primitive::Points | Primitive::LineStrip | Primitive::TriangleStrip => count > 0,
-            Primitive::Lines => count > 0 && count % 2 == 0,
-            Primitive::Triangles => count > 0 && count % 3 == 0,
+            Primitive::Lines => count > 0 && count.is_multiple_of(2),
+            Primitive::Triangles => count > 0 && count.is_multiple_of(3),
         }
     }
 }

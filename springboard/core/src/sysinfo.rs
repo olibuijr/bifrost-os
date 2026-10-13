@@ -121,12 +121,12 @@ pub struct Firmware {
 /// The chassis name for an SMBIOS chassis type code.
 pub fn chassis_name(code: u32) -> &'static str {
     match code {
-        3 | 4 | 5 | 6 | 7 => "Desktop",
+        3..=7 => "Desktop",
         8 | 9 | 10 | 14 => "Laptop",
         11 => "Handheld",
         13 | 15 | 16 => "All in One",
         17 | 23 | 25 | 28 => "Server",
-        30 | 31 | 32 => "Tablet",
+        30..=32 => "Tablet",
         _ => "",
     }
 }

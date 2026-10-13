@@ -62,7 +62,7 @@ pub struct UrlFilter {
 /// literal (a bracketed host).
 pub fn parse_url(url: &str) -> Option<ParsedUrl> {
     let (_, rest) = url.split_once("://")?;
-    let end = rest.find(|c: char| c == '/' || c == '?' || c == '#').unwrap_or(rest.len());
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     let authority = &rest[..end];
     let host_port = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
     if host_port.contains('[') {
@@ -73,7 +73,7 @@ pub fn parse_url(url: &str) -> Option<ParsedUrl> {
         return None;
     }
     let tail = &rest[end..];
-    let path_end = tail.find(|c: char| c == '?' || c == '#').unwrap_or(tail.len());
+    let path_end = tail.find(['?', '#']).unwrap_or(tail.len());
     let path = &tail[..path_end];
     let path = if path.is_empty() { "/".to_string() } else { path.to_string() };
     Some(ParsedUrl { host, path })
@@ -141,7 +141,7 @@ impl UrlFilter {
         for (host, path) in sub_urls(&parsed) {
             if let Some(rule) = self.rules.iter().find(|r| r.host == host && r.path_prefix == path) {
                 let key = (rule.host.split('.').count(), segments(&rule.path_prefix));
-                if best.map_or(true, |(k, _)| key > k) {
+                if best.is_none_or( |(k, _)| key > k) {
                     best = Some((key, rule.action));
                 }
             }

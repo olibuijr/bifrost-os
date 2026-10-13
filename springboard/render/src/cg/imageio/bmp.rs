@@ -200,15 +200,15 @@ pub(super) fn decode_dib(dib: &[u8], pix_off: Option<usize>, ico: bool) -> Optio
                 rgba[o..o + 4].copy_from_slice(&px);
             }
         }
-        if bpp == 32 && ma == 0 && rgba.chunks_exact(4).all(|p| p[3] == 0) {
-            rgba.chunks_exact_mut(4).for_each(|p| p[3] = 255);
+        if bpp == 32 && ma == 0 && rgba.as_chunks::<4>().0.iter().all(|p| p[3] == 0) {
+            rgba.as_chunks_mut::<4>().0.iter_mut().for_each(|p| p[3] = 255);
         }
     }
     if ico {
         let color_bytes = if comp == 1 || comp == 2 { 0 } else { stride * h };
         let mask_at = pix + color_bytes;
         let mstride = w.div_ceil(32) * 4;
-        let has_alpha = bpp == 32 && rgba.chunks_exact(4).any(|p| p[3] != 255);
+        let has_alpha = bpp == 32 && rgba.as_chunks::<4>().0.iter().any(|p| p[3] != 255);
         if !has_alpha && comp != 1 && comp != 2 {
             for y in 0..h {
                 let Some(row) = dib.get(mask_at + y * mstride..mask_at + y * mstride + w.div_ceil(8)) else { break };
@@ -227,7 +227,7 @@ pub(super) fn decode_dib(dib: &[u8], pix_off: Option<usize>, ico: bool) -> Optio
 
 /// Encodes straight RGBA as a BMP: 24-bit when fully opaque, otherwise 32-bit with an alpha mask.
 pub fn encode(w: usize, h: usize, rgba: &[u8], dpi: Option<(f64, f64)>) -> Vec<u8> {
-    let alpha = rgba.chunks_exact(4).any(|p| p[3] != 255);
+    let alpha = rgba.as_chunks::<4>().0.iter().any(|p| p[3] != 255);
     let bpp = if alpha { 32 } else { 24 };
     let stride = (w * bpp).div_ceil(32) * 4;
     let hs = if alpha { 108 } else { 40 };

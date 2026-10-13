@@ -58,6 +58,7 @@ impl Surface<'_> {
     }
 
     /// An arc about `center` from angle `start` to `end` (radians, 0 along +x); see [`Path::add_arc`].
+    #[allow(clippy::too_many_arguments)] // arc geometry plus stroke style; mirrors the CoreGraphics call
     pub fn stroke_arc(&mut self, center: Point, radius: f32, start: f32, end: f32, clockwise: bool, width: f32, cap: LineCap, color: u32) {
         let mut p = Path::new();
         p.add_arc(center, radius, start, end, clockwise);

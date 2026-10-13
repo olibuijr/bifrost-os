@@ -139,7 +139,7 @@ impl Sensors {
         };
         let mut dirs: Vec<PathBuf> = entries
             .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| p.file_name().and_then(|n| n.to_str()).map_or(false, |n| n.starts_with("iio:device")))
+            .filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and( |n| n.starts_with("iio:device")))
             .collect();
         dirs.sort();
         for dir in dirs {

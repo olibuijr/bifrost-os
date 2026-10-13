@@ -223,7 +223,7 @@ impl GuestConfig {
         if self.memory_bytes < MIN_MEMORY_BYTES {
             return Err(ConfigError::MemoryTooSmall);
         }
-        if self.memory_bytes % MIB != 0 {
+        if !self.memory_bytes.is_multiple_of(MIB) {
             return Err(ConfigError::MemoryNotWholeMiB);
         }
 

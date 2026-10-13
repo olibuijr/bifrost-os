@@ -33,12 +33,12 @@ impl TileGrid {
 
     /// Tiles across the picture, rounding up.
     pub fn columns(&self) -> usize {
-        (self.width + self.tile_w - 1) / self.tile_w
+        self.width.div_ceil(self.tile_w)
     }
 
     /// Tiles down the picture, rounding up.
     pub fn rows(&self) -> usize {
-        (self.height + self.tile_h - 1) / self.tile_h
+        self.height.div_ceil(self.tile_h)
     }
 
     /// Total number of tiles.

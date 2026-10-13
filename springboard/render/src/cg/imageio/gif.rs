@@ -236,7 +236,7 @@ pub fn decode(data: &[u8]) -> Option<Decoded> {
                     }
                 }
                 let mut pr = props0.clone();
-                pr.has_alpha = transparent.is_some() || frames.is_empty() && canvas.chunks_exact(4).any(|q| q[3] == 0);
+                pr.has_alpha = transparent.is_some() || frames.is_empty() && canvas.as_chunks::<4>().0.iter().any(|q| q[3] == 0);
                 let mut g: Dict = props0.gif.clone();
                 g.insert("DelayTime".into(), PropValue::Float(delay as f64 / 1000.0));
                 g.insert("HasGlobalColorMap".into(), PropValue::Int((!global.is_empty()) as i64));
@@ -356,25 +356,27 @@ pub struct GifFrame<'a> {
     pub delay_ms: u32,
 }
 
-fn quantise(frames: &[GifFrame]) -> (Vec<[u8; 3]>, bool, Box<dyn Fn(&[u8]) -> u8>) {
+type IndexFn = Box<dyn Fn(&[u8]) -> u8>;
+
+fn quantise(frames: &[GifFrame]) -> (Vec<[u8; 3]>, bool, IndexFn) {
     use std::collections::HashMap;
-    let transparent = frames.iter().any(|f| f.rgba.chunks_exact(4).any(|p| p[3] < 128));
+    let transparent = frames.iter().any(|f| f.rgba.as_chunks::<4>().0.iter().any(|p| p[3] < 128));
     let limit = if transparent { 255 } else { 256 };
     let mut exact: HashMap<[u8; 3], u8> = HashMap::new();
     let mut pal: Vec<[u8; 3]> = Vec::new();
     let mut fits = true;
     'scan: for f in frames {
-        for p in f.rgba.chunks_exact(4) {
+        for p in f.rgba.as_chunks::<4>().0 {
             if p[3] < 128 {
                 continue;
             }
             let c = [p[0], p[1], p[2]];
-            if !exact.contains_key(&c) {
+            if let std::collections::hash_map::Entry::Vacant(slot) = exact.entry(c) {
                 if pal.len() == limit {
                     fits = false;
                     break 'scan;
                 }
-                exact.insert(c, pal.len() as u8);
+                slot.insert(pal.len() as u8);
                 pal.push(c);
             }
         }
@@ -439,7 +441,7 @@ pub fn encode(w: usize, h: usize, frames: &[GifFrame], loop_count: Option<u32>) 
         o.extend((h as u16).to_le_bytes());
         o.push(0);
         o.push(8);
-        let idx: Vec<u8> = f.rgba.chunks_exact(4).take(w * h).map(|p| index_of(p)).collect();
+        let idx: Vec<u8> = f.rgba.as_chunks::<4>().0.iter().take(w * h).map(|p| index_of(p)).collect();
         for chunk in lzw_encode(&idx, 8).chunks(255) {
             o.push(chunk.len() as u8);
             o.extend(chunk);

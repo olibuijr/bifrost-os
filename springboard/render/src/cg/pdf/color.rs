@@ -193,7 +193,7 @@ impl ColorSpace {
                 let (lx, my, nz) = (m + a / 500.0, m, m - b / 200.0);
                 let f = |x: f32| if x >= 6.0 / 29.0 { x * x * x } else { 108.0 / 841.0 * (x - 4.0 / 29.0) };
                 let (x, y, z) = (white[0] * f(lx), white[1] * f(my), white[2] * f(nz));
-                let r = 3.133_856_1 * x - 1.616_866_7 * y - 0.490_614_6 * z;
+                let r = 3.133_856 * x - 1.616_866_7 * y - 0.490_614_6 * z;
                 let gg = -0.978_768_4 * x + 1.916_141_5 * y + 0.033_454 * z;
                 let bb = 0.071_945_3 * x - 0.228_991_4 * y + 1.405_242_7 * z;
                 [srgb_encode(r), srgb_encode(gg), srgb_encode(bb)]

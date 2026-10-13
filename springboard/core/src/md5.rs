@@ -82,11 +82,11 @@ impl Md5 {
 
     fn block(&mut self, block: &[u8; 64]) {
         let mut m = [0u32; 16];
-        for (i, c) in block.chunks_exact(4).enumerate() {
+        for (i, c) in block.as_chunks::<4>().0.iter().enumerate() {
             m[i] = u32::from_le_bytes([c[0], c[1], c[2], c[3]]);
         }
         let [mut a, mut b, mut c, mut d] = self.h;
-        for i in 0..64 {
+        for (i, &shift) in S.iter().enumerate() {
             let (f, g) = match i / 16 {
                 0 => ((b & c) | (!b & d), i),
                 1 => ((d & b) | (!d & c), (5 * i + 1) % 16),
@@ -97,7 +97,7 @@ impl Md5 {
             a = d;
             d = c;
             c = b;
-            b = b.wrapping_add(f.rotate_left(S[i]));
+            b = b.wrapping_add(f.rotate_left(shift));
         }
         for (s, v) in self.h.iter_mut().zip([a, b, c, d]) {
             *s = s.wrapping_add(v);

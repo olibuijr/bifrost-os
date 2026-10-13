@@ -163,7 +163,7 @@ pub(crate) enum Phase {
 impl MediaTiming {
     /// Seconds of one cycle: `duration`, or twice that with autoreverse. Zero for a non-positive duration.
     fn cycle(&self) -> f64 {
-        if !(self.duration > 0.0) {
+        if self.duration.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
             return 0.0;
         }
         if self.autoreverses {
@@ -193,7 +193,7 @@ impl MediaTiming {
 
     /// The phase at tree time `t` for an animation that began at `begin` and lasts `total` seconds of local time.
     pub(crate) fn phase_with(&self, begin: f64, t: f64, total: f64) -> Phase {
-        if !(t >= begin) {
+        if !matches!(t.partial_cmp(&begin), Some(std::cmp::Ordering::Greater | std::cmp::Ordering::Equal)) {
             return Phase::Before;
         }
         let local = (t - begin) * self.speed as f64 + self.time_offset;
@@ -358,7 +358,7 @@ impl Spring {
 
     /// The progress (0 at start, settling at 1) after `t` seconds.
     pub fn progress(&self, t: f32) -> f32 {
-        if !(t > 0.0) {
+        if t.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) {
             return 0.0;
         }
         (1.0 + self.displacement(t as f64)) as f32
@@ -394,7 +394,7 @@ impl Spring {
             let amp = c1.abs() + c2.abs();
             (-r1, Box::new(move |t: f64| amp * (r1 * t).exp()), f64::INFINITY)
         };
-        if !(rate > 0.0) || !rate.is_finite() {
+        if rate.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater) || !rate.is_finite() {
             return f32::INFINITY;
         }
         // Horizon: double from one time constant until the envelope is inside the band.

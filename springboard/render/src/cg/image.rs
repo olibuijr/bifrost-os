@@ -414,7 +414,7 @@ impl CgImage {
         }
         let (nw, nh) = (x1 - x, y1 - y);
         let bit0 = x * self.bits_per_pixel;
-        if bit0 % 8 != 0 {
+        if !bit0.is_multiple_of(8) {
             return None;
         }
         let rb = row_bytes(nw, self.bits_per_pixel)?;

@@ -147,7 +147,7 @@ fn find_in_root(root: &Path, kind: Kind, name: &str) -> Option<PathBuf> {
     // case-insensitive stem match, preferring the extension order
     for ext in kind.extensions() {
         let hit = entries.iter().find(|p| {
-            p.extension().and_then(|e| e.to_str()).map_or(false, |e| e.eq_ignore_ascii_case(ext))
+            p.extension().and_then(|e| e.to_str()).is_some_and( |e| e.eq_ignore_ascii_case(ext))
                 && normalize(&p.file_name().unwrap_or_default().to_string_lossy()) == name
         });
         if let Some(p) = hit {

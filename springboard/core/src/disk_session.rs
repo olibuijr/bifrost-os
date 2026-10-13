@@ -13,12 +13,16 @@ use crate::disk_commands::{self, Command, Refusal};
 use crate::disk_events::{self, Approvals, Disk, DiskEvent};
 use std::collections::BTreeMap;
 
+type AppearedCallback = Box<dyn FnMut(&Disk)>;
+type DisappearedCallback = Box<dyn FnMut(&str)>;
+type ChangedCallback = Box<dyn FnMut(&Disk, &Disk)>;
+
 #[derive(Default)]
 pub struct Session {
     disks: Vec<Disk>,
-    appeared: Vec<Box<dyn FnMut(&Disk)>>,
-    disappeared: Vec<Box<dyn FnMut(&str)>>,
-    changed: Vec<Box<dyn FnMut(&Disk, &Disk)>>,
+    appeared: Vec<AppearedCallback>,
+    disappeared: Vec<DisappearedCallback>,
+    changed: Vec<ChangedCallback>,
     approvals: Approvals,
     claims: Claims,
 }

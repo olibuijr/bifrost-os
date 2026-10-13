@@ -156,7 +156,7 @@ impl Affine {
     /// The inverse, or `None` when the matrix collapses an axis.
     pub fn invert(&self) -> Option<Affine> {
         let det = self.determinant();
-        if !(det.abs() > 1e-12) {
+        if det.abs().partial_cmp(&1e-12) != Some(std::cmp::Ordering::Greater) {
             return None;
         }
         Some(Affine {
@@ -733,7 +733,7 @@ impl Path {
             }
             let start = lerp(p, q, (lo - s0) / len);
             let end = lerp(p, q, (hi - s0) / len);
-            if !last.map_or(false, |l| dist(l, start) < 1e-4) {
+            if !last.is_some_and(|l| dist(l, start) < 1e-4) {
                 out.move_to(start);
             }
             out.line_to(end);
@@ -776,7 +776,7 @@ impl Path {
             }
         }
         let first = |subs: &[Subpath]| subs.iter().find_map(|s| s.points.first().copied());
-        first(&a).map_or(false, |p| other.contains(p, rule)) || first(&b).map_or(false, |p| self.contains(p, rule))
+        first(&a).is_some_and(|p| other.contains(p, rule)) || first(&b).is_some_and(|p| self.contains(p, rule))
     }
 
     /// Splits into one path per outer outline, each with the holes inside it.
@@ -791,7 +791,7 @@ impl Path {
                 if i != j && o.points.len() > 2 && Path::from_subpath(o).contains(probe, FillRule::EvenOdd) {
                     depth += 1;
                     let area = poly_area(&o.points).abs();
-                    if inner.map_or(true, |(_, a)| area < a) {
+                    if inner.is_none_or(|(_, a)| area < a) {
                         inner = Some((j, area));
                     }
                 }
@@ -860,7 +860,7 @@ impl Bounds {
         self.max = (self.max.0.max(p.0), self.max.1.max(p.1));
     }
     fn rect(&self) -> Option<Rect> {
-        (self.min.0 <= self.max.0).then(|| Rect { x: self.min.0, y: self.min.1, w: self.max.0 - self.min.0, h: self.max.1 - self.min.1 })
+        (self.min.0 <= self.max.0).then_some(Rect { x: self.min.0, y: self.min.1, w: self.max.0 - self.min.0, h: self.max.1 - self.min.1 })
     }
 }
 

@@ -10,6 +10,12 @@ pub struct SurfaceRegistry<T> {
     items: HashMap<SurfaceId, T>,
 }
 
+impl<T> Default for SurfaceRegistry<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> SurfaceRegistry<T> {
     pub fn new() -> Self {
         SurfaceRegistry { next: 1, items: HashMap::new() }

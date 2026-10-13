@@ -71,7 +71,7 @@ pub fn ports_from(nodes: &[(&str, bool)]) -> Vec<SerialPort> {
             })
         })
         .collect();
-    out.sort_by(|a, b| (a.kind, a.index).cmp(&(b.kind, b.index)));
+    out.sort_by_key(|a| (a.kind, a.index));
     out
 }
 

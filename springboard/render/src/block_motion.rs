@@ -35,6 +35,8 @@ pub struct MotionEstimation {
 
 /// SAD between the `bw` x `bh` block at (x0, y0) of `cur` and the block displaced by (dx, dy)
 /// in `reference`. The caller guarantees the displaced block is inside the plane.
+// Each argument is a distinct plane or block coordinate; a struct would only add noise to this hot helper.
+#[allow(clippy::too_many_arguments)]
 fn block_sad(cur: &[u8], reference: &[u8], width: usize, x0: usize, y0: usize, bw: usize, bh: usize, dx: i32, dy: i32) -> u32 {
     let rx = (x0 as i32 + dx) as usize;
     let ry = (y0 as i32 + dy) as usize;
@@ -58,7 +60,7 @@ impl MotionEstimation {
 
     /// The block grid: `cols` x `rows` blocks covering the plane.
     pub fn grid(&self) -> (usize, usize) {
-        ((self.width + self.block - 1) / self.block, (self.height + self.block - 1) / self.block)
+        (self.width.div_ceil(self.block), self.height.div_ceil(self.block))
     }
 
     /// Estimates the motion of `current` relative to `reference`. None when either

@@ -345,7 +345,7 @@ impl Image {
             return None;
         }
         let data = bytes.get(12..w.checked_mul(h)?.checked_mul(4)?.checked_add(12)?)?;
-        let px = data.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+        let px = data.as_chunks::<4>().0.iter().map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
         Some(Image { w, h, px })
     }
 
@@ -491,9 +491,9 @@ impl Image {
 #[inline(always)]
 fn over_row(dst: &mut [u32], src: &[u32], f: impl Fn(u32) -> u32) {
     const N: usize = 8;
-    let mut d = dst.chunks_exact_mut(N);
-    let mut s = src.chunks_exact(N);
-    for (d, s) in (&mut d).zip(&mut s) {
+    let (d, d_rest) = dst.as_chunks_mut::<N>();
+    let (s, s_rest) = src.as_chunks::<N>();
+    for (d, s) in d.iter_mut().zip(s) {
         let mut t = [0u32; N];
         for (t, &s) in t.iter_mut().zip(s) {
             *t = f(s);
@@ -505,7 +505,7 @@ fn over_row(dst: &mut [u32], src: &[u32], f: impl Fn(u32) -> u32) {
             d.iter_mut().zip(&t).for_each(|(d, &s)| *d = over(*d, s));
         }
     }
-    for (d, &s) in d.into_remainder().iter_mut().zip(s.remainder()) {
+    for (d, &s) in d_rest.iter_mut().zip(s_rest) {
         *d = over(*d, f(s));
     }
 }
@@ -557,8 +557,8 @@ fn box_pass(src: &[u32], dst: &mut [u32], w: usize, h: usize, r: usize, horizont
             for i in -(r as isize)..=(r as isize) {
                 add(&mut sum, at(i));
             }
-            for i in 0..w {
-                dst[i] = avg(&sum);
+            for (i, d) in dst.iter_mut().enumerate() {
+                *d = avg(&sum);
                 add(&mut sum, at(i as isize + r as isize + 1));
                 sub(&mut sum, at(i as isize - r as isize));
             }
@@ -675,7 +675,8 @@ impl Surface<'_> {
             return draw(self.px, self.y0, h, 0, total);
         }
         // cut the pixel rows into one band per share, then let the pool draw them (the caller too)
-        let mut bands: Vec<std::sync::Mutex<Option<(&mut [u32], usize, usize, usize, usize)>>> = Vec::with_capacity(threads);
+        type Band<'a> = std::sync::Mutex<Option<(&'a mut [u32], usize, usize, usize, usize)>>;
+        let mut bands: Vec<Band<'_>> = Vec::with_capacity(threads);
         let mut rest = &mut *self.px;
         let mut row = self.y0;
         for k in 0..threads {
@@ -857,6 +858,8 @@ impl Surface<'_> {
     /// tints it, and composites through the anti-aliased mask. `tint` is premultiplied and drawn over
     /// the blurred backdrop. With Reduce Transparency on, the panel is the opaque `solid` colour and
     /// nothing is blurred. `blur` is a box-blur radius in pixels.
+    // Rect, radius and the tint/solid/blur triple are independent draw parameters; a struct would be a one-use wrapper.
+    #[allow(clippy::too_many_arguments)]
     pub fn glass_rrect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, tint: u32, solid: u32, blur: usize) {
         if crate::appearance::reduce_transparency() {
             self.fill_rrect(x, y, w, h, r, solid);
@@ -905,10 +908,14 @@ impl Surface<'_> {
     }
 
     /// Strokes the inside edge of a rounded rectangle with thickness `t`.
+    // Rect, radius, thickness and colour are independent draw parameters, mirroring `fill_rrect`.
+    #[allow(clippy::too_many_arguments)]
     pub fn stroke_rrect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, t: f32, color: u32) {
         self.rrect(x, y, w, h, r, Some(t), color);
     }
 
+    // Shared body of `stroke_rrect` and `fill_rrect`; same flat draw parameters.
+    #[allow(clippy::too_many_arguments)]
     fn rrect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, stroke: Option<f32>, color: u32) {
         let color = crate::appearance::contrast(color);
         let r = r.min(w / 2.0).min(h / 2.0);

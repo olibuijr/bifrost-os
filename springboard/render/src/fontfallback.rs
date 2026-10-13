@@ -41,7 +41,7 @@ pub fn install_from_dir(dir: &std::path::Path, lang: &str) -> usize {
 
 /// Splits `text` into runs that share a face. `pick` says, per character, which fallback face draws it (`None`
 /// keeps the character on the main face). Neighbours with the same pick join one run.
-pub fn split<'t>(text: &'t str, mut pick: impl FnMut(char) -> Option<usize>) -> Vec<(Option<usize>, &'t str)> {
+pub fn split(text: &str, mut pick: impl FnMut(char) -> Option<usize>) -> Vec<(Option<usize>, &str)> {
     let mut runs: Vec<(Option<usize>, usize, usize)> = Vec::new();
     for (i, ch) in text.char_indices() {
         let f = pick(ch);

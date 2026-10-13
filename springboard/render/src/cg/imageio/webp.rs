@@ -45,13 +45,12 @@ pub fn probe(data: &[u8]) -> Option<Properties> {
         }
         let bits = u32::from_le_bytes([l[1], l[2], l[3], l[4]]);
         ((bits & 0x3fff) as usize + 1, ((bits >> 14) & 0x3fff) as usize + 1, (bits >> 28) & 1 == 1)
-    } else if let Some(v) = c.get(b"VP8 ") {
+    } else {
+        let v = c.get(b"VP8 ")?;
         if v.get(3..6)? != [0x9d, 0x01, 0x2a] {
             return None;
         }
         ((u16::from_le_bytes([v[6], v[7]]) & 0x3fff) as usize, (u16::from_le_bytes([v[8], v[9]]) & 0x3fff) as usize, false)
-    } else {
-        return None;
     };
     alpha |= c.get(b"ALPH").is_some();
     let mut p = Properties::new(w, h);
@@ -120,8 +119,8 @@ impl Code {
             return Some(Code { counts, symbols: Vec::new(), single: Some(s) });
         }
         let mut left = 1i32;
-        for l in 1..16 {
-            left = (left << 1) - counts[l] as i32;
+        for &count in &counts[1..16] {
+            left = (left << 1) - count as i32;
             if left < 0 {
                 return None;
             }
@@ -348,7 +347,7 @@ fn decode_stream(br: &mut Br, w: usize, h: usize, level0: bool) -> Option<Vec<u3
 fn add_px(a: u32, b: u32) -> u32 {
     let mut r = 0;
     for s in [0, 8, 16, 24] {
-        r |= (((a >> s) & 255) + ((b >> s) & 255) & 255) << s;
+        r |= ((((a >> s) & 255) + ((b >> s) & 255)) & 255) << s;
     }
     r
 }

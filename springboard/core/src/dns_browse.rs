@@ -220,7 +220,7 @@ impl Browser {
     /// All known instances, sorted by name without regard to case.
     pub fn instances(&self) -> Vec<&Instance> {
         let mut v: Vec<&Instance> = self.instances.iter().collect();
-        v.sort_by(|a, b| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()));
+        v.sort_by_key(|a| a.name.to_ascii_lowercase());
         v
     }
 }

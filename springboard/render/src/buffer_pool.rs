@@ -49,7 +49,7 @@ impl<T> Pool<T> {
     }
 
     fn below_threshold(&self) -> bool {
-        self.config.threshold.map_or(true, |t| self.live < t)
+        self.config.threshold.is_none_or(|t| self.live < t)
     }
 
     /// A buffer: the most recently released free one, or a new one from `make` while under the threshold.
@@ -87,11 +87,7 @@ impl<T> Pool<T> {
             return 0;
         };
         let mut dropped = 0;
-        loop {
-            let oldest = match self.free.first() {
-                Some((_, t)) => *t,
-                None => break,
-            };
+        while let Some(&(_, oldest)) = self.free.first() {
             if now.saturating_sub(oldest) <= max || self.live <= self.config.min_count {
                 break;
             }

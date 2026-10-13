@@ -76,6 +76,8 @@ pub fn check_key(key: &str) -> Result<(), PrefsError> {
     Ok(())
 }
 
+type PrefsCallback = Box<dyn FnMut(&PrefsEvent)>;
+
 /// A preferences session. See the module comment for the rules.
 pub struct PrefsSession {
     name: String,
@@ -83,7 +85,7 @@ pub struct PrefsSession {
     committed: BTreeMap<String, PrefValue>,
     applied: BTreeMap<String, PrefValue>,
     generation: u64,
-    callback: Option<Box<dyn FnMut(&PrefsEvent)>>,
+    callback: Option<PrefsCallback>,
 }
 
 impl PrefsSession {

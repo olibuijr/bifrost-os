@@ -67,7 +67,7 @@ pub fn transfer_nv12(src: Nv12, ow: usize, oh: usize, m: Colorimetry) -> Option<
     }
     // chroma pairs are read at the rounded-up width, so odd widths need that much stride
     let rw = (w + 1) & !1;
-    if stride < rw || y.len() < stride * h || uv.len() < stride * ((h + 1) / 2) {
+    if stride < rw || y.len() < stride * h || uv.len() < stride * h.div_ceil(2) {
         return None;
     }
     let mut img = Image::new(ow, oh);
