@@ -5,12 +5,13 @@
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::kit::canvas::{Canvas, RectF};
-use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON};
+use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON};
 use bifrost_app::kit::{Damage, Scroller};
 use bifrost_app::widgets;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use bifrost_ui::stardict::{load_library, Hit, Library};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 mod model;
@@ -80,13 +81,23 @@ struct Hot {
 /// Find in the definition on screen.
 struct Find {
     query: String,
-    /// Lines that match, counted in the last frame.
+    /// Occurrences of the text, counted in the last frame.
     count: usize,
     /// Position in the matches of the highlighted one.
     cur: Option<usize>,
     /// Scroll the highlighted match into view in the next frame.
     scroll_to: bool,
 }
+
+/// A dictionary row of the settings page that is being dragged to another place.
+struct Drag {
+    from: usize,
+    /// The pointer's vertical position, in points.
+    y: f32,
+}
+
+/// The most words remembered as having (or not having) a definition before the memory is emptied.
+const KNOWN_LIMIT: usize = 4096;
 
 /// The lookup on screen: the word and what each dictionary says about it.
 struct Shown {
@@ -127,6 +138,12 @@ struct DictionaryApp {
     hot: Vec<Hot>,
     /// The definition lines on screen in the last frame: top, height, text and size, in points.
     body_rows: Vec<(f32, f32, String, f32)>,
+    /// The settings row being dragged, if any.
+    drag: Option<Drag>,
+    /// Top of the first dictionary row of the settings page in the last frame, in points.
+    rows_top: f32,
+    /// Whether a word has a definition in an enabled dictionary; links in definitions use it.
+    known: HashMap<String, bool>,
 }
 
 /// Pointer position in points: input is in pixels, and the layout is in points.
@@ -153,7 +170,31 @@ impl DictionaryApp {
             rename: None,
             hot: Vec::new(),
             body_rows: Vec::new(),
+            drag: None,
+            rows_top: 0.0,
+            known: HashMap::new(),
         }
+    }
+
+    /// True when an enabled dictionary defines `word`. The answer is remembered until the dictionary choices change.
+    fn defines(&mut self, word: &str) -> bool {
+        if let Some(known) = self.known.get(word) {
+            return *known;
+        }
+        let found = self.library.as_ref().is_some_and(|l| l.dictionaries.iter().any(|d| self.prefs.is_enabled(&d.info.name) && d.find(word).is_some()));
+        if self.known.len() >= KNOWN_LIMIT {
+            self.known.clear();
+        }
+        self.known.insert(word.to_string(), found);
+        found
+    }
+
+    /// True when `word` in a definition is a cross-reference: another word than the one on screen that has a definition.
+    fn is_link(&mut self, word: &str) -> bool {
+        if self.shown.as_ref().is_some_and(|s| s.word.eq_ignore_ascii_case(word)) {
+            return false;
+        }
+        self.defines(word)
     }
 
     fn save_prefs(&self) {
@@ -177,6 +218,7 @@ impl DictionaryApp {
 
     /// Shows the same word again, for example after the dictionary choices changed.
     fn refresh(&mut self) -> bool {
+        self.known.clear();
         match self.shown.as_ref().map(|s| s.word.clone()) {
             Some(w) => self.show(&w, false),
             None => true,
@@ -266,6 +308,7 @@ impl DictionaryApp {
             Act::Done => {
                 self.settings = false;
                 self.rename = None;
+                self.drag = None;
                 true
             }
         }
@@ -404,15 +447,34 @@ impl DictionaryApp {
         let (px, py) = to_points(ctx, x, y);
         match kind {
             TouchKind::Down => {
+                if self.settings && self.rename.is_none() && self.hit_test(px, py).is_none() {
+                    if let Some(from) = model::row_at(py, self.rows_top, SETTINGS_ROW_H, self.prefs.dicts.len()) {
+                        self.drag = Some(Drag { from, y: py });
+                        return true;
+                    }
+                }
                 self.scroll.down(py, t);
                 false
             }
             TouchKind::Move => {
+                if let Some(d) = &mut self.drag {
+                    d.y = py;
+                    return true;
+                }
                 self.scroll.moved(py, t);
                 true
             }
             // Scroller::up reports a tap (no drag): a suggestion row looks its word up
             TouchKind::Up => {
+                if let Some(d) = self.drag.take() {
+                    let to = model::drop_slot(py, self.rows_top, SETTINGS_ROW_H, self.prefs.dicts.len());
+                    if to != d.from {
+                        self.prefs.move_to(d.from, to);
+                        self.save_prefs();
+                        self.refresh();
+                    }
+                    return true;
+                }
                 if self.scroll.up(py, t) {
                     if let Some(act) = self.hit_test(px, py) {
                         return self.perform(act);
@@ -426,6 +488,9 @@ impl DictionaryApp {
                 }
             }
             TouchKind::Cancel => {
+                if self.drag.take().is_some() {
+                    return true;
+                }
                 self.scroll.up(py, t);
                 true
             }
@@ -439,31 +504,12 @@ impl DictionaryApp {
         }
         let Some((_, _, text, pt)) = self.body_rows.iter().find(|(y, h, _, _)| py >= *y && py < *y + *h).cloned() else { return false };
         let tap = x_px - ctx.ui.pt(PAD);
-        let mut start = None;
-        let mut spans: Vec<(usize, usize)> = Vec::new();
-        for (i, c) in text.char_indices() {
-            match (c.is_whitespace(), start) {
-                (false, None) => start = Some(i),
-                (true, Some(s)) => {
-                    spans.push((s, i));
-                    start = None;
-                }
-                _ => {}
-            }
-        }
-        if let Some(s) = start {
-            spans.push((s, text.len()));
-        }
-        for (s, e) in spans {
-            let from = ctx.ui.measure(&text[..s], pt, Weight::Regular);
-            let to = ctx.ui.measure(&text[..e], pt, Weight::Regular);
+        for (start, end) in model::word_spans(&text) {
+            let from = ctx.ui.measure(&text[..start], pt, Weight::Regular);
+            let to = ctx.ui.measure(&text[..end], pt, Weight::Regular);
             if tap >= from && tap < to {
-                let word = text[s..e].trim_matches(|c: char| !c.is_alphanumeric()).to_string();
-                if word.is_empty() || self.shown.as_ref().is_some_and(|sh| sh.word.eq_ignore_ascii_case(&word)) {
-                    return false;
-                }
-                let known = self.library.as_ref().is_some_and(|l| !l.lookup(&word).is_empty());
-                return known && self.look_up(&word);
+                let word = text[start..end].to_string();
+                return self.is_link(&word) && self.look_up(&word);
             }
         }
         false
@@ -507,6 +553,7 @@ impl DictionaryApp {
             return match key {
                 KeyInput::Code(27) => {
                     self.settings = false;
+                    self.drag = None;
                     true
                 }
                 _ => false,
@@ -626,8 +673,23 @@ impl DictionaryApp {
         text_at(canvas, ui, "Dictionaries", MAC_SUBHEAD_PT, Weight::Semibold, LABEL_2.now(), PAD, y, width_pt - 2.0 * PAD);
         y += SETTINGS_ROW_H;
         let count = self.prefs.dicts.len();
-        for i in 0..count {
+        self.rows_top = y;
+        let rows_top = y;
+        // while a row is dragged the others show where it would land
+        let order = match &self.drag {
+            Some(d) if d.from < count => model::preview_order(count, d.from, model::drop_slot(d.y, rows_top, SETTINGS_ROW_H, count)),
+            _ => (0..count).collect(),
+        };
+        let dragged = self.drag.as_ref().map(|d| (d.from, d.y));
+        for (slot, &i) in order.iter().enumerate() {
             let d = self.prefs.dicts[i].clone();
+            let mut y = rows_top + slot as f32 * SETTINGS_ROW_H;
+            if let Some((from, pointer)) = dragged {
+                if from == i {
+                    y = (pointer - SETTINGS_ROW_H / 2.0).clamp(rows_top, rows_top + (count.max(1) - 1) as f32 * SETTINGS_ROW_H);
+                    canvas.fill_rect(RectF::new(0.0, ui.pt(y), cw as f32, ui.pt(SETTINGS_ROW_H)), ROW_PRESSED.now());
+                }
+            }
             let renaming = self.rename.as_ref().and_then(|(r, buf)| (*r == i).then(|| buf.clone()));
             button(canvas, ui, &mut self.hot, PAD, y + 4.0, 36.0, SETTINGS_ROW_H - 8.0, if d.enabled { "On" } else { "Off" }, Some(Act::Toggle(i)), d.enabled);
             let buttons_w = 3.0 * 56.0 + 2.0 * 4.0;
@@ -648,8 +710,8 @@ impl DictionaryApp {
             button(canvas, ui, &mut self.hot, bx, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "Up", (i > 0).then_some(Act::Up(i)), false);
             button(canvas, ui, &mut self.hot, bx + 60.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "Down", (i + 1 < count).then_some(Act::Down(i)), false);
             button(canvas, ui, &mut self.hot, bx + 120.0, y + 4.0, 56.0, SETTINGS_ROW_H - 8.0, "Rename", Some(Act::Rename(i)), false);
-            y += SETTINGS_ROW_H;
         }
+        y = rows_top + count as f32 * SETTINGS_ROW_H;
         if count == 0 {
             text_at(canvas, ui, "No dictionary is installed yet.", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), PAD, y, width_pt - 2.0 * PAD);
             y += SETTINGS_ROW_H;
@@ -737,6 +799,7 @@ impl App for DictionaryApp {
             MENU_SETTINGS => {
                 self.settings = !self.settings;
                 self.rename = None;
+                self.drag = None;
                 true
             }
             MENU_BACK => self.go_back(),
@@ -871,10 +934,10 @@ impl App for DictionaryApp {
                 ys.push(acc);
                 acc += l.h;
             }
-            let matches: Vec<usize> = match &self.find {
+            let matches: Vec<model::Match> = match &self.find {
                 Some(f) => {
                     let texts: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
-                    model::find_lines(&texts, &f.query)
+                    model::find_matches(&texts, &f.query)
                 }
                 None => Vec::new(),
             };
@@ -888,7 +951,7 @@ impl App for DictionaryApp {
                 current = f.cur.map(|c| matches[c]);
                 if f.scroll_to {
                     f.scroll_to = false;
-                    scroll_target = current;
+                    scroll_target = current.map(|m| m.line);
                 }
             }
             if let Some(i) = scroll_target {
@@ -900,13 +963,27 @@ impl App for DictionaryApp {
             for (i, line) in lines.iter().enumerate() {
                 let y = top + ys[i] - offset;
                 if y + line.h > top && y < top + view_h && !line.text.is_empty() {
-                    if matches.contains(&i) {
-                        let tint = if current == Some(i) { MATERIAL_SELECTION.now() } else { ROW_PRESSED.now() };
-                        canvas.fill_rect(RectF::new(0.0, ui.pt(y), cw as f32, ui.pt(line.h)), tint);
+                    let left = ui.pt(PAD);
+                    // the found words, the current one stronger
+                    for m in matches.iter().filter(|m| m.line == i) {
+                        let from = ui.measure(&line.text[..m.start], line.pt, line.weight);
+                        let to = ui.measure(&line.text[..m.end], line.pt, line.weight);
+                        let tint = if current == Some(*m) { MATERIAL_SELECTION.now() } else { ROW_PRESSED.now() };
+                        canvas.fill_rrect(RectF::new(left + from, ui.pt(y), to - from, ui.pt(line.h)), ui.pt(3.0), tint);
                     }
-                    let img = ui.text(&line.text, line.pt, line.weight, line.colour);
-                    let ty = ui.pt(y) + (ui.pt(line.h) - img.h as f32) / 2.0;
-                    widgets::blit(canvas, &img, ui.pt(PAD) as i32, ty as i32);
+                    // a definition line draws the words that have a definition of their own as links
+                    let runs = if line.body {
+                        model::link_runs(&line.text, |w| self.is_link(w))
+                    } else {
+                        vec![model::Run { start: 0, end: line.text.len(), link: false }]
+                    };
+                    for run in runs {
+                        let piece = &line.text[run.start..run.end];
+                        let img = ui.text(piece, line.pt, line.weight, if run.link { LINK } else { line.colour });
+                        let x = left + if run.start == 0 { 0.0 } else { ui.measure(&line.text[..run.start], line.pt, line.weight) };
+                        let ty = ui.pt(y) + (ui.pt(line.h) - img.h as f32) / 2.0;
+                        widgets::blit(canvas, &img, x as i32, ty as i32);
+                    }
                     if line.body {
                         self.body_rows.push((y, line.h, line.text.clone(), line.pt));
                     }

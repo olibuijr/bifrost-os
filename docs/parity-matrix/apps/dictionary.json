@@ -33,9 +33,9 @@
       "area": "integration",
       "apple": "Info.plist CFBundleURLTypes",
       "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:763",
-      "note": "Input::Open handles dict: and x-dictionary: URLs; the manifest does not register the schemes yet",
-      "wire": ""
+      "bifrost": "springboard/apps/dictionary-desktop/manifest.toml:12",
+      "note": "Manifest registers dict and x-dictionary; Input::Open handles the URLs; built on parity/team-d-dictionary; not yet verified on Midget",
+      "wire": "Verify on Midget, then promote with bifrost pc parity verify"
     },
     {
       "feature": "Dictionary scope bar (All / per dictionary)",
@@ -44,7 +44,7 @@
       "status": "partial",
       "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:897",
       "note": "Scope bar and Go > Select Next/Previous Dictionary (cmd+alt+arrows); needs lab check",
-      "wire": ""
+      "wire": "Check on Midget against the reference, then promote with bifrost pc parity verify"
     },
     {
       "feature": "Back / Forward history",
@@ -53,16 +53,16 @@
       "status": "partial",
       "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:186",
       "note": "Toolbar buttons, Go menu, cmd+[ / cmd+]; Clear History",
-      "wire": ""
+      "wire": "Check on Midget against the reference, then promote with bifrost pc parity verify"
     },
     {
       "feature": "Follow cross-reference links",
       "area": "view",
       "apple": "definition view links",
       "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:436",
-      "note": "Tapping a word known to a dictionary looks it up; words are not drawn as links",
-      "wire": ""
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:976",
+      "note": "Words with a definition in an enabled dictionary are drawn in the link colour; tapping looks them up; built on parity/team-d-dictionary; not yet verified on Midget",
+      "wire": "Verify on Midget, then promote with bifrost pc parity verify"
     },
     {
       "feature": "New Window / New Tab",
@@ -80,7 +80,7 @@
       "status": "partial",
       "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:335",
       "note": "File menu Print (cmd+p) sends text to the default printer",
-      "wire": ""
+      "wire": "Check on Midget against the reference, then promote with bifrost pc parity verify"
     },
     {
       "feature": "Copy definition",
@@ -96,9 +96,9 @@
       "area": "menu",
       "apple": "MainMenu.nib Edit > Find, Find Next/Previous",
       "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:945",
-      "note": "Find bar with line highlight, cmd+f, cmd+g, cmd+shift+g; highlights whole lines, not the matched words",
-      "wire": ""
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:937",
+      "note": "Found words are highlighted and Find Next/Previous step through every occurrence; a match split across a wrapped line is not found; built on parity/team-d-dictionary; not yet verified on Midget",
+      "wire": "Verify on Midget, then promote with bifrost pc parity verify"
     },
     {
       "feature": "Text size control",
@@ -107,7 +107,7 @@
       "status": "partial",
       "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:885",
       "note": "A-/A+ toolbar buttons and View menu cmd+= / cmd+- / cmd+0; persisted in prefs.txt",
-      "wire": ""
+      "wire": "Check on Midget against the reference, then promote with bifrost pc parity verify"
     },
     {
       "feature": "Front/back matter",
@@ -125,16 +125,16 @@
       "status": "partial",
       "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:796",
       "note": "Opens a file:// URL through the shell; depends on the shell routing it to Files",
-      "wire": ""
+      "wire": "Check on Midget against the reference, then promote with bifrost pc parity verify"
     },
     {
       "feature": "Settings: choose and order dictionaries",
       "area": "settings",
       "apple": "Preferences.nib dictionary list with checkboxes and drag order",
       "status": "partial",
-      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:621",
-      "note": "Settings page (cmd+,) with On/Off, Up/Down; drag reorder not done",
-      "wire": ""
+      "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:449",
+      "note": "Settings page with On/Off, Up/Down and drag reorder of rows; built on parity/team-d-dictionary; not yet verified on Midget",
+      "wire": "Verify on Midget, then promote with bifrost pc parity verify"
     },
     {
       "feature": "Settings: font size",
@@ -143,7 +143,7 @@
       "status": "partial",
       "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:658",
       "note": "Size buttons in the settings page",
-      "wire": ""
+      "wire": "Check on Midget against the reference, then promote with bifrost pc parity verify"
     },
     {
       "feature": "Rename dictionary label",
@@ -152,7 +152,7 @@
       "status": "partial",
       "bifrost": "springboard/apps/dictionary-desktop/src/main.rs:650",
       "note": "Rename inline in the settings page; stored in prefs.txt",
-      "wire": ""
+      "wire": "Check on Midget against the reference, then promote with bifrost pc parity verify"
     },
     {
       "feature": "Look-up intent",
