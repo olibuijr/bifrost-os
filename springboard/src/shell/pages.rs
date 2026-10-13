@@ -9,7 +9,7 @@ use super::icons::Icon;
 use super::row_glyphs::Glyph;
 use super::low_battery::last_charged;
 use super::list::{Accessory, Ends, Group, Item, Spec, Tint};
-use super::options::{speed_slider, Options, AUTO_LOCK, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES, TRACKPAD_SECONDARY};
+use super::options::{speed_slider, Options, AUTO_LOCK, REQUIRE_AFTER, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES, TRACKPAD_SECONDARY};
 use super::{Info, WifiAction};
 use bifrost_render::fontprefs::{FontRole, Installed};
 use bifrost_ui::capture_access::Media;
@@ -60,6 +60,8 @@ pub enum PageId {
     Display,
     NightShift,
     AutoLock,
+    /// Lock Screen > Require Password: the grace after the display goes off (see `options::REQUIRE_AFTER`)
+    RequirePassword,
     Energy,
     HomeScreen,
     Battery,
@@ -199,6 +201,7 @@ pub enum Pick {
     SoundOutput(usize),
     SoundInput(usize),
     AutoLock(usize),
+    RequirePassword(usize),
     SystemSleep(usize),
     IconSize(usize),
     PowerMode(usize),
@@ -782,6 +785,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 Group::new(vec![Item::new("Passcode").icon(Icon::Passcode).link(PageId::Passcode)])
                     .footer("A passcode is asked for before the screen opens again after it locks."),
                 Group::new(vec![Item::new("Lock After Inactivity").value(o.auto_lock_label()).link(PageId::AutoLock)]),
+                Group::new(vec![Item::new("Require Password").value(o.lock_grace_label()).link(PageId::RequirePassword)])
+                    .footer("After the display has been off longer than this, the screen asks for the password before it opens again."),
                 Group::new(vec![Item::new("Screen Saver").value(if o.screensaver_minutes == 0 { "Never" } else { super::screensaver::saver_name(o.screensaver_module) }).link(PageId::ScreenSaver)])
                     .footer("The screen saver can start after a while without input, and then the lock applies as usual."),
             ],
@@ -983,6 +988,12 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             },
         ),
         PageId::AutoLock => page("Auto-Lock", false, vec![Group::new(AUTO_LOCK.iter().enumerate().map(|(i, (l, ms))| Item::new(*l).check(*ms == o.auto_lock_ms, Action::Pick(Pick::AutoLock(i)))).collect())]),
+        PageId::RequirePassword => page(
+            "Require Password",
+            false,
+            vec![Group::new(REQUIRE_AFTER.iter().enumerate().map(|(i, (l, s))| Item::new(*l).check(*s == o.lock_grace_s, Action::Pick(Pick::RequirePassword(i)))).collect())
+                .footer("Choose how long the screen can stay off before a password is asked. Immediately asks for it every time the screen comes back on.")],
+        ),
         PageId::Energy => page(
             "Energy",
             false,
