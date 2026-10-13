@@ -140,6 +140,8 @@ pub trait Backend: Send + Sync {
 pub enum Msg {
     None,
     Wrong,
+    /// name and password mode: the typed name is not this computer's account
+    NameMismatch,
     LockedOut,
     Unavailable,
     NoPassword,
@@ -163,6 +165,8 @@ enum Sheet {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Hit {
     Submit,
+    /// name and password mode: the name field
+    Name,
     Power,
     Sleep,
     Restart,
@@ -188,6 +192,12 @@ pub struct Login {
     power_open: bool,
     /// the user's message for the locked screen, drawn low on the screen
     pub lock_message: Option<String>,
+    /// Users & Groups > Login Options > Name and Password: no picture; a name field above the password field
+    pub name_mode: bool,
+    /// name mode: the name typed so far
+    typed_name: String,
+    /// name mode: keys go to the name field until Return moves them on to the password
+    name_focus: bool,
     backend: Arc<dyn Backend>,
     w: i32,
     h: i32,
@@ -208,6 +218,9 @@ impl Login {
             sheet: None,
             power_open: false,
             lock_message: None,
+            name_mode: false,
+            typed_name: String::new(),
+            name_focus: false,
             backend,
             w,
             h,
@@ -282,6 +295,7 @@ impl Login {
         match &self.msg {
             Msg::None => String::new(),
             Msg::Wrong => "Incorrect password".into(),
+            Msg::NameMismatch => "Unknown account name".into(),
             Msg::LockedOut => {
                 let s = self.secs_left(t);
                 if s == 0 {
@@ -326,6 +340,34 @@ impl Login {
         if self.pending.is_some() {
             return Act::None;
         }
+        if self.name_mode && self.name_focus {
+            match out {
+                Out::Text(s) => {
+                    if self.locked(t) || self.msg == Msg::Unavailable {
+                        return Act::None;
+                    }
+                    if matches!(self.msg, Msg::Wrong | Msg::NameMismatch) {
+                        self.msg = Msg::None;
+                    }
+                    for c in s.chars().filter(|c| !c.is_control()) {
+                        if self.typed_name.chars().count() < MAX_LEN {
+                            self.typed_name.push(c);
+                        }
+                    }
+                }
+                Out::Backspace => {
+                    self.typed_name.pop();
+                }
+                Out::Named("Escape") => self.typed_name.clear(),
+                Out::Enter => {
+                    if !self.typed_name.trim().is_empty() {
+                        self.name_focus = false;
+                    }
+                }
+                _ => {}
+            }
+            return Act::None;
+        }
         match out {
             Out::Text(s) => {
                 if self.locked(t) || self.msg == Msg::Unavailable {
@@ -354,6 +396,16 @@ impl Login {
     pub fn submit(&mut self, t: f64) {
         if self.pending.is_some() || self.locked(t) || self.msg == Msg::Unavailable {
             return;
+        }
+        if self.name_mode {
+            // the name is checked here, before the password reaches the helper, so a wrong name costs no attempt
+            if !self.name_matches() {
+                wipe(&mut self.password);
+                self.name_focus = true;
+                self.shake = Some(t);
+                self.msg = Msg::NameMismatch;
+                return;
+            }
         }
         if self.password.is_empty() && self.msg != Msg::NoPassword {
             return;
@@ -444,6 +496,17 @@ impl Login {
         (self.w as f32 / 2.0 - fw / 2.0, top + d + ui.pt(48.0), fw, fh)
     }
 
+    /// Name mode: the name field, one row above the password field.
+    fn name_field(&self, ui: &Ui) -> Rect {
+        let (fx, fy, fw, fh) = self.field(ui);
+        (fx, fy - fh - ui.pt(10.0), fw, fh)
+    }
+
+    /// Name mode: the typed name is this account (case-insensitive, outer spaces ignored).
+    fn name_matches(&self) -> bool {
+        !self.typed_name.trim().is_empty() && self.username.eq_ignore_ascii_case(self.typed_name.trim())
+    }
+
     fn arrow(&self, ui: &Ui) -> Rect {
         let (x, y, w, h) = self.field(ui);
         let d = h - ui.pt(8.0);
@@ -495,6 +558,9 @@ impl Login {
         if let Some(h) = self.bottom(ui).into_iter().find(|(_, _, r)| inside(*r)).map(|(h, _, _)| h) {
             return Some(h);
         }
+        if self.name_mode && inside(self.name_field(ui)) {
+            return Some(Hit::Name);
+        }
         if inside(self.arrow(ui)) {
             return Some(Hit::Submit);
         }
@@ -510,6 +576,7 @@ impl Login {
         match hit {
             Some(Hit::Power) => self.power_open = !was_open,
             Some(Hit::Submit) => self.submit(t),
+            Some(Hit::Name) => self.name_focus = true,
             Some(Hit::Sleep) => return Act::Sleep,
             Some(Hit::Restart) => self.sheet = Some(Sheet::Restart),
             Some(Hit::ShutDown) => self.sheet = Some(Sheet::ShutDown),
@@ -527,13 +594,21 @@ impl Login {
         s.fill_rrect(0.0, 0.0, w, h, 0.0, scrim());
         let cx = self.w / 2;
         let shake = self.shake_phase(t) * ui.pt(14.0);
-        let (_, top, d, _) = self.avatar_rect(ui);
-        s.fill_rrect(cx as f32 - d / 2.0, top, d, d, d / 2.0, avatar());
-        let ini = ui.text(&self.initials(), 28.0, Weight::Medium, rgba(255, 255, 255, 255));
-        centred(s, &ini, cx, (top + d / 2.0 - ini.h as f32 / 2.0) as i32);
-        // over the wallpaper the name is white in both appearances, as the reference draws it
-        let name = ui.text(&self.name, 17.0, Weight::Semibold, rgba(255, 255, 255, 255));
-        centred(s, &name, cx, (top + d + ui.pt(12.0)) as i32);
+        if !self.name_mode {
+            let (_, top, d, _) = self.avatar_rect(ui);
+            s.fill_rrect(cx as f32 - d / 2.0, top, d, d, d / 2.0, avatar());
+            let ini = ui.text(&self.initials(), 28.0, Weight::Medium, rgba(255, 255, 255, 255));
+            centred(s, &ini, cx, (top + d / 2.0 - ini.h as f32 / 2.0) as i32);
+            // over the wallpaper the name is white in both appearances, as the reference draws it
+            let name = ui.text(&self.name, 17.0, Weight::Semibold, rgba(255, 255, 255, 255));
+            centred(s, &name, cx, (top + d + ui.pt(12.0)) as i32);
+        } else {
+            let (nx, ny, nw, nh) = self.name_field(ui);
+            s.fill_rrect(nx + shake, ny, nw, nh, nh / 2.0, field());
+            let (text, col) = if self.typed_name.is_empty() { ("Name", ink_2()) } else { (self.typed_name.as_str(), ink()) };
+            let nt = ui.text(text, 13.0, Weight::Regular, col);
+            s.blit(&nt, (nx + shake + ui.pt(14.0)) as i32, (ny + (nh - nt.h as f32) / 2.0) as i32, 255, 255);
+        }
         let (fx, fy, fw, fh) = self.field(ui);
         let fxs = fx + shake;
         s.fill_rrect(fxs, fy, fw, fh, fh / 2.0, field());
@@ -798,6 +873,8 @@ impl super::Shell {
         let fallback = super::account::load().full_name;
         let mut l = Login::new(b, &fallback, self.w, self.h, t);
         l.lock_message = load_lock_message();
+        l.name_mode = self.options().login_name_password;
+        l.name_focus = l.name_mode;
         self.login = Some(l);
         self.dirty = true;
     }
@@ -889,6 +966,49 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         None
+    }
+
+    fn name_mode(r: Reply) -> Login {
+        let mut l = login(r);
+        l.name_mode = true;
+        l.name_focus = true;
+        l
+    }
+
+    #[test]
+    fn name_and_password_mode_checks_the_name_before_the_password() {
+        let mut l = name_mode(Reply::Ok("tok".into()));
+        l.key(&Out::Text("Ada ".into()), 0.0);
+        l.key(&Out::Enter, 0.0);
+        assert!(!l.name_focus, "return moves on to the password");
+        l.key(&Out::Text("pw".into()), 0.0);
+        l.key(&Out::Enter, 0.0);
+        assert!(l.busy(), "the matching name sends the password");
+        assert_eq!(wait(&mut l, 0.0), Some("tok".to_string()));
+    }
+
+    #[test]
+    fn a_wrong_name_is_refused_without_an_attempt() {
+        let mut l = name_mode(Reply::Ok("tok".into()));
+        l.key(&Out::Text("bob".into()), 0.0);
+        l.key(&Out::Enter, 0.0);
+        l.key(&Out::Text("pw".into()), 0.0);
+        l.key(&Out::Enter, 0.0);
+        assert!(!l.busy(), "no helper call for another name");
+        assert_eq!(l.msg, Msg::NameMismatch);
+        assert!(l.is_empty(), "the password is cleared");
+        assert!(l.name_focus, "the name field takes the keys again");
+        assert_eq!(l.message(0.0), "Unknown account name");
+    }
+
+    #[test]
+    fn the_name_match_ignores_case_and_outer_spaces_and_an_empty_name_never_matches() {
+        let mut l = name_mode(Reply::Ok("tok".into()));
+        assert!(!l.name_matches());
+        l.key(&Out::Text("  ADA ".into()), 0.0);
+        assert!(l.name_matches());
+        l.key(&Out::Named("Escape"), 0.0);
+        assert!(l.typed_name.is_empty(), "Escape clears the focused name field");
     }
 
     #[test]
