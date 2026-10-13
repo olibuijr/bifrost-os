@@ -124,6 +124,57 @@ pub fn days_left(deleted_at: i64, now: i64) -> i64 {
     (TRASH_DAYS - (now - deleted_at).max(0) / DAY).max(0)
 }
 
+/// The order the album picker lists user albums in: `names` are (slot, name) pairs in slot order; by name sorts
+/// case-insensitively (slot order breaks ties), otherwise the slots stay in creation order.
+pub fn album_order(names: &[(usize, String)], by_name: bool) -> Vec<usize> {
+    let mut v: Vec<&(usize, String)> = names.iter().collect();
+    if by_name {
+        v.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()).then(a.0.cmp(&b.0)));
+    }
+    v.into_iter().map(|(i, _)| *i).collect()
+}
+
+/// The settings writes that delete user album `slot`: its name and members are cleared and every later album moves
+/// down one slot, so the slots stay contiguous. `entries` are all (key, value) settings; keys that are not
+/// `ua.<n>.` keys are left alone. `ua.last` follows the move. Clears come first so a move never reads a cleared key.
+pub fn delete_album_writes(entries: &[(String, String)], slot: usize) -> Vec<(String, String)> {
+    let mut clears = Vec::new();
+    let mut moves = Vec::new();
+    for (key, value) in entries {
+        if key == "ua.last" {
+            match value.parse::<usize>() {
+                Ok(n) if n == slot => clears.push((key.clone(), String::new())),
+                Ok(n) if n > slot => moves.push((key.clone(), (n - 1).to_string())),
+                _ => {}
+            }
+            continue;
+        }
+        let Some(rest) = key.strip_prefix("ua.") else { continue };
+        let Some((n, tail)) = rest.split_once('.') else { continue };
+        let Ok(n) = n.parse::<usize>() else { continue };
+        if n < slot || value.is_empty() {
+            continue;
+        }
+        clears.push((key.clone(), String::new()));
+        if n > slot && value != "0" {
+            moves.push((format!("ua.{}.{tail}", n - 1), value.clone()));
+        }
+    }
+    clears.extend(moves);
+    clears
+}
+
+/// Seconds a slide stays, as the slideshow row cycles through them.
+pub const SHOW_SECONDS: [u32; 4] = [2, 4, 6, 10];
+
+/// The next slide length after `current` (wrapping); an unknown value restarts at the default 4.
+pub fn next_show_seconds(current: u32) -> u32 {
+    match SHOW_SECONDS.iter().position(|&s| s == current) {
+        Some(i) => SHOW_SECONDS[(i + 1) % SHOW_SECONDS.len()],
+        None => 4,
+    }
+}
+
 /// The multi-select set, by path so it survives rescans.
 #[derive(Clone, Debug, Default)]
 pub struct Selection {
@@ -305,5 +356,42 @@ mod tests {
         assert_eq!(s.len(), 4, "the range adds to the selection");
         s.select_range(&photos, 9, 12);
         assert_eq!(s.len(), 4, "a range past the end adds nothing");
+    }
+
+    #[test]
+    fn albums_sort_by_name_or_keep_creation_order() {
+        let names = [(0, "Trip".to_string()), (1, "aspen".to_string()), (2, "Beach".to_string())];
+        assert_eq!(album_order(&names, false), [0, 1, 2]);
+        assert_eq!(album_order(&names, true), [1, 2, 0], "case-insensitive");
+        assert!(album_order(&[], true).is_empty());
+    }
+
+    #[test]
+    fn deleting_an_album_closes_the_slot_gap() {
+        let e = |k: &str, v: &str| (k.to_string(), v.to_string());
+        let entries = [e("ua.0.name", "A"), e("ua.1.name", "B"), e("ua.1.p:/x.jpg", "1"), e("ua.1.p:/y.jpg", "0"), e("ua.2.name", "C"), e("ua.2.p:/z.jpg", "1"), e("fav:/x.jpg", "1"), e("ua.last", "2")];
+        let w = delete_album_writes(&entries, 1);
+        let get = |k: &str| w.iter().rev().find(|(key, _)| key == k).map(|(_, v)| v.as_str());
+        assert_eq!(get("ua.0.name"), None, "earlier albums are untouched");
+        assert_eq!(get("ua.1.name"), Some("C"), "C moved into the freed slot");
+        assert_eq!(get("ua.1.p:/z.jpg"), Some("1"));
+        assert_eq!(get("ua.1.p:/x.jpg"), Some(""), "the deleted album's members are cleared");
+        assert_eq!(get("ua.2.name"), Some(""), "the last slot is freed");
+        assert_eq!(get("ua.2.p:/z.jpg"), Some(""));
+        assert_eq!(get("ua.last"), Some("1"));
+        assert_eq!(get("fav:/x.jpg"), None);
+        // clears precede moves, so applying in order ends with the moved values
+        let first_move = w.iter().position(|(_, v)| !v.is_empty()).unwrap();
+        assert!(w[first_move..].iter().all(|(_, v)| !v.is_empty()), "clears come before moves");
+        // deleting the remembered album forgets it
+        let w = delete_album_writes(&[e("ua.0.name", "A"), e("ua.last", "0")], 0);
+        assert!(w.contains(&e("ua.last", "")) && w.contains(&e("ua.0.name", "")));
+    }
+
+    #[test]
+    fn slideshow_seconds_cycle() {
+        assert_eq!(next_show_seconds(2), 4);
+        assert_eq!(next_show_seconds(10), 2);
+        assert_eq!(next_show_seconds(7), 4);
     }
 }

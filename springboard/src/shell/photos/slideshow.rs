@@ -23,6 +23,8 @@ pub struct Slideshow {
     elapsed: f64,
     last: Option<f64>,
     hide_at: f64,
+    /// how long one picture stays, fade included (ms)
+    slide_ms: f64,
 }
 
 impl Slideshow {
@@ -32,7 +34,13 @@ impl Slideshow {
             return None;
         }
         let index = index.min(photos.len() - 1);
-        Some(Slideshow { photos, index, paused: false, controls: false, elapsed: 0.0, last: None, hide_at: 0.0 })
+        Some(Slideshow { photos, index, paused: false, controls: false, elapsed: 0.0, last: None, hide_at: 0.0, slide_ms: SLIDE_MS })
+    }
+
+    /// Shows each picture for `seconds` (at least two, so the cross-fade fits).
+    pub fn with_seconds(mut self, seconds: u32) -> Self {
+        self.slide_ms = f64::from(seconds.max(2)) * 1000.0;
+        self
     }
 
     pub fn current(&self) -> &Photo {
@@ -57,8 +65,8 @@ impl Slideshow {
             return false;
         }
         self.elapsed += dt;
-        while self.elapsed >= SLIDE_MS {
-            self.elapsed -= SLIDE_MS;
+        while self.elapsed >= self.slide_ms {
+            self.elapsed -= self.slide_ms;
             self.index = self.next_index();
         }
         true
@@ -93,9 +101,9 @@ impl Slideshow {
     /// The pictures to draw as (photo index, progress 0..1 of its drift,
     /// opacity 0..255): the current one, then the next while it fades in.
     pub fn layers(&self) -> Vec<(usize, f32, u32)> {
-        let total = SLIDE_MS + FADE_MS;
+        let total = self.slide_ms + FADE_MS;
         let mut out = vec![(self.index, ((self.elapsed + FADE_MS) / total) as f32, 255)];
-        let into = self.elapsed - (SLIDE_MS - FADE_MS);
+        let into = self.elapsed - (self.slide_ms - FADE_MS);
         if into > 0.0 && self.photos.len() > 1 {
             out.push((self.next_index(), (into / total) as f32, ((into / FADE_MS).min(1.0) * 255.0) as u32));
         }
@@ -147,6 +155,19 @@ mod tests {
             s.tick(k as f64 * 250.0);
         }
         assert_eq!(s.index, 0);
+    }
+
+    #[test]
+    fn slide_length_follows_the_chosen_seconds() {
+        let mut s = show(2).with_seconds(2);
+        s.tick(0.0);
+        for k in 1..=9 {
+            s.tick(k as f64 * 250.0);
+        }
+        assert_eq!(s.index, 1, "two seconds later the second picture is up");
+        let long = show(2).with_seconds(10);
+        assert_eq!(long.slide_ms, 10_000.0);
+        assert_eq!(show(2).with_seconds(0).slide_ms, 2000.0, "never shorter than the fade allows");
     }
 
     #[test]

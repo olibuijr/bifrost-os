@@ -110,6 +110,12 @@ pub enum Target {
     AlbumCancel,
     /// the picker's sort row: flips oldest first and newest first
     SortOrder,
+    /// the picker's Albums row: user albums by creation order or by name
+    AlbumSort,
+    /// the picker's Slideshow row: cycles the seconds each slide stays
+    ShowSeconds,
+    /// the picker's Delete Album row (a user album is open)
+    DeleteAlbum,
     ZoomIn,
     ZoomOut,
     /// Select All / Deselect All while selecting
@@ -578,8 +584,44 @@ impl Photos {
         if !self.hidden.is_empty() {
             v.push(Album::Hidden);
         }
-        v.extend((0..self.user_albums.len()).map(|i| Album::User(i as u8)));
+        let names: Vec<(usize, String)> = self.user_albums.iter().enumerate().map(|(i, u)| (i, u.0.clone())).collect();
+        v.extend(albums::album_order(&names, self.albums_by_name()).into_iter().map(|i| Album::User(i as u8)));
         v
+    }
+
+    /// The picker lists user albums by name (otherwise in creation order).
+    fn albums_by_name(&self) -> bool {
+        self.prefs.get("album_sort") == Some("name")
+    }
+
+    /// Seconds each slideshow picture stays.
+    fn show_seconds(&self) -> u32 {
+        self.prefs.get_parsed::<u32>("show_secs").filter(|s| albums::SHOW_SECONDS.contains(s)).unwrap_or(4)
+    }
+
+    /// The rows under the album list, top to bottom.
+    fn extra_rows(&self) -> Vec<Target> {
+        let mut v = Vec::new();
+        if self.user_albums.len() < MAX_USER_ALBUMS {
+            v.push(Target::NewAlbum);
+        }
+        v.extend([Target::SortOrder, Target::AlbumSort, Target::ShowSeconds]);
+        if matches!(self.album, Album::User(_)) {
+            v.push(Target::DeleteAlbum);
+        }
+        v
+    }
+
+    /// Deletes user album `slot`; later albums move down so the slots stay contiguous.
+    fn delete_album(&mut self, slot: usize) {
+        let entries: Vec<(String, String)> = self.prefs.entries().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let writes = albums::delete_album_writes(&entries, slot);
+        let pairs: Vec<(&str, &str)> = writes.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+        let mut next = self.prefs.clone();
+        match next.set_many(&pairs) {
+            Ok(()) => self.prefs = next,
+            Err(e) => eprintln!("photos: {PREFS_FILE}: {e}"),
+        }
     }
 
     /// Is `p` hidden from All Photos.
@@ -1171,11 +1213,10 @@ impl Photos {
                     return Some(Target::ChooseAlbum(album));
                 }
             }
-            if self.user_albums.len() < MAX_USER_ALBUMS && within(x, y, self.new_album_row(ui)) {
-                return Some(Target::NewAlbum);
-            }
-            if within(x, y, self.sort_row(ui)) {
-                return Some(Target::SortOrder);
+            for (k, t) in self.extra_rows().into_iter().enumerate() {
+                if within(x, y, self.extra_row(ui, k)) {
+                    return Some(t);
+                }
             }
             return Some(Target::AlbumCancel);
         }
@@ -1486,6 +1527,22 @@ impl Photos {
                 self.album_menu = false;
                 self.rebuild(ui);
                 self.scroll.jump_to(if self.newest_first { 0.0 } else { f32::MAX });
+            }
+            Target::AlbumSort => {
+                let by_name = !self.albums_by_name();
+                let _ = self.pref_set("album_sort", if by_name { "name" } else { "custom" });
+                self.rebuild(ui);
+            }
+            Target::ShowSeconds => {
+                let next = albums::next_show_seconds(self.show_seconds());
+                let _ = self.pref_set("show_secs", &next.to_string());
+                self.dirty = true;
+            }
+            Target::DeleteAlbum => {
+                if let Album::User(i) = self.album {
+                    self.delete_album(i as usize);
+                    self.select_album(ui, Album::All);
+                }
             }
             Target::NewAlbum => {
                 if let Some(i) = self.new_album() {
@@ -2038,32 +2095,32 @@ impl Photos {
         (margin, content_top(ui) + ui.pt(8.0 + row as f32 * 56.0), ui.pt(280.0).min(self.w as f32 - 2.0 * margin), ui.pt(56.0))
     }
 
-    fn new_album_row(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+    /// The `k`-th row under the album list.
+    fn extra_row(&self, ui: &Ui, k: usize) -> (f32, f32, f32, f32) {
         let (x, y, w, h) = self.album_row(ui, Album::All);
-        (x, y + h * self.menu_albums().len() as f32, w, h)
+        (x, y + h * (self.menu_albums().len() + k) as f32, w, h)
+    }
+
+    fn extra_row_of(&self, ui: &Ui, target: Target) -> (f32, f32, f32, f32) {
+        let k = self.extra_rows().iter().position(|&t| t == target).unwrap_or(0);
+        self.extra_row(ui, k)
+    }
+
+    fn new_album_row(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        self.extra_row_of(ui, Target::NewAlbum)
     }
 
     /// The picker's sort row, below the albums and the New Album row.
     fn sort_row(&self, ui: &Ui) -> (f32, f32, f32, f32) {
-        let (x, y, w, h) = self.album_row(ui, Album::All);
-        let rows = self.menu_albums().len() + usize::from(self.user_albums.len() < MAX_USER_ALBUMS);
-        (x, y + h * rows as f32, w, h)
+        self.extra_row_of(ui, Target::SortOrder)
     }
 
     fn draw_albums(&mut self, s: &mut Surface, ui: &Ui) {
         s.fill_rrect(0.0, 0.0, self.w as f32, self.h as f32, 0.0, rgba(0, 0, 0, 80));
         let (x, y, w, row_h) = self.album_row(ui, Album::All);
         let menu = self.menu_albums();
-        let can_add = self.user_albums.len() < MAX_USER_ALBUMS;
-        s.fill_rrect(x, y, w, row_h * (menu.len() + usize::from(can_add) + 1) as f32, flat(ui), SHEET);
-        if can_add {
-            let (_, ny, _, _) = self.new_album_row(ui);
-            if self.pressed == Some(Target::NewAlbum) {
-                s.fill_rrect(x, ny, w, row_h, flat(ui), rgba(255, 255, 255, 20));
-            }
-            s.fill_rect((x + ui.pt(14.0)) as usize, ny as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
-            self.label_left(s, ui, "New Album", 17.0, Weight::Regular, BLUE, x + ui.pt(16.0), ny + row_h / 2.0);
-        }
+        let extras = self.extra_rows();
+        s.fill_rrect(x, y, w, row_h * (menu.len() + extras.len()) as f32, flat(ui), SHEET);
         for (index, album) in menu.into_iter().enumerate() {
             let (_, y, _, _) = self.album_row(ui, album);
             if self.pressed == Some(Target::ChooseAlbum(album)) {
@@ -2077,15 +2134,25 @@ impl Photos {
             let count = self.album_list(album).len();
             self.label(s, ui, &count.to_string(), 14.0, Weight::Regular, SECONDARY, x + w - ui.pt(22.0), cy);
         }
-        let (_, sy, _, _) = self.sort_row(ui);
-        if self.pressed == Some(Target::SortOrder) {
-            s.fill_rrect(x, sy, w, row_h, flat(ui), rgba(255, 255, 255, 20));
+        for (k, target) in extras.into_iter().enumerate() {
+            let (_, ry, _, _) = self.extra_row(ui, k);
+            if self.pressed == Some(target) {
+                s.fill_rrect(x, ry, w, row_h, flat(ui), rgba(255, 255, 255, 20));
+            }
+            s.fill_rect((x + ui.pt(14.0)) as usize, ry as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
+            let cy = ry + row_h / 2.0;
+            let (title, color, value) = match target {
+                Target::NewAlbum => ("New Album", BLUE, String::new()),
+                Target::SortOrder => ("Sort by Date", WHITE, if self.newest_first { "Newest" } else { "Oldest" }.to_string()),
+                Target::AlbumSort => ("Sort Albums", WHITE, if self.albums_by_name() { "By Name" } else { "Custom" }.to_string()),
+                Target::ShowSeconds => ("Slideshow Slide", WHITE, format!("{} s", self.show_seconds())),
+                _ => ("Delete Album", RED, String::new()),
+            };
+            self.label_left(s, ui, title, 17.0, Weight::Regular, color, x + ui.pt(16.0), cy);
+            if !value.is_empty() {
+                self.label(s, ui, &value, 14.0, Weight::Regular, SECONDARY, x + w - ui.pt(60.0), cy);
+            }
         }
-        s.fill_rect((x + ui.pt(14.0)) as usize, sy as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
-        let cy = sy + row_h / 2.0;
-        self.label_left(s, ui, "Sort by Date", 17.0, Weight::Regular, WHITE, x + ui.pt(16.0), cy);
-        let order = if self.newest_first { "Newest" } else { "Oldest" };
-        self.label(s, ui, order, 14.0, Weight::Regular, SECONDARY, x + w - ui.pt(60.0), cy);
     }
 
     /// A round zoom button with a plus or minus.
@@ -2307,7 +2374,8 @@ impl Photos {
 
     fn start_slideshow(&mut self, photos: Vec<Photo>, index: usize, t: f64) {
         self.sheet = None;
-        self.slideshow = Slideshow::new(photos, index);
+        let seconds = self.show_seconds();
+        self.slideshow = Slideshow::new(photos, index).map(|s| s.with_seconds(seconds));
         if let Some(sh) = &mut self.slideshow {
             sh.show_controls(t);
         }
@@ -2612,6 +2680,47 @@ mod tests {
         let mut buf = vec![0u32; 1200 * 1920];
         p.draw(&mut Surface { w: 1200, h: 1920, stride: 1200, px: &mut buf, y0: 0 }, ui, 0.0);
         buf
+    }
+
+    #[test]
+    fn album_rows_delete_sort_and_set_the_slide_length() {
+        let (mut p, dir, ui) = photos("album-rows", 2);
+        assert_eq!((p.new_album(), p.new_album(), p.new_album()), (Some(0), Some(1), Some(2)));
+        p.pref_set("ua.0.name", "Trip");
+        p.pref_set("ua.1.name", "aspen");
+        p.pref_set("ua.2.name", "Beach");
+        p.rebuild(&ui);
+        let order = |p: &Photos| p.menu_albums().into_iter().filter_map(|a| if let Album::User(i) = a { Some(i) } else { None }).collect::<Vec<_>>();
+        assert_eq!(order(&p), [0, 1, 2]);
+
+        // Sort Albums flips between creation order and by name
+        tap(&mut p, &ui, ui.pt(40.0), nav_mid(&ui), 100.0);
+        let (x, y, w, h) = p.extra_row_of(&ui, Target::AlbumSort);
+        tap(&mut p, &ui, x + w / 2.0, y + h / 2.0, 200.0);
+        assert_eq!(p.prefs.get("album_sort"), Some("name"));
+        assert_eq!(order(&p), [1, 2, 0]);
+
+        // the Slideshow row steps the seconds and the show uses them
+        assert_eq!(p.show_seconds(), 4);
+        p.touch(&ui, Event::Down(x + w / 2.0, y + h / 2.0 + h), 300.0);
+        p.touch(&ui, Event::Up(x + w / 2.0, y + h / 2.0 + h), 330.0);
+        assert!(p.album_menu, "the picker stays open after the first tap");
+        assert_eq!(p.show_seconds(), 6);
+        p.start_slideshow(p.photos().to_vec(), 0, 400.0);
+        assert!(p.slideshow.is_some());
+        p.slideshow = None;
+        p.album_menu = false;
+
+        // Delete Album removes the open album; the later one moves down
+        p.select_album(&ui, Album::User(1));
+        tap(&mut p, &ui, ui.pt(40.0), nav_mid(&ui), 500.0);
+        let (x, y, w, h) = p.extra_row_of(&ui, Target::DeleteAlbum);
+        tap(&mut p, &ui, x + w / 2.0, y + h / 2.0, 600.0);
+        assert_eq!(p.album(), Album::All);
+        assert_eq!(p.user_albums.len(), 2);
+        assert_eq!(p.album_title(Album::User(0)), "Trip");
+        assert_eq!(p.album_title(Album::User(1)), "Beach");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
