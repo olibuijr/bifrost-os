@@ -46,7 +46,7 @@ pub fn change_by_user(app_id: &str, choice: Choice) -> Result<Status, Error> {
 }
 
 /// Whether the app holds any read grant, so the shell may load the book for it.
-fn reads(app_id: &str) -> bool {
+pub fn reads(app_id: &str) -> bool {
     matches!(access_of(app_id).status(), Status::Authorized | Status::Limited)
 }
 

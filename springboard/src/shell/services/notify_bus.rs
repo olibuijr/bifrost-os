@@ -7,6 +7,7 @@
 //!   `system.` belongs to the shell and is refused.
 //! - `register` `{name, mode?}` makes a token on `name`; replies `{token}`. `mode` `"event"` (the default) pushes a
 //!   `notified` event to the app after each post; `"poll"` keeps the mark for `check`. An app holds at most 64 tokens.
+//!   The store-change names are refused unless the app holds that store's access (see [`may_hear`]).
 //! - `check` `{token}` (poll tokens only) replies `{pending}` and clears the mark.
 //! - `suspend` / `resume` `{token}` reply `{ok}`; `cancel` `{token}` removes the token and replies `{ok}`.
 //! - `valid` `{token}` replies `{valid}`, which is false for a token that is not the caller's.
@@ -19,7 +20,8 @@
 //! System names the shell posts, once per change, after the first tick (which only records the state):
 //! `system.appearance.change` (the scheme went Light or Dark), `system.screen.locked` and `system.screen.unlocked`,
 //! `system.network.change` (the Wi-Fi or wired link went up or down), `system.contacts.change` (the contacts file
-//! changed) and `system.calendar.change` (the events file changed). Each reaches the apps that hold a token on it.
+//! changed) and `system.calendar.change` (the events file changed). Each reaches the apps that hold a token on it and
+//! may read that store: a read grant for contacts, the `calendars` permission for events.
 use super::{Event, Shell, SystemService};
 use bifrost_core::json::Json;
 use bifrost_core::notify_center::NotifyCenter;
@@ -51,6 +53,17 @@ pub const MAX_NAME: usize = 128;
 pub const MAX_TOKENS_PER_APP: usize = 64;
 /// Names with this prefix are the shell's.
 const SYSTEM_PREFIX: &str = "system.";
+
+/// Whether `app` may hear `name`. The store-change names say that a person's private data changed, so only an app
+/// with that store's access hears them (Apple sends the contacts and event-store change notices only to apps that can
+/// read the store). Every other name is open to all apps.
+fn may_hear(app: &str, name: &str) -> bool {
+    match name {
+        CONTACTS_CHANGE => super::contacts::reads(app),
+        CALENDAR_CHANGE => super::app_has_permission(app, super::calendar::PERMISSION),
+        _ => true,
+    }
+}
 
 /// Who owns a token, the name it is on, and whether it is pushed (`true`) or polled.
 struct Owner {
@@ -121,6 +134,9 @@ impl NotifyBus {
             }
             "register" => {
                 let name = name_param(params)?;
+                if !may_hear(app, &name) {
+                    return Err(format!("notify_bus: {name} is only for apps with access to that store"));
+                }
                 let push = match params.str_field("mode").as_deref() {
                     None | Some("event") => true,
                     Some("poll") => false,
@@ -135,10 +151,13 @@ impl NotifyBus {
             }
             "check" => {
                 let token = token_param(params)?;
-                if self.owned(app, token)?.push {
+                let owner = self.owned(app, token)?;
+                if owner.push {
                     return Err("notify_bus: an event token is not polled; wait for the notified event".into());
                 }
-                Ok(obj(vec![("pending", Json::Bool(self.center.check(token)))]))
+                let heard = may_hear(app, &owner.name);
+                let pending = self.center.check(token) && heard;
+                Ok(obj(vec![("pending", Json::Bool(pending))]))
             }
             "suspend" | "resume" => {
                 let token = token_param(params)?;
@@ -199,7 +218,8 @@ impl NotifyBus {
     fn deliver(&mut self) -> Vec<Event> {
         let mut out = Vec::new();
         for (&token, owner) in self.owners.iter() {
-            if owner.push && self.center.check(token) {
+            // the mark is cleared even when the owner may not hear the name, so a later grant does not replay it
+            if owner.push && self.center.check(token) && may_hear(&owner.app, &owner.name) {
                 let body = obj(vec![("token", Json::Num(token as f64)), ("name", Json::Str(owner.name.clone()))]);
                 out.push(Event { app: Some(owner.app.clone()), event: EVENT.to_string(), body });
             }
@@ -285,6 +305,8 @@ fn state_param(params: &Json) -> Result<u64, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shell::services::contacts::{answer_prompt, change_by_user};
+    use bifrost_ui::contact_access::Choice;
     use std::time::{Duration, UNIX_EPOCH};
 
     fn params(fields: Vec<(&str, Json)>) -> Json {
@@ -311,6 +333,13 @@ mod tests {
     fn stores(contacts: Option<u64>, calendar: Option<u64>) -> Seen {
         let at = |secs: u64| Some(UNIX_EPOCH + Duration::from_secs(secs));
         Seen { contacts: contacts.and_then(at), calendar: calendar.and_then(at), ..quiet() }
+    }
+
+    /// A pushed token for `app` on `name`, put in place without the access gate. The calendar permission comes from an
+    /// installed manifest, which a unit test cannot install, so the delivery tests use this for that name.
+    fn token_past_the_gate(bus: &mut NotifyBus, app: &str, name: &str) {
+        let token = bus.center.register(name);
+        bus.owners.insert(token, Owner { app: app.into(), name: name.into(), push: true });
     }
 
     fn event_names(bus: &mut NotifyBus) -> Vec<(Option<String>, String)> {
@@ -501,8 +530,9 @@ mod tests {
     #[test]
     fn a_store_change_reaches_only_the_apps_on_that_name() {
         let mut bus = NotifyBus::default();
+        answer_prompt("app.a", Choice::All).unwrap();
         bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).unwrap();
-        bus.handle("app.b", "register", &name(CALENDAR_CHANGE)).unwrap();
+        token_past_the_gate(&mut bus, "app.b", CALENDAR_CHANGE);
         bus.system_changes(stores(Some(1), Some(1)));
         assert!(bus.deliver().is_empty(), "the first tick only records the stamps");
         bus.system_changes(stores(Some(2), Some(1)));
@@ -516,12 +546,49 @@ mod tests {
     #[test]
     fn a_store_file_that_appears_or_goes_is_a_change() {
         let mut bus = NotifyBus::default();
+        answer_prompt("app.a", Choice::All).unwrap();
         bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).unwrap();
         bus.system_changes(stores(None, None));
         bus.system_changes(stores(Some(5), None));
         assert_eq!(event_names(&mut bus).len(), 1);
         bus.system_changes(stores(None, None));
         assert_eq!(event_names(&mut bus).len(), 1);
+    }
+
+    #[test]
+    fn the_contacts_change_needs_a_contacts_grant_to_be_registered() {
+        let mut bus = NotifyBus::default();
+        assert!(bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).is_err(), "an app with no answer hears nothing");
+        answer_prompt("app.a", Choice::Deny).unwrap();
+        assert!(bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).is_err(), "a denied app hears nothing");
+        answer_prompt("app.b", Choice::All).unwrap();
+        assert!(bus.handle("app.b", "register", &name(CONTACTS_CHANGE)).is_ok());
+    }
+
+    #[test]
+    fn the_calendar_change_needs_the_calendars_permission_to_be_registered() {
+        let mut bus = NotifyBus::default();
+        assert!(bus.handle("app.a", "register", &name(CALENDAR_CHANGE)).is_err());
+    }
+
+    #[test]
+    fn an_app_without_contacts_access_is_not_sent_the_change() {
+        let mut bus = NotifyBus::default();
+        token_past_the_gate(&mut bus, "app.b", CONTACTS_CHANGE);
+        bus.system_changes(stores(Some(1), None));
+        bus.system_changes(stores(Some(2), None));
+        assert!(bus.deliver().is_empty());
+    }
+
+    #[test]
+    fn an_app_that_loses_contacts_access_is_no_longer_sent_the_change() {
+        let mut bus = NotifyBus::default();
+        answer_prompt("app.a", Choice::All).unwrap();
+        bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).unwrap();
+        bus.system_changes(stores(Some(1), None));
+        bus.system_changes(stores(Some(2), None));
+        change_by_user("app.a", Choice::Deny).unwrap();
+        assert!(bus.deliver().is_empty());
     }
 
     #[test]
