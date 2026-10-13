@@ -3964,11 +3964,11 @@
     "size": 221376
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/src/shell/alert_sound.rs",
+   "status": "partial",
+   "note": "synthesised equivalent, not the original recording",
    "rea": [],
    "method": "heuristic"
   },
@@ -3985,11 +3985,11 @@
     "size": 403782
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/src/shell/alert_sound.rs",
+   "status": "partial",
+   "note": "synthesised equivalent, not the original recording",
    "rea": [],
    "method": "heuristic"
   },
@@ -4006,11 +4006,11 @@
     "size": 222744
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/src/shell/alert_sound.rs",
+   "status": "partial",
+   "note": "synthesised equivalent, not the original recording",
    "rea": [],
    "method": "heuristic"
   },

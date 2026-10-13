@@ -2242,11 +2242,11 @@
     "size": 475278
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/src/shell/alert_sound.rs",
+   "status": "partial",
+   "note": "synthesised equivalent, not the original recording",
    "rea": [],
    "method": "heuristic"
   },
@@ -2263,11 +2263,11 @@
     "size": 304344
    },
    "description": "",
-   "role": "",
+   "role": "Selectable alert sound",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: asset, inventory only, never copied",
+   "bifrost": "springboard/src/shell/alert_sound.rs",
+   "status": "partial",
+   "note": "synthesised equivalent, not the original recording",
    "rea": [],
    "method": "heuristic"
   }
