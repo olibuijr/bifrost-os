@@ -146,6 +146,10 @@ const TYPES: &[Entry] = &[
     Entry { id: "org.debian.deb-archive", parent: &["public.archive"], ext: &["deb"], mime: "application/vnd.debian.binary-package", desc: "Debian package" },
     Entry { id: "org.rpm.rpm-archive", parent: &["public.archive"], ext: &["rpm"], mime: "application/x-rpm", desc: "RPM package" },
     Entry { id: "org.zstandard.zstd-archive", parent: &["public.archive"], ext: &["zst"], mime: "application/zstd", desc: "Zstandard archive" },
+    Entry { id: "bifrost.3d-model", parent: &["public.data", "public.content"], ext: &[], mime: "model/*", desc: "3D Model" },
+    Entry { id: "bifrost.wavefront-obj", parent: &["bifrost.3d-model"], ext: &["obj"], mime: "model/obj", desc: "Wavefront OBJ model" },
+    Entry { id: "bifrost.stl-model", parent: &["bifrost.3d-model"], ext: &["stl"], mime: "model/stl", desc: "STL model" },
+    Entry { id: "bifrost.ply-model", parent: &["bifrost.3d-model"], ext: &["ply"], mime: "model/ply", desc: "PLY model" },
     Entry { id: "public.folder", parent: &["public.item"], ext: &[], mime: "", desc: "Folder" },
 ];
 
@@ -327,6 +331,15 @@ mod tests {
             }
         }
         assert!(TYPES.iter().all(|e| !e.desc.is_empty()), "every type has a description");
+    }
+    #[test]
+    fn mesh_files_resolve_to_3d_model_types() {
+        assert_eq!(type_for_extension("cube.OBJ"), Some("bifrost.wavefront-obj"));
+        assert_eq!(type_for_extension("part.stl"), Some("bifrost.stl-model"));
+        assert_eq!(type_for_extension("scan.ply"), Some("bifrost.ply-model"));
+        assert!(conforms("bifrost.wavefront-obj", "bifrost.3d-model"));
+        assert!(conforms("bifrost.ply-model", "public.data"));
+        assert_eq!(mime("bifrost.stl-model"), "model/stl");
     }
     #[test]
     fn mime_falls_back() {
