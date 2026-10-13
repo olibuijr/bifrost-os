@@ -126,6 +126,7 @@ pub mod video;
 pub mod ui;
 pub mod splitview;
 mod desk;
+mod desk_occlusion;
 pub mod window_fx;
 pub mod desktop_network;
 pub mod disk_image;
