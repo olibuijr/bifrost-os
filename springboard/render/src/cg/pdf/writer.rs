@@ -408,12 +408,14 @@ mod tests {
         "<< /Type /Page /Parent 2 0 R /Rotate 90 >>",
     ];
 
-    /// The byte offset that the xref table records for object `n`.
+    /// The byte offset that the xref table records for object `n`. Offsets are byte positions, so the file is indexed
+    /// as bytes: a lossy string would shift them past the binary bytes in the header.
     fn xref_offset(pdf: &[u8], n: usize) -> usize {
-        let text = String::from_utf8_lossy(pdf).into_owned();
-        let at = text.rfind("startxref\n").unwrap() + "startxref\n".len();
-        let xref: usize = text[at..].lines().next().unwrap().parse().unwrap();
-        let entry = text[xref..].lines().nth(2 + n).unwrap();
+        let at = pdf.windows(10).rposition(|w| w == b"startxref\n").unwrap() + 10;
+        let xref: usize = String::from_utf8_lossy(&pdf[at..]).lines().next().unwrap().parse().unwrap();
+        let table = String::from_utf8_lossy(&pdf[xref..]).into_owned();
+        // lines: "xref", "0 N", the free entry for object 0, then object 1 onwards
+        let entry = table.lines().nth(2 + n).unwrap();
         entry.split_whitespace().next().unwrap().parse().unwrap()
     }
 
