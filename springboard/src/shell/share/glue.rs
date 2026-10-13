@@ -1,16 +1,23 @@
 //! Shell side of sharing: opening the sheet, the nearby service, the
-//! incoming-file prompt and the modal touch handling. Kept out of
+//! incoming-file prompt, the progress card and the modal touch handling. Kept out of
 //! shell/mod.rs so that file only gains the fields and a few hook lines.
 
+use super::progress;
 use super::prompt::{Choice, Prompt};
 use super::{Item, Outcome, Sheet};
-use crate::net::share::{self, Event};
+use crate::net::share::{self, Event, Tracker};
 use crate::shell::notify::store::Notification;
 use crate::shell::{AppId, Effect, Event as Touch, Shell};
 use std::path::PathBuf;
+use std::time::Instant;
 
-/// Where received files and "Save to Files" copies land.
+/// Where nearby files land: the person's Downloads folder.
 pub fn received_dir() -> PathBuf {
+    crate::files::fs::downloads()
+}
+
+/// Where "Save to Files" copies land.
+fn files_inbox() -> PathBuf {
     crate::files::fs::home().join("Received")
 }
 
@@ -18,22 +25,28 @@ fn device_name() -> String {
     std::fs::read_to_string("/proc/sys/kernel/hostname").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| "BifrOSt".into())
 }
 
-/// Sends an item on a worker thread; the result is reported through the log.
-fn send_in_background(item: Item, secret: String, peer: share::Peer) {
+/// Sends an item on a worker thread. Progress and the outcome go to the tracker
+/// (the progress card); a failure is also logged.
+fn send_in_background(item: Item, secret: String, peer: share::Peer, tracker: Tracker) {
     std::thread::spawn(move || {
+        let name = item.file_name();
+        let id = tracker.begin(true, &peer.name, &name, 0);
+        let mut on_bytes = |sent: u64, total: u64| tracker.progress(id, sent, total);
         let r = match (&item, item.bytes()) {
-            (_, Some(bytes)) => share::send_bytes(peer.addr, &secret, &item.file_name(), &bytes),
-            (Item::File(p), None) => std::fs::File::open(p).and_then(|mut f| share::send(peer.addr, &secret, &item.file_name(), &mut f, |_, _| {})),
+            (_, Some(bytes)) => share::send(peer.addr, &secret, &name, &mut std::io::Cursor::new(bytes), &mut on_bytes),
+            (Item::File(p), None) => std::fs::File::open(p).and_then(|mut f| share::send(peer.addr, &secret, &name, &mut f, &mut on_bytes)),
             _ => Ok(()),
         };
-        if let Err(e) = r {
+        let error = r.err().map(|e| e.to_string());
+        if let Some(e) = &error {
             eprintln!("springboard: share to {}: {e}", peer.name);
         }
+        tracker.finish(id, error);
     });
 }
 
 fn save_to_files(item: &Item) -> std::io::Result<PathBuf> {
-    let dir = received_dir();
+    let dir = files_inbox();
     std::fs::create_dir_all(&dir)?;
     let (dest, mut out) = share::create_unique(&dir, &item.file_name())?;
     match (item.bytes(), item) {
@@ -74,8 +87,11 @@ impl Shell {
     pub fn poll_share(&mut self) {
         let Some(svc) = &self.share_svc else { return };
         let peers = svc.peers();
+        let rows = svc.tracker.snapshot(Instant::now()).len();
         let events: Vec<_> = std::iter::from_fn(|| svc.events.try_recv().ok()).collect();
-        let mut changed = !events.is_empty();
+        // a running transfer repaints every poll; the last repaint after one ends clears its row
+        let mut changed = !events.is_empty() || rows > 0 || rows != self.share_rows;
+        self.share_rows = rows;
         if let Some(sheet) = &mut self.share {
             changed |= sheet.set_peers(peers.clone());
         }
@@ -118,6 +134,7 @@ impl Shell {
         let sheet = self.share.as_ref()?;
         let outcome = sheet.tap(&self.ui, w, h, x, y);
         let secret = share::DEFAULT_SECRET.to_string();
+        let tracker = self.share_svc.as_ref().map(|s| s.tracker.clone()).unwrap_or_default();
         match outcome {
             Outcome::None => {}
             Outcome::Close => self.share = None,
@@ -132,7 +149,7 @@ impl Shell {
                 self.share = None;
             }
             Outcome::SendTo(item, peer) => {
-                send_in_background(item, secret, peer);
+                send_in_background(item, secret, peer, tracker);
                 self.share = None;
             }
         }
@@ -146,6 +163,9 @@ impl Shell {
         }
         if let Some(p) = &self.share_prompt {
             p.draw(s, &self.ui, self.w, self.h);
+        }
+        if let Some(svc) = &self.share_svc {
+            progress::draw(&svc.tracker.snapshot(Instant::now()), s, &self.ui, self.w);
         }
     }
 }

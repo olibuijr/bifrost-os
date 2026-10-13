@@ -613,6 +613,8 @@ pub struct Shell {
     share: Option<share::Sheet>,
     share_svc: Option<crate::net::share::Service>,
     share_prompt: Option<share::prompt::Prompt>,
+    /// transfer rows the progress card showed at the last poll
+    share_rows: usize,
     /// the "Low Battery" alert on screen
     low_alert: Option<low_battery::Alert>,
     /// the Allow / Don't Allow sheet for an app's privacy request (see `permission_sheet.rs`)
@@ -864,6 +866,7 @@ impl Shell {
             share: None,
             share_svc: None,
             share_prompt: None,
+            share_rows: 0,
             low_alert: None,
             permission_sheet: None,
             low_monitor: low_battery::Monitor::default(),

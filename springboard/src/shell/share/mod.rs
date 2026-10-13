@@ -9,6 +9,7 @@ use crate::shell::ui::{Ui, Weight};
 use std::path::PathBuf;
 
 pub mod glue;
+pub mod progress;
 pub mod prompt;
 
 pub const WIDTH_PT: f32 = 340.0;
