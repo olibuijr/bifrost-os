@@ -207,6 +207,17 @@ The agent map names them `toggle`, `checkbox`, `slider`, `segmented-control`, `t
 Focusable roles now include the interactive types. This gives SDK widgets and apps a semantic vocabulary that matches
 the controls they draw; hierarchy, `ax set` and the AT-SPI bridge follow in "Accessibility bridge (AT-SPI2)".
 
+### Screen reader earcons (Accessibility)
+
+`springboard/src/shell/accessibility/earcons.rs` synthesises one short cue per reader event family (`Earcon`: Focus,
+Boundary, Wrap, EnterGroup, ExitGroup, ItemSelected, Error, ModeOn, ModeOff, PageTurn, Announcement, TextSelected), each
+mono i16 PCM at `kb_clicks::RATE` and under 400 ms. `Earcon::for_event(ReaderEvent)` is total, and
+`ReaderEvent::Posted(Notification)` maps the `NSAccessibility.Notification` set (focusedUIElementChanged, layoutChanged,
+announcementRequested, selectedTextChanged, rowExpanded, rowCollapsed). `Reader` queues the cue on a focus move, wrap,
+empty page, rotor change, press and unavailable press (`cue`, `take_earcons`; `set_sounds(false)` is the sound option).
+Status: partial. The cues are synthesised stand-ins, not the original sounds, and the sound player does not drain
+`take_earcons` yet (it lives in `bin/shell.rs`). The parity matrix holds no earcon rows to flip.
+
 ### Accessibility bridge (AT-SPI2)
 
 Screen readers (Orca) read BifrOSt apps through the AT-SPI2 bus. Three layers:
