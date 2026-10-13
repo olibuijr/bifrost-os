@@ -67,11 +67,17 @@ impl SystemGestures {
         SystemGestures { arbiter, home }
     }
 
-    /// Consumes one contact and returns the states the home swipe went through, in order.
-    pub fn feed(&mut self, phase: TouchPhase, id: i32, logical: (f32, f32), t_ms: f64, frame: Frame) -> Vec<GestureState> {
+    /// The frame changed size (a rotation, a resized surface): the edges the recognizers test move with it. A swipe
+    /// that starts on the new bottom edge is judged against it.
+    pub fn set_frame(&mut self, frame: Frame) {
         if let Some(pan) = self.arbiter.get_mut::<ScreenEdgePan>(self.home) {
             pan.set_screen(frame.size_pt());
         }
+    }
+
+    /// Consumes one contact and returns the states the home swipe went through, in order.
+    pub fn feed(&mut self, phase: TouchPhase, id: i32, logical: (f32, f32), t_ms: f64, frame: Frame) -> Vec<GestureState> {
+        self.set_frame(frame);
         let s = sample(phase, id, logical, t_ms, frame.points_px);
         let events = self.arbiter.feed(&s);
         self.home_states(events)
@@ -209,6 +215,20 @@ mod tests {
         assert_eq!(g.home_state(), GestureState::Possible);
         let states = swipe_up_from_bottom(&mut g, 5);
         assert_eq!(states.last(), Some(&GestureState::Ended), "a new touch after the cancel works: {states:?}");
+    }
+
+    #[test]
+    fn a_rotated_frame_moves_the_bottom_edge_the_home_swipe_starts_on() {
+        // 960 x 600 pt after a turn: the portrait bottom edge (y 960 pt) is now mid-screen, the landscape one is 600 pt
+        const LANDSCAPE: Frame = Frame { size_px: (1920.0, 1200.0), points_px: 2.0 };
+        let mut g = SystemGestures::new(HOME_MARGIN);
+        g.set_frame(LANDSCAPE);
+        let mut states = g.feed(TouchPhase::Down, 8, (300.0, 1180.0), 0.0, LANDSCAPE);
+        states.extend(g.feed(TouchPhase::Move, 8, (300.0, 1100.0), 16.0, LANDSCAPE));
+        states.extend(g.feed(TouchPhase::Move, 8, (300.0, 1000.0), 32.0, LANDSCAPE));
+        states.extend(g.feed(TouchPhase::Up, 8, (300.0, 1000.0), 48.0, LANDSCAPE));
+        assert!(states.contains(&GestureState::Began), "{states:?}");
+        assert_eq!(states.last(), Some(&GestureState::Ended), "{states:?}");
     }
 
     #[test]
