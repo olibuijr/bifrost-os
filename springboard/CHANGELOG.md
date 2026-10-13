@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.20 — 2026-10-13
+
+- An app launch no longer starts the app-resources writer; only the Cpu/Memory readout does (nothing else reads the file).
+
 ## 0.7.19 — 2026-10-13
 
 - The app-resources writer exits when nobody has read its file for 15 s and starts again on demand, instead of parking a thread for the life of the shell.

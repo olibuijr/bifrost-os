@@ -173,8 +173,7 @@ pub fn configure(cmd: &mut Command, id: &str) -> io::Result<()> {
             g.push(id.to_owned());
         }
     }
-    LAST_WANT.store(now_secs(), std::sync::atomic::Ordering::SeqCst);
-    ensure_writer();
+    // the writer starts when a readout asks for the file (`want_resources`), not on every launch
     Ok(())
 }
 pub fn focus(id: &str, on: bool) {
