@@ -349,6 +349,22 @@ mod tests {
     }
 
     #[test]
+    fn detach_is_enabled_only_for_a_selected_disk_image() {
+        let mut w = DiskUtility::new();
+        w.nodes = vec![
+            Node { name: "sdb".into(), removable: true, ..Node::default() },
+            Node { name: "loop3".into(), image_file: Some("/home/me/a.iso".into()), fs_type: Some("iso9660".into()), ..Node::default() },
+        ];
+        let detach_enabled = |w: &DiskUtility| w.toolbar().items.iter().find(|i| i.id == B_DETACH).is_some_and(|i| i.enabled);
+        w.selected = Some("sdb".into());
+        assert!(!w.selected_image());
+        assert!(!detach_enabled(&w));
+        w.selected = Some("loop3".into());
+        assert!(w.selected_image());
+        assert!(detach_enabled(&w));
+    }
+
+    #[test]
     fn the_sidebar_groups_by_removability_and_nests_partitions() {
         let mut w = DiskUtility::new();
         w.nodes = vec![
