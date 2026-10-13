@@ -164,6 +164,16 @@ received, search filtered, and Edit Select All/Copy/Cut/Paste completed.
 Core/protocol/Files/shell focused tests passed. Captures live in
 `~/Pictures/tab/bifrost-ui-final.png` and `bifrost-ui-menu-verified.png`.
 
+## AppKit drawing and print layout (`bifrost_app::appkit_drawing`)
+
+`BezierPath` (NSBezierPath: move/line/curve, close, appendRect/Oval/RoundedRect/Arc, `bounds`, `contains` under
+`WindingRule` NonZero or EvenOdd, `set_line_dash`, `line_width`, cap and join styles, `fill`/`stroke`/`add_clip` on a
+`GraphicsContext`); `Gradient` (NSGradient colors at locations, interpolated colour, linear angle and radial
+position); `ShadowStyle` (NSShadow offset, blur, colour, covered extent); `PageLayout` (NSPrintInfo scaling:
+content size, page grid, page count, per-page document rect for A4/Letter, either orientation). Gaps: dash, cap and
+join are stored but the CPU stroker still draws round joins and caps; NSImage representations, NSColorSpace,
+NSColorList, NSPrintOperation.runModal and NSPageLayout are not built yet. Host tests only; not yet checked on Midget.
+
 ## UIKit and AppKit counterparts (`bifrost-ui`, pure models with tests)
 
 Layout (`geometry`, `stack`, `split`): `EdgeInsets` (UIEdgeInsets); `Rect::inset`, `divide` (CGRectDivide),
