@@ -109,6 +109,7 @@ fn main() {
         battery_present: true,
         desktop_network: Default::default(),
         display_mode: None,
+        display_rates: Vec::new(),
         brightness_supported: true,
         power_profile: "Auto".into(),
         wifi_notice: None,

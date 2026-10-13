@@ -296,6 +296,8 @@ pub struct Settings {
     login_ext: super::login_items_page::LoginExtensions,
     /// the pages' reads off the UI thread (fonts, graphics, crash logs, ...)
     loads: Loads,
+    /// Displays > Refresh Rate: the choice in the display-refresh file, read when the Displays pages open
+    refresh: super::services::display_services::RefreshChoice,
     sound: super::sound_page::SoundView,
     login_out: Vec<String>,
     /// the Focus time row the time-of-day picker is editing
@@ -506,6 +508,7 @@ impl Settings {
             login_ext: Default::default(),
             login_out: Vec::new(),
             loads: Loads::default(),
+            refresh: super::services::display_services::RefreshChoice::Max,
             sound: Default::default(),
             notify_edge: None,
             night: NightShift::load(prefs),
@@ -589,7 +592,7 @@ impl Settings {
 
     fn model(&self) -> Model<'_> {
         let now = self.info.battery_history.last().map_or(0, |s| s.unix);
-        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: &self.loads.fonts.value, sound: &self.sound, sharing: self.loads.sharing.get(), printers: self.loads.printers.get(), users: &self.loads.users.value }
+        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: &self.loads.fonts.value, refresh: self.refresh, sound: &self.sound, sharing: self.loads.sharing.get(), printers: self.loads.printers.get(), users: &self.loads.users.value }
     }
 
     fn wallpaper_name(&self) -> String {
@@ -864,6 +867,7 @@ impl Settings {
         let dir = self.data_dir.clone();
         match id {
             PageId::Fonts | PageId::FontPick(_) => self.load_fonts(),
+            PageId::Display | PageId::RefreshRate => self.refresh = super::services::display_services::RefreshChoice::load(&dir),
             PageId::Graphics => self.loads.gpus.start("gpu-read", super::gpu_page::read_system),
             PageId::Diagnostics => self.loads.crashes.start("diag-read", move || diag::load(&dir)),
             PageId::Backup | PageId::SoftwareUpdate => self.loads.latest_backup.start("backup-read", move || backup::latest(&dir).map(|(_, t)| t)),
@@ -2289,6 +2293,19 @@ impl Settings {
                         let v = if k == 0 { 1.0 } else { 0.0 };
                         bifrost_render::glass::set_clarity(v);
                         let _ = prefs.set(LIQUID_GLASS_PREF, &format!("{v:.3}"));
+                        vec![]
+                    }
+                    Pick::RefreshRate(k) => {
+                        use super::services::display_services::{choice_at, request_refresh};
+                        let choice = choice_at(k, &self.info.display_rates);
+                        self.refresh = choice;
+                        if let Err(e) = choice.save(&self.data_dir) {
+                            eprintln!("springboard: display-refresh: {e}");
+                        }
+                        if let Some((w, h, _)) = self.info.display_mode {
+                            request_refresh(choice, w, h);
+                        }
+                        self.set_parent_value(ui, "Refresh Rate", &choice.label());
                         vec![]
                     }
                     Pick::InterfaceScale(k) => {
