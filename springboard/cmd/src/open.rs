@@ -8,20 +8,16 @@
 //! app, and the options `-W -n -g -j -F -f -h -s --arch --env --stdin --stdout --stderr --args`. The shell has no request
 //! for a file yet, so those wait on one.
 
-use std::io::{Read, Write};
-use std::net::TcpStream;
+use crate::control;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+
+/// The control port (see `control::port`).
+pub use crate::control::port;
 
 /// The Files app, which shows folders (`-R` and folder operands).
 pub const FILES_APP: &str = "is.olibuijr.files.desktop";
 /// The text editor app (`-e` and `-t`).
 pub const TEXT_EDITOR_APP: &str = "is.olibuijr.textedit.desktop";
-/// The shell's control port; `SPRINGBOARD_CONTROL_PORT` overrides it, as it does in the shell.
-pub const DEFAULT_PORT: u16 = 7777;
-/// The longest request line the shell's control socket is asked to read (the same limit `bifrost-open-url` keeps).
-pub const MAX_LINE: usize = 510;
-const TIMEOUT: Duration = Duration::from_secs(5);
 
 pub const USAGE: &str = "usage: open [-a app] [-b app] [-e] [-t] [-R] [-u] [file | folder | URL ...]";
 
@@ -197,26 +193,6 @@ fn io_text(e: &std::io::Error) -> String {
     }
 }
 
-/// The control port from `SPRINGBOARD_CONTROL_PORT`, else the default.
-pub fn port() -> u16 {
-    port_from(std::env::var("SPRINGBOARD_CONTROL_PORT").ok().as_deref())
-}
-
-fn port_from(v: Option<&str>) -> u16 {
-    v.and_then(|s| s.trim().parse().ok()).unwrap_or(DEFAULT_PORT)
-}
-
-/// Checks that a control line can be sent: short enough, and one line.
-pub fn check_line(line: &str) -> Result<(), String> {
-    if line.len() > MAX_LINE {
-        Err("the request is too long".into())
-    } else if line.chars().any(|c| c == '\n' || c == '\r') {
-        Err("a name with a line break cannot be sent".into())
-    } else {
-        Ok(())
-    }
-}
-
 /// The shell's answer as a result: `ok` succeeds, `error: <why>` fails with the reason.
 pub fn reply_result(text: &str) -> Result<(), String> {
     let t = text.trim();
@@ -231,15 +207,8 @@ pub fn reply_result(text: &str) -> Result<(), String> {
 
 /// Sends one request to the shell on `127.0.0.1:port` and returns its answer.
 pub fn send(req: &Request, port: u16) -> Result<(), String> {
-    let line = req.line();
-    check_line(&line)?;
-    let mut stream = TcpStream::connect(("127.0.0.1", port)).map_err(|e| format!("the desktop is not answering on port {port}: {e}"))?;
-    stream.set_read_timeout(Some(TIMEOUT)).map_err(|e| e.to_string())?;
-    stream.set_write_timeout(Some(TIMEOUT)).map_err(|e| e.to_string())?;
-    stream.write_all(format!("{line}\n").as_bytes()).map_err(|e| e.to_string())?;
-    let mut buf = [0u8; 4096];
-    let n = stream.read(&mut buf).map_err(|e| e.to_string())?;
-    reply_result(&String::from_utf8_lossy(&buf[..n]))
+    let answer = control::request(&req.line(), port)?;
+    reply_result(&String::from_utf8_lossy(&answer))
 }
 
 #[cfg(test)]
@@ -292,14 +261,6 @@ mod tests {
     }
 
     #[test]
-    fn request_lines_match_the_control_protocol() {
-        assert_eq!(Request::OpenApp("is.x.app".into()).line(), "open-app is.x.app");
-        assert_eq!(Request::OpenUrl("https://a.is".into()).line(), "open-url https://a.is");
-        let folder = Request::OpenFolder { app: FILES_APP.into(), folder: PathBuf::from("/home/me/My Files") };
-        assert_eq!(folder.line(), "open-folder is.olibuijr.files.desktop /home/me/My Files");
-    }
-
-    #[test]
     fn app_and_editor_requests_take_no_operands() {
         let o = Options { app: Some("is.x.app".into()), ..Options::default() };
         assert_eq!(plan(&o), Ok(vec![Request::OpenApp("is.x.app".into())]));
@@ -344,17 +305,11 @@ mod tests {
     }
 
     #[test]
-    fn port_comes_from_the_environment_when_it_is_a_number() {
-        assert_eq!(port_from(None), DEFAULT_PORT);
-        assert_eq!(port_from(Some(" 8000 ")), 8000);
-        assert_eq!(port_from(Some("many")), DEFAULT_PORT);
-    }
-
-    #[test]
-    fn lines_with_breaks_or_too_long_are_refused() {
-        assert!(check_line("open-folder a /x\nopen-app b").is_err());
-        assert!(check_line(&"a".repeat(MAX_LINE + 1)).is_err());
-        assert!(check_line("open-app is.x.app").is_ok());
+    fn request_lines_match_the_control_protocol() {
+        assert_eq!(Request::OpenApp("is.x.app".into()).line(), "open-app is.x.app");
+        assert_eq!(Request::OpenUrl("https://a.is".into()).line(), "open-url https://a.is");
+        let folder = Request::OpenFolder { app: FILES_APP.into(), folder: PathBuf::from("/home/me/My Files") };
+        assert_eq!(folder.line(), "open-folder is.olibuijr.files.desktop /home/me/My Files");
     }
 
     #[test]

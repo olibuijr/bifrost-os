@@ -2,9 +2,14 @@
 //! its logic in a module here (`pub mod <tool>;`) so it can be unit tested.
 
 pub mod defaults;
+pub mod caffeinate;
+pub mod control;
 pub mod open;
 pub mod plutil;
 pub mod pasteboard;
+pub mod pmset;
+pub mod say;
+pub mod screencapture;
 
 /// Prints `msg` to stderr prefixed with the tool name and exits with `code`.
 pub fn die(tool: &str, msg: &str, code: i32) -> ! {
