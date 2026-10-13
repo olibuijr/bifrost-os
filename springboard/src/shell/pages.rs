@@ -1791,7 +1791,9 @@ mod tests {
         assert_eq!(lock.groups[0].items[0].action, Action::Push(PageId::Passcode));
         assert_eq!(lock.groups[1].items[0].action, Action::Push(PageId::AutoLock));
         assert_eq!(lock.groups[1].items[0].value, opts.auto_lock_label());
-        assert_eq!(lock.groups[2].items[0].action, Action::Push(PageId::ScreenSaver));
+        // Require Password has its own group now, so Screen Saver moved from group 2 to group 3
+        assert_eq!(lock.groups[2].items[0].action, Action::Push(PageId::RequirePassword));
+        assert_eq!(lock.groups[3].items[0].action, Action::Push(PageId::ScreenSaver));
     }
 
     #[test]
@@ -1834,8 +1836,9 @@ mod tests {
         assert_eq!(u.groups[0].items[0].value, env!("CARGO_PKG_VERSION"));
         assert!(!BUILD.git.is_empty() && !BUILD.date.is_empty());
         let t = spec(PageId::DateTime, &m);
-        assert_eq!(t.groups[2].items[1].value, "14:05");
-        assert_eq!(t.groups[2].items[0].action, Action::TimeZone);
+        // the clock options (24-hour, date and day in the menu bar) take groups 1 and 2, so Time Zone and Time are group 3
+        assert_eq!(t.groups[3].items[1].value, "14:05");
+        assert_eq!(t.groups[3].items[0].action, Action::TimeZone);
         let acc = spec(PageId::Accessibility, &m);
         assert_eq!(acc.groups[0].items[1].value, "130%");
         assert_eq!(acc.groups[0].items[6].accessory, super::super::list::Accessory::Switch(false));
