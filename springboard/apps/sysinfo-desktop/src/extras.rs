@@ -1,7 +1,8 @@
 //! Facts the shared `bifrost_core::sysinfo` report does not carry: the host name, uptime, boot volume, loaded kernel
-//! modules, startup items and the language. The parsers are pure functions over text, so they are tested on the host;
+//! modules, startup items and the language (and, in `probe`, the hardware detail). The parsers are pure functions over text, so they are tested on the host;
 //! `Extras::collect` only reads the files and hands the text to them.
 
+use crate::probe::Hardware;
 use std::path::Path;
 
 /// One loaded kernel module (a line of `/proc/modules`).
@@ -25,6 +26,8 @@ pub struct Extras {
     pub startup: Vec<String>,
     /// The `LANG` value, such as `is_IS.UTF-8`.
     pub locale: String,
+    /// The detail `probe` reads: processor caches, memory modules, volumes, network addressing and the rest.
+    pub hw: Hardware,
 }
 
 impl Extras {
@@ -44,6 +47,7 @@ impl Extras {
             modules: parse_modules(&read("/proc/modules")),
             startup,
             locale: std::env::var("LANG").unwrap_or_default(),
+            hw: Hardware::collect(),
         }
     }
 }

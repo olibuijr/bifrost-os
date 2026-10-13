@@ -9,10 +9,10 @@
  "summary": {
   "features": 32,
   "parity": 5,
-  "partial": 15,
-  "gap": 10,
+  "partial": 25,
+  "gap": 0,
   "n/a": 2,
-  "coverage_pct": 41.7
+  "coverage_pct": 58.3
  },
  "features": [
   {
@@ -20,52 +20,52 @@
    "area": "view",
    "apple": "sidebar group of every hardware class (ATA, Audio, Bluetooth, Camera, Card Reader, Controller, Diagnostics, Disc Burning, Ethernet, Fibre Channel, Graphics/Displays, Memory, NVMe, PCI, Power, Printers, SAS, SATA, Storage, Thunderbolt, USB)",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:46",
-   "note": "Nine hardware categories: Overview, Processor, Memory, Graphics, PCI, USB, Displays, Power, Storage.",
-   "wire": "Add Audio, Bluetooth, Camera, Printers, Thunderbolt and NVMe/SATA categories to model::Category and ALL (model.rs:47), each filled from a new bifrost_core::sysinfo::Report list (sysfs: /sys/class/sound, /sys/class/bluetooth, /sys/class/video4linux, /sys/class/nvme, /sys/class/ata_port)."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:76",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Add the remaining hardware classes the reference lists (Card Reader, Controller, Diagnostics, Disc Burning, Fibre Channel, SAS), each with a sysfs reader in probe.rs and a Category variant in model.rs. Then check the new Audio, Bluetooth, Camera, Printers, Thunderbolt, NVMe and SATA pages on a machine that has the device."
   },
   {
    "feature": "Network section in the sidebar",
    "area": "view",
    "apple": "Network group: Firewall, Locations, Volumes, WWAN, Wi-Fi",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:86",
-   "note": "One Network category lists interfaces inside Hardware; there is no Network section.",
-   "wire": "Add Section::Network to model.rs (Section enum, in_section) with Wi-Fi, Ethernet, Firewall, Volumes and WWAN categories; Firewall from the firewall service state, Volumes from mounts in Report."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:21",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Add Locations (network profiles) once the OS keeps them, and rule state on the Firewall page once a firewall service exists (the page shows the loaded packet filter only). Check Wi-Fi, Ethernet, WWAN and Volumes on Midget."
   },
   {
    "feature": "Software section in the sidebar",
    "area": "view",
    "apple": "Software group: Accessibility, Applications, Developer, Extensions, Fonts, Frameworks, Installations, Language & Region, Logs, Preference Panes, Printer Software, Profiles, Startup Items, Sync Services",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:98",
-   "note": "Extensions (kernel modules), Startup Items and Language & Region added; Fonts, Logs and Preference Panes remain.",
-   "wire": "Add Fonts (Font Book catalogue), Extensions (kernel modules from /proc/modules), Startup Items (autostart and user units), Logs (journal summary), Language & Region and Preference Panes (settings pane list) categories to model.rs."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:76",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Add Preference Panes (the pane list lives in the shell), Accessibility, Developer, Frameworks, Installations, Profiles, Printer Software and Sync Services. Check Fonts and Logs on Midget."
   },
   {
    "feature": "Outline sidebar with section headers",
    "area": "view",
    "apple": "SPOutlineView with disclosure triangles",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:111",
-   "note": "Section headers and symbol rows via the shared source list; the headers cannot be collapsed.",
-   "wire": "Make Hardware/Software headers collapsible in the SourceList (disclosure state kept in SysInfo) and persist it."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:577",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Check on Midget: fold a section, relaunch and see it stay folded, drag the sidebar to scroll it; then promote to parity."
   },
   {
    "feature": "Item list above an item detail pane",
    "area": "view",
    "apple": "split view: Contents list on top, details pane below",
-   "status": "gap",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:24",
-   "note": "One key/value card per category; no selectable item list with a separate detail.",
-   "wire": "In window.rs split the content into a list of items (one per device, disk, app) and a detail card for the selected item; model::rows returns Vec<Item> with a detail Vec<Row> each; keep the card for single-item categories."
+   "status": "partial",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:657",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Add column headers and sorting to the item list, and keep the picked item across a refresh. Check the split on Midget."
   },
   {
    "feature": "Key/value detail card",
    "area": "view",
    "apple": "item detail rows",
    "status": "parity",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/draw.rs:53",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/draw.rs:85",
    "note": "Key column and value column, scrolls with wheel, drag and arrow keys.",
    "wire": ""
   },
@@ -74,7 +74,7 @@
    "area": "view",
    "apple": "first sidebar item Hardware Overview: model, chip, memory, serial, firmware, OS",
    "status": "parity",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:163",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:451",
    "note": "Model, vendor, form factor, processor, memory, graphics, serial, operating system, kernel and firmware.",
    "wire": ""
   },
@@ -83,34 +83,34 @@
    "area": "view",
    "apple": "Hardware > Processor / chip: cores, cache, speed",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:80",
-   "note": "Name, vendor, logical processors, clock; no physical cores, cache sizes or per-core frequency.",
-   "wire": "Extend bifrost_core::sysinfo cpu with physical cores, L1/L2/L3 sizes (lscpu fields from /sys/devices/system/cpu/cpu0/cache) and show them in the Processor rows."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:467",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Show the clock of each core (cpufreq) and the performance and efficiency core split. Physical cores, cache sizes and the clock range are in place; check on Midget."
   },
   {
    "feature": "Memory details",
    "area": "view",
    "apple": "Hardware > Memory: type, speed, slots, manufacturer",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:81",
-   "note": "Installed total only.",
-   "wire": "Read DIMM type, speed and slots via the DMI memory device table in bifrost_core::sysinfo and list one row per slot."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:491",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "The firmware table (/sys/firmware/dmi/tables/DMI) is readable by root only: read it through the privileged helper so the slots show for a normal user. Available memory and swap are in place; check on Midget."
   },
   {
    "feature": "Graphics and displays",
    "area": "view",
    "apple": "Graphics/Displays: chipset, VRAM, resolution",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:184",
-   "note": "Graphics rows from PCI, displays with connector state and mode; no VRAM or per-display scale and refresh.",
-   "wire": "Add VRAM (DRM sysfs mem_info_vram_total) and refresh rate/scale per display to Display in bifrost_core::sysinfo and display_row."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:581",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Add the refresh rate and scale of each display (needs the shell display service, not sysfs). Video memory is in place; check it on a machine with a discrete GPU."
   },
   {
    "feature": "PCI devices",
    "area": "view",
    "apple": "Hardware > PCI",
    "status": "parity",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:83",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:589",
    "note": "Address, vendor, class and driver per device.",
    "wire": ""
   },
@@ -119,16 +119,16 @@
    "area": "view",
    "apple": "Hardware > USB: bus tree with speed, vendor, power",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:179",
-   "note": "Flat list with manufacturer, speed and port; no hub/bus hierarchy or power draw.",
-   "wire": "Group USB rows by bus and hub parent (sysfs devpath) with indentation and add bMaxPower to the row."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:597",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Check the tree and the maximum power on Midget with a hub attached, then promote to parity."
   },
   {
    "feature": "Power and battery",
    "area": "view",
    "apple": "Hardware > Power: battery cycle count, condition, charger",
    "status": "parity",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:206",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:674",
    "note": "Source kind, capacity, status, health percentage and cycle count.",
    "wire": ""
   },
@@ -137,52 +137,52 @@
    "area": "view",
    "apple": "Hardware > Storage / Volumes: capacity, free space, file system, SMART",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:224",
-   "note": "Disk model, size, removable, SSD or HDD, partition count; no free space, file system or SMART status.",
-   "wire": "Add per-partition file system, mount point, free space (statvfs) and SMART health (smartctl summary) to Disk in bifrost_core::sysinfo and expand disk_row into a row per volume."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:691",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Add SMART health (a smartctl summary needs root: read it through the privileged helper). File system, mount point and free space per partition are in place."
   },
   {
    "feature": "Network interfaces",
    "area": "view",
    "apple": "Network > Wi-Fi / Ethernet: addresses, MAC, state",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:193",
-   "note": "Kind, state, MAC, default route, addresses; no DNS, gateway, speed or Wi-Fi signal and channel.",
-   "wire": "Add gateway, DNS, link speed and Wi-Fi SSID/channel/signal (netd status) to NetInterface and net_row."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:781",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Add the Wi-Fi SSID and channel (they come from the network service status, not /proc). IPv4 addresses, gateway, DNS, link speed and signal are in place."
   },
   {
    "feature": "Operating system details",
    "area": "view",
    "apple": "Software > System / About: version, build, boot volume, uptime",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:173",
-   "note": "Computer name, time since boot, boot volume and boot mode added; no build id or secure-boot state.",
-   "wire": "Add host name, uptime, boot volume and secure-boot state rows to Category::System."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:533",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Check the build and secure boot rows on Midget (UEFI and legacy boot), then promote to parity."
   },
   {
    "feature": "Installed applications list",
    "area": "view",
    "apple": "Software > Applications: name, version, source, 64-bit, last modified",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:236",
-   "note": "Id and version only.",
-   "wire": "Add display name, kind (system/store/user), install date and signature state columns to InstalledApp rows (app_row)."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:746",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Show the signature state once packages carry signatures (installs verify a SHA-256 only). Name, kind and install date are in place."
   },
   {
    "feature": "Audio, Bluetooth, Camera, Printers, Thunderbolt hardware pages",
    "area": "view",
    "apple": "one page per hardware class",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No such categories.",
-   "wire": "Covered by the Hardware section row; add one Category variant per class with sysfs readers in bifrost_core::sysinfo."
+   "status": "partial",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/model.rs:633",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Check each page on a machine that has the device (sound card, Bluetooth controller, camera, printer, Thunderbolt port) and promote to parity."
   },
   {
    "feature": "Refresh Information",
    "area": "menu",
    "apple": "File/View > Refresh Information (cmd+R)",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:127",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:89",
    "note": "View > Refresh Information (Cmd+R) routes to SysInfo::reload; the toolbar button stays.",
    "wire": "Declare a View menu (Refresh Information cmd+R) in main.rs via the app menu API used by activity-desktop (main.rs main_menu) and route cmd+R to SysInfo::reload (window.rs:74)."
   },
@@ -190,17 +190,17 @@
    "feature": "Preparing system profile progress",
    "area": "view",
    "apple": "progress sheet with Cancel while the profile loads",
-   "status": "gap",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:74",
-   "note": "Report is read synchronously on launch; the window is blank until it finishes.",
-   "wire": "Read the report on a worker thread, show a progress sheet with Cancel (SDK sheet kit) until it lands."
+   "status": "partial",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:249",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Check on Midget that the sheet shows during a slow read and that Cancel and Escape work, then promote to parity."
   },
   {
    "feature": "Show Less / More Information",
    "area": "menu",
    "apple": "View > Show Less Information (hides item detail or developer rows)",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:147",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:349",
    "note": "View > Show Less Information toggles a mini mode: sidebar and report keep only the Overview.",
    "wire": "Add a mini/full flag to SysInfo and a View menu toggle; the concise mode shows only the Overview rows."
   },
@@ -209,36 +209,36 @@
    "area": "menu",
    "apple": "File > Save; document types spx, txt, rtf",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:122",
-   "note": "File > Save Report As writes a plain-text report through the save panel; no .spx or rich text yet.",
-   "wire": "Add File > Save As… in main.rs that serializes every category's model::rows to a plain text and a JSON report file through the SDK save panel."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:317",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "The reference .spx type has no equivalent here: text, rich text and JSON reports are written. Check the three files on Midget."
   },
   {
    "feature": "Open a saved system report and Open Recent",
    "area": "menu",
    "apple": "File > Open, Open Recent; spreporter and spx types",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Cannot open a stored report.",
-   "wire": "Register the report file type in manifest.toml, load a saved report into the model in place of the live one, and add Open Recent from the shell recent-items store."
+   "status": "partial",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:325",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Register the report file type with the shell once manifests can declare document types, so Files opens a report in this app. File > Open Report and Open Recent are in place."
   },
   {
    "feature": "Find in the report",
    "area": "menu",
    "apple": "Edit > Find: Find Next/Previous, Use Selection for Find, Jump to Selection",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:157",
-   "note": "Edit > Find (Cmd+F) opens a typed find that filters rows; Find Next/Previous jump across categories. No toolbar search field yet.",
-   "wire": "Add a toolbar search field (kit search_field) to window.rs filtering rows across categories and Find Next/Previous menu items."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:608",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Check typing into the toolbar field on Midget; add Use Selection for Find and Jump to Selection."
   },
   {
    "feature": "Select and copy rows",
    "area": "menu",
    "apple": "Edit > Select All, Copy",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:204",
-   "note": "Click or Select All picks rows (highlighted); Edit > Copy (Cmd+C) puts key: value lines on the clipboard. No multi-row range selection.",
-   "wire": "Add row selection to the detail card and cmd+C to place key: value lines on the shell clipboard."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/window.rs:437",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Add range selection (Shift-click and Shift with the arrow keys) once the touch event carries modifiers. Copy of a picked row or the picked list item is in place."
   },
   {
    "feature": "Send to Apple",
@@ -253,10 +253,10 @@
    "feature": "Speak Serial Number",
    "area": "menu",
    "apple": "Window/Hardware > Speak Serial Number",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No speech of the serial number.",
-   "wire": "Add a menu item that sends the serial to the speech service (assistant-desktop tts path) and speaks it digit by digit."
+   "status": "partial",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:300",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "The announcement is spoken only while the screen reader is on (the shell speaks announcements through its speech engine and shows the text as a banner otherwise). Add a speak call that works without the screen reader once the shell offers one."
   },
   {
    "feature": "Develop menu: fill startup disk and memory thresholds",
@@ -272,16 +272,16 @@
    "area": "input",
    "apple": "arrow keys move the sidebar selection",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:204",
-   "note": "Up/Down move the sidebar selection when it has focus; Tab switches focus to the card, where they scroll.",
-   "wire": "In main.rs route Up/Down to SysInfo::select with the previous/next Category when the sidebar has focus (window.rs:91) and add Tab to move focus between sidebar and card."
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:233",
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "Check Tab and the arrow keys on Midget across sidebar, item list and card, then promote to parity."
   },
   {
    "feature": "Accessibility tree",
    "area": "a11y",
    "apple": "item list and item detail with AXHelp text",
    "status": "parity",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/draw.rs:82",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/draw.rs:125",
    "note": "Toolbar, sidebar rows and detail card are published controls and tappable through Activate.",
    "wire": ""
   },
@@ -291,15 +291,15 @@
    "apple": "About, Hide, Hide Others, Show All, Services, Quit, Minimize, Bring All to Front",
    "status": "partial",
    "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:94",
-   "note": "File, Edit, View and Help menus are published; no app or Window menu items beyond the shell's.",
-   "wire": "Publish an app menu (About System Information, Quit) and a Window menu from main.rs with the SDK menu API."
+   "note": "built on parity/team-d-system-information; not yet verified on Midget",
+   "wire": "The application menu (About, Hide, Quit) is built by the shell and an app cannot add to it; the Window menu has Show Overview, Previous Category and Next Category. Check on Midget."
   },
   {
    "feature": "Help menu",
    "area": "menu",
    "apple": "System Information Help",
    "status": "partial",
-   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:145",
+   "bifrost": "springboard/apps/sysinfo-desktop/src/main.rs:102",
    "note": "Help > System Information Help opens the help page URL; no in-shell help viewer.",
    "wire": "Add a Help menu entry that opens a short Help page in the shell help viewer."
   }
