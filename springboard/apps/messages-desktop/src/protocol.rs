@@ -41,6 +41,8 @@ pub struct RoomUpdate {
     pub highlights: u64,
     /// Read receipts that came with the room (who has read up to which event).
     pub receipts: Vec<Receipt>,
+    /// Who is typing in the room, when the sync carried a typing update (`None` when it did not, so the last one stands).
+    pub typing: Option<Vec<String>>,
 }
 
 /// A message in a timeline.
@@ -280,7 +282,15 @@ fn parse_room(id: &str, room: &Json) -> RoomUpdate {
         unread: count("notification_count"),
         highlights: count("highlight_count"),
         receipts: receipts(raw_events(room.get("ephemeral"))),
+        typing: typing(raw_events(room.get("ephemeral"))),
     }
+}
+
+/// The typing list of an ephemeral section: the user ids of the latest `m.typing` event. `None` when there is none.
+fn typing(events: &[Json]) -> Option<Vec<String>> {
+    let ev = events.iter().find(|e| e.str_field("type").as_deref() == Some("m.typing"))?;
+    let ids = ev.get("content")?.get("user_ids")?.as_array()?;
+    Some(ids.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
 }
 
 /// The last name a room's events set: `m.room.name`, or else `m.room.canonical_alias`. Empty names do not count.
@@ -496,6 +506,7 @@ mod tests {
         assert_eq!(room.events[3].body, Body::Redacted);
         assert_eq!(room.events[4].body, Body::Other("m.file".into()));
         assert_eq!(room.receipts.len(), 2);
+        assert_eq!(room.typing, Some(Vec::new()), "an m.typing event with nobody typing is an answer, not a silence");
         assert!(room.receipts.contains(&Receipt { event_id: "$e1".into(), user_id: "@alice:example.org".into(), ts: 1500 }));
     }
 
@@ -505,6 +516,18 @@ mod tests {
         let room = sync.rooms.iter().find(|r| r.id == "!room2:example.org").unwrap();
         assert_eq!(room.name, None);
         assert!(room.events.is_empty());
+    }
+
+    #[test]
+    fn a_typing_update_lists_the_users_and_a_room_without_one_has_none() {
+        let typing = parse(
+            r#"{"next_batch":"s1","rooms":{"join":{"!t:x":{"timeline":{"events":[]},"ephemeral":{"events":[
+                {"type":"m.typing","content":{"user_ids":["@bob:x","@me:x"]}}]}}}}}"#,
+        );
+        let sync = parse_sync(&typing).unwrap();
+        assert_eq!(sync.rooms[0].typing, Some(vec!["@bob:x".to_string(), "@me:x".to_string()]));
+        let quiet = parse(r#"{"next_batch":"s1","rooms":{"join":{"!q:x":{"timeline":{"events":[]}}}}}"#);
+        assert_eq!(parse_sync(&quiet).unwrap().rooms[0].typing, None);
     }
 
     #[test]

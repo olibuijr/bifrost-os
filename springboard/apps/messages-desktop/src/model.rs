@@ -30,6 +30,8 @@ pub struct Room {
     pub read_up_to: Option<String>,
     /// Server time of the newest message, for ordering the list.
     pub last_ts: u64,
+    /// The other people typing in the room now, by user id.
+    pub typing: Vec<String>,
 }
 
 impl Room {
@@ -203,6 +205,9 @@ fn apply_room(room: &mut Room, update: &RoomUpdate, me: &str, primed: bool, view
     }
     room.unread = update.unread;
     room.highlights = update.highlights;
+    if let Some(typing) = &update.typing {
+        room.typing = typing.iter().filter(|user| user.as_str() != me).cloned().collect();
+    }
     for event in &update.events {
         if room.timeline.iter().any(|m| m.id == event.id) {
             continue;
@@ -226,6 +231,61 @@ fn apply_room(room: &mut Room, update: &RoomUpdate, me: &str, primed: bool, view
 
 fn notice(room: &str, event: &Event) -> Notice {
     Notice { title: room.to_string(), body: format!("{}: {}", protocol::display_name(&event.sender), preview(&event.body)) }
+}
+
+/// Milliseconds in a day: a message's day is its server time over this.
+const DAY_MS: u64 = 86_400_000;
+
+/// The day a server time (milliseconds since the epoch) falls on, in days since the epoch. UTC: the days are the
+/// desktop's zone's when the zone is UTC, which is what the lab machines use.
+pub fn day_of(ts: u64) -> i64 {
+    (ts / DAY_MS) as i64
+}
+
+/// True when a message at `ts` starts a new day in the timeline: the first message, or one on another day than the one
+/// before it.
+pub fn starts_day(prev: Option<u64>, ts: u64) -> bool {
+    prev.map_or(true, |p| day_of(p) != day_of(ts))
+}
+
+const MONTHS: [&str; 12] =
+    ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/// The heading of a day in the timeline: "Today", "Yesterday", or the date, given today's day.
+pub fn day_label(day: i64, today: i64) -> String {
+    match today - day {
+        0 => "Today".into(),
+        1 => "Yesterday".into(),
+        _ => {
+            let (y, m, d) = civil_from_days(day);
+            format!("{d} {} {y}", MONTHS[(m - 1) as usize])
+        }
+    }
+}
+
+/// Civil (year, month 1-12, day) of a day count since 1970-01-01 (Howard Hinnant's algorithm).
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    (y, m, d)
+}
+
+/// The typing line for the people typing in a room, named by their user ids. `None` when nobody is typing.
+pub fn typing_text(users: &[String]) -> Option<String> {
+    let names: Vec<&str> = users.iter().map(|u| protocol::display_name(u)).collect();
+    match names.as_slice() {
+        [] => None,
+        [one] => Some(format!("{one} is typing...")),
+        [a, b] => Some(format!("{a} and {b} are typing...")),
+        _ => Some("Several people are typing...".into()),
+    }
 }
 
 /// The text a message shows as a preview: its words, or a short description for a picture or a file.
@@ -416,6 +476,50 @@ mod tests {
         assert_eq!(s.focus, PASSWORD_FIELD);
         assert_eq!(s.values[2], "");
         assert_eq!(s.error, "wrong");
+    }
+
+    #[test]
+    fn a_new_day_starts_at_the_first_message_and_at_each_midnight() {
+        let day = DAY_MS;
+        assert!(starts_day(None, 5));
+        assert!(!starts_day(Some(day + 1), day + 2), "the same day");
+        assert!(starts_day(Some(day - 1), day), "across midnight");
+        assert_eq!(day_of(2 * DAY_MS + 7), 2);
+    }
+
+    #[test]
+    fn day_headings_are_today_yesterday_or_the_date() {
+        let today = day_of(1_800_000_000_000);
+        assert_eq!(day_label(today, today), "Today");
+        assert_eq!(day_label(today - 1, today), "Yesterday");
+        assert_eq!(day_label(0, 20_000), "1 January 1970");
+        assert_eq!(day_label(19_723, 20_000), "1 January 2024", "day 19723 is 2024-01-01");
+        assert_eq!(day_label(19_997, 20_000), "1 October 2024", "274 days after 2024-01-01 in a leap year");
+    }
+
+    #[test]
+    fn typing_names_one_two_or_several_people() {
+        assert_eq!(typing_text(&[]), None);
+        assert_eq!(typing_text(&["@bob:x".into()]).as_deref(), Some("bob is typing..."));
+        assert_eq!(typing_text(&["@bob:x".into(), "@ann:x".into()]).as_deref(), Some("bob and ann are typing..."));
+        let many = ["@a:x", "@b:x", "@c:x"].map(String::from);
+        assert_eq!(typing_text(&many).as_deref(), Some("Several people are typing..."));
+    }
+
+    #[test]
+    fn a_typing_update_names_the_others_and_an_absent_one_keeps_the_last() {
+        let mut m = signed_in();
+        m.apply_sync(&sync(vec![update("!a:x", vec![], 0)]));
+        let mut typing = update("!a:x", vec![], 0);
+        typing.typing = Some(vec!["@bob:x".into(), "@me:x".into()]);
+        m.apply_sync(&sync(vec![typing]));
+        assert_eq!(m.rooms[0].typing, vec!["@bob:x".to_string()], "my own typing is not shown");
+        m.apply_sync(&sync(vec![update("!a:x", vec![], 0)]));
+        assert_eq!(m.rooms[0].typing.len(), 1, "a sync without a typing update keeps the list");
+        let mut stopped = update("!a:x", vec![], 0);
+        stopped.typing = Some(vec![]);
+        m.apply_sync(&sync(vec![stopped]));
+        assert!(m.rooms[0].typing.is_empty());
     }
 
     #[test]
