@@ -1582,10 +1582,10 @@ impl Shell {
         let artist = session.content().map(|c| c.subtitle()).unwrap_or_default();
         let text_w = ui.pt(130.0);
         let tx = (x + ui.pt(14.0) + size + ui.pt(10.0)) as i32;
-        let title = ui.text(&ui.fit(&title, 15.0, text_w), 15.0, Weight::Semibold, WHITE);
-        let artist = ui.text(&ui.fit(&artist, 13.0, text_w), 13.0, Weight::Regular, rgba(255, 255, 255, 150));
-        s.blit(&title, tx, (y + ui.pt(16.0)) as i32, 255, alpha);
-        s.blit(&artist, tx, (y + ui.pt(38.0)) as i32, 255, alpha);
+        let title = self.fit_chrome(&title, 15.0, text_w);
+        let artist = self.fit_chrome(&artist, 13.0, text_w);
+        self.label(&title, 15.0, Weight::Semibold, WHITE, |im| s.blit(im, tx, (y + ui.pt(16.0)) as i32, 255, alpha));
+        self.label(&artist, 13.0, Weight::Regular, rgba(255, 255, 255, 150), |im| s.blit(im, tx, (y + ui.pt(38.0)) as i32, 255, alpha));
         let playing = session.snapshot().state == PlaybackState::Playing;
         draw_cc_controls(s, ui, (x, y, w, h), playing, scale(WHITE, alpha), pressed);
         // progress: the elapsed share of a finite item, advanced while it plays
@@ -1765,8 +1765,8 @@ impl Shell {
             match tile {
                 Tile::Brightness | Tile::Volume => {
                     desk_glass(s, ShellSurface::ControlCentre, (x, y, w, h), ui.pt(DK_SLIDER_R_PT), alpha);
-                    let name = ui.text(if tile == Tile::Brightness { "Display" } else { "Sound" }, MAC_HEADLINE_PT, Weight::Semibold, label);
-                    s.blit(&name, (x + ui.pt(DK_PAD_PT + 4.0)) as i32, (y + ui.pt(10.0)) as i32, 255, alpha);
+                    let name = if tile == Tile::Brightness { "Display" } else { "Sound" };
+                    self.label(name, MAC_HEADLINE_PT, Weight::Semibold, label, |im| s.blit(im, (x + ui.pt(DK_PAD_PT + 4.0)) as i32, (y + ui.pt(10.0)) as i32, 255, alpha));
                     let (l, r, cy) = self.desk_track((x, y, w, h));
                     let v = if tile == Tile::Brightness { self.info.brightness } else { self.cc.volume };
                     let th = ui.pt(DK_TRACK_H_PT);
@@ -1820,11 +1820,13 @@ impl Shell {
                     }
                     let tx = dx + d + ui.pt(8.0);
                     let room = x + w - tx - ui.pt(DK_PAD_PT);
-                    let t1 = ui.text(&ui.fit(title, MAC_HEADLINE_PT, room), MAC_HEADLINE_PT, Weight::Semibold, label);
-                    let t2 = ui.text(&ui.fit(&sub, MAC_SUBHEAD_PT, room), MAC_SUBHEAD_PT, Weight::Regular, LABEL_2.now());
-                    let top = y + (h - (t1.h + t2.h) as f32) / 2.0;
-                    s.blit(&t1, tx as i32, top as i32, 255, alpha);
-                    s.blit(&t2, tx as i32, (top + t1.h as f32) as i32, 255, alpha);
+                    let (f1, f2) = (self.fit_chrome(title, MAC_HEADLINE_PT, room), self.fit_chrome(&sub, MAC_SUBHEAD_PT, room));
+                    let sub_ink = LABEL_2.now();
+                    let h1 = self.label(&f1, MAC_HEADLINE_PT, Weight::Semibold, label, |im| im.h);
+                    let h2 = self.label(&f2, MAC_SUBHEAD_PT, Weight::Regular, sub_ink, |im| im.h);
+                    let top = y + (h - (h1 + h2) as f32) / 2.0;
+                    self.label(&f1, MAC_HEADLINE_PT, Weight::Semibold, label, |im| s.blit(im, tx as i32, top as i32, 255, alpha));
+                    self.label(&f2, MAC_SUBHEAD_PT, Weight::Regular, sub_ink, |im| s.blit(im, tx as i32, (top + h1 as f32) as i32, 255, alpha));
                 }
             }
         }
