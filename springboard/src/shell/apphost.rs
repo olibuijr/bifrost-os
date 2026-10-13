@@ -1373,9 +1373,9 @@ impl Shell {
     }
 
     /// Shows or hides the keyboard over the foreground app and tells it the new safe area.
-    fn ext_set_keyboard(&mut self, on: bool, t: f64) {
-        // a desktop has a hardware keyboard: physical keys reach the app, no docked one
-        self.set_keyboard(on && !self.desk_active(), t);
+    pub(super) fn ext_set_keyboard(&mut self, on: bool, t: f64) {
+        // a desktop has a hardware keyboard: physical keys reach the app, no docked one (set_keyboard applies the policy)
+        self.set_keyboard(on, t);
         let cfg = self.ext_cfg();
         if let Some(Some(h)) = self.ext_fg.and_then(|n| self.ext.get_mut(n as usize)) {
             h.configure(cfg);
