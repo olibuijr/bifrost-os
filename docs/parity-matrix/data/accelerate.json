@@ -3,7 +3,7 @@
   "doc": "https://developer.apple.com/documentation/accelerate",
   "macos_since": "10.3",
   "status": "partial",
-  "bifrost": "No SDK module. Ad hoc equivalents: springboard/render/src/gfx/rotate.rs, springboard/src/media/convert.rs, springboard/apps/daw/src/conv.rs, springboard/src/shell/books/engine/inflate.rs, springboard/src/shell/photos/edit.rs",
+  "bifrost": "No SDK module. Ad hoc equivalents: springboard/render/src/gfx/rotate.rs, springboard/src/media/convert.rs, springboard/apps/daw/src/conv.rs, springboard/render/src/cg/pdf/inflate.rs, springboard/src/shell/photos/edit.rs",
   "summary": "Accelerate's vector, signal, linear algebra, sparse solver, compression and ML APIs have no BifrOSt SDK counterpart. The system and apps contain private equivalents (quarter-turn rotation, YUV to RGBA conversion, DEFLATE decoding, a radix-2 FFT convolver, brightness and contrast lookup tables), but no app can call them through the SDK.",
   "rea_evidence": "ev_371efbd6465434fa7c238d2db92f2f8a9c41b8360f6013ec6863082d97dc6c3e",
   "features": [
@@ -59,7 +59,7 @@
     {
       "feature": "Compression and decompression",
       "apple": "Compression (buffer, stream and filter APIs), Directories and Data Archives",
-      "bifrost": "springboard/src/shell/books/engine/inflate.rs:251 (zlib), springboard/src/pngenc.rs:31 (zlib_stored, stored blocks only)",
+      "bifrost": "springboard/render/src/cg/pdf/inflate.rs:251 (zlib), springboard/src/pngenc.rs:31 (zlib_stored, stored blocks only)",
       "status": "partial",
       "note": "DEFLATE and zlib decoding exist inside the Books engine. There is no compressor and no SDK compression API. The PNG writer emits uncompressed blocks."
     },

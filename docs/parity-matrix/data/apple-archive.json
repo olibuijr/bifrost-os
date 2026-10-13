@@ -3,7 +3,7 @@
   "doc": "https://developer.apple.com/documentation/applearchive",
   "macos_since": "11.0",
   "status": "os",
-  "bifrost": "springboard/src/files/zip.rs (create, extract), springboard/apps/files/src/main.rs (compress_now, extract_now), springboard/src/shell/store/install.rs (read_tar, index_tar, extract_from), springboard/src/shell/books/engine/inflate.rs, springboard/src/shell/books/engine/zip.rs",
+  "bifrost": "springboard/src/files/zip.rs (create, extract), springboard/apps/files/src/main.rs (compress_now, extract_now), springboard/src/shell/store/install.rs (read_tar, index_tar, extract_from), springboard/render/src/cg/pdf/inflate.rs, springboard/src/shell/books/engine/zip.rs",
   "summary": "BifrOSt has zip create and extract in the Files app and its system file layer, tar reading and extraction for app package install, and DEFLATE decoding for the Books engine. None of this is exposed through an SDK API, and the Apple Archive stream, string, metadata-preserving and encrypted formats are not present.",
   "rea_evidence": "ev_d29483e649b181c7241be638022e1dc6ebfbd3923c5a414205cc47a344dd7a4d",
   "features": [
