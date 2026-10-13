@@ -140,10 +140,6 @@ impl Text {
         self.cells.len()
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.cells.is_empty()
-    }
-
     /// The text without styles; paragraphs end with `'\n'`.
     pub fn text(&self) -> String {
         self.cells.iter().map(|c| c.ch).collect()
@@ -503,10 +499,6 @@ impl Text {
         words
     }
 
-    /// Paragraphs: the line breaks plus one, so an empty document has one.
-    pub fn paragraph_count(&self) -> usize {
-        self.cells.iter().filter(|c| c.ch == '\n').count() + 1
-    }
 }
 
 /// The char that a cell stands for when searching, folded to lower case unless the search is case sensitive.
@@ -669,8 +661,6 @@ mod tests {
         let t = plain("two words\nthree more  words");
         assert_eq!(t.word_count(), 5);
         assert_eq!(t.char_count(), 26);
-        assert_eq!(t.paragraph_count(), 2);
-        assert_eq!(plain("").paragraph_count(), 1);
     }
 
     #[test]
