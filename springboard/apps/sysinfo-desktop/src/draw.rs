@@ -4,7 +4,7 @@
 use crate::window::{SysInfo, B_REFRESH, KEY_PT, LINE_PT, PAD_PT, SIDE_PT};
 use bifrost_app::controls::sidebar::SidebarItem;
 use bifrost_app::controls::{Node, Rect, Role};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_LARGE_TITLE_PT, SEPARATOR_C, SIDEBAR_BG};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_LARGE_TITLE_PT, SEGMENT_ON, SEPARATOR_C, SIDEBAR_BG};
 use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::widgets;
@@ -57,7 +57,12 @@ fn paint_detail(w: &mut SysInfo, s: &mut Surface, ui: &Ui) {
     let title = w.selected.title();
     let blurb = w.selected.blurb();
     text_mid(&mut w.labels, s, ui, title, MAC_LARGE_TITLE_PT, Weight::Bold, LABEL.now(), x, y0 + 16.0, cw);
-    text_mid(&mut w.labels, s, ui, blurb, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x, y0 + 50.0, cw);
+    // while the find bar is open the line under the title shows what is being searched for
+    let subtitle = match &w.find {
+        Some(q) => format!("Find: {q}|  (Return finds the next category, Escape closes)"),
+        None => blurb.to_string(),
+    };
+    text_mid(&mut w.labels, s, ui, &subtitle, MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x, y0 + 50.0, cw);
 
     let top = w.card_top();
     let avail = (w.size.1 - top - PAD_PT).max(0.0);
@@ -68,6 +73,9 @@ fn paint_detail(w: &mut SysInfo, s: &mut Surface, ui: &Ui) {
         let row_bottom = row_top + LINE_PT;
         if row_top < top || row_bottom > top + avail {
             continue;
+        }
+        if w.is_selected(i) {
+            fill(s, ui, Rect { x: x + 6.0, y: row_top + 1.0, w: cw - 12.0, h: LINE_PT - 2.0 }, 5.0, SEGMENT_ON.now());
         }
         let mid = row_top + LINE_PT / 2.0;
         text_mid(&mut w.labels, s, ui, key, MAC_BODY_PT, Weight::Regular, LABEL.now(), x + 16.0, mid, KEY_PT - 16.0);
