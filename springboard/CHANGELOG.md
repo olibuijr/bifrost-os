@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Terminal: More menu row "Open link in selection" opens the first web link in the selected text in the browser
+  (`terminal/links.rs`, reusing the URL detection in `profile_table.rs`).
 - SDK: text layout objects (`bifrost_ui::typeset`: typesetter, framesetter, frame, line, run) with Unicode line break and
   grapheme cluster rules, paragraph styles, tab stops, bidi line reordering, truncated and justified lines. Attributed
   strings gain font family and size, literal colours, baseline, superscript, kern, tracking, stroke, underline colour and

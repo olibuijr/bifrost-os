@@ -29,6 +29,7 @@ pub mod layout;
 mod control;
 mod find;
 mod input;
+mod links;
 mod menus;
 #[allow(dead_code)]
 pub mod profile_table;
@@ -49,7 +50,7 @@ const BADGE: u32 = pack(38, 38, 38, 255);
 const RED: u32 = pack(224, 90, 79, 255);
 const ACCENT: u32 = pack(42, 166, 106, 255);
 const ROW: f32 = 40.0;
-const MENU: [&str; 15] = [
+const MENU: [&str; 16] = [
     "Find in scrollback",
     "Smaller text",
     "Larger text",
@@ -65,6 +66,7 @@ const MENU: [&str; 15] = [
     "Clear screen",
     "Reset terminal",
     "SSH connections",
+    "Open link in selection",
 ];
 /// True for the Find line's "n of m" match count (secondary), false for "No matches" and warnings (red).
 fn find_count(message: &str) -> bool {
