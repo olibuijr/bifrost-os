@@ -679,7 +679,8 @@ impl Shell {
 
     /// The Clock's alert just fired: note it under the Clock.
     pub(super) fn notify_alarm(&mut self) {
-        let app = super::apphost::slot_of(super::clock::APP_ID).map(|n| AppId::External(n as u8));
+        // filed under the installed Clock app by its manifest id, so it lands whether or not the app is open
+        let app = super::apphost::slot_of(super::clock::MANIFEST_ID).map(|n| AppId::External(n as u8));
         for a in self.clock.drain_fired() {
             let Some(app) = app else { continue };
             let now = self.notify.now();

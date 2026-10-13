@@ -26,8 +26,12 @@ use tz::{civil, City};
 pub const ORANGE: u32 = crate::shell::ui::SYSTEM_ORANGE;
 const GREY_ACTIVE: u32 = crate::shell::ui::CALC_NUMERIC;
 
-/// The package id of the Clock app.
+/// The package id of the Clock app's data (the folder under appdata, and the legacy migration key).
 pub const APP_ID: &str = "is.olibuijr.clock";
+
+/// The manifest id of the installed Clock app (`apps/clock-desktop/manifest.toml`). Notifications for fired alarms
+/// are filed under the installed app with this id, which is found whether or not the app is running.
+pub const MANIFEST_ID: &str = "is.olibuijr.clock.desktop";
 
 /// How often the service looks for changes the app made to its files.
 const POLL_MS: f64 = 1000.0;
@@ -430,6 +434,13 @@ impl Clock {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_notification_app_id_is_the_clock_manifest_id() {
+        // fired alarms are filed under the installed app by this id; the manifest must say the same
+        let manifest = include_str!("../../../apps/clock-desktop/manifest.toml");
+        assert!(manifest.contains(&format!("id = \"{MANIFEST_ID}\"")), "the Clock manifest id is {MANIFEST_ID}");
+    }
 
     #[test]
     fn sample_reads_the_system_clock_with_the_zone_offset() {
