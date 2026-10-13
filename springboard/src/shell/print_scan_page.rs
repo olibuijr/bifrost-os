@@ -18,7 +18,7 @@ pub enum Edit {
 }
 
 /// The printers as the scheduler has them now, or why they could not be read.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct View {
     pub printers: Vec<Printer>,
     pub error: Option<String>,
@@ -27,6 +27,9 @@ pub struct View {
     /// why the scanners could not be listed (scanning not installed, or the command failed)
     pub scanner_error: Option<String>,
 }
+
+/// The view before the first load lands: nothing listed and no error.
+pub static NO_PRINT_SCAN: View = View { printers: Vec::new(), error: None, scanners: Vec::new(), scanner_error: None };
 
 impl View {
     pub fn load() -> View {

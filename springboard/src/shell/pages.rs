@@ -435,6 +435,12 @@ pub struct Model<'a> {
     pub fonts: &'a FontsView,
     /// Settings > Sound: the device lists from the audio object model
     pub sound: &'a super::sound_page::SoundView,
+    /// Settings > Sharing: the computer name and service states, loaded ahead of the build
+    pub sharing: &'a super::sharing_page::View,
+    /// Settings > Users & Groups: the accounts and groups, loaded ahead of the build
+    pub users: &'a super::users_page::View,
+    /// Settings > Print & Scan: the printers and scanners, loaded ahead of the build
+    pub print_scan: &'a super::print_scan_page::View,
 }
 
 /// Settings > Fonts as the page shows it, indexed by `FontRole::index`.
@@ -807,7 +813,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 .footer("Nearby Share lets you share instantly with devices nearby. You can be discoverable to receive from everyone or only from devices you have already seen nearby.")],
         ),
         PageId::Sharing => {
-            let mut groups = super::sharing_page::groups(&super::sharing_page::View::load());
+            let mut groups = super::sharing_page::groups(m.sharing);
             groups.push(Group::new(vec![
                 Item::new("Nearby Share").glyph(Glyph::Nearby).value(NEARBY_CHOICES.get(o.nearby).copied().unwrap_or(NEARBY_CHOICES[0])).link(PageId::Nearby),
                 Item::new("AirPlay & Handoff").value(if o.handoff { "Handoff On" } else { "Handoff Off" }).link(PageId::AirPlayHandoff),
@@ -815,7 +821,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             .footer("Choose who can share files with this computer nearby, and whether your other devices can pick up work from it."));
             page("Sharing", false, groups)
         }
-        PageId::PrintScan => super::print_scan_page::spec(&super::print_scan_page::View::load()),
+        PageId::PrintScan => super::print_scan_page::spec(m.print_scan),
         PageId::LockScreen => page(
             "Lock Screen",
             false,
@@ -927,7 +933,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 Group::new(vec![Item::new("Swap Left and Right Buttons").switch(o.swap_buttons, Action::Toggle(Toggle::SwapButtons))]).footer("The left button becomes the secondary button and the right button the primary one."),
             ],
         ),
-        PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, &super::users_page::View::load(), m.detail, "", o),
+        PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, m.users, m.detail, "", o),
         PageId::Fonts => fonts_page(m),
         PageId::FontPick(role) => font_pick_page(m, role),
         PageId::Dictionary => page(
@@ -1626,7 +1632,7 @@ mod tests {
     static A11Y_DEFAULT: AccessibilitySettings = AccessibilitySettings::DEFAULT;
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND }
+        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND, sharing: &crate::shell::sharing_page::NO_SHARING, users: &crate::shell::users_page::NO_USERS, print_scan: &crate::shell::print_scan_page::NO_PRINT_SCAN }
     }
 
     #[test]

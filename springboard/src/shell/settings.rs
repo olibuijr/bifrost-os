@@ -19,6 +19,7 @@ use super::passcode::{self, Lock, LockOut, Overlay, OverlayOut};
 use super::screentime::{self, config::Config as StConfig, page::{StEdit, View as StView}, usage as st_usage};
 use super::prefs::Prefs;
 use super::storage::Scanner;
+use super::view_cache::ViewCache;
 use bifrost_ui::transition::{Ease, Subtype, Transition};
 use super::storage_page::{self, DevState, PageState};
 use super::update::{self, Updater};
@@ -280,6 +281,16 @@ pub struct Settings {
     data_dir: PathBuf,
     /// the bifrost Storage measurement, run on a worker thread
     scan: Scanner,
+    /// Settings > Sharing: the computer name and service states, reloaded on a worker when the page opens and after a change
+    sharing_view: ViewCache<super::sharing_page::View>,
+    /// Settings > Users & Groups: the accounts and groups, reloaded the same way
+    users_view: ViewCache<super::users_page::View>,
+    /// Settings > Print & Scan: the printers and scanners, reloaded the same way
+    print_view: ViewCache<super::print_scan_page::View>,
+    /// the backup copied before Install Now restarts the system, while it runs (its file count, or why it failed)
+    install_rx: Option<std::sync::mpsc::Receiver<Result<usize, String>>>,
+    /// the backup is in and the restart can go ahead (taken by the shell through `take_install_ready`)
+    install_ready: bool,
     /// the graphics adapters shown by Display > Graphics, read when the page opens
     gpus: Vec<super::gpu_page::Gpu>,
     /// Developer switches as read from the Android properties
@@ -476,6 +487,11 @@ impl Settings {
             detail: String::new(),
             data_dir: super::apphost::root(),
             scan: Scanner::default(),
+            sharing_view: ViewCache::default(),
+            users_view: ViewCache::default(),
+            print_view: ViewCache::default(),
+            install_rx: None,
+            install_ready: false,
             gpus: Vec::new(),
             dev: DevState { perf_hud: prefs.get(PERF_HUD_PREF) == Some("1"), gpu_scanout: crate::bare::scanout::pref_on(prefs.get(GPU_SCANOUT_PREF)), ..DevState::read() },
             updater: Updater::new(super::apphost::root(), prefs.get(update::URL_PREF)),
@@ -538,7 +554,7 @@ impl Settings {
 
     fn model(&self) -> Model<'_> {
         let now = self.info.battery_history.last().map_or(0, |s| s.unix);
-        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: &self.fonts, sound: &self.sound }
+        Model { info: &self.info, opts: &self.opts, a11y: &self.a11y, airplane: self.airplane, haptics: self.haptics, wifi_on: self.wifi_on, brightness: self.brightness, wallpaper: self.wallpaper_name(), detail: &self.detail, now, update_badge: self.update_badge, dock: self.dock.clone(), defaults: &self.defaults, login_items: &self.login_items, login_pending: &self.login_pending, ext: &self.login_ext, fonts: &self.fonts, sound: &self.sound, sharing: self.sharing_view.get(), users: self.users_view.get(), print_scan: self.print_view.get() }
     }
 
     fn wallpaper_name(&self) -> String {
@@ -589,7 +605,7 @@ impl Settings {
                 let crashes = diag::load(&self.data_dir);
                 diagnostics_page::spec(&diagnostics_page::PageState { crashes: &crashes, offset: crate::bare::sys::wall_time().1, note: &self.diag_note, sharing: self.diag_rx.is_some() })
             }
-            PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, &super::users_page::View::load(), &self.detail, &self.users_note, &self.opts),
+            PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, self.users_view.get(), &self.detail, &self.users_note, &self.opts),
             PageId::ScreenTime | PageId::StDowntime | PageId::StLimits | PageId::StAllowed => self.st_spec(id),
             PageId::PrivacyPermissions => super::pages::permissions_page(&super::services::privacy_permissions::rows()),
             PageId::Backup | PageId::SoftwareUpdate => backup_page::spec(id, &backup_page::PageState { updater: &self.updater, auto_update: self.opts.auto_update, backup_before_update: self.opts.backup_before_update, backup_note: &self.backup_note, latest_backup: backup::latest(&self.data_dir).map(|(_, t)| t) }),
@@ -839,6 +855,33 @@ impl Settings {
 
     pub(super) fn take_dock_changes(&mut self) -> Vec<super::desktop_dock::Change> {
         std::mem::take(&mut self.dock_out)
+    }
+
+    /// True once the update's backup is in and the shell should restart into the new version (taken once).
+    pub(super) fn take_install_ready(&mut self) -> bool {
+        std::mem::take(&mut self.install_ready)
+    }
+
+    /// Takes the update backup's answer when it is in: a success makes the restart ready, a failure says why not.
+    fn poll_install(&mut self, ui: &Ui) -> bool {
+        let Some(rx) = &self.install_rx else { return false };
+        let res = match rx.try_recv() {
+            Ok(res) => res,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return false,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => Err("the backup stopped early".to_string()),
+        };
+        self.install_rx = None;
+        match res {
+            Ok(n) => {
+                self.backup_note = format!("Backed up {n} files before the update.");
+                self.update_badge = false;
+                self.install_ready = true;
+            }
+            // the data is never replaced unsaved: the install stops here
+            Err(e) => self.backup_note = format!("Update not installed: backup failed: {e}"),
+        }
+        self.rebuild(ui);
+        true
     }
 
     fn notify_edit(&mut self, ui: &Ui, edit: NotifyEdit, g: usize, i: usize, t: f64) {
@@ -1169,6 +1212,12 @@ impl Settings {
             }
             frame = true;
         }
+        // a loaded view replaces the one the page was built from; the page follows it
+        if self.sharing_view.poll() | self.users_view.poll() | self.print_view.poll() {
+            self.rebuild_visible(ui);
+            frame = true;
+        }
+        frame |= self.poll_install(ui);
         if let Some(res) = self.diag_rx.as_ref().and_then(|rx| rx.try_recv().ok()) {
             self.diag_rx = None;
             self.diag_note = match res {
@@ -1207,7 +1256,7 @@ impl Settings {
         if self.transition.is_some() || self.list().is_some_and(|p| p.animating(t)) || self.sidebar.as_ref().is_some_and(|p| p.animating(t)) || self.passcode.as_ref().is_some_and(|o| o.animating(t)) || self.st_gate.as_ref().is_some_and(|(l, _)| l.animating(t)) {
             return Some(t);
         }
-        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() {
+        if self.scan.busy() || self.updater.busy() || self.diag_rx.is_some() || self.install_rx.is_some() || self.sharing_view.busy() || self.users_view.busy() || self.print_view.busy() {
             return Some(t + 100.0);
         }
         self.search.next_wake(t).or_else(|| self.zone_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.time_picker.as_ref().and_then(|p| p.next_wake(t))).or_else(|| self.sheet.as_ref().and_then(|sh| sh.next_wake(t)))
@@ -1224,7 +1273,14 @@ impl Settings {
             PageId::Diagnostics => self.diag_note.clear(),
             PageId::SoftwareUpdate if matches!(self.updater.state, update::State::Idle | update::State::UpToDate | update::State::Failed(_)) => self.updater.check(),
             PageId::Backup => self.backup_note.clear(),
-            PageId::Users => self.users_note.clear(),
+            PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => {
+                if id == PageId::Users {
+                    self.users_note.clear();
+                }
+                self.users_view.refresh(super::users_page::View::load);
+            }
+            PageId::Sharing => self.sharing_view.refresh(super::sharing_page::View::load),
+            PageId::PrintScan => self.print_view.refresh(super::print_scan_page::View::load),
             PageId::Fonts => self.load_fonts(),
             _ => {}
         }
@@ -1601,8 +1657,16 @@ impl Settings {
         if let Some((purpose, text)) = self.sheet.as_ref().and_then(|sh| sh.form_result()) {
             self.sheet = None;
             let r = match purpose {
-                super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname => super::sharing_page::finish(&purpose, &text).map(|_| None),
-                super::forms::Purpose::PrinterAddress => super::print_scan_page::finish(&purpose, &text).map(|_| None),
+                super::forms::Purpose::ComputerName | super::forms::Purpose::LocalHostname => {
+                    let r = super::sharing_page::finish(&purpose, &text).map(|_| None);
+                    self.sharing_view.refresh(super::sharing_page::View::load);
+                    r
+                }
+                super::forms::Purpose::PrinterAddress => {
+                    let r = super::print_scan_page::finish(&purpose, &text).map(|_| None);
+                    self.print_view.refresh(super::print_scan_page::View::load);
+                    r
+                }
                 _ => return self.form_done(ui, &purpose, &text, t),
             };
             self.edit_result(ui, t, r);
@@ -1626,7 +1690,9 @@ impl Settings {
             self.rebuild_visible(ui);
             return vec![];
         }
-        match super::users_page::finish(purpose, text) {
+        let finished = super::users_page::finish(purpose, text);
+        self.users_view.refresh(super::users_page::View::load);
+        match finished {
             Ok(Some(next)) => self.sheet = Some(Sheet::form(ui, self.w, t, next)),
             Ok(None) => self.users_note.clear(),
             Err(e) => self.users_note = e,
@@ -1637,7 +1703,9 @@ impl Settings {
 
     /// Users & Groups: an edit applies now, or opens the prompt that asks for what it still needs.
     fn users_act(&mut self, ui: &Ui, edit: super::users_page::Edit, t: f64) -> Vec<Effect> {
-        match super::users_page::apply(&edit, &super::users_page::View::load()) {
+        let r = super::users_page::apply(&edit, self.users_view.get());
+        self.users_view.refresh(super::users_page::View::load);
+        match r {
             Ok(Some(prompt)) => {
                 self.users_note.clear();
                 self.sheet = Some(Sheet::form(ui, self.w, t, prompt));
@@ -2205,17 +2273,24 @@ impl Settings {
                 }
             }
             Action::Users(edit) => {
-                let r = super::users_page::apply(&edit, &super::users_page::View::load());
+                let r = super::users_page::apply(&edit, self.users_view.get());
+                self.users_view.refresh(super::users_page::View::load);
                 self.edit_result(ui, t, r);
                 vec![]
             }
             Action::Sharing(edit) => {
-                let r = super::sharing_page::apply(&edit, &super::sharing_page::View::load());
+                let r = super::sharing_page::apply(&edit, self.sharing_view.get());
+                // a service that just started or stopped shows its new state at once; the reload confirms it
+                if let (super::sharing_page::Edit::Service { id, on }, Ok(None)) = (&edit, &r) {
+                    self.sharing_view.get_mut().set_service(*id, *on);
+                }
+                self.sharing_view.refresh(super::sharing_page::View::load);
                 self.edit_result(ui, t, r);
                 vec![]
             }
             Action::PrintScan(edit) => {
                 let r = super::print_scan_page::apply(&edit);
+                self.print_view.refresh(super::print_scan_page::View::load);
                 self.edit_result(ui, t, r);
                 vec![]
             }
@@ -2564,16 +2639,21 @@ impl Settings {
                 vec![]
             }
             Command::InstallUpdate => {
+                if self.install_rx.is_some() {
+                    return vec![];
+                }
                 if self.opts.backup_before_update {
-                    // a failed backup stops the install so the data is never replaced unsaved
-                    match backup::back_up_now(&self.data_dir) {
-                        Ok((_, n)) => self.backup_note = format!("Backed up {n} files before the update."),
-                        Err(e) => {
-                            self.backup_note = format!("Update not installed: backup failed: {e}");
-                            self.rebuild(ui);
-                            return vec![];
-                        }
-                    }
+                    // the copy runs on a worker; `poll_install` restarts once it is in, and a failed backup stops the install
+                    // so the data is never replaced unsaved
+                    let (tx, rx) = std::sync::mpsc::channel();
+                    let dir = self.data_dir.clone();
+                    crate::bare::sys::spawn_named("update-backup", move || {
+                        let _ = tx.send(backup::back_up_now(&dir).map(|(_, n)| n).map_err(|e| e.to_string()));
+                    });
+                    self.install_rx = Some(rx);
+                    self.backup_note = "Backing up before the update…".into();
+                    self.rebuild(ui);
+                    return vec![];
                 }
                 self.update_badge = false;
                 vec![Effect::Restart]
@@ -2629,6 +2709,7 @@ impl Settings {
                 match super::users_page::run(&danger) {
                     Ok(()) => {
                         self.users_note.clear();
+                        self.users_view.refresh(super::users_page::View::load);
                         // the deleted account's or group's page has nothing left to show
                         if matches!(self.page(), PageId::UserDetail | PageId::GroupDetail) {
                             self.pop(t);
