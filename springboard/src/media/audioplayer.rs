@@ -106,7 +106,7 @@ struct Waker(Arc<Mutex<UnixStream>>);
 
 impl Waker {
     fn wake(&self) {
-        let _ = self.0.lock().unwrap().write(&[1]);
+        let _ = self.0.lock().unwrap_or_else(|p| p.into_inner()).write(&[1]);
     }
 }
 
@@ -168,7 +168,7 @@ impl AudioPlayer {
     }
 
     pub fn snapshot(&self) -> Snapshot {
-        let s = self.shared.lock().unwrap();
+        let s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         Snapshot {
             track: s.current.as_ref().map(|c| c.1.clone()),
             index: s.current.as_ref().map(|c| c.0),
@@ -186,13 +186,13 @@ impl AudioPlayer {
 
     /// The queue's songs in list order.
     pub fn queue(&self) -> Vec<Track> {
-        self.shared.lock().unwrap().queue.items().to_vec()
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).queue.items().to_vec()
     }
 
     /// Replaces the queue and starts playing `tracks[start]`; with shuffle
     /// on the rest is reordered with `seed`.
     pub fn play_queue(&mut self, tracks: Vec<Track>, start: usize, shuffle: bool, seed: u64) {
-        let mut s = self.shared.lock().unwrap();
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         let repeat = s.queue.repeat();
         s.queue = Queue::new(tracks, start);
         s.queue.set_repeat(repeat);
@@ -214,18 +214,18 @@ impl AudioPlayer {
     }
 
     pub fn play(&mut self) {
-        let mut s = self.shared.lock().unwrap();
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         if !s.queue.is_empty() {
             s.playing = true;
         }
     }
 
     pub fn pause(&mut self) {
-        self.shared.lock().unwrap().playing = false;
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).playing = false;
     }
 
     pub fn toggle(&mut self) {
-        let playing = self.shared.lock().unwrap().playing;
+        let playing = self.shared.lock().unwrap_or_else(|p| p.into_inner()).playing;
         if playing {
             self.pause();
         } else {
@@ -235,7 +235,7 @@ impl AudioPlayer {
 
     /// Skips to the next song (wrapping at the end).
     pub fn next(&mut self) {
-        let mut s = self.shared.lock().unwrap();
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         if s.queue.next(true) {
             Self::restart(&mut s, 0.0);
         }
@@ -244,7 +244,7 @@ impl AudioPlayer {
     /// Restarts the song when it is past `RESTART_AFTER_MS`, else goes back
     /// one; a live stream has nothing to restart, so it always goes back.
     pub fn prev(&mut self) {
-        let mut s = self.shared.lock().unwrap();
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         if s.queue.is_empty() {
             return;
         }
@@ -257,14 +257,14 @@ impl AudioPlayer {
 
     /// Jumps to the queue item at `index` (list order).
     pub fn jump_to(&mut self, index: usize) {
-        let mut s = self.shared.lock().unwrap();
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         s.queue.jump_to(index);
         s.playing = true;
         Self::restart(&mut s, 0.0);
     }
 
     pub fn seek_ms(&mut self, ms: f64) {
-        let mut s = self.shared.lock().unwrap();
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         if s.queue.is_empty() || s.queue.current().is_some_and(Track::is_live) {
             return;
         }
@@ -273,31 +273,31 @@ impl AudioPlayer {
     }
 
     pub fn set_shuffle(&mut self, on: bool, seed: u64) {
-        self.shared.lock().unwrap().queue.set_shuffle(on, seed);
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).queue.set_shuffle(on, seed);
     }
 
     pub fn set_repeat(&mut self, r: Repeat) {
-        self.shared.lock().unwrap().queue.set_repeat(r);
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).queue.set_repeat(r);
     }
 
     /// Software gain 0..=1, applied before the device.
     pub fn set_volume(&mut self, v: f32) {
-        self.shared.lock().unwrap().volume = v.clamp(0.0, 1.0);
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).volume = v.clamp(0.0, 1.0);
     }
 
     /// Whether the samples reach the device (false) or are zeroed (true,
     /// the default). Only the lead's audio routing turns this off.
     pub fn set_muted(&mut self, muted: bool) {
-        self.shared.lock().unwrap().muted = muted;
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).muted = muted;
     }
 
     pub fn muted(&self) -> bool {
-        self.shared.lock().unwrap().muted
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).muted
     }
 
     /// Stops the thread; the player is finished afterwards.
     pub fn stop(&mut self) {
-        self.shared.lock().unwrap().quit = true;
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).quit = true;
         if let Some(w) = self.worker.take() {
             join_within(w, std::time::Duration::from_millis(300));
         }
@@ -376,7 +376,7 @@ impl Engine {
     /// Opens the current song at `start_ms`; None (with the error noted)
     /// when it does not play.
     fn open_current(&mut self, start_ms: f64) -> Option<Box<dyn AudioDecoder>> {
-        let track = self.shared.lock().unwrap().queue.current().cloned()?;
+        let track = self.shared.lock().unwrap_or_else(|p| p.into_inner()).queue.current().cloned()?;
         let opened = match &track.url {
             Some(url) => self.open_stream(url),
             None => audiofile::open(&track.path).map_err(|e| format!("{}: {e}", track.path.display())),
@@ -384,7 +384,7 @@ impl Engine {
         let mut d = match opened {
             Ok(d) => d,
             Err(e) => {
-                self.shared.lock().unwrap().error = Some(e);
+                self.shared.lock().unwrap_or_else(|p| p.into_inner()).error = Some(e);
                 return None;
             }
         };
@@ -398,11 +398,11 @@ impl Engine {
     /// Connects to a live stream; blocks until audio arrives, but gives up
     /// as soon as the song is changed or the player stopped.
     fn open_stream(&mut self, url: &str) -> Result<Box<dyn AudioDecoder>, String> {
-        let live = self.shared.lock().unwrap().live.clone().ok_or("no stream state")?;
+        let live = self.shared.lock().unwrap_or_else(|p| p.into_inner()).live.clone().ok_or("no stream state")?;
         let transport = self.transport.get_or_insert_with(|| Arc::new(Tls::new())).clone();
         let (shared, generation) = (self.shared.clone(), self.generation);
         let abort = Box::new(move || {
-            let s = shared.lock().unwrap();
+            let s = shared.lock().unwrap_or_else(|p| p.into_inner());
             s.quit || s.generation != generation
         });
         stream::open(url, transport, live, abort, self.tuning).map_err(|e| format!("{url}: {e}"))
@@ -418,7 +418,7 @@ impl Engine {
         self.decoder = self.open_current(start_ms);
         self.song_start = (0, start_ms);
         let duration = self.decoder.as_ref().and_then(|d| d.duration_ms());
-        let mut s = self.shared.lock().unwrap();
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         s.duration_ms = duration;
         s.position_ms = start_ms;
         s.current = s.queue.current_index().zip(s.queue.current().cloned());
@@ -436,14 +436,14 @@ impl Engine {
         while self.pending.front().is_some_and(|p| played >= p.0) {
             let (first, duration, index, track) = self.pending.pop_front().unwrap();
             self.song_start = (first, 0.0);
-            let mut s = self.shared.lock().unwrap();
+            let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
             s.duration_ms = duration;
             s.current = Some((index, track));
             drop(s);
             self.waker.wake();
         }
         let (first, start) = self.song_start;
-        let mut s = self.shared.lock().unwrap();
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         if !s.playing {
             // a pause landed while a write was in flight: the position stays put
             return;
@@ -461,7 +461,7 @@ impl Engine {
         let mut latency: Option<crate::bare::pmqos::CpuDmaLatency> = None;
         loop {
             let (quit, generation, playing, start_ms) = {
-                let s = self.shared.lock().unwrap();
+                let s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
                 (s.quit, s.generation, s.playing, s.start_ms)
             };
             if quit {
@@ -488,7 +488,7 @@ impl Engine {
                 self.out.pause(self.paused);
                 if !self.paused && self.out.played() < self.played_at_pause {
                     // the device dropped its queue on pause: resume from where it stopped
-                    let at = self.shared.lock().unwrap().position_ms;
+                    let at = self.shared.lock().unwrap_or_else(|p| p.into_inner()).position_ms;
                     self.reopen(at);
                     continue;
                 }
@@ -502,7 +502,7 @@ impl Engine {
                 self.report();
                 if self.out.played() >= self.written {
                     // the last song ended: rest paused on the first one
-                    let mut s = self.shared.lock().unwrap();
+                    let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
                     s.playing = false;
                     s.queue.next(false);
                     AudioPlayer::restart(&mut s, 0.0);
@@ -519,7 +519,7 @@ impl Engine {
                 match d.next(&mut self.samples) {
                     Ok(more) => more,
                     Err(e) => {
-                        self.shared.lock().unwrap().error = Some(e.to_string());
+                        self.shared.lock().unwrap_or_else(|p| p.into_inner()).error = Some(e.to_string());
                         false
                     }
                 }
@@ -540,7 +540,7 @@ impl Engine {
 
     /// Whether a newer request (or quit) arrived since the song was opened.
     fn superseded(&self) -> bool {
-        let s = self.shared.lock().unwrap();
+        let s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         s.quit || s.generation != self.generation
     }
 
@@ -549,7 +549,7 @@ impl Engine {
     /// successor.
     fn advance(&mut self) {
         let next = {
-            let mut s = self.shared.lock().unwrap();
+            let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
             if s.queue.current().is_some_and(Track::is_live) {
                 None
             } else if s.queue.following(false).is_some() {
@@ -575,7 +575,7 @@ impl Engine {
 
     fn write_samples(&mut self) {
         let (volume, muted) = {
-            let s = self.shared.lock().unwrap();
+            let s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
             (s.volume, s.muted)
         };
         let d = self.decoder.as_ref().unwrap();
@@ -603,7 +603,7 @@ impl Engine {
             Ok(()) => self.written += self.pcm.len() as u64 / 2,
             Err(e) => {
                 // the device is gone: stop here instead of racing through the queue
-                let mut s = self.shared.lock().unwrap();
+                let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
                 s.playing = false;
                 s.error = Some(format!("audio output: {e}"));
                 drop(s);

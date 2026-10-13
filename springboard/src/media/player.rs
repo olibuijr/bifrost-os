@@ -162,7 +162,7 @@ impl Player {
             let notify_fd = pipe[1];
             std::thread::Builder::new().name("media-video".into()).spawn(move || {
                 if let Err(e) = run(shared.clone(), notify_fd, source, decoder, audio) {
-                    shared.lock().unwrap().error = Some(e);
+                    shared.lock().unwrap_or_else(|p| p.into_inner()).error = Some(e);
                     notify(notify_fd);
                 }
             })?
@@ -171,7 +171,7 @@ impl Player {
     }
 
     pub fn play(&mut self) {
-        let mut s = self.shared.lock().unwrap();
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         if !s.playing {
             s.playing = true;
             let t = s.clock.now();
@@ -180,7 +180,7 @@ impl Player {
     }
 
     pub fn pause(&mut self) {
-        let mut s = self.shared.lock().unwrap();
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         if s.playing {
             s.playing = false;
             let t = s.clock.now();
@@ -191,7 +191,7 @@ impl Player {
     /// Stops the threads; the player is finished afterwards.
     /// Returns false when the worker was detached because it did not exit in time.
     pub fn stop(&mut self) -> bool {
-        self.shared.lock().unwrap().quit = true;
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).quit = true;
         match self.worker.take() {
             Some(w) => super::audioplayer::join_within(w, std::time::Duration::from_millis(300)),
             None => true,
@@ -200,7 +200,7 @@ impl Player {
 
     /// Jumps to the keyframe at or before `ms`.
     pub fn seek_ms(&mut self, ms: f64) {
-        let mut s = self.shared.lock().unwrap();
+        let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         let ms = ms.max(0.0).min(s.duration_ms.unwrap_or(f64::MAX));
         s.seek_pending = Some(ms);
         s.seek_target = ms;
@@ -213,7 +213,7 @@ impl Player {
     }
 
     pub fn position_ms(&self) -> f64 {
-        let s = self.shared.lock().unwrap();
+        let s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         let t = s.seek_pending.unwrap_or_else(|| s.clock.now());
         match s.duration_ms {
             Some(d) => t.min(d),
@@ -222,11 +222,11 @@ impl Player {
     }
 
     pub fn duration_ms(&self) -> Option<f64> {
-        self.duration_ms.or_else(|| self.shared.lock().unwrap().duration_ms)
+        self.duration_ms.or_else(|| self.shared.lock().unwrap_or_else(|p| p.into_inner()).duration_ms)
     }
 
     pub fn state(&self) -> State {
-        let s = self.shared.lock().unwrap();
+        let s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(e) = &s.error {
             return State::Error(e.clone());
         }
@@ -248,7 +248,7 @@ impl Player {
 
     /// The latest decoded frame, at most once per frame; drains the pipe.
     pub fn take_frame(&mut self) -> Option<Image> {
-        let viewport = self.shared.lock().unwrap().viewport;
+        let viewport = self.shared.lock().unwrap_or_else(|p| p.into_inner()).viewport;
         self.take_picture().map(|p| p.into_rgba(viewport))
     }
 
@@ -257,13 +257,13 @@ impl Player {
         let mut buf = [0u8; 64];
         // SAFETY: non-blocking read into a local buffer from our own pipe.
         while unsafe { crate::bare::sys::read(self.pipe[0], buf.as_mut_ptr() as *mut _, buf.len()) } > 0 {}
-        self.shared.lock().unwrap().frame.take().map(|(p, _)| p)
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).frame.take().map(|(p, _)| p)
     }
 
     /// Asks for pictures left in the decoder's buffers (`Picture::Gpu`) when the decoder can;
     /// off, they are converted to RGBA at the viewport size on the video thread.
     pub fn set_zero_copy(&mut self, on: bool) {
-        self.shared.lock().unwrap().zero_copy = on;
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).zero_copy = on;
     }
 
     /// Readable when a new frame or state is available.
@@ -277,7 +277,7 @@ impl Player {
         // SAFETY: non-blocking read into a local buffer from our own pipe.
         while unsafe { crate::bare::sys::read(self.pipe[0], buf.as_mut_ptr() as *mut _, buf.len()) } > 0 {}
         let taken = {
-            let mut s = self.shared.lock().unwrap();
+            let mut s = self.shared.lock().unwrap_or_else(|p| p.into_inner());
             s.frame.take().map(|f| (f, s.viewport))
         };
         match taken {
@@ -291,7 +291,7 @@ impl Player {
 
     /// The box frames are scaled to fit (default: the 1200x1920 panel).
     pub fn set_viewport(&mut self, w: u32, h: u32) {
-        self.shared.lock().unwrap().viewport = (w.max(2), h.max(2));
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).viewport = (w.max(2), h.max(2));
     }
 }
 
@@ -318,10 +318,10 @@ fn run(shared: Arc<Mutex<Shared>>, notify_fd: c_int, mut source: Box<dyn Source>
         match Demuxer::open(&mut *source) {
             Ok(d) => break d,
             Err(Error::NeedData { offset, len }) => {
-                shared.lock().unwrap().video_wait = Some((offset, len));
+                shared.lock().unwrap_or_else(|p| p.into_inner()).video_wait = Some((offset, len));
                 notify(notify_fd);
                 std::thread::sleep(RETRY);
-                if shared.lock().unwrap().quit {
+                if shared.lock().unwrap_or_else(|p| p.into_inner()).quit {
                     return Ok(());
                 }
             }
@@ -332,7 +332,7 @@ fn run(shared: Arc<Mutex<Shared>>, notify_fd: c_int, mut source: Box<dyn Source>
     let video = demuxer.video().map(|t| t.codec.clone());
     let has_audio = demuxer.audio().is_some();
     {
-        let mut s = shared.lock().unwrap();
+        let mut s = shared.lock().unwrap_or_else(|p| p.into_inner());
         s.duration_ms = duration;
         s.has_audio = has_audio;
         s.video_wait = None;
@@ -354,7 +354,7 @@ fn run(shared: Arc<Mutex<Shared>>, notify_fd: c_int, mut source: Box<dyn Source>
         None => Ok(()),
     };
     if result.is_err() {
-        shared.lock().unwrap().quit = true;
+        shared.lock().unwrap_or_else(|p| p.into_inner()).quit = true;
     }
     if let Some(t) = audio_thread {
         let _ = t.join();
@@ -366,8 +366,8 @@ fn run(shared: Arc<Mutex<Shared>>, notify_fd: c_int, mut source: Box<dyn Source>
 /// `generation` (the caller resets first, so the keyframe is not lost).
 /// Checked under the demuxer lock, which every seek also takes.
 fn fetch(shared: &Mutex<Shared>, demux: &Demux, kind: Kind, generation: u64) -> Option<Result<Option<mp4::Sample>, Error>> {
-    let mut d = demux.lock().unwrap();
-    if shared.lock().unwrap().generation != generation {
+    let mut d = demux.lock().unwrap_or_else(|p| p.into_inner());
+    if shared.lock().unwrap_or_else(|p| p.into_inner()).generation != generation {
         return None;
     }
     let (demuxer, source) = &mut *d;
@@ -379,7 +379,7 @@ fn fetch(shared: &Mutex<Shared>, demux: &Demux, kind: Kind, generation: u64) -> 
 fn wait_until(shared: &Mutex<Shared>, pts_ms: f64, generation: u64) -> bool {
     loop {
         let (now, playing) = {
-            let s = shared.lock().unwrap();
+            let s = shared.lock().unwrap_or_else(|p| p.into_inner());
             if s.quit || s.generation != generation {
                 return false;
             }
@@ -395,23 +395,23 @@ fn wait_until(shared: &Mutex<Shared>, pts_ms: f64, generation: u64) -> bool {
 
 /// Applies a pending seek to the demuxer; false while its data is missing.
 fn apply_seek(shared: &Mutex<Shared>, demux: &Demux, wait: fn(&mut Shared) -> &mut Option<(u64, u64)>) -> bool {
-    let Some(target) = shared.lock().unwrap().seek_pending else { return true };
-    let mut d = demux.lock().unwrap();
+    let Some(target) = shared.lock().unwrap_or_else(|p| p.into_inner()).seek_pending else { return true };
+    let mut d = demux.lock().unwrap_or_else(|p| p.into_inner());
     let (demuxer, source) = &mut *d;
     match demuxer.seek_ms(target, &mut **source) {
         Ok(_) => {
-            let mut s = shared.lock().unwrap();
+            let mut s = shared.lock().unwrap_or_else(|p| p.into_inner());
             if s.seek_pending == Some(target) {
                 s.seek_pending = None;
             }
             true
         }
         Err(Error::NeedData { offset, len }) => {
-            *wait(&mut shared.lock().unwrap()) = Some((offset, len));
+            *wait(&mut shared.lock().unwrap_or_else(|p| p.into_inner())) = Some((offset, len));
             false
         }
         Err(e) => {
-            shared.lock().unwrap().error = Some(e.to_string());
+            shared.lock().unwrap_or_else(|p| p.into_inner()).error = Some(e.to_string());
             false
         }
     }
@@ -442,7 +442,7 @@ fn video_loop(shared: &Arc<Mutex<Shared>>, notify_fd: c_int, demux: &Demux, code
     let mut starved = false;
     loop {
         {
-            let mut s = shared.lock().unwrap();
+            let mut s = shared.lock().unwrap_or_else(|p| p.into_inner());
             if s.quit {
                 return Ok(());
             }
@@ -467,7 +467,7 @@ fn video_loop(shared: &Arc<Mutex<Shared>>, notify_fd: c_int, demux: &Demux, code
             starved = false;
             match sample {
                 Ok(Some(sample)) => {
-                    let had_wait = shared.lock().unwrap().video_wait.take().is_some();
+                    let had_wait = shared.lock().unwrap_or_else(|p| p.into_inner()).video_wait.take().is_some();
                     if had_wait {
                         notify(notify_fd);
                     }
@@ -482,7 +482,7 @@ fn video_loop(shared: &Arc<Mutex<Shared>>, notify_fd: c_int, demux: &Demux, code
                 Ok(None) => eof = true,
                 Err(Error::NeedData { offset, len }) => {
                     starved = true;
-                    let mut s = shared.lock().unwrap();
+                    let mut s = shared.lock().unwrap_or_else(|p| p.into_inner());
                     if s.video_wait != Some((offset, len)) {
                         s.video_wait = Some((offset, len));
                         drop(s);
@@ -501,7 +501,7 @@ fn video_loop(shared: &Arc<Mutex<Shared>>, notify_fd: c_int, demux: &Demux, code
         }
         let Some(front) = queue.front() else {
             if eof {
-                let mut s = shared.lock().unwrap();
+                let mut s = shared.lock().unwrap_or_else(|p| p.into_inner());
                 if !s.video_done {
                     s.video_done = true;
                     if !s.has_audio {
@@ -514,7 +514,7 @@ fn video_loop(shared: &Arc<Mutex<Shared>>, notify_fd: c_int, demux: &Demux, code
             }
             // Decode latency is unpredictable (no wake fd from the decoder), so keep the short poll
             // only while playing; paused or finished, nothing arrives that soon.
-            let playing = shared.lock().unwrap().playing;
+            let playing = shared.lock().unwrap_or_else(|p| p.into_inner()).playing;
             std::thread::sleep(if starved { RETRY } else { Duration::from_millis(if eof || !playing { 20 } else { 2 }) });
             continue;
         };
@@ -525,7 +525,7 @@ fn video_loop(shared: &Arc<Mutex<Shared>>, notify_fd: c_int, demux: &Demux, code
         }
         if queue.len() < LOOKAHEAD && !eof && !starved {
             // keep the decoder fed before blocking on the clock
-            let now = shared.lock().unwrap().clock.now();
+            let now = shared.lock().unwrap_or_else(|p| p.into_inner()).clock.now();
             if pts_ms - now > 10.0 {
                 continue;
             }
@@ -536,7 +536,7 @@ fn video_loop(shared: &Arc<Mutex<Shared>>, notify_fd: c_int, demux: &Demux, code
         drop_until = 0.0;
         let frame = queue.pop_front().unwrap();
         let (now, viewport, has_audio, want_zero_copy) = {
-            let s = shared.lock().unwrap();
+            let s = shared.lock().unwrap_or_else(|p| p.into_inner());
             (s.clock.now(), s.viewport, s.has_audio, s.zero_copy)
         };
         if want_zero_copy != zero_copy {
@@ -555,7 +555,7 @@ fn video_loop(shared: &Arc<Mutex<Shared>>, notify_fd: c_int, demux: &Demux, code
             Pixels::Rgba(img) => Picture::Rgba(convert::rgba_scale(&img, ow, oh)),
             Pixels::Dma(p) => Picture::Rgba(convert::dma_to_rgba(&p, ow, oh, matrix, CONVERT_THREADS)),
         };
-        let mut s = shared.lock().unwrap();
+        let mut s = shared.lock().unwrap_or_else(|p| p.into_inner());
         if s.generation == generation {
             if !has_audio && s.playing {
                 s.clock.set(pts_ms, true);
@@ -578,14 +578,14 @@ fn written_after_resume(written: u64, played: u64) -> u64 {
 
 fn audio_loop(shared: Arc<Mutex<Shared>>, notify_fd: c_int, demux: Demux, mut out: Box<dyn AudioOut>) {
     crate::gfx::affinity::audio_thread();
-    let asc = match demux.lock().unwrap().0.audio().map(|t| t.codec.clone()) {
+    let asc = match demux.lock().unwrap_or_else(|p| p.into_inner()).0.audio().map(|t| t.codec.clone()) {
         Some(mp4::Codec::Aac { asc, .. }) => asc,
         _ => return,
     };
     let mut decoder = match aac::Decoder::new(&asc) {
         Ok(d) => d,
         Err(e) => {
-            shared.lock().unwrap().error = Some(format!("aac: {e}"));
+            shared.lock().unwrap_or_else(|p| p.into_inner()).error = Some(format!("aac: {e}"));
             return;
         }
     };
@@ -599,7 +599,7 @@ fn audio_loop(shared: Arc<Mutex<Shared>>, notify_fd: c_int, demux: Demux, mut ou
     let mut written = 0u64;
     loop {
         {
-            let mut s = shared.lock().unwrap();
+            let mut s = shared.lock().unwrap_or_else(|p| p.into_inner());
             if s.quit {
                 return;
             }
@@ -618,7 +618,7 @@ fn audio_loop(shared: Arc<Mutex<Shared>>, notify_fd: c_int, demux: Demux, mut ou
             std::thread::sleep(RETRY);
             continue;
         }
-        let playing = shared.lock().unwrap().playing;
+        let playing = shared.lock().unwrap_or_else(|p| p.into_inner()).playing;
         if playing == paused {
             paused = !playing;
             out.pause(paused);
@@ -627,7 +627,7 @@ fn audio_loop(shared: Arc<Mutex<Shared>>, notify_fd: c_int, demux: Demux, mut ou
         }
         if paused || eof {
             if eof && out.played() >= written {
-                shared.lock().unwrap().audio_done = true;
+                shared.lock().unwrap_or_else(|p| p.into_inner()).audio_done = true;
             }
             std::thread::sleep(Duration::from_millis(10));
             continue;
@@ -635,18 +635,18 @@ fn audio_loop(shared: Arc<Mutex<Shared>>, notify_fd: c_int, demux: Demux, mut ou
         let Some(sample) = fetch(&shared, &demux, Kind::Audio, generation) else { continue };
         match sample {
             Ok(Some(sample)) => {
-                if shared.lock().unwrap().audio_wait.take().is_some() {
+                if shared.lock().unwrap_or_else(|p| p.into_inner()).audio_wait.take().is_some() {
                     notify(notify_fd);
                 }
                 if let Err(e) = decoder.decode(&sample.data, &mut samples) {
-                    shared.lock().unwrap().error = Some(format!("aac: {e}"));
+                    shared.lock().unwrap_or_else(|p| p.into_inner()).error = Some(format!("aac: {e}"));
                     return;
                 }
                 resampler.retune(decoder.rate(), decoder.channels());
                 pcm.clear();
                 resampler.convert(&samples, &mut pcm);
                 if let Err(e) = super::audio_out::write_with_retry(&mut *out, &pcm, &super::audio_out::WRITE_RETRY_BACKOFF) {
-                    shared.lock().unwrap().error = Some(format!("audio output: {e}"));
+                    shared.lock().unwrap_or_else(|p| p.into_inner()).error = Some(format!("audio output: {e}"));
                     notify(notify_fd);
                     return;
                 }
@@ -655,14 +655,14 @@ fn audio_loop(shared: Arc<Mutex<Shared>>, notify_fd: c_int, demux: Demux, mut ou
                 // the end of what we just wrote
                 let queued = written.saturating_sub(out.played());
                 let end_ms = sample.pts_ms + sample.duration_ms;
-                let mut s = shared.lock().unwrap();
+                let mut s = shared.lock().unwrap_or_else(|p| p.into_inner());
                 if s.generation == generation && s.playing {
                     s.clock.set(end_ms - queued as f64 * 1000.0 / aac::OUT_RATE as f64, true);
                 }
             }
             Ok(None) => eof = true,
             Err(Error::NeedData { offset, len }) => {
-                let mut s = shared.lock().unwrap();
+                let mut s = shared.lock().unwrap_or_else(|p| p.into_inner());
                 if s.audio_wait != Some((offset, len)) {
                     s.audio_wait = Some((offset, len));
                     drop(s);
@@ -671,7 +671,7 @@ fn audio_loop(shared: Arc<Mutex<Shared>>, notify_fd: c_int, demux: Demux, mut ou
                 std::thread::sleep(RETRY);
             }
             Err(e) => {
-                shared.lock().unwrap().error = Some(e.to_string());
+                shared.lock().unwrap_or_else(|p| p.into_inner()).error = Some(e.to_string());
                 notify(notify_fd);
                 return;
             }
@@ -738,10 +738,10 @@ mod tests {
 
     impl Source for Growing {
         fn read_at(&mut self, offset: u64, buf: &mut [u8]) -> Result<(), Error> {
-            self.0.lock().unwrap().read_at(offset, buf)
+            self.0.lock().unwrap_or_else(|p| p.into_inner()).read_at(offset, buf)
         }
         fn size(&mut self) -> u64 {
-            self.0.lock().unwrap().size()
+            self.0.lock().unwrap_or_else(|p| p.into_inner()).size()
         }
     }
 
@@ -842,7 +842,7 @@ mod tests {
         let State::Buffering { need } = p.state() else { panic!("{:?}", p.state()) };
         assert!(need.0 >= 3000 && need.1 > 0);
         {
-            let mut m = mem.0.lock().unwrap();
+            let mut m = mem.0.lock().unwrap_or_else(|p| p.into_inner());
             m.available = BASELINE.len() as u64;
             m.complete = true;
         }
@@ -857,7 +857,7 @@ mod tests {
         pump(&mut p, 1000, |p| matches!(p.state(), State::Buffering { .. }));
         assert!(matches!(p.state(), State::Buffering { .. }));
         assert_eq!(p.duration_ms(), None);
-        mem.0.lock().unwrap().available = BASELINE.len() as u64;
+        mem.0.lock().unwrap_or_else(|p| p.into_inner()).available = BASELINE.len() as u64;
         pump(&mut p, 1000, |p| p.duration_ms().is_some());
         assert_eq!(p.duration_ms().map(|d| d.round()), Some(1000.0));
     }

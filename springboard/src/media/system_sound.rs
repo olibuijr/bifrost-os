@@ -87,7 +87,7 @@ mod tests {
 
     impl AudioOut for Capture {
         fn write(&mut self, frames: &[i16]) -> io::Result<()> {
-            self.0.lock().unwrap().extend_from_slice(frames);
+            self.0.lock().unwrap_or_else(|p| p.into_inner()).extend_from_slice(frames);
             Ok(())
         }
         fn played(&mut self) -> u64 {
@@ -102,7 +102,7 @@ mod tests {
         let got = Arc::new(Mutex::new(Vec::new()));
         let mut k = SoundPlayer::new(Box::new(Capture(got.clone()))).unwrap();
         k.click(Click::Key, 1.0).unwrap();
-        let pcm = got.lock().unwrap();
+        let pcm = got.lock().unwrap_or_else(|p| p.into_inner());
         // 14 ms at 48 kHz, stereo
         assert_eq!(pcm.len(), 672 * 2);
         assert!(pcm.iter().any(|&s| s != 0));
@@ -113,7 +113,7 @@ mod tests {
         let got = Arc::new(Mutex::new(Vec::new()));
         let mut k = SoundPlayer::new(Box::new(Capture(got.clone()))).unwrap();
         k.click(Click::Delete, 0.0).unwrap();
-        assert!(got.lock().unwrap().iter().all(|&s| s == 0));
+        assert!(got.lock().unwrap_or_else(|p| p.into_inner()).iter().all(|&s| s == 0));
     }
 
     #[test]
@@ -121,7 +121,7 @@ mod tests {
         let got = Arc::new(Mutex::new(Vec::new()));
         let mut k = SoundPlayer::new(Box::new(Capture(got.clone()))).unwrap();
         k.alert(1, 1.0).unwrap();
-        let pcm = got.lock().unwrap();
+        let pcm = got.lock().unwrap_or_else(|p| p.into_inner());
         // Chime is 900 ms: 43200 frames of stereo
         assert_eq!(pcm.len(), 43_200 * 2);
         assert!(pcm.iter().any(|&s| s != 0));
@@ -132,6 +132,6 @@ mod tests {
         let got = Arc::new(Mutex::new(Vec::new()));
         let mut k = SoundPlayer::new(Box::new(Capture(got.clone()))).unwrap();
         assert!(k.alert(ALERT_SOUNDS.len(), 1.0).is_err());
-        assert!(got.lock().unwrap().is_empty());
+        assert!(got.lock().unwrap_or_else(|p| p.into_inner()).is_empty());
     }
 }

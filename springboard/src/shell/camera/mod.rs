@@ -1052,7 +1052,7 @@ mod tests {
         });
         let w = Worker { slot: slot.clone(), stop: Arc::new(AtomicBool::new(false)), thread: Some(thread) };
         {
-            let mut s = slot.lock().unwrap();
+            let mut s = slot.lock().unwrap_or_else(|p| p.into_inner());
             s.opened = true;
             s.frame = Some(frame(1));
             s.frame = Some(frame(2));

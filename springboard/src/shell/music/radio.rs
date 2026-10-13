@@ -352,7 +352,7 @@ pub(crate) mod tests {
 
     impl Fetch for Canned {
         fn get(&self, url: &str, _limit: usize) -> io::Result<Vec<u8>> {
-            self.calls.lock().unwrap().push(url.to_string());
+            self.calls.lock().unwrap_or_else(|p| p.into_inner()).push(url.to_string());
             self.pages.iter().find(|(u, _)| u == url).map(|(_, b)| b.clone()).ok_or_else(|| io::Error::other("offline"))
         }
     }
@@ -385,7 +385,7 @@ pub(crate) mod tests {
         let net = Canned { pages: vec![("https://bakendi.spilarinn.is/api/files/2".into(), png())], calls: Default::default() };
         assert!(store.logo(&list[0], &net).is_some());
         assert!(store.logo(&list[0], &net).is_some());
-        assert_eq!(net.calls.lock().unwrap().len(), 1, "second look is from disk");
+        assert_eq!(net.calls.lock().unwrap_or_else(|p| p.into_inner()).len(), 1, "second look is from disk");
         assert!(store.logo(&list[0], &Canned { pages: vec![], calls: Default::default() }).is_some(), "and works offline");
         let bad = Canned { pages: vec![("https://bakendi.spilarinn.is/api/files/20".into(), b"nope".to_vec())], calls: Default::default() };
         assert!(store.logo(&list[1], &bad).is_none(), "a non-image is not kept");

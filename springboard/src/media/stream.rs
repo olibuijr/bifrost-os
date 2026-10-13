@@ -89,12 +89,12 @@ impl LiveHandle {
     }
 
     pub fn status(&self) -> LiveStatus {
-        self.status.lock().unwrap().clone()
+        self.status.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     fn update(&self, f: impl FnOnce(&mut LiveStatus)) {
         let changed = {
-            let mut s = self.status.lock().unwrap();
+            let mut s = self.status.lock().unwrap_or_else(|p| p.into_inner());
             let before = s.clone();
             f(&mut s);
             *s != before
@@ -126,7 +126,7 @@ impl Ring {
     /// The first `SNIFF_BYTES` of the stream, left in the ring, once they
     /// have arrived; None when `abort` says to give up first.
     fn peek_head(&self, abort: &dyn Fn() -> bool) -> Option<Vec<u8>> {
-        let mut s = self.inner.lock().unwrap();
+        let mut s = self.inner.lock().unwrap_or_else(|p| p.into_inner());
         loop {
             if s.data.len() >= SNIFF_BYTES {
                 return Some(s.data.iter().take(SNIFF_BYTES).copied().collect());
@@ -139,7 +139,7 @@ impl Ring {
     }
 
     fn push(&self, bytes: &[u8]) {
-        let mut s = self.inner.lock().unwrap();
+        let mut s = self.inner.lock().unwrap_or_else(|p| p.into_inner());
         s.data.extend(bytes);
         let excess = s.data.len().saturating_sub(RING_MAX);
         s.data.drain(..excess);
@@ -147,12 +147,12 @@ impl Ring {
     }
 
     fn stop(&self) {
-        self.inner.lock().unwrap().stop = true;
+        self.inner.lock().unwrap_or_else(|p| p.into_inner()).stop = true;
         self.ready.notify_all();
     }
 
     fn stopped(&self) -> bool {
-        self.inner.lock().unwrap().stop
+        self.inner.lock().unwrap_or_else(|p| p.into_inner()).stop
     }
 }
 
@@ -172,7 +172,7 @@ struct LiveReader {
 
 impl Read for LiveReader {
     fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
-        let mut s = self.ring.inner.lock().unwrap();
+        let mut s = self.ring.inner.lock().unwrap_or_else(|p| p.into_inner());
         loop {
             if self.probing.load(Ordering::SeqCst) && self.served > PROBE_LIMIT {
                 return Ok(0);
@@ -241,7 +241,7 @@ pub fn open(url: &str, transport: Arc<dyn Transport>, live: LiveHandle, abort: B
     // until the reader owns the ring (and stops it on drop), an early return must stop the pump
     let mut guard = StopRing(Some(ring.clone()));
     let head = ring.peek_head(&*abort).ok_or(Error::Invalid("radio stream (no audio)"))?;
-    let content_type = ring.content_type.lock().unwrap().clone();
+    let content_type = ring.content_type.lock().unwrap_or_else(|p| p.into_inner()).clone();
     // nothing recognisable: try MP3, whose probe then rejects the stream
     let kind = codec::sniff(content_type.as_deref(), &head).unwrap_or(Kind::Mp3);
     let probing = Arc::new(AtomicBool::new(true));
@@ -280,7 +280,7 @@ fn pump(url: &str, transport: &dyn Transport, ring: &Ring, live: &LiveHandle, tu
     while !ring.stopped() {
         let why = match connect_typed(transport, url, &titles) {
             Ok((mut body, content_type)) => {
-                *ring.content_type.lock().unwrap() = content_type;
+                *ring.content_type.lock().unwrap_or_else(|p| p.into_inner()) = content_type;
                 loop {
                     if ring.stopped() {
                         return;
@@ -523,7 +523,7 @@ pub(crate) mod fake {
                         }
                         request.push_str(&line);
                     }
-                    seen.lock().unwrap().push(request);
+                    seen.lock().unwrap_or_else(|p| p.into_inner()).push(request);
                     let head = head.replace("{metaint}", &metaint.to_string());
                     if conn.write_all(head.as_bytes()).is_err() {
                         return;
@@ -621,11 +621,11 @@ mod tests {
         stream.extend([16, 17, 18, 19, 20, 21, 22, 23, 0]); // an empty block ends the data
         expect.extend([16, 17, 18, 19, 20, 21, 22, 23]);
         let titles = Mutex::new(Vec::new());
-        let mut r = IcyReader::new(Cursor::new(stream), 8, |t| titles.lock().unwrap().push(t));
+        let mut r = IcyReader::new(Cursor::new(stream), 8, |t| titles.lock().unwrap_or_else(|p| p.into_inner()).push(t));
         let mut audio = Vec::new();
         r.read_to_end(&mut audio).unwrap();
         assert_eq!(audio, expect);
-        assert_eq!(*titles.lock().unwrap(), [Some("Artist - One".to_string()), Some("Artist - Two".to_string())]);
+        assert_eq!(*titles.lock().unwrap_or_else(|p| p.into_inner()), [Some("Artist - One".to_string()), Some("Artist - Two".to_string())]);
     }
 
     #[test]
@@ -661,7 +661,7 @@ mod tests {
         let mut audio = [0u8; 50];
         body.read_exact(&mut audio).unwrap();
         assert_eq!(audio, [7; 50]);
-        assert!(requests.lock().unwrap()[0].starts_with("GET /live?x=1 HTTP/1.0"));
+        assert!(requests.lock().unwrap_or_else(|p| p.into_inner())[0].starts_with("GET /live?x=1 HTTP/1.0"));
     }
 
     #[test]
@@ -670,7 +670,7 @@ mod tests {
         let mut body = connect(&Local::on(port), "http://radio.test/stream?k=v", &|_| {}).unwrap();
         let mut sink = [0u8; 8];
         let _ = body.read(&mut sink);
-        let request = requests.lock().unwrap()[0].clone();
+        let request = requests.lock().unwrap_or_else(|p| p.into_inner())[0].clone();
         assert!(request.starts_with("GET /stream?k=v HTTP/1.0\r\n"), "{request}");
         assert!(request.contains("Icy-MetaData: 1\r\n") && request.contains("Host: radio.test\r\n"), "{request}");
         let mut c = Chunked { r: Cursor::new(b"5\r\nhello\r\n6;ext=1\r\n world\r\n0\r\n\r\n".to_vec()), left: 0 };
@@ -710,7 +710,7 @@ mod tests {
         let mut d = open("http://radio.test/live", Arc::new(Local::on(port)), live.clone(), Box::new(|| false), FAST).unwrap();
         let pcm = collect(&mut *d, 44100 * 2);
         assert!(pcm.len() / 2 >= 44100 * 2, "decoding went on past the dropped connection");
-        assert!(requests.lock().unwrap().len() >= 2, "it dialled again");
+        assert!(requests.lock().unwrap_or_else(|p| p.into_inner()).len() >= 2, "it dialled again");
         assert_eq!(live.status().phase, Phase::Live);
         assert_eq!(live.status().error, None);
     }
@@ -803,11 +803,11 @@ mod tests {
     fn real_station_streams_mp3_with_icy_metadata() {
         let titles = Arc::new(Mutex::new(Vec::new()));
         let sink = titles.clone();
-        let mut body = connect(&crate::deildu::http::Tls::new(), "http://ice-11.spilarinn.is/truv2", &move |t| sink.lock().unwrap().push(t)).unwrap();
+        let mut body = connect(&crate::deildu::http::Tls::new(), "http://ice-11.spilarinn.is/truv2", &move |t| sink.lock().unwrap_or_else(|p| p.into_inner()).push(t)).unwrap();
         let mut audio = vec![0u8; 40_000];
         body.read_exact(&mut audio).unwrap();
         assert!(audio.windows(2).any(|w| w[0] == 0xFF && w[1] & 0xE0 == 0xE0), "MP3 frame sync in the audio");
         assert!(!audio.windows(11).any(|w| w == b"StreamTitle"), "metadata blocks were stripped");
-        eprintln!("titles: {:?}", titles.lock().unwrap());
+        eprintln!("titles: {:?}", titles.lock().unwrap_or_else(|p| p.into_inner()));
     }
 }

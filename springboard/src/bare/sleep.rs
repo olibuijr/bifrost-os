@@ -546,31 +546,31 @@ Delay Only 0 root 1 y sleep because delay
             Fake { log: Arc::default(), count, refuse, count_blocks: false }
         }
         fn log(&self) -> Vec<String> {
-            self.log.lock().unwrap().clone()
+            self.log.lock().unwrap_or_else(|p| p.into_inner()).clone()
         }
     }
 
     impl PowerSys for Fake {
         fn read(&mut self, file: &str) -> io::Result<String> {
-            self.log.lock().unwrap().push(format!("read {file}"));
+            self.log.lock().unwrap_or_else(|p| p.into_inner()).push(format!("read {file}"));
             match (file, self.count) {
                 ("wakeup_count", Some(c)) => Ok(c.into()),
                 _ => Err(io::ErrorKind::NotFound.into()),
             }
         }
         fn write(&mut self, file: &str, value: &str) -> io::Result<()> {
-            self.log.lock().unwrap().push(format!("{file}={value}"));
+            self.log.lock().unwrap_or_else(|p| p.into_inner()).push(format!("{file}={value}"));
             if self.refuse == Some(file) {
                 return Err(io::Error::from_raw_os_error(16));
             }
             Ok(())
         }
         fn resumed(&mut self) {
-            self.log.lock().unwrap().push("resumed".into());
+            self.log.lock().unwrap_or_else(|p| p.into_inner()).push("resumed".into());
         }
         fn wakeup_count(&mut self, _timeout_ms: u64) -> io::Result<String> {
             if self.count_blocks {
-                self.log.lock().unwrap().push("read wakeup_count (blocked)".into());
+                self.log.lock().unwrap_or_else(|p| p.into_inner()).push("read wakeup_count (blocked)".into());
                 return Err(io::ErrorKind::TimedOut.into());
             }
             self.read("wakeup_count")

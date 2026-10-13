@@ -822,7 +822,7 @@ impl Photos {
         let wanted: Vec<Photo> = order.into_iter().filter_map(|i| self.photos().get(i).cloned()).collect();
         let keys: Vec<String> = wanted.iter().map(Photo::key).collect();
         // jobs still queued for cells that scrolled away give way
-        *self.thumb_wanted.lock().unwrap() = keys.iter().cloned().collect();
+        *self.thumb_wanted.lock().unwrap_or_else(|p| p.into_inner()) = keys.iter().cloned().collect();
         // the caching manager keeps the same window as its preparations; the ones that scrolled away stop
         let window: Vec<PreKey> = keys.iter().map(|k| PreKey::new(k, thumbs::SIZE as u32, thumbs::SIZE as u32)).collect();
         let stale: Vec<PreKey> = self.preheat_keys.iter().filter(|k| !window.contains(*k)).cloned().collect();
@@ -839,7 +839,7 @@ impl Photos {
             let failed = key.clone();
             self.pool.spawn_or(
                 move || {
-                    if !still_wanted.lock().unwrap().contains(&key) {
+                    if !still_wanted.lock().unwrap_or_else(|p| p.into_inner()).contains(&key) {
                         return Done::ThumbSkipped { key };
                     }
                     let image = disk.read(&key).or_else(|| {
@@ -2388,7 +2388,7 @@ mod tests {
         let (mut p, dir, ui) = photos("wanted", 12);
         p.tick(&ui, 0.0);
         let visible: HashSet<String> = p.grid.visible(0.0, p.content_bottom(&ui) - content_top(&ui)).into_iter().map(|i| p.photos()[i].key()).collect();
-        assert_eq!(*p.thumb_wanted.lock().unwrap(), visible);
+        assert_eq!(*p.thumb_wanted.lock().unwrap_or_else(|p| p.into_inner()), visible);
         assert_eq!(visible.len(), 12);
         // the caching manager holds one preparation per visible thumbnail, at the grid's thumbnail size
         assert_eq!(p.preheat.len(), 12);

@@ -35,14 +35,14 @@ pub fn init(dh: &DisplayHandle) -> GlobalId {
 
 /// The committed blur region of `surface` (surface coordinates), empty when it asks for none.
 pub fn blur_region(surface: &WlSurface) -> Vec<Rectangle<i32, Logical>> {
-    with_states(surface, |s| s.data_map.get::<Mutex<Blur>>().map(|b| b.lock().unwrap().current.clone()).unwrap_or_default())
+    with_states(surface, |s| s.data_map.get::<Mutex<Blur>>().map(|b| b.lock().unwrap_or_else(|p| p.into_inner()).current.clone()).unwrap_or_default())
 }
 
 /// Called on every surface commit: a pending region becomes the current one.
 pub fn commit(surface: &WlSurface) {
     with_states(surface, |s| {
         if let Some(b) = s.data_map.get::<Mutex<Blur>>() {
-            let mut b = b.lock().unwrap();
+            let mut b = b.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(p) = b.pending.take() {
                 b.current = p;
             }
@@ -122,7 +122,7 @@ impl Dispatch<ExtBackgroundEffectManagerV1, ()> for WmState {
             ext_background_effect_manager_v1::Request::GetBackgroundEffect { id, surface } => {
                 let taken = with_states(&surface, |s| {
                     s.data_map.insert_if_missing_threadsafe(|| Mutex::new(Blur::default()));
-                    let mut b = s.data_map.get::<Mutex<Blur>>().unwrap().lock().unwrap();
+                    let mut b = s.data_map.get::<Mutex<Blur>>().unwrap().lock().unwrap_or_else(|p| p.into_inner());
                     std::mem::replace(&mut b.claimed, true)
                 });
                 if taken {
@@ -153,7 +153,7 @@ impl Dispatch<ExtBackgroundEffectSurfaceV1, Weak<WlSurface>> for WmState {
         };
         with_states(&surface, |s| {
             if let Some(b) = s.data_map.get::<Mutex<Blur>>() {
-                let mut b = b.lock().unwrap();
+                let mut b = b.lock().unwrap_or_else(|p| p.into_inner());
                 if region.is_some() {
                     b.pending = region;
                 }

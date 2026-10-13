@@ -60,7 +60,7 @@ pub fn init(dh: &DisplayHandle) -> GlobalId {
 
 /// The committed material regions of `surface` (surface coordinates), empty when it sent none.
 pub fn materials(surface: &WlSurface) -> Vec<MaterialSpec> {
-    with_states(surface, |s| s.data_map.get::<Mutex<Materials>>().map(|m| m.lock().unwrap().current.clone()).unwrap_or_default())
+    with_states(surface, |s| s.data_map.get::<Mutex<Materials>>().map(|m| m.lock().unwrap_or_else(|p| p.into_inner()).current.clone()).unwrap_or_default())
 }
 
 /// The regions the renderer draws for `surface`: its materials, else its plain blur regions.
@@ -72,7 +72,7 @@ pub fn effective_regions(surface: &WlSurface) -> Vec<MaterialSpec> {
 pub fn commit(surface: &WlSurface) {
     with_states(surface, |s| {
         if let Some(m) = s.data_map.get::<Mutex<Materials>>() {
-            let mut m = m.lock().unwrap();
+            let mut m = m.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(p) = m.pending.take() {
                 m.current = p;
             }
@@ -91,7 +91,7 @@ impl Dispatch<BifrostMaterialManagerV1, ()> for WmState {
         if let bifrost_material_manager_v1::Request::GetMaterial { id, surface } = request {
             let taken = with_states(&surface, |s| {
                 s.data_map.insert_if_missing_threadsafe(|| Mutex::new(Materials::default()));
-                let mut m = s.data_map.get::<Mutex<Materials>>().unwrap().lock().unwrap();
+                let mut m = s.data_map.get::<Mutex<Materials>>().unwrap().lock().unwrap_or_else(|p| p.into_inner());
                 std::mem::replace(&mut m.claimed, true)
             });
             if taken {
@@ -157,7 +157,7 @@ impl Dispatch<BifrostMaterialSurfaceV1, Weak<WlSurface>> for WmState {
         }
         with_states(&surface, |s| {
             if let Some(m) = s.data_map.get::<Mutex<Materials>>() {
-                let mut m = m.lock().unwrap();
+                let mut m = m.lock().unwrap_or_else(|p| p.into_inner());
                 if let Some(edit) = edit {
                     // start from the pending list when there is one, else from the committed one
                     let mut list = m.pending.take().unwrap_or_else(|| m.current.clone());

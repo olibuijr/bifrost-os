@@ -232,7 +232,7 @@ impl Recorder {
                 std::thread::sleep(Duration::from_millis(20));
                 chunk.clear();
                 ring.drain(&mut chunk);
-                let mut s = worker.lock().unwrap();
+                let mut s = worker.lock().unwrap_or_else(|p| p.into_inner());
                 s.level = ring.level().min(32768) as u16;
                 s.samples.extend_from_slice(&chunk);
                 if ring.dropped() > 0 && s.error.is_none() {
@@ -241,7 +241,7 @@ impl Recorder {
             }
             chunk.clear();
             ring.drain(&mut chunk);
-            worker.lock().unwrap().samples.extend_from_slice(&chunk);
+            worker.lock().unwrap_or_else(|p| p.into_inner()).samples.extend_from_slice(&chunk);
         });
         eprintln!("audio.capture: recording {node} at {rate} Hz");
         let format = pcm16(rate, CHANNELS);
@@ -249,18 +249,18 @@ impl Recorder {
     }
 
     pub fn elapsed_ms(&self) -> u64 {
-        let frames = self.shared.lock().unwrap().samples.len() as u64 / self.format.channels.max(1) as u64;
+        let frames = self.shared.lock().unwrap_or_else(|p| p.into_inner()).samples.len() as u64 / self.format.channels.max(1) as u64;
         frames * 1000 / self.format.sample_rate.max(1.0) as u64
     }
 
     /// 0.0..=1.0 level of the latest audio, for a meter.
     pub fn level(&self) -> f32 {
-        self.shared.lock().unwrap().level as f32 / 32768.0
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).level as f32 / 32768.0
     }
 
     /// The reader's error, if it died.
     pub fn error(&self) -> Option<String> {
-        self.shared.lock().unwrap().error.clone()
+        self.shared.lock().unwrap_or_else(|p| p.into_inner()).error.clone()
     }
 
     fn halt(&mut self) {
@@ -275,7 +275,7 @@ impl Recorder {
     /// Stops the stream and returns what was recorded.
     pub fn stop(mut self) -> Take {
         self.halt();
-        let samples = std::mem::take(&mut self.shared.lock().unwrap().samples);
+        let samples = std::mem::take(&mut self.shared.lock().unwrap_or_else(|p| p.into_inner()).samples);
         Take { format: self.format, samples }
     }
 }
