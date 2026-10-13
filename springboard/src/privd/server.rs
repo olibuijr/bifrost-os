@@ -157,9 +157,11 @@ pub fn handle_request(gate: &dyn Gate, exec: &dyn Exec, peer: Peer, text: &str) 
     let params = req.get("params").unwrap_or(&empty);
     let r = dispatch(gate, exec, peer, method, params);
     // the journal gets the method and the outcome, never the parameters (passwords travel here)
+    // the method is the client's string: escaped and capped, so it cannot forge journal lines
+    let shown: String = method.chars().take(64).collect();
     match &r {
-        Ok(_) => eprintln!("privd: {method} ok"),
-        Err(e) => eprintln!("privd: {method} -> {}", e.code),
+        Ok(_) => eprintln!("privd: {shown:?} ok"),
+        Err(e) => eprintln!("privd: {shown:?} -> {}", e.code),
     }
     match r {
         Ok(v) => reply_ok(id, &v),

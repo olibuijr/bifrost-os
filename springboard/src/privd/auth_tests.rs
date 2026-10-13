@@ -130,7 +130,9 @@ fn bypass_only_from_flag_or_failed_boot_probe() {
     assert!(!b.bypass_active(), "no probe, no bypass: runtime errors alone cannot open the lock");
     assert!(matches!(b.authenticate_at("", 1), Err(AuthError::WrongPassword { .. }) | Err(AuthError::Internal(_))));
     b.probe_boot();
-    assert!(b.bypass_active());
+    assert!(!b.bypass_active(), "a failed boot probe fails closed: no automatic bypass");
+    std::fs::write(d.join("no-login"), "").unwrap();
+    assert!(b.bypass_active(), "only root's explicit flag opens it");
     assert!(b.authenticate_at("", 1).is_ok());
 }
 

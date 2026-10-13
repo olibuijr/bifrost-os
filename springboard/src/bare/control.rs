@@ -78,6 +78,17 @@ pub enum Key {
     VolumeDown,
 }
 
+/// What the control port still serves while the screen is locked: status, a screenshot, locking, and raw input (which the
+/// shell routes to the login window only). Opening apps, folders or URLs, pressing or listing elements, appearance,
+/// Term control, Search and desktop pointer events wait for a login.
+pub fn allowed_while_locked(r: &Request) -> bool {
+    matches!(
+        r,
+        Request::Shot(_) | Request::State | Request::Version | Request::Ready | Request::Perf | Request::Trace(_) | Request::Lock
+            | Request::Key(_) | Request::Tap(..) | Request::Swipe { .. } | Request::Touch(..) | Request::DoubleTap(..)
+    )
+}
+
 /// Percent-encodes everything but `[A-Za-z0-9._/-]`, so a value is one whitespace-free word.
 pub fn pct_encode(s: &str) -> String {
     let mut o = String::new();
@@ -251,6 +262,16 @@ pub fn reply(mut stream: TcpStream, body: &[u8]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_locked_screen_serves_status_and_input_only() {
+        for ok in ["state", "version", "ready", "shot", "lock", "tap 10 10", "key power"] {
+            assert!(allowed_while_locked(&parse(ok).unwrap()), "{ok} stays available while locked");
+        }
+        for no in ["open-app is.olibuijr.files.desktop", "open-url https://x.is", "ax press General", "ax list", "appearance light", "hover 1 1", "context 1 1"] {
+            assert!(!allowed_while_locked(&parse(no).unwrap()), "{no} must wait for a login");
+        }
+    }
 
     #[test]
     fn version_and_ready_parse() {

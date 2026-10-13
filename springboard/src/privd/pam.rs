@@ -16,7 +16,7 @@ pub enum Verify {
 pub trait Verifier: Send + Sync {
     fn verify(&self, user: &str, password: &str) -> Verify;
     /// Called once at boot. `Err` means the backend cannot start at all (libpam or the service file is
-    /// missing), the one case where privd opens the lock screen, with a loud log (see `Auth::probe_boot`).
+    /// missing): privd logs it loudly and keeps the lock shut (see `Auth::probe_boot`).
     fn probe(&self) -> Result<(), String> {
         Ok(())
     }

@@ -71,7 +71,8 @@ impl Default for Config {
         Config {
             account_file: "/var/lib/springboard/account".into(),
             shadow: "/etc/shadow".into(),
-            fails_file: "/run/bifrost/privd-fails".into(),
+            // persistent and root-only: a reboot (allowed from the login window) must not reset the lockout
+            fails_file: "/var/lib/springboard/privd-fails".into(),
             bypass_flag: "/etc/bifrost/no-login".into(),
         }
     }
@@ -91,8 +92,6 @@ pub struct Auth {
     until: i64,
     /// a password check is running outside the lock; a second one is refused so attempts cannot overlap
     verifying: bool,
-    /// libpam could not start at boot (`probe_boot`): the only automatic bypass. Never set at run time.
-    boot_bypass: bool,
 }
 
 /// The first half of a login: either done (bypass) or the user name whose password must now be verified.
@@ -145,7 +144,7 @@ impl Auth {
 
     pub fn with(cfg: Config, backend: Box<dyn Verifier>, account: Option<AccountFn>) -> Self {
         let (fails, until) = std::fs::read_to_string(&cfg.fails_file).map(|t| parse_fails(&t)).unwrap_or((0, 0));
-        Auth { cfg, backend: Arc::from(backend), account, session: Session::Locked, fails, until, verifying: false, boot_bypass: false }
+        Auth { cfg, backend: Arc::from(backend), account, session: Session::Locked, fails, until, verifying: false }
     }
 
     /// The verifier, so a caller can run `verify` without holding the lock around this `Auth`.
@@ -153,16 +152,15 @@ impl Auth {
         self.backend.clone()
     }
 
-    /// Boot-time check that libpam can start. When it cannot (library or service file missing) the machine
-    /// would otherwise be a brick, so the lock screen opens for an empty password and the journal says so
-    /// loudly. Runtime PAM errors never come here: they only ever fail the attempt.
+    /// Boot-time check that libpam can start. It fails closed: a failed probe only logs loudly and the lock stays
+    /// shut (an automatic bypass would be re-armed by any crash that breaks the probe; security review 2026-10-11).
+    /// The one way in without a password is root creating the bypass flag on purpose (`midget.py login-bypass on`).
     pub fn probe_boot(&mut self) {
         if self.cfg.bypass_flag.exists() {
             return;
         }
         if let Err(e) = self.backend.probe() {
-            self.boot_bypass = true;
-            eprintln!("privd: WARNING PAM cannot start ({e}); LOGIN BYPASS ENABLED until privd restarts. Fix pam and libpam, or create {} on purpose", self.cfg.bypass_flag.display());
+            eprintln!("privd: WARNING PAM cannot start ({e}); the login window stays locked. Fix pam and libpam, or as root create {} to let an empty password in", self.cfg.bypass_flag.display());
         }
     }
 
@@ -184,7 +182,7 @@ impl Auth {
 
     /// The documented opt-in (`/etc/bifrost/no-login`) or the boot-time PAM failure.
     pub fn bypass_active(&self) -> bool {
-        self.boot_bypass || self.cfg.bypass_flag.exists()
+        self.cfg.bypass_flag.exists()
     }
 
     fn hash_class(&self, user: &str) -> Hash {

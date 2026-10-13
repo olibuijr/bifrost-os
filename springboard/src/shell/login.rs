@@ -30,6 +30,8 @@ fn wipe(s: &mut String) {
 pub const SHAKE_MS: f64 = super::passcode::SHAKE_MS;
 /// Longest password the field takes.
 pub const MAX_LEN: usize = 256;
+/// How often an unavailable login helper is asked again.
+const RETRY_MS: f64 = 5000.0;
 /// The power button's size in the status bar.
 const POWER_PT: f32 = 22.0;
 
@@ -183,6 +185,9 @@ pub struct Login {
     until_ms: f64,
     /// behind a Mutex so the shell (drawn on several threads) stays Sync
     pending: Option<Mutex<Receiver<Reply>>>,
+    /// while the helper is unavailable: the account query in flight on a worker, and when to ask again
+    probe: Option<Mutex<Receiver<Option<AccountInfo>>>>,
+    retry_at: f64,
     sheet: Option<Sheet>,
     /// the power button's menu (Sleep, Restart…, Shut Down…) is open
     power_open: bool,
@@ -205,6 +210,8 @@ impl Login {
             shake: None,
             until_ms: 0.0,
             pending: None,
+            probe: None,
+            retry_at: t + RETRY_MS,
             sheet: None,
             power_open: false,
             lock_message: None,
@@ -212,21 +219,58 @@ impl Login {
             w,
             h,
         };
+        l.account_info(info, t);
+        l
+    }
+
+    fn account_info(&mut self, info: Option<AccountInfo>, t: f64) {
         match info {
-            None => l.msg = Msg::Unavailable,
+            None => self.msg = Msg::Unavailable,
             Some(i) => {
-                if !i.full_name.is_empty() {
-                    l.name = i.full_name;
+                if self.msg == Msg::Unavailable {
+                    self.msg = Msg::None;
                 }
-                l.username = i.username;
+                if !i.full_name.is_empty() {
+                    self.name = i.full_name;
+                }
+                self.username = i.username;
                 if !i.has_password {
-                    l.msg = Msg::NoPassword;
+                    self.msg = Msg::NoPassword;
                 } else if i.locked_out_secs > 0 {
-                    l.lock_for(i.locked_out_secs, t);
+                    self.lock_for(i.locked_out_secs, t);
                 }
             }
         }
-        l
+    }
+
+    /// While the helper is unavailable, asks again every `RETRY_MS` on a worker (a call may block for its 10 s
+    /// timeout), so a restarted privd brings the window back without a re-lock. True when something changed.
+    fn retry(&mut self, t: f64) -> bool {
+        if let Some(rx) = &self.probe {
+            let got = rx.lock().map(|rx| rx.try_recv()).unwrap_or(Err(TryRecvError::Disconnected));
+            return match got {
+                Err(TryRecvError::Empty) => false,
+                Ok(info) => {
+                    self.probe = None;
+                    self.account_info(info, t);
+                    true
+                }
+                Err(TryRecvError::Disconnected) => {
+                    self.probe = None;
+                    false
+                }
+            };
+        }
+        if self.msg == Msg::Unavailable && self.pending.is_none() && t >= self.retry_at {
+            self.retry_at = t + RETRY_MS;
+            let (tx, rx) = channel();
+            let backend = self.backend.clone();
+            std::thread::spawn(move || {
+                let _ = tx.send(backend.account());
+            });
+            self.probe = Some(Mutex::new(rx));
+        }
+        false
     }
 
     fn lock_for(&mut self, secs: u64, t: f64) {
@@ -404,6 +448,9 @@ impl Login {
 
     /// Clears an expired lockout; true while the window still needs frames.
     pub fn tick(&mut self, t: f64) -> bool {
+        if self.retry(t) {
+            return true;
+        }
         if self.msg == Msg::LockedOut && t >= self.until_ms {
             self.msg = Msg::None;
             return true;
@@ -417,6 +464,10 @@ impl Login {
             Some(t)
         } else if self.locked(t) {
             Some(t + 1000.0)
+        } else if self.probe.is_some() {
+            Some(t + 100.0)
+        } else if self.msg == Msg::Unavailable {
+            Some(self.retry_at.max(t))
         } else {
             None
         }
@@ -802,6 +853,19 @@ impl super::Shell {
         self.dirty = true;
     }
 
+    /// Brings the login window up at once (input that arrives before the next tick must not reach the old unlock):
+    /// on the lock screen, with a backend, before a token.
+    pub(super) fn login_show(&mut self, t: f64) {
+        self.lock_drag = None;
+        if self.login.is_some() || self.screen != super::Screen::Lock || self.session_token.is_some() {
+            return;
+        }
+        let Some(b) = self.login_backend.clone() else { return };
+        let fallback = super::account::load().full_name;
+        self.login = Some(Login::new(b, &fallback, self.w, self.h, t));
+        self.dirty = true;
+    }
+
     pub(super) fn login_touch(&mut self, ev: Event, t: f64) -> Vec<Effect> {
         let Some(l) = self.login.as_mut() else { return vec![] };
         let act = l.touch(&self.ui, ev, t);
@@ -954,6 +1018,31 @@ mod tests {
         assert_eq!(l.message(0.0), "Incorrect password");
         l.key(&Out::Text("a".into()), 10.0);
         assert_eq!(l.message(10.0), "");
+    }
+
+    /// Down until `up` is set, then a normal account.
+    struct Flaky(std::sync::atomic::AtomicBool);
+    impl Backend for Flaky {
+        fn authenticate(&self, _: &str) -> Reply { Reply::Unavailable }
+        fn account(&self) -> Option<AccountInfo> {
+            self.0.load(std::sync::atomic::Ordering::SeqCst).then(|| AccountInfo { full_name: "Owner".into(), username: "owner".into(), has_password: true, locked_out_secs: 0 })
+        }
+    }
+
+    #[test]
+    fn an_unavailable_helper_is_asked_again_and_the_window_recovers() {
+        let b = Arc::new(Flaky(std::sync::atomic::AtomicBool::new(false)));
+        let mut l = Login::new(b.clone(), "Owner", 1200, 800, 0.0);
+        assert_eq!(l.msg, Msg::Unavailable);
+        assert_eq!(l.wake(0.0), Some(RETRY_MS), "it schedules the next try");
+        b.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        let mut t = RETRY_MS;
+        while l.msg == Msg::Unavailable && t < RETRY_MS + 2000.0 {
+            l.tick(t);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            t += 10.0;
+        }
+        assert_eq!(l.msg, Msg::None, "privd is back: the window takes a password again");
     }
 
     #[test]

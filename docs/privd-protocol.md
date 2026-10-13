@@ -92,9 +92,13 @@ requires the password; apps keep running. Logout/restart/shutdown go through pri
 - Recovery chord unchanged (user in `input`), shell exits 71, systemd restarts the session.
 - `/etc/bifrost/no-login` (root creates over ssh) is the one explicit lab opt-in: privd reports `has_password:false` and
   accepts an empty password. `tools/midget.py recovery` prints whether it exists; `midget.py login-bypass on|off`.
-- The only automatic bypass is a failed PAM start at privd boot (libpam or `/etc/pam.d/bifrost-login` missing), with a loud
-  journal warning, so a broken image cannot brick Midget. PAM errors at run time (resource exhaustion, `AUTHINFO_UNAVAIL`,
-  faillock trouble) only fail that attempt and never open the lock: the session stays locked.
+- There is no automatic bypass (security review 2026-10-11): a failed PAM start at privd boot only logs loudly and the
+  login window stays locked; root recovers over ssh with `login-bypass on`. PAM errors at run time (resource exhaustion,
+  `AUTHINFO_UNAVAIL`, faillock trouble) only fail that attempt and never open the lock.
+- Stage 1 (0.5.30): privd admits root only (the shell is root); the account is not in `bifrost-session`. The lockout
+  counters are persistent (`/var/lib/springboard/privd-fails`, faillock `dir=/var/lib/faillock`), so a reboot from the
+  login window does not reset them. With a login backend every unlock route (Return, the swipe, a notification tap)
+  only brings the login window up; privd's token is the only unlock.
 - Fail closed: without the user-data marker the shell starts on a fresh `~/.local/share/springboard`; root never
   chgrp/chmods or creates directories inside paths the user can write (they are made as the user via `setpriv`).
 - The shell runs with `setpriv --no-new-privs` (skipped when `/usr/bin/bwrap` is setuid), `PR_SET_DUMPABLE=0` and
