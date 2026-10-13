@@ -64,6 +64,14 @@ const MENU_EXPORT_V4: u32 = 3;
 const MENU_SIDEBAR: u32 = 4;
 const MENU_FIRST_LAST: u32 = 5;
 const MENU_LAST_FIRST: u32 = 6;
+/// Card menu: move through the list, My Card, and merge the open card's duplicates.
+const MENU_NEXT: u32 = 7;
+const MENU_PREVIOUS: u32 = 8;
+const MENU_MAKE_MINE: u32 = 9;
+const MENU_GO_MINE: u32 = 10;
+const MENU_MERGE: u32 = 11;
+/// The identifier of My Card, beside the contacts file.
+const MYCARD_FILE: &str = "mycard.txt";
 /// Sidebar rows.
 const LIST_ALL: u32 = 100;
 const LIST_FAVORITES: u32 = 101;
@@ -360,6 +368,8 @@ pub struct Contacts {
     dirty: bool,
     /// Whether names show given name first or family name first (View menu). Saved with the display settings.
     name_order: names::NameOrder,
+    /// The card marked as the user's own (Card > Make This My Card), saved as `mycard.txt`.
+    me: Option<u64>,
 }
 
 fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
@@ -395,6 +405,7 @@ impl Contacts {
         };
         let groups_failed = groups_error.is_some();
         let (display, name_order) = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap_or_default();
+        let me = display_file::load_me(&path.with_file_name(MYCARD_FILE)).filter(|id| contacts.iter().any(|c| c.id == *id));
         contacts.sort_by(|a, b| names::compare(a.display_name(), b.display_name()).then(a.id.cmp(&b.id)));
         let history = History::new(&contacts);
         let mut app = Self {
@@ -437,6 +448,7 @@ impl Contacts {
             labels: TextCache::default(),
             dirty: true,
             name_order,
+            me,
         };
         app.rebuild(ui);
         app
@@ -1118,6 +1130,7 @@ impl Contacts {
     pub fn main_menu(&self) -> Vec<AppMenu> {
         let ready = !self.load_failed;
         let sidebar = if self.sidebar_shown { "Hide Sidebar" } else { "Show Sidebar" };
+        let open = self.open_id();
         vec![
             AppMenu {
                 title: "File".into(),
@@ -1137,7 +1150,110 @@ impl Contacts {
                     AppMenuItem::new(MENU_LAST_FIRST, "Last Name First").checked(self.name_order == names::NameOrder::LastFirst),
                 ],
             },
+            AppMenu {
+                title: "Card".into(),
+                items: vec![
+                    AppMenuItem::new(MENU_NEXT, "Go to Next Card").key("cmd+]").enabled(self.neighbour(1).is_some()),
+                    AppMenuItem::new(MENU_PREVIOUS, "Go to Previous Card").key("cmd+[").enabled(self.neighbour(-1).is_some()),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_MAKE_MINE, "Make This My Card").enabled(ready && open.is_some() && open != self.me),
+                    AppMenuItem::new(MENU_GO_MINE, "Go to My Card").enabled(self.me.is_some()),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_MERGE, "Merge Duplicates").enabled(ready && self.twins().len() > 1),
+                ],
+            },
         ]
+    }
+
+    /// The identifier of the open card, if the detail pane shows one.
+    fn open_id(&self) -> Option<u64> {
+        match self.screen {
+            Screen::Detail(id) => Some(id),
+            _ => None,
+        }
+    }
+
+    /// The card `step` rows from the open one in the shown list (no wrap), or the first or last row when no card is
+    /// open. `None` when the list does not reach that far.
+    fn neighbour(&self, step: i32) -> Option<u64> {
+        if matches!(self.screen, Screen::Editor(_)) || self.rows.is_empty() {
+            return None;
+        }
+        let at = self.open_id().and_then(|id| self.rows.iter().position(|r| self.contacts[r.contact].id == id));
+        let next = match at {
+            Some(i) => i as i64 + step as i64,
+            None if step > 0 => 0,
+            None => self.rows.len() as i64 - 1,
+        };
+        usize::try_from(next).ok().and_then(|i| self.rows.get(i)).map(|r| self.contacts[r.contact].id)
+    }
+
+    /// The open card with the cards it duplicates (the open card first); just the open card when it has no twin.
+    fn twins(&self) -> Vec<u64> {
+        let Some(id) = self.open_id() else { return vec![] };
+        let group = dupes::groups(&self.contacts).into_iter().find(|g| g.contains(&id)).unwrap_or_default();
+        if group.is_empty() {
+            return vec![id];
+        }
+        std::iter::once(id).chain(group.into_iter().filter(|g| *g != id)).collect()
+    }
+
+    fn go_relative(&mut self, ui: &Ui, step: i32) {
+        if let Some(id) = self.neighbour(step) {
+            self.open_detail(ui, id);
+        }
+    }
+
+    fn set_my_card(&mut self, id: u64) {
+        match display_file::save_me(&self.path.with_file_name(MYCARD_FILE), Some(id)) {
+            Ok(()) => self.me = Some(id),
+            Err(e) => self.error = Some(format!("Unable to save My Card: {e}")),
+        }
+        self.dirty = true;
+    }
+
+    /// Folds the open card's duplicates into it (see `dupes::merge`), deletes them and keeps their extra values.
+    fn merge_duplicates(&mut self, ui: &Ui) {
+        let ids = self.twins();
+        if self.load_failed || ids.len() < 2 {
+            return;
+        }
+        let keep_id = ids[0];
+        let Some(keep) = self.contacts.iter().find(|c| c.id == keep_id).cloned() else { return };
+        let others: Vec<Contact> = self.contacts.iter().filter(|c| ids[1..].contains(&c.id)).cloned().collect();
+        let (card, spare) = dupes::merge(&keep, &others);
+        let updated: Vec<Contact> = self
+            .contacts
+            .iter()
+            .filter(|c| !ids[1..].contains(&c.id))
+            .map(|c| if c.id == keep_id { card.clone() } else { c.clone() })
+            .collect();
+        if let Err(e) = store::save(&self.path, &updated) {
+            self.error = Some(format!("Unable to merge: {e}"));
+            self.dirty = true;
+            return;
+        }
+        let moved: Vec<Extra> = ids[1..].iter().flat_map(|id| self.extras.get(*id).to_vec()).collect();
+        for extra in moved.into_iter().chain(spare) {
+            let _ = self.extras.add(keep_id, extra);
+        }
+        for id in &ids[1..] {
+            self.extras.remove(*id);
+            if self.groups.forget_contact(*id) > 0 {
+                self.save_groups();
+            }
+            if self.me == Some(*id) {
+                self.set_my_card(keep_id);
+            }
+        }
+        if let Err(e) = extras::save(&self.values_path(), &self.extras) {
+            self.error = Some(format!("Unable to save contact values: {e}"));
+        }
+        let before = std::mem::replace(&mut self.contacts, updated);
+        self.record(&before);
+        self.status = Some(format!("Merged {} cards", ids.len()));
+        self.rebuild(ui);
+        self.open_detail(ui, keep_id);
     }
 
     /// Runs a main-menu item. True when the screen changed and needs a frame.
@@ -1149,6 +1265,22 @@ impl Contacts {
             MENU_SIDEBAR => self.bar(ui, BAR_SIDEBAR),
             MENU_FIRST_LAST => self.set_name_order(names::NameOrder::FirstLast),
             MENU_LAST_FIRST => self.set_name_order(names::NameOrder::LastFirst),
+            MENU_NEXT => self.go_relative(ui, 1),
+            MENU_PREVIOUS => self.go_relative(ui, -1),
+            MENU_MAKE_MINE => {
+                if let Some(id) = self.open_id() {
+                    self.set_my_card(id);
+                }
+            }
+            MENU_GO_MINE => {
+                if let Some(id) = self.me {
+                    self.filter = Filter::All;
+                    self.query.clear();
+                    self.rebuild(ui);
+                    self.open_detail(ui, id);
+                }
+            }
+            MENU_MERGE => self.merge_duplicates(ui),
             _ => return false,
         }
         true
@@ -2303,7 +2435,7 @@ mod tests {
         let ui = test_ui();
         let mut app = Contacts::new(&ui, 1200, 780, path.clone());
         let menus = app.main_menu();
-        assert_eq!(menus.iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), ["File", "View"]);
+        assert_eq!(menus.iter().map(|m| m.title.as_str()).collect::<Vec<_>>(), ["File", "View", "Card"]);
         assert_eq!(menus[0].items.iter().filter(|i| !i.separator).count(), 3, "import, export 3.0, export 4.0");
         assert_eq!(menus[1].items[0].title, "Hide Sidebar", "the sidebar starts shown on a wide window");
         assert!(menus[1].items[2].checked, "first name first is the default");
@@ -2315,6 +2447,44 @@ mod tests {
         let (_, saved) = display_file::load(&path.with_file_name(DISPLAY_FILE)).unwrap();
         assert_eq!(saved, names::NameOrder::LastFirst);
         assert!(!app.menu_action(&ui, 99), "an unknown id is not handled");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn the_card_menu_moves_between_cards_and_keeps_my_card() {
+        let path = file_with("card-menu", &[contact(1, "Anna As"), contact(2, "Bo Berg"), contact(3, "Cara Cole")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        app.open_detail(&ui, 1);
+        assert!(app.menu_action(&ui, MENU_NEXT));
+        assert_eq!(app.selected().map(|c| c.id), Some(2));
+        assert!(app.menu_action(&ui, MENU_PREVIOUS));
+        assert!(app.menu_action(&ui, MENU_PREVIOUS));
+        assert_eq!(app.selected().map(|c| c.id), Some(1), "no wrap at the first card");
+        assert!(app.menu_action(&ui, MENU_MAKE_MINE));
+        app.close_detail(&ui);
+        assert!(app.menu_action(&ui, MENU_GO_MINE));
+        assert_eq!(app.selected().map(|c| c.id), Some(1));
+        let again = Contacts::new(&ui, 1200, 780, path.clone());
+        assert_eq!(again.me, Some(1), "My Card is saved");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn merge_duplicates_folds_twins_into_the_open_card() {
+        let mut a = contact(1, "Anna As");
+        a.phone = "111 1111".into();
+        let mut b = contact(2, "Anna As");
+        b.email = "anna@x.is".into();
+        let path = file_with("merge", &[a, b, contact(3, "Bo Berg")]);
+        let ui = test_ui();
+        let mut app = Contacts::new(&ui, 1200, 780, path.clone());
+        app.open_detail(&ui, 1);
+        assert!(app.menu_action(&ui, MENU_MERGE));
+        assert_eq!(app.contacts.len(), 2);
+        let kept = app.selected().unwrap();
+        assert_eq!((kept.id, kept.email.as_str(), kept.phone.as_str()), (1, "anna@x.is", "111 1111"));
+        assert_eq!(store::load_checked(&path).unwrap().len(), 2, "the merge is saved");
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 

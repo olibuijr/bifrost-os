@@ -81,6 +81,27 @@ fn parse_name(word: &str) -> Option<NameOrder> {
     })
 }
 
+/// Reads the identifier of My Card from `mycard.txt` (one line, the identifier). A missing or unreadable file means
+/// no card is marked.
+pub fn load_me(path: &Path) -> Option<u64> {
+    std::fs::read_to_string(path).ok()?.trim().parse().ok()
+}
+
+/// Writes My Card's identifier, or removes the file for `None`.
+pub fn save_me(path: &Path, id: Option<u64>) -> io::Result<()> {
+    match id {
+        Some(id) => {
+            let temp = path.with_extension("txt.tmp");
+            std::fs::write(&temp, format!("{id}\n"))?;
+            std::fs::rename(&temp, path)
+        }
+        None => match std::fs::remove_file(path) {
+            Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        },
+    }
+}
+
 fn bad(message: &str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message)
 }
@@ -118,6 +139,18 @@ mod tests {
         let (defaults, names) = load(&path).unwrap();
         assert_eq!(defaults.sort_order(), SortOrder::FamilyName);
         assert_eq!(names, NameOrder::FirstLast);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn my_card_round_trips_and_clears() {
+        let path = dir("me").join("mycard.txt");
+        assert_eq!(load_me(&path), None);
+        save_me(&path, Some(7)).unwrap();
+        assert_eq!(load_me(&path), Some(7));
+        save_me(&path, None).unwrap();
+        assert_eq!(load_me(&path), None);
+        save_me(&path, None).unwrap();
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 

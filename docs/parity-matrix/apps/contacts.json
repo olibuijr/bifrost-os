@@ -104,8 +104,8 @@
    "area": "menu",
    "apple": "Card > Look for Duplicates, Merge Selected Cards; ABDuplicateReviewSheet.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/contacts-desktop/src/dupes.rs:1",
-   "note": "Duplicates sidebar list shows matches (contacts.rs:751); no merge",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1216",
+   "note": "Card > Merge Duplicates merges the open card with its twins (dupes.rs:117); no review sheet, group membership of merged cards is dropped",
    "wire": "Add Merge on the Duplicates list: fold fields into the first card (spare values into extras), delete the rest, record in history."
   },
   {
@@ -157,9 +157,9 @@
    "feature": "My Card (make this my card, go to my card)",
    "area": "menu",
    "apple": "Card > Make This My Card, Go to My Card",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1207",
+   "note": "Card menu Make This My Card / Go to My Card, saved in mycard.txt; no marker on the list row",
    "wire": "Store a me-card id in display_file.rs; add both Card menu commands and a marker on that row."
   },
   {
@@ -193,9 +193,9 @@
    "feature": "Next / previous card",
    "area": "menu",
    "apple": "Card > Go to Next/Previous Card",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1201",
+   "note": "Card > Go to Next/Previous Card with cmd+] / cmd+[",
    "wire": "Add Card menu commands (cmd+] / cmd+[) moving the list selection."
   },
   {

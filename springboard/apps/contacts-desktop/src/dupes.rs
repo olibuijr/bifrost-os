@@ -2,6 +2,7 @@
 //! number (compared by its last seven digits, so "+354 555 1234" and "5551234" match), or the same name with no
 //! conflicting phone or email. Names match ignoring case and accents. Pure std.
 
+use crate::extras::{Extra, ValueKind};
 use crate::names;
 use springboard::shell::contactstore::Contact;
 use std::collections::{BTreeMap, BTreeSet};
@@ -110,9 +111,81 @@ pub fn has_duplicate(existing: &[Contact], candidate: &Contact) -> bool {
     existing.iter().any(|c| is_duplicate(c, candidate))
 }
 
+/// Folds `others` into `keep`. An empty field of the kept card takes the other card's value; a value that differs
+/// is returned as an extra value under the label the other card gave it, so nothing is lost. Notes are joined and a
+/// favourite stays a favourite. Values that repeat what the kept card already holds are dropped.
+pub fn merge(keep: &Contact, others: &[Contact]) -> (Contact, Vec<Extra>) {
+    let mut card = keep.clone();
+    let mut spare: Vec<Extra> = Vec::new();
+    for other in others {
+        if card.name.trim().is_empty() {
+            card.name = other.name.clone();
+        }
+        if card.company.trim().is_empty() {
+            card.company = other.company.clone();
+        }
+        card.favorite |= other.favorite;
+        let notes = other.notes.trim();
+        if !notes.is_empty() && !card.notes.contains(notes) {
+            card.notes = if card.notes.trim().is_empty() {
+                notes.to_string()
+            } else {
+                format!("{}\n{notes}", card.notes.trim_end())
+            };
+        }
+        let kinds = [ValueKind::Phone, ValueKind::Email, ValueKind::Address];
+        for (k, kind) in kinds.into_iter().enumerate() {
+            let value = [&other.phone, &other.email, &other.address][k].trim().to_string();
+            if value.is_empty() {
+                continue;
+            }
+            let own = match k {
+                0 => &mut card.phone,
+                1 => &mut card.email,
+                _ => &mut card.address,
+            };
+            if own.trim().is_empty() {
+                *own = value;
+                card.labels[k] = other.labels[k];
+            } else if own.trim().to_lowercase() != value.to_lowercase()
+                && !spare.iter().any(|e| e.kind == kind && e.value.to_lowercase() == value.to_lowercase())
+            {
+                let labels = springboard::shell::contactstore::LABELS[k];
+                let label = labels[other.labels[k] as usize % labels.len()].to_string();
+                spare.push(Extra { kind, label, value });
+            }
+        }
+    }
+    (card, spare)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn merge_fills_gaps_and_keeps_differing_values_as_extras() {
+        let keep = c(1, "Anna As", "111 1111", "");
+        let mut other = c(2, "Anna As", "222 2222", "anna@x.is");
+        other.notes = "met at fair".into();
+        other.favorite = true;
+        let (card, spare) = merge(&keep, &[other]);
+        assert_eq!(card.id, 1);
+        assert_eq!(card.phone, "111 1111");
+        assert_eq!(card.email, "anna@x.is");
+        assert_eq!(card.notes, "met at fair");
+        assert!(card.favorite);
+        assert_eq!(spare.len(), 1);
+        assert_eq!(spare[0].value, "222 2222");
+        assert!(spare[0].well_formed());
+    }
+
+    #[test]
+    fn merge_drops_repeated_values() {
+        let keep = c(1, "Anna", "111", "A@x.is");
+        let (_, spare) = merge(&keep, &[c(2, "Anna", "111", "a@x.is"), c(3, "Anna", "111", "")]);
+        assert!(spare.is_empty());
+    }
 
     fn c(id: u64, name: &str, phone: &str, email: &str) -> Contact {
         Contact { id, name: name.into(), phone: phone.into(), email: email.into(), ..Default::default() }
