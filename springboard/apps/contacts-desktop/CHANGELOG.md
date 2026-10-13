@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.1
+
+- Code cleanup: the unused `needs_frame` and `show_contact` helpers are removed. No behaviour change.
+
 ## 1.8.0 — 2026-10-13
 
 - Internet Accounts: the CardDAV address books switched on for Contacts are read in the background and merged into the
