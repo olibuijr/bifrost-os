@@ -75,6 +75,8 @@ const MENU_FIND_NEXT: u32 = 7;
 const MENU_FIND_PREV: u32 = 8;
 const MENU_DOWNLOADS: u32 = 9;
 const MENU_CLEAR_DOWNLOADS: u32 = 10;
+const MENU_AUTOFILL: u32 = 11;
+const MENU_OVERVIEW: u32 = 12;
 const KEY_D: u32 = 32;
 const KEY_Y: u32 = 21;
 const KEY_B: u32 = 48;
@@ -100,8 +102,11 @@ mod favicon;
 mod inbox;
 mod tokens;
 mod session;
+mod autofill;
+mod overview;
 
 const KEY_F: u32 = 33;
+const KEY_BACKSLASH: u32 = 43;
 const KEY_G: u32 = 34;
 const KEY_0: u32 = 11;
 const KEY_MINUS: u32 = 12;
@@ -182,6 +187,10 @@ struct Browser {
     lib: library::Library,
     /// Site icons for tabs, the address field and suggestions (favicon.rs).
     favicons: favicon::Favicons,
+    /// Password AutoFill: which pages have a password field, and the request in flight (autofill.rs).
+    autofill: autofill::AutoFill,
+    /// Tab overview grid (overview.rs).
+    overview: overview::Overview,
 }
 
 /// The bookmark star at the trailing edge of the address field (a square the height of the field).
@@ -550,6 +559,8 @@ impl Browser {
                 items: vec![
                     AppMenuItem::new(MENU_SHARE, "Share\u{2026}").enabled(self.web_url().is_some()),
                     AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_AUTOFILL, "AutoFill Password").enabled(self.view().is_some_and(|v| self.autofill.has_form(v))),
+                    AppMenuItem::separator(),
                     AppMenuItem::new(MENU_DOWNLOADS, "Show Downloads").enabled(!self.downloads.items.is_empty()),
                     AppMenuItem::new(MENU_CLEAR_DOWNLOADS, "Clear Finished Downloads").enabled(finished),
                 ],
@@ -558,6 +569,7 @@ impl Browser {
                 title: "View".into(),
                 items: vec![
                     AppMenuItem::new(MENU_READER, "Show Reader").key("cmd+shift+r").checked(reader_on).enabled(reader_ok),
+                    AppMenuItem::new(MENU_OVERVIEW, "Show All Tabs").key("cmd+shift+backslash").checked(self.overview.open).enabled(!self.tabs.is_empty()),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_ZOOM_IN, "Zoom In").key("cmd+=").enabled(page),
                     AppMenuItem::new(MENU_ZOOM_OUT, "Zoom Out").key("cmd+-").enabled(page),
@@ -581,6 +593,21 @@ impl Browser {
             let _ = bifrost_app::share::show_picker(ctx, &[bifrost_app::share::Payload::Url(url)], anchor);
         }
         false
+    }
+
+    /// File > AutoFill Password for the selected tab (autofill.rs).
+    fn autofill_page(&mut self, ctx: &Ctx) -> bool {
+        let Some(v) = self.view() else { return false };
+        let url = self.pool.as_ref().and_then(|p| p.state(v)).map(|s| s.url.clone()).unwrap_or_default();
+        self.autofill.start(ctx, v, &url)
+    }
+
+    /// View > Show All Tabs and Cmd+Shift+backslash (overview.rs). Opening it closes the downloads list.
+    fn toggle_overview(&mut self) {
+        self.overview.open = !self.overview.open && !self.tabs.is_empty();
+        if self.overview.open {
+            self.downloads.open = false;
+        }
     }
 
     fn toggle_reader(&mut self) {
@@ -759,11 +786,13 @@ impl Browser {
                 }
                 WebViewEvent::EvalResult(v, text) if self.downloads.on_eval(v, &text) => {}
                 WebViewEvent::EvalResult(v, text) if self.favicons.on_eval(v, &text) => {}
+                WebViewEvent::EvalResult(v, text) if self.autofill.on_eval(v, &text) => {}
                 WebViewEvent::LoadFinished(v) => {
-                    // cookies for the next download probe from this page (downloads.rs)
+                    // cookies for the next download probe from this page (downloads.rs); password field (autofill.rs)
                     if let Some(p) = self.pool.as_mut() {
                         p.eval(v, downloads::COOKIE_JS);
                         p.eval(v, favicon::FAV_JS);
+                        p.eval(v, autofill::FORM_JS);
                     }
                     let loaded = self.pool.as_ref().and_then(|p| p.state(v)).map(|s| s.url.clone());
                     if let (Some(u), Some(p)) = (loaded, self.pool.as_mut()) {
@@ -784,6 +813,7 @@ impl Browser {
                     self.downloads.forget(v);
                     self.reader.forget(v);
                     self.favicons.forget(v);
+                    self.autofill.forget(v);
                     if self.pool.as_ref().is_none_or(|p| p.state(v).is_none()) && !self.tabs.iter().any(|t| t.view == v) {
                         continue;
                     }
@@ -893,6 +923,10 @@ impl Browser {
                     }
                     None => false,
                 }
+            }
+            KEY_BACKSLASH => {
+                self.toggle_overview();
+                true
             }
             _ => false,
         }
@@ -1049,6 +1083,11 @@ impl App for Browser {
                 self.downloads.clear_finished();
                 true
             }
+            MENU_AUTOFILL => self.autofill_page(ctx),
+            MENU_OVERVIEW => {
+                self.toggle_overview();
+                true
+            }
             _ if devmenu::pick(id).is_some() => {
                 self.dev_menu_action(ctx, id);
                 true
@@ -1201,6 +1240,13 @@ impl App for Browser {
     }
 
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
+        // AutoFill: the logins listing, then the chosen password, go into the page (autofill.rs)
+        if let Some((view, js)) = self.autofill.on_reply(ctx, request, result) {
+            if let Some(p) = self.pool.as_mut() {
+                p.eval(view, &js);
+            }
+            return false;
+        }
         if self.net_request == Some(request) {
             self.net_request = None;
             match network_path::decode_reply(result.clone()) {
@@ -1287,6 +1333,19 @@ impl App for Browser {
                     None => self.sheet.key(&k, &mut self.prefs),
                 };
                 self.sheet_action(ctx, a);
+                true
+            }
+            // the tab overview covers the content: a card selects its tab, anything else is ignored (overview.rs)
+            Input::Touch { kind, x, y, .. } if self.overview.open => {
+                self.hover = None;
+                if kind == TouchKind::Down {
+                    let (px, py) = (x / ui.pt(1.0), y / ui.pt(1.0));
+                    let wpt = ctx.cfg.w as f32 / ui.pt(1.0);
+                    if let Some(i) = overview::hit(self.tabs.len(), wpt, self.content_top(), px, py) {
+                        self.overview.open = false;
+                        self.select(i);
+                    }
+                }
                 true
             }
             Input::Touch { kind, x, y, .. } if self.lib.wants_touch(ui, y, self.fav_top()) => {
@@ -1604,6 +1663,10 @@ impl App for Browser {
                     self.downloads.open = false;
                     return true;
                 }
+                if self.overview.open && matches!(k, KeyInput::Code(27)) {
+                    self.overview.open = false;
+                    return true;
+                }
                 if self.editing {
                     match k {
                         KeyInput::Text(s) => {
@@ -1815,6 +1878,17 @@ impl App for Browser {
         if self.editing {
             suggest::draw(s, ui, field, &self.sugg, self.sel, &mut self.favicons);
         }
+        if self.overview.open {
+            let tabs: Vec<(String, String)> = self
+                .tabs
+                .iter()
+                .map(|t| {
+                    let st = self.pool.as_ref().and_then(|p| p.state(t.view));
+                    (st.map(|s| s.title.clone()).unwrap_or_default(), st.map(|s| s.url.clone()).unwrap_or_default())
+                })
+                .collect();
+            self.overview.draw(s, ui, wpt, self.content_top(), &tabs, self.current);
+        }
         let anchor = self.bar_layout.as_ref().and_then(|l| l.rect_of(DOWNLOADS)).map(|r| r.x + r.w / 2.0);
         self.downloads.draw(s, ui, wpt, anchor);
         self.lib.draw_overlays(s, ui, w, h, self.fav_top(), &self.store, store::now());
@@ -1913,6 +1987,8 @@ fn main() {
             f.set_private(private);
             f
         },
+        autofill: Default::default(),
+        overview: Default::default(),
         pageui: pageui::PageUi::default(),
         prefs: prefs::Prefs::default(),
         sheet: prefs::Sheet::default(),

@@ -1,3 +1,9 @@
+## 0.14.0
+
+- File > AutoFill Password fills the sign-in form of the open page from the shared passwords (the same logins as the Passwords app and Settings). The item is enabled only on a page with a password field. It picks the newest login whose site matches the page's host or a parent domain, fills the field before the password and the password, and skips notes and certificates. The app asks for the `keychain` permission and the `is.bifrost.passwords` group.
+- View > Show All Tabs (Cmd+Shift+backslash) covers the content with a grid of cards, one per open tab, with its title and address. A card selects its tab; Escape or the menu item closes it.
+- Not yet: page snapshots in the overview (the engine keeps none), the password save prompt, and a bookmark folder manager.
+
 ## 0.13.4 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.

@@ -1,6 +1,6 @@
 id = "is.olibuijr.browser.desktop"
 name = "BifrOSt Browser"
-version = "0.13.4"
+version = "0.14.0"
 exec = "bifrost-browser"
 icon = "icon.png"
 min_shell = "0.4.92"
@@ -8,4 +8,5 @@ summary = "A Browser-style browser powered by Servo, with a separate BifrOSt pro
 category = "Productivity"
 architecture = "x86_64-linux"
 window = "full-size"
-permissions = ["network", "storage"]
+permissions = ["network", "storage", "keychain"]
+keychain_groups = ["is.bifrost.passwords"]
