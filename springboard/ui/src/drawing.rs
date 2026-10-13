@@ -2,7 +2,7 @@
 //! (`NativeStrokePoint`) and each stroke names its ink (`NativeInk`). Points keep the touch data the reference SDK
 //! records (time offset, force, azimuth, altitude), so a stylus stroke saves as it was made. The drawing has a text
 //! form that saves and reloads. Capturing touch input, rendering and the tool palette belong to the shell and apps.
-use crate::affine::AffineTransform;
+use crate::cg::path::Affine;
 use crate::Rect;
 use std::fmt;
 
@@ -79,7 +79,7 @@ impl Stroke {
     }
 
     /// Maps every point through `t`. Times, sizes and stylus readings are kept.
-    pub fn transform(&mut self, t: AffineTransform) {
+    pub fn transform(&mut self, t: Affine) {
         for p in &mut self.points {
             let (x, y) = t.apply(p.x, p.y);
             p.x = x;
@@ -217,9 +217,9 @@ impl Drawing {
 
     /// A drawing with one stroke per subpath of `path`, all in `ink`. Curves are flattened to points within
     /// `tolerance` (the path import of the reference SDK). Subpaths that draw nothing add no stroke.
-    pub fn from_path(path: &crate::path::Path, tolerance: f32, ink: Ink) -> Drawing {
+    pub fn from_path(path: &crate::cg::path::Path, tolerance: f32, ink: Ink) -> Drawing {
         let strokes = path
-            .polylines(tolerance)
+            .flatten(tolerance)
             .into_iter()
             .map(|line| Stroke { ink, points: line.into_iter().map(|(x, y)| StrokePoint::at(x, y)).collect() })
             .collect();
@@ -251,7 +251,7 @@ impl Drawing {
     }
 
     /// Maps every stroke through `t`.
-    pub fn transform(&mut self, t: AffineTransform) {
+    pub fn transform(&mut self, t: Affine) {
         for s in &mut self.strokes {
             s.transform(t);
         }
@@ -406,7 +406,7 @@ mod tests {
         s.points[0].force = 0.5;
         s.points[0].time_offset = 0.25;
         d.push(s);
-        d.transform(AffineTransform::scale(2.0, 2.0).then(AffineTransform::translate(1.0, -1.0)));
+        d.transform(Affine::scale(2.0, 2.0).then(Affine::translate(1.0, -1.0)));
         let p = d.strokes()[0].points[0];
         assert_eq!((p.x, p.y), (7.0, 7.0));
         assert_eq!(p.force, 0.5);
@@ -504,7 +504,7 @@ mod tests {
 
     #[test]
     fn from_path_makes_one_stroke_per_subpath() {
-        let mut p = crate::path::Path::new();
+        let mut p = crate::cg::path::Path::new();
         p.move_to((0.0, 0.0));
         p.cubic_to((10.0, 0.0), (20.0, 0.0), (30.0, 0.0));
         p.move_to((5.0, 5.0));

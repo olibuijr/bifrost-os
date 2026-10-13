@@ -1,7 +1,7 @@
 //! The look of each stroke for Freeform's shape inspector: a fill (solid, or a two-colour gradient, for rectangles
 //! and ovals), a dashed outline, a drop shadow and opacity. The look lives beside the drawing model, one `Style` per
 //! stroke at the same index, so the shared model crate keeps its own shape. Painting builds on the discs and trails of
-//! `ink`, and on the models `gradient` (the ramp), `layer_style` (the shadow) and `stroke_style` (the dash pieces).
+//! `ink`, and on the models `gradient` (the ramp), `layer_style` (the shadow) and `cg::raster` (the fill and the dash pieces).
 //! `Bitmap` is the bitmap drawing context a picture is exported through: a pixel buffer that is painted and then
 //! written as a PNG.
 
@@ -9,7 +9,8 @@ use crate::ink;
 use bifrost_app::controls::drawing::{InkKind, Stroke};
 use bifrost_app::controls::gradient::{Gradient, Stop};
 use bifrost_app::controls::layer_style::Shadow;
-use bifrost_app::controls::stroke_style::dash_polyline;
+use bifrost_app::controls::cg::path::{Affine, Path};
+use bifrost_app::controls::cg::raster::{self, dash_polyline, FillRule};
 
 /// The opacity steps the inspector offers, as fractions of full opacity.
 pub const OPACITY_STEPS: [f32; 3] = [1.0, 0.5, 0.25];
@@ -101,9 +102,8 @@ fn outline(px: &mut [u32], cw: usize, ch: usize, pts: &[(f32, f32)], width: f32,
     }
 }
 
-/// Fills the polygon through `pts` (closed back to its first point) with the even-odd rule, one scanline per pixel
-/// row at the row's centre. The fill is not antialiased; the outline drawn over it is. A gradient runs left to right
-/// across the polygon's box.
+/// Fills the polygon through `pts` (closed back to its first point) with the even-odd rule, antialiased at the
+/// edges by the shared scan converter. A gradient runs left to right across the polygon's box.
 fn fill_polygon(px: &mut [u32], cw: usize, ch: usize, pts: &[(f32, f32)], fill: Fill, alpha: f32) {
     if pts.len() < 3 || cw == 0 || ch == 0 {
         return;
@@ -122,36 +122,27 @@ fn fill_polygon(px: &mut [u32], cw: usize, ch: usize, pts: &[(f32, f32)], fill: 
     }
     let cy = (y0 + y1) / 2.0;
     let a = (255.0 * alpha).round().clamp(0.0, 255.0) as u32;
-    let ymin = y0.floor().max(0.0) as usize;
-    let ymax = (y1.ceil().min(ch as f32 - 1.0)).max(0.0) as usize;
-    for py in ymin..=ymax {
-        if py >= ch {
-            break;
-        }
-        let y = py as f32 + 0.5;
-        let mut xs: Vec<f32> = Vec::new();
-        for i in 0..pts.len() {
-            let (p, q) = (pts[i], pts[(i + 1) % pts.len()]);
-            if (p.1 <= y && q.1 > y) || (q.1 <= y && p.1 > y) {
-                let t = (y - p.1) / (q.1 - p.1);
-                xs.push(p.0 + t * (q.0 - p.0));
+    let mut path = Path::new();
+    path.add_lines(pts);
+    path.close();
+    let cov = raster::fill(&path, FillRule::EvenOdd, &Affine::IDENTITY, None, cw, ch);
+    for row in 0..cov.h {
+        let py = cov.y as usize + row;
+        for col in 0..cov.w {
+            let c = cov.a[row * cov.w + col] as u32;
+            if c == 0 {
+                continue;
             }
-        }
-        xs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-        for span in xs.chunks_exact(2) {
-            let sx0 = span[0].round().max(0.0) as usize;
-            let sx1 = span[1].round().clamp(0.0, cw as f32) as usize;
-            for px_x in sx0..sx1 {
-                let colour = match &gradient {
-                    Some(g) => {
-                        let [r, gg, b, _] = g.color_at(Gradient::linear_t((x0, cy), (x1, cy), px_x as f32 + 0.5, y));
-                        0xFF00_0000 | (r as u32) << 16 | (gg as u32) << 8 | b as u32
-                    }
-                    None => solid,
-                };
-                if let Some(p) = px.get_mut(py * cw + px_x) {
-                    *p = ink::mix(*p, colour, a);
+            let px_x = cov.x as usize + col;
+            let colour = match &gradient {
+                Some(g) => {
+                    let [r, gg, b, _] = g.color_at(Gradient::linear_t((x0, cy), (x1, cy), px_x as f32 + 0.5, py as f32 + 0.5));
+                    0xFF00_0000 | (r as u32) << 16 | (gg as u32) << 8 | b as u32
                 }
+                None => solid,
+            };
+            if let Some(p) = px.get_mut(py * cw + px_x) {
+                *p = ink::mix(*p, colour, (a * c + 127) / 255);
             }
         }
     }

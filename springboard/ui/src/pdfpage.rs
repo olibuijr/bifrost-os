@@ -5,9 +5,9 @@
 //! Boxes fall back along a chain when a page does not set them: the crop box follows the media box, and the bleed,
 //! trim and art boxes follow the crop box. Setting a box therefore moves every box that still falls back to it.
 //! Rotation is stored as one of 0, 90, 180 or 270 degrees, clockwise, the way the page is displayed. The renderer
-//! applies the returned [`AffineTransform`] to its own drawing calls; nothing here draws.
+//! applies the returned [`Affine`] to its own drawing calls; nothing here draws.
 
-use crate::affine::AffineTransform;
+use crate::cg::path::Affine;
 use crate::Rect;
 
 /// The display boxes a page can report or set.
@@ -156,15 +156,15 @@ impl PdfPage {
 
     /// The transform from page space to a display of `which` whose origin is at the bottom left of the displayed
     /// box. The result maps the box onto `(0, 0)` to `displayed_size(which)`. Rotation is clockwise.
-    pub fn transform_for(&self, which: DisplayBox) -> AffineTransform {
+    pub fn transform_for(&self, which: DisplayBox) -> Affine {
         let r = self.boxes.bounds(which);
         let (w, h) = (r.w, r.h);
-        let to_origin = AffineTransform::translate(-r.x, -r.y);
+        let to_origin = Affine::translate(-r.x, -r.y);
         let turn = match self.rotation {
-            90 => AffineTransform { a: 0.0, b: -1.0, c: 1.0, d: 0.0, tx: 0.0, ty: w },
-            180 => AffineTransform { a: -1.0, b: 0.0, c: 0.0, d: -1.0, tx: w, ty: h },
-            270 => AffineTransform { a: 0.0, b: 1.0, c: -1.0, d: 0.0, tx: h, ty: 0.0 },
-            _ => AffineTransform::IDENTITY,
+            90 => Affine { a: 0.0, b: -1.0, c: 1.0, d: 0.0, tx: 0.0, ty: w },
+            180 => Affine { a: -1.0, b: 0.0, c: 0.0, d: -1.0, tx: w, ty: h },
+            270 => Affine { a: 0.0, b: 1.0, c: -1.0, d: 0.0, tx: h, ty: 0.0 },
+            _ => Affine::IDENTITY,
         };
         to_origin.then(turn)
     }
@@ -188,12 +188,12 @@ impl PdfPage {
 
     /// The transform that draws `which` centred inside `target` (width, height), scaled to fit. It maps page space
     /// onto a rectangle at the origin of the target, so the caller adds its own placement.
-    pub fn fit_transform(&self, which: DisplayBox, target: (f32, f32)) -> Result<AffineTransform, PageError> {
+    pub fn fit_transform(&self, which: DisplayBox, target: (f32, f32)) -> Result<Affine, PageError> {
         let s = self.fit_scale(which, target)?;
         let (w, h) = self.displayed_size(which);
         let ox = (target.0 - w * s) / 2.0;
         let oy = (target.1 - h * s) / 2.0;
-        Ok(self.transform_for(which).then(AffineTransform::scale(s, s)).then(AffineTransform::translate(ox, oy)))
+        Ok(self.transform_for(which).then(Affine::scale(s, s)).then(Affine::translate(ox, oy)))
     }
 }
 
@@ -266,7 +266,7 @@ mod tests {
             page.set_rotation(deg).unwrap();
             let (dw, dh) = page.displayed_size(DisplayBox::Media);
             let local = Rect { x: 5.0, y: 7.0, w: 4.0, h: 10.0 };
-            let mapped = page.transform_for(DisplayBox::Media).apply_rect(local);
+            let mapped: Rect = page.transform_for(DisplayBox::Media).apply_rect(local.into()).into();
             assert!(near((mapped.x, mapped.y), (0.0, 0.0)), "rotation {deg}: origin {mapped:?}");
             assert!(near((mapped.w, mapped.h), (dw, dh)), "rotation {deg}: size {mapped:?}");
         }
@@ -306,9 +306,9 @@ mod tests {
     #[test]
     fn fit_transform_centres_the_page_in_the_target() {
         let page = PdfPage::new(letter()).unwrap();
-        let t: AffineTransform = page.fit_transform(DisplayBox::Media, (300.0, 300.0)).unwrap();
+        let t: Affine = page.fit_transform(DisplayBox::Media, (300.0, 300.0)).unwrap();
         let s = 300.0 / 792.0;
-        let placed = t.apply_rect(Rect { x: 0.0, y: 0.0, w: 612.0, h: 792.0 });
+        let placed: Rect = t.apply_rect(Rect { x: 0.0, y: 0.0, w: 612.0, h: 792.0 }.into()).into();
         assert!((placed.h - 300.0).abs() < 1e-2, "height {}", placed.h);
         assert!((placed.w - 612.0 * s).abs() < 1e-2, "width {}", placed.w);
         assert!((placed.x - (300.0 - 612.0 * s) / 2.0).abs() < 1e-2, "x {}", placed.x);
