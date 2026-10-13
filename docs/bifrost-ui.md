@@ -1125,12 +1125,17 @@ global queue; completions run on `DispatchQueue::main`.
 | `downloadTask(with:)` + progress | `download_task(req, dest, progress, completion)`: writes `dest.part`, renames on 2xx |
 | `URLSession.bytes(for:)` | `bytes(req, cancel, on_response, on_chunk)`: blocking, streaming (the assistant's SSE) |
 | `URLSessionTask.cancel()` | `URLSessionTask::cancel()` |
+| `uploadTask(with:from:completionHandler:)` | `upload_task(req, body, progress, completion)`: `Content-Length` from the body; `progress(bytes_in_chunk, total_sent, total_expected)` is `didSendBodyData` and runs on the main queue |
+| `uploadTask(with:fromFile:completionHandler:)` | `upload_task_from_file(req, path, progress, completion)`: streams the file in 64 KiB chunks; a missing file completes with `FileError` and sends no request |
+| `URLSessionTask.countOfBytesSent` / `countOfBytesExpectedToSend` | `count_of_bytes_sent()` (u64) and `count_of_bytes_expected_to_send()` (i64, -1 until known, like `NSURLSessionTransferSizeUnknown`); cancel stops between 64 KiB chunks with `Cancelled` |
 | `URLCache` | `URLCache::new(capacity)`: GET 200 by URL; `Cache-Control: max-age` serves without a request, `ETag` revalidates with `If-None-Match` and a 304 serves the cached body; `no-store` and `no-cache` respected |
 
-Gaps, decided here: no `URLSessionConfiguration`, delegates, background sessions, upload tasks or HTTP/2; no disk cache
-(`URLCache` is memory only); no cookie storage or `URLCredential`s (the Deildu `Client` keeps its own jar); no
-`Vary`, `Expires` or `Age` handling; one connection per request (`Connection: close`); `URLError` has the few codes
-used here. The assistant app moved onto `URLSession::bytes`.
+Gaps, decided here: no `URLSessionConfiguration`, delegates (progress comes in as closures instead), background sessions
+or HTTP/2; no disk cache (`URLCache` is memory only); no cookie storage or `URLCredential`s (the Deildu `Client` keeps
+its own jar); no `Vary`, `Expires` or `Age` handling; one connection per request (`Connection: close`); `URLError` has
+the few codes used here. Upload progress is the same `didSendBodyData` shape as the delegate. A 307/308 redirect of an
+upload re-sends the body, so its counts keep growing past the expected length: a known limit. The assistant app moved
+onto `URLSession::bytes`.
 
 ## Unified Logging (`os.Logger`, `OSLogStore`, `log` CLI; milestone `docs/milestone-unified-logging.md`, Phase 1)
 
