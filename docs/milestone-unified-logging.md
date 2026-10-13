@@ -35,6 +35,23 @@ registry of those subsystems, and a Console system app (installed by default) to
 | Crash Reports | coredumpctl list/info, shown as reports with a backtrace; the shell's panic log alongside. |
 | agent access | the MCP `logs`/`crash` tools read the same fields (filter by subsystem). |
 
+## Status (2026-10-13)
+
+All three phases are built; what is left is listed at the end.
+
+- Phase 1: the API lives in `springboard/core/src/log.rs` (Logger, levels, `private`, registry, `LogStore` with the `log-store`
+  entitlement, which `Policy::with_entitlements` grants only to a first-party `system-app`) and is re-exported as
+  `bifrost_app::log`. `bifrost-log` is built and packaged with the shell (`bifrost pc log show|stream|config|subsystems` runs it
+  on Midget over ssh).
+- Phase 2: `springboard/apps/console-desktop` (1.5.0): live stream with Start/Pause, filters and search tokens, detail pane,
+  Crash Reports, and a Log menu with Save Messages (a new `Console-<time>.log` in Documents/Console, never overwriting).
+- Phase 3: `Signposter` is `springboard/sdk/src/signpost.rs` (`bifrost_app::signpost`); the Console's Signposts view totals
+  intervals per name and times its own loads through it (subsystem `is.olibuijr.console.desktop`). Reports also has Hang
+  Diagnostics (each stall of the shell's UI loop of 20 s or more, read from the shell's `crash.log`; no call stack is kept for a
+  hang) and a Daily Summary of crashes and hangs per UTC day (`diagnostics.rs`).
+- Not built: metric reports from the shell's per-app counters, and opening or saving log archives (there is no archive
+  format). Agents read the same fields through the MCP `logs` and `crash` tools ([bifrost-mcp.md](bifrost-mcp.md)).
+
 ## Phases
 
 1. **Logging API and registry.** SDK `log` module, journald writer, levels, privacy, registry from manifests, overrides,

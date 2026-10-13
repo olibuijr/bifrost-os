@@ -43,11 +43,8 @@ is only partly right. Re-reading the code:
 
 So the real gaps are narrower than "not implemented":
 
-1. **No sound on a background alarm.** `clock/mod.rs:75-99` says the shell
-   "plays it on `Effect::Alarm`", but `bin/shell.rs:777` only logs
-   `springboard: alarm`. The alert's `sound`, `vibrate` and `ramp` fields are
-   carried and never used. (Sound is also gated by the board rule: no sound
-   without the user asking at that moment; see AGENTS.md and bifrost-audio.)
+1. **(Closed, see above.) No sound on a background alarm.** On 2026-10-08 `bin/shell.rs:777` only logged
+   `springboard: alarm`; the alert's `sound`, `vibrate` and `ramp` fields were carried and never used.
 2. **Wake from suspend depends on RTC.** `Effect::WakeAt` goes to `rtc_wake`
    (`bin/shell.rs:1298`), which writes `/sys/class/rtc/rtc0/wakealarm`. On the
    PC (Midget) this path is unverified; failures are only logged
