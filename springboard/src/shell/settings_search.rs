@@ -161,7 +161,31 @@ impl Search {
     }
 }
 
-/// Keeps the rows whose title contains `query` (case-insensitive) and
+/// Search keywords for root rows, by their title: words a row answers to besides its name, so Search finds Accessibility
+/// by what it does. Lower case; matched as substrings of the query.
+pub const KEYWORDS: &[(&str, &[&str])] = &[(
+    "Accessibility",
+    &[
+        "screen reader", "speech", "spoken", "zoom", "magnifier", "magnify", "contrast", "transparency", "reduce motion",
+        "motion", "animation", "shortcut", "cursor", "pointer", "switch scanning", "touch accommodations", "hold",
+        "flashing lights", "button shapes", "vision", "touch",
+    ],
+)];
+
+/// The keywords a row titled `label` answers to.
+pub fn keywords(label: &str) -> &'static [&'static str] {
+    match KEYWORDS.iter().find(|(title, _)| *title == label) {
+        Some(&(_, words)) => words,
+        None => &[],
+    }
+}
+
+/// Whether a row titled `label` matches the lower-case, trimmed `q`: by its title or one of its keywords.
+fn matches(label: &str, q: &str) -> bool {
+    label.to_lowercase().contains(q) || keywords(label).iter().any(|k| k.contains(q))
+}
+
+/// Keeps the rows whose title or keywords contain `query` (case-insensitive) and
 /// drops the groups left empty; an empty query keeps everything.
 pub fn filter(spec: &mut Spec, query: &str) {
     let q = query.trim().to_lowercase();
@@ -169,7 +193,7 @@ pub fn filter(spec: &mut Spec, query: &str) {
         return;
     }
     for g in &mut spec.groups {
-        g.items.retain(|i| i.label.to_lowercase().contains(&q));
+        g.items.retain(|i| matches(&i.label, &q));
     }
     spec.groups.retain(|g: &Group| !g.items.is_empty());
 }
@@ -186,5 +210,20 @@ mod tests {
         filter(&mut spec, " BLUE ");
         assert_eq!(spec.groups.len(), 1);
         assert_eq!(spec.groups[0].items[0].label, "Bluetooth");
+    }
+
+    #[test]
+    fn accessibility_is_found_by_its_keywords_too() {
+        let root = || Spec { id: PageId::Root, title: "Settings".into(), large: true, groups: vec![Group::new(vec![Item::new("Wi-Fi"), Item::new("Accessibility")])] };
+        for q in ["zoom", "Magnif", "screen reader", "reduce motion", "cursor"] {
+            let mut spec = root();
+            filter(&mut spec, q);
+            assert_eq!(spec.groups.len(), 1, "{q}");
+            assert_eq!(spec.groups[0].items[0].label, "Accessibility", "{q}");
+        }
+        let mut spec = root();
+        filter(&mut spec, "shortcutz");
+        assert!(spec.groups.is_empty(), "no keyword matches");
+        assert!(keywords("Wi-Fi").is_empty());
     }
 }

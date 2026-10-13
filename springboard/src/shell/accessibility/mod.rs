@@ -15,6 +15,7 @@ pub mod actions;
 pub mod banner;
 pub mod reader;
 pub mod shortcut;
+pub mod shortcut_panel;
 pub mod speech;
 pub mod tree;
 pub mod walk;
