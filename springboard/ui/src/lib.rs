@@ -798,6 +798,7 @@ pub mod contact_groups;
 pub mod contact_changes;
 pub mod contact_card;
 pub mod contact_picker;
+pub mod media_picker;
 pub mod contact_access;
 pub mod contact_fetch;
 pub mod contact_display;
@@ -1075,6 +1076,7 @@ pub mod surface_attach;
 pub mod surface_lock;
 pub mod surface_layout;
 pub mod surface_colour;
+pub mod colour_profile;
 
 pub mod braille;
 pub mod run_delegate;

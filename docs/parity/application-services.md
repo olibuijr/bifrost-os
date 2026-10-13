@@ -62,3 +62,18 @@ Owner-rule check: `python3 tools/check-names.py --summary` reports 0 hits after 
 
 No builds, tests or cargo runs were made in this round, as the task required. The new tests are listed above and must be run by the
 build stage (`cargo test` for `bifrost-ui`).
+
+## ColorSync profile model (team A, parity/team-a-10)
+
+`springboard/ui/src/colour_profile.rs` reads an RGB ICC matrix/TRC profile and converts colour values between two
+profiles through CIE XYZ.
+
+- `Profile::parse(bytes)` checks the header (signature, RGB data colour space) and reads the `rXYZ`, `gXYZ`, `bXYZ`
+  colourants and the `rTRC`, `gTRC`, `bTRC` tone curves. Curves may be `curv` (identity, gamma or table) or `para`
+  (type 0 gamma, type 3 sRGB-style). Malformed or zero-gamma tags are refused with the tag signature.
+- `Profile::rgb_to_xyz` and `Profile::xyz_to_rgb` convert one colour in each direction. The reverse direction returns
+  `None` when the primaries are singular; linear values outside the gamut are clamped.
+- `convert(from, to, rgb)` chains the two directions.
+
+Not covered: profile lookup or a display profile, chromatic adaptation (both profiles must share a white point),
+LUT-based profiles (A2B and B2A tags), and any SDK API for apps. Built on parity/team-a-10; not yet verified on Midget.
