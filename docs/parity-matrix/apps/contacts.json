@@ -14,7 +14,7 @@
    "area": "menu",
    "apple": "MainMenu.nib File > New Card",
    "status": "parity",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:541",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:861",
    "note": "",
    "wire": ""
   },
@@ -23,7 +23,7 @@
    "area": "panel",
    "apple": "Card > Edit Card; ABCardWindow.nib",
    "status": "parity",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:858",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1432",
    "note": "",
    "wire": ""
   },
@@ -40,17 +40,17 @@
    "feature": "Add Field (birthday, nickname, job title, department, URL, related names, dates, profiles, pronouns, phonetic)",
    "area": "menu",
    "apple": "MainMenu.nib Card > Add Field; ABTemplatePreferencesModule.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "Store has fixed fields only",
-   "wire": "Add these fields in a sidecar like extras.rs (or the contact store), an Add Field submenu in main_menu (contacts.rs:1118) and rows in the edit form; read/write them in exchange.rs vCards."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:2404",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; nine single-valued fields (nickname, job title, department, URL, birthday, pronouns, phonetic name, related name, profile), read and written in vCards, saved in details.txt",
+   "wire": "Allow several labelled values for dates, related names and profiles (with a service), and let the person reorder fields."
   },
   {
    "feature": "Delete contact with confirm",
    "area": "menu",
    "apple": "Edit > Delete",
    "status": "parity",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:663",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:992",
    "note": "",
    "wire": ""
   },
@@ -59,7 +59,7 @@
    "area": "toolbar",
    "apple": "search field; Edit > Find",
    "status": "parity",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:762",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1325",
    "note": "",
    "wire": ""
   },
@@ -68,7 +68,7 @@
    "area": "menu",
    "apple": "File > New Group; Edit > Rename List, Remove From List",
    "status": "parity",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:965",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1601",
    "note": "",
    "wire": ""
   },
@@ -76,26 +76,26 @@
    "feature": "Multi-select and New Group from Selection",
    "area": "menu",
    "apple": "File > New Group From Selection",
-   "status": "gap",
-   "bifrost": "",
-   "note": "List is single selection",
-   "wire": "Add Shift/Cmd multi-select to the list and a New Group From Selection command in main_menu."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1893",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; selection mode from Card > Select Contacts because the list gets no Shift or Command click; then New Group From Selection and Merge Selected Cards",
+   "wire": "Add Shift and Command click and drag selection once pointer events carry modifiers."
   },
   {
    "feature": "Smart lists with user rules",
    "area": "menu",
    "apple": "File > New Smart List; Edit Smart List",
    "status": "partial",
-   "bifrost": "springboard/apps/contacts-desktop/src/smart.rs:21",
-   "note": "Four fixed built-in smart lists; no user rules",
-   "wire": "Add a New Smart List sheet (field, condition, value; all/any) saved in group_file.rs; evaluate in smart.rs."
+   "bifrost": "springboard/apps/contacts-desktop/src/smart.rs:185",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; File > New Smart List editor with up to six rules (name, company, phone, email, address, notes) joined by all or any, saved in smartlists.txt",
+   "wire": "Add rules on groups, favorites and card fields, nested conditions, and a sheet in place of the detail pane."
   },
   {
    "feature": "Favorites list",
    "area": "view",
    "apple": "sidebar",
    "status": "parity",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:937",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1573",
    "note": "",
    "wire": ""
   },
@@ -104,16 +104,16 @@
    "area": "menu",
    "apple": "Card > Look for Duplicates, Merge Selected Cards; ABDuplicateReviewSheet.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/contacts-desktop/src/dupes.rs:1",
-   "note": "Duplicates sidebar list shows matches (contacts.rs:751); no merge",
-   "wire": "Add Merge on the Duplicates list: fold fields into the first card (spare values into extras), delete the rest, record in history."
+   "bifrost": "springboard/apps/contacts-desktop/src/dupes.rs:236",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; Merge Duplicates and Merge All on the Possible Duplicates list, and Card > Merge Selected Cards; recorded in Recently Changed; no review sheet",
+   "wire": "Add a review sheet that lets the person pick the value to keep for each field before merging."
   },
   {
    "feature": "Import vCard",
    "area": "document",
    "apple": "File > Import; ABImportPanel.nib; Info.plist vCard type",
    "status": "parity",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1177",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1973",
    "note": "",
    "wire": ""
   },
@@ -122,7 +122,7 @@
    "area": "document",
    "apple": "File > Export > Export vCard",
    "status": "parity",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1271",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:2109",
    "note": "",
    "wire": ""
   },
@@ -130,46 +130,46 @@
    "feature": "Import LDIF / CSV text files",
    "area": "document",
    "apple": "ABTextFileImport.nib; Info.plist LDIF type",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add CSV and LDIF readers in exchange.rs with a column-mapping review sheet, reachable from File > Import."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/textimport.rs:378",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; CSV (comma, semicolon, tab) and LDIF read from the Import folder; the column mapping is shown as a status line, not a review sheet",
+   "wire": "Add the column-mapping review sheet with a choice per column, and an open panel in place of the Import folder."
   },
   {
    "feature": "Print and Export as PDF (list, labels, envelopes)",
    "area": "menu",
    "apple": "File > Print, Export as PDF; ABPrintPanel, ABLabelPrinting, ABEnvelopePrinting nibs",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add File > Print with list and label layouts through the shell print service, plus Export as PDF."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:2292",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; the list, one card and address labels as plain text pages through the print service; PDF saved in the Export folder; no envelope layout",
+   "wire": "Add label sheet and envelope layouts, a print panel with options, and styled list pages."
   },
   {
    "feature": "Contacts archive backup",
    "area": "document",
    "apple": "File > Export > Contacts Archive",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Write one archive of the Contacts folder (contacts, values, groups, display) and import it back."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/archive.rs:21",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; File > Export Contacts Archive writes contacts.bcarchive; Restore from Archive reads the newest one in the Import folder after a second confirmation and puts the old data back if it does not read",
+   "wire": "Use save and open panels in place of the Export and Import folders."
   },
   {
    "feature": "My Card (make this my card, go to my card)",
    "area": "menu",
    "apple": "Card > Make This My Card, Go to My Card",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Store a me-card id in display_file.rs; add both Card menu commands and a marker on that row."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:2315",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; Make This My Card, Go to My Card, a Me mark on the list row and a caption on the card",
+   "wire": "Share My Card, and use the card as the sender identity in Mail."
   },
   {
    "feature": "Mark as company",
    "area": "menu",
    "apple": "Card > Mark as a Company",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add an is-company flag; display the company as the name with a building avatar."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:2383",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; Card menu item and edit form switch; the card and list row show the company as the title with a building avatar",
+   "wire": "Sort companies by company name in the list."
   },
   {
    "feature": "Contact photo (choose / clear image)",
@@ -193,10 +193,10 @@
    "feature": "Next / previous card",
    "area": "menu",
    "apple": "Card > Go to Next/Previous Card",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add Card menu commands (cmd+] / cmd+[) moving the list selection."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:2360",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; Go to Next Card and Go to Previous Card in the Card menu with Cmd+] and Cmd+[",
+   "wire": "Check on Midget that the key equivalents reach the menu items."
   },
   {
    "feature": "Open card in separate window",
@@ -212,7 +212,7 @@
    "area": "view",
    "apple": "View > Hide Groups",
    "status": "parity",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1134",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1827",
    "note": "",
    "wire": ""
   },
@@ -221,7 +221,7 @@
    "area": "settings",
    "apple": "ABGeneralPreferencesModule.nib show first name",
    "status": "parity",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1110",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1762",
    "note": "",
    "wire": ""
   },
@@ -230,7 +230,7 @@
    "area": "settings",
    "apple": "ABGeneralPreferencesModule.nib sort by",
    "status": "parity",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1901",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:3416",
    "note": "",
    "wire": ""
   },
@@ -238,37 +238,37 @@
    "feature": "Settings: short name, prefer nicknames, address format, default account",
    "area": "settings",
    "apple": "ABGeneralPreferencesModule.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add these rows to draw_settings (contacts.rs:1901), persist in display_file.rs, apply in names.rs."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1739",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; Prefer Nicknames only",
+   "wire": "Add the short name style, address format and default account rows."
   },
   {
    "feature": "Settings: vCard options (format, include notes/photos, private card)",
    "area": "settings",
    "apple": "ABVCardPreferencesModule.nib",
    "status": "partial",
-   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1127",
-   "note": "Format picked per export command; no notes/photos/private toggles",
-   "wire": "Add the toggles to Settings and honour them in exchange.rs export."
+   "bifrost": "springboard/apps/contacts-desktop/src/exchange.rs:97",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; Settings > Include Notes in vCards is honoured by the export; the format is still picked per export command",
+   "wire": "Add the vCard version, photo and private card toggles to Settings."
   },
   {
    "feature": "Settings: card template",
    "area": "settings",
    "apple": "ABTemplatePreferencesModule.nib",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Add a template pane choosing the fields new cards show; read it in the edit form layout."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/display_file.rs:30",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; Settings > Fields a New Card Shows; the form of a new card shows those card fields",
+   "wire": "Add phone, email and address defaults to the template and let the person reorder its fields."
   },
   {
    "feature": "CardDAV accounts",
    "area": "integration",
    "apple": "ABAccountsPreferencesModule.nib; File > Add Account, Refresh Accounts",
    "status": "partial",
-   "bifrost": "springboard/apps/contacts-desktop/src/main.rs:146",
-   "note": "Reads and merges from Internet Accounts; no write-back, no Refresh command",
-   "wire": "Push edits back via dav_sync and add Refresh Accounts to File."
+   "bifrost": "springboard/apps/contacts-desktop/src/main.rs:145",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; File > Refresh Accounts starts the sync at once; edits are still not written back",
+   "wire": "Push edits back to the server (dav_client needs PUT and DELETE support)."
   },
   {
    "feature": "Directory (LDAP) search",
@@ -284,9 +284,9 @@
    "area": "view",
    "apple": "Show Last Import Group",
    "status": "partial",
-   "bifrost": "springboard/apps/contacts-desktop/src/history.rs:1",
-   "note": "Session-only Recent list; no Last Import group",
-   "wire": "Keep the last vCard import as a temporary sidebar group."
+   "bifrost": "springboard/apps/contacts-desktop/src/contacts.rs:1553",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; a Last Import sidebar list of the contacts the most recent file import added, kept between runs; Recently Changed is still session-only",
+   "wire": "Keep the Recently Changed history between runs."
   },
   {
    "feature": "System search indexing",
@@ -310,10 +310,10 @@
    "feature": "User activities / intents (view card, create, search)",
    "area": "intent",
    "apple": "Info.plist NSUserActivityTypes",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
-   "wire": "Expose view-card, create-contact and search methods on the app control socket and the intent registry."
+   "status": "partial",
+   "bifrost": "springboard/apps/contacts-desktop/src/main.rs:174",
+   "note": "built on parity/team-d-contacts; not yet verified on Midget; view-card, create-contact and search-contacts intents on the control socket and in the manifest",
+   "wire": "Add the contact entity query and donate view-card activities to Search."
   },
   {
    "feature": "Send card updates",
