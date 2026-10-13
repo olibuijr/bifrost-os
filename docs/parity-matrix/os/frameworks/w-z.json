@@ -19,10 +19,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/weatherkit.json",
-   "status": "gap",
-   "note": "heuristic: no status evidence; rows in the framework data file decide",
+   "status": "partial",
+   "note": "from SDK matrix weatherkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/WiFiAware.framework",
@@ -61,10 +61,10 @@
    "role": "",
    "doc": "",
    "bifrost": "docs/parity-matrix/data/widgetkit.json",
-   "status": "gap",
-   "note": "heuristic: no status evidence; rows in the framework data file decide",
+   "status": "partial",
+   "note": "from SDK matrix widgetkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/WorkoutKit.framework",
@@ -104,9 +104,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WalletBlastDoorSupport.framework",
@@ -125,9 +125,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Wallpaper.framework",
@@ -146,9 +146,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperAnalytics.framework",
@@ -167,9 +167,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperExtensionKit.framework",
@@ -188,9 +188,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperFoundation.framework",
@@ -209,9 +209,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperServices.framework",
@@ -230,9 +230,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperSettingsUI.framework",
@@ -251,9 +251,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WallpaperTypes.framework",
@@ -272,9 +272,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WatchListKit.framework",
@@ -293,9 +293,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WatchdogClient.framework",
@@ -314,9 +314,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WatchdogServiceManagement.framework",
@@ -335,9 +335,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherAnalytics.framework",
@@ -356,9 +356,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherCore.framework",
@@ -377,9 +377,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherDaemon.framework",
@@ -398,9 +398,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherData.framework",
@@ -419,9 +419,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherFoundation.framework",
@@ -440,9 +440,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WeatherResources.framework",
@@ -461,9 +461,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WebContentAnalysis.framework",
@@ -482,9 +482,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WebContentRestrictions.framework",
@@ -503,9 +503,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WebFilterDNS.framework",
@@ -524,9 +524,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WebPrivacy.framework",
@@ -545,9 +545,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/Welcome.framework",
@@ -566,9 +566,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WellnessUI.framework",
@@ -587,9 +587,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WiFiAnalytics.framework",
@@ -606,11 +606,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "docs/parity-matrix/data/core-wlan.json",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WiFiCloudSyncEngine.framework",
@@ -627,11 +627,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "docs/parity-matrix/data/core-wlan.json",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WiFiPeerToPeer.framework",
@@ -648,11 +648,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "docs/parity-matrix/data/core-wlan.json",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WiFiPolicy.framework",
@@ -669,11 +669,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "docs/parity-matrix/data/core-wlan.json",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WiFiSettingsKit.framework",
@@ -690,11 +690,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "docs/parity-matrix/data/core-wlan.json",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WiFiVelocity.framework",
@@ -711,11 +711,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
+   "bifrost": "docs/parity-matrix/data/core-wlan.json",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, owner CoreWLAN; from SDK matrix core-wlan.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WidgetObservation.framework",
@@ -734,9 +734,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WidgetRenderer.framework",
@@ -755,9 +755,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WindowManagement.framework",
@@ -776,9 +776,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WindowManager.framework",
@@ -797,9 +797,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WirelessCoexManager.framework",
@@ -818,9 +818,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WirelessDiagnostics.framework",
@@ -839,9 +839,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WirelessProximity.framework",
@@ -860,9 +860,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowEditor.framework",
@@ -881,9 +881,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowKit.framework",
@@ -902,9 +902,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowResponsiveness.framework",
@@ -923,9 +923,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowUI.framework",
@@ -944,9 +944,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowUICore.framework",
@@ -965,9 +965,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkflowUIServices.framework",
@@ -986,9 +986,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorkoutAnnouncements.framework",
@@ -1006,10 +1006,10 @@
    "role": "",
    "doc": "",
    "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "status": "n/a",
+   "note": "private framework, owner n/a: fitness services are not mirrored",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WorldClockAppIntents.framework",
@@ -1026,11 +1026,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WritingTools.framework",
@@ -1049,9 +1049,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/WritingToolsUI.framework",
@@ -1070,9 +1070,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XARTRecovery.framework",
@@ -1091,9 +1091,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XCTAutomationSupport.framework",
@@ -1112,9 +1112,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XCTTargetBootstrap.framework",
@@ -1133,9 +1133,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XCTestSupport.framework",
@@ -1154,9 +1154,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XGBoostFramework.framework",
@@ -1175,9 +1175,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XOJIT.framework",
@@ -1196,9 +1196,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XOJITExecutor.framework",
@@ -1217,9 +1217,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XPCDistributed.framework",
@@ -1238,9 +1238,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XPCSupport.framework",
@@ -1259,9 +1259,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XQuery.framework",
@@ -1280,9 +1280,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/XprotectFramework.framework",
@@ -1301,9 +1301,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ZeoliteFramework.framework",
@@ -1322,9 +1322,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/ZeoliteLanguage.framework",
@@ -1343,9 +1343,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/yara.framework",
@@ -1364,9 +1364,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }

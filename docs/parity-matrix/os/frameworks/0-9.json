@@ -18,11 +18,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
+   "status": "partial",
+   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_AVKit_SwiftUI.framework",
@@ -39,11 +39,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/avkit.json",
+   "status": "partial",
+   "note": "overlay module, owner AVKit; from SDK matrix avkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_AppIntents_AppKit.framework",
@@ -60,11 +60,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "overlay module, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_AppIntents_HealthKit.framework",
@@ -81,11 +81,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "overlay module, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_AppIntents_SwiftUI.framework",
@@ -102,11 +102,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "overlay module, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_CompositorServices_SwiftUI.framework",
@@ -123,11 +123,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
+   "status": "partial",
+   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_Contacts_AppIntents.framework",
@@ -144,11 +144,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/contacts.json",
+   "status": "partial",
+   "note": "overlay module, owner Contacts; from SDK matrix contacts.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_CoreData_CloudKit.framework",
@@ -165,11 +165,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/core-data.json",
+   "status": "partial",
+   "note": "overlay module, owner CoreData; from SDK matrix core-data.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_CoreSpotlight_FoundationModels.framework",
@@ -186,11 +186,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/core-spotlight.json",
+   "status": "partial",
+   "note": "overlay module, owner CoreSpotlight; from SDK matrix core-spotlight.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_DeviceActivity_SwiftUI.framework",
@@ -207,11 +207,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
+   "status": "partial",
+   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_FinanceKit_AppIntents.framework",
@@ -228,11 +228,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "overlay module, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_FoundationModels_AppKit.framework",
@@ -249,11 +249,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/foundation-models.json",
+   "status": "partial",
+   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_FoundationModels_SwiftUI.framework",
@@ -270,11 +270,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/foundation-models.json",
+   "status": "partial",
+   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_GeoToolbox_AppIntents.framework",
@@ -291,11 +291,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/geotoolbox.json",
+   "status": "n/a",
+   "note": "overlay module, owner GeoToolbox; from SDK matrix geotoolbox.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_GroupActivities_AppKit.framework",
@@ -312,11 +312,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/group-activities.json",
+   "status": "n/a",
+   "note": "overlay module, owner GroupActivities; from SDK matrix group-activities.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_Intents_TipKit.framework",
@@ -333,11 +333,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/siri-kit.json",
+   "status": "partial",
+   "note": "overlay module, owner Intents; from SDK matrix siri-kit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_LinkPresentation_AppIntents.framework",
@@ -354,11 +354,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/link-presentation.json",
+   "status": "partial",
+   "note": "overlay module, owner LinkPresentation; from SDK matrix link-presentation.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_LocalAuthentication_SwiftUI.framework",
@@ -375,11 +375,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/local-authentication.json",
+   "status": "partial",
+   "note": "overlay module, owner LocalAuthentication; from SDK matrix local-authentication.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_LocationEssentials.framework",
@@ -417,11 +417,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/managed-app-distribution.json",
+   "status": "n/a",
+   "note": "overlay module, owner ManagedAppDistribution; from SDK matrix managed-app-distribution.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_MapKit_SwiftUI.framework",
@@ -438,11 +438,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/mapkit.json",
+   "status": "partial",
+   "note": "overlay module, owner MapKit; from SDK matrix mapkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_MediaIntents_AppIntents.framework",
@@ -459,11 +459,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/media-intents.json",
+   "status": "partial",
+   "note": "overlay module, owner MediaIntents; from SDK matrix media-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_MediaPlayer_AppIntents.framework",
@@ -480,11 +480,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/media-player.json",
+   "status": "partial",
+   "note": "overlay module, owner MediaPlayer; from SDK matrix media-player.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_MusicKit_SwiftUI.framework",
@@ -501,11 +501,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/musickit.json",
+   "status": "n/a",
+   "note": "overlay module, owner MusicKit; from SDK matrix musickit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_NowPlaying_AppIntents.framework",
@@ -522,11 +522,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/now-playing.json",
+   "status": "partial",
+   "note": "overlay module, owner NowPlaying; from SDK matrix now-playing.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_PassKit_SwiftUI.framework",
@@ -543,11 +543,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/passkit-apple-pay-and-wallet.json",
+   "status": "n/a",
+   "note": "overlay module, owner PassKit; from SDK matrix passkit-apple-pay-and-wallet.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_PermissionKit_AppKit.framework",
@@ -564,11 +564,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/permissionkit.json",
+   "status": "os",
+   "note": "overlay module, owner PermissionKit; from SDK matrix permissionkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_PermissionKit_SwiftUI.framework",
@@ -585,11 +585,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/permissionkit.json",
+   "status": "os",
+   "note": "overlay module, owner PermissionKit; from SDK matrix permissionkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_PhotosUI_SwiftUI.framework",
@@ -606,11 +606,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "status": "partial",
+   "note": "overlay module, owner PhotosUI; from SDK matrix photokit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_PhotosUI_WidgetKit.framework",
@@ -627,11 +627,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "status": "partial",
+   "note": "overlay module, owner PhotosUI; from SDK matrix photokit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_Photos_AppIntents.framework",
@@ -648,11 +648,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/photokit.json",
+   "status": "partial",
+   "note": "overlay module, owner Photos; from SDK matrix photokit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_QuickLook_SwiftUI.framework",
@@ -669,11 +669,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/quick-look.json",
+   "status": "partial",
+   "note": "overlay module, owner QuickLook; from SDK matrix quick-look.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_RealityKit_ComputeGraph.framework",
@@ -690,11 +690,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/realitykit.json",
+   "status": "n/a",
+   "note": "overlay module, owner RealityKit; from SDK matrix realitykit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_RealityKit_SwiftUI.framework",
@@ -711,11 +711,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/realitykit.json",
+   "status": "n/a",
+   "note": "overlay module, owner RealityKit; from SDK matrix realitykit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_SceneKit_SwiftUI.framework",
@@ -732,11 +732,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/scenekit.json",
+   "status": "partial",
+   "note": "overlay module, owner SceneKit; from SDK matrix scenekit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_ScreenCaptureKit_SwiftUI.framework",
@@ -753,11 +753,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/screencapturekit.json",
+   "status": "os",
+   "note": "overlay module, owner ScreenCaptureKit; from SDK matrix screencapturekit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_SharedWithYou_AppIntents.framework",
@@ -774,11 +774,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/shared-with-you.json",
+   "status": "n/a",
+   "note": "overlay module, owner SharedWithYou; from SDK matrix shared-with-you.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_SpatialPreview_SwiftUI.framework",
@@ -795,11 +795,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/spatial-preview.json",
+   "status": "n/a",
+   "note": "overlay module, owner SpatialPreview; from SDK matrix spatial-preview.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_SpatialPreview_USDKit.framework",
@@ -816,11 +816,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/spatial-preview.json",
+   "status": "n/a",
+   "note": "overlay module, owner SpatialPreview; from SDK matrix spatial-preview.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_SpriteKit_SwiftUI.framework",
@@ -837,11 +837,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/spritekit.json",
+   "status": "partial",
+   "note": "overlay module, owner SpriteKit; from SDK matrix spritekit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_StoreKit_SwiftUI.framework",
@@ -858,11 +858,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/storekit.json",
+   "status": "partial",
+   "note": "overlay module, owner StoreKit; from SDK matrix storekit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_SwiftData_CoreData.framework",
@@ -879,11 +879,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/swiftdata.json",
+   "status": "partial",
+   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_SwiftData_SwiftUI.framework",
@@ -900,11 +900,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/swiftdata.json",
+   "status": "partial",
+   "note": "overlay module, owner SwiftData; from SDK matrix swiftdata.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_Translation_SwiftUI.framework",
@@ -921,11 +921,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/translation.json",
+   "status": "partial",
+   "note": "overlay module, owner Translation; from SDK matrix translation.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_USDKit_RealityKit.framework",
@@ -942,11 +942,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/usdkit.json",
+   "status": "n/a",
+   "note": "overlay module, owner USDKit; from SDK matrix usdkit.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_UserNotifications_AppIntents.framework",
@@ -963,11 +963,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/user-notifications.json",
+   "status": "partial",
+   "note": "overlay module, owner UserNotifications; from SDK matrix user-notifications.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_Vision_FoundationModels.framework",
@@ -984,11 +984,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/foundation-models.json",
+   "status": "partial",
+   "note": "overlay module, owner FoundationModels; from SDK matrix foundation-models.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/Frameworks/_WorkoutKit_SwiftUI.framework",
@@ -1005,11 +1005,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "heuristic: public framework without a data file",
+   "bifrost": "docs/parity-matrix/data/swiftui-app-data.json, docs/parity-matrix/data/swiftui-events-a11y-integration.json, docs/parity-matrix/data/swiftui-views-layout.json",
+   "status": "partial",
+   "note": "overlay module, owner SwiftUI; from SDK matrix swiftui-app-data.json, swiftui-events-a11y-integration.json, swiftui-views-layout.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_AppIntentsServices_AppIntents.framework",
@@ -1026,11 +1026,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_AppIntentsServices_ToolKit.framework",
@@ -1047,11 +1047,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_AppUserEvents_AppAnalytics.framework",
@@ -1070,9 +1070,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_Coherence_CloudKit_Private.framework",
@@ -1091,9 +1091,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_CommunicationsUICore_PosterBoardServices.framework",
@@ -1112,9 +1112,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_DeviceExpertIntents_AppIntents.framework",
@@ -1131,11 +1131,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_FlowToolTypes_AppIntents.framework",
@@ -1152,11 +1152,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_FoundationModels_AppIntents.framework",
@@ -1173,11 +1173,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_GeoServices_GeoToolbox.framework",
@@ -1196,9 +1196,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_GeoToolbox_CoreLocation.framework",
@@ -1217,9 +1217,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_IconServices_SwiftUI.framework",
@@ -1238,9 +1238,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_JetEngine_SwiftUI.framework",
@@ -1259,9 +1259,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_JetUI_SwiftUI.framework",
@@ -1280,9 +1280,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_MarketplaceIntents_AppIntents.framework",
@@ -1299,11 +1299,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_MusicKitInternal_AppIntents.framework",
@@ -1320,11 +1320,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_MusicKitInternal_MediaPlaybackCore.framework",
@@ -1343,9 +1343,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_MusicKitInternal_MediaPlayer.framework",
@@ -1364,9 +1364,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_MusicKitInternal_SwiftUI.framework",
@@ -1385,9 +1385,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_NutritionCore_AppIntents.framework",
@@ -1404,11 +1404,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_OnDeviceStorage_JetEngine.framework",
@@ -1427,9 +1427,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_PhotosUIPrivate_SwiftUI.framework",
@@ -1448,9 +1448,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_SonicKit_MusicKit.framework",
@@ -1469,9 +1469,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_SwiftMedia_SwiftUI.framework",
@@ -1490,9 +1490,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_SwiftMedia_SwiftUI_MacHelper.framework",
@@ -1511,9 +1511,9 @@
    "doc": "",
    "bifrost": "",
    "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "note": "private framework, no plausible owner found",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   },
   {
    "id": "path:/System/Library/PrivateFrameworks/_ToolKit_AppIntents.framework",
@@ -1530,11 +1530,11 @@
    "description": "",
    "role": "",
    "doc": "",
-   "bifrost": "",
-   "status": "os",
-   "note": "heuristic: private framework, behaviour only, no binary",
+   "bifrost": "docs/parity-matrix/data/app-intents.json",
+   "status": "partial",
+   "note": "private framework, owner AppIntents; from SDK matrix app-intents.json",
    "rea": [],
-   "method": "heuristic"
+   "method": "assessed"
   }
  ]
 }
