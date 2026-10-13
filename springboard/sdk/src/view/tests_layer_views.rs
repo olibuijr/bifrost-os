@@ -10,7 +10,7 @@ use crate::layer_kinds::text::TextContent;
 use crate::layer_kinds::tiled::{TileDrawing, TileGrid, TileKey};
 use bifrost_render::emitter::Cell;
 use bifrost_render::gfx::{rgba, Image};
-use bifrost_ui::shape::Path;
+use bifrost_render::cg::path::{Path, Rect as PathRect};
 use bifrost_ui::Rect;
 
 fn ui() -> Ui {
@@ -46,7 +46,7 @@ fn doc(w: f32, h: f32) -> Box<dyn View> {
 fn a_shape_view_draws_its_path_in_the_frame() {
     let ui = ui();
     let mut p = Path::new();
-    p.add_rect(rect(2.0, 2.0, 4.0, 4.0));
+    p.add_rect(PathRect::new(2.0, 2.0, 4.0, 4.0));
     let mut content = ShapeContent::new(p);
     content.fill = Some([255, 0, 0, 255]);
     let mut v = ShapeView::new(content);
@@ -63,7 +63,7 @@ fn a_shape_view_draws_its_path_in_the_frame() {
 fn changing_the_content_redraws_it() {
     let ui = ui();
     let mut p = Path::new();
-    p.add_rect(rect(0.0, 0.0, 8.0, 8.0));
+    p.add_rect(PathRect::new(0.0, 0.0, 8.0, 8.0));
     let mut v = ShapeView::new(ShapeContent::new(p));
     v.layout(&ui, rect(0.0, 0.0, 8.0, 8.0));
     let mut px = Vec::new();
@@ -196,7 +196,7 @@ fn a_text_layer_view_draws_wrapped_text() {
 fn a_replicator_view_draws_a_source_several_times() {
     let ui = ui();
     let mut p = Path::new();
-    p.add_rect(rect(0.0, 0.0, 2.0, 2.0));
+    p.add_rect(PathRect::new(0.0, 0.0, 2.0, 2.0));
     let mut sh = ShapeContent::new(p);
     sh.fill = Some([255, 255, 255, 255]);
     let r = Replicator { count: 3, transform: translation(5.0, 0.0, 0.0), ..Default::default() };

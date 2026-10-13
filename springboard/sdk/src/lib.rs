@@ -23,11 +23,10 @@ pub mod kit {
     pub use bifrost_render::font::Font;
     pub use bifrost_render::gfx::{self, pack, rgba, Area, Damage, Image, Surface};
     pub use bifrost_render::cache::TextCache;
-    /// The 2D drawing context (`DrawContext`, `Bitmap`, paths, clipping, blend modes); a view reaches one for its frame
-    /// through `view::with_context`.
-    pub use bifrost_render::cg;
     pub use bifrost_render::clipboard;
-    /// The 2D drawing stack: colours and colour spaces (`cg::color`), gradients, shadings, functions and patterns (`cg::paint`).
+    /// The 2D drawing stack: the context (`DrawContext`, `Bitmap`, paths, clipping, blend modes) that a view reaches for
+    /// its frame through `view::with_context`; colours and colour spaces (`cg::color`); gradients, shadings, functions
+    /// and patterns (`cg::paint`).
     pub use bifrost_render::cg;
     /// The drawing vocabulary `draw_canvas` takes (`Canvas`, `RectF`, `ImageRef`, ...).
     pub use bifrost_render::canvas;

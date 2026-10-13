@@ -5,7 +5,7 @@
 use bifrost_render::bezier::{BezierPath, WindingRule};
 use bifrost_render::font::{Font, Style, Var};
 use bifrost_render::gfx::{pack, Image, Surface};
-use bifrost_ui::shape::{Path, Point};
+use bifrost_render::cg::path::Path;
 
 /// Joins flat segments `[x0, y0, x1, y1]` (consecutive segments of one contour share an end point) into a path.
 /// A contour whose last point returns to its first is closed.
@@ -13,7 +13,7 @@ pub fn path_from_segments(segs: &[[f32; 4]], origin: (f32, f32)) -> Path {
     let mut path = Path::new();
     let mut start: Option<(f32, f32)> = None;
     let mut cur: Option<(f32, f32)> = None;
-    let pt = |x: f32, y: f32| Point { x: x + origin.0, y: y + origin.1 };
+    let pt = |x: f32, y: f32| (x + origin.0, y + origin.1);
     for s in segs {
         let a = (s[0], s[1]);
         let b = (s[2], s[3]);
@@ -48,7 +48,7 @@ pub fn text_path(font: &Font, text: &str, px: f32, vars: &[Var], origin: (f32, f
     for ch in text.chars() {
         let gid = font.glyph(ch);
         let p = glyph_path(font, gid, px, vars, (origin.0 + x, origin.1));
-        for sp in p.subpaths() {
+        for sp in p.flatten_subpaths(0.1) {
             let mut it = sp.points.iter();
             if let Some(first) = it.next() {
                 all.move_to(*first);
@@ -86,12 +86,12 @@ pub fn fill_path(surface: &mut Surface, path: &Path, color: u32) {
     let w = (b.w.ceil() as usize + 2).min(8192);
     let h = (b.h.ceil() as usize + 2).min(8192);
     let mut bp = BezierPath::new();
-    for sp in path.subpaths() {
+    for sp in path.flatten_subpaths(0.1) {
         let mut it = sp.points.iter();
         if let Some(p) = it.next() {
-            bp.move_to((p.x - x0, p.y - y0));
+            bp.move_to((p.0 - x0, p.1 - y0));
             for q in it {
-                bp.line_to((q.x - x0, q.y - y0));
+                bp.line_to((q.0 - x0, q.1 - y0));
             }
             bp.close();
         }
@@ -114,25 +114,30 @@ mod tests {
     fn segments_become_a_closed_contour() {
         let segs = [[0.0, 0.0, 4.0, 0.0], [4.0, 0.0, 4.0, 4.0], [4.0, 4.0, 0.0, 0.0]];
         let p = path_from_segments(&segs, (1.0, 2.0));
-        assert_eq!(p.subpaths().len(), 1);
-        let sp = &p.subpaths()[0];
+        let subs = p.flatten_subpaths(0.1);
+        assert_eq!(subs.len(), 1);
+        let sp = &subs[0];
         assert!(sp.closed);
         assert_eq!(sp.points.len(), 3);
-        assert_eq!(sp.points[0], Point { x: 1.0, y: 2.0 });
+        assert_eq!(sp.points[0], (1.0, 2.0));
     }
 
     #[test]
     fn disjoint_contours_make_separate_subpaths() {
         let segs = [[0.0, 0.0, 1.0, 0.0], [1.0, 0.0, 0.0, 0.0], [5.0, 5.0, 6.0, 5.0], [6.0, 5.0, 5.0, 5.0]];
         let p = path_from_segments(&segs, (0.0, 0.0));
-        assert_eq!(p.subpaths().len(), 2);
+        assert_eq!(p.flatten_subpaths(0.1).len(), 2);
         assert!(path_from_segments(&[], (0.0, 0.0)).is_empty());
     }
 
     #[test]
     fn fill_path_paints_inside_pixels() {
         let mut p = Path::new();
-        p.move_to(Point { x: 1.0, y: 1.0 }).line_to(Point { x: 5.0, y: 1.0 }).line_to(Point { x: 5.0, y: 5.0 }).line_to(Point { x: 1.0, y: 5.0 }).close();
+        p.move_to((1.0, 1.0));
+        p.line_to((5.0, 1.0));
+        p.line_to((5.0, 5.0));
+        p.line_to((1.0, 5.0));
+        p.close();
         let mut px = vec![0u32; 8 * 8];
         let mut s = Surface { w: 8, h: 8, stride: 8, px: &mut px, y0: 0 };
         fill_path(&mut s, &p, 0xff00_00ff);

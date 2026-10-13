@@ -2,9 +2,9 @@
 //! range. `ShapeContent::render` rasterises it; a `Layer` or a `ShapeView` holds it.
 use super::raster::{self, Coverage, FillRule, Pt, Run};
 use bifrost_render::bezier::BezierPath;
+use bifrost_render::cg::path::Path;
+use bifrost_render::cg::raster::StrokeStyle;
 use bifrost_render::gfx::Image;
-use bifrost_ui::shape::{Path, Point};
-use bifrost_ui::stroke_style::StrokeStyle;
 
 /// Flattening tolerance for curves, in points.
 const TOLERANCE: f32 = 0.1;
@@ -45,9 +45,9 @@ impl ShapeContent {
     }
 
     /// Builds the outline from curves (cubic segments are flattened).
-    pub fn from_curves(path: &bifrost_ui::path::Path) -> Self {
+    pub fn from_curves(path: &Path) -> Self {
         let mut out = Path::new();
-        for line in path.polylines(TOLERANCE) {
+        for line in path.flatten(TOLERANCE) {
             add_polyline(&mut out, &line);
         }
         ShapeContent::new(out)
@@ -72,30 +72,31 @@ impl ShapeContent {
     /// The stroked pieces after the stroke range and the dash pattern, in points.
     pub fn stroke_runs(&self) -> Vec<(Vec<Pt>, bool)> {
         let whole = self.stroke_start <= 0.0 && self.stroke_end >= 1.0;
-        let ranged = if whole { self.path.clone() } else { self.path.trimmed(self.stroke_start, self.stroke_end) };
-        let dashed = if self.style.dash.is_empty() { ranged.clone() } else { ranged.dashed(&self.style.dash, self.style.dash_phase) };
+        let ranged = if whole { self.path.clone() } else { self.path.trimmed(self.stroke_start, self.stroke_end, TOLERANCE) };
+        let dashed = if self.style.dash.is_empty() {
+            ranged.clone()
+        } else {
+            ranged.copy_by_dashing(&self.style.dash, self.style.dash_phase, TOLERANCE)
+        };
         let keep_closed = whole && self.style.dash.is_empty();
-        dashed
-            .subpaths()
-            .iter()
-            .map(|s| (s.points.iter().map(|p| (p.x, p.y)).collect(), keep_closed && s.closed))
-            .collect()
+        dashed.flatten_subpaths(TOLERANCE).into_iter().map(|s| (s.points, keep_closed && s.closed)).collect()
     }
 
     /// True when `(x, y)` (content points) is inside the filled outline under the fill rule.
     pub fn contains(&self, x: f32, y: f32) -> bool {
         let mut wind = 0i32;
-        for s in self.path.subpaths() {
-            let n = s.points.len();
+        for s in self.path.flatten_subpaths(TOLERANCE) {
+            let pts = &s.points;
+            let n = pts.len();
             if n < 2 {
                 continue;
             }
             for i in 0..n {
-                let (a, b) = (s.points[i], s.points[(i + 1) % n]);
-                if (a.y <= y) != (b.y <= y) {
-                    let t = (y - a.y) / (b.y - a.y);
-                    if a.x + t * (b.x - a.x) > x {
-                        wind += if b.y > a.y { 1 } else { -1 };
+                let (a, b) = (pts[i], pts[(i + 1) % n]);
+                if (a.1 <= y) != (b.1 <= y) {
+                    let t = (y - a.1) / (b.1 - a.1);
+                    if a.0 + t * (b.0 - a.0) > x {
+                        wind += if b.1 > a.1 { 1 } else { -1 };
                     }
                 }
             }
@@ -115,10 +116,10 @@ impl ShapeContent {
         if let Some(fill) = self.fill {
             let polys: Vec<Vec<Pt>> = self
                 .path
-                .subpaths()
-                .iter()
+                .flatten_subpaths(TOLERANCE)
+                .into_iter()
                 .filter(|s| s.points.len() > 2)
-                .map(|s| s.points.iter().map(|p| (p.x * scale, p.y * scale)).collect())
+                .map(|s| s.points.iter().map(|p| (p.0 * scale, p.1 * scale)).collect())
                 .collect();
             let cov = raster::fill_polygons(&polys, self.fill_rule, w, h);
             raster::paint(&mut img, &cov, fill);
@@ -149,7 +150,7 @@ fn add_polyline(out: &mut Path, line: &[(f32, f32)]) {
         pts.pop();
     }
     for (i, p) in pts.iter().enumerate() {
-        let p = Point { x: p.0, y: p.1 };
+        let p = *p;
         if i == 0 {
             out.move_to(p);
         } else {
@@ -165,8 +166,8 @@ fn add_polyline(out: &mut Path, line: &[(f32, f32)]) {
 mod tests {
     use super::*;
     use bifrost_render::gfx::rgba;
-    use bifrost_ui::stroke_style::LineCap;
-    use bifrost_ui::Rect;
+    use bifrost_render::cg::path::Rect;
+    use bifrost_render::cg::raster::LineCap;
 
     fn rect_path(x: f32, y: f32, w: f32, h: f32) -> Path {
         let mut p = Path::new();
@@ -219,8 +220,8 @@ mod tests {
     #[test]
     fn stroke_end_trims_the_stroked_part() {
         let mut p = Path::new();
-        p.move_to(Point { x: 0.0, y: 5.0 });
-        p.line_to(Point { x: 10.0, y: 5.0 });
+        p.move_to((0.0, 5.0));
+        p.line_to((10.0, 5.0));
         let mut s = ShapeContent::new(p);
         s.fill = None;
         s.stroke = Some([255, 255, 255, 255]);
@@ -239,8 +240,8 @@ mod tests {
     #[test]
     fn a_dash_pattern_leaves_gaps() {
         let mut p = Path::new();
-        p.move_to(Point { x: 0.0, y: 2.0 });
-        p.line_to(Point { x: 12.0, y: 2.0 });
+        p.move_to((0.0, 2.0));
+        p.line_to((12.0, 2.0));
         let mut s = ShapeContent::new(p);
         s.fill = None;
         s.stroke = Some([255, 255, 255, 255]);
@@ -259,8 +260,8 @@ mod tests {
     #[test]
     fn round_caps_extend_an_open_stroke() {
         let mut p = Path::new();
-        p.move_to(Point { x: 5.0, y: 5.0 });
-        p.line_to(Point { x: 10.0, y: 5.0 });
+        p.move_to((5.0, 5.0));
+        p.line_to((10.0, 5.0));
         let mut s = ShapeContent::new(p);
         s.fill = None;
         s.stroke = Some([255, 255, 255, 255]);
@@ -272,8 +273,8 @@ mod tests {
 
     #[test]
     fn curves_flatten_into_a_closed_ellipse() {
-        let mut c = bifrost_ui::path::Path::new();
-        c.add_ellipse_in(Rect { x: 0.0, y: 0.0, w: 10.0, h: 10.0 });
+        let mut c = Path::new();
+        c.add_ellipse(Rect { x: 0.0, y: 0.0, w: 10.0, h: 10.0 });
         let s = ShapeContent::from_curves(&c);
         assert!(s.contains(5.0, 5.0));
         assert!(!s.contains(0.5, 0.5));
@@ -285,9 +286,9 @@ mod tests {
     #[test]
     fn bounds_grow_by_half_the_stroke_width() {
         let mut s = ShapeContent::new(rect_path(2.0, 2.0, 4.0, 4.0));
-        assert_eq!(s.bounds(), Some(Rect { x: 2.0, y: 2.0, w: 4.0, h: 4.0 }));
+        assert_eq!(s.bounds(), Some(bifrost_ui::Rect { x: 2.0, y: 2.0, w: 4.0, h: 4.0 }));
         s.stroke = Some([0, 0, 0, 255]);
         s.style.width = 2.0;
-        assert_eq!(s.bounds(), Some(Rect { x: 1.0, y: 1.0, w: 6.0, h: 6.0 }));
+        assert_eq!(s.bounds(), Some(bifrost_ui::Rect { x: 1.0, y: 1.0, w: 6.0, h: 6.0 }));
     }
 }

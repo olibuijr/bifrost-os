@@ -48,7 +48,7 @@ mod tests {
         let mut s = Surface { w: 40, h: 40, stride: 40, px: &mut px, y0: 0 };
         let frame = Rect { x: 5.0, y: 5.0, w: 10.0, h: 10.0 }; // device 10..30 at scale 2
         let r = with_context(&mut s, &ui, frame, |cx| {
-            cx.set_fill_color(Color::rgba(1.0, 0.0, 0.0, 1.0));
+            cx.set_fill_color(Color::srgb(1.0, 0.0, 0.0, 1.0));
             // larger than the frame: the clip stops it at the frame
             cx.fill_rect(CgRect::new(-100.0, -100.0, 300.0, 300.0));
             7

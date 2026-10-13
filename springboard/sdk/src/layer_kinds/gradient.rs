@@ -1,9 +1,19 @@
 //! Gradient content: colours along a ramp, drawn axial, radial or conic between a start and an end point given in unit
 //! coordinates of the content (0,0 is the top left, 1,1 the bottom right). A radial gradient is an ellipse when the
-//! content is not square, as the unit space is stretched with it.
+//! content is not square, as the unit space is stretched with it. The painting is `bifrost_render::cg::paint`.
+use bifrost_render::cg::paint::{ColorRamp, ConicGradient, LinearGradient, RadialGradient};
 use bifrost_render::gfx::{self, Image};
-pub use bifrost_ui::gradient::GradientType;
-use bifrost_ui::gradient::{Gradient, Stop};
+
+/// Which gradient a content draws.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GradientType {
+    /// Colours change along the line from `start` to `end`; the end colours hold beyond it.
+    Axial,
+    /// Colours change with the distance from `start`, out to `end`; the last colour holds beyond it.
+    Radial,
+    /// Colours sweep clockwise around `start`, starting in the direction of `end`.
+    Conic,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GradientContent {
@@ -23,16 +33,34 @@ impl Default for GradientContent {
     }
 }
 
+/// The painter for one gradient: the cg gradient over the content's unit space.
+enum Shader {
+    Axial(LinearGradient),
+    Radial(RadialGradient),
+    Conic(ConicGradient),
+}
+
+impl Shader {
+    /// The straight RGBA colour at unit position `(u, v)`; transparent where the gradient does not paint.
+    fn at(&self, u: f32, v: f32) -> [u8; 4] {
+        match self {
+            Shader::Axial(g) => g.shade_rgba(u, v).unwrap_or([0; 4]),
+            Shader::Radial(g) => g.shade_rgba(u, v).unwrap_or([0; 4]),
+            Shader::Conic(g) => g.shade_rgba(u, v),
+        }
+    }
+}
+
 impl GradientContent {
     pub fn new(kind: GradientType, colors: Vec<[u8; 4]>) -> Self {
         GradientContent { kind, colors, ..Default::default() }
     }
 
-    /// The ramp these colours and locations make.
-    pub fn ramp(&self) -> Gradient {
+    /// The ramp these colours and locations make; `None` without colours.
+    pub fn ramp(&self) -> Option<ColorRamp> {
         let n = self.colors.len();
         let even = |i: usize| if n > 1 { i as f32 / (n - 1) as f32 } else { 0.0 };
-        let stops = self
+        let stops: Vec<(f32, [u8; 4])> = self
             .colors
             .iter()
             .enumerate()
@@ -41,37 +69,46 @@ impl GradientContent {
                     Some(l) if l.len() == n => l[i],
                     _ => even(i),
                 };
-                Stop { at, rgba }
+                (at, rgba)
             })
             .collect();
-        Gradient::new(stops)
+        ColorRamp::from_rgba8(&stops)
+    }
+
+    fn shader(&self, ramp: ColorRamp) -> Shader {
+        let (s, e) = (self.start, self.end);
+        match self.kind {
+            GradientType::Axial => Shader::Axial(LinearGradient::new(s, e, ramp).extended(true, true)),
+            GradientType::Radial => {
+                let r = (e.0 - s.0).hypot(e.1 - s.1).max(1e-6);
+                Shader::Radial(RadialGradient::new(s, 0.0, s, r, ramp).extended(true, true))
+            }
+            GradientType::Conic => Shader::Conic(ConicGradient { center: s, start_angle: (e.1 - s.1).atan2(e.0 - s.0), ramp }),
+        }
     }
 
     /// The straight RGBA colour at unit position `(u, v)` of the content.
     pub fn color_at(&self, u: f32, v: f32) -> [u8; 4] {
-        self.ramp().color_at(Gradient::layer_t(self.kind, self.start, self.end, u, v))
+        match self.ramp() {
+            Some(ramp) => self.shader(ramp).at(u, v),
+            None => [0; 4],
+        }
     }
 
     /// Rasterises into a `w` x `h` image.
     pub fn render(&self, w: usize, h: usize) -> Image {
         let mut img = Image::new(w, h);
-        if w == 0 || h == 0 || self.colors.is_empty() {
+        let Some(ramp) = self.ramp() else { return img };
+        if w == 0 || h == 0 {
             return img;
         }
-        let ramp = self.ramp();
-        // The ramp is sampled through a 256 entry table of premultiplied colours.
-        let lut: Vec<u32> = (0..256)
-            .map(|i| {
-                let c = ramp.color_at(i as f32 / 255.0);
-                gfx::rgba(c[0], c[1], c[2], c[3])
-            })
-            .collect();
+        let shader = self.shader(ramp);
         for y in 0..h {
             let v = (y as f32 + 0.5) / h as f32;
             for x in 0..w {
                 let u = (x as f32 + 0.5) / w as f32;
-                let t = Gradient::layer_t(self.kind, self.start, self.end, u, v);
-                img.px[y * w + x] = lut[(t * 255.0 + 0.5).clamp(0.0, 255.0) as usize];
+                let c = shader.at(u, v);
+                img.px[y * w + x] = gfx::rgba(c[0], c[1], c[2], c[3]);
             }
         }
         img
@@ -99,9 +136,9 @@ mod tests {
         let mut g = GradientContent::new(GradientType::Axial, vec![BLACK, WHITE]);
         g.locations = Some(vec![0.5, 1.0]);
         assert_eq!(g.color_at(0.5, 0.25), BLACK);
-        assert_eq!(g.color_at(0.5, 0.75)[0], 128);
+        assert!((g.color_at(0.5, 0.75)[0] as i32 - 128).abs() <= 2);
         g.locations = Some(vec![0.0]);
-        assert_eq!(g.color_at(0.5, 0.5)[0], 128, "a list of the wrong length spaces the colours evenly");
+        assert!((g.color_at(0.5, 0.5)[0] as i32 - 128).abs() <= 2, "a list of the wrong length spaces the colours evenly");
     }
 
     #[test]
@@ -120,7 +157,7 @@ mod tests {
         g.start = (0.5, 0.5);
         g.end = (1.0, 0.5);
         // Just past the start direction the ramp is near 0, a quarter turn clockwise (down) it is a quarter of the way.
-        assert_eq!(g.color_at(1.0, 0.5), BLACK);
+        assert!(g.color_at(1.0, 0.5)[0] <= 2);
         let q = g.color_at(0.5, 1.0)[0];
         assert!((q as i32 - 64).abs() <= 2);
         let half = g.color_at(0.0, 0.5)[0];

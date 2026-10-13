@@ -1,7 +1,7 @@
 //! Pixel helpers for the layer content kinds: coverage compositing, blits and bilinear sampling on premultiplied
-//! images. Scan conversion itself is `bifrost_ui::raster`.
+//! images. Scan conversion itself is `bifrost_render::cg::raster`.
 use bifrost_render::gfx::{self, Image};
-pub use bifrost_ui::raster::{fill_polygons, stroke_polygons, Coverage, FillRule, Pt, Run};
+pub use bifrost_render::cg::raster::{fill_polygons, stroke_polygons, Coverage, FillRule, Pt, Run};
 
 /// Composites `color` (straight RGBA) over `img` where `cov` is set.
 pub fn paint(img: &mut Image, cov: &Coverage, color: [u8; 4]) {
@@ -76,7 +76,7 @@ mod tests {
     #[test]
     fn paint_composites_premultiplied_colour_by_coverage() {
         let mut img = Image::new(2, 1);
-        let cov = Coverage { w: 2, h: 1, a: vec![255, 0] };
+        let cov = Coverage { x: 0, y: 0, w: 2, h: 1, a: vec![255, 0] };
         paint(&mut img, &cov, [255, 0, 0, 255]);
         assert_eq!(img.px[0], gfx::rgba(255, 0, 0, 255));
         assert_eq!(img.px[1], 0);
