@@ -553,6 +553,10 @@ fn run() -> std::io::Result<()> {
                 let body: Vec<u8> = match req {
                     _ if refused => b"error: locked\n".to_vec(),
                     Ok(Request::Shot(k)) => control::snapshot(&frame, fw, fh, k),
+                    Ok(Request::Capture(mode)) => match shell.capture_request(&mode) {
+                        Ok(()) => b"ok\n".to_vec(),
+                        Err(e) => format!("error: {e}\n").into_bytes(),
+                    },
                     Ok(Request::Context(x,y))=>{let (x,y)=shell.orientation().to_logical(x,y,w as i32,h as i32);shell.desktop_pointer(x,y,true,t);b"ok\n".to_vec()},
                     Ok(Request::Hover(x,y))=>{let (x,y)=shell.orientation().to_logical(x,y,w as i32,h as i32);shell.desktop_pointer(x,y,false,t);b"ok\n".to_vec()},
                     Ok(Request::AxList(prefix))=>shell.ax_listing(&prefix,t).into_bytes(),

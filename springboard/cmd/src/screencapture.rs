@@ -7,10 +7,13 @@
 //! display only), `-r` (no DPI metadata) and `-a` (no attached windows) are accepted: sounds are never played, the panel is
 //! the only display, the PNG has no DPI chunk, and a full-screen capture has no attached windows to leave out.
 //! Without a file operand the capture goes to the current folder as `Screenshot-<unix seconds>.png`.
-//! Refused with a message rather than run wrongly: the interactive and window modes (`-i -w -W -s -S -l`), the cursor
+//! `-i` (a dragged selection) and `-w` (a window picked by its frame, with its shadow) start the shell's screenshot toolbar,
+//! the same overlay as Shift-Cmd-5. The command returns once the toolbar is up; the capture is saved to Photos when the user
+//! finishes, so `-i` and `-w` take no `-c`, `-R`, `-T` or file name.
+//! Refused with a message rather than run wrongly: the other selection modes (`-W -s -S -l`), the cursor
 //! (`-C`), video (`-v -V -G -g -k`), the built-in function strip (`-b`), the other formats, and the options that open or send the picture
 //! somewhere (`-M -P -B -p -u -U -J -o -d`).
-//! Gap: `-R` coordinates are panel pixels, not points, and the capture has no cursor or window shadows.
+//! Gap: `-R` coordinates are panel pixels, not points, and the capture has no cursor.
 
 use crate::control;
 use std::path::PathBuf;
@@ -18,7 +21,7 @@ use std::process::{Command, Stdio};
 use std::io::Write;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-pub const USAGE: &str = "usage: screencapture [-x] [-m] [-r] [-a] [-c] [-R x,y,w,h] [-T seconds] [-t png] [-D 1] [file]";
+pub const USAGE: &str = "usage: screencapture [-x] [-m] [-r] [-a] [-c] [-i | -w] [-R x,y,w,h] [-T seconds] [-t png] [-D 1] [file]";
 /// The MIME type the clipboard takes a picture under.
 pub const PNG_MIME: &str = "image/png";
 /// The shell's raw frame magic.
@@ -34,9 +37,20 @@ pub struct Rect {
     pub h: u32,
 }
 
+/// The interactive capture a `-i` or `-w` starts on the desktop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Interactive {
+    /// `-i`: a rectangle dragged over the screen.
+    Select,
+    /// `-w`: the window under the pointer.
+    Window,
+}
+
 /// The parsed command line.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Options {
+    /// `-i` or `-w`: the desktop's screenshot toolbar takes the capture.
+    pub interactive: Option<Interactive>,
     /// `-c`: the picture goes to the clipboard instead of a file.
     pub clipboard: bool,
     /// `-R`: capture this rectangle instead of the whole panel.
@@ -65,7 +79,7 @@ pub struct Frame {
 /// Why an option is refused, or what it means for the capture.
 fn refusal(c: char) -> String {
     match c {
-        'i' | 'w' | 'W' | 's' | 'S' | 'l' => format!("-{c}: the interactive and window modes need a selection the desktop does not offer yet"),
+        'W' | 's' | 'S' | 'l' => format!("-{c}: this selection mode is not supported yet"),
         'C' => "-C: the cursor is not part of the desktop's frame yet".into(),
         'v' | 'V' | 'G' | 'g' | 'k' => format!("-{c}: video capture is not supported yet"),
         'b' => "-b: the function strip is not part of this desktop".into(),
@@ -91,6 +105,12 @@ pub fn parse(args: &[String]) -> Result<Parsed, String> {
         while let Some(c) = chars.next() {
             match c {
                 'c' => o.clipboard = true,
+                'i' | 'w' => {
+                    if o.interactive.is_some() {
+                        return Err("-i and -w pick one mode".into());
+                    }
+                    o.interactive = Some(if c == 'i' { Interactive::Select } else { Interactive::Window });
+                }
                 'x' | 'm' | 'r' | 'a' => {}
                 'T' | 'R' | 't' | 'D' => {
                     let rest: String = chars.by_ref().collect();
@@ -106,7 +126,30 @@ pub fn parse(args: &[String]) -> Result<Parsed, String> {
         return Err("one file for the one display: give a single file name".into());
     }
     o.file = operands.pop();
+    if o.interactive.is_some() && (o.clipboard || o.rect.is_some() || o.delay > 0 || o.file.is_some()) {
+        return Err("-i and -w save to Photos from the desktop: they take no -c, -R, -T or file name".into());
+    }
     Ok(Parsed::Run(o))
+}
+
+/// The control request that starts the desktop's capture for `mode`.
+pub fn interactive_request(mode: Interactive) -> &'static str {
+    match mode {
+        Interactive::Select => "capture select",
+        Interactive::Window => "capture window",
+    }
+}
+
+/// Asks the desktop to open its screenshot toolbar for `mode` and reads its answer.
+pub fn start_interactive(mode: Interactive, port: u16) -> Result<(), String> {
+    let reply = control::request(interactive_request(mode), port)?;
+    let text = String::from_utf8_lossy(&reply);
+    let text = text.trim();
+    if text == "ok" {
+        Ok(())
+    } else {
+        Err(text.strip_prefix("error: ").unwrap_or("the desktop did not start the capture").to_string())
+    }
 }
 
 fn apply_value(o: &mut Options, c: char, value: &str) -> Result<(), String> {
@@ -192,6 +235,10 @@ pub fn copy_png(png: &[u8]) -> Result<(), String> {
 
 /// Runs a capture: waits the delay, grabs the panel, crops it, then writes the file or the clipboard.
 pub fn run(o: &Options, port: u16) -> Result<PathBuf, String> {
+    if let Some(mode) = o.interactive {
+        start_interactive(mode, port)?;
+        return Ok(PathBuf::from("Photos"));
+    }
     if o.delay > 0 {
         std::thread::sleep(Duration::from_secs(o.delay as u64));
     }
@@ -241,12 +288,25 @@ mod tests {
 
     #[test]
     fn interactive_and_video_modes_are_refused_by_name() {
-        assert!(parse(&args(&["-i"])).unwrap_err().contains("-i"));
-        assert!(parse(&args(&["-w"])).unwrap_err().contains("interactive"));
+        assert!(parse(&args(&["-W"])).unwrap_err().contains("-W"));
         assert!(parse(&args(&["-V", "5"])).unwrap_err().contains("video"));
         assert!(parse(&args(&["-t", "jpg"])).unwrap_err().contains("png only"));
         assert!(parse(&args(&["-D", "2"])).unwrap_err().contains("-D 1"));
         assert!(parse(&args(&["-q"])).unwrap_err().contains("unknown option -q"));
+    }
+
+    #[test]
+    fn interactive_modes_ask_the_desktop_toolbar() {
+        let Parsed::Run(sel) = parse(&args(&["-i"])).unwrap() else { panic!("help") };
+        assert_eq!(sel.interactive, Some(Interactive::Select));
+        let Parsed::Run(win) = parse(&args(&["-x", "-w"])).unwrap() else { panic!("help") };
+        assert_eq!(win.interactive, Some(Interactive::Window));
+        assert_eq!(interactive_request(Interactive::Select), "capture select");
+        assert_eq!(interactive_request(Interactive::Window), "capture window");
+        assert!(parse(&args(&["-i", "-w"])).unwrap_err().contains("one mode"));
+        assert!(parse(&args(&["-i", "-c"])).unwrap_err().contains("Photos"));
+        assert!(parse(&args(&["-w", "-T", "3"])).unwrap_err().contains("Photos"));
+        assert!(parse(&args(&["-i", "shot.png"])).unwrap_err().contains("Photos"));
     }
 
     #[test]
