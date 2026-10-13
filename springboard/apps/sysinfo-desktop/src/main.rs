@@ -136,6 +136,12 @@ impl App for SysInfo {
         changed
     }
 
+    fn resume(&mut self, ctx: &Ctx) {
+        // the shell may have dropped the keyboard request while the app was away
+        self.keyboard_wanted = false;
+        self.sync(ctx);
+    }
+
     fn tick(&mut self, _ctx: &Ctx, t: f64) -> bool {
         self.poll_load(t)
     }
