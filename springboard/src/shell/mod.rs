@@ -2943,6 +2943,9 @@ impl Shell {
             }
         }
         self.audio_tick(t);
+        if self.login_owns_keyboard() && self.keyboard.animating() {
+            self.dirty = true;
+        }
         for out in self.keyboard.tick(t) {
             // on the lock screen the login window owns the keys
             if self.login_owns_keyboard() {

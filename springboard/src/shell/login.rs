@@ -42,10 +42,15 @@ pub const LIFT_MS: f64 = 250.0;
 const GROUP_TOP: f32 = 0.62;
 
 /// Whether the shell runs in the touch (tablet) form, where the login window raises the on-screen keyboard. This is the
-/// single place the login window reads the form from; it follows the `SPRINGBOARD_FORM` setting until the shared form
-/// type is wired in.
+/// single place the login window reads the form from. It reads what the shared form type reads (`BIFROST_FORM`, then the
+/// file `/etc/bifrost/form`, default desktop) and is replaced by `FormFactor::current().is_tablet()` once that type is
+/// merged.
 pub fn tablet_form() -> bool {
-    std::env::var("SPRINGBOARD_FORM").is_ok_and(|v| v.eq_ignore_ascii_case("tablet"))
+    let word = |s: &str| s.trim().eq_ignore_ascii_case("tablet");
+    match std::env::var("BIFROST_FORM") {
+        Ok(v) if matches!(v.trim().to_ascii_lowercase().as_str(), "tablet" | "desktop") => word(&v),
+        _ => std::fs::read_to_string("/etc/bifrost/form").is_ok_and(|v| word(&v)),
+    }
 }
 
 /// How far the status icons move left while the login window shows its power button.
@@ -507,6 +512,12 @@ impl Login {
         }
     }
 
+    /// The shell could not raise the keyboard (no keyboard package, a hardware keyboard, the form): keys keep going to
+    /// the field from the hardware.
+    fn keyboard_refused(&mut self) {
+        self.kb_up = false;
+    }
+
     /// The raise or hide the shell has still to carry out.
     pub fn take_keyboard_request(&mut self) -> Option<bool> {
         self.kb_request.take()
@@ -760,7 +771,9 @@ impl Login {
                 self.name_focus = true;
                 self.request_keyboard(true);
             }
-            Some(Hit::Field | Hit::Avatar) => self.focus_password(),
+            // the pointer form keeps its behaviour: the keys go where they went before
+            Some(Hit::Field | Hit::Avatar) if self.touch_keyboard => self.focus_password(),
+            Some(Hit::Field | Hit::Avatar) => {}
             Some(Hit::Sleep) => return Act::Sleep,
             Some(Hit::Restart) => {
                 self.sheet = Some(Sheet::Restart);
@@ -1145,6 +1158,12 @@ impl super::Shell {
                 self.keyboard.set_return_key(bifrost_proto::ReturnKey::Go);
             }
             self.set_keyboard(on, t);
+            if on && !self.keyboard.shown() {
+                self.keyboard.set_return_key(bifrost_proto::ReturnKey::Return);
+                if let Some(l) = self.login.as_mut() {
+                    l.keyboard_refused();
+                }
+            }
         }
         let up = self.login_owns_keyboard() && self.keyboard.shown() && self.keyboard.h() > 0.0;
         let top = up.then(|| self.kb_top());
@@ -1158,6 +1177,7 @@ impl super::Shell {
         let raised = self.login.take().is_some_and(|l| l.keyboard_up());
         if raised {
             self.set_keyboard(false, t);
+            self.keyboard.set_return_key(bifrost_proto::ReturnKey::Return);
         }
     }
 
@@ -1194,7 +1214,8 @@ impl super::Shell {
     }
 
     pub(super) fn login_wake(&self, t: f64) -> Option<f64> {
-        self.login.as_ref()?.wake(t)
+        let own = self.login_owns_keyboard() && self.keyboard.animating();
+        self.login.as_ref()?.wake(t).or(own.then_some(t))
     }
 
     /// A lock (menu, idle, lid): the session token is dropped and privd forgets the unlock.
@@ -1529,6 +1550,32 @@ mod tests {
         let p = field_point(&l, &ui);
         tap(&mut l, &ui, p, 1.0);
         assert!(!l.name_focus, "keys go to the password again");
+    }
+
+    #[test]
+    fn a_click_in_the_desktop_form_leaves_the_key_focus_alone() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Unavailable);
+        l.touch_keyboard = false;
+        l.name_mode = true;
+        l.name_focus = true;
+        let p = field_point(&l, &ui);
+        tap(&mut l, &ui, p, 0.0);
+        assert!(l.name_focus, "a pointer click on the password field changes nothing in the desktop form");
+        assert!(!l.keyboard_up());
+    }
+
+    #[test]
+    fn a_refused_keyboard_is_not_counted_as_up() {
+        let ui = super::super::tests::ui();
+        let mut l = touch_login(Reply::Unavailable);
+        let p = field_point(&l, &ui);
+        tap(&mut l, &ui, p, 0.0);
+        assert_eq!(l.take_keyboard_request(), Some(true));
+        l.keyboard_refused();
+        assert!(!l.keyboard_up());
+        tap(&mut l, &ui, p, 1.0);
+        assert_eq!(l.take_keyboard_request(), Some(true), "the next tap asks again");
     }
 
     #[test]
