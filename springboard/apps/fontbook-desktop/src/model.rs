@@ -115,6 +115,8 @@ pub struct Prefs {
     pub sample_text: String,
     /// the sample size in points
     pub sample_size: f32,
+    /// the font library the list shows (`LIBRARY_COMPUTER`, `LIBRARY_USER` or a name from the libraries file)
+    pub library: String,
 }
 
 pub const SIZE_MIN: f32 = 8.0;
@@ -123,7 +125,7 @@ pub const SIZE_DEFAULT: f32 = 32.0;
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { validate_before_install: true, sample_text: String::new(), sample_size: SIZE_DEFAULT }
+        Prefs { validate_before_install: true, sample_text: String::new(), sample_size: SIZE_DEFAULT, library: LIBRARY_COMPUTER.to_string() }
     }
 }
 
@@ -143,7 +145,7 @@ impl Prefs {
     }
 
     pub fn to_text(&self) -> String {
-        format!("validate\t{}\nsample\t{}\nsize\t{}\n", self.validate_before_install, clean(&self.sample_text), self.sample_size)
+        format!("validate\t{}\nsample\t{}\nsize\t{}\nlibrary\t{}\n", self.validate_before_install, clean(&self.sample_text), self.sample_size, clean(&self.library))
     }
 
     pub fn parse(text: &str) -> Prefs {
@@ -158,6 +160,7 @@ impl Prefs {
                         p.set_size(n);
                     }
                 }
+                "library" if !v.trim().is_empty() => p.library = v.trim().to_string(),
                 _ => {}
             }
         }
@@ -531,7 +534,11 @@ pub fn safe_file_name(name: &str) -> String {
 /// Rows for the Info panel from a font's check: characters, glyphs, the Unicode blocks covered and the validation.
 pub fn repertoire_rows(r: &validate::Report) -> Vec<(String, String)> {
     let coverage = if r.blocks.is_empty() { "None".to_string() } else { r.blocks.join(", ") };
-    let validation = if r.is_valid() { "Valid".to_string() } else { r.problems.join(" ") };
+    let validation = match r.verdict() {
+        validate::Verdict::Pass => "Valid".to_string(),
+        validate::Verdict::Warn => format!("Valid, {} warning{}", r.warnings.len(), if r.warnings.len() == 1 { "" } else { "s" }),
+        validate::Verdict::Fail => r.problems.join(" "),
+    };
     vec![
         ("Characters".to_string(), r.characters.to_string()),
         ("Glyphs".to_string(), r.glyphs.to_string()),
@@ -581,6 +588,137 @@ pub fn uninstall(path: &Path, user_dir: &Path) -> Result<(), String> {
         return Err("Only fonts installed for this user can be removed.".to_string());
     }
     std::fs::remove_file(path).map_err(|e| format!("Cannot remove the font: {e}"))
+}
+
+/// File in the app's data dir holding the user's libraries, one per line: `name<TAB>folder<TAB>folder...`.
+pub const LIBRARIES_FILE: &str = "libraries.tsv";
+/// The library of every font the desktop can see: the system fonts, the user's installs and the shell's library.
+pub const LIBRARY_COMPUTER: &str = "Computer";
+/// The library of the fonts the user installed.
+pub const LIBRARY_USER: &str = "User";
+
+/// A named set of font folders: a library the list can be switched to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FontSet {
+    pub name: String,
+    pub dirs: Vec<PathBuf>,
+}
+
+fn is_builtin_library(name: &str) -> bool {
+    key(name) == key(LIBRARY_COMPUTER) || key(name) == key(LIBRARY_USER)
+}
+
+/// Parses the libraries file. Lines without a name or a folder, and names that clash with a built-in library, are
+/// skipped; a repeated name merges its folders into the first.
+pub fn parse_font_sets(text: &str) -> Vec<FontSet> {
+    let mut out: Vec<FontSet> = Vec::new();
+    for line in text.lines() {
+        let mut fields = line.split('\t').map(str::trim);
+        let Some(name) = fields.next().filter(|n| !n.is_empty() && !is_builtin_library(n)) else { continue };
+        let dirs: Vec<PathBuf> = fields.filter(|d| !d.is_empty()).map(PathBuf::from).collect();
+        if dirs.is_empty() {
+            continue;
+        }
+        match out.iter_mut().find(|s| key(&s.name) == key(name)) {
+            Some(set) => {
+                for d in dirs {
+                    if !set.dirs.contains(&d) {
+                        set.dirs.push(d);
+                    }
+                }
+            }
+            None => out.push(FontSet { name: name.to_string(), dirs }),
+        }
+    }
+    out
+}
+
+/// The text to write to the libraries file.
+pub fn font_sets_file(sets: &[FontSet]) -> String {
+    sets.iter()
+        .map(|s| std::iter::once(clean(&s.name)).chain(s.dirs.iter().map(|d| clean(&d.to_string_lossy()))).collect::<Vec<_>>().join("\t") + "\n")
+        .collect()
+}
+
+/// Every library name in menu order: Computer, User, then the user's own.
+pub fn library_names(sets: &[FontSet]) -> Vec<String> {
+    [LIBRARY_COMPUTER, LIBRARY_USER].iter().map(|s| s.to_string()).chain(sets.iter().map(|s| s.name.clone())).collect()
+}
+
+/// True when `name` is one of the user's own libraries (the only ones that can be removed).
+pub fn is_custom_library(sets: &[FontSet], name: &str) -> bool {
+    sets.iter().any(|s| key(&s.name) == key(name))
+}
+
+/// The folders the library `active` is read from. An unknown name reads as Computer.
+pub fn library_dirs(active: &str, sets: &[FontSet], home: &Path, shell_library: &Path) -> Vec<PathBuf> {
+    if key(active) == key(LIBRARY_USER) {
+        return vec![home.join(USER_FONTS_DIR)];
+    }
+    match sets.iter().find(|s| key(&s.name) == key(active)) {
+        Some(set) => set.dirs.clone(),
+        None => scan_dirs(home, shell_library),
+    }
+}
+
+/// The name a library made from `dir` gets: the folder's own name.
+pub fn folder_label(dir: &Path) -> String {
+    dir.file_name().map(|n| clean(&n.to_string_lossy())).filter(|n| !n.is_empty()).unwrap_or_else(|| "Fonts".to_string())
+}
+
+/// Adds the folder `dir` as a library named after it. A folder with the name of an existing library of the user's joins
+/// it; a name that clashes with a built-in library gets a number. Returns the library's name.
+pub fn add_font_set(sets: &mut Vec<FontSet>, dir: &Path) -> Result<String, String> {
+    if !dir.is_absolute() {
+        return Err("That folder has no path this app can read.".to_string());
+    }
+    let label = folder_label(dir);
+    if let Some(set) = sets.iter_mut().find(|s| key(&s.name) == key(&label)) {
+        if !set.dirs.iter().any(|d| d == dir) {
+            set.dirs.push(dir.to_path_buf());
+        }
+        return Ok(set.name.clone());
+    }
+    let name = unique_name(&library_names(sets), &label);
+    sets.push(FontSet { name: name.clone(), dirs: vec![dir.to_path_buf()] });
+    Ok(name)
+}
+
+/// Removes the user's library `name` (the fonts in its folders stay). False for a built-in or unknown name.
+pub fn remove_font_set(sets: &mut Vec<FontSet>, name: &str) -> bool {
+    let before = sets.len();
+    sets.retain(|s| key(&s.name) != key(name));
+    sets.len() != before
+}
+
+/// The folder a `/proc/self/fd` link points at, or None when it is not an absolute path or the folder was deleted.
+pub fn dir_from_link(target: &Path) -> Option<PathBuf> {
+    let text = target.to_string_lossy();
+    if !target.is_absolute() || text.ends_with(" (deleted)") {
+        return None;
+    }
+    Some(target.to_path_buf())
+}
+
+/// True when the font file at `path` lies inside the user's home, the only place the shell can reveal a file from.
+pub fn can_reveal(path: &Path, home: &Path) -> bool {
+    !home.as_os_str().is_empty() && path.starts_with(home) && path != home
+}
+
+/// The file name the save panel suggests when exporting the font at `path`.
+pub fn export_name(path: &str) -> String {
+    Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned()).filter(|n| !n.is_empty()).unwrap_or_else(|| "Font.ttf".to_string())
+}
+
+/// Plain text for a printed font sample sheet: the family, its info rows, the sample line and the character set. The
+/// print service sets plain text in its own typeface, so the sheet describes the font rather than drawing it.
+pub fn sample_sheet(family: &str, info: &[(String, String)], sample: &str) -> String {
+    let mut out = format!("{family}\n\n");
+    for (k, v) in info.iter().filter(|(k, _)| k != "Family") {
+        out.push_str(&format!("{k}: {v}\n"));
+    }
+    out.push_str(&format!("\nSample\n{sample}\n\nCharacters\nABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz\n0123456789\n"));
+    out
 }
 
 #[cfg(test)]
@@ -830,7 +968,7 @@ mod tests {
 
     #[test]
     fn repertoire_rows_show_characters_coverage_and_validity() {
-        let ok = validate::Report { problems: Vec::new(), glyphs: 12, characters: 95, blocks: vec!["Basic Latin".to_string()] };
+        let ok = validate::Report { problems: Vec::new(), glyphs: 12, characters: 95, blocks: vec!["Basic Latin".to_string()], warnings: Vec::new() };
         let rows = repertoire_rows(&ok);
         assert!(rows.contains(&("Characters".to_string(), "95".to_string())));
         assert!(rows.contains(&("Coverage".to_string(), "Basic Latin".to_string())));
@@ -839,5 +977,90 @@ mod tests {
         let rows = repertoire_rows(&bad);
         assert!(rows.contains(&("Coverage".to_string(), "None".to_string())));
         assert!(rows.contains(&("Validation".to_string(), "The maxp table is missing.".to_string())));
+    }
+
+    #[test]
+    fn libraries_round_trip_and_skip_bad_lines() {
+        let text = "Work\t/a/fonts\t/b/fonts\nwork\t/c\nComputer\t/x\n\tbad\nEmpty\n";
+        let sets = parse_font_sets(text);
+        assert_eq!(sets.len(), 1, "a built-in name, an empty name and a folderless line are skipped");
+        assert_eq!(sets[0].dirs, [PathBuf::from("/a/fonts"), PathBuf::from("/b/fonts"), PathBuf::from("/c")], "a repeated name merges");
+        assert_eq!(parse_font_sets(&font_sets_file(&sets)), sets);
+        assert_eq!(library_names(&sets), ["Computer", "User", "Work"]);
+        assert!(is_custom_library(&sets, "WORK") && !is_custom_library(&sets, "User"));
+    }
+
+    #[test]
+    fn a_library_reads_its_own_folders() {
+        let home = Path::new("/home/a");
+        let shell = Path::new("/var/lib/assets/fonts");
+        let sets = vec![FontSet { name: "Work".into(), dirs: vec![PathBuf::from("/w")] }];
+        assert_eq!(library_dirs("Computer", &sets, home, shell), scan_dirs(home, shell));
+        assert_eq!(library_dirs("user", &sets, home, shell), [home.join(USER_FONTS_DIR)]);
+        assert_eq!(library_dirs("work", &sets, home, shell), [PathBuf::from("/w")]);
+        assert_eq!(library_dirs("Gone", &sets, home, shell), scan_dirs(home, shell), "an unknown library reads as Computer");
+    }
+
+    #[test]
+    fn adding_a_folder_names_the_library_after_it() {
+        let mut sets = Vec::new();
+        assert_eq!(add_font_set(&mut sets, Path::new("/m/Fonts")).unwrap(), "Fonts");
+        assert_eq!(add_font_set(&mut sets, Path::new("/n/fonts")).unwrap(), "Fonts", "the same name joins the library");
+        assert_eq!(add_font_set(&mut sets, Path::new("/n/fonts")).unwrap(), "Fonts");
+        assert_eq!(sets.len(), 1);
+        assert_eq!(sets[0].dirs.len(), 2);
+        assert_eq!(add_font_set(&mut sets, Path::new("/x/User")).unwrap(), "User 2", "a built-in name gets a number");
+        assert!(add_font_set(&mut sets, Path::new("relative")).is_err());
+        assert_eq!(folder_label(Path::new("/")), "Fonts");
+        assert!(remove_font_set(&mut sets, "fonts"));
+        assert!(!remove_font_set(&mut sets, "Computer"));
+        assert_eq!(sets.len(), 1);
+    }
+
+    #[test]
+    fn a_deleted_or_relative_folder_link_is_refused() {
+        assert_eq!(dir_from_link(Path::new("/home/a/Fonts")), Some(PathBuf::from("/home/a/Fonts")));
+        assert_eq!(dir_from_link(Path::new("/home/a/Fonts (deleted)")), None);
+        assert_eq!(dir_from_link(Path::new("anon_inode:[x]")), None);
+    }
+
+    #[test]
+    fn only_files_in_the_home_can_be_revealed() {
+        let home = Path::new("/home/a");
+        assert!(can_reveal(Path::new("/home/a/.local/share/fonts/A.ttf"), home));
+        assert!(!can_reveal(Path::new("/usr/share/fonts/A.ttf"), home));
+        assert!(!can_reveal(home, home));
+        assert!(!can_reveal(Path::new("/x"), Path::new("")));
+    }
+
+    #[test]
+    fn export_names_and_sample_sheets_describe_the_font() {
+        assert_eq!(export_name("/x/y/Inter-Regular.otf"), "Inter-Regular.otf");
+        assert_eq!(export_name(""), "Font.ttf");
+        let info = sample().info("Inter");
+        let sheet = sample_sheet("Inter", &info, "Hello");
+        assert!(sheet.starts_with("Inter\n\n"));
+        assert!(sheet.contains("Pitch: Proportional\n"));
+        assert!(!sheet.contains("Family: "), "the title already names the family");
+        assert!(sheet.contains("Sample\nHello\n"));
+        assert!(sheet.contains("ABCDEFGHIJKLMNOPQRSTUVWXYZ"));
+    }
+
+    #[test]
+    fn warnings_show_in_the_validation_row_without_failing_it() {
+        let warned = validate::Report { warnings: vec!["a".into(), "b".into()], ..validate::Report::default() };
+        let rows = repertoire_rows(&warned);
+        assert!(rows.contains(&("Validation".to_string(), "Valid, 2 warnings".to_string())));
+        let one = validate::Report { warnings: vec!["a".into()], ..validate::Report::default() };
+        assert!(repertoire_rows(&one).contains(&("Validation".to_string(), "Valid, 1 warning".to_string())));
+    }
+
+    #[test]
+    fn the_chosen_library_is_saved_with_the_settings() {
+        let mut p = Prefs::default();
+        assert_eq!(p.library, LIBRARY_COMPUTER);
+        p.library = "Work".into();
+        assert_eq!(Prefs::parse(&p.to_text()).library, "Work");
+        assert_eq!(Prefs::parse("library\t \n").library, LIBRARY_COMPUTER);
     }
 }
