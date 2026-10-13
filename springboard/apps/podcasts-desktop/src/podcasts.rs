@@ -8,7 +8,12 @@ use bifrost_app::kit::ui::{MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MAC_TIT
 use bifrost_app::kit::ui::{CARD_BG, DESTRUCTIVE, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LINK, ROW_PRESSED, SELECTION, SEPARATOR_C, TRACK_C, WHITE};
 use crate::feed::{self, Show, Store};
 use crate::info;
+use crate::library::{self, Library};
+use crate::opml;
+use crate::prefs::Prefs;
 use crate::refresh;
+use crate::search;
+use crate::transcript::{self, Cue};
 use crate::media::{self, Bar, Shown};
 use crate::transport;
 use bifrost_app::Ctx;
@@ -42,7 +47,25 @@ const PLAYER_H: f32 = 56.0;
 /// Sidebar rows start under the traffic lights.
 const SIDEBAR_SCROLL: f32 = -(UNIFIED_BAR_PT + 4.0);
 const SIDE_SHOWS: u32 = 1;
+const SIDE_NEW: u32 = 2;
+const SIDE_UP_NEXT: u32 = 3;
+const SIDE_DOWNLOADED: u32 = 4;
+const SIDE_SEARCH: u32 = 5;
 const SIDE_SHOW: u32 = 100;
+const BAR_REFRESH: u32 = 7;
+const BAR_SHOW_SETTINGS: u32 = 8;
+const BAR_BACK: u32 = 9;
+/// New Episodes lists at most this many.
+const NEW_LIMIT: usize = 100;
+/// The search field's band above the results, in points.
+const SEARCH_BAR_PT: f32 = 48.0;
+/// One row of a settings list and of the chapter list, in points.
+const OPT_ROW_PT: f32 = 48.0;
+const CHAPTER_ROW_PT: f32 = 30.0;
+/// Transcripts kept in memory.
+const TRANSCRIPTS_KEPT: usize = 4;
+const TRANSCRIPT_LIMIT: usize = 4 << 20;
+const IMPORT_MAX: u64 = 4 << 20;
 const BAR_TITLE: u32 = 1;
 const BAR_ADD: u32 = 2;
 const BAR_REMOVE: u32 = 3;
@@ -84,12 +107,55 @@ enum Target {
     /// one rate of the speed menu, an index into `transport::RATES`
     Rate(usize),
     Sleep,
+    Refresh,
+    ShowSettings,
+    Back,
+    /// a row of a settings list (app settings or one show's)
+    Opt(usize),
+    /// a button of the episode detail: 0 play, 1 download, 2 up next, 3 played
+    Detail(usize),
+    /// the Chapters and Transcript buttons of the Now Playing sheet
+    Chapters,
+    Transcript,
+    /// one row of the sheet's chapter list
+    Chapter(usize),
+    /// the sheet's transcript area (it scrolls)
+    Panel,
+    /// the Follow button of a search result
+    Follow(usize),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum View {
     Shows,
     Episodes(usize),
+    /// unplayed episodes of every show, newest first
+    New,
+    UpNext,
+    Downloaded,
+    Search,
+    Settings,
+    ShowSettings(usize),
+    /// an episode's notes and chapters: show index, episode index
+    Detail(usize, usize),
+}
+
+/// What a row of the list stands for.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Row {
+    Show(usize),
+    /// show index, episode index
+    Ep(usize, usize),
+    /// an entry of the search results
+    Hit(usize),
+}
+
+/// What the Now Playing sheet shows in place of the artwork.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum SheetPanel {
+    None,
+    Chapters,
+    Transcript,
 }
 
 enum Msg {
@@ -98,6 +164,10 @@ enum Msg {
     /// bytes of the episode on disk so far and, when the server said, its size
     Progress(String, u64, Option<u64>),
     Episode(String, Result<PathBuf, String>),
+    /// the answer of a show search
+    Search(Result<Vec<search::Hit>, String>),
+    /// the transcript cues of an episode (by URL)
+    Transcript(String, Result<Vec<Cue>, String>),
 }
 
 /// The results a worker produced, waiting for the app loop to apply them.
@@ -168,6 +238,44 @@ pub struct Podcasts {
     calls: Vec<u32>,
     /// an episode finished downloading: the Dock tile bounces once, if the app is not in front
     bounce_ready: bool,
+    /// the app settings and the options of each show
+    prefs: Prefs,
+    /// played flags and the Up Next queue
+    library: Library,
+    /// the rows of the current view, rebuilt whenever what they list changes
+    rows: Vec<Row>,
+    /// the selected row of `rows`
+    selected: Option<usize>,
+    /// the view a panel (settings, detail) returns to
+    back: View,
+    /// episodes waiting to download after the current one
+    dl_queue: Vec<String>,
+    /// the episode that plays as soon as its download is done
+    play_after: Option<String>,
+    /// when feeds were last refreshed; None before the first tick
+    last_refresh: Option<f64>,
+    /// the show search: its field, the last answer and whether a request is out
+    search_field: Option<TextField>,
+    search_touch: bool,
+    results: Vec<search::Hit>,
+    searching: bool,
+    /// a line of news in grey (imports, exports), cleared with the next view change
+    notice: String,
+    sheet_panel: SheetPanel,
+    transcripts: Vec<(String, Vec<Cue>)>,
+    transcript_loading: Option<String>,
+    /// wrapped lines of the open detail or transcript, and the width they were wrapped for (bits), cached
+    wrapped: Option<(String, u32, Vec<String>)>,
+    /// pixels from the list top to the end of the scrolling content of a panel
+    body_h: f32,
+    /// the open request for the subscriptions file to read, and the save in progress (request, bytes)
+    import: Option<u32>,
+    export: Option<(u32, Vec<u8>)>,
+    /// every show's cached episodes were read from disk (New Episodes, Up Next and Downloaded need them all)
+    cached_all: bool,
+    /// the sheet's panel scrolls apart from the list, and its content height in pixels
+    panel_scroll: Scroller,
+    panel_h: f32,
 }
 
 impl Podcasts {
@@ -175,6 +283,8 @@ impl Podcasts {
         let store = Store::new(dir);
         let shows = store.load();
         let resume = store.positions();
+        let prefs = Prefs::load(&store.dir);
+        let library = Library::load(&store.dir);
         let inbox: Inbox = Arc::new(Mutex::new(VecDeque::new()));
         Self {
             w,
@@ -220,7 +330,36 @@ impl Podcasts {
             dock: Bar::Off,
             calls: Vec::new(),
             bounce_ready: false,
+            prefs,
+            library,
+            rows: Vec::new(),
+            selected: None,
+            back: View::Shows,
+            dl_queue: Vec::new(),
+            play_after: None,
+            last_refresh: None,
+            search_field: None,
+            search_touch: false,
+            results: Vec::new(),
+            searching: false,
+            notice: String::new(),
+            sheet_panel: SheetPanel::None,
+            transcripts: Vec::new(),
+            transcript_loading: None,
+            wrapped: None,
+            body_h: 0.0,
+            import: None,
+            export: None,
+            cached_all: false,
+            panel_scroll: Scroller::new(),
+            panel_h: 0.0,
         }
+        .with_rows()
+    }
+
+    fn with_rows(mut self) -> Self {
+        self.rebuild();
+        self
     }
 
     /// The app left the foreground: the episode keeps playing in the service; remember where it is.
@@ -292,10 +431,11 @@ impl Podcasts {
                 self.paused = !self.paused;
             }
             Command::Stop => self.stop_playback(),
-            Command::SkipForward => self.skip(false, transport::FORWARD_SKIP_S),
-            Command::SkipBackward => self.skip(true, transport::BACK_SKIP_S),
+            Command::SkipForward => self.skip(false, self.prefs.settings.forward_s as f64),
+            Command::SkipBackward => self.skip(true, self.prefs.settings.back_s as f64),
             Command::Seek(ms) => self.seek_to(ms),
-            Command::Next | Command::Previous => {}
+            Command::Next => self.next_episode(),
+            Command::Previous => {}
         }
         self.dirty = true;
     }
@@ -338,15 +478,55 @@ impl Podcasts {
         });
     }
 
-    fn download(&mut self, url: &str) {
+    /// Fetches every followed show's feed again (View > Refresh, and the refresh period).
+    fn refresh_all(&mut self) {
+        self.last_refresh = Some(self.now);
+        let urls: Vec<String> = self.shows.iter().map(|s| s.url.clone()).collect();
+        for url in urls {
+            self.fetch_feed(&url);
+        }
+    }
+
+    /// Downloads `url` (queued behind a download in progress); with `play` the episode plays as soon as it is on
+    /// disk, and jumps the queue.
+    fn download(&mut self, url: &str, play: bool) {
         let path = self.store.episode_file(url);
         if path.is_file() {
-            self.play_file(url, path);
+            if play {
+                self.play_file(url, path);
+            }
+            return;
+        }
+        if play {
+            self.play_after = Some(url.to_string());
+        }
+        if self.downloading.as_deref() == Some(url) {
             return;
         }
         if self.downloading.is_some() {
+            self.dl_queue.retain(|u| u != url);
+            if play {
+                self.dl_queue.insert(0, url.to_string());
+            } else {
+                self.dl_queue.push(url.to_string());
+            }
             return;
         }
+        self.start_download(url);
+    }
+
+    /// Starts the next queued download when none is running.
+    fn next_download(&mut self) {
+        while self.downloading.is_none() && !self.dl_queue.is_empty() {
+            let url = self.dl_queue.remove(0);
+            if !self.store.downloaded(&url) {
+                self.start_download(&url);
+            }
+        }
+    }
+
+    fn start_download(&mut self, url: &str) {
+        let path = self.store.episode_file(url);
         self.downloading = Some(url.to_string());
         self.progress = None;
         let (net, inbox, url) = (self.net.clone(), self.inbox.clone(), url.to_string());
@@ -361,12 +541,41 @@ impl Podcasts {
         });
     }
 
+    /// Deletes an episode's download (stopping it first when it plays).
+    fn remove_download(&mut self, url: &str) {
+        if self.playing.as_deref() == Some(url) {
+            self.stop_playback();
+        }
+        self.dl_queue.retain(|u| u != url);
+        self.store.forget_episodes([url]);
+        self.rebuild();
+    }
+
+    /// After a feed arrived: a show with auto-download fetches its newest unplayed episodes and drops the downloads
+    /// beyond the number to keep.
+    fn after_refresh(&mut self, url: &str) {
+        let options = self.prefs.show(url);
+        if !options.auto_download {
+            return;
+        }
+        let Some(show) = self.shows.iter().find(|s| s.url == url) else { return };
+        let store = &self.store;
+        let want: Vec<String> = library::auto_downloads(&show.episodes, &self.library, options.keep, |u| store.downloaded(u)).into_iter().map(str::to_string).collect();
+        let drop: Vec<String> = library::prune(&show.episodes, options.keep, |u| store.downloaded(u), self.playing.as_deref()).into_iter().map(str::to_string).collect();
+        self.store.forget_episodes(drop.iter().map(String::as_str));
+        for episode in want {
+            self.download(&episode, false);
+        }
+    }
+
     fn next_msg(&self) -> Option<Msg> {
         self.inbox.lock().ok()?.pop_front()
     }
 
     fn pump(&mut self) {
+        let mut any = false;
         while let Some(msg) = self.next_msg() {
+            any = true;
             self.dirty = true;
             match msg {
                 Msg::Feed(url, r) => {
@@ -380,6 +589,7 @@ impl Podcasts {
                                 }
                                 show.episodes = episodes;
                                 self.store.save(&self.shows);
+                                self.after_refresh(&url);
                             }
                         }
                         Err(e) => self.error = format!("Cannot load feed: {e}"),
@@ -395,15 +605,48 @@ impl Podcasts {
                         self.downloading = None;
                         self.progress = None;
                     }
+                    let wanted = self.play_after.as_deref() == Some(url.as_str());
+                    if wanted {
+                        self.play_after = None;
+                    }
                     match r {
                         Ok(path) => {
                             self.bounce_ready = true;
-                            self.play_file(&url, path);
+                            if wanted {
+                                self.play_file(&url, path);
+                            }
                         }
                         Err(e) => self.error = format!("Cannot download: {e}"),
                     }
+                    self.next_download();
+                }
+                Msg::Search(r) => {
+                    self.searching = false;
+                    match r {
+                        Ok(hits) => self.results = hits,
+                        Err(e) => self.error = format!("Cannot search: {e}"),
+                    }
+                }
+                Msg::Transcript(url, r) => {
+                    if self.transcript_loading.as_deref() == Some(url.as_str()) {
+                        self.transcript_loading = None;
+                    }
+                    match r {
+                        Ok(cues) => {
+                            self.transcripts.retain(|(u, _)| *u != url);
+                            self.transcripts.push((url, cues));
+                            if self.transcripts.len() > TRANSCRIPTS_KEPT {
+                                self.transcripts.remove(0);
+                            }
+                        }
+                        Err(e) => self.error = format!("Cannot load the transcript: {e}"),
+                    }
+                    self.wrapped = None;
                 }
             }
+        }
+        if any {
+            self.rebuild();
         }
     }
 
@@ -418,6 +661,10 @@ impl Podcasts {
         }
         self.playing = Some(url.to_string());
         self.playing_path = Some(path);
+        if self.library.in_queue(url) {
+            self.library.dequeue(url);
+            self.library.save(&self.store.dir);
+        }
         self.started = false;
         self.started_at = self.now;
         self.released = None;
@@ -437,6 +684,7 @@ impl Podcasts {
     /// Forgets the episode; the position is kept for resuming unless it finished. `stop` also
     /// silences the service (not when another app has taken the speaker).
     fn end_playback(&mut self, finished: bool, stop: bool) {
+        let was_sheet = self.sheet;
         if stop && self.playing.is_some() {
             self.audio.stop();
             self.released = self.playing_path.clone();
@@ -446,12 +694,44 @@ impl Podcasts {
         if let Some(url) = self.playing.take() {
             let ms = if finished || self.position_ms < 5_000.0 { None } else { Some(self.position_ms as u64) };
             self.set_resume(&url, ms);
+            if finished {
+                self.library.set_played(&url, true);
+                self.library.dequeue(&url);
+                self.library.save(&self.store.dir);
+            }
         }
         self.position_ms = 0.0;
         self.sheet = false;
+        self.sheet_panel = SheetPanel::None;
         self.scrubbing = None;
         self.sleep_at = None;
         self.paused = false;
+        if finished {
+            self.advance(was_sheet);
+        } else {
+            self.rebuild();
+        }
+    }
+
+    /// Continues with the next episode of Up Next, keeping the Now Playing sheet open when it was.
+    fn advance(&mut self, keep_sheet: bool) {
+        if let Some(next) = self.library.take_next() {
+            self.library.save(&self.store.dir);
+            self.error.clear();
+            self.download(&next, true);
+            self.sheet = keep_sheet;
+        }
+        self.rebuild();
+    }
+
+    /// Skips to the next episode of Up Next (Controls > Next Episode).
+    fn next_episode(&mut self) {
+        if self.library.queue().is_empty() {
+            return;
+        }
+        let was_sheet = self.sheet;
+        self.stop_playback();
+        self.advance(was_sheet);
     }
 
     /// Follows the service: the episode's position and state, another app taking over, and an
