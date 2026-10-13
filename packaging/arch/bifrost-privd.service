@@ -16,8 +16,9 @@ Restart=always
 RestartSec=1
 # Shutdown budget (docs/boot-architecture.md, "Symmetric shutdown"): a stop that is not done in 2 s is killed.
 TimeoutStopSec=2s
-# /home stays readable but this daemon cannot write it.
+# /home is read-only for this daemon except where user.add / user.delete create and remove home directories.
 ProtectHome=read-only
+ReadWritePaths=/home
 # NoNewPrivileges is deliberately not set: privd runs chpasswd and pacman as root.
 RuntimeDirectory=bifrost
 RuntimeDirectoryMode=0755

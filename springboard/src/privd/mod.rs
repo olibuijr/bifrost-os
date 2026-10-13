@@ -12,6 +12,7 @@
 use bifrost_core::json::{self, Json};
 use std::io::{self, Read, Write};
 
+pub mod accounts;
 pub mod auth;
 pub mod gate;
 pub mod methods;
