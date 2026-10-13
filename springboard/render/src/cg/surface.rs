@@ -101,7 +101,11 @@ mod tests {
         assert_eq!(*s.at(10, 9), RED);
         assert_eq!(*s.at(10, 5), 0);
         s.stroke_arc((10.0, 10.0), 6.0, 0.0, std::f32::consts::PI, false, 2.0, LineCap::Butt, RED);
-        assert_eq!(*s.at(10, 16), RED, "bottom of the half circle (y grows down)");
+        // The arc's edges are anti-aliased, so the bottom pixel is red at most of its coverage, not a hard RED
+        // (the old hard-edge expectation). Only the red channel and alpha carry it: no green or blue.
+        let bottom = *s.at(10, 16);
+        assert!(bottom >> 24 >= 0xE0, "bottom of the half circle (y grows down): {bottom:#x}");
+        assert_eq!(bottom & 0x00FF_FF00, 0, "red only");
         assert_eq!(*s.at(10, 4), 0);
     }
 
