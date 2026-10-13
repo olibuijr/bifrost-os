@@ -300,8 +300,13 @@ impl TextEditApp {
             }
             return true;
         }
+        self.insert_raw(&printable)
+    }
+
+    /// Inserts text into the page as typed, line breaks included.
+    fn insert_raw(&mut self, s: &str) -> bool {
         let Some(doc) = active_doc_mut(&mut self.docs) else { return false };
-        doc.text.type_text(&printable);
+        doc.text.type_text(s);
         self.edited();
         true
     }
@@ -506,7 +511,7 @@ impl App for TextEditApp {
                         if self.find_open && self.focus != Focus::Body {
                             self.find_step(true)
                         } else {
-                            self.type_into("\n")
+                            self.insert_raw("\n")
                         }
                     }
                     27 => {
