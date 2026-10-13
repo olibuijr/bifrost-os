@@ -5,7 +5,7 @@
 use crate::accounts::{self, Account};
 use crate::api::{Api, UPLOAD_LIMIT};
 use crate::draw::{inside, ChipHit, Hit, OverlayAction, Rect};
-use crate::model::{Messages, Outgoing, Overlay, Prompt, PromptKind, SignIn, REACTIONS};
+use crate::model::{InfoKind, Messages, Outgoing, Overlay, Prompt, PromptKind, SignIn, REACTIONS};
 use crate::protocol;
 use crate::sync::{self, Event};
 use bifrost_app::kit::{Scroller, TextCache, Ui};
@@ -48,11 +48,15 @@ pub const MENU_ATTACH: u32 = 7;
 pub const MENU_EMOJI: u32 = 8;
 pub const MENU_SETTINGS: u32 = 9;
 pub const MENU_FIND: u32 = 10;
+pub const MENU_PIN_UP: u32 = 11;
+pub const MENU_PIN_DOWN: u32 = 12;
 // Message context menu.
 pub const CTX_REPLY: u32 = 20;
 pub const CTX_EDIT: u32 = 21;
 pub const CTX_UNSEND: u32 = 22;
 pub const CTX_COPY: u32 = 23;
+pub const CTX_REACTIONS: u32 = 24;
+pub const CTX_HISTORY: u32 = 25;
 /// The first of the tapback ids: `CTX_REACT + i` reacts with `REACTIONS[i]`.
 pub const CTX_REACT: u32 = 30;
 
@@ -113,6 +117,8 @@ pub struct MessagesWindow {
     /// The bubbles and reaction chips of the last frame, for taps and the context menu.
     pub bubbles: Vec<(Rect, String)>,
     pub chips: Vec<ChipHit>,
+    /// The quoted lines of replies in the last frame, with the id of the message each one quotes.
+    pub quotes: Vec<(Rect, String)>,
     pub w: u32,
     pub h: u32,
     pub room_scroll: Scroller,
@@ -158,6 +164,7 @@ impl MessagesWindow {
             ctx_target: None,
             bubbles: Vec::new(),
             chips: Vec::new(),
+            quotes: Vec::new(),
             w: 0,
             h: 0,
             room_scroll: Scroller::new(),
@@ -219,7 +226,11 @@ impl MessagesWindow {
             },
             Event::Synced(Ok(_)) if self.api.is_none() => {}
             Event::Synced(Ok(sync)) => {
+                let marks = self.model.prefs.unread_marks.clone();
                 let notices = self.model.apply_sync(&sync);
+                if self.model.prefs.unread_marks != marks {
+                    self.save_prefs();
+                }
                 for notice in &notices {
                     ctx.notify(&notice.title, &notice.body);
                 }
@@ -370,7 +381,12 @@ impl MessagesWindow {
 
     /// Puts a room on screen and marks its newest message read.
     fn open_room(&mut self, id: &str) {
+        let was_marked = self.model.is_marked_unread(id);
         let marker = self.model.select(id);
+        if was_marked {
+            self.save_prefs();
+            self.store_marked_unread(id, false);
+        }
         self.timeline_scroll = Scroller::new();
         self.stick_bottom = true;
         self.send_read(marker);
@@ -477,9 +493,19 @@ impl MessagesWindow {
     }
 
     fn pin(&mut self, ctx: &Ctx, id: &str) {
-        self.model.toggle_pin(id);
+        if let Err(e) = self.model.toggle_pin(id) {
+            self.model.status = e;
+            return;
+        }
         self.save_prefs();
         self.badge(ctx);
+    }
+
+    /// Moves a pinned conversation one place up or down among the pins.
+    fn move_pin(&mut self, id: &str, up: bool) {
+        if self.model.move_pin(id, up) {
+            self.save_prefs();
+        }
     }
 
     fn mute(&mut self, ctx: &Ctx, id: &str) {
@@ -489,14 +515,29 @@ impl MessagesWindow {
     }
 
     fn mark_unread(&mut self, ctx: &Ctx, id: &str) {
-        self.model.toggle_unread_mark(id);
+        let marked = self.model.toggle_unread_mark(id);
         self.save_prefs();
         self.badge(ctx);
+        self.store_marked_unread(id, marked);
+    }
+
+    /// Stores the unread flag of a conversation on the account, so the other devices show it too.
+    fn store_marked_unread(&mut self, id: &str, marked: bool) {
+        let Some(api) = self.api.clone() else { return };
+        let room = id.to_string();
+        sync::spawn(self.tx.clone(), self.wake(), move || sync::set_marked_unread(api, room, marked));
+    }
+
+    /// Scrolls the timeline to the message `id`, the one a reply quotes.
+    fn jump_to_message(&mut self, ui: &Ui, id: &str) {
+        let Some(offset) = self.message_offset(ui, id) else { return };
+        self.stick_bottom = false;
+        self.timeline_scroll.jump_to(offset);
     }
 
     fn open_emoji(&mut self, message: Option<String>) {
         if self.model.selected.is_some() {
-            self.model.overlay = Overlay::Emoji(message);
+            self.model.open_emoji(message);
         }
     }
 
@@ -544,7 +585,7 @@ impl MessagesWindow {
             MENU_EMOJI => self.open_emoji(None),
             MENU_SETTINGS => self.model.overlay = Overlay::Settings,
             MENU_FIND => self.model.search_focus = true,
-            MENU_PIN | MENU_MUTE | MENU_UNREAD | MENU_DELETE | MENU_DETAILS => {
+            MENU_PIN | MENU_PIN_UP | MENU_PIN_DOWN | MENU_MUTE | MENU_UNREAD | MENU_DELETE | MENU_DETAILS => {
                 let from_menu = match &self.ctx_target {
                     Some(CtxTarget::Room(room)) => Some(room.clone()),
                     _ => None,
@@ -552,6 +593,8 @@ impl MessagesWindow {
                 let Some(room) = from_menu.or_else(|| self.model.selected.clone()) else { return false };
                 match id {
                     MENU_PIN => self.pin(ctx, &room),
+                    MENU_PIN_UP => self.move_pin(&room, true),
+                    MENU_PIN_DOWN => self.move_pin(&room, false),
                     MENU_MUTE => self.mute(ctx, &room),
                     MENU_UNREAD => self.mark_unread(ctx, &room),
                     MENU_DELETE => self.model.overlay = Overlay::Confirm(room),
@@ -594,6 +637,8 @@ impl MessagesWindow {
                 title: "Conversation".into(),
                 items: vec![
                     AppMenuItem::new(MENU_PIN, if pinned { "Unpin" } else { "Pin" }).key("cmd+shift+p").enabled(has_room),
+                    AppMenuItem::new(MENU_PIN_UP, "Move Pin Up").enabled(has_room && room.is_some_and(|id| self.model.can_move_pin(id, true))),
+                    AppMenuItem::new(MENU_PIN_DOWN, "Move Pin Down").enabled(has_room && room.is_some_and(|id| self.model.can_move_pin(id, false))),
                     AppMenuItem::new(MENU_MUTE, if muted { "Show Alerts" } else { "Hide Alerts" }).key("cmd+shift+d").enabled(has_room),
                     AppMenuItem::new(MENU_UNREAD, if marked { "Mark as Read" } else { "Mark as Unread" }).key("cmd+shift+u").enabled(has_room),
                     AppMenuItem::separator(),
@@ -617,12 +662,16 @@ impl MessagesWindow {
         }
         let item = |id: u32, label: &str, enabled: bool| ContextItem { id, label: label.to_string(), enabled };
         if let Some(room) = self.room_at(&ctx.ui, x, y) {
-            let items = vec![
-                item(MENU_PIN, if self.model.is_pinned(&room) { "Unpin" } else { "Pin" }, true),
+            let mut items = vec![item(MENU_PIN, if self.model.is_pinned(&room) { "Unpin" } else { "Pin" }, true)];
+            if self.model.is_pinned(&room) {
+                items.push(item(MENU_PIN_UP, "Move Pin Up", self.model.can_move_pin(&room, true)));
+                items.push(item(MENU_PIN_DOWN, "Move Pin Down", self.model.can_move_pin(&room, false)));
+            }
+            items.extend([
                 item(MENU_MUTE, if self.model.is_muted(&room) { "Show Alerts" } else { "Hide Alerts" }, true),
                 item(MENU_UNREAD, if self.model.is_marked_unread(&room) { "Mark as Read" } else { "Mark as Unread" }, true),
                 item(MENU_DELETE, "Delete Conversation...", true),
-            ];
+            ]);
             self.ctx_target = Some(CtxTarget::Room(room));
             ctx.context_menu(x, y, items);
             return false;
@@ -634,9 +683,20 @@ impl MessagesWindow {
                 .and_then(|r| r.timeline.iter().find(|m| m.id == id))
                 .is_some_and(|m| m.sender == self.model.user_id);
             let text = self.message_text(&id).is_some();
+            let (reacted, edited) = self
+                .model
+                .selected_room()
+                .and_then(|r| r.timeline.iter().find(|m| m.id == id))
+                .map_or((false, false), |m| (!m.reactions.is_empty(), m.edited));
             let mut items = vec![item(CTX_REPLY, "Reply", true)];
             for (i, (label, _)) in REACTIONS.iter().enumerate() {
                 items.push(item(CTX_REACT + i as u32, label, true));
+            }
+            if reacted {
+                items.push(item(CTX_REACTIONS, "Show Reactions...", true));
+            }
+            if edited {
+                items.push(item(CTX_HISTORY, "Edit History...", true));
             }
             items.push(item(CTX_COPY, "Copy", text));
             if own {
@@ -662,7 +722,9 @@ impl MessagesWindow {
     pub fn context_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         let target = self.ctx_target.clone();
         match (id, target) {
-            (MENU_PIN | MENU_MUTE | MENU_UNREAD | MENU_DELETE, Some(CtxTarget::Room(_))) => return self.run_command(ctx, id),
+            (MENU_PIN | MENU_PIN_UP | MENU_PIN_DOWN | MENU_MUTE | MENU_UNREAD | MENU_DELETE, Some(CtxTarget::Room(_))) => {
+                return self.run_command(ctx, id)
+            }
             (CTX_REPLY, Some(CtxTarget::Message(m))) => {
                 self.model.begin_reply(&m);
             }
@@ -670,6 +732,8 @@ impl MessagesWindow {
                 self.model.begin_edit(&m);
             }
             (CTX_UNSEND, Some(CtxTarget::Message(m))) => self.unsend(&m),
+            (CTX_REACTIONS, Some(CtxTarget::Message(m))) => self.model.overlay = Overlay::Info(InfoKind::Reactions, m),
+            (CTX_HISTORY, Some(CtxTarget::Message(m))) => self.model.overlay = Overlay::Info(InfoKind::Edits, m),
             (CTX_COPY, Some(CtxTarget::Message(m))) => {
                 if let Some(text) = self.message_text(&m) {
                     bifrost_app::kit::clipboard::set_text(&text);
@@ -729,10 +793,12 @@ impl MessagesWindow {
             }
             (OverlayAction::Pick(i), Overlay::Emoji(target)) => {
                 self.model.overlay = Overlay::None;
-                if let Some(emoji) = crate::model::EMOJI.get(i) {
+                if let Some(emoji) = self.model.emoji_choices().get(i).cloned() {
+                    self.model.note_emoji_used(&emoji);
+                    self.save_prefs();
                     match target {
-                        Some(msg) => self.react(&msg, emoji),
-                        None => self.model.composer.push_str(emoji),
+                        Some(msg) => self.react(&msg, &emoji),
+                        None => self.model.composer.push_str(&emoji),
                     }
                 }
             }
@@ -761,7 +827,8 @@ impl MessagesWindow {
                     p.busy = true;
                     p.error.clear();
                 }
-                sync::spawn(self.tx.clone(), self.wake(), move || sync::create_direct(api, value));
+                let users = Prompt::users(&value);
+                sync::spawn(self.tx.clone(), self.wake(), move || sync::create_conversation(api, users));
             }
             PromptKind::Rename(room) => {
                 self.model.overlay = Overlay::None;
@@ -823,6 +890,7 @@ impl MessagesWindow {
             Hit::EmojiButton => self.open_emoji(None),
             Hit::CancelCompose => self.model.cancel_compose(),
             Hit::Chip { msg, key } => self.react(&msg, &key),
+            Hit::Quote(target) => self.jump_to_message(&ctx.ui, &target),
             Hit::Overlay(action) => self.overlay_action(ctx, action),
             Hit::Field(i) => {
                 if let Some(sign) = self.model.sign_in.as_mut() {
@@ -877,6 +945,7 @@ impl MessagesWindow {
                 p.value.push_str(text);
                 p.error.clear();
             }
+            Overlay::Emoji(_) => self.model.emoji_query.push_str(text),
             Overlay::None => {
                 if self.model.search_focus {
                     self.model.search.push_str(text);
@@ -897,6 +966,9 @@ impl MessagesWindow {
         match &mut self.model.overlay {
             Overlay::Prompt(p) => {
                 p.value.pop();
+            }
+            Overlay::Emoji(_) => {
+                self.model.emoji_query.pop();
             }
             Overlay::None => {
                 if self.model.search_focus {
@@ -924,6 +996,12 @@ impl MessagesWindow {
                     self.submit_sign_in();
                 } else if let Overlay::Prompt(p) = self.model.overlay.clone() {
                     self.submit_prompt(p);
+                } else if matches!(self.model.overlay, Overlay::Emoji(_)) {
+                    // Return picks the first emoji the search shows.
+                    if self.model.emoji_choices().is_empty() {
+                        return false;
+                    }
+                    self.overlay_action(ctx, OverlayAction::Pick(0));
                 } else if self.model.overlay != Overlay::None {
                     return false;
                 } else if self.model.search_focus {
@@ -964,7 +1042,7 @@ impl MessagesWindow {
     }
 
     pub fn paste(&mut self, ctx: &Ctx) -> bool {
-        if !matches!(self.model.overlay, Overlay::None | Overlay::Prompt(_)) {
+        if !matches!(self.model.overlay, Overlay::None | Overlay::Prompt(_) | Overlay::Emoji(_)) {
             return false;
         }
         let Some(text) = ctx.pasteboard_string() else { return false };

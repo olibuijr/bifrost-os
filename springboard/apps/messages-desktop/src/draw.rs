@@ -2,7 +2,7 @@
 //! sidebar; the timeline and the composer are the main pane; the sign-in form is a sheet over both. [`Layout`] holds the
 //! geometry for the painter and the hit test alike, so a tap lands on what is drawn.
 
-use crate::model::{day_label, day_of, preview, starts_day, typing_text, Overlay, EMOJI, EMOJI_COLUMNS, FIELD_LABELS, PASSWORD_FIELD};
+use crate::model::{day_label, day_of, preview, starts_day, typing_text, Overlay, EMOJI_CATALOG, INFO_ROWS_MAX, EMOJI_COLUMNS, FIELD_LABELS, PASSWORD_FIELD};
 use crate::protocol::Body;
 use crate::window::MessagesWindow;
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, DESTRUCTIVE, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, WHITE};
@@ -23,6 +23,8 @@ const BANNER_PT: f32 = 36.0;
 const CORNER_PT: f32 = 6.0;
 const CELL_PT: f32 = 40.0;
 const MEMBER_ROWS: usize = 8;
+/// How many shared picture names the details panel lists.
+const SHARED_ROWS: usize = 4;
 const SEND_W_PT: f32 = 64.0;
 const BUBBLE_PAD_PT: f32 = 10.0;
 const BUBBLE_LINE_PT: f32 = 18.0;
@@ -68,6 +70,8 @@ pub enum Hit {
     CancelCompose,
     /// A reaction chip under a message: tapping it adds or takes back the user's own reaction.
     Chip { msg: String, key: String },
+    /// The quoted line of a reply, by the id of the message it quotes: tapping it scrolls to that message.
+    Quote(String),
     /// A button of the sheet or panel that is open.
     Overlay(OverlayAction),
     /// A field of the sign-in sheet.
@@ -86,7 +90,7 @@ pub enum OverlayAction {
     Rename,
     SignOut,
     Delete,
-    /// The emoji at this index of [`EMOJI`].
+    /// The emoji at this index of the picker's choices (`Messages::emoji_choices`).
     Pick(usize),
 }
 
@@ -325,6 +329,9 @@ impl MessagesWindow {
         if let Some(c) = self.chips.iter().find(|c| inside(c.rect, x, y)) {
             return Hit::Chip { msg: c.msg.clone(), key: c.key.clone() };
         }
+        if let Some((_, target)) = self.quotes.iter().find(|(r, _)| inside(*r, x, y)) {
+            return Hit::Quote(target.clone());
+        }
         if inside(lay.sidebar(), x, y) {
             let index = ((y - lay.header + self.room_scroll.offset()) / lay.row).floor();
             if index >= 0.0 {
@@ -352,6 +359,16 @@ impl MessagesWindow {
     /// The message bubble under (`x`, `y`), by event id, from the last frame.
     pub fn message_at(&self, x: f32, y: f32) -> Option<String> {
         self.bubbles.iter().find(|(r, _)| inside(*r, x, y)).map(|(_, id)| id.clone())
+    }
+
+    /// The scroll offset that puts the message `id` at the top of the timeline, from the rows as they are laid out now.
+    /// `None` when the message is not in the room on screen.
+    pub fn message_offset(&self, ui: &Ui, id: &str) -> Option<f32> {
+        let lay = self.layout(ui);
+        let rows = self.timeline_rows(ui, &lay);
+        let heights: Vec<f32> = rows.iter().map(|r| r.height).collect();
+        let index = rows.iter().position(|r| r.id == id)?;
+        Some(rows_height_before(&heights, lay.bubble_gap, index))
     }
 
     /// The panel that is open over the window, with its buttons. `None` when no panel is open.
@@ -410,7 +427,10 @@ impl MessagesWindow {
             Overlay::Details => {
                 let members = self.model.selected_room().map_or(0, |r| r.members.len());
                 let rows = members.min(MEMBER_ROWS) + usize::from(members > MEMBER_ROWS);
-                let ph = head + lay.pad + lay.button_h + lay.pad + lay.line + rows as f32 * lay.line + ui.pt(SHEET_FOOT_PT);
+                let pictures = self.model.selected_room().map_or(0, |r| r.shared_pictures().len());
+                let media = media_rows(pictures);
+                let media_h = if media == 0 { 0.0 } else { lay.pad + media as f32 * lay.line };
+                let ph = head + lay.pad + lay.button_h + lay.pad + lay.line + rows as f32 * lay.line + media_h + ui.pt(SHEET_FOOT_PT);
                 let r = place(ph, pw);
                 let content_y = r[1] + head + lay.pad;
                 let rename = [r[0] + pw - lay.pad - bw, content_y, bw, lay.button_h];
@@ -441,20 +461,39 @@ impl MessagesWindow {
                     ],
                 })
             }
+            Overlay::Info(kind, id) => {
+                let rows = self.model.info_lines(*kind, id).len().clamp(1, INFO_ROWS_MAX);
+                let ph = head + lay.pad + rows as f32 * lay.line + ui.pt(SHEET_FOOT_PT);
+                let r = place(ph, pw);
+                let done = [r[0] + pw - lay.pad - bw, r[1] + ph - lay.pad - lay.button_h, bw, lay.button_h];
+                Some(Panel {
+                    panel: r,
+                    field: None,
+                    content_y: r[1] + head + lay.pad,
+                    buttons: vec![button(done, "Done", OverlayAction::Ok, true, false)],
+                })
+            }
             Overlay::Emoji(_) => {
                 let cell = ui.pt(CELL_PT);
-                let rows = EMOJI.len().div_ceil(EMOJI_COLUMNS);
+                // The panel keeps the height of the whole catalogue, so a search does not make it jump.
+                let rows = EMOJI_CATALOG.len().div_ceil(EMOJI_COLUMNS);
                 let width = (EMOJI_COLUMNS as f32 * cell + 2.0 * lay.pad).min(lay.w);
-                let ph = head + lay.pad + rows as f32 * cell + lay.pad;
+                let search_h = ui.pt(SHEET_BOX_PT) + lay.pad;
+                let ph = head + search_h + rows as f32 * cell + lay.pad;
                 let r = place(ph, width);
-                let content_y = r[1] + head;
-                let buttons = (0..EMOJI.len())
-                    .map(|i| {
+                let field = [r[0] + lay.pad, r[1] + head, (width - 2.0 * lay.pad).max(0.0), ui.pt(SHEET_BOX_PT)];
+                let content_y = r[1] + head + search_h;
+                let buttons = self
+                    .model
+                    .emoji_choices()
+                    .iter()
+                    .enumerate()
+                    .map(|(i, emoji)| {
                         let rect = [r[0] + lay.pad + (i % EMOJI_COLUMNS) as f32 * cell, content_y + (i / EMOJI_COLUMNS) as f32 * cell, cell, cell];
-                        button(rect, EMOJI[i], OverlayAction::Pick(i), false, false)
+                        button(rect, emoji.as_str(), OverlayAction::Pick(i), false, false)
                     })
                     .collect();
-                Some(Panel { panel: r, field: None, content_y, buttons })
+                Some(Panel { panel: r, field: Some(field), content_y, buttons })
             }
         }
     }
@@ -464,6 +503,7 @@ impl MessagesWindow {
         s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
         self.bubbles.clear();
         self.chips.clear();
+        self.quotes.clear();
         self.draw_sidebar(s, ui, &lay);
         self.draw_timeline(s, ui, &lay);
         self.draw_header(s, ui, &lay);
@@ -635,6 +675,9 @@ impl MessagesWindow {
             let mut ly = by + lay.bubble_pad;
             if let Some(quote) = &row.quote {
                 put(s, &mut self.labels, ui, quote, MAC_FOOTNOTE_PT, Weight::Regular, faint, x + lay.bubble_pad, ly);
+                if let Some(target) = &row.quote_target {
+                    self.quotes.push(([x, ly, bw, lay.foot], target.clone()));
+                }
                 ly += lay.foot;
             }
             for line in &row.lines {
@@ -681,6 +724,7 @@ impl MessagesWindow {
                 let quote = m.reply_to.as_ref().and_then(|id| room.quote(id)).map(|(who, what)| {
                     fit(ui, &format!("{who}: {what}"), MAC_FOOTNOTE_PT, Weight::Regular, text_w)
                 });
+                let quote_target = quote.as_ref().and(m.reply_to.clone());
                 let mut widest = lines.iter().map(|l| ui.measure(l, MAC_BODY_PT, Weight::Regular)).fold(0.0, f32::max);
                 if let Some(q) = &quote {
                     widest = widest.max(ui.measure(q, MAC_FOOTNOTE_PT, Weight::Regular));
@@ -709,6 +753,7 @@ impl MessagesWindow {
                     head,
                     sender,
                     quote,
+                    quote_target,
                     edited: m.edited,
                     lines,
                     widest,
@@ -751,6 +796,7 @@ impl MessagesWindow {
             Overlay::Details => "Conversation Details",
             Overlay::Settings => "Settings",
             Overlay::Emoji(_) => "Emoji",
+            Overlay::Info(kind, _) => kind.title(),
             Overlay::None => "",
         };
         put_centred(s, &mut self.labels, ui, title, MAC_BODY_PT, Weight::Semibold, LABEL.now(), px_ + pw / 2.0, py + ui.pt(SHEET_HEAD_PT) / 2.0);
@@ -793,6 +839,23 @@ impl MessagesWindow {
                     if room.members.len() > MEMBER_ROWS {
                         let more = format!("and {} more", room.members.len() - MEMBER_ROWS);
                         put(s, &mut self.labels, ui, &more, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, y);
+                        y += lay.line;
+                    }
+                    let pictures = room.shared_pictures();
+                    if !pictures.is_empty() {
+                        y += lay.pad;
+                        let heading = format!("Shared pictures ({})", pictures.len());
+                        put(s, &mut self.labels, ui, &heading, MAC_FOOTNOTE_PT, Weight::Semibold, LABEL_2.now(), text_x, y);
+                        y += lay.line;
+                        for name in pictures.iter().take(SHARED_ROWS) {
+                            let shown = fit(ui, name, MAC_BODY_PT, Weight::Regular, text_w);
+                            put(s, &mut self.labels, ui, &shown, MAC_BODY_PT, Weight::Regular, LABEL.now(), text_x, y);
+                            y += lay.line;
+                        }
+                        if pictures.len() > SHARED_ROWS {
+                            let more = format!("and {} more", pictures.len() - SHARED_ROWS);
+                            put(s, &mut self.labels, ui, &more, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_2.now(), text_x, y);
+                        }
                     }
                 }
             }
@@ -806,7 +869,24 @@ impl MessagesWindow {
                     put(s, &mut self.labels, ui, &shown, MAC_BODY_PT, Weight::Regular, LABEL.now(), text_x + text_w - vw, y);
                 }
             }
-            Overlay::Emoji(_) => {}
+            Overlay::Info(kind, id) => {
+                let lines = self.model.info_lines(kind, &id);
+                if lines.is_empty() {
+                    put(s, &mut self.labels, ui, "Nothing to show", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), text_x, panel.content_y);
+                }
+                for (i, line) in lines.iter().enumerate() {
+                    let shown = fit(ui, line, MAC_BODY_PT, Weight::Regular, text_w);
+                    put(s, &mut self.labels, ui, &shown, MAC_BODY_PT, Weight::Regular, LABEL.now(), text_x, panel.content_y + i as f32 * lay.line);
+                }
+            }
+            Overlay::Emoji(_) => {
+                if let Some(f) = panel.field {
+                    draw_field_tail(s, &mut self.labels, ui, lay, f, &self.model.emoji_query, "Search emoji", true);
+                }
+                if panel.buttons.is_empty() {
+                    put_centred(s, &mut self.labels, ui, "No emoji match", MAC_BODY_PT, Weight::Regular, LABEL_2.now(), px_ + pw / 2.0, panel.content_y + lay.pad);
+                }
+            }
             Overlay::None => {}
         }
         for b in &panel.buttons {
@@ -865,6 +945,8 @@ struct TimelineRow {
     sender: Option<String>,
     /// The line quoting the message this one answers.
     quote: Option<String>,
+    /// The id of the message the quote line is about, when the line is shown.
+    quote_target: Option<String>,
     edited: bool,
     lines: Vec<String>,
     widest: f32,
@@ -909,6 +991,22 @@ pub fn room_tags(pinned: bool, muted: bool) -> String {
 /// The height of a day heading: its line and the space around it.
 fn day_height(lay: &Layout) -> f32 {
     lay.foot + 2.0 * lay.gap
+}
+
+/// The lines the shared-pictures block of the details panel takes for `pictures` pictures: its heading, the names it
+/// lists and a "more" line. None when there are no pictures.
+pub fn media_rows(pictures: usize) -> usize {
+    if pictures == 0 {
+        0
+    } else {
+        1 + pictures.min(SHARED_ROWS) + usize::from(pictures > SHARED_ROWS)
+    }
+}
+
+/// The height of the timeline rows before row `index`, each followed by `gap`: how far the content has to scroll for
+/// that row to sit at the top.
+pub fn rows_height_before(heights: &[f32], gap: f32, index: usize) -> f32 {
+    heights.iter().take(index).map(|h| h + gap).sum()
 }
 
 /// The height the typing line takes at the foot of the timeline.
@@ -1186,6 +1284,22 @@ mod tests {
         assert_eq!(room_tags(true, false), "Pinned");
         assert_eq!(room_tags(false, true), "Alerts hidden");
         assert!(room_tags(true, true).contains("Pinned"));
+    }
+
+    #[test]
+    fn a_row_scrolls_to_the_top_past_the_rows_before_it() {
+        let heights = [30.0, 50.0, 20.0];
+        assert_eq!(rows_height_before(&heights, 8.0, 0), 0.0);
+        assert_eq!(rows_height_before(&heights, 8.0, 2), 38.0 + 58.0);
+        assert_eq!(rows_height_before(&heights, 8.0, 9), 38.0 + 58.0 + 28.0, "past the end counts every row");
+    }
+
+    #[test]
+    fn the_shared_pictures_block_has_a_heading_the_names_and_a_more_line() {
+        assert_eq!(media_rows(0), 0);
+        assert_eq!(media_rows(1), 2);
+        assert_eq!(media_rows(SHARED_ROWS), 1 + SHARED_ROWS);
+        assert_eq!(media_rows(SHARED_ROWS + 3), 2 + SHARED_ROWS);
     }
 
     #[test]

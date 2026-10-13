@@ -89,10 +89,16 @@ impl Api {
         protocol::parse_event_id(&answer).map(|_| ())
     }
 
-    /// Makes a private conversation with `user_id` and returns its room id.
-    pub fn create_direct(&self, user_id: &str) -> Result<String, String> {
+    /// Makes a private conversation with `users` and returns its room id: a direct conversation for one person, a
+    /// group for several. The signed-in user is left out of the invitations.
+    pub fn create_conversation(&self, users: &[String]) -> Result<String, String> {
+        let others: Vec<String> = users.iter().filter(|u| **u != self.user_id).cloned().collect();
+        let body = match others.as_slice() {
+            [] => return Err("Enter someone other than yourself".into()),
+            [one] => protocol::create_direct_body(one),
+            many => protocol::create_group_body(many),
+        };
         let url = protocol::create_room_url(&self.base);
-        let body = protocol::create_direct_body(user_id);
         let answer = call(&self.http, "POST", &url, Some(self.token.as_str()), Some((body.as_bytes(), "application/json")), CALL_LIMIT)?;
         protocol::parse_room_id(&answer)
     }
@@ -118,6 +124,13 @@ impl Api {
     pub fn logout(&self) -> Result<(), String> {
         let empty = Some(("{}".as_bytes(), "application/json"));
         call(&self.http, "POST", &protocol::logout_url(&self.base), Some(self.token.as_str()), empty, CALL_LIMIT).map(|_| ())
+    }
+
+    /// Sets or clears the account's "marked as unread" flag for `room`, so the other devices show it too.
+    pub fn set_marked_unread(&self, room: &str, unread: bool) -> Result<(), String> {
+        let url = protocol::room_account_data_url(&self.base, &self.user_id, room, protocol::MARKED_UNREAD);
+        let body = protocol::marked_unread_body(unread);
+        call(&self.http, "PUT", &url, Some(self.token.as_str()), Some((body.as_bytes(), "application/json")), CALL_LIMIT).map(|_| ())
     }
 
     /// Marks `event` as read in `room` (a public read receipt).

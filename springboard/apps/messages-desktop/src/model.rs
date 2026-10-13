@@ -19,6 +19,8 @@ pub struct Message {
     pub reply_to: Option<String>,
     /// True once the sender replaced the words.
     pub edited: bool,
+    /// The words this message had before each edit, oldest first.
+    pub history: Vec<Body>,
     /// The reactions to this message, one entry per emoji in the order they first appeared.
     pub reactions: Vec<Reaction>,
 }
@@ -147,6 +149,18 @@ impl Room {
         })
     }
 
+    /// The file names of the pictures in the loaded timeline, newest first. Removed messages are left out.
+    pub fn shared_pictures(&self) -> Vec<String> {
+        self.timeline
+            .iter()
+            .rev()
+            .filter_map(|m| match &m.body {
+                Body::Image { name, .. } => Some(name.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// The one-line preview of the newest message, for the room list.
     pub fn preview(&self) -> String {
         match self.timeline.last() {
@@ -226,16 +240,57 @@ pub const REACTIONS: [(&str, &str); 6] = [
     ("Question", "\u{2753}"),
 ];
 
-/// The emoji the composer's picker offers, in rows of [`EMOJI_COLUMNS`].
-pub const EMOJI: [&str; 40] = [
-    "\u{1F600}", "\u{1F603}", "\u{1F604}", "\u{1F601}", "\u{1F606}", "\u{1F605}", "\u{1F602}", "\u{1F642}",
-    "\u{1F609}", "\u{1F60A}", "\u{1F60D}", "\u{1F618}", "\u{1F61C}", "\u{1F914}", "\u{1F610}", "\u{1F62E}",
-    "\u{1F622}", "\u{1F62D}", "\u{1F620}", "\u{1F631}", "\u{1F634}", "\u{1F60E}", "\u{1F973}", "\u{1F64F}",
-    "\u{1F44D}", "\u{1F44E}", "\u{1F44F}", "\u{1F64C}", "\u{1F44B}", "\u{1F4AA}", "\u{2764}\u{FE0F}", "\u{1F494}",
-    "\u{1F525}", "\u{2728}", "\u{1F389}", "\u{1F381}", "\u{2705}", "\u{274C}", "\u{2753}", "\u{203C}\u{FE0F}",
+/// The emoji the picker offers with the words that find them, in rows of [`EMOJI_COLUMNS`].
+pub const EMOJI_CATALOG: [(&str, &str); 64] = [
+    ("\u{1F600}", "grinning smile happy"), ("\u{1F603}", "smile happy joy"),
+    ("\u{1F604}", "laugh happy"), ("\u{1F601}", "beam grin"),
+    ("\u{1F606}", "laugh squint"), ("\u{1F605}", "sweat relief"),
+    ("\u{1F602}", "joy laugh tears lol"), ("\u{1F642}", "slight smile"),
+    ("\u{1F609}", "wink"), ("\u{1F60A}", "blush smile"),
+    ("\u{1F60D}", "love heart eyes"), ("\u{1F618}", "kiss"),
+    ("\u{1F61C}", "tongue wink silly"), ("\u{1F914}", "think thinking hmm"),
+    ("\u{1F610}", "neutral meh"), ("\u{1F62E}", "surprised wow"),
+    ("\u{1F622}", "cry sad tear"), ("\u{1F62D}", "sob cry"),
+    ("\u{1F620}", "angry mad"), ("\u{1F631}", "scream shock fear"),
+    ("\u{1F634}", "sleep tired zzz"), ("\u{1F60E}", "cool sunglasses"),
+    ("\u{1F973}", "party celebrate"), ("\u{1F64F}", "pray thanks please"),
+    ("\u{1F44D}", "thumbs up like yes ok"), ("\u{1F44E}", "thumbs down dislike no"),
+    ("\u{1F44F}", "clap applause"), ("\u{1F64C}", "raised hands hooray"),
+    ("\u{1F44B}", "wave hello bye"), ("\u{1F4AA}", "strong muscle flex"),
+    ("\u{2764}\u{FE0F}", "heart love red"), ("\u{1F494}", "broken heart"),
+    ("\u{1F525}", "fire hot"), ("\u{2728}", "sparkles shine"),
+    ("\u{1F389}", "tada party celebrate"), ("\u{1F381}", "gift present"),
+    ("\u{2705}", "check done yes"), ("\u{274C}", "cross no wrong"),
+    ("\u{2753}", "question"), ("\u{203C}\u{FE0F}", "exclamation emphasis"),
+    ("\u{1F607}", "angel halo"), ("\u{1F923}", "rofl laugh floor"),
+    ("\u{1F60B}", "yum tasty"), ("\u{1F917}", "hug"),
+    ("\u{1F644}", "eye roll"), ("\u{1F62C}", "grimace awkward"),
+    ("\u{1F633}", "flushed embarrassed"), ("\u{1F97A}", "pleading puppy"),
+    ("\u{1F621}", "rage furious"), ("\u{1F92F}", "mind blown"),
+    ("\u{1F91D}", "handshake deal"), ("\u{1F440}", "eyes look"),
+    ("\u{1F648}", "see no evil monkey"), ("\u{1F4AF}", "hundred perfect"),
+    ("\u{2615}", "coffee tea"), ("\u{1F355}", "pizza food"),
+    ("\u{1F382}", "cake birthday"), ("\u{1F31E}", "sun sunny"),
+    ("\u{1F308}", "rainbow"), ("\u{2B50}", "star"),
+    ("\u{1F436}", "dog puppy"), ("\u{1F431}", "cat kitten"),
+    ("\u{1F680}", "rocket launch ship"), ("\u{1F4A1}", "idea light bulb"),
 ];
 /// How many emoji a row of the picker holds.
 pub const EMOJI_COLUMNS: usize = 8;
+
+/// The most recently used emoji the picker puts first.
+pub const RECENT_EMOJI_MAX: usize = 8;
+
+/// The catalogue emoji whose words contain every word of `query` (any case). An empty query finds all of them, in
+/// catalogue order.
+pub fn emoji_matches(query: &str) -> Vec<&'static str> {
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    EMOJI_CATALOG
+        .iter()
+        .filter(|(emoji, keywords)| words.iter().all(|w| keywords.contains(w.as_str()) || emoji.contains(w.as_str())))
+        .map(|(emoji, _)| *emoji)
+        .collect()
+}
 
 /// The per-conversation choices the user makes: pinned, alerts hidden, and marked as unread. Kept as room ids and saved
 /// in the app's preferences as one id per line.
@@ -244,6 +299,8 @@ pub struct RoomPrefs {
     pub pinned: Vec<String>,
     pub muted: Vec<String>,
     pub unread_marks: Vec<String>,
+    /// The emoji picked most recently, newest first.
+    pub recent_emoji: Vec<String>,
 }
 
 impl RoomPrefs {
@@ -272,6 +329,9 @@ fn toggle(list: &mut Vec<String>, id: &str) -> bool {
     }
 }
 
+/// The most conversations that can be pinned at once.
+pub const PIN_LIMIT: usize = 9;
+
 /// What the composer's text becomes when it is sent.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Compose {
@@ -292,7 +352,7 @@ pub enum Outgoing {
 /// What a one-line sheet asks for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PromptKind {
-    /// The user id of the person to message.
+    /// The user ids of the people to message: one starts a direct conversation, several a group.
     NewMessage,
     /// A new name for the room with this id.
     Rename(String),
@@ -316,6 +376,11 @@ impl Prompt {
         Prompt { kind: PromptKind::Rename(room.to_string()), value: current.to_string(), error: String::new(), busy: false }
     }
 
+    /// The people a checked New Message value names.
+    pub fn users(checked: &str) -> Vec<String> {
+        checked.split(',').filter(|u| !u.is_empty()).map(str::to_string).collect()
+    }
+
     pub fn title(&self) -> &'static str {
         match self.kind {
             PromptKind::NewMessage => "New Message",
@@ -325,7 +390,7 @@ impl Prompt {
 
     pub fn label(&self) -> &'static str {
         match self.kind {
-            PromptKind::NewMessage => "To (a Matrix user id)",
+            PromptKind::NewMessage => "To (Matrix user ids, separated by commas)",
             PromptKind::Rename(_) => "Name",
         }
     }
@@ -337,10 +402,11 @@ impl Prompt {
         }
     }
 
-    /// The checked value: a user id for New Message, a non-empty name for Rename.
+    /// The checked value: the user ids joined by commas for New Message (see [`Prompt::users`]), a non-empty name for
+    /// Rename.
     pub fn checked(&self) -> Result<String, String> {
         match self.kind {
-            PromptKind::NewMessage => protocol::checked_user_id(&self.value),
+            PromptKind::NewMessage => protocol::checked_user_ids(&self.value).map(|ids| ids.join(",")),
             PromptKind::Rename(_) => {
                 let name = self.value.trim();
                 if name.is_empty() {
@@ -352,6 +418,27 @@ impl Prompt {
         }
     }
 }
+
+/// What a message-info panel lists.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InfoKind {
+    /// The words of the message before each edit.
+    Edits,
+    /// Who reacted with which emoji.
+    Reactions,
+}
+
+impl InfoKind {
+    pub fn title(self) -> &'static str {
+        match self {
+            InfoKind::Edits => "Edit History",
+            InfoKind::Reactions => "Reactions",
+        }
+    }
+}
+
+/// The most lines a message-info panel lists; older entries are left out.
+pub const INFO_ROWS_MAX: usize = 10;
 
 /// A panel over the window. The sign-in sheet is separate because it blocks everything.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -367,6 +454,8 @@ pub enum Overlay {
     Confirm(String),
     /// The emoji picker. With a message id, a choice reacts to that message; without, it goes into the composer.
     Emoji(Option<String>),
+    /// The edits or the reactions of the message with this id, in the room on screen.
+    Info(InfoKind, String),
 }
 
 /// The app's state.
@@ -393,6 +482,8 @@ pub struct Messages {
     /// Set while the composer holds a reply or an edit.
     pub compose: Option<Compose>,
     pub overlay: Overlay,
+    /// What is typed in the emoji picker's search field.
+    pub emoji_query: String,
 }
 
 impl Messages {
@@ -427,9 +518,33 @@ impl Messages {
         self.prefs.unread_marks.iter().any(|x| x == id)
     }
 
-    /// Pins or unpins a conversation. True when it is pinned afterwards.
-    pub fn toggle_pin(&mut self, id: &str) -> bool {
-        toggle(&mut self.prefs.pinned, id)
+    /// Pins or unpins a conversation. True when it is pinned afterwards. A new pin goes after the others; past
+    /// [`PIN_LIMIT`] it is refused with the reason.
+    pub fn toggle_pin(&mut self, id: &str) -> Result<bool, String> {
+        if !self.is_pinned(id) && self.prefs.pinned.len() >= PIN_LIMIT {
+            return Err(format!("You can pin up to {PIN_LIMIT} conversations"));
+        }
+        Ok(toggle(&mut self.prefs.pinned, id))
+    }
+
+    /// True when the pinned conversation `id` has a neighbour to swap places with, above (`up`) or below it.
+    pub fn can_move_pin(&self, id: &str, up: bool) -> bool {
+        match self.prefs.pinned.iter().position(|x| x == id) {
+            Some(i) if up => i > 0,
+            Some(i) => i + 1 < self.prefs.pinned.len(),
+            None => false,
+        }
+    }
+
+    /// Moves the pinned conversation `id` one place up or down among the pins. False when it cannot move.
+    pub fn move_pin(&mut self, id: &str, up: bool) -> bool {
+        if !self.can_move_pin(id, up) {
+            return false;
+        }
+        let Some(i) = self.prefs.pinned.iter().position(|x| x == id) else { return false };
+        let j = if up { i - 1 } else { i + 1 };
+        self.prefs.pinned.swap(i, j);
+        true
     }
 
     /// Hides or shows the alerts of a conversation. True when they are hidden afterwards.
@@ -448,12 +563,84 @@ impl Messages {
         marked
     }
 
-    /// The conversations the list shows: those matching the search, pinned ones first, the rest in their order.
+    /// Applies the unread flag the server holds for a conversation. A mark never lands on the conversation on screen:
+    /// it is being read. True when the local mark changed.
+    pub fn set_unread_mark(&mut self, id: &str, marked: bool) -> bool {
+        let present = self.is_marked_unread(id);
+        if marked == present || (marked && self.selected.as_deref() == Some(id)) {
+            return false;
+        }
+        toggle(&mut self.prefs.unread_marks, id);
+        true
+    }
+
+    /// The conversations the list shows: those matching the search, the pinned ones first in the order they were pinned
+    /// (and moved to), the rest in their order.
     pub fn visible_rooms(&self) -> Vec<&Room> {
         let query = self.search.trim().to_lowercase();
         let mut rooms: Vec<&Room> = self.rooms.iter().filter(|r| r.matches(&self.user_id, &query)).collect();
-        rooms.sort_by_key(|r| !self.is_pinned(&r.id));
+        rooms.sort_by_key(|r| self.prefs.pinned.iter().position(|x| *x == r.id).unwrap_or(usize::MAX));
         rooms
+    }
+
+    /// The emoji the open picker shows: with no search, the recent ones first and then the rest of the catalogue; with
+    /// a search, the emoji it finds.
+    pub fn emoji_choices(&self) -> Vec<String> {
+        let found = emoji_matches(&self.emoji_query);
+        if !self.emoji_query.trim().is_empty() {
+            return found.into_iter().map(str::to_string).collect();
+        }
+        let recent: Vec<&str> =
+            self.prefs.recent_emoji.iter().map(String::as_str).filter(|e| found.iter().any(|f| *f == *e)).collect();
+        recent.iter().copied().chain(found.iter().copied().filter(|e| !recent.iter().any(|r| r == e))).map(str::to_string).collect()
+    }
+
+    /// The lines of a message-info panel for the message `id` of the room on screen: its versions, oldest first (the
+    /// current one marked), or each emoji with the people who gave it. At most [`INFO_ROWS_MAX`] lines.
+    pub fn info_lines(&self, kind: InfoKind, id: &str) -> Vec<String> {
+        let Some(message) = self.selected_room().and_then(|r| r.timeline.iter().find(|m| m.id == id)) else { return Vec::new() };
+        let mut lines: Vec<String> = match kind {
+            InfoKind::Edits => {
+                let total = message.history.len() + 1;
+                message
+                    .history
+                    .iter()
+                    .map(preview)
+                    .chain(std::iter::once(preview(&message.body)))
+                    .enumerate()
+                    .map(|(i, text)| if i + 1 == total { format!("{}. {text} (current)", i + 1) } else { format!("{}. {text}", i + 1) })
+                    .collect()
+            }
+            InfoKind::Reactions => message
+                .reactions
+                .iter()
+                .map(|r| {
+                    let who: Vec<String> = r
+                        .users
+                        .iter()
+                        .map(|(user, _)| if *user == self.user_id { "You".to_string() } else { protocol::display_name(user).to_string() })
+                        .collect();
+                    format!("{}  {}", r.key, who.join(", "))
+                })
+                .collect(),
+        };
+        if lines.len() > INFO_ROWS_MAX {
+            lines.drain(..lines.len() - INFO_ROWS_MAX);
+        }
+        lines
+    }
+
+    /// Opens the picker with an empty search, for a message (a reaction) or for the composer.
+    pub fn open_emoji(&mut self, message: Option<String>) {
+        self.emoji_query.clear();
+        self.overlay = Overlay::Emoji(message);
+    }
+
+    /// Notes that `emoji` was picked: it moves to the front of the recent ones, which keep [`RECENT_EMOJI_MAX`].
+    pub fn note_emoji_used(&mut self, emoji: &str) {
+        self.prefs.recent_emoji.retain(|e| e != emoji);
+        self.prefs.recent_emoji.insert(0, emoji.to_string());
+        self.prefs.recent_emoji.truncate(RECENT_EMOJI_MAX);
     }
 
     /// Forgets a conversation that was left or deleted.
@@ -557,6 +744,9 @@ impl Messages {
             let viewing = self.selected.as_deref() == Some(update.id.as_str());
             let alerts = self.primed && !self.prefs.muted.iter().any(|x| *x == update.id);
             apply_room(&mut self.rooms[index], update, &self.user_id, alerts, viewing, &mut notices);
+            if let Some(flag) = update.marked_unread {
+                self.set_unread_mark(&update.id, flag);
+            }
         }
         self.primed = true;
         self.rooms.sort_by(|a, b| b.last_ts.cmp(&a.last_ts).then_with(|| a.name.cmp(&b.name)));
@@ -636,6 +826,7 @@ fn apply_room(room: &mut Room, update: &RoomUpdate, me: &str, primed: bool, view
             body: event.body.clone(),
             reply_to: event.reply_to.clone(),
             edited: false,
+            history: Vec::new(),
             reactions: Vec::new(),
         });
     }
@@ -656,7 +847,10 @@ fn apply_changes(room: &mut Room, update: &RoomUpdate) {
     for edit in &update.edits {
         if let Some(m) = room.timeline.iter_mut().find(|m| m.id == edit.target && m.sender == edit.sender) {
             if m.body != Body::Redacted {
-                m.body = edit.body.clone();
+                if m.body != edit.body {
+                    let before = std::mem::replace(&mut m.body, edit.body.clone());
+                    m.history.push(before);
+                }
                 m.edited = true;
             }
         }
@@ -670,6 +864,7 @@ fn apply_changes(room: &mut Room, update: &RoomUpdate) {
         if let Some(m) = room.timeline.iter_mut().find(|m| m.id == *removed) {
             m.body = Body::Redacted;
             m.reactions.clear();
+            m.history.clear();
             m.edited = false;
         } else {
             for m in &mut room.timeline {
@@ -1004,10 +1199,41 @@ mod tests {
     fn pinned_conversations_sort_first_and_keep_their_order() {
         let mut m = two_rooms();
         assert_eq!(m.visible_rooms().iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["!b:x", "!a:x"]);
-        assert!(m.toggle_pin("!a:x"));
+        assert_eq!(m.toggle_pin("!a:x"), Ok(true));
         assert_eq!(m.visible_rooms()[0].id, "!a:x");
-        assert!(!m.toggle_pin("!a:x"), "a second toggle unpins");
+        assert_eq!(m.toggle_pin("!a:x"), Ok(false), "a second toggle unpins");
         assert_eq!(m.visible_rooms()[0].id, "!b:x");
+    }
+
+    #[test]
+    fn pins_keep_the_order_they_were_made_in_and_can_be_moved() {
+        let mut m = two_rooms();
+        m.apply_sync(&sync(vec![update("!c:x", vec![ev("$3", "@a:x", 5, Body::Text("c".into()))], 0)]));
+        m.toggle_pin("!a:x").unwrap();
+        m.toggle_pin("!c:x").unwrap();
+        let ids = |m: &Messages| m.visible_rooms().iter().map(|r| r.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&m), ["!a:x", "!c:x", "!b:x"], "pins in pin order, then the rest");
+        assert!(!m.can_move_pin("!a:x", true) && m.can_move_pin("!a:x", false));
+        assert!(!m.can_move_pin("!b:x", true), "an unpinned conversation does not move");
+        assert!(m.move_pin("!c:x", true));
+        assert_eq!(ids(&m), ["!c:x", "!a:x", "!b:x"]);
+        assert!(!m.move_pin("!c:x", true), "already first");
+        assert!(!m.move_pin("!a:x", false), "already last of the pins");
+    }
+
+    #[test]
+    fn at_most_nine_conversations_can_be_pinned() {
+        let mut m = signed_in();
+        let updates: Vec<RoomUpdate> = (0..PIN_LIMIT + 1).map(|i| update(&format!("!r{i}:x"), vec![], 0)).collect();
+        m.apply_sync(&sync(updates));
+        for i in 0..PIN_LIMIT {
+            assert_eq!(m.toggle_pin(&format!("!r{i}:x")), Ok(true));
+        }
+        let refused = m.toggle_pin(&format!("!r{PIN_LIMIT}:x"));
+        assert!(refused.unwrap_err().contains('9'));
+        assert!(!m.is_pinned(&format!("!r{PIN_LIMIT}:x")));
+        assert_eq!(m.toggle_pin("!r0:x"), Ok(false), "a pin can always be taken off");
+        assert_eq!(m.toggle_pin(&format!("!r{PIN_LIMIT}:x")), Ok(true), "which makes room");
     }
 
     #[test]
@@ -1048,6 +1274,32 @@ mod tests {
     }
 
     #[test]
+    fn the_unread_flag_of_the_server_sets_and_clears_the_mark() {
+        let mut m = two_rooms();
+        let mut flagged = update("!a:x", vec![], 0);
+        flagged.marked_unread = Some(true);
+        m.apply_sync(&sync(vec![flagged.clone()]));
+        assert!(m.is_marked_unread("!a:x"));
+        assert!(!m.set_unread_mark("!a:x", true), "the same flag changes nothing");
+        m.apply_sync(&sync(vec![update("!a:x", vec![], 0)]));
+        assert!(m.is_marked_unread("!a:x"), "a sync without the flag leaves the mark");
+        flagged.marked_unread = Some(false);
+        m.apply_sync(&sync(vec![flagged]));
+        assert!(!m.is_marked_unread("!a:x"));
+    }
+
+    #[test]
+    fn the_server_does_not_mark_the_conversation_being_read() {
+        let mut m = two_rooms();
+        m.select("!a:x");
+        let mut flagged = update("!a:x", vec![], 0);
+        flagged.marked_unread = Some(true);
+        m.apply_sync(&sync(vec![flagged]));
+        assert!(!m.is_marked_unread("!a:x"));
+        assert_eq!(m.selected.as_deref(), Some("!a:x"));
+    }
+
+    #[test]
     fn marking_the_open_conversation_closes_it() {
         let mut m = two_rooms();
         m.select("!a:x");
@@ -1069,7 +1321,7 @@ mod tests {
     fn a_removed_conversation_leaves_no_trace() {
         let mut m = two_rooms();
         m.select("!a:x");
-        m.toggle_pin("!a:x");
+        m.toggle_pin("!a:x").unwrap();
         m.toggle_mute("!a:x");
         m.overlay = Overlay::Details;
         m.remove_room("!a:x");
@@ -1085,6 +1337,19 @@ mod tests {
         m.show_new_room("!new:x");
         assert_eq!(m.selected.as_deref(), Some("!new:x"));
         assert!(m.rooms.iter().any(|r| r.id == "!new:x"));
+    }
+
+    #[test]
+    fn shared_pictures_list_the_loaded_images_newest_first() {
+        let mut m = signed_in();
+        let image = |id: &str, ts: u64, name: &str| ev(id, "@bob:x", ts, Body::Image { name: name.into(), mxc: "mxc://x/y".into() });
+        let events = vec![image("$1", 1, "a.png"), ev("$2", "@bob:x", 2, Body::Text("hi".into())), image("$3", 3, "b.png"), image("$4", 4, "c.png")];
+        m.apply_sync(&sync(vec![update("!a:x", events, 0)]));
+        assert_eq!(m.rooms[0].shared_pictures(), vec!["c.png".to_string(), "b.png".to_string(), "a.png".to_string()]);
+        let mut gone = update("!a:x", vec![], 0);
+        gone.redactions = vec!["$4".into()];
+        m.apply_sync(&sync(vec![gone]));
+        assert_eq!(m.rooms[0].shared_pictures(), vec!["b.png".to_string(), "a.png".to_string()], "a removed picture is not listed");
     }
 
     #[test]
@@ -1126,6 +1391,57 @@ mod tests {
         let message = &m.rooms.iter().find(|r| r.id == "!a:x").unwrap().timeline[0];
         assert_eq!(message.body, Body::Text("dinner plans".into()));
         assert!(message.edited);
+    }
+
+    #[test]
+    fn an_edit_keeps_the_words_it_replaced() {
+        let mut m = two_rooms();
+        let edit = |text: &str| protocol::Edit { target: "$1".into(), sender: "@bob:x".into(), body: Body::Text(text.into()) };
+        let mut u = update("!a:x", vec![], 0);
+        u.edits = vec![edit("dinner plans"), edit("dinner plans"), edit("brunch plans")];
+        m.apply_sync(&sync(vec![u]));
+        let message = &m.rooms.iter().find(|r| r.id == "!a:x").unwrap().timeline[0];
+        assert_eq!(message.history, vec![Body::Text("lunch plans".into()), Body::Text("dinner plans".into())]);
+        assert_eq!(message.body, Body::Text("brunch plans".into()));
+        m.select("!a:x");
+        assert_eq!(
+            m.info_lines(InfoKind::Edits, "$1"),
+            ["1. lunch plans", "2. dinner plans", "3. brunch plans (current)"].map(String::from).to_vec()
+        );
+        let mut gone = update("!a:x", vec![], 0);
+        gone.redactions = vec!["$1".into()];
+        m.apply_sync(&sync(vec![gone]));
+        let message = &m.rooms.iter().find(|r| r.id == "!a:x").unwrap().timeline[0];
+        assert!(message.history.is_empty(), "removing a message forgets its earlier words");
+    }
+
+    #[test]
+    fn the_reactions_panel_names_who_gave_each_emoji() {
+        let mut m = two_rooms();
+        let react = |id: &str, who: &str, key: &str| protocol::Annotation { id: id.into(), target: "$1".into(), key: key.into(), sender: who.into() };
+        let mut u = update("!a:x", vec![], 0);
+        u.reactions = vec![react("$r1", "@me:x", "+1"), react("$r2", "@bob:x", "+1"), react("$r3", "@ann:x", "ok")];
+        m.apply_sync(&sync(vec![u]));
+        assert!(m.info_lines(InfoKind::Reactions, "$1").is_empty(), "nothing is listed until the room is on screen");
+        m.select("!a:x");
+        assert_eq!(m.info_lines(InfoKind::Reactions, "$1"), vec!["+1  You, bob".to_string(), "ok  ann".to_string()]);
+        assert!(m.info_lines(InfoKind::Reactions, "$none").is_empty());
+        assert_eq!((InfoKind::Edits.title(), InfoKind::Reactions.title()), ("Edit History", "Reactions"));
+    }
+
+    #[test]
+    fn a_long_history_lists_only_the_newest_versions_with_true_numbers() {
+        let mut m = two_rooms();
+        let mut u = update("!a:x", vec![], 0);
+        u.edits = (0..INFO_ROWS_MAX + 4)
+            .map(|i| protocol::Edit { target: "$1".into(), sender: "@bob:x".into(), body: Body::Text(format!("v{i}")) })
+            .collect();
+        m.apply_sync(&sync(vec![u]));
+        m.select("!a:x");
+        let lines = m.info_lines(InfoKind::Edits, "$1");
+        assert_eq!(lines.len(), INFO_ROWS_MAX);
+        assert!(lines[0].starts_with("6. "), "{lines:?}");
+        assert!(lines[INFO_ROWS_MAX - 1].ends_with("(current)"));
     }
 
     #[test]
@@ -1217,6 +1533,11 @@ mod tests {
         assert!(p.checked().is_err(), "a bare @ is not a user id");
         p.value = "@bob:example.org".into();
         assert_eq!(p.checked(), Ok("@bob:example.org".into()));
+        p.value = "@bob:example.org, @ann:example.org".into();
+        assert_eq!(
+            Prompt::users(&p.checked().unwrap()),
+            vec!["@bob:example.org".to_string(), "@ann:example.org".to_string()]
+        );
         let mut r = Prompt::rename("!a:x", "Old");
         r.value = "  ".into();
         assert_eq!(r.checked(), Err("Enter a name".into()));
@@ -1228,7 +1549,7 @@ mod tests {
     #[test]
     fn signing_out_keeps_only_the_preferences() {
         let mut m = two_rooms();
-        m.toggle_pin("!a:x");
+        m.toggle_pin("!a:x").unwrap();
         m.composer = "x".into();
         m.sign_out();
         assert!(!m.signed_in());
@@ -1238,7 +1559,49 @@ mod tests {
 
     #[test]
     fn the_emoji_picker_fills_whole_rows() {
-        assert_eq!(EMOJI.len() % EMOJI_COLUMNS, 0);
+        assert_eq!(EMOJI_CATALOG.len() % EMOJI_COLUMNS, 0);
         assert_eq!(REACTIONS.len(), 6);
+        let mut seen: Vec<&str> = EMOJI_CATALOG.iter().map(|(e, _)| *e).collect();
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), EMOJI_CATALOG.len(), "no emoji twice");
+    }
+
+    #[test]
+    fn a_search_finds_emoji_by_every_word() {
+        assert_eq!(emoji_matches("").len(), EMOJI_CATALOG.len());
+        assert_eq!(emoji_matches("THUMBS up"), vec!["\u{1F44D}"]);
+        assert!(emoji_matches("party").contains(&"\u{1F389}") && emoji_matches("party").contains(&"\u{1F973}"));
+        assert!(emoji_matches("no such word").is_empty());
+        assert_eq!(emoji_matches("\u{1F525}"), vec!["\u{1F525}"], "the emoji itself finds itself");
+    }
+
+    #[test]
+    fn the_picker_puts_recent_emoji_first_and_a_search_replaces_the_list() {
+        let mut m = signed_in();
+        m.open_emoji(None);
+        assert_eq!(m.emoji_choices().len(), EMOJI_CATALOG.len());
+        m.note_emoji_used("\u{1F525}");
+        m.note_emoji_used("\u{1F389}");
+        m.note_emoji_used("\u{1F525}");
+        assert_eq!(m.prefs.recent_emoji, vec!["\u{1F525}".to_string(), "\u{1F389}".to_string()], "newest first, no repeats");
+        let choices = m.emoji_choices();
+        assert_eq!(&choices[..2], ["\u{1F525}".to_string(), "\u{1F389}".to_string()]);
+        assert_eq!(choices.len(), EMOJI_CATALOG.len(), "a recent emoji is not listed twice");
+        m.emoji_query = "cat".into();
+        assert_eq!(m.emoji_choices(), vec!["\u{1F431}".to_string()]);
+        m.open_emoji(Some("$1".into()));
+        assert!(m.emoji_query.is_empty(), "opening the picker clears the search");
+        assert_eq!(m.overlay, Overlay::Emoji(Some("$1".into())));
+    }
+
+    #[test]
+    fn only_the_latest_emoji_are_remembered() {
+        let mut m = signed_in();
+        for (emoji, _) in EMOJI_CATALOG.iter().take(RECENT_EMOJI_MAX + 3) {
+            m.note_emoji_used(emoji);
+        }
+        assert_eq!(m.prefs.recent_emoji.len(), RECENT_EMOJI_MAX);
+        assert_eq!(m.prefs.recent_emoji[0], EMOJI_CATALOG[RECENT_EMOJI_MAX + 2].0);
     }
 }
