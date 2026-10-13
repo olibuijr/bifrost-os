@@ -1137,6 +1137,8 @@ fn run() -> std::io::Result<()> {
             // the shell draws a logical frame (turned on its side in landscape); the panel gets it rotated
             let (lw, lh) = shell.size();
             (fw, fh) = (lw as usize, lh as usize);
+            // a rotated frame moves the bottom edge the home swipe starts on
+            system_gestures.set_frame(springboard::shell::touch_gestures::Frame { size_px: (lw as f32, lh as f32), points_px: shell.points_px() });
             if frame.len() != fw * fh {
                 frame = vec![0u32; fw * fh];
             }

@@ -1239,6 +1239,15 @@ mod tests {
         Login::new(Arc::new(Stub(r)), "Owner", 1200, 800, 0.0)
     }
 
+    #[test]
+    fn resize_takes_the_rotated_surface_size() {
+        let mut l = login(Reply::Unavailable);
+        l.resize(800, 1200);
+        assert_eq!((l.w, l.h), (800, 1200));
+        l.resize(800, 1200);
+        assert_eq!((l.w, l.h), (800, 1200), "the same size again changes nothing");
+    }
+
     fn wait(l: &mut Login, t: f64) -> Option<String> {
         for _ in 0..400 {
             if !l.busy() {

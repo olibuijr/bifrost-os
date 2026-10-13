@@ -142,6 +142,8 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     let hook = b.clone();
     state.session.hooks.set_mode = Some(Box::new(move |name: &str, mode: ModeInfo| hook.borrow_mut().set_mode(name, mode)));
     let hook = b.clone();
+    state.session.hooks.set_transform = Some(Box::new(move |name: &str, t: Transform| hook.borrow_mut().set_transform(name, t)));
+    let hook = b.clone();
     state.session.hooks.capture = Some(Box::new(move |state, spec| hook.borrow_mut().capture(state, spec)));
     let backend = b;
 
@@ -375,6 +377,20 @@ impl Drm {
                 false
             }
         }
+    }
+
+    /// Accepts a live change of output `name` to transform `t` (`live_rotation::rotate_output`). The DRM compositor reads
+    /// the output's transform for every frame, so nothing is reprogrammed here. The Vulkan scanout draws unrotated, so
+    /// it cannot follow a turn away from `Normal`; the change is refused while it runs.
+    fn set_transform(&mut self, name: &str, t: Transform) -> bool {
+        if name != self.output.name().as_str() {
+            return false;
+        }
+        if self.vulkan.is_some() && t != Transform::Normal {
+            eprintln!("bifrost-wm: rotation refused: the Vulkan scanout draws unrotated");
+            return false;
+        }
+        true
     }
 
     /// The boot frame over the desktop for the shutdown fade, with its opacity; None before a request.
