@@ -1,6 +1,13 @@
 # File grant and picker portal design
 
-Status (2026-10-09, round 21): phases 1 and 2 are built and tested on the host, not wired into the shell yet.
+Status (2026-10-13): phases 1 to 3 are built and wired into the shell (details below, written at round 21 and 0.4.81).
+Since then: 20 app manifests declare `documents` and 48 still declare `storage` (Files and Notes hold both, so the home-wide
+grant is not removed anywhere yet). Drag sources mint read grants (`Broker::drag_grant`, released when the drag ends); a drop
+that no window takes goes to the Dock icon of an app (files open in it) or to the desktop (`shell/dnd.rs`). The only portal
+interface served is `org.freedesktop.portal.Settings` (`bifrost-portal`, appearance for Linux toolkits); there is no
+FileChooser proxy.
+
+Historical status (2026-10-09, round 21): phases 1 and 2 were built and tested on the host, not wired into the shell yet.
 - Phase 1, broker: `springboard/src/bare/docbroker.rs` (`Opener`: open as the account with `openat2`
   `RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS | RESOLVE_NO_MAGICLINKS`, regular files only; `begin_save`/`commit`/`abort`;
   `Grants`: per-app records, 0600, atomic writes, `Stale` on a replaced file). 3 tests.
@@ -16,7 +23,8 @@ Status (2026-10-09, round 21): phases 1 and 2 are built and tested on the host, 
   quit app's unfinished saves are removed.
 - Phase 4 started: Notes 1.6.0 exports (Share -> save panel) and imports (Cmd+O). Notes keeps `storage` until its
   attachments move to the panels.
-- Not yet: Settings page to revoke grants, removal revoking an app's grants, persistent "last folder", `NSOpenPanel`
+- Not yet (still open 2026-10-13 unless noted): Settings page to revoke grants, removal revoking an app's grants (`Grants` has
+  the call to drop all of an app's grants; check the removal path before relying on it), persistent "last folder", `NSOpenPanel`
   multiple selection and folder choice, native (non-SDK) apps (section 4.2), and the XDG FileChooser proxy.
 
 Original status: design only (task S4). Implements the goal of
@@ -37,8 +45,8 @@ Original status: design only (task S4). Implements the goal of
 - Without `storage` the app gets a private home: `data/home` is bound over
   `account.home` (app_policy.rs:232-236). Neighbouring files are not visible.
 - Manifests declaring `storage`: 34 `springboard/apps/*/manifest.toml` entries
-  (grep, same count). Examples: `files`,
-  `notes`, `notes-desktop`.
+  at the time of writing (48 on 2026-10-13). Examples: `files`,
+  `notes-desktop`.
 - Native apps additionally get the compositor socket, read-only `session.json`,
   `/sys`, `/run/udev`, and `/dev/dri`. There is no D-Bus socket.
 - `docs/app-isolation.md` (lines 25, 29-30, 33) states the same: storage is the
@@ -199,7 +207,7 @@ and the native launch path before implementation (not yet verified).
 ### 4.4 Linux XDG FileChooser (PC, later)
 
 `task/006` step 5 asks for XDG Desktop Portal FileChooser. This is not in the
-first phase. Apps are not given the session or system bus (`app-isolation.md`).
+first phase and does not exist yet (`bifrost-portal` serves only the Settings interface). Apps are not given the session or system bus (`app-isolation.md`).
 A portal client would need a D-Bus proxy that filters to
 `org.freedesktop.portal.FileChooser` and returns descriptors through
 the same broker. It is only useful for Arch applications that are currently
