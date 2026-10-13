@@ -4,6 +4,11 @@
 
 use bifrost_core::json::Json;
 
+/// The room account-data type that marks a conversation as unread, across the devices of an account.
+pub const MARKED_UNREAD: &str = "m.marked_unread";
+/// The type older servers and clients used for the same flag before it was stabilised; read, never written.
+const MARKED_UNREAD_UNSTABLE: &str = "org.matrix.msc2867.marked_unread";
+
 /// The path every client call starts with.
 pub const CLIENT_API: &str = "/_matrix/client/v3";
 /// The path media uploads go to.
@@ -51,6 +56,8 @@ pub struct RoomUpdate {
     pub redactions: Vec<String>,
     /// Membership changes (joins, invitations, leaves, new display names).
     pub members: Vec<MemberUpdate>,
+    /// The "marked as unread" flag the account holds for this room, when the sync carried one.
+    pub marked_unread: Option<bool>,
 }
 
 /// A replacement text for a message: `target` now reads `body`.
@@ -207,6 +214,16 @@ pub fn forget_url(base: &str, room: &str) -> String {
 /// The PUT that sets the room's name.
 pub fn room_name_url(base: &str, room: &str) -> String {
     api(base, &format!("/rooms/{}/state/m.room.name", encode(room)))
+}
+
+/// The PUT that sets a room account-data entry of `kind` for `user` (for example the unread flag).
+pub fn room_account_data_url(base: &str, user: &str, room: &str, kind: &str) -> String {
+    api(base, &format!("/user/{}/rooms/{}/account_data/{}", encode(user), encode(room), encode(kind)))
+}
+
+/// The content of the unread flag.
+pub fn marked_unread_body(unread: bool) -> String {
+    obj(vec![("unread", Json::Bool(unread))]).encode()
 }
 
 pub fn logout_url(base: &str) -> String {
@@ -482,7 +499,20 @@ fn parse_room(id: &str, room: &Json) -> RoomUpdate {
         reactions: timeline.iter().filter_map(reaction).collect(),
         redactions: timeline.iter().filter_map(redaction).collect(),
         members: state.iter().chain(timeline.iter()).filter_map(member).collect(),
+        marked_unread: marked_unread(raw_events(room.get("account_data"))),
     }
+}
+
+/// The unread flag of a room's account-data section: the last `m.marked_unread` (or its unstable name) entry.
+fn marked_unread(events: &[Json]) -> Option<bool> {
+    events
+        .iter()
+        .filter(|e| matches!(e.str_field("type").as_deref(), Some(MARKED_UNREAD) | Some(MARKED_UNREAD_UNSTABLE)))
+        .filter_map(|e| match e.get("content")?.get("unread") {
+            Some(Json::Bool(flag)) => Some(*flag),
+            _ => None,
+        })
+        .last()
 }
 
 /// The `m.relates_to` object of an event's content.
@@ -798,6 +828,34 @@ mod tests {
         let room = sync.rooms.iter().find(|r| r.id == "!room2:example.org").unwrap();
         assert_eq!(room.name, None);
         assert!(room.events.is_empty());
+    }
+
+    #[test]
+    fn the_unread_flag_comes_from_the_rooms_account_data() {
+        let marked = parse(
+            r#"{"next_batch":"s1","rooms":{"join":{"!m:x":{"timeline":{"events":[]},"account_data":{"events":[
+                {"type":"m.fully_read","content":{"event_id":"$a"}},
+                {"type":"m.marked_unread","content":{"unread":true}}]}},
+                "!n:x":{"account_data":{"events":[
+                {"type":"org.matrix.msc2867.marked_unread","content":{"unread":true}},
+                {"type":"m.marked_unread","content":{"unread":false}}]}},
+                "!o:x":{"timeline":{"events":[]}}}}}"#,
+        );
+        let sync = parse_sync(&marked).unwrap();
+        let flag = |id: &str| sync.rooms.iter().find(|r| r.id == id).unwrap().marked_unread;
+        assert_eq!(flag("!m:x"), Some(true));
+        assert_eq!(flag("!n:x"), Some(false), "the last entry wins");
+        assert_eq!(flag("!o:x"), None, "no account data, no change");
+    }
+
+    #[test]
+    fn the_unread_flag_is_written_to_the_users_room_account_data() {
+        assert_eq!(
+            room_account_data_url("https://m", "@me:x", "!r:x", MARKED_UNREAD),
+            "https://m/_matrix/client/v3/user/%40me%3Ax/rooms/%21r%3Ax/account_data/m.marked_unread"
+        );
+        assert_eq!(parse(&marked_unread_body(true)).get("unread"), Some(&Json::Bool(true)));
+        assert_eq!(marked_unread_body(false), r#"{"unread":false}"#);
     }
 
     #[test]

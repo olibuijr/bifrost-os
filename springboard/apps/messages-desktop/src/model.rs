@@ -481,6 +481,17 @@ impl Messages {
         marked
     }
 
+    /// Applies the unread flag the server holds for a conversation. A mark never lands on the conversation on screen:
+    /// it is being read. True when the local mark changed.
+    pub fn set_unread_mark(&mut self, id: &str, marked: bool) -> bool {
+        let present = self.is_marked_unread(id);
+        if marked == present || (marked && self.selected.as_deref() == Some(id)) {
+            return false;
+        }
+        toggle(&mut self.prefs.unread_marks, id);
+        true
+    }
+
     /// The conversations the list shows: those matching the search, the pinned ones first in the order they were pinned
     /// (and moved to), the rest in their order.
     pub fn visible_rooms(&self) -> Vec<&Room> {
@@ -591,6 +602,9 @@ impl Messages {
             let viewing = self.selected.as_deref() == Some(update.id.as_str());
             let alerts = self.primed && !self.prefs.muted.iter().any(|x| *x == update.id);
             apply_room(&mut self.rooms[index], update, &self.user_id, alerts, viewing, &mut notices);
+            if let Some(flag) = update.marked_unread {
+                self.set_unread_mark(&update.id, flag);
+            }
         }
         self.primed = true;
         self.rooms.sort_by(|a, b| b.last_ts.cmp(&a.last_ts).then_with(|| a.name.cmp(&b.name)));
@@ -1110,6 +1124,32 @@ mod tests {
         m.select("!a:x");
         assert!(!m.is_marked_unread("!a:x"));
         assert_eq!(m.total_unread(), 0);
+    }
+
+    #[test]
+    fn the_unread_flag_of_the_server_sets_and_clears_the_mark() {
+        let mut m = two_rooms();
+        let mut flagged = update("!a:x", vec![], 0);
+        flagged.marked_unread = Some(true);
+        m.apply_sync(&sync(vec![flagged.clone()]));
+        assert!(m.is_marked_unread("!a:x"));
+        assert!(!m.set_unread_mark("!a:x", true), "the same flag changes nothing");
+        m.apply_sync(&sync(vec![update("!a:x", vec![], 0)]));
+        assert!(m.is_marked_unread("!a:x"), "a sync without the flag leaves the mark");
+        flagged.marked_unread = Some(false);
+        m.apply_sync(&sync(vec![flagged]));
+        assert!(!m.is_marked_unread("!a:x"));
+    }
+
+    #[test]
+    fn the_server_does_not_mark_the_conversation_being_read() {
+        let mut m = two_rooms();
+        m.select("!a:x");
+        let mut flagged = update("!a:x", vec![], 0);
+        flagged.marked_unread = Some(true);
+        m.apply_sync(&sync(vec![flagged]));
+        assert!(!m.is_marked_unread("!a:x"));
+        assert_eq!(m.selected.as_deref(), Some("!a:x"));
     }
 
     #[test]

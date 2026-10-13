@@ -221,7 +221,11 @@ impl MessagesWindow {
             },
             Event::Synced(Ok(_)) if self.api.is_none() => {}
             Event::Synced(Ok(sync)) => {
+                let marks = self.model.prefs.unread_marks.clone();
                 let notices = self.model.apply_sync(&sync);
+                if self.model.prefs.unread_marks != marks {
+                    self.save_prefs();
+                }
                 for notice in &notices {
                     ctx.notify(&notice.title, &notice.body);
                 }
@@ -372,7 +376,12 @@ impl MessagesWindow {
 
     /// Puts a room on screen and marks its newest message read.
     fn open_room(&mut self, id: &str) {
+        let was_marked = self.model.is_marked_unread(id);
         let marker = self.model.select(id);
+        if was_marked {
+            self.save_prefs();
+            self.store_marked_unread(id, false);
+        }
         self.timeline_scroll = Scroller::new();
         self.stick_bottom = true;
         self.send_read(marker);
@@ -501,9 +510,17 @@ impl MessagesWindow {
     }
 
     fn mark_unread(&mut self, ctx: &Ctx, id: &str) {
-        self.model.toggle_unread_mark(id);
+        let marked = self.model.toggle_unread_mark(id);
         self.save_prefs();
         self.badge(ctx);
+        self.store_marked_unread(id, marked);
+    }
+
+    /// Stores the unread flag of a conversation on the account, so the other devices show it too.
+    fn store_marked_unread(&mut self, id: &str, marked: bool) {
+        let Some(api) = self.api.clone() else { return };
+        let room = id.to_string();
+        sync::spawn(self.tx.clone(), self.wake(), move || sync::set_marked_unread(api, room, marked));
     }
 
     fn open_emoji(&mut self, message: Option<String>) {

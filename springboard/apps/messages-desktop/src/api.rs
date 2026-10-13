@@ -126,6 +126,13 @@ impl Api {
         call(&self.http, "POST", &protocol::logout_url(&self.base), Some(self.token.as_str()), empty, CALL_LIMIT).map(|_| ())
     }
 
+    /// Sets or clears the account's "marked as unread" flag for `room`, so the other devices show it too.
+    pub fn set_marked_unread(&self, room: &str, unread: bool) -> Result<(), String> {
+        let url = protocol::room_account_data_url(&self.base, &self.user_id, room, protocol::MARKED_UNREAD);
+        let body = protocol::marked_unread_body(unread);
+        call(&self.http, "PUT", &url, Some(self.token.as_str()), Some((body.as_bytes(), "application/json")), CALL_LIMIT).map(|_| ())
+    }
+
     /// Marks `event` as read in `room` (a public read receipt).
     pub fn read_receipt(&self, room: &str, event: &str) -> Result<(), String> {
         let url = protocol::receipt_url(&self.base, room, event);

@@ -106,6 +106,12 @@ pub fn read(api: Arc<Api>, room: String, event: String) -> Event {
     Event::Read { result: api.read_receipt(&room, &event) }
 }
 
+/// Stores the "marked as unread" flag of `room` on the account.
+pub fn set_marked_unread(api: Arc<Api>, room: String, unread: bool) -> Event {
+    let what = if unread { "Mark as Unread" } else { "Mark as Read" };
+    Event::Changed { what, result: api.set_marked_unread(&room, unread) }
+}
+
 /// Uploads any file and sends it to `room`.
 pub fn send_file(api: Arc<Api>, room: String, name: String, mime: &'static str, bytes: Vec<u8>) -> Event {
     let result = api.send_file(&room, &name, mime, &bytes);
