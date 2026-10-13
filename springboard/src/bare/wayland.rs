@@ -29,7 +29,10 @@ pub struct WindowFrame { pub id:u32, pub title:String, pub x:i32, pub y:i32, pub
     /// the traffic lights and an app's toolbar controls in a full-size-content window.
     pub drag_height:i32, pub no_drag:Vec<[i32;4]>,
     /// Open, close, minimize and zoom transform of the window (identity at rest), applied by the GPU presenter.
-    pub fx:bifrost_render::glass::Fx }
+    pub fx:bifrost_render::glass::Fx,
+    /// The content is opaque inside its corner radius (a shell-drawn window without vibrancy). An opaque window
+    /// that covers another one lets the presenter skip drawing the hidden one (`gpu::occlusion`).
+    pub opaque:bool }
 pub enum WindowEvent { Focus(u32), Resize(u32,i32,i32), Close(u32), Maximized(u32,bool) }
 struct Window { surface:wl_surface::WlSurface, xdg:xdg_surface::XdgSurface, top:xdg_toplevel::XdgToplevel, slots:Vec<Slot>, buffer_size:(usize,usize), configured:bool, frame:WindowFrame,
     /// GPU path: content damage not presented yet, the shadow margin around the content, the drawable size
@@ -307,6 +310,26 @@ impl Display {
     fn render_windows(&mut self) -> io::Result<()> {
         let qh = self.queue.handle();
         if let Some(g)=&mut self.gpu {
+            // occlusion: a window that no visible pixel can show is not drawn; its pending damage waits for it
+            let order:Vec<u32>=self.state.z.iter().copied().filter(|id|self.state.windows.get(id).is_some_and(|w|w.configured)).collect();
+            let state_scale=self.state.scale;
+            let layers:Vec<crate::gpu::occlusion::Layer>=order.iter().map(|id|{
+                let f=&self.state.windows[id].frame;
+                let scale=if state_scale>0.0 {state_scale} else {(f.title_height as f32/TITLE_PT).max(1.0)};
+                let (m,b)=if f.maximized {(0,0)} else {((SHADOW_SIDE_PT*scale).round() as i32,(SHADOW_BOTTOM_PT*scale).round() as i32)};
+                let (x,y,cw,ch)=(f.x,f.y,f.width as i32,f.height as i32);
+                let radius=if f.maximized {0} else {(scale*bifrost_ui::prefs_layout::m::WINDOW_RADIUS).round() as i32};
+                let glass=self.state.materials.get(id).is_some_and(|v|!v.is_empty());
+                let still=f.fx.is_identity();
+                crate::gpu::occlusion::Layer {
+                    rect:[x-m,y-m,cw+2*m,ch+m+b],
+                    // only a window that has shown content covers the ones below it
+                    cover:(f.opaque&&f.pixels.is_some()&&!glass&&still).then(||crate::gpu::occlusion::opaque_inset([x,y,cw,ch],radius)).flatten(),
+                    glass,
+                    still,
+                }
+            }).collect();
+            let hidden:HashSet<u32>=crate::gpu::occlusion::hidden(&layers).into_iter().zip(&order).filter(|(h,_)|*h).map(|(_,id)|*id).collect();
             let ids:Vec<u32>=self.state.windows.keys().copied().collect();
             for id in ids {
                 let key=GPU_WINDOW+id;
@@ -380,6 +403,8 @@ impl Display {
                         m.iter().map(|r|Glass{x:r.x+w.frame.x as f32,y:r.y+w.frame.y as f32,..*r}).collect()),
                     None => (Backdrop::None,Vec::new()),
                 };
+                // a hidden window keeps its pending damage and is drawn when it shows again
+                if hidden.contains(&id) {continue;}
                 let areas=g.p.draw(key,slot,pixels,width,&w.pending,back,&glass);
                 w.pending.clear();
                 if areas.is_empty() {continue;}
