@@ -327,6 +327,8 @@ pub enum Action {
     GameController(super::game_controllers_page::Edit),
     /// Login Items: start this app (id) one place earlier
     LoginItemMove(String),
+    /// Login Items & Extensions: turn an app's background agent on or off (the switch in ALLOW IN THE BACKGROUND)
+    BackgroundAgentToggle(String),
     /// Fonts: draw `role` with this font file from now on (None is the default)
     Font(FontRole, Option<String>),
 }
@@ -367,6 +369,8 @@ pub struct Model<'a> {
     pub login_items: &'a [(String, String)],
     /// the Login Items page: (app id, name) of each registration waiting for approval
     pub login_pending: &'a [(String, String)],
+    /// the background agents and app extensions of the Login Items & Extensions page
+    pub ext: &'a super::login_items_page::LoginExtensions,
     /// the Fonts pages: each role's default and override, and the font library
     pub fonts: &'a FontsView,
     /// Settings > Sound: the device lists from the audio object model
@@ -714,7 +718,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                         Item::new("Language & Region").glyph(Glyph::Language).link(PageId::Language),
                         Item::new("Dictionary").glyph(Glyph::Dictionary).link(PageId::Dictionary),
                         Item::new("Default Apps").glyph(Glyph::DefaultApps).link(PageId::DefaultApps),
-                        Item::new("Login Items").glyph(Glyph::DefaultApps).link(PageId::LoginItems),
+                        Item::new("Login Items & Extensions").glyph(Glyph::DefaultApps).link(PageId::LoginItems),
                         Item::new("Game Controllers").link(PageId::GameControllers),
                     ]),
                     Group::new(vec![Item::new("Legal & Regulatory").glyph(Glyph::Info).link(PageId::Legal)]),
@@ -780,7 +784,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 .collect(),
         ),
         PageId::LoginItems => page(
-            "Login Items",
+            "Login Items & Extensions",
             false,
             {
                 // an app that asked to open at login waits here until the user allows it (SMAppService: requiresApproval)
@@ -802,6 +806,8 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                     .footer("These apps start when you log in. Choose one to remove it. An app adds itself with SMAppService and can be removed here at any time."),
                 );
                 groups.extend(super::login_items_page::order_group(m.login_items));
+                groups.extend(super::login_items_page::background_group(m.ext));
+                groups.extend(super::login_items_page::extension_groups(m.ext));
                 groups
             },
         ),
@@ -1445,7 +1451,7 @@ mod tests {
     }
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND }
+        Model { info, opts, a11y: &AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &super::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND }
     }
 
     #[test]
