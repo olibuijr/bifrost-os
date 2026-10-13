@@ -16,6 +16,9 @@ pub const MAX_NOTIF_ACTIONS: usize = 10;
 pub const MAX_NOTIF_ID: usize = 128;
 pub const MAX_NOTIF_TEXT: usize = 256;
 pub const MAX_NOTIF_IDS: usize = 64;
+/// `userInfo` entries of one request, and the longest value.
+pub const MAX_NOTIF_USER_INFO: usize = 16;
+pub const MAX_NOTIF_USER_INFO_VALUE: usize = 512;
 
 /// A text-reply action (`UNTextInputNotificationAction`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -68,6 +71,18 @@ pub struct NotifRequest {
     pub badge: Option<u32>,
     /// `UNTimeIntervalNotificationTrigger(timeInterval:repeats:)`: fire every `delay_ms` until removed. Only with a delay.
     pub repeats: bool,
+    /// `content.sound`: 0 none, 1 default, 2 named (`sound_name`), 3 default critical, 4 critical with `sound_volume`
+    pub sound_kind: u8,
+    /// the bundled sound file name for `sound_kind` 2
+    pub sound_name: String,
+    /// the audio volume of `sound_kind` 4, in percent
+    pub sound_volume: u8,
+    /// `content.userInfo`: string keys and values, returned with the response
+    pub user_info: Vec<(String, String)>,
+    /// `content.interruptionLevel`: 0 passive, 1 active (the default), 2 time sensitive, 3 critical
+    pub interruption_level: u8,
+    /// `content.relevanceScore` in thousandths, 0 to 1000
+    pub relevance_milli: u16,
 }
 
 /// The answer to `ToShell::NotifyRequest` (`add(_:withCompletionHandler:)`'s error).
@@ -351,6 +366,17 @@ fn put_request(b: &mut Vec<u8>, q: &NotifRequest) {
         None => b.push(0),
     }
     b.push(u8::from(q.repeats));
+    b.push(q.sound_kind);
+    put(b, &q.sound_name, MAX_NOTIF_ID);
+    b.push(q.sound_volume);
+    let n = q.user_info.len().min(MAX_NOTIF_USER_INFO);
+    u32_(b, n as u32);
+    for (k, v) in &q.user_info[..n] {
+        put(b, k, MAX_NOTIF_ID);
+        put(b, v, MAX_NOTIF_USER_INFO_VALUE);
+    }
+    b.push(q.interruption_level);
+    b.extend_from_slice(&q.relevance_milli.to_le_bytes());
 }
 
 fn get_request(r: &mut Reader) -> Result<NotifRequest, DecodeError> {
@@ -363,7 +389,23 @@ fn get_request(r: &mut Reader) -> Result<NotifRequest, DecodeError> {
     let delay_ms = r.u32()?;
     let badge = if flag(r)? { Some(r.u32()?) } else { None };
     let repeats = flag(r)?;
-    Ok(NotifRequest { id, title, subtitle, body, thread, category, delay_ms, badge, repeats })
+    let sound_kind = r.u8()?;
+    let sound_name = get(r, MAX_NOTIF_ID)?;
+    let sound_volume = r.u8()?;
+    if sound_kind > 4 || sound_volume > 100 {
+        return Err(DecodeError::BadValue);
+    }
+    let n = count(r, MAX_NOTIF_USER_INFO)?;
+    let mut user_info = Vec::with_capacity(n);
+    for _ in 0..n {
+        user_info.push((get(r, MAX_NOTIF_ID)?, get(r, MAX_NOTIF_USER_INFO_VALUE)?));
+    }
+    let interruption_level = r.u8()?;
+    let relevance_milli = u16::from_le_bytes([r.u8()?, r.u8()?]);
+    if interruption_level > 3 || relevance_milli > 1000 {
+        return Err(DecodeError::BadValue);
+    }
+    Ok(NotifRequest { id, title, subtitle, body, thread, category, delay_ms, badge, repeats, sound_kind, sound_name, sound_volume, user_info, interruption_level, relevance_milli })
 }
 
 fn put_payload(b: &mut Vec<u8>, p: &Payload) {
@@ -750,8 +792,9 @@ mod tests {
         shell_rt(ToShell::NotifyCategories(vec![category(), NotifCategory { id: "EMPTY".into(), actions: vec![] }]));
         shell_rt(ToShell::NotifyRequest {
             request: 4,
-            req: NotifRequest { id: "n1".into(), title: "Hi".into(), subtitle: "sub".into(), body: "b ü".into(), thread: "t".into(), category: "MESSAGE".into(), delay_ms: 1500, badge: Some(3), repeats: true },
+            req: NotifRequest { id: "n1".into(), title: "Hi".into(), subtitle: "sub".into(), body: "b ü".into(), thread: "t".into(), category: "MESSAGE".into(), delay_ms: 1500, badge: Some(3), repeats: true, sound_kind: 4, sound_name: String::new(), sound_volume: 60, user_info: vec![("room".into(), "ü 7".into())], interruption_level: 2, relevance_milli: 750 },
         });
+        shell_rt(ToShell::NotifyRequest { request: 6, req: NotifRequest { id: "n3".into(), sound_kind: 2, sound_name: "chime.wav".into(), ..Default::default() } });
         shell_rt(ToShell::NotifyRequest { request: 5, req: NotifRequest { id: "n2".into(), ..Default::default() } });
         shell_rt(ToShell::NotifyRemove { delivered: true, ids: vec!["a".into(), "b".into()] });
         shell_rt(ToShell::NotifyRemove { delivered: false, ids: vec![] });

@@ -628,6 +628,11 @@ Creating a secure note from an app needs a text editor and is still missing. Mid
   category does not have and only passes `text` to a text-input action. If the app is not running the shell starts it and delivers
   the response as soon as it is up (up to 32 are held).
 - **Dock badge** (`NSDockTile.badgeLabel`): `Request::badge(n)` sets it (0 clears); `Ctx::set_badge` still sets any short label.
+- **Content** (`UNMutableNotificationContent`): `Request::sound(&Sound)` (default, named, critical, critical with volume),
+  `Request::user_info(&[(key, value)])` (text values, at most 16 entries of 512 characters, otherwise an error),
+  `Request::interruption_level(InterruptionLevel)` (passive < active < time sensitive < critical) and
+  `Request::relevance_score(f32)` (clamped to 0...1). The notification-schedule service takes the same as `sound`, `userInfo`,
+  `interruptionLevel` and `relevanceScore`. Delivery does not yet play the sound or return `userInfo` in `Event::Response`.
 - **Triggers** (`bifrost_app::notification_schedule`, the `notification-schedule` service): `Schedule::interval(id, title, seconds,
   repeats)` (`UNTimeIntervalNotificationTrigger(timeInterval:repeats:)`) and `Schedule::calendar(id, title, hour, minute,
   weekdays, repeats)` (`UNCalendarNotificationTrigger(dateMatching:repeats:)`, weekdays 1 = Sunday .. 7 = Saturday, empty = every
