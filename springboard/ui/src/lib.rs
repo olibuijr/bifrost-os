@@ -836,6 +836,8 @@ pub mod drawing;
 pub mod markup_drawing;
 pub mod stylus;
 pub mod lasso;
+pub mod handwriting;
+pub mod scribble;
 pub mod tool_picker;
 pub mod transcript;
 pub mod context_window;
