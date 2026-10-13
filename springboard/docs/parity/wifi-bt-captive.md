@@ -44,15 +44,16 @@ Round 75. Code and commits only, not built or run by the agent; the lead builds,
   `src/bin/shell.rs` (info tick), `Info.captive_portal` in `src/shell/mod.rs`, Wi-Fi menu row "Sign In to <network>…"
   in `src/shell/desktop_bar.rs` (`Action::Portal`).
 - Done:
-  - After a link comes up with an address, one plain HTTP GET goes to `captive::PROBE_URL`
-    (`http://connectivity.olibuijr.com/generate_204`), on its own thread, 4 s timeout.
+  - After a link comes up with an address, one plain HTTP GET goes to the probe address, on its own thread, 4 s
+    timeout. The address is the `captive_url` key in settings.ini when it is a plain `http://` URL, else
+    `captive::DEFAULT_PROBE_URL` (`http://connectivitycheck.gstatic.com/generate_204`).
   - 204 is open access. A redirect (3xx) or any 2xx other than 204 is a sign-in page; the redirect target (or the probe
     address) is the page. Errors and silence are offline and never open anything.
   - The sign-in page opens once per network in the browser (`desktop_open_url`). The Wi-Fi menu keeps a
     "Sign In to <network>…" row while the page is known. Going offline forgets it, and a return opens it again.
 - Decision: the assistant is not a separate native window. It opens the browser view and offers the sign-in row in the
   Wi-Fi menu. A separate window would need its own drawing pass; this slice did not build one.
-- Open: the probe host `connectivity.olibuijr.com` must be deployed and answer `204` for the probe to say "online";
+- Open: the probe address must answer `204` for the probe to say "online" (the default is a public check host);
   until then the probe reports offline and nothing opens (safe default). The probe is plain HTTP only; HTTPS
   probes are not attempted. No re-probe after a user signs in: the row goes away on the next link change.
 - Tests: `src/net/captive.rs` (reply parsing, classification, redirect targets, URL splitting, assistant lifecycle).

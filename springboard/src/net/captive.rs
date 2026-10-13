@@ -10,8 +10,11 @@ use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
-/// The probe answers `204 No Content` with an empty body when the network is open.
-pub const PROBE_URL: &str = "http://connectivity.olibuijr.com/generate_204";
+/// The probe answers `204 No Content` with an empty body when the network is open. This is the generic check
+/// used when the settings do not name another (`SETTING`).
+pub const DEFAULT_PROBE_URL: &str = "http://connectivitycheck.gstatic.com/generate_204";
+/// The settings key (settings.ini) that names the probe address; it must be a plain `http://` URL.
+pub const SETTING: &str = "captive_url";
 /// How long the connect, the send and the reply may each take.
 pub const TIMEOUT: Duration = Duration::from_secs(4);
 /// The reply is read up to this many bytes; a portal page is never needed in full.
@@ -62,6 +65,14 @@ pub fn parse_reply(buf: &[u8]) -> Option<Reply> {
 
 fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
     hay.windows(needle.len()).position(|w| w == needle)
+}
+
+/// The probe address to use: the saved setting when it is a plain `http://` URL, else the default.
+pub fn probe_url(saved: Option<&str>) -> String {
+    match saved.map(str::trim) {
+        Some(url) if split_http_url(url).is_some() => url.to_string(),
+        _ => DEFAULT_PROBE_URL.to_string(),
+    }
 }
 
 /// Splits a plain `http://host[:port][/path]` URL. Other schemes and IPv6 literals are not probed.
@@ -194,39 +205,39 @@ mod tests {
     #[test]
     fn a_204_is_an_open_network() {
         let r = parse_reply(b"HTTP/1.1 204 No Content\r\nDate: x\r\n\r\n").unwrap();
-        assert_eq!(classify(PROBE_URL, Some(&r)), Verdict::Online);
+        assert_eq!(classify(DEFAULT_PROBE_URL, Some(&r)), Verdict::Online);
     }
 
     #[test]
     fn a_redirect_to_a_sign_in_page_is_a_portal_at_that_page() {
         let r = parse_reply(b"HTTP/1.1 302 Found\r\nLocation: https://portal.example.net/login?x=1\r\n\r\n").unwrap();
-        assert_eq!(classify(PROBE_URL, Some(&r)), Verdict::Portal("https://portal.example.net/login?x=1".into()));
+        assert_eq!(classify(DEFAULT_PROBE_URL, Some(&r)), Verdict::Portal("https://portal.example.net/login?x=1".into()));
     }
 
     #[test]
     fn a_relative_redirect_resolves_against_the_probe_host() {
-        assert_eq!(redirect_target(PROBE_URL, Some("/login")), "http://connectivity.olibuijr.com/login");
+        assert_eq!(redirect_target(DEFAULT_PROBE_URL, Some("/login")), "http://connectivitycheck.gstatic.com/login");
         assert_eq!(redirect_target("http://probe.test:8080/g", Some("/x")), "http://probe.test:8080/x");
     }
 
     #[test]
     fn a_redirect_without_a_location_or_with_a_bad_one_opens_the_probe_itself() {
-        assert_eq!(redirect_target(PROBE_URL, None), PROBE_URL);
-        assert_eq!(redirect_target(PROBE_URL, Some("javascript:alert(1)")), PROBE_URL);
-        assert_eq!(classify(PROBE_URL, Some(&reply(302, None))), Verdict::Portal(PROBE_URL.into()));
+        assert_eq!(redirect_target(DEFAULT_PROBE_URL, None), DEFAULT_PROBE_URL);
+        assert_eq!(redirect_target(DEFAULT_PROBE_URL, Some("javascript:alert(1)")), DEFAULT_PROBE_URL);
+        assert_eq!(classify(DEFAULT_PROBE_URL, Some(&reply(302, None))), Verdict::Portal(DEFAULT_PROBE_URL.into()));
     }
 
     #[test]
     fn an_intercepted_page_with_200_is_a_portal() {
         let r = parse_reply(b"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n<html>Sign in</html>").unwrap();
         assert_eq!(r.body, b"<html>Sign in</html>".to_vec());
-        assert_eq!(classify(PROBE_URL, Some(&r)), Verdict::Portal(PROBE_URL.into()));
+        assert_eq!(classify(DEFAULT_PROBE_URL, Some(&r)), Verdict::Portal(DEFAULT_PROBE_URL.into()));
     }
 
     #[test]
     fn server_errors_and_silence_are_offline() {
-        assert_eq!(classify(PROBE_URL, None), Verdict::Offline);
-        assert_eq!(classify(PROBE_URL, Some(&reply(503, None))), Verdict::Offline);
+        assert_eq!(classify(DEFAULT_PROBE_URL, None), Verdict::Offline);
+        assert_eq!(classify(DEFAULT_PROBE_URL, Some(&reply(503, None))), Verdict::Offline);
         assert_eq!(parse_reply(b"garbage"), None);
         assert_eq!(parse_reply(b""), None);
     }
@@ -240,12 +251,20 @@ mod tests {
 
     #[test]
     fn plain_http_urls_split_into_host_port_and_path() {
-        assert_eq!(split_http_url(PROBE_URL), Some(("connectivity.olibuijr.com".into(), 80, "/generate_204".into())));
+        assert_eq!(split_http_url(DEFAULT_PROBE_URL), Some(("connectivitycheck.gstatic.com".into(), 80, "/generate_204".into())));
         assert_eq!(split_http_url("http://10.0.0.1:8080"), Some(("10.0.0.1".into(), 8080, "/".into())));
         assert_eq!(split_http_url("https://secure.example/"), None);
         assert_eq!(split_http_url("http://[::1]/"), None);
         assert_eq!(split_http_url("http://:80/"), None);
         assert_eq!(split_http_url("http://host:notaport/"), None);
+    }
+
+    #[test]
+    fn the_probe_address_comes_from_the_setting_when_it_is_a_plain_http_url() {
+        assert_eq!(probe_url(None), DEFAULT_PROBE_URL);
+        assert_eq!(probe_url(Some("")), DEFAULT_PROBE_URL, "an empty setting keeps the default");
+        assert_eq!(probe_url(Some("https://secure.example/")), DEFAULT_PROBE_URL, "only plain http is probed");
+        assert_eq!(probe_url(Some(" http://check.lan:8080/204 ")), "http://check.lan:8080/204");
     }
 
     #[test]
