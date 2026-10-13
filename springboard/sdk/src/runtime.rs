@@ -1,5 +1,6 @@
 use crate::proto::sys::{now_ms, shm_create, Channel, Map, Owned, Recv};
 use crate::proto::{Configure, KeyInput, Rect, ToApp, ToShell, TouchKind, SDK_VERSION};
+use crate::touch_events::{Plain, TouchEvent, TouchRouter};
 use crate::{kit, App};
 use bifrost_render::font::Font;
 use bifrost_render::gfx::{Damage, Surface};
@@ -494,6 +495,8 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
     let mut repaint_suspended = false;
     let mut need_frame = false;
     let mut active = true;
+    // plain touches or touch events, whichever the app takes (touch_events.rs)
+    let mut touch_router = TouchRouter::new(1.0);
     let mut size = (0u32, 0u32);
     // C1: counts the sets of buffers sent (wrapping, from 1); a `Release` for another set is stale
     let mut generation = 0u32;
@@ -580,13 +583,13 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             if let ToApp::Touch { kind: TouchKind::Move, id, x, y, t_ms } = msg {
                 if let Some(h) = held_move.replace((id, x, y, t_ms)) {
                     if h.0 != id {
-                        need_frame |= deliver_move(&mut app, ctx.as_ref(), h, now);
+                        need_frame |= deliver_move(&mut app, ctx.as_ref(), &mut touch_router, h, now);
                     }
                 }
                 continue;
             }
             if let Some(h) = held_move.take() {
-                need_frame |= deliver_move(&mut app, ctx.as_ref(), h, now);
+                need_frame |= deliver_move(&mut app, ctx.as_ref(), &mut touch_router, h, now);
             }
             match msg {
                 ToApp::Configure(cfg) => {
@@ -606,6 +609,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                         }
                     }
                     crate::layout::set_from(&cfg);
+                    touch_router.set_scale(cfg.scale);
                     let c = ctx.as_ref().unwrap();
                     app.configure(c);
                     // `restoreState(with:)`: once, when the shell asked this launch to restore
@@ -636,7 +640,15 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 ToApp::ContextAction(id)=>{if let Some(ctx)=&ctx {need_frame|=app.event(ctx,Input::ContextAction(id));}},
                 ToApp::Touch { kind, id, x, y, t_ms } => {
                     if let Some(c) = &ctx {
-                        need_frame |= app.event(c, Input::Touch { kind, id, x, y, t: event_time(now, t_ms) });
+                        need_frame |= deliver_touch(&mut app, c, &mut touch_router, kind, id, x, y, event_time(now, t_ms));
+                    }
+                }
+                ToApp::Touches(mut ev) => {
+                    if let Some(c) = &ctx {
+                        localize_touches(&mut ev, now);
+                        if let Some(ev) = touch_router.frame(app.wants_touch_events(), ev) {
+                            need_frame |= app.touches(c, &ev);
+                        }
                     }
                 }
                 ToApp::Key(k) => {
@@ -669,6 +681,10 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
                 ToApp::Suspend => {
                     active = false;
                     if let Some(c) = &ctx {
+                        // touches still down on the plain stream end here (`touchesCancelled`)
+                        if let Some(ev) = touch_router.cancel_all(app.wants_touch_events(), now) {
+                            need_frame |= app.touches(c, &ev);
+                        }
                         app.suspend(c);
                         flush_restorable(&app, c, true);
                     }
@@ -819,7 +835,7 @@ pub fn run_on<A: App>(chan: Channel, mut app: A, data_dir: PathBuf, shell_dir: &
             }
         }
         if let Some(h) = held_move.take() {
-            need_frame |= deliver_move(&mut app, ctx.as_ref(), h, now_ms());
+            need_frame |= deliver_move(&mut app, ctx.as_ref(), &mut touch_router, h, now_ms());
         }
         if !open {
             break;
@@ -933,9 +949,28 @@ fn alloc(chan: &Channel, w: u32, h: u32, generation: u32) -> Option<[Slot; 2]> {
 }
 
 /// Delivers the last of a run of moves of one touch (`t_ms` is the shell's stamp of that last sample).
-fn deliver_move<A: App>(app: &mut A, ctx: Option<&Ctx>, m: (u32, f32, f32, u32), now: f64) -> bool {
+fn deliver_move<A: App>(app: &mut A, ctx: Option<&Ctx>, router: &mut TouchRouter, m: (u32, f32, f32, u32), now: f64) -> bool {
     let Some(c) = ctx else { return false };
-    app.event(c, Input::Touch { kind: TouchKind::Move, id: m.0, x: m.1, y: m.2, t: event_time(now, m.3) })
+    deliver_touch(app, c, router, TouchKind::Move, m.0, m.1, m.2, event_time(now, m.3))
+}
+
+/// Delivers a plain touch: as `Input::Touch`, or as a touch event for an app that takes them (`App::wants_touch_events`).
+#[allow(clippy::too_many_arguments)]
+fn deliver_touch<A: App>(app: &mut A, c: &Ctx, router: &mut TouchRouter, kind: TouchKind, id: u32, x: f32, y: f32, t: f64) -> bool {
+    match router.plain(app.wants_touch_events(), kind, id, x, y, t) {
+        Plain::Deliver => app.event(c, Input::Touch { kind, id, x, y, t }),
+        Plain::Frame(ev) => app.touches(c, &ev),
+        Plain::Skip => false,
+    }
+}
+
+/// Moves the shell's millisecond stamps of a touch frame onto the app's clock (`event_time`).
+fn localize_touches(ev: &mut TouchEvent, now: f64) {
+    let local = |t: f64| event_time(now, t as u64 as u32);
+    ev.timestamp = local(ev.timestamp);
+    for t in &mut ev.touches {
+        t.timestamp = local(t.timestamp);
+    }
 }
 
 /// Draws into slot `i`, brings it up to date with the other buffer, and sends the frame. Returns whether a frame went

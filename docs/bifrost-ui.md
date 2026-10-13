@@ -3576,3 +3576,22 @@ wiring.
 - `shape_ot`: An OpenType text shaper
 - `temporal_upscale`: Temporal upscaler model for CPU rasters
 - `video_transfer`: Pixel transfer and pixel rotation for decoded video pictures, as plain std code.
+
+## Touch events (`bifrost_ui::touch`, `bifrost_app::touch_events`)
+
+Apps can take full touch events instead of the single-pointer `Input::Touch` stream.
+
+- Model (`springboard/ui/src/touch.rs`): `Touch` (id, `TouchPhase` began / moved / stationary / ended / cancelled, location and
+  previous location, timestamp, tap count, optional force, max force and major radius, `TouchType` direct / pencil / indirect)
+  and `TouchEvent`, the touches of one frame. A frame lists the changed touches and every other touch that is down as
+  `Stationary`. `TouchTracker` builds frames from raw down / move / up / cancel samples and counts taps (same type, within
+  400 ms and the slop of the last tap; a drag, a hold over 500 ms or a cancel is not a tap).
+- Wire (`springboard/proto/src/touch.rs`): `ToApp::Touches(TouchEvent)`, tag `0x1f0`, at most 16 touches, locations in surface
+  pixels like `ToApp::Touch`. The shell sends a frame ahead of the matching `ToApp::Touch`.
+- SDK: `App::wants_touch_events()` opts in, `App::touches(ctx, &TouchEvent)` receives frames. `TouchEvent::to_points(scale)` and
+  `in_view(scale, ox, oy)` convert to points / view coordinates. Apps that do not opt in keep `Input::Touch`. Once frames
+  arrive the plain stream is dropped for opted-in apps; with a shell that sends only plain touches the SDK derives one indirect
+  touch (with phases and tap counts) from them, so a mouse still works. Touches still down on the plain stream are cancelled on
+  `Suspend`.
+- Parity: touch objects and the touches-began / moved / ended / cancelled model of the reference toolkit. Not yet: coalesced and
+  predicted touches, estimated (pencil) properties, azimuth and altitude, hover.
