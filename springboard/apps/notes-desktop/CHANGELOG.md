@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.16.0 — 2026-10-13
+
+- Import to Notes also reads HTML and RTF files, converting headings, emphasis, lists and paragraphs to Markdown (notes/import.rs); a file with no text is skipped and logged.
+- Format menu: Increase/Decrease Indent (Cmd+] / Cmd+[), Move Line Up/Down (Ctrl+Cmd+Up/Down), Mark All Checked and Unmark All; the same commands are in the editor More menu.
+- Pipe tables get Add Row Above/Below, Add Column Left/Right, Delete Row/Column and Convert Table to Text (notes/table.rs), shown in the editor More menu while the caret is in a table.
+- The list menu can sort Newest First / Oldest First (A to Z / Z to A for titles); the choice is saved with the other list settings.
+- Note > Recent Notes lists the ten newest notes and opens the one chosen.
+
 ## 1.15.0 — 2026-10-13
 
 - Note > Print... (Cmd+P) prints the open note as plain text in Helvetica, wrapped to the page, through the shared print
