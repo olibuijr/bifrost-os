@@ -4,7 +4,7 @@
   "macos_since": "10.13",
   "status": "partial",
   "bifrost": "springboard/render/src/imgdec.rs, springboard/src/shell/night_shift.rs, springboard/render/src/cg/pdf/image.rs, springboard/src/gpu/nv12.rs",
-  "summary": "ColorSync is the ICC profile and colour-transform engine. BifrOSt has no ICC profile loading, no profile-to-profile transforms, no device or display profiles and no HDR path. Its only colour work is 8-bit sRGB image decoding, a Night Shift warmth tint applied to the final frame, and Light/Dark colour pairs; apps get no ColorSync-style API.",
+  "summary": "ColorSync is the ICC profile and colour-transform engine. BifrOSt has no ICC profile loading, no profile-to-profile transforms, no device or display profiles and no HDR path. Working-space conversions now have rendering intents and black point compensation as pure models. Its only colour work is 8-bit sRGB image decoding, a Night Shift warmth tint applied to the final frame, and Light/Dark colour pairs; apps get no ColorSync-style API.",
   "rea_evidence": "ev_30be09349fd96962c2c0d304f23da436d4e22734281493023b9095453ed6b510",
   "features": [
     {
@@ -52,9 +52,9 @@
     {
       "feature": "Rendering intents and black point compensation",
       "apple": "kColorSyncRenderingIntentPerceptual, kColorSyncRenderingIntentRelative, kColorSyncBlackPointCompensation",
-      "bifrost": "springboard/src/shell/night_shift.rs",
-      "status": "gap",
-      "note": "Intent and black-point choices do not exist. Night Shift is a warmth scalar, not a rendering intent."
+      "bifrost": "springboard/render/src/rendering_intent.rs (IntentTransform, BlackPoints, compensate_black; intents are cg::color::RenderingIntent)",
+      "status": "partial",
+      "note": "Four intents (perceptual with gamut compression, relative colorimetric, saturation with clipping, absolute colorimetric without white adaptation) and affine black point compensation, on linear light. Intents from a profile's own tables are not read, and cg::color::ColorConversionInfo still treats perceptual and saturation as relative. A pure model with no caller outside its tests yet. Built on parity/team-a-09; not yet verified on Midget."
     },
     {
       "feature": "HDR, extended range and tone mapping",

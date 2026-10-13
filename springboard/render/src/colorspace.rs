@@ -3,8 +3,8 @@
 //! Each space is defined by the CIE xy chromaticities of its primaries and white point and by its transfer curve.
 //! A conversion decodes the channels to linear light, maps them through XYZ with a 3x3 matrix (adapting the white
 //! point with the Bradford transform when the two spaces use different whites) and encodes them again. Colours
-//! outside the target gamut come out negative or above 1; `Transform::apply_u8` clamps them. ICC profile tables,
-//! rendering intents and black point compensation are not modelled here.
+//! outside the target gamut come out negative or above 1; `Transform::apply_u8` clamps them. Rendering intents and
+//! black point compensation are in `rendering_intent`. ICC profile tables are not modelled here.
 
 /// A 3x3 matrix, row-major.
 pub type Mat3 = [[f64; 3]; 3];
@@ -169,6 +169,13 @@ pub fn matrix(from: Space, to: Space) -> Mat3 {
     let (_, from_white) = from.chromaticities();
     let (_, to_white) = to.chromaticities();
     mul(inverse(rgb_to_xyz(to)), mul(adaptation(from_white, to_white), rgb_to_xyz(from)))
+}
+
+/// Linear RGB to linear RGB matrix without chromatic adaptation. The XYZ of each input colour is kept as it is, so a
+/// white in `from` does not become a white in `to`. This is the absolute colorimetric case; luminance is relative
+/// to the source white.
+pub fn matrix_absolute(from: Space, to: Space) -> Mat3 {
+    mul(inverse(rgb_to_xyz(to)), rgb_to_xyz(from))
 }
 
 /// A conversion between two working spaces, with its matrix computed once.
