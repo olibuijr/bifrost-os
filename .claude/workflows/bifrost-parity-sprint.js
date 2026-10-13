@@ -24,7 +24,7 @@ const TASKS = {
   properties: { tasks: { type: 'array', items: { type: 'object', properties: {
     framework: { type: 'string' }, title: { type: 'string' }, why: { type: 'string' },
     apple: { type: 'string' }, files: { type: 'array', items: { type: 'string' } },
-    parityFile: { type: 'string' }, plan: { type: 'string' }, appsToMigrateLater: { type: 'array', items: { type: 'string' } },
+    parityFile: { type: 'string' }, plan: { type: 'string' }, model: { type: 'string', enum: ['sonnet', 'haiku'] }, appsToMigrateLater: { type: 'array', items: { type: 'string' } },
   }, required: ['framework', 'title', 'why', 'apple', 'files', 'parityFile', 'plan'] } } },
   required: ['tasks'],
 }
@@ -35,7 +35,7 @@ const triage = A.taskList ? { tasks: A.taskList } : await agent(
   `${RULES}\n\nYou are the parity triage lead. READ ONLY. Goal: pick the ${N} most important missing macOS 27 API/SDK capabilities for BifrOSt as a daily-driver desktop OS, as independent tasks that Sonnet coders can do in parallel.
 Inputs: \`bifrost pc parity status\`, \`bifrost pc parity coverage\`, \`bifrost pc parity gaps\` (and \`--group\`), \`bifrost pc parity os-status\`, docs/parity-matrix/data/*.json. ${A.context ? 'Also read the lead\'s survey: ' + A.context : ''}
 Rank by daily-driver impact: what real apps and users hit first (files/documents, networking/URLSession, pasteboard/drag, notifications, preferences/defaults, keychain, contacts/calendar/reminders/photos stores, text input, printing, audio/video playback, accessibility, power/displays, launch services/workspace, search/metadata, sharing, undo/document model).
-Rules for tasks: SDK/API side only (springboard/sdk, springboard/ui, springboard/core, shell services under springboard/src/shell/services); NO app changes (list apps that should adopt it later in appsToMigrateLater). Each task: one framework, one parity json file, files disjoint from every other task, a size one Sonnet agent can do in one sitting (<~500 lines with tests). Verify each gap is real by reading the existing module first. 'apple' = the exact Apple types/methods being matched. plan = numbered steps including the tests to write first and the parity rows to update.`,
+Rules for tasks: SDK/API side only (springboard/sdk, springboard/ui, springboard/core, shell services under springboard/src/shell/services); NO app changes (list apps that should adopt it later in appsToMigrateLater). Each task: one framework, one parity json file, files disjoint from every other task, LARGE: agents have 1M context with auto-compaction, so give each agent a whole framework or several related frameworks (thousands of lines with tests is fine). model = 'sonnet' for design-heavy or cross-cutting work, 'haiku' for mechanical, well-specified work. Verify each gap is real by reading the existing module first. 'apple' = the exact Apple types/methods being matched. plan = numbered steps including the tests to write first and the parity rows to update.`,
   { label: 'triage', phase: 'Triage', schema: TASKS })
 
 // one-line `mod` additions to lib.rs/mod.rs merge cleanly, so they never count as overlap
@@ -61,7 +61,7 @@ Setup: \`git checkout -b sprint${A.sprint || 1}/${i}-${t.framework.toLowerCase()
 Write the tests first, then the code; mirror Apple's names and semantics (${t.apple}); update ${t.parityFile} rows for what you built (status stays partial; parity needs a Midget check), and document new API in docs/bifrost-ui.md under the framework. Do not touch apps. Commit with a conventional message ending in \`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\`.
 
 Framework: ${t.framework}\nTask: ${t.title}\nWhy: ${t.why}\nFiles: ${t.files.join(', ')}\nPlan:\n${t.plan}`,
-  { label: `build:${t.framework}`, phase: 'Build', model: 'sonnet', isolation: 'worktree', schema: DONE })
+  { label: `build:${t.framework}`, phase: 'Build', model: t.model === 'haiku' ? 'haiku' : 'sonnet', isolation: 'worktree', schema: DONE })
   .then(d => d && { ...d, framework: t.framework, title: t.title, appsToMigrateLater: t.appsToMigrateLater || [] })))
 
 return { sprint: A.sprint || 1, results: results.filter(Boolean), failed: tasks.filter((t, i) => !results[i]).map(t => t.title) }
