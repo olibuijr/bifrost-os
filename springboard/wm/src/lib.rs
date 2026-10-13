@@ -22,8 +22,12 @@ pub mod render_server;
 pub mod nested;
 pub mod scene;
 pub mod session_protocols;
+pub mod overview;
+pub mod spaces;
+pub mod stage;
 pub mod state;
 pub mod sync;
+pub mod tiling;
 pub mod wm;
 #[cfg(feature = "xwayland")]
 pub mod xwayland;
