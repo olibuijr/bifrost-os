@@ -4,7 +4,7 @@
   "macos_since": "10.10",
   "status": "partial",
   "bifrost": "springboard/src/net/ (wifi.rs, wifi_config.rs, wpa.rs, dhcp.rs, wifi_event.rs), springboard/netd/src, springboard/src/shell/pages.rs (PageId::Vpn)",
-  "summary": "BifrOSt has a system-level Wi-Fi client (wpa_supplicant control, saved networks, DHCP, DNS from the lease written to resolv.conf) but no app-facing Network Extension API. There is no VPN client, tunnel, relay, content filter, URL filter, DNS proxy or local push; the VPN settings page is a static placeholder showing Not Connected.",
+  "summary": "BifrOSt has a system-level Wi-Fi client (wpa_supplicant control, saved networks, DHCP, DNS from the lease written to resolv.conf) but no working app-facing Network Extension API (only a pure hotspot helper model that the system does not drive). There is no VPN client, tunnel, relay, content filter, URL filter, DNS proxy or local push; the VPN settings page is a static placeholder showing Not Connected.",
   "rea_evidence": "ev_ddbc332a1dc5f4c399f025abe104945e408ce39544875e293b957f3ad23c93fd",
   "features": [
     {

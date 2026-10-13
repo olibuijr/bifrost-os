@@ -10,6 +10,8 @@
 use std::collections::VecDeque;
 use std::fmt;
 
+use crate::hotspot_configuration::HotspotConfiguration;
+
 /// The kind of hotspot command a helper can register for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CommandKind {
@@ -62,8 +64,8 @@ pub enum Error {
     NoCommandKinds,
     /// `register` was given an empty name.
     EmptyName,
-    /// The command names no network.
-    EmptySsid,
+    /// The command names no network, or a network name that is not 1 to 32 octets.
+    InvalidSsid,
     /// The command kind was not in the registration.
     NotRegistered,
     /// A confidence was given for a command that does not carry one, or for a failed evaluation.
@@ -75,7 +77,7 @@ impl fmt::Display for Error {
         f.write_str(match self {
             Error::NoCommandKinds => "A hotspot helper must register for at least one command.",
             Error::EmptyName => "A hotspot helper needs a name.",
-            Error::EmptySsid => "The hotspot command names no network.",
+            Error::InvalidSsid => "The hotspot command names no valid network.",
             Error::NotRegistered => "The helper did not register for this command.",
             Error::ConfidenceNotAllowed => "Only a successful evaluation carries a confidence.",
         })
@@ -121,10 +123,11 @@ impl Helper {
         &self.kinds
     }
 
-    /// Queues a command from the system. Only registered kinds are accepted, and the network name must not be empty.
+    /// Queues a command from the system. Only registered kinds are accepted, and the network name must be 1 to 32 octets.
     pub fn deliver(&mut self, command: Command) -> Result<(), Error> {
-        if command.ssid.trim().is_empty() {
-            return Err(Error::EmptySsid);
+        // The same network-name rule as a hotspot configuration: 1 to 32 octets.
+        if command.ssid.trim().is_empty() || HotspotConfiguration::open(&command.ssid).validate().is_err() {
+            return Err(Error::InvalidSsid);
         }
         if !self.kinds.contains(&command.kind) {
             return Err(Error::NotRegistered);
@@ -178,8 +181,10 @@ mod tests {
     fn commands_for_unregistered_kinds_or_empty_networks_are_refused() {
         let mut h = Helper::register("Login", &[CommandKind::Authenticate]).unwrap();
         assert_eq!(h.deliver(cmd(CommandKind::Maintain, "Cafe")), Err(Error::NotRegistered));
-        assert_eq!(h.deliver(cmd(CommandKind::Authenticate, " ")), Err(Error::EmptySsid));
-        assert_eq!(h.pending_count(), 0);
+        assert_eq!(h.deliver(cmd(CommandKind::Authenticate, " ")), Err(Error::InvalidSsid));
+        assert_eq!(h.deliver(cmd(CommandKind::Authenticate, &"a".repeat(33))), Err(Error::InvalidSsid));
+        assert!(h.deliver(cmd(CommandKind::Authenticate, &"a".repeat(32))).is_ok());
+        assert_eq!(h.pending_count(), 1);
     }
 
     #[test]

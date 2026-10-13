@@ -4,7 +4,7 @@
   "macos_since": "10.12",
   "status": "partial",
   "bifrost": "bifrost_app::webview (springboard/sdk/src/webview.rs), bifrost_app::webview_dev (springboard/sdk/src/webview_dev.rs), springboard/apps/browser/ (Browser app), springboard/ui/src/web_auth.rs (shared-login session model)",
-  "summary": "BifrOSt has a WebKit-style web view for SDK apps (WebProcessPool over the Servo engine) and a full Browser app with tabs, history, bookmarks, reader mode and private windows. It has no Safari extension, content blocker, Reading List, authentication session, universal link, or standard in-app Safari sheet API.",
+  "summary": "BifrOSt has a WebKit-style web view for SDK apps (WebProcessPool over the Servo engine) and a full Browser app with tabs, history, bookmarks, reader mode and private windows. It has a shared-login session model that no shell code drives yet, but no Safari extension, content blocker, Reading List, universal link, or standard in-app Safari sheet API.",
   "rea_evidence": "ev_db48755bdd049ac960cdd61e81535120a7dc9a2c45e56e809f496825a5b51dc8",
   "features": [
     {

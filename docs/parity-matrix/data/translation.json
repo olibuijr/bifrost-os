@@ -4,7 +4,7 @@
   "macos_since": "15.0",
   "status": "partial",
   "bifrost": "springboard/sdk/src/locale.rs (localization only, no text translation); springboard/ui/src/format.rs (formatters only); springboard/sdk/src/spellcheck.rs (spelling only)",
-  "summary": "Apple's Translation framework translates text between a language pair on device, through a system translation popover, a session API and language-availability checks. BifrOSt has no text-to-text translation API for apps and no translation UI. Its locale and spellcheck code only localize strings, format numbers and dates, and check spelling in the same language.",
+  "summary": "Apple's Translation framework translates text between a language pair on device, through a system translation popover, a session API and language-availability checks. BifrOSt has a popover model (presentation, language-pair check, result and replacement) but no translation engine and no drawn translation UI. Its locale and spellcheck code only localize strings, format numbers and dates, and check spelling in the same language.",
   "rea_evidence": "ev_318b6155181a029fffc215b27f3997bb92800b4751200f5d8b7a005c5a848088",
   "features": [
     {

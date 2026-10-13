@@ -3,8 +3,8 @@
   "doc": "https://developer.apple.com/documentation/extensionfoundation",
   "macos_since": "13.0",
   "status": "partial",
-  "bifrost": "No app extension model. Nearby: springboard/src/bare/app_policy.rs, springboard/sdk/src/control.rs, springboard/sdk/src/intents.rs",
-  "summary": "Apps run as sandboxed processes, but there is no API for an app to declare extension points, discover extensions from other packages, or launch them as separate processes with a connection. Related features (App Intents, share, app control socket) cover fixed system integrations only.",
+  "bifrost": "Extension model (points, identities, registry): springboard/ui/src/extension.rs, springboard/core/src/extension_process.rs, springboard/sdk/src/extension.rs. Nearby: springboard/src/bare/app_policy.rs, springboard/sdk/src/control.rs, springboard/sdk/src/intents.rs",
+  "summary": "Apps run as sandboxed processes. An SDK model lets an app declare extension points, discover enabled extensions from installed packages and track one extension process per host with an in-memory connection; the shell does not wire it yet, so no extension runs in its own sandbox. Related features (App Intents, share, app control socket) cover fixed system integrations only.",
   "rea_evidence": "ev_d1c4f8ce36f377938b28696b41679f6d283efbe97d6190b90b0558dc854c7623",
   "features": [
     {
