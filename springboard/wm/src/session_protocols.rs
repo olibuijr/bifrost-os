@@ -225,6 +225,9 @@ pub struct SessionHooks {
     pub capture: Option<Box<dyn FnMut(&mut WmState, &CaptureSpec) -> Option<Vec<u8>>>>,
     /// Switches an output to a mode (a DRM modeset). Returns whether it took.
     pub set_mode: Option<Box<dyn FnMut(&str, ModeInfo) -> bool>>,
+    /// Checks and prepares a change of an output's transform (`live_rotation::rotate_output`). The transform itself is
+    /// set by the window server; the backend answers whether its scanout can follow it. Returns whether it can.
+    pub set_transform: Option<Box<dyn FnMut(&str, Transform) -> bool>>,
     /// Turns an output on or off (DPMS). Returns whether it took.
     pub set_power: Option<Box<dyn FnMut(&str, bool) -> bool>>,
 }
@@ -275,6 +278,8 @@ struct HeadRec {
 #[derive(Debug, Default)]
 pub struct HeadWant {
     pub mode: Option<Want>,
+    /// The transform the configuration asks for, if it set one.
+    pub transform: Option<Transform>,
 }
 
 type HeadWantRef = Arc<Mutex<HeadWant>>;
@@ -433,9 +438,9 @@ impl WmState {
 
     /// Applies (or, with `test_only`, only checks) a configuration. Disabling heads is accepted; enabling one needs a
     /// mode the output has, and a mode change needs the `set_mode` hook (the DRM backend sets it in `drm::run`).
-    pub fn apply_outputs(&mut self, entries: &[(String, bool, Option<Want>)], test_only: bool) -> bool {
-        let mut plan: Vec<(Output, String, ModeInfo, bool)> = Vec::new();
-        for (name, enabled, want) in entries {
+    pub fn apply_outputs(&mut self, entries: &[(String, bool, Option<Want>, Option<Transform>)], test_only: bool) -> bool {
+        let mut plan: Vec<(Output, String, ModeInfo, bool, Option<Transform>)> = Vec::new();
+        for (name, enabled, want, transform) in entries {
             if !enabled {
                 continue;
             }
@@ -448,24 +453,29 @@ impl WmState {
             };
             let Some(chosen) = chosen else { return false };
             let changed = Some(chosen) != current;
-            plan.push((out, name.clone(), chosen, changed));
+            plan.push((out, name.clone(), chosen, changed, *transform));
         }
         if test_only {
             return true;
         }
-        for (out, name, chosen, changed) in plan {
-            if !changed {
-                continue;
+        for (out, name, chosen, changed, transform) in plan {
+            if changed {
+                let Some(hook) = self.session.hooks.set_mode.as_mut() else { return false };
+                if !hook(&name, chosen) {
+                    return false;
+                }
+                let mode = Mode { size: (chosen.w, chosen.h).into(), refresh: chosen.refresh };
+                out.change_current_state(Some(mode), None, None, None);
+                self.refresh_area();
+                // the next frame is composed at the new size (the backend's swapchain was resized by the hook)
+                self.dirty = true;
             }
-            let Some(hook) = self.session.hooks.set_mode.as_mut() else { return false };
-            if !hook(&name, chosen) {
-                return false;
+            // after the mode, so the rotation is measured on the mode the output now has
+            if let Some(t) = transform {
+                if !self.rotate_output(&out, t) {
+                    return false;
+                }
             }
-            let mode = Mode { size: (chosen.w, chosen.h).into(), refresh: chosen.refresh };
-            out.change_current_state(Some(mode), None, None, None);
-            self.refresh_area();
-            // the next frame is composed at the new size (the backend's swapchain was resized by the hook)
-            self.dirty = true;
         }
         true
     }
@@ -584,6 +594,22 @@ fn wl_transform(t: Transform) -> wl_output::Transform {
         Transform::Flipped90 => W::Flipped90,
         Transform::Flipped180 => W::Flipped180,
         Transform::Flipped270 => W::Flipped270,
+    }
+}
+
+/// The transform a `wl_output.transform` value names: the inverse of `wl_transform`.
+fn from_wl_transform(t: wl_output::Transform) -> Transform {
+    use wl_output::Transform as W;
+    match t {
+        W::Normal => Transform::Normal,
+        W::_90 => Transform::_90,
+        W::_180 => Transform::_180,
+        W::_270 => Transform::_270,
+        W::Flipped => Transform::Flipped,
+        W::Flipped90 => Transform::Flipped90,
+        W::Flipped180 => Transform::Flipped180,
+        W::Flipped270 => Transform::Flipped270,
+        _ => Transform::Normal,
     }
 }
 
@@ -777,12 +803,15 @@ impl Dispatch<ZwlrOutputConfigurationV1, ConfigEntries> for WmState {
 
 /// Applies or tests a configuration and answers `succeeded` or `failed`.
 fn run_configuration(state: &mut WmState, resource: &ZwlrOutputConfigurationV1, data: &ConfigEntries, test_only: bool) {
-    let entries: Vec<(String, bool, Option<Want>)> = data
+    let entries: Vec<(String, bool, Option<Want>, Option<Transform>)> = data
         .0
         .lock()
         .unwrap()
         .iter()
-        .map(|e| (e.output.clone(), e.enabled, e.want.lock().unwrap_or_else(|p| p.into_inner()).mode))
+        .map(|e| {
+            let want = e.want.lock().unwrap_or_else(|p| p.into_inner());
+            (e.output.clone(), e.enabled, want.mode, want.transform)
+        })
         .collect();
     if state.apply_outputs(&entries, test_only) {
         resource.succeeded();
@@ -806,7 +835,12 @@ impl Dispatch<ZwlrOutputConfigurationHeadV1, HeadWantRef> for WmState {
             R::SetCustomMode { width, height, refresh } => {
                 data.lock().unwrap_or_else(|p| p.into_inner()).mode = Some((width, height, (refresh > 0).then_some(refresh)));
             }
-            // Position, transform, scale and adaptive sync are accepted and ignored until the backend can apply them.
+            R::SetTransform { transform } => {
+                if let WEnum::Value(t) = transform {
+                    data.lock().unwrap_or_else(|p| p.into_inner()).transform = Some(from_wl_transform(t));
+                }
+            }
+            // Position, scale and adaptive sync are accepted and ignored until the backend can apply them.
             _ => {}
         }
     }
@@ -1037,6 +1071,22 @@ impl smithay::wayland::tablet_manager::TabletSeatHandler for WmState {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_transform_request_reads_back_the_transform_it_names() {
+        for t in [
+            Transform::Normal,
+            Transform::_90,
+            Transform::_180,
+            Transform::_270,
+            Transform::Flipped,
+            Transform::Flipped90,
+            Transform::Flipped180,
+            Transform::Flipped270,
+        ] {
+            assert_eq!(from_wl_transform(wl_transform(t)), t, "{t:?}");
+        }
+    }
 
     #[test]
     fn argb8888_is_bgra_in_memory() {
