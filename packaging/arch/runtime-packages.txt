@@ -66,6 +66,7 @@ libxml2
 libxslt
 lsof
 man-db
+mandoc
 mg
 nano
 ncompress
@@ -78,6 +79,7 @@ picocom
 plocate
 powertop
 procps-ng
+quota-tools
 rsync
 ruby
 screen
