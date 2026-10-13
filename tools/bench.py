@@ -179,32 +179,40 @@ def pss_threads(pids):
             pass
     return pss / 1024, thr
 res = {}
-for app_id in APPS:
-    if time.time() > DEADLINE - 8: break
-    a = app_id.removeprefix("is.olibuijr.").removesuffix(".desktop").replace(".", "_")
-    # the session restores last boot's windows (round 75): a launch is only measured from a closed app
+def close(app_id):
     for pid in procs(app_id):
         try: os.kill(pid, 15)
         except OSError: pass
     for _ in range(40):
         if not procs(app_id): break
         time.sleep(0.05)
-    time.sleep(0.5)
-    before, t0 = windows(), time.time()
-    ctl("open-app " + app_id)
-    # ready = a process runs from the app's directory AND the shell maps one more external window
-    while time.time() - t0 < 6:
-        if procs(app_id) and windows() > before: break
-        time.sleep(0.02)
-    else:
-        print(f"launch {a}: no window within 6 s", file=sys.stderr)
-    if time.time() - t0 < 6:
-        res[f"midget_launch_ms_{a}"] = (time.time() - t0) * 1000
-        time.sleep(3)
-        res[f"midget_pss_app_{a}_mib"], res[f"midget_threads_app_{a}"] = pss_threads(procs(app_id))
-    for p in procs(app_id):
-        try: os.kill(p, 15)
-        except OSError: pass
+for app_id in APPS:
+    if time.time() > DEADLINE - 12: break
+    a = app_id.removeprefix("is.olibuijr.").removesuffix(".desktop").replace(".", "_")
+    # the median of three launches: one launch after a reboot swung 50-82 ms with the disk cache (round 75); the
+    # session restores last boot's windows, so each launch starts from a closed app
+    times = []
+    for k in range(3):
+        if time.time() > DEADLINE - 8: break
+        close(app_id)
+        time.sleep(0.5)
+        before, t0 = windows(), time.time()
+        ctl("open-app " + app_id)
+        # ready = a process runs from the app's directory AND the shell maps one more external window
+        while time.time() - t0 < 6:
+            if procs(app_id) and windows() > before: break
+            time.sleep(0.02)
+        else:
+            print(f"launch {a}: no window within 6 s", file=sys.stderr)
+            break
+        times.append((time.time() - t0) * 1000)
+        if k == 0:
+            time.sleep(3)
+            res[f"midget_pss_app_{a}_mib"], res[f"midget_threads_app_{a}"] = pss_threads(procs(app_id))
+    if times:
+        times.sort()
+        res[f"midget_launch_ms_{a}"] = times[len(times) // 2]
+    close(app_id)
     time.sleep(0.5)
 print(json.dumps(res))
 '''
