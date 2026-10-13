@@ -42,6 +42,7 @@ use std::{
 use bifrost_app::kit::ui::{SPACE_L, SPACE_XL, SPACE_XS};
 
 mod control;
+mod dragout;
 mod coordinate;
 mod go;
 mod info;
@@ -172,6 +173,8 @@ struct Files {
     undo: Vec<Undo>,
     /// Go to Folder, spring-loaded folders and the copy-drag flag.
     fx: FileManagerState,
+    /// Drag and drop with other windows and apps (`dragout`).
+    dnd: dragout::DragOut,
     /// Service calls (preview panel, pasteboard, search index, Dock progress) and the replies they wait for.
     sys: SystemState,
 }
@@ -257,6 +260,7 @@ impl Files {
             journal: bifrost_app::fswatch::EventJournal::new(JOURNAL_CAP),
             journal_seen: 0,
             fx: FileManagerState::default(),
+            dnd: Default::default(),
             vo: ViewOpts::default(),
             data_dir: None,
             labels: new_labels(),
@@ -274,6 +278,8 @@ impl App for Files {
     }
     fn configure(&mut self, ctx: &Ctx) {
         self.painted_state.clear();
+        // files from any app can be dropped on the folder listing (`dragout`)
+        bifrost_app::dnd::register_types(ctx, &["public.data"]);
         if self.data_dir.is_none() {
             let _ = std::fs::create_dir_all(&ctx.data_dir);
             self.data_dir = Some(ctx.data_dir.clone());
@@ -327,6 +333,15 @@ impl App for Files {
             Some(e) => self.preview_event(e),
             None => false,
         }
+    }
+    fn drag(&mut self, ctx: &Ctx, ev: bifrost_app::dnd::Event) -> bool {
+        match ev {
+            bifrost_app::dnd::Event::Dest { session, phase, x, y, items, .. } => self.drag_out_dest(ctx, session, phase, x / ctx.ui.s, y / ctx.ui.s, items),
+            bifrost_app::dnd::Event::Ended { session, .. } => self.drag_out_ended(ctx, session),
+        }
+    }
+    fn document(&mut self, ctx: &Ctx, ev: bifrost_app::DocumentEvent) -> bool {
+        self.drag_out_document(ctx, ev)
     }
     fn tick(&mut self, ctx: &Ctx, _: f64) -> bool {
         self.request_thumbnails(ctx);
@@ -503,6 +518,7 @@ impl Files {
                             self.fx.drag_paths = self.selected_paths();
                             self.fx.copy_drag = false;
                             self.revision += 1;
+                            self.drag_out_ask(ctx);
                         }
                     }
                 }
