@@ -147,6 +147,8 @@ pub enum Target {
     Info,
     /// a star of the Info sheet's rating row
     Rate(u8),
+    /// the Info sheet's Hide Photo / Unhide Photo row
+    InfoHide,
     /// the share sheet's Duplicate row
     SheetDuplicate,
     /// the Info sheet's Revert to Original row
@@ -295,6 +297,8 @@ pub enum Album {
     Favorites,
     Screenshots,
     Trash,
+    /// photos hidden from All Photos; listed in the picker once there is one
+    Hidden,
     /// a user album: index into the album list
     User(u8),
 }
@@ -311,6 +315,7 @@ impl Album {
             Self::Favorites => "Favorites",
             Self::Screenshots => "Screenshots",
             Self::Trash => "Recently Deleted",
+            Self::Hidden => "Hidden",
             Self::User(_) => "Album",
         }
     }
@@ -360,6 +365,10 @@ pub struct Photos {
     gen: u64,
     scanning: bool,
     all: Vec<Photo>,
+    /// `all` without the hidden photos: what All Photos and the smart albums draw from
+    visible: Vec<Photo>,
+    /// the hidden photos (the Hidden album)
+    hidden: Vec<Photo>,
     favorites: Vec<Photo>,
     trash: Vec<Photo>,
     recents: Vec<Photo>,
@@ -457,6 +466,8 @@ impl Photos {
             gen: 0,
             scanning: false,
             all: vec![],
+            visible: vec![],
+            hidden: vec![],
             favorites: vec![],
             trash: vec![],
             recents: vec![],
@@ -551,7 +562,8 @@ impl Photos {
     /// The photos of `album` before the date filter.
     fn album_list(&self, album: Album) -> &[Photo] {
         match album {
-            Album::All => &self.all,
+            Album::All => &self.visible,
+            Album::Hidden => &self.hidden,
             Album::Recents => &self.recents,
             Album::Favorites => &self.favorites,
             Album::Screenshots => &self.screenshots,
@@ -563,8 +575,20 @@ impl Photos {
     /// The albums the picker lists: the fixed ones, then the user's.
     fn menu_albums(&self) -> Vec<Album> {
         let mut v = vec![Album::All, Album::Recents, Album::Favorites, Album::Screenshots, Album::Trash];
+        if !self.hidden.is_empty() {
+            v.push(Album::Hidden);
+        }
         v.extend((0..self.user_albums.len()).map(|i| Album::User(i as u8)));
         v
+    }
+
+    /// Is `p` hidden from All Photos.
+    pub fn is_hidden(&self, p: &Photo) -> bool {
+        self.prefs.get(&format!("hide:{}", p.path.display())) == Some("1")
+    }
+
+    fn set_hidden(&mut self, p: &Photo, on: bool) {
+        let _ = self.pref_set(&format!("hide:{}", p.path.display()), if on { "1" } else { "" });
     }
 
     fn album_title(&self, album: Album) -> String {
@@ -694,17 +718,23 @@ impl Photos {
     /// Recomputes the albums, the filtered view, the sections and the grid.
     fn rebuild(&mut self, ui: &Ui) {
         let now = unix_now();
-        self.favorites = models::smart_album(SmartAlbum::Favourites, &self.all, |p| self.is_favourite(p), now);
+        let (hidden, visible): (Vec<Photo>, Vec<Photo>) = self.all.iter().cloned().partition(|p| self.is_hidden(p));
+        self.hidden = hidden;
+        self.visible = visible;
+        if self.album == Album::Hidden && self.hidden.is_empty() {
+            self.album = Album::All;
+        }
+        self.favorites = models::smart_album(SmartAlbum::Favourites, &self.visible, |p| self.is_favourite(p), now);
         self.fav_paths = self.all.iter().chain(&self.trash).filter(|p| self.is_favourite(p)).map(|p| p.path.clone()).collect();
         self.user_albums = (0..MAX_USER_ALBUMS)
             .filter_map(|i| {
                 let name = self.prefs.get(&format!("ua.{i}.name")).filter(|n| !n.is_empty())?.to_string();
                 Some((i, name))
             })
-            .map(|(i, name)| (name, self.all.iter().filter(|p| self.in_user_album(i, p)).cloned().collect()))
+            .map(|(i, name)| (name, self.visible.iter().filter(|p| self.in_user_album(i, p)).cloned().collect()))
             .collect();
-        self.recents = models::smart_album(SmartAlbum::RecentlyAdded, &self.all, |p| self.is_favourite(p), now);
-        self.screenshots = models::smart_album(SmartAlbum::Screenshots, &self.all, |p| self.is_favourite(p), now);
+        self.recents = models::smart_album(SmartAlbum::RecentlyAdded, &self.visible, |p| self.is_favourite(p), now);
+        self.screenshots = models::smart_album(SmartAlbum::Screenshots, &self.visible, |p| self.is_favourite(p), now);
         let view = {
             let base = self.album_list(self.album);
             let filtered = match &self.filter {
@@ -1193,11 +1223,14 @@ impl Photos {
         };
         if let Some(sheet) = self.sheet {
             if sheet == Sheet::Info {
-                let rated = usize::from(self.info_has_rating());
+                let rated = 2 * usize::from(self.info_has_rating());
                 if self.info_has_rating() {
                     let (rect, (x0, x1)) = self.info_rating_row(ui);
                     if within(x, y, rect) {
                         return Some(stars::star_at(x, x0, x1).map_or(Target::SheetCancel, Target::Rate));
+                    }
+                    if within(x, y, self.info_hide_row(ui)) {
+                        return Some(Target::InfoHide);
                     }
                 }
                 if self.info_revert {
@@ -1357,6 +1390,17 @@ impl Photos {
                 if let Some(p) = self.viewing().cloned() {
                     let next = stars::after_tap(self.rating(&p), n);
                     self.set_rating(&p, next);
+                }
+            }
+            Target::InfoHide => {
+                if let Some(p) = self.viewing().cloned() {
+                    let anchor = self.viewer_anchor();
+                    let on = !self.is_hidden(&p);
+                    self.set_hidden(&p, on);
+                    self.sheet = None;
+                    self.rebuild(ui);
+                    // the photo has left this album's grid (or come back to it): the viewer lands on its neighbour
+                    self.restore_viewer(anchor);
                 }
             }
             Target::SheetDuplicate => {
@@ -1740,10 +1784,16 @@ impl Photos {
 
     fn info_size(&self, ui: &Ui) -> (f32, f32) {
         let revert = usize::from(self.info_revert);
-        (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * (self.info.len() + 1 + usize::from(self.info_has_rating()) + revert) as f32)
+        (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * (self.info.len() + 1 + 2 * usize::from(self.info_has_rating()) + revert) as f32)
     }
 
-    /// The Info sheet has a rating row for every photo that is not in Recently Deleted.
+    /// The Info sheet's Hide Photo row (x, y, w, h), under the rating row.
+    fn info_hide_row(&self, ui: &Ui) -> (f32, f32, f32, f32) {
+        let ((x, y, w, h), _) = self.info_rating_row(ui);
+        (x, y + h, w, h)
+    }
+
+    /// The Info sheet has a rating row and a Hide Photo row for every photo that is not in Recently Deleted.
     fn info_has_rating(&self) -> bool {
         self.album != Album::Trash
     }
@@ -1906,6 +1956,7 @@ impl Photos {
                     (Album::Favorites, _) => ("No Favorites", "Tap the heart on a photo to add it to Favorites."),
                     (Album::Screenshots, _) => ("No Screenshots", "Screenshots you take appear here."),
                     (Album::Trash, _) => ("No Recently Deleted Photos", "Deleted photos wait here for 30 days."),
+                    (Album::Hidden, _) => ("No Hidden Photos", "Photos you hide from All Photos appear here."),
                     (Album::User(_), _) => ("No Photos", "Open a photo and tap Album to add it here."),
                 };
                 self.label(s, ui, title, 22.0, Weight::Bold, WHITE, cx, cy - ui.pt(14.0));
@@ -2143,8 +2194,8 @@ impl Photos {
             let tx = (x + w - ui.pt(16.0)) as i32 - tw;
             s.blit(text, tx.max((x + ui.pt(100.0)) as i32), cy as i32 - th / 2, 255, 255);
         }
-        let rated = usize::from(self.info_has_rating());
-        if rated == 1 {
+        let rated = 2 * usize::from(self.info_has_rating());
+        if rated == 2 {
             let cy = y + row * (rows.len() + 1) as f32 + row / 2.0;
             s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
             self.label_left(s, ui, "Rating", 14.0, Weight::Regular, SECONDARY, x + ui.pt(16.0), cy);
@@ -2161,6 +2212,13 @@ impl Photos {
                     if on { d } else { d.abs() - t / 2.0 }
                 });
             }
+        }
+        if rated == 2 {
+            let cy = y + row * (rows.len() + 2) as f32 + row / 2.0;
+            s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
+            let hidden = self.viewing().is_some_and(|p| self.is_hidden(p));
+            let color = if self.pressed == Some(Target::InfoHide) { crate::gfx::scale(BLUE, 140) } else { BLUE };
+            self.label(s, ui, if hidden { "Unhide Photo" } else { "Hide Photo" }, 15.0, Weight::Regular, color, x + w / 2.0, cy);
         }
         if self.info_revert {
             let cy = y + row * (rows.len() + 1 + rated) as f32 + row / 2.0;
@@ -2791,6 +2849,34 @@ mod tests {
         tap(&mut p, &ui, star(1.0), ry + rh / 2.0, 1300.0);
         assert_eq!(p.rating(&photo), 1);
         assert!(rx < x0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hiding_a_photo_moves_it_from_all_photos_to_the_hidden_album() {
+        let (mut p, dir, ui) = photos("hidden", 3);
+        p.open_viewer(0);
+        let photo = p.photos()[0].clone();
+        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
+        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1000.0);
+        frame(&mut p, &ui);
+        let (hx, hy, hw, hh) = p.info_hide_row(&ui);
+        tap(&mut p, &ui, hx + hw / 2.0, hy + hh / 2.0, 1100.0);
+        assert!(p.is_hidden(&photo));
+        assert_eq!((p.visible.len(), p.hidden.len(), p.all.len()), (2, 1, 3));
+        assert!(!p.album_list(Album::All).iter().any(|q| q.path == photo.path));
+        assert!(p.menu_albums().contains(&Album::Hidden));
+        assert!(!p.favorites.iter().chain(&p.recents).any(|q| q.path == photo.path));
+        p.viewer = None;
+        p.select_album(&ui, Album::Hidden);
+        assert_eq!(p.photos().len(), 1);
+        p.open_viewer(0);
+        tap(&mut p, &ui, 1200.0 * 0.31, cy, 1200.0);
+        frame(&mut p, &ui);
+        let (hx, hy, hw, hh) = p.info_hide_row(&ui);
+        tap(&mut p, &ui, hx + hw / 2.0, hy + hh / 2.0, 1300.0);
+        assert_eq!((p.visible.len(), p.hidden.len()), (3, 0));
+        assert_eq!(p.album(), Album::All, "an empty Hidden album closes");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
