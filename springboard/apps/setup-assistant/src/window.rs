@@ -196,7 +196,8 @@ impl Setup {
                 }
             }
             Step::Keyboard => {
-                for (i, (r, (id, _))) in self.grid(LANGUAGE_LAYOUTS.len(), CONTENT_Y, CHIP_W).into_iter().zip(LANGUAGE_LAYOUTS).enumerate() {
+                // LANGUAGE_LAYOUTS pairs (locale, keyboard layout id); the chip is the layout id
+                for (i, (r, (_, id))) in self.grid(LANGUAGE_LAYOUTS.len(), CONTENT_Y, CHIP_W).into_iter().zip(LANGUAGE_LAYOUTS).enumerate() {
                     let name = keymaps::layouts().find(|l| l.id == *id).map_or(*id, |l| l.name);
                     out.push(Item { r, act: Act::Layout(i), kind: Kind::Chip, label: name.to_string(), on: self.choices.keyboard == *id, swatch: None });
                 }

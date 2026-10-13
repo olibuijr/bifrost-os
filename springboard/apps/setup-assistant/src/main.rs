@@ -86,7 +86,7 @@ impl Setup {
                 }
             }
             Act::Layout(i) => {
-                if let Some((id, _)) = springboard::installer::app::LANGUAGE_LAYOUTS.get(i) {
+                if let Some((_, id)) = springboard::installer::app::LANGUAGE_LAYOUTS.get(i) {
                     self.choices.keyboard = id.to_string();
                 }
             }
