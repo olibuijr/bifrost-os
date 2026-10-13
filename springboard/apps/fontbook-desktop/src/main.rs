@@ -1,17 +1,19 @@
-//! Fonts as an installed BifrOSt app in the full-size window: a sidebar of lists (All, Off, collections, New
-//! Collection), the family list with search, and a preview with sample text, the repertoire, Info, the on/off switch,
-//! Remove Font for the user's own installs, and collection membership. Installing a font opens it here (Open With on a
-//! .ttf or .otf file) and a file that fails validation is refused. The model is in `model.rs`; the font checks are in
-//! `validate.rs`.
+//! Fonts as an installed BifrOSt app in the full-size window: a sidebar of lists (All, Off, collections, smart
+//! collections, New Collection), the family list with search, and a preview with three modes (Sample, Repertoire,
+//! Info) plus a validation result, the on/off switch, Remove Font for the user's own installs, and collection
+//! membership. Fonts are added from the Font menu (Add Fonts), by Open With, or by a `fontbook:` link; a file is shown
+//! in an install preview first and refused when it fails validation (a setting). The model is in `model.rs`; the font
+//! checks are in `validate.rs`.
 
 mod model;
 mod validate;
 
 use bifrost_app::kit::ui::{self, Ui, Weight};
 use bifrost_app::kit::{Damage, Font, Surface};
-use bifrost_app::{App, Ctx, Input, KeyInput, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, DocumentEvent, Input, KeyInput, OpenOptions, TouchKind};
 use bifrost_render::fontprefs;
-use model::{Library, Source};
+use model::{Library, Prefs, Rule, Source};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 /// The shell's seeded asset folder: its font library is `<dir>/fonts`, read by Settings > Fonts.
@@ -25,12 +27,77 @@ const PAD_PT: f32 = 12.0;
 /// Width of the preview's buttons (On/Off, Remove Font), and the gap from the switch to the remove button.
 const BUTTON_PT: f32 = 120.0;
 const BUTTON_GAP_PT: f32 = 130.0;
-/// The Info rows start here in the preview column, and the collection membership block below them.
-const INFO_TOP_PT: f32 = HEADER_PT + 260.0;
-const MEMBERSHIP_TOP_PT: f32 = HEADER_PT + 450.0;
+/// The mode tabs under the family name, and where a mode's content starts.
+const TABS_TOP_PT: f32 = HEADER_PT + 44.0;
+const TAB_PT: f32 = 100.0;
+const TAB_H_PT: f32 = 24.0;
+const CONTENT_TOP_PT: f32 = HEADER_PT + 84.0;
+/// The sample field and its size buttons (Sample mode).
+const FIELD_W_PT: f32 = 360.0;
+const FIELD_H_PT: f32 = 26.0;
+const SIZE_BTN_PT: f32 = 26.0;
+/// The collection membership block in Info mode, below the info rows.
+const MEMBERSHIP_TOP_PT: f32 = CONTENT_TOP_PT + 210.0;
 const MEMBERSHIP_ROW_PT: f32 = 22.0;
-/// Sizes shown in the preview, in points.
-const PREVIEW_SIZES: [f32; 4] = [14.0, 22.0, 32.0, 48.0];
+/// Sizes of the ladder under the sample, in points; only those smaller than the sample size are drawn.
+const LADDER_SIZES: [f32; 3] = [12.0, 18.0, 24.0];
+/// The size step of Bigger and Smaller.
+const SIZE_STEP: f32 = 4.0;
+/// Columns and cell size of the repertoire grid.
+const GRID_COLS: usize = 16;
+const GRID_CELL_PT: f32 = 28.0;
+
+// main menu items
+const MENU_ADD: u32 = 1;
+const MENU_NEW_COLLECTION: u32 = 2;
+const MENU_SMART_FIXED: u32 = 3;
+const MENU_SMART_VARIABLE: u32 = 4;
+const MENU_SMART_STATIC: u32 = 5;
+const MENU_SMART_TTF: u32 = 6;
+const MENU_SMART_OTF: u32 = 7;
+const MENU_SMART_NAME: u32 = 8;
+const MENU_RENAME: u32 = 9;
+const MENU_DELETE: u32 = 10;
+const MENU_VALIDATE: u32 = 11;
+const MENU_DUPLICATES: u32 = 12;
+const MENU_SAMPLE: u32 = 13;
+const MENU_REPERTOIRE: u32 = 14;
+const MENU_INFO: u32 = 15;
+const MENU_EDIT_TEXT: u32 = 16;
+const MENU_BIGGER: u32 = 17;
+const MENU_SMALLER: u32 = 18;
+const MENU_VALIDATE_FIRST: u32 = 19;
+const MENU_TOGGLE: u32 = 20;
+const MENU_REMOVE: u32 = 21;
+
+/// What the preview column shows for the selected family.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Mode {
+    Sample,
+    Repertoire,
+    Info,
+    Validation,
+}
+
+/// A text field being edited.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Edit {
+    None,
+    /// the sample line
+    Sample(String),
+    /// a collection's name (`smart` for a smart collection)
+    Rename { old: String, smart: bool, text: String },
+}
+
+/// A font file waiting in the install preview.
+struct Pending {
+    /// the file to install (a staged copy when it came from the open panel)
+    path: PathBuf,
+    name: String,
+    family: Option<String>,
+    report: validate::Report,
+    font: Option<Ui>,
+}
 
 struct FontBookApp {
     library: Option<Library>,
@@ -38,6 +105,12 @@ struct FontBookApp {
     source: Source,
     query: String,
     selected: Option<String>,
+    mode: Mode,
+    prefs: Prefs,
+    edit: Edit,
+    pending: Option<Pending>,
+    /// duplicates found by the first Resolve Duplicates, removed by the second
+    duplicates: Vec<model::Duplicate>,
     /// the sample font for `selected`, drawn at the current scale
     preview: Option<(String, Ui)>,
     /// the validation and repertoire of the selected font's file, with the family it belongs to
@@ -53,15 +126,26 @@ impl FontBookApp {
         let families = fontprefs::installed(&model::scan_dirs(&home, &fontprefs::library(SHELL_ASSETS)));
         let disabled = model::parse_disabled(&model::read_text(data_dir, model::DISABLED_FILE));
         let collections = model::parse_collections(&model::read_text(data_dir, model::COLLECTIONS_FILE));
-        self.library = Some(Library::new(families, disabled, collections));
+        let smart = model::parse_smart(&model::read_text(data_dir, model::SMART_FILE));
+        self.prefs = Prefs::parse(&model::read_text(data_dir, model::PREFS_FILE));
+        self.library = Some(Library::new(families, disabled, collections).with_smart(smart));
+        self.preview = None;
+        self.report = None;
     }
 
-    /// Saves the disabled list and the collections; a failed write is shown in the status line.
+    /// Saves the disabled list, the collections and the smart collections; a failed write is shown in the status line.
     fn save(&mut self, data_dir: &Path) {
         let Some(lib) = &self.library else { return };
         let a = model::write_text(data_dir, model::DISABLED_FILE, &lib.disabled_file());
         let b = model::write_text(data_dir, model::COLLECTIONS_FILE, &lib.collections_file());
-        if let Err(e) = a.and(b) {
+        let c = model::write_text(data_dir, model::SMART_FILE, &lib.smart_file());
+        if let Err(e) = a.and(b).and(c) {
+            self.status = format!("Could not save: {e}");
+        }
+    }
+
+    fn save_prefs(&mut self, data_dir: &Path) {
+        if let Err(e) = model::write_text(data_dir, model::PREFS_FILE, &self.prefs.to_text()) {
             self.status = format!("Could not save: {e}");
         }
     }
@@ -84,11 +168,7 @@ impl FontBookApp {
         let path = self.library.as_ref().and_then(|l| l.find(&name)).map(|f| f.path.clone());
         let bytes = path.and_then(|p| std::fs::read(&p).ok());
         self.report = bytes.as_deref().map(|b| (name.clone(), validate::check(b)));
-        self.preview = bytes.and_then(|bytes| {
-            // the bytes live for the whole run: one preview font per selection, so the leak is bounded by what was viewed
-            let data: &'static [u8] = Box::leak(bytes.into_boxed_slice());
-            Font::parse(data).map(|font| (name.clone(), Ui::new(font, scale)))
-        });
+        self.preview = bytes.and_then(|bytes| font_ui(bytes, scale).map(|ui| (name.clone(), ui)));
     }
 
     /// True when the family's file is one this user installed (the only fonts Remove Font may delete).
@@ -96,14 +176,53 @@ impl FontBookApp {
         self.library.as_ref().and_then(|l| l.find(name)).is_some_and(|f| Path::new(&f.path).starts_with(&self.user_dir))
     }
 
-    fn install(&mut self, ctx: &Ctx, path: &str) {
-        match model::install(Path::new(path), &self.user_dir) {
+    /// Opens the install preview for the font file at `path` (named `name`): its validation, family and a sample.
+    fn begin_install(&mut self, ctx: &Ctx, path: PathBuf, name: &str) {
+        let ext = path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
+        if ext != "ttf" && ext != "otf" {
+            self.status = "Only .ttf and .otf fonts can be installed.".to_string();
+            return;
+        }
+        let bytes = match std::fs::read(&path) {
+            Ok(b) => b,
+            Err(e) => {
+                self.status = format!("Cannot read the font: {e}");
+                return;
+            }
+        };
+        let report = validate::check(&bytes);
+        let family = fontprefs::family(&path.to_string_lossy());
+        let font = font_ui(bytes, ctx.ui.s);
+        self.status.clear();
+        self.pending = Some(Pending { path, name: name.to_string(), family, report, font });
+    }
+
+    /// Install in the preview: copies the file into the user's fonts (checked first when the setting asks for it).
+    fn install_pending(&mut self, ctx: &Ctx) {
+        let Some(p) = self.pending.take() else { return };
+        match model::install(&p.path, &self.user_dir, self.prefs.validate_before_install) {
             Ok((_, family)) => {
                 self.status = format!("Installed {family}.");
                 self.reload(&ctx.data_dir);
+                self.source = Source::All;
                 self.selected = Some(family);
             }
-            Err(e) => self.status = e,
+            Err(e) => {
+                self.status = e;
+                self.pending = Some(p);
+                return;
+            }
+        }
+        if p.path.starts_with(ctx.data_dir.join("staging")) {
+            let _ = std::fs::remove_file(&p.path);
+        }
+    }
+
+    fn cancel_install(&mut self, ctx: &Ctx) {
+        if let Some(p) = self.pending.take() {
+            if p.path.starts_with(ctx.data_dir.join("staging")) {
+                let _ = std::fs::remove_file(&p.path);
+            }
         }
     }
 
@@ -120,6 +239,15 @@ impl FontBookApp {
         }
     }
 
+    /// Turns the family on or off and saves.
+    fn toggle_enabled(&mut self, data_dir: &Path, name: &str) {
+        if let Some(lib) = &mut self.library {
+            let on = lib.is_enabled(name);
+            lib.set_enabled(name, !on);
+        }
+        self.save(data_dir);
+    }
+
     /// Adds the family to the collection, or takes it out when it is already a member, then saves.
     fn toggle_membership(&mut self, data_dir: &Path, collection: &str, family: &str) {
         let Some(lib) = &mut self.library else { return };
@@ -132,32 +260,130 @@ impl FontBookApp {
         self.save(data_dir);
     }
 
-    /// New Collection: adds an empty collection with a free name and shows it in the list.
+    /// Every collection name, plain and smart.
+    fn all_collection_names(&self) -> Vec<String> {
+        self.library.as_ref().map(|l| l.collection_names().into_iter().chain(l.smart_names()).collect()).unwrap_or_default()
+    }
+
+    /// New Collection: adds an empty collection with a free name, shows it in the list and starts renaming it.
     fn new_collection(&mut self, data_dir: &Path) {
+        let name = model::unique_name(&self.all_collection_names(), "New Collection");
         let Some(lib) = &mut self.library else { return };
-        let taken = lib.collection_names();
-        let name = (1..)
-            .map(|n: u32| if n == 1 { "New Collection".to_string() } else { format!("New Collection {n}") })
-            .find(|c| !taken.iter().any(|k| k.eq_ignore_ascii_case(c)))
-            .unwrap_or_default();
         if lib.create_collection(&name) {
-            self.source = Source::Collection(name);
+            self.source = Source::Collection(name.clone());
+            self.edit = Edit::Rename { old: name.clone(), smart: false, text: name };
             self.save(data_dir);
         }
     }
 
+    /// New Smart Collection with `rule`: named after the rule, shown in the list and ready to rename.
+    fn new_smart(&mut self, data_dir: &Path, rule: Rule) {
+        let name = model::unique_name(&self.all_collection_names(), &rule.title());
+        let Some(lib) = &mut self.library else { return };
+        if lib.create_smart(&name, rule) {
+            self.source = Source::Smart(name.clone());
+            self.edit = Edit::Rename { old: name.clone(), smart: true, text: name };
+            self.save(data_dir);
+        }
+    }
+
+    /// The collection the sidebar shows, with whether it is smart; None for All Fonts and Off.
+    fn current_collection(&self) -> Option<(String, bool)> {
+        match &self.source {
+            Source::Collection(n) => Some((n.clone(), false)),
+            Source::Smart(n) => Some((n.clone(), true)),
+            _ => None,
+        }
+    }
+
+    fn delete_current(&mut self, data_dir: &Path) {
+        let Some((name, smart)) = self.current_collection() else { return };
+        let Some(lib) = &mut self.library else { return };
+        let done = if smart { lib.delete_smart(&name) } else { lib.delete_collection(&name) };
+        if done {
+            self.status = format!("Deleted {name}.");
+            self.source = Source::All;
+            self.save(data_dir);
+        }
+    }
+
+    fn start_rename(&mut self) {
+        if let Some((name, smart)) = self.current_collection() {
+            self.edit = Edit::Rename { old: name.clone(), smart, text: name };
+        }
+    }
+
+    /// Ends the text edit, keeping what was typed.
+    fn commit_edit(&mut self, data_dir: &Path) {
+        match std::mem::replace(&mut self.edit, Edit::None) {
+            Edit::None => {}
+            Edit::Sample(text) => {
+                self.prefs.sample_text = text;
+                self.save_prefs(data_dir);
+            }
+            Edit::Rename { old, smart, text } => {
+                let Some(lib) = &mut self.library else { return };
+                if lib.rename_collection(&old, &text) {
+                    let new = text.trim().to_string();
+                    if self.source == Source::Collection(old.clone()) || self.source == Source::Smart(old.clone()) {
+                        self.source = if smart { Source::Smart(new) } else { Source::Collection(new) };
+                    }
+                    self.save(data_dir);
+                } else if text.trim() != old {
+                    self.status = format!("Cannot rename to \"{}\": the name is empty or already used.", text.trim());
+                }
+            }
+        }
+    }
+
+    /// Resolve Duplicates: the first call lists the families with several files, the second removes the older files.
+    fn resolve_duplicates(&mut self, data_dir: &Path) {
+        if self.duplicates.is_empty() {
+            self.duplicates = model::find_duplicates(&model::scan_files(&self.user_dir));
+            if self.duplicates.is_empty() {
+                self.status = "No duplicate fonts found among your installs.".to_string();
+            } else {
+                let older: usize = self.duplicates.iter().map(|d| d.remove.len()).sum();
+                self.status = format!("{} families have duplicates ({older} older files). Choose Resolve Duplicates again to keep the newest.", self.duplicates.len());
+            }
+            return;
+        }
+        let dups = std::mem::take(&mut self.duplicates);
+        let removed = model::resolve_duplicates(&dups, &self.user_dir);
+        self.status = format!("Removed {removed} older files.");
+        self.reload(data_dir);
+    }
+
+    fn change_size(&mut self, data_dir: &Path, delta: f32) {
+        let size = self.prefs.sample_size + delta;
+        self.prefs.set_size(size);
+        self.save_prefs(data_dir);
+    }
+
     /// A press in the sidebar, the list or the preview column (window points, scaled by the caller).
     fn touch_down(&mut self, ctx: &Ctx, x: f32, y: f32) -> bool {
-        let Some(lib) = &self.library else { return false };
+        self.commit_edit(&ctx.data_dir);
+        if self.library.is_none() {
+            return false;
+        }
+        let preview_x = SIDEBAR_PT + LIST_PT + PAD_PT;
+        if self.pending.is_some() {
+            return self.pending_touch(ctx, x, y, preview_x);
+        }
         if x < SIDEBAR_PT {
-            if let Some(source) = sidebar_row(lib, y) {
-                self.source = source;
-                self.query.clear();
-                return true;
-            }
-            if new_collection_row(lib, y) {
-                self.new_collection(&ctx.data_dir);
-                return true;
+            let rows = self.library.as_ref().map(sidebar_sources).unwrap_or_default();
+            let index = ((y - HEADER_PT) / ROW_PT).floor();
+            if y >= HEADER_PT && index >= 0.0 {
+                let index = index as usize;
+                if let Some((_, source)) = rows.get(index) {
+                    self.source = source.clone();
+                    self.query.clear();
+                    return true;
+                }
+                if index == rows.len() {
+                    self.new_collection(&ctx.data_dir);
+                    return true;
+                }
             }
             return false;
         }
@@ -172,16 +398,11 @@ impl FontBookApp {
             return false;
         }
         let Some(name) = self.selected.clone() else { return false };
-        let switch_x = SIDEBAR_PT + LIST_PT + PAD_PT;
-        let remove_x = switch_x + BUTTON_GAP_PT;
+        let remove_x = preview_x + BUTTON_GAP_PT;
         // the on/off switch and Remove Font sit at the top of the preview column
         if (PAD_PT..PAD_PT + 28.0).contains(&y) {
-            if (switch_x..switch_x + BUTTON_PT).contains(&x) {
-                if let Some(lib) = &mut self.library {
-                    let on = lib.is_enabled(&name);
-                    lib.set_enabled(&name, !on);
-                }
-                self.save(&ctx.data_dir);
+            if (preview_x..preview_x + BUTTON_PT).contains(&x) {
+                self.toggle_enabled(&ctx.data_dir, &name);
                 return true;
             }
             if (remove_x..remove_x + BUTTON_PT).contains(&x) && self.is_user_font(&name) {
@@ -189,35 +410,122 @@ impl FontBookApp {
                 return true;
             }
         }
-        // one row per collection: a press adds the family to it or takes it out
-        let rows_top = MEMBERSHIP_TOP_PT + MEMBERSHIP_ROW_PT;
-        if (switch_x..switch_x + 260.0).contains(&x) && y >= rows_top {
-            let index = ((y - rows_top) / MEMBERSHIP_ROW_PT).floor() as usize;
-            let collection = self.library.as_ref().and_then(|l| l.collection_names().get(index).cloned());
-            if let Some(collection) = collection {
-                self.toggle_membership(&ctx.data_dir, &collection, &name);
+        // the mode tabs
+        if (TABS_TOP_PT..TABS_TOP_PT + TAB_H_PT).contains(&y) && x >= preview_x {
+            let index = ((x - preview_x) / TAB_PT).floor() as usize;
+            if let Some(mode) = [Mode::Sample, Mode::Repertoire, Mode::Info].get(index) {
+                self.mode = *mode;
                 return true;
             }
         }
+        match self.mode {
+            Mode::Sample => self.sample_touch(ctx, x, y, preview_x),
+            Mode::Info => {
+                // one row per collection: a press adds the family to it or takes it out
+                let rows_top = MEMBERSHIP_TOP_PT + MEMBERSHIP_ROW_PT;
+                if (preview_x..preview_x + 260.0).contains(&x) && y >= rows_top {
+                    let index = ((y - rows_top) / MEMBERSHIP_ROW_PT).floor() as usize;
+                    let collection = self.library.as_ref().and_then(|l| l.collection_names().get(index).cloned());
+                    if let Some(collection) = collection {
+                        self.toggle_membership(&ctx.data_dir, &collection, &name);
+                        return true;
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// A press in Sample mode: the sample field starts editing, the buttons change the size.
+    fn sample_touch(&mut self, ctx: &Ctx, x: f32, y: f32, preview_x: f32) -> bool {
+        if !(CONTENT_TOP_PT..CONTENT_TOP_PT + FIELD_H_PT).contains(&y) {
+            return false;
+        }
+        if (preview_x..preview_x + FIELD_W_PT).contains(&x) {
+            self.edit = Edit::Sample(self.prefs.sample_text.clone());
+            return true;
+        }
+        let smaller_x = preview_x + FIELD_W_PT + 12.0;
+        if (smaller_x..smaller_x + SIZE_BTN_PT).contains(&x) {
+            self.change_size(&ctx.data_dir, -SIZE_STEP);
+            return true;
+        }
+        let bigger_x = smaller_x + SIZE_BTN_PT + 4.0;
+        if (bigger_x..bigger_x + SIZE_BTN_PT).contains(&x) {
+            self.change_size(&ctx.data_dir, SIZE_STEP);
+            return true;
+        }
         false
     }
-}
 
-/// Which sidebar row sits at point `y` (rows start under the header), if any.
-fn sidebar_row(lib: &Library, y: f32) -> Option<Source> {
-    let index = ((y - HEADER_PT) / ROW_PT).floor();
-    if y < HEADER_PT || index < 0.0 {
-        return None;
+    /// A press while the install preview is up: Install or Cancel.
+    fn pending_touch(&mut self, ctx: &Ctx, x: f32, y: f32, preview_x: f32) -> bool {
+        if !(PAD_PT..PAD_PT + 28.0).contains(&y) {
+            return false;
+        }
+        if (preview_x..preview_x + BUTTON_PT).contains(&x) {
+            let can = self.pending.as_ref().is_some_and(|p| p.family.is_some() && (!self.prefs.validate_before_install || p.report.is_valid()));
+            if can {
+                self.install_pending(ctx);
+            } else {
+                self.status = "This font fails validation and cannot be installed.".to_string();
+            }
+            return true;
+        }
+        if (preview_x + BUTTON_GAP_PT..preview_x + BUTTON_GAP_PT + BUTTON_PT).contains(&x) {
+            self.cancel_install(ctx);
+            return true;
+        }
+        false
     }
-    let mut rows = vec![Source::All, Source::Disabled];
-    rows.extend(lib.collection_names().into_iter().map(Source::Collection));
-    rows.get(index as usize).cloned()
+
+    /// Selects the family a `fontbook:` link names.
+    fn open_link(&mut self, url: &str) -> bool {
+        let Some(wanted) = model::family_from_url(url) else { return false };
+        let found = self.library.as_ref().and_then(|l| l.find(&wanted)).map(|f| f.family.clone());
+        match found {
+            Some(family) => {
+                self.source = Source::All;
+                self.query.clear();
+                self.selected = Some(family);
+                self.mode = Mode::Sample;
+                self.status.clear();
+            }
+            None => self.status = format!("No font named {wanted} is installed."),
+        }
+        true
+    }
 }
 
-/// True when `y` is on the New Collection row, which sits under the last list row.
-fn new_collection_row(lib: &Library, y: f32) -> bool {
-    let index = ((y - HEADER_PT) / ROW_PT).floor();
-    y >= HEADER_PT && index >= 0.0 && index as usize == 2 + lib.collection_names().len()
+/// A drawing context for the font in `bytes`, at `scale`. The bytes live for the whole run: one per selection or
+/// install preview, so the leak is bounded by what was viewed.
+fn font_ui(bytes: Vec<u8>, scale: f32) -> Option<Ui> {
+    let data: &'static [u8] = Box::leak(bytes.into_boxed_slice());
+    Font::parse(data).map(|font| Ui::new(font, scale))
+}
+
+/// The sidebar rows in order: All Fonts, Off, the collections, then the smart collections.
+fn sidebar_sources(lib: &Library) -> Vec<(String, Source)> {
+    let mut rows = vec![("All Fonts".to_string(), Source::All), ("Off".to_string(), Source::Disabled)];
+    rows.extend(lib.collection_names().into_iter().map(|n| (n.clone(), Source::Collection(n))));
+    rows.extend(lib.smart_names().into_iter().map(|n| (n.clone(), Source::Smart(n))));
+    rows
+}
+
+/// Draws `text` at (`x`, `y`) points, cut to `max_w` points.
+fn put(s: &mut Surface, ui: &Ui, text: &str, pt: f32, colour: u32, x: f32, y: f32, max_w: f32) {
+    let img = ui.text(&ui.fit(text, pt, ui.pt(max_w)), pt, Weight::Regular, colour);
+    s.blit_colored(&img, (x * ui.s) as i32, (y * ui.s) as i32, colour, 255);
+}
+
+/// A filled button of `w` points with its label.
+fn button(s: &mut Surface, ui: &Ui, label: &str, fill: u32, x: f32, y: f32, w: f32, h: f32) {
+    let p = |v: f32| (v * ui.s) as usize;
+    s.fill_rect(p(x), p(y), p(w), p(h), fill);
+    let colour = ui::LABEL.now();
+    let img = ui.text(&ui.fit(label, ui::MAC_BODY_PT, ui.pt(w - 16.0)), ui::MAC_BODY_PT, Weight::Regular, colour);
+    s.blit_colored(&img, ((x + 8.0) * ui.s) as i32, ((y + 6.0) * ui.s) as i32, colour, 255);
 }
 
 impl App for FontBookApp {
@@ -239,24 +547,170 @@ impl App for FontBookApp {
                 self.touch_down(ctx, x, y)
             }
             Input::Key(KeyInput::Text(text)) => {
-                self.query.push_str(&text);
-                self.selected = None;
+                match &mut self.edit {
+                    Edit::Sample(buf) => buf.push_str(&text),
+                    Edit::Rename { text: buf, .. } => buf.push_str(&text),
+                    Edit::None => {
+                        self.query.push_str(&text);
+                        self.selected = None;
+                    }
+                }
                 true
             }
             Input::Key(KeyInput::Code(8)) => {
-                self.query.pop();
+                match &mut self.edit {
+                    Edit::Sample(buf) => {
+                        buf.pop();
+                    }
+                    Edit::Rename { text: buf, .. } => {
+                        buf.pop();
+                    }
+                    Edit::None => {
+                        self.query.pop();
+                    }
+                }
+                true
+            }
+            Input::Key(KeyInput::Code(13)) | Input::Key(KeyInput::Code(10)) if self.edit != Edit::None => {
+                self.commit_edit(&ctx.data_dir);
                 true
             }
             Input::Key(KeyInput::Code(27)) => {
-                self.query.clear();
+                if self.edit != Edit::None {
+                    self.edit = Edit::None;
+                } else if self.pending.is_some() {
+                    self.cancel_install(ctx);
+                } else {
+                    self.query.clear();
+                }
                 true
             }
             Input::Open(path) => {
-                self.install(ctx, &path);
+                if self.open_link(&path) {
+                    return true;
+                }
+                let name = Path::new(&path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                self.begin_install(ctx, PathBuf::from(&path), &name);
                 true
             }
             _ => false,
         }
+    }
+
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        let doc = match ev {
+            DocumentEvent::Opened(doc) => doc,
+            DocumentEvent::OpenedMany { docs, .. } => match docs.into_iter().next() {
+                Some(doc) => doc,
+                None => return false,
+            },
+            DocumentEvent::Failed { .. } => return false,
+            _ => return false,
+        };
+        let mut bytes = Vec::new();
+        if let Err(e) = (&doc.file).read_to_end(&mut bytes) {
+            self.status = format!("Cannot read {}: {e}", doc.name);
+            return true;
+        }
+        match model::stage(&bytes, &doc.name, &ctx.data_dir) {
+            Ok(path) => self.begin_install(ctx, path, &doc.name),
+            Err(e) => self.status = format!("Cannot prepare {}: {e}", doc.name),
+        }
+        true
+    }
+
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        let has_font = self.selected.is_some() && self.pending.is_none();
+        let is_user = self.selected.as_deref().is_some_and(|n| self.is_user_font(n));
+        let on = self.selected.as_deref().and_then(|n| self.library.as_ref().map(|l| l.is_enabled(n)));
+        let collection = self.current_collection().is_some();
+        let has_query = !self.query.trim().is_empty();
+        vec![AppMenu {
+            title: "Font".into(),
+            items: vec![
+                AppMenuItem::new(MENU_ADD, "Add Fonts...").key("cmd+o"),
+                AppMenuItem::separator(),
+                AppMenuItem::new(MENU_NEW_COLLECTION, "New Collection").key("cmd+shift+n"),
+                AppMenuItem::submenu("New Smart Collection"),
+                AppMenuItem::new(MENU_SMART_FIXED, "Fixed Width Fonts").depth(1),
+                AppMenuItem::new(MENU_SMART_VARIABLE, "Variable Fonts").depth(1),
+                AppMenuItem::new(MENU_SMART_STATIC, "Static Fonts").depth(1),
+                AppMenuItem::new(MENU_SMART_TTF, "TrueType Fonts").depth(1),
+                AppMenuItem::new(MENU_SMART_OTF, "OpenType Fonts").depth(1),
+                AppMenuItem::new(MENU_SMART_NAME, "Name Contains Search Text").enabled(has_query).depth(1),
+                AppMenuItem::new(MENU_RENAME, "Rename Collection").enabled(collection),
+                AppMenuItem::new(MENU_DELETE, "Delete Collection").enabled(collection),
+                AppMenuItem::separator(),
+                AppMenuItem::new(MENU_TOGGLE, if on == Some(false) { "Turn Font On" } else { "Turn Font Off" }).enabled(has_font),
+                AppMenuItem::new(MENU_REMOVE, "Remove Font").enabled(has_font && is_user),
+                AppMenuItem::new(MENU_VALIDATE, "Validate Font").key("cmd+shift+v").enabled(has_font),
+                AppMenuItem::new(MENU_DUPLICATES, if self.duplicates.is_empty() { "Resolve Duplicates" } else { "Resolve Duplicates (Confirm)" }),
+                AppMenuItem::separator(),
+                AppMenuItem::new(MENU_SAMPLE, "Sample").key("cmd+1").checked(self.mode == Mode::Sample),
+                AppMenuItem::new(MENU_REPERTOIRE, "Repertoire").key("cmd+2").checked(self.mode == Mode::Repertoire),
+                AppMenuItem::new(MENU_INFO, "Info").key("cmd+3").checked(self.mode == Mode::Info),
+                AppMenuItem::separator(),
+                AppMenuItem::new(MENU_EDIT_TEXT, "Edit Sample Text").key("cmd+t").enabled(has_font),
+                AppMenuItem::new(MENU_BIGGER, "Bigger").key("cmd++"),
+                AppMenuItem::new(MENU_SMALLER, "Smaller").key("cmd+-"),
+                AppMenuItem::separator(),
+                AppMenuItem::new(MENU_VALIDATE_FIRST, "Validate Fonts Before Installing").checked(self.prefs.validate_before_install),
+            ],
+        }]
+    }
+
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
+        let data = ctx.data_dir.clone();
+        self.commit_edit(&data);
+        match id {
+            MENU_ADD => {
+                let options = OpenOptions { title: "Add Fonts".into(), filters: vec!["ttf".into(), "otf".into()], ..OpenOptions::default() };
+                let _ = ctx.open_panel(&options);
+            }
+            MENU_NEW_COLLECTION => self.new_collection(&data),
+            MENU_SMART_FIXED => self.new_smart(&data, Rule::Fixed),
+            MENU_SMART_VARIABLE => self.new_smart(&data, Rule::Variable),
+            MENU_SMART_STATIC => self.new_smart(&data, Rule::Static),
+            MENU_SMART_TTF => self.new_smart(&data, Rule::TrueType),
+            MENU_SMART_OTF => self.new_smart(&data, Rule::OpenType),
+            MENU_SMART_NAME => {
+                let text = self.query.trim().to_string();
+                if !text.is_empty() {
+                    self.new_smart(&data, Rule::NameContains(text));
+                }
+            }
+            MENU_RENAME => self.start_rename(),
+            MENU_DELETE => self.delete_current(&data),
+            MENU_VALIDATE => self.mode = Mode::Validation,
+            MENU_DUPLICATES => self.resolve_duplicates(&data),
+            MENU_SAMPLE => self.mode = Mode::Sample,
+            MENU_REPERTOIRE => self.mode = Mode::Repertoire,
+            MENU_INFO => self.mode = Mode::Info,
+            MENU_EDIT_TEXT => {
+                self.mode = Mode::Sample;
+                self.edit = Edit::Sample(self.prefs.sample_text.clone());
+            }
+            MENU_BIGGER => self.change_size(&data, SIZE_STEP),
+            MENU_SMALLER => self.change_size(&data, -SIZE_STEP),
+            MENU_VALIDATE_FIRST => {
+                self.prefs.validate_before_install = !self.prefs.validate_before_install;
+                self.save_prefs(&data);
+            }
+            MENU_TOGGLE => {
+                if let Some(name) = self.selected.clone() {
+                    self.toggle_enabled(&data, &name);
+                }
+            }
+            MENU_REMOVE => {
+                if let Some(name) = self.selected.clone() {
+                    if self.is_user_font(&name) {
+                        self.remove(&data, &name);
+                    }
+                }
+            }
+            _ => return false,
+        }
+        true
     }
 
     fn draw(&mut self, ctx: &Ctx, s: &mut Surface, _t: f64) -> Damage {
@@ -264,37 +718,38 @@ impl App for FontBookApp {
         let scale = ui.s;
         self.ensure_preview(scale);
         let p = |v: f32| (v * scale) as usize;
-        // positions for blit_colored, which takes signed pixels
-        let pi = |v: f32| (v * scale) as i32;
         let (w, h) = (s.w, s.h);
+        let (wp, hp) = (w as f32 / scale, h as f32 / scale);
         s.fill_rect(0, 0, w, h, ui::DETAIL_BG.now());
         // sidebar
         s.fill_rect(0, 0, p(SIDEBAR_PT), h, ui::SIDEBAR_BG.now());
-        let mut rows = vec![("All Fonts".to_string(), Source::All), ("Off".to_string(), Source::Disabled)];
-        if let Some(lib) = &self.library {
-            rows.extend(lib.collection_names().into_iter().map(|n| (n.clone(), Source::Collection(n))));
-        }
+        let rows = self.library.as_ref().map(sidebar_sources).unwrap_or_default();
         for (i, (label, source)) in rows.iter().enumerate() {
             let y = HEADER_PT + i as f32 * ROW_PT;
             if *source == self.source {
                 s.fill_rect(p(6.0), p(y), p(SIDEBAR_PT - 12.0), p(ROW_PT), ui::SIDEBAR_SELECTED);
             }
-            let img = ui.text(&ui.fit(label, ui::MAC_BODY_PT, ui.pt(SIDEBAR_PT - 2.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
-            s.blit_colored(&img, pi(PAD_PT), pi(y + 6.0), ui::LABEL.now(), 255);
+            let editing = match (&self.edit, source) {
+                (Edit::Rename { old, smart, text }, Source::Collection(n)) if !*smart && old == n => Some(text.clone()),
+                (Edit::Rename { old, smart, text }, Source::Smart(n)) if *smart && old == n => Some(text.clone()),
+                _ => None,
+            };
+            let shown = match editing {
+                Some(text) => format!("{text}|"),
+                None => label.clone(),
+            };
+            put(s, ui, &shown, ui::MAC_BODY_PT, ui::LABEL.now(), PAD_PT, y + 6.0, SIDEBAR_PT - 2.0 * PAD_PT);
         }
-        let new_y = HEADER_PT + rows.len() as f32 * ROW_PT;
-        let img = ui.text("New Collection", ui::MAC_BODY_PT, Weight::Regular, ui::LINK);
-        s.blit_colored(&img, pi(PAD_PT), pi(new_y + 6.0), ui::LINK, 255);
+        put(s, ui, "New Collection", ui::MAC_BODY_PT, ui::LINK, PAD_PT, HEADER_PT + rows.len() as f32 * ROW_PT + 6.0, SIDEBAR_PT - 2.0 * PAD_PT);
         // list column
         let x0 = SIDEBAR_PT;
         s.fill_rect(p(x0 + LIST_PT - 1.0), 0, 1, h, ui::SEPARATOR);
         let shown = self.shown();
-        let total = shown.len();
-        let header = ui.text(&format!("{total} families"), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-        s.blit_colored(&header, pi(x0 + PAD_PT), pi(HEADER_PT - 20.0), ui::LABEL_2.now(), 255);
+        let heading = if self.query.is_empty() { format!("{} families", shown.len()) } else { format!("{} families matching \"{}\"", shown.len(), self.query) };
+        put(s, ui, &heading, ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), x0 + PAD_PT, HEADER_PT - 20.0, LIST_PT - 2.0 * PAD_PT);
         for (i, name) in shown.iter().enumerate() {
             let y = HEADER_PT + i as f32 * ROW_PT;
-            if y > h as f32 / scale {
+            if y > hp {
                 break;
             }
             let on = self.library.as_ref().is_none_or(|l| l.is_enabled(name));
@@ -302,77 +757,201 @@ impl App for FontBookApp {
                 s.fill_rect(p(x0 + 6.0), p(y), p(LIST_PT - 12.0), p(ROW_PT), ui::SIDEBAR_SELECTED);
             }
             let colour = if on { ui::LABEL.now() } else { ui::LABEL_2.now() };
-            let img = ui.text(&ui.fit(name, ui::MAC_BODY_PT, ui.pt(LIST_PT - 2.0 * PAD_PT)), ui::MAC_BODY_PT, Weight::Regular, colour);
-            s.blit_colored(&img, pi(x0 + PAD_PT), pi(y + 6.0), colour, 255);
+            put(s, ui, name, ui::MAC_BODY_PT, colour, x0 + PAD_PT, y + 6.0, LIST_PT - 2.0 * PAD_PT);
         }
         // preview column
         let px = SIDEBAR_PT + LIST_PT + PAD_PT;
-        match (&self.selected, &self.preview) {
-            (Some(name), preview) => {
-                let on = self.library.as_ref().is_none_or(|l| l.is_enabled(name));
-                s.fill_rect(p(px), p(PAD_PT), p(BUTTON_PT), p(28.0), if on { ui::LINK } else { ui::SEPARATOR });
-                let label = if on { "Turn Off" } else { "Turn On" };
-                let img = ui.text(label, ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
-                s.blit_colored(&img, pi(px + 12.0), pi(PAD_PT + 6.0), ui::LABEL.now(), 255);
-                if self.is_user_font(name) {
-                    let rx = px + BUTTON_GAP_PT;
-                    s.fill_rect(p(rx), p(PAD_PT), p(BUTTON_PT), p(28.0), ui::DESTRUCTIVE);
-                    let img = ui.text("Remove Font", ui::MAC_BODY_PT, Weight::Regular, ui::LABEL.now());
-                    s.blit_colored(&img, pi(rx + 12.0), pi(PAD_PT + 6.0), ui::LABEL.now(), 255);
-                }
-                let title = ui.text(&ui.fit(name, ui::MAC_TITLE2_PT, ui.pt(w as f32 / scale - px - PAD_PT)), ui::MAC_TITLE2_PT, Weight::Regular, ui::LABEL.now());
-                s.blit_colored(&title, pi(px), pi(HEADER_PT + PAD_PT), ui::LABEL.now(), 255);
-                let mut y = HEADER_PT + 56.0;
-                if let Some((_, font_ui)) = preview {
-                    for size in PREVIEW_SIZES {
-                        let img = font_ui.text(model::PREVIEW_TEXT, size, Weight::Regular, ui::LABEL.now());
-                        s.blit_colored(&img, pi(px), pi(y), ui::LABEL.now(), 255);
-                        y += size * 1.6;
-                    }
-                }
-                if let Some(lib) = &self.library {
-                    y = y.max(INFO_TOP_PT);
-                    let mut info = lib.info(name);
-                    if let Some((n, r)) = &self.report {
-                        if n == name {
-                            info.extend(model::repertoire_rows(r));
-                        }
-                    }
-                    for (k, v) in info {
-                        let line = format!("{k}: {v}");
-                        let img = ui.text(&ui.fit(&line, ui::MAC_FOOTNOTE_PT, ui.pt(w as f32 / scale - px - PAD_PT)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-                        s.blit_colored(&img, pi(px), pi(y), ui::LABEL_2.now(), 255);
-                        y += 18.0;
-                    }
-                    // collection membership: one row per collection, the action named on the row
-                    let head = ui.text("Collections", ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-                    s.blit_colored(&head, pi(px), pi(MEMBERSHIP_TOP_PT), ui::LABEL_2.now(), 255);
-                    let names = lib.collection_names();
-                    if names.is_empty() {
-                        let hint = ui.text("No collections yet. Choose New Collection in the sidebar.", ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-                        s.blit_colored(&hint, pi(px), pi(MEMBERSHIP_TOP_PT + MEMBERSHIP_ROW_PT), ui::LABEL_2.now(), 255);
-                    }
-                    for (i, collection) in names.iter().enumerate() {
-                        let member = lib.members(collection).is_some_and(|m| m.iter().any(|x| x.eq_ignore_ascii_case(name)));
-                        let label = if member { format!("Remove from {collection}") } else { format!("Add to {collection}") };
-                        let y = MEMBERSHIP_TOP_PT + MEMBERSHIP_ROW_PT * (i + 1) as f32;
-                        let img = ui.text(&ui.fit(&label, ui::MAC_BODY_PT, ui.pt(260.0)), ui::MAC_BODY_PT, Weight::Regular, ui::LINK);
-                        s.blit_colored(&img, pi(px), pi(y), ui::LINK, 255);
-                    }
-                }
-            }
-            (None, _) => {
-                let hint = ui.text("Select a font to preview it", ui::MAC_BODY_PT, Weight::Regular, ui::LABEL_2.now());
-                s.blit_colored(&hint, pi(px), pi(HEADER_PT + PAD_PT), ui::LABEL_2.now(), 255);
-            }
+        let avail = wp - px - PAD_PT;
+        if self.pending.is_some() {
+            self.draw_pending(ui, s, px, avail);
+        } else if let Some(name) = self.selected.clone() {
+            self.draw_selected(ui, s, &name, px, avail, hp);
+        } else {
+            put(s, ui, "Select a font to preview it", ui::MAC_BODY_PT, ui::LABEL_2.now(), px, HEADER_PT + PAD_PT, avail);
         }
         if !self.status.is_empty() {
-            let img = ui.text(&ui.fit(&self.status, ui::MAC_FOOTNOTE_PT, ui.pt(w as f32 / scale - px - PAD_PT)), ui::MAC_FOOTNOTE_PT, Weight::Regular, ui::LABEL_2.now());
-            s.blit_colored(&img, pi(px), pi(h as f32 / scale - 24.0), ui::LABEL_2.now(), 255);
+            put(s, ui, &self.status, ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), px, hp - 24.0, avail);
         }
         let mut d = Damage::new(w, h);
         d.all();
         d
+    }
+}
+
+impl FontBookApp {
+    /// The install preview: Install and Cancel, the validation verdict, and a sample in the candidate font.
+    fn draw_pending(&self, ui: &Ui, s: &mut Surface, px: f32, avail: f32) {
+        let Some(pending) = &self.pending else { return };
+        let can = pending.family.is_some() && (!self.prefs.validate_before_install || pending.report.is_valid());
+        button(s, ui, "Install", if can { ui::LINK } else { ui::SEPARATOR }, px, PAD_PT, BUTTON_PT, 28.0);
+        button(s, ui, "Cancel", ui::SEPARATOR, px + BUTTON_GAP_PT, PAD_PT, BUTTON_PT, 28.0);
+        let title = pending.family.clone().unwrap_or_else(|| pending.name.clone());
+        put(s, ui, &title, ui::MAC_TITLE2_PT, ui::LABEL.now(), px, HEADER_PT + PAD_PT, avail);
+        let verdict = if pending.report.is_valid() { "Validation: passed".to_string() } else { "Validation: failed".to_string() };
+        put(s, ui, &format!("{} - {verdict}", pending.name), ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), px, HEADER_PT + 44.0, avail);
+        let mut y = CONTENT_TOP_PT;
+        if let Some(font) = &pending.font {
+            let size = self.prefs.sample_size;
+            let img = font.text(&font.fit(self.prefs.sample(), size, font.pt(avail)), size, Weight::Regular, ui::LABEL.now());
+            s.blit_colored(&img, (px * ui.s) as i32, (y * ui.s) as i32, ui::LABEL.now(), 255);
+            y += size * 1.6 + 8.0;
+        }
+        let mut rows = model::repertoire_rows(&pending.report);
+        if pending.family.is_none() {
+            rows.push(("Family".to_string(), "This desktop cannot draw the file".to_string()));
+        }
+        for (k, v) in rows {
+            put(s, ui, &format!("{k}: {v}"), ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), px, y, avail);
+            y += 18.0;
+        }
+        if !can {
+            put(s, ui, "Install is off for a font that fails validation (Font > Validate Fonts Before Installing).", ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), px, y + 8.0, avail);
+        }
+    }
+
+    /// The selected family: switch and Remove Font, the name, the mode tabs and the mode's content.
+    fn draw_selected(&self, ui: &Ui, s: &mut Surface, name: &str, px: f32, avail: f32, hp: f32) {
+        let on = self.library.as_ref().is_none_or(|l| l.is_enabled(name));
+        button(s, ui, if on { "Turn Off" } else { "Turn On" }, if on { ui::LINK } else { ui::SEPARATOR }, px, PAD_PT, BUTTON_PT, 28.0);
+        if self.is_user_font(name) {
+            button(s, ui, "Remove Font", ui::DESTRUCTIVE, px + BUTTON_GAP_PT, PAD_PT, BUTTON_PT, 28.0);
+        }
+        put(s, ui, name, ui::MAC_TITLE2_PT, ui::LABEL.now(), px, HEADER_PT + PAD_PT, avail);
+        for (i, (label, mode)) in [("Sample", Mode::Sample), ("Repertoire", Mode::Repertoire), ("Info", Mode::Info)].iter().enumerate() {
+            let x = px + i as f32 * TAB_PT;
+            let active = self.mode == *mode;
+            let p = |v: f32| (v * ui.s) as usize;
+            if active {
+                s.fill_rect(p(x), p(TABS_TOP_PT), p(TAB_PT - 4.0), p(TAB_H_PT), ui::SIDEBAR_SELECTED);
+            }
+            put(s, ui, label, ui::MAC_BODY_PT, ui::LABEL.now(), x + 10.0, TABS_TOP_PT + 4.0, TAB_PT - 20.0);
+        }
+        let preview = self.preview.as_ref().filter(|(n, _)| n == name).map(|(_, u)| u);
+        let report = self.report.as_ref().filter(|(n, _)| n == name).map(|(_, r)| r);
+        match self.mode {
+            Mode::Sample => self.draw_sample(ui, s, preview, px, avail, hp),
+            Mode::Repertoire => self.draw_repertoire(ui, s, preview, report, px, hp),
+            Mode::Info => self.draw_info(ui, s, name, report, px, avail),
+            Mode::Validation => self.draw_validation(ui, s, report, px, avail),
+        }
+    }
+
+    /// Sample mode: the editable sample field with the size buttons, the sample at that size, and a smaller ladder.
+    fn draw_sample(&self, ui: &Ui, s: &mut Surface, preview: Option<&Ui>, px: f32, avail: f32, hp: f32) {
+        let p = |v: f32| (v * ui.s) as usize;
+        s.fill_rect(p(px), p(CONTENT_TOP_PT), p(FIELD_W_PT), p(FIELD_H_PT), ui::FIELD_FILL);
+        let editing = if let Edit::Sample(buf) = &self.edit { Some(format!("{buf}|")) } else { None };
+        let (text, colour) = match (&editing, self.prefs.sample_text.trim().is_empty()) {
+            (Some(t), _) => (t.clone(), ui::LABEL.now()),
+            (None, true) => ("Click to type your own text".to_string(), ui::LABEL_2.now()),
+            (None, false) => (self.prefs.sample_text.clone(), ui::LABEL.now()),
+        };
+        put(s, ui, &text, ui::MAC_BODY_PT, colour, px + 8.0, CONTENT_TOP_PT + 5.0, FIELD_W_PT - 16.0);
+        let smaller_x = px + FIELD_W_PT + 12.0;
+        let bigger_x = smaller_x + SIZE_BTN_PT + 4.0;
+        button(s, ui, "-", ui::SEPARATOR, smaller_x, CONTENT_TOP_PT, SIZE_BTN_PT, FIELD_H_PT);
+        button(s, ui, "+", ui::SEPARATOR, bigger_x, CONTENT_TOP_PT, SIZE_BTN_PT, FIELD_H_PT);
+        put(s, ui, &format!("{} pt", self.prefs.sample_size.round() as i32), ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), bigger_x + SIZE_BTN_PT + 8.0, CONTENT_TOP_PT + 6.0, 60.0);
+        let Some(font) = preview else { return };
+        let mut y = CONTENT_TOP_PT + FIELD_H_PT + 14.0;
+        let mut sizes = vec![self.prefs.sample_size];
+        sizes.extend(LADDER_SIZES.iter().rev().copied().filter(|v| *v < self.prefs.sample_size));
+        for size in sizes {
+            if y > hp {
+                break;
+            }
+            let img = font.text(&font.fit(self.prefs.sample(), size, font.pt(avail)), size, Weight::Regular, ui::LABEL.now());
+            s.blit_colored(&img, (px * ui.s) as i32, (y * ui.s) as i32, ui::LABEL.now(), 255);
+            y += size * 1.6;
+        }
+    }
+
+    /// Repertoire mode: the coverage numbers and a grid of the Latin characters in the font.
+    fn draw_repertoire(&self, ui: &Ui, s: &mut Surface, preview: Option<&Ui>, report: Option<&validate::Report>, px: f32, hp: f32) {
+        let mut y = CONTENT_TOP_PT;
+        if let Some(r) = report {
+            let line = format!("{} characters, {} glyphs", r.characters, r.glyphs);
+            put(s, ui, &line, ui::MAC_BODY_PT, ui::LABEL.now(), px, y, 400.0);
+            y += 22.0;
+            let blocks = if r.blocks.is_empty() { "No Unicode blocks covered".to_string() } else { r.blocks.join(", ") };
+            put(s, ui, &blocks, ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), px, y, 520.0);
+            y += 26.0;
+        }
+        let Some(font) = preview else { return };
+        let chars: Vec<char> = (0x21u32..0x7f).chain(0xa1..0x100).filter_map(char::from_u32).collect();
+        for (i, c) in chars.iter().enumerate() {
+            let cx = px + (i % GRID_COLS) as f32 * GRID_CELL_PT;
+            let cy = y + (i / GRID_COLS) as f32 * GRID_CELL_PT;
+            if cy > hp {
+                break;
+            }
+            let img = font.text(&c.to_string(), 20.0, Weight::Regular, ui::LABEL.now());
+            s.blit_colored(&img, (cx * ui.s) as i32, (cy * ui.s) as i32, ui::LABEL.now(), 255);
+        }
+    }
+
+    /// Info mode: the info rows, then one row per collection to add the family to it or take it out.
+    fn draw_info(&self, ui: &Ui, s: &mut Surface, name: &str, report: Option<&validate::Report>, px: f32, avail: f32) {
+        let Some(lib) = &self.library else { return };
+        let mut y = CONTENT_TOP_PT;
+        let mut info = lib.info(name);
+        if let Some(r) = report {
+            info.extend(model::repertoire_rows(r));
+        }
+        for (k, v) in info {
+            put(s, ui, &format!("{k}: {v}"), ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), px, y, avail);
+            y += 18.0;
+        }
+        put(s, ui, "Collections", ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), px, MEMBERSHIP_TOP_PT, avail);
+        let names = lib.collection_names();
+        if names.is_empty() {
+            put(s, ui, "No collections yet. Choose New Collection in the sidebar.", ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), px, MEMBERSHIP_TOP_PT + MEMBERSHIP_ROW_PT, avail);
+        }
+        for (i, collection) in names.iter().enumerate() {
+            let member = lib.members(collection).is_some_and(|m| m.iter().any(|x| x.eq_ignore_ascii_case(name)));
+            let label = if member { format!("Remove from {collection}") } else { format!("Add to {collection}") };
+            put(s, ui, &label, ui::MAC_BODY_PT, ui::LINK, px, MEMBERSHIP_TOP_PT + MEMBERSHIP_ROW_PT * (i + 1) as f32, 260.0);
+        }
+    }
+
+    /// The validation result of the selected font: pass or fail, then each problem.
+    fn draw_validation(&self, ui: &Ui, s: &mut Surface, report: Option<&validate::Report>, px: f32, avail: f32) {
+        let mut y = CONTENT_TOP_PT;
+        let Some(r) = report else {
+            put(s, ui, "The font file could not be read.", ui::MAC_BODY_PT, ui::LABEL_2.now(), px, y, avail);
+            return;
+        };
+        let (verdict, colour) = if r.is_valid() { ("Passed", ui::LABEL.now()) } else { ("Failed", ui::DESTRUCTIVE) };
+        put(s, ui, &format!("Validation: {verdict}"), ui::MAC_TITLE3_PT, colour, px, y, avail);
+        y += 30.0;
+        for problem in &r.problems {
+            put(s, ui, problem, ui::MAC_BODY_PT, ui::DESTRUCTIVE, px, y, avail);
+            y += 22.0;
+        }
+        if r.is_valid() {
+            for (k, v) in model::repertoire_rows(r).into_iter().filter(|(k, _)| k != "Validation") {
+                put(s, ui, &format!("{k}: {v}"), ui::MAC_FOOTNOTE_PT, ui::LABEL_2.now(), px, y, avail);
+                y += 18.0;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    #[test]
+    fn sidebar_lists_all_off_collections_then_smart_collections() {
+        let mut cols = BTreeMap::new();
+        cols.insert("Work".to_string(), Vec::new());
+        let smart = BTreeMap::from([("Mono".to_string(), Rule::Fixed)]);
+        let lib = Library::new(Vec::new(), BTreeSet::new(), cols).with_smart(smart);
+        let rows = sidebar_sources(&lib);
+        let names: Vec<&str> = rows.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["All Fonts", "Off", "Work", "Mono"]);
+        assert_eq!(rows[3].1, Source::Smart("Mono".to_string()));
     }
 }
 
@@ -383,6 +962,11 @@ fn main() {
         source: Source::All,
         query: String::new(),
         selected: None,
+        mode: Mode::Sample,
+        prefs: Prefs::default(),
+        edit: Edit::None,
+        pending: None,
+        duplicates: Vec::new(),
         preview: None,
         report: None,
         status: String::new(),

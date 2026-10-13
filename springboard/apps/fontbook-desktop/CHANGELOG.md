@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0 — 2026-10-13
+
+- Font menu in the menu bar: Add Fonts (Cmd+O, open panel), New Collection, New Smart Collection (fixed width, variable,
+  static, TrueType, OpenType, name contains the search text), Rename and Delete Collection, Turn Font On/Off, Remove Font,
+  Validate Font, Resolve Duplicates, the three preview modes, Edit Sample Text, Bigger and Smaller.
+- Install preview: a font from Add Fonts or Open With shows its validation and a sample, with Install and Cancel.
+- Settings: "Validate Fonts Before Installing" (on by default), saved with the sample text and size.
+- Preview modes Sample, Repertoire (coverage and a character grid) and Info, chosen with tabs; a Validation view shows
+  pass or fail with each problem.
+- Custom sample text (click the field or Cmd+T) and a size control, saved in the app's data dir.
+- Smart collections saved as rules; collections can be renamed in the sidebar and deleted.
+- Resolve Duplicates: finds families with several files among your installs and keeps the newest after a second confirm.
+- `fontbook:` links select a family (`fontbook://Inter`).
+- Still missing: Libraries, export and print of samples, Show in Files, Type 1 and font collections, per-style listing.
+
 ## 0.2.0 — 2026-10-13
 
 - Validation: an install is refused, with the reason, when the file is not a complete TrueType or OpenType font (header,
