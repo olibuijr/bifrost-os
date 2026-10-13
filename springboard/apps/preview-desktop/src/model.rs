@@ -262,6 +262,146 @@ pub struct Mark {
     pub ink: Vec<(f32, f32)>,
 }
 
+/// Everything an edit can change in a document: markup, page order and deletions, turns and colour adjustments.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Snapshot {
+    pub marks: Vec<Mark>,
+    pub order: Vec<usize>,
+    pub turns: Vec<u8>,
+    pub adjust: Adjust,
+}
+
+/// The most edits Undo goes back through.
+const HISTORY_MAX: usize = 100;
+
+/// The undo and redo stacks of a document's edits.
+#[derive(Clone, Debug, Default)]
+pub struct History {
+    undo: Vec<Snapshot>,
+    redo: Vec<Snapshot>,
+}
+
+impl History {
+    /// Notes that an edit just changed the document from `before`. A new edit clears what Redo would have redone.
+    pub fn record(&mut self, before: Snapshot) {
+        self.undo.push(before);
+        if self.undo.len() > HISTORY_MAX {
+            self.undo.remove(0);
+        }
+        self.redo.clear();
+    }
+
+    /// The state to go back to, given the `current` one (kept for Redo).
+    pub fn undo(&mut self, current: Snapshot) -> Option<Snapshot> {
+        let previous = self.undo.pop()?;
+        self.redo.push(current);
+        Some(previous)
+    }
+
+    /// The state to go forward to, given the `current` one (kept for Undo).
+    pub fn redo(&mut self, current: Snapshot) -> Option<Snapshot> {
+        let next = self.redo.pop()?;
+        self.undo.push(current);
+        Some(next)
+    }
+
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
+}
+
+/// The pages visited, for Go > Back and Go > Forward.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Trail {
+    back: Vec<usize>,
+    forward: Vec<usize>,
+}
+
+impl Trail {
+    /// Notes that the view left page `from` for another page. Going somewhere new clears Forward.
+    pub fn visit(&mut self, from: usize) {
+        if self.back.last() != Some(&from) {
+            self.back.push(from);
+        }
+        if self.back.len() > HISTORY_MAX {
+            self.back.remove(0);
+        }
+        self.forward.clear();
+    }
+
+    /// The page Back goes to, given the `current` page (kept for Forward).
+    pub fn back(&mut self, current: usize) -> Option<usize> {
+        let page = self.back.pop()?;
+        self.forward.push(current);
+        Some(page)
+    }
+
+    /// The page Forward goes to, given the `current` page (kept for Back).
+    pub fn forward(&mut self, current: usize) -> Option<usize> {
+        let page = self.forward.pop()?;
+        self.back.push(current);
+        Some(page)
+    }
+
+    pub fn can_back(&self) -> bool {
+        !self.back.is_empty()
+    }
+
+    pub fn can_forward(&self) -> bool {
+        !self.forward.is_empty()
+    }
+}
+
+/// The zero-based page for the text typed in Go to Page (pages count from 1), or `None` when it is not a page number
+/// of a document of `count` pages.
+pub fn parse_page(text: &str, count: usize) -> Option<usize> {
+    let n: usize = text.trim().parse().ok()?;
+    (n >= 1 && n <= count).then(|| n - 1)
+}
+
+/// The bookmarks file text: one source page per line.
+pub fn to_bookmarks(pages: &[usize]) -> String {
+    pages.iter().map(|p| format!("{p}\n")).collect()
+}
+
+/// Reads bookmarks back, in order and without repeats; lines that are not page numbers are skipped.
+pub fn parse_bookmarks(text: &str) -> Vec<usize> {
+    let mut out: Vec<usize> = Vec::new();
+    for page in text.lines().filter_map(|l| l.trim().parse::<usize>().ok()) {
+        if !out.contains(&page) {
+            out.push(page);
+        }
+    }
+    out
+}
+
+/// Adds source page `page` to the bookmarks, or removes it when it is there. Returns whether it is bookmarked now.
+pub fn toggle_bookmark(pages: &mut Vec<usize>, page: usize) -> bool {
+    match pages.iter().position(|&p| p == page) {
+        Some(i) => {
+            pages.remove(i);
+            false
+        }
+        None => {
+            pages.push(page);
+            true
+        }
+    }
+}
+
+/// The bookmarked shown page after (or before) `current`, from the shown positions of the bookmarks. It does not wrap.
+pub fn neighbour(positions: &[usize], current: usize, forward: bool) -> Option<usize> {
+    if forward {
+        positions.iter().copied().filter(|&p| p > current).min()
+    } else {
+        positions.iter().copied().filter(|&p| p < current).max()
+    }
+}
+
 /// A note's marker on an exported picture, in pixels.
 const NOTE_PX: usize = 14;
 
@@ -626,5 +766,79 @@ mod tests {
         // the first point is drawn, and the picture away from the stroke is untouched
         assert_ne!(picture.px[1 * 10 + 1], pack(255, 255, 255, 255));
         assert_eq!(picture.px[9 * 10 + 9], pack(255, 255, 255, 255));
+    }
+
+    fn snap(n: usize) -> Snapshot {
+        Snapshot { marks: Vec::new(), order: (0..n).collect(), turns: vec![0; n], adjust: Adjust::default() }
+    }
+
+    #[test]
+    fn undo_and_redo_walk_the_edits_and_a_new_edit_clears_redo() {
+        let mut h = History::default();
+        assert!(!h.can_undo() && !h.can_redo());
+        h.record(snap(1));
+        h.record(snap(2));
+        let back = h.undo(snap(3)).expect("an edit to undo");
+        assert_eq!(back, snap(2));
+        assert!(h.can_redo());
+        assert_eq!(h.redo(snap(2)), Some(snap(3)));
+        assert_eq!(h.undo(snap(3)), Some(snap(2)));
+        h.record(snap(9));
+        assert!(!h.can_redo());
+        assert_eq!(h.undo(snap(10)), Some(snap(9)));
+        assert_eq!(h.undo(snap(9)), Some(snap(1)));
+        assert_eq!(h.undo(snap(1)), None);
+    }
+
+    #[test]
+    fn history_keeps_a_bounded_number_of_edits() {
+        let mut h = History::default();
+        for i in 0..(HISTORY_MAX + 20) {
+            h.record(snap(i + 1));
+        }
+        let mut n = 0;
+        while h.undo(snap(1)).is_some() {
+            n += 1;
+        }
+        assert_eq!(n, HISTORY_MAX);
+    }
+
+    #[test]
+    fn the_trail_goes_back_and_forward_and_new_visits_clear_forward() {
+        let mut t = Trail::default();
+        assert!(!t.can_back() && !t.can_forward());
+        t.visit(0);
+        t.visit(4);
+        assert_eq!(t.back(7), Some(4));
+        assert_eq!(t.back(4), Some(0));
+        assert_eq!(t.back(0), None);
+        assert_eq!(t.forward(0), Some(4));
+        t.visit(4);
+        assert!(!t.can_forward());
+    }
+
+    #[test]
+    fn go_to_page_text_is_one_based_and_checked() {
+        assert_eq!(parse_page("1", 5), Some(0));
+        assert_eq!(parse_page(" 5 ", 5), Some(4));
+        assert_eq!(parse_page("6", 5), None);
+        assert_eq!(parse_page("0", 5), None);
+        assert_eq!(parse_page("x", 5), None);
+        assert_eq!(parse_page("", 5), None);
+    }
+
+    #[test]
+    fn bookmarks_toggle_round_trip_and_find_neighbours() {
+        let mut pages = Vec::new();
+        assert!(toggle_bookmark(&mut pages, 3));
+        assert!(toggle_bookmark(&mut pages, 1));
+        assert!(!toggle_bookmark(&mut pages, 3));
+        assert_eq!(pages, vec![1]);
+        assert_eq!(parse_bookmarks(&to_bookmarks(&[4, 2, 4, 9])), vec![4, 2, 9]);
+        assert_eq!(parse_bookmarks("x\n7\n"), vec![7]);
+        assert_eq!(neighbour(&[2, 5, 9], 5, true), Some(9));
+        assert_eq!(neighbour(&[2, 5, 9], 5, false), Some(2));
+        assert_eq!(neighbour(&[2, 5, 9], 9, true), None);
+        assert_eq!(neighbour(&[], 0, false), None);
     }
 }

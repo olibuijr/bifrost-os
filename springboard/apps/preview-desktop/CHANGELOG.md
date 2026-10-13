@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0
+
+- Edit > Undo (Cmd+Z) and Redo (Cmd+Shift+Z) step back and forward through markup, page moves and deletes, turns and
+  colour changes.
+- File > Revert to Original drops all markup, restores the page order and turns and resets the colour. It can be undone.
+- A new Go menu holds Previous, Next, First Page, Last Page, Go to Page (Cmd+Option+G, type the number, Return), Back
+  and Forward through the pages visited (Cmd+Option+B, Cmd+Option+F), and bookmarks: Add Bookmark (Cmd+D) toggles one on
+  the shown page, Previous and Next Bookmark jump between them. Bookmarks are kept beside the markup.
+- View > Hide Sidebar and Show Sidebar (Cmd+Option+S).
+
 ## 0.5.1
 
 - File > Print... (Cmd+P) prints the document as it is marked up: a PDF's page order, turns, markup and deletions are
