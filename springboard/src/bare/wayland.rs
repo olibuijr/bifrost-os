@@ -794,6 +794,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
     fn event(s: &mut Self, _: &wl_pointer::WlPointer, e: wl_pointer::Event, _: &(), _: &Connection, _: &QueueHandle<Self>) {
         let t = super::sys::now_ms();
         let offset = s.target.and_then(|id| s.windows.get(&id)).map(|w| (w.frame.x as f32,w.frame.y as f32)).or_else(||s.chrome_target.and_then(|id|s.chrome.get(&id)).map(|w|(w.frame.x as f32,w.frame.y as f32))).unwrap_or((0.0,0.0));
+        if let wl_pointer::Event::Leave{..}=e {crate::shell::services::screen_sample::pointer_left();}
         match e {
             wl_pointer::Event::Enter { surface,surface_x,surface_y,serial,.. } => {
                 s.cursor_serial=serial;
@@ -807,6 +808,7 @@ impl Dispatch<wl_pointer::WlPointer, ()> for State {
                 crate::shell::services::cursor_service::pointer_moved();
                 let m = s.target.and_then(|id| s.windows.get(&id)).map_or(0.0, |w| w.margin as f32);
                 s.xy = (surface_x as f32 - m,surface_y as f32 - m);
+                crate::shell::services::screen_sample::pointer_moved(s.xy.0+offset.0,s.xy.1+offset.1);
                 {
                     let shape=s.target.and_then(|id|s.windows.get(&id)).map_or(cursor_device::Shape::Default,|w| {
                         let (x,y)=s.xy; let edge=6.0;
