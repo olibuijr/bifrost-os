@@ -2712,3 +2712,17 @@ table: the macOS 27 pane identifiers are not in `docs/parity-matrix/os/settings`
 is evidenced (as a LaunchAgent name in `docs/parity-matrix/os/daemons/a-c.json`). Add identifiers with their evidence
 before wiring them. The scheme name is allowlisted in `tools/check-names-allow.txt`. Parity: `Preference Panes`,
 "Pane links" row in `docs/parity-matrix/data/preference-panes.json` (partial).
+
+### Contacts data model, store and vCard (`bifrost_ui::contact_book`, `bifrost_ui::contact_vcard`)
+
+Mirrors the Contacts framework type by type, pure and host-tested; the shell store and the Contacts app still use the
+single-field `contactstore.rs` until wired (`from_legacy` migrates one old row). `Contact` (CNMutableContact) holds
+labelled multi-values (`LabeledValue`, `label::*` for the CNLabel constants): phones, emails, postal addresses, URLs,
+relations, social profiles, instant messages, dates, plus birthday and image data. `ContactStore` offers
+`contacts_matching(Predicate, keys)` (name, email, phone, identifiers, in group, in container; email and phone use
+indexes), `groups_matching`, `containers_matching`, `default_container_identifier`, and atomic `SaveRequest`s
+(add/update/delete contact and group, add/remove member). A fetch returns `FetchedContact`, whose getters fail with
+`Error::PropertyNotFetched(key)` for keys the fetch did not name. `format_name` is the formatter's full-name style.
+`contact_vcard::serialize(contacts, Version::V3|V4)` and `contacts(text)` read and write vCards (folding at 75 bytes,
+escapes, TYPE, custom labels via item groups, PHOTO base64). Gaps: no on-disk format for the new model, no change
+history, no thumbnail in vCards, no postal address formatter, no SDK service surface for the new keys.
