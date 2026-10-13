@@ -102,9 +102,9 @@
       "feature": "x-man-page URL and man page services",
       "area": "shell",
       "apple": "x-man-page scheme; Open man Page, Search man Page Index services",
-      "status": "gap",
-      "bifrost": "",
-      "note": "No man page entry points.",
+      "status": "partial",
+      "bifrost": "springboard/src/shell/terminal/selection.rs:24",
+      "note": "More menu row Open man page for selection opens man in a new tab. No x-man-page scheme or search index.",
       "wire": "Add Open man Page (selection) and the x-man-page scheme: spawn man in a new tab; wire to a selection context item."
     },
     {
@@ -194,7 +194,7 @@
       "apple": "Edit > Find (panel with Ignore Case, Wrap Around, Not found), Find Next/Previous, Use Selection for Find",
       "status": "partial",
       "bifrost": "springboard/src/shell/terminal/find.rs:5",
-      "note": "Find bar with match count, No matches, next and previous; no case toggle, no wrap toggle, no Use Selection for Find.",
+      "note": "Use Selection for Find (Cmd+E, Edit menu, More menu) added. Ignore Case and Wrap Around need the iosterm search API.",
       "wire": "Add Ignore Case and Wrap Around toggles to the Find panel (search.rs find options) and cmd+E to use the selection."
     },
     {
@@ -229,8 +229,8 @@
       "area": "edit",
       "apple": "View > Allow Mouse Reporting",
       "status": "partial",
-      "bifrost": "springboard/src/shell/termtouch.rs",
-      "note": "The core encodes SGR and legacy mouse; the menu has no toggle to turn reporting off.",
+      "bifrost": "springboard/src/shell/terminal/profiles.rs:36",
+      "note": "More menu row Allow mouse reporting turns mouse and wheel reports off for all tabs (saved). No option+drag rectangle yet.",
       "wire": "Add Allow Mouse Reporting to the More menu (state in TerminalUi) that disables mouse encoding when off."
     },
     {
@@ -266,7 +266,7 @@
       "apple": "Shell > Export Text As…, Save Selected Text As…",
       "status": "partial",
       "bifrost": "springboard/src/shell/terminal/menus.rs:186",
-      "note": "Writes the transcript to a fixed Files/terminal-scrollback.txt; no name or location panel and no selection export.",
+      "note": "Save selected text to Files added (fixed file name); still no save panel.",
       "wire": "Use the SDK save panel for Export Text As and add Save Selected Text As."
     },
     {
@@ -291,9 +291,9 @@
       "feature": "Edit Title and tab title",
       "area": "window",
       "apple": "Shell > Edit Title",
-      "status": "gap",
-      "bifrost": "",
-      "note": "Tab title follows the program title only.",
+      "status": "partial",
+      "bifrost": "springboard/src/shell/terminal/command.rs:16",
+      "note": "More menu row Edit title sets a per-tab title (Terminal::set_custom_title); empty restores the automatic one. No Inspector field yet.",
       "wire": "Add Edit Title to the More menu that overrides the tab title (term.title in layout.rs)."
     },
     {
@@ -301,8 +301,8 @@
       "area": "view",
       "apple": "Edit > Open URL, Look Up, Search the Web; command-click links",
       "status": "partial",
-      "bifrost": "springboard/src/shell/terminal/links.rs:5",
-      "note": "Opens the first link of the selection in the browser from the More menu; no command-click, no Look Up or Search the Web.",
+      "bifrost": "springboard/src/shell/terminal/selection.rs:5",
+      "note": "Search the web for selection added to the More menu. No command-click and no Look Up.",
       "wire": "Add Cmd+click on detect_urls hits in termtouch.rs and Look Up / Search the Web items to the selection menu."
     },
     {

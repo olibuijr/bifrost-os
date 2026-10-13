@@ -40,6 +40,7 @@ impl Shell {
                     self.terminal_action(1, t);
                 }
             }
+            TermKey::UseSelectionForFind => self.terminal_use_selection_for_find(t),
             TermKey::ClearScrollback => {
                 if let Some(term) = self.term.as_mut() {
                     term.clear_history();

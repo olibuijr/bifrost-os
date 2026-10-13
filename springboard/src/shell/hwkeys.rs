@@ -53,6 +53,8 @@ pub enum TermKey {
     Find,
     FindNext,
     FindPrev,
+    /// Cmd+E: Use Selection for Find
+    UseSelectionForFind,
     ClearScrollback,
     Bigger,
     Smaller,
@@ -74,6 +76,7 @@ impl TermKey {
             (33, false) => TermKey::Find,
             (34, false) => TermKey::FindNext,
             (34, true) => TermKey::FindPrev,
+            (18, false) => TermKey::UseSelectionForFind,
             (37, false) => TermKey::ClearScrollback,
             // Cmd+= and Cmd++ (Shift+=) both enlarge
             (13, _) => TermKey::Bigger,
@@ -712,6 +715,7 @@ mod tests {
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 33), Some(Shortcut::Term(TermKey::Find)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 34), Some(Shortcut::Term(TermKey::FindNext)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], 34), Some(Shortcut::Term(TermKey::FindPrev)));
+        assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 18), Some(Shortcut::Term(TermKey::UseSelectionForFind)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 37), Some(Shortcut::Term(TermKey::ClearScrollback)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA], 13), Some(Shortcut::Term(TermKey::Bigger)));
         assert_eq!(in_term(&mut k, &[KEY_LEFTMETA, KEY_LEFTSHIFT], 13), Some(Shortcut::Term(TermKey::Bigger)), "Cmd++");
