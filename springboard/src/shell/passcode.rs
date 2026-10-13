@@ -719,6 +719,12 @@ impl Shell {
     /// Starts the unlock slide from `from` (a fraction of the screen), or
     /// asks for the passcode first when one is set ("Require: Immediately").
     pub(super) fn begin_unlock(&mut self, from: f32, t: f64) {
+        // with a login backend only privd's token unlocks (login_tick); every other route (Return, the swipe, a
+        // notification tap) just brings the login window up
+        if self.login_backend.is_some() {
+            self.login_show(t);
+            return;
+        }
         let path = self.passcode_path();
         if Lock::required(&path) {
             self.lock_drag = None;

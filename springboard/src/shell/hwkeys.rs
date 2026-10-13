@@ -361,7 +361,10 @@ impl Shell {
                 self.type_out(out, t);
                 vec![]
             }
-            Screen::Lock if self.login_open() => self.login_key(&out, t),
+            Screen::Lock if self.login_open() || self.login_backend.is_some() => {
+                self.login_show(t);
+                self.login_key(&out, t)
+            }
             Screen::Lock if matches!(out, Out::Enter) && self.lock_pad.is_none() && self.anim.is_none() => {
                 self.begin_unlock(0.0, t);
                 vec![]

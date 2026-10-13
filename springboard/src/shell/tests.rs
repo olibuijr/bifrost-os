@@ -414,6 +414,57 @@
         }
     }
 
+    /// A login backend that answers `reply` for any password.
+    struct FixedLogin(login::Reply);
+    impl login::Backend for FixedLogin {
+        fn authenticate(&self, _: &str) -> login::Reply { self.0.clone() }
+        fn account(&self) -> Option<login::AccountInfo> {
+            Some(login::AccountInfo { full_name: "Owner".into(), username: "owner".into(), has_password: true, locked_out_secs: 0 })
+        }
+    }
+
+    fn login_shell(reply: login::Reply) -> Shell {
+        let mut sh = shell();
+        sh.login_backend = Some(std::sync::Arc::new(FixedLogin(reply)));
+        sh
+    }
+
+    #[test]
+    fn with_a_login_backend_return_before_the_first_tick_does_not_unlock() {
+        let mut sh = login_shell(login::Reply::Unavailable);
+        assert!(sh.is_locked() && sh.login.is_none(), "no tick yet: the window is not up");
+        sh.hw_type(keyboard::Out::Enter, 0.0);
+        settle(&mut sh, 2000.0);
+        assert!(sh.is_locked(), "Return alone must not unlock");
+        assert!(sh.login.is_some(), "the login window came up instead");
+    }
+
+    #[test]
+    fn with_a_login_backend_a_swipe_or_a_notification_tap_does_not_unlock() {
+        let mut sh = login_shell(login::Reply::Unavailable);
+        swipe(&mut sh, 600.0, 1800.0, 200.0, 0.0);
+        settle(&mut sh, 2000.0);
+        assert!(sh.is_locked(), "a swipe must not unlock");
+        assert!(sh.lock_drag.is_none(), "and must not lift the lock screen over the desktop");
+        sh.begin_unlock(0.0, 3000.0);
+        settle(&mut sh, 5000.0);
+        assert!(sh.is_locked(), "the notification path (begin_unlock) must not unlock");
+    }
+
+    #[test]
+    fn with_a_login_backend_only_privd_s_token_unlocks() {
+        let mut sh = login_shell(login::Reply::Ok("tok".into()));
+        sh.hw_type(keyboard::Out::Text("pw".into()), 0.0);
+        sh.hw_type(keyboard::Out::Enter, 10.0);
+        for k in 0..200 {
+            sh.tick(20.0 + k as f64 * 20.0);
+            if !sh.is_locked() { break; }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(!sh.is_locked(), "a right password unlocks");
+        assert_eq!(sh.session_token.as_deref(), Some("tok"));
+    }
+
     /// Developer preview: `PREVIEW_DIR=DIR cargo test preview_login -- --ignored` writes login-dark.png and login-light.png
     /// (the boot login window over the lock screen, with a stub account).
     #[test]

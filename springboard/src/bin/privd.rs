@@ -14,15 +14,12 @@ fn main() -> std::process::ExitCode {
         println!("bifrost-privd {}", env!("CARGO_PKG_VERSION"));
         return std::process::ExitCode::SUCCESS;
     }
-    let uid = privd::account_ids().map(|(u, _, _)| u);
-    let gid = std::fs::read_to_string("/etc/group").ok().and_then(|g| privd::parse_group(&g, "bifrost-session"));
-    if uid.is_none() {
-        eprintln!("bifrost-privd: no valid installed account; only root may connect");
-    }
-    if gid.is_none() {
-        eprintln!("bifrost-privd: group bifrost-session is missing (systemd-sysusers); the socket stays root-only");
-    }
-    let cfg = server::Config::system(uid, gid);
+    // faillock's tally outlives a reboot (pam-bifrost-login dir=); the default /run/faillock is tmpfs
+    let _ = std::fs::create_dir_all("/var/lib/faillock");
+    // Stage 1 (docs/privd-protocol.md): the shell runs as root, so no process of the account needs the socket. The
+    // /proc/<pid>/exe check cannot tell the shell from any other process of the account (security review
+    // 2026-10-11), so the account is refused outright until stage 2 hands the user shell a launch-time credential.
+    let cfg = server::Config::system(None, None);
     match server::serve(cfg, privd::default_gate(), Arc::new(RootExec)) {
         Ok(handles) => {
             eprintln!("bifrost-privd {} listening on {}", env!("CARGO_PKG_VERSION"), privd::SOCK);

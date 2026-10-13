@@ -2104,7 +2104,9 @@ impl Shell {
     /// slides the Today View in from the left; once that page is in, its
     /// touches go to the page.
     fn lock_touch(&mut self, ev: Event, t: f64) -> Vec<Effect> {
-        if self.login_open() {
+        // with a login backend the lock screen takes no swipe (a drag would lift it over the desktop)
+        if self.login_open() || self.login_backend.is_some() {
+            self.login_show(t);
             return self.login_touch(ev, t);
         }
         if self.lock_pad.is_some() {
