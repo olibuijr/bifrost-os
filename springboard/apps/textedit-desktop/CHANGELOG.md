@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.0 — 2026-10-13
+
+- Documents open and save as RTF, HTML and plain text, chosen by the file's extension in Save As; a plain text document
+  stays plain, and Format > Make Rich Text and Make Plain Text switch a document's mode.
+- Paragraph styles: line spacing, bullet and numbered lists, and tab stops set by clicking the ruler above the page.
+  Colours from a palette in the format bar and Format > Color.
+- Spelling: misspelled words are underlined while typing, Check Document Now selects the next one, Correct Spelling,
+  Learn Spelling and Ignore Spelling, and learned words are kept in the app's preferences.
+- Printing: File > Print sends the document, paginated for the page setup, to the default printer. Page setup offers
+  A4, US Letter, US Legal, A5 and A3 in portrait or landscape.
+
 ## 1.0.0 — 2026-10-13
 
 - New app: Text Editor. Opens and saves plain text and RTF through the shell's document panels (Open, Save, Save As,
