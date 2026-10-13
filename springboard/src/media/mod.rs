@@ -56,6 +56,10 @@ pub mod queue;
 pub mod player;
 #[cfg(target_os = "linux")]
 pub use player::{Player, State};
+/// Subtitle cues (SubRip and WebVTT) for the video player, and the cue on screen at a time.
+pub mod subtitles;
+/// Picture in picture geometry: the size, corner and snap of a shrunken picture.
+pub mod pip;
 
 use std::io;
 
