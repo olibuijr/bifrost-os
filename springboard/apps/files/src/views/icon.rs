@@ -27,9 +27,9 @@ impl Files {
         let name_field = self.naming.as_ref().filter(|(p, _)| *p == e.path).map(|(_, f)| f);
         let selected = self.selection.contains(&i);
         let x = (self.side() + 16.) + (n % cols) as f32 * self.grid_w();
-        let y = 110. + (n / cols) as f32 * self.grid_h() - self.scroll;
+        let y = self.rows_top() + 16. + (n / cols) as f32 * self.grid_h() - self.scroll;
         let cell_h = self.grid_h() - 6.;
-        if y < 64. || y + cell_h > bottom || ui.pt(y+cell_h) < s.y0 as f32 || ui.pt(y-6.) >= s.h as f32 {
+        if y < self.body_top() + 4. || y + cell_h > bottom || ui.pt(y+cell_h) < s.y0 as f32 || ui.pt(y-6.) >= s.h as f32 {
             return;
         }
         let icon_x = x + (self.grid_w() - self.grid_icon()) / 2.;

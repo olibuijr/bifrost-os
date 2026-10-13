@@ -36,17 +36,17 @@ impl Files {
         }
         if self.columns {
             // only the open folder's column takes item clicks; the folders above are handled by ancestor_hit
-            if x < (self.side() + 16.) || y < ROWS_TOP || y > self.bottom() {
+            if x < (self.side() + 16.) || y < self.rows_top() || y > self.bottom() {
                 return None;
             }
             let col = ((x - (self.side() + 16.)) / self.vo.col_w).floor() as usize;
             if col != self.ancestor_shown() {
                 return None;
             }
-            let row = ((y - ROWS_TOP) / ROW_H).floor() as usize;
+            let row = ((y - self.rows_top()) / ROW_H).floor() as usize;
             return self.visible().get(row).copied();
         }
-        if x < self.side() || y < 94. || y > self.bottom() {
+        if x < self.side() || y < self.rows_top() || y > self.bottom() {
             return None;
         }
         let visible = self.visible();
@@ -56,9 +56,9 @@ impl Files {
             if col >= cols {
                 return None;
             }
-            (((y - 110. + self.scroll) / self.grid_h()).floor().max(0.) as usize) * cols + col
+            (((y - self.rows_top() - 16. + self.scroll) / self.grid_h()).floor().max(0.) as usize) * cols + col
         } else {
-            ((y - 94. + self.scroll) / 32.).floor().max(0.) as usize
+            ((y - self.rows_top() + self.scroll) / 32.).floor().max(0.) as usize
         };
         visible.get(n).copied()
     }

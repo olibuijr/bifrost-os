@@ -12,19 +12,19 @@ impl Files {
     /// The list view's column header band. The sorted column is bold-marked with an arrow; a click on a header sorts.
     pub(crate) fn paint_list_header(&self, ui: &Ui, s: &mut Surface) {
         let w = self.w;
-        rect(s, ui, self.side(), 60., w - self.side(), 34., CARD_BG.now());
-        rect(s, ui, self.side(), 93., w - self.side(), 1., SEPARATOR_C.now());
+        rect(s, ui, self.side(), self.body_top(), w - self.side(), 34., CARD_BG.now());
+        rect(s, ui, self.side(), self.body_top() + 33., w - self.side(), 1., SEPARATOR_C.now());
         for (by, x) in self.list_columns() {
             let label = if by == Sort::Date { "Date Modified" } else { by.label() };
             let active = by == self.sort;
             let color = if active { LABEL.now() } else { LABEL_2.now() };
-            text(s, ui, label, MAC_CALLOUT_PT, color, x, 70., if by == Sort::Name { w - 580. } else { 110. });
+            text(s, ui, label, MAC_CALLOUT_PT, color, x, self.body_top() + 10., if by == Sort::Name { w - 580. } else { 110. });
             if active {
                 let tw = ui.measure(label, MAC_CALLOUT_PT, Weight::Regular) / ui.pt(1.);
                 // arrow up for A to Z / smallest first, down for newest / largest first
                 let natural_up = matches!(by, Sort::Name | Sort::Kind);
                 let up = natural_up == self.vo.asc;
-                triangle(s, ui, x + tw.min(100.) + 6., 73., if up { 2 } else { 1 }, color);
+                triangle(s, ui, x + tw.min(100.) + 6., self.body_top() + 13., if up { 2 } else { 1 }, color);
             }
         }
     }
@@ -34,8 +34,8 @@ impl Files {
         let e = &self.rows[i];
         let name_field = self.naming.as_ref().filter(|(p, _)| *p == e.path).map(|(_, f)| f);
         let selected = self.selection.contains(&i);
-        let y = 94. + n as f32 * 32. - self.scroll;
-        if y < 94. || y + 32. > bottom || ui.pt(y+32.) <= s.y0 as f32 || ui.pt(y) >= s.h as f32 {
+        let y = self.rows_top() + n as f32 * 32. - self.scroll;
+        if y < self.rows_top() || y + 32. > bottom || ui.pt(y+32.) <= s.y0 as f32 || ui.pt(y) >= s.h as f32 {
             return;
         }
         let indent = self.depth_of(i) as f32 * INDENT;

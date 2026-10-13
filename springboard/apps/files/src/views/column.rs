@@ -6,8 +6,6 @@ pub(crate) const COLUMN_W: f32 = 200.;
 
 pub(crate) const ROW_H: f32 = 28.;
 
-pub(crate) const ROWS_TOP: f32 = 94.;
-
 /// One row of a column: icon, name, and a chevron for folders.
 pub(crate) fn column_row(s: &mut Surface, ui: &Ui, e: &Entry, x0: f32, y: f32, cw: f32) {
     icons::entry(s, (ui.pt(x0 + 8.), ui.pt(y + 5.), ui.pt(SPACE_XL), ui.pt(SPACE_XL)), e.kind);
@@ -29,7 +27,7 @@ impl Files {
     }
     /// The folder a click in an ancestor column opens, when that row is a folder.
     pub(crate) fn ancestor_hit(&self, x: f32, y: f32) -> Option<PathBuf> {
-        if !self.columns || x < (self.side() + 16.) || y < ROWS_TOP || y > self.bottom() {
+        if !self.columns || x < (self.side() + 16.) || y < self.rows_top() || y > self.bottom() {
             return None;
         }
         let n = self.ancestor_shown();
@@ -37,7 +35,7 @@ impl Files {
         if col >= n {
             return None;
         }
-        let row = ((y - ROWS_TOP) / ROW_H).floor() as usize;
+        let row = ((y - self.rows_top()) / ROW_H).floor() as usize;
         let index = self.ancestors.len() - n + col;
         self.ancestor_rows(index).get(row).filter(|e| e.is_dir).map(|e| e.path.clone())
     }
@@ -49,11 +47,11 @@ impl Files {
         let bottom = self.bottom();
         for c in 0..n {
             let x0 = (self.side() + 16.) + c as f32 * self.vo.col_w;
-            rect(s, ui, x0, 60., 1., bottom - 60., SEPARATOR_C.now());
+            rect(s, ui, x0, self.body_top(), 1., bottom - self.body_top(), SEPARATOR_C.now());
             // the row leading to the next column is highlighted
             let next = if c + 1 < n { &self.ancestors[first + c + 1].0 } else { &self.path };
             for (k, e) in self.ancestor_rows(first + c).into_iter().enumerate() {
-                let y = ROWS_TOP + k as f32 * ROW_H;
+                let y = self.rows_top() + k as f32 * ROW_H;
                 if y + ROW_H > bottom {
                     break;
                 }
@@ -64,9 +62,9 @@ impl Files {
             }
         }
         let x0 = (self.side() + 16.) + n as f32 * self.vo.col_w;
-        rect(s, ui, x0, 60., 1., bottom - 60., SEPARATOR_C.now());
+        rect(s, ui, x0, self.body_top(), 1., bottom - self.body_top(), SEPARATOR_C.now());
         for (k, &i) in visible.iter().enumerate() {
-            let y = ROWS_TOP + k as f32 * ROW_H;
+            let y = self.rows_top() + k as f32 * ROW_H;
             if y + ROW_H > bottom {
                 break;
             }
