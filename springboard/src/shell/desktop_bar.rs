@@ -264,8 +264,11 @@ impl Shell {
             Menu::Cpu=>{let m=&self.desktop_metrics;let mut rows=vec![Row::label(format!("CPU usage: {:.1}%",m.cpu)),Row::label(format!("{} logical processors",m.cores)),Row::label(format!("Load: {}",m.load)),Row::label(format!("Uptime: {}h {}m",m.uptime/3600,m.uptime/60%60))];rows.extend(top_app_rows(&m.apps,"Top apps by CPU time",|a|a.cpu_usec,|v|format!("{:.1} s",v as f64/1e6)));rows},
             Menu::Memory=>{let m=&self.desktop_metrics;let gb=|n:u64|format!("{:.2} GB",n as f64/1073741824.);let mut rows=vec![Row::label(format!("Used: {} ({:.0}%)",gb(m.used),m.memory_percent())),Row::label(format!("Available: {}",gb(m.available))),Row::label(format!("Installed: {}",gb(m.total))),Row::label(format!("Cached: {}",gb(m.cached))),Row::label(format!("Swap: {} / {}",gb(m.swap_total.saturating_sub(m.swap_free)),gb(m.swap_total)))];rows.extend(top_app_rows(&m.apps,"Top apps by memory",|a|a.memory,gb));rows},
             Menu::Power=>{
-                let mut rows=vec![Row::label(if self.info.battery_present&&!self.info.charging {"On battery power"}else{"Connected to AC power"})];if let Some(n)=&self.info.desktop_network {for p in &n.power_profiles {rows.push(Row::action(format!("{} {}",if n.power==*p{"✓"}else{" "},match p.as_str(){"performance"=>"Performance","power-saver"=>"Low Power",_=>"Balanced"}),Action::Power(p.clone())));}}
-                if rows.len()==1 {rows.push(Row::label("Power profiles unavailable"));}
+                let mut rows=vec![Row::label(if self.info.battery_present&&!self.info.charging {"On battery power"}else{"Connected to AC power"})];
+                // the charge level, with the charging state, when there is a battery
+                if self.info.battery_present {rows.push(Row::label(format!("Battery {}%{}",self.info.battery,if self.info.charging {", charging"} else {""})));}
+                let base=rows.len();if let Some(n)=&self.info.desktop_network {for p in &n.power_profiles {rows.push(Row::action(format!("{} {}",if n.power==*p{"✓"}else{" "},match p.as_str(){"performance"=>"Performance","power-saver"=>"Low Power",_=>"Balanced"}),Action::Power(p.clone())));}}
+                if rows.len()==base {rows.push(Row::label("Power profiles unavailable"));}
                 rows.push(Row::action("Lock Screen",Action::Lock));rows.push(Row::action("Restart",Action::Halt(super::power_menu::PowerAction::Restart)));rows.push(Row::action("Shut Down",Action::Halt(super::power_menu::PowerAction::Off)));rows
             },
         }
@@ -336,7 +339,7 @@ impl Shell {
             s.blit_colored(shadow,x,y+self.ui.pt(0.5).max(1.) as i32,ink.shadow,ink.shadow_alpha);s.blit_colored(im,x,y,ink.text,ink.text_alpha);
         });
     }
-    pub(super) fn clock_text(&self)->String {format!("{}  {}",super::status::date_text(self.info.wday,self.info.mday,self.info.mon),super::status::clock_in(self.info.hour,self.info.min,self.clock_24h))}
+    pub(super) fn clock_text(&self)->String {self.clock.text(self.info.wday,self.info.mday,self.info.mon,self.info.hour,self.info.min)}
     /// The date and time at the right end of the bar; a tap toggles Notification Center.
     fn clock_hit(&self,x:f32,y:f32)->bool {
         let width=self.ui.measure(&self.clock_text(),12.,Weight::Medium);let left=self.w as f32-self.ui.pt(16.)-width;

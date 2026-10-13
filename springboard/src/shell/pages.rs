@@ -140,6 +140,10 @@ pub enum Toggle {
     KeyboardHaptics,
     LockSound,
     Clock24,
+    /// Date & Time: the menu bar clock shows the date
+    ClockDate,
+    /// Date & Time: the menu bar clock's date starts with the weekday
+    ClockDay,
     AutoCaps,
     /// enables or removes a keyboard layout (index into `kb_layouts::Layout::ALL`)
     Layout(usize),
@@ -935,6 +939,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             vec![
                 Group::new(vec![Item::new("Set Automatically").switch(!info.time_manual, Action::Toggle(Toggle::AutoTime))]).footer(&info.time_sync),
                 Group::new(vec![Item::new("24-Hour Time").switch(o.clock_24h, Action::Toggle(Toggle::Clock24))]),
+                Group::new(vec![Item::new("Show Date in Menu Bar").switch(o.clock_date, Action::Toggle(Toggle::ClockDate)), Item::new("Show Day of the Week").switch(o.clock_day, Action::Toggle(Toggle::ClockDay))]),
                 Group::new(vec![Item::new("Time Zone").value(info.timezone.as_str()).link(PageId::DateTime).action(Action::TimeZone), { let t = Item::new("Time").value(crate::status::clock_in(info.hour, info.min, o.clock_24h)); if info.time_manual { t.link(PageId::DateTime).action(Action::SetTime) } else { t } }]),
             ],
         ),

@@ -535,7 +535,8 @@ pub struct Shell {
     grace_from: Option<(f64, Screen)>,
     /// Settings > Screen Saver: idle activation and the saver on screen (see `screensaver`)
     saver: screensaver::ScreenSaver,
-    clock_24h: bool,
+    /// the menu bar clock's options (Date & Time), see `options::Options::clock_style`
+    clock: bifrost_ui::menu_extras::ClockStyle,
     lock_time: Option<Image>,
     lock_date: Option<Image>,
     clock: clock::Clock,
@@ -806,7 +807,7 @@ impl Shell {
             idle_off_ms: Options::default().auto_lock_ms as f64,
             grace_from: None,
             saver: screensaver::ScreenSaver::new(),
-            clock_24h: true,
+            clock: bifrost_ui::menu_extras::ClockStyle::default(),
             lock_time: None,
             lock_date: None,
             clock,
@@ -1265,8 +1266,8 @@ impl Shell {
         }
         self.idle_off_ms = low_battery::auto_lock_ms(o.auto_lock_ms, o.low_power) as f64;
         self.saver.configure(o.screensaver_module, o.screensaver_minutes);
-        if self.clock_24h != o.clock_24h {
-            self.clock_24h = o.clock_24h;
+        if self.clock != o.clock_style() {
+            self.clock = o.clock_style();
             self.chrome.time = None;
             let info = std::mem::take(&mut self.info);
             self.set_info(info);
@@ -1616,7 +1617,7 @@ impl Shell {
             return;
         }
         let ui = &self.ui;
-        let clock = status::clock_in(info.hour, info.min, self.clock_24h);
+        let clock = status::clock_in(info.hour, info.min, self.clock.use_24h);
         let short_date = status::date_text(info.wday, info.mday, info.mon);
         let minute_changed = (info.hour, info.min, info.mday) != (self.info.hour, self.info.min, self.info.mday) || self.chrome.time.is_none();
         if minute_changed {
