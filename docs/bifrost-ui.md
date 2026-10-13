@@ -2066,3 +2066,18 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## PhotoKit: photo library for apps (`bifrost_app::photo_library`, the `photos` service)
+
+Apps fetch photos from the person's library (`~/Pictures`, as the Photos app scans it) with the PhotoKit shapes:
+`PHPhotoLibrary::authorization_status` / `request_authorization`, `PHAsset::fetch_assets` with `PHFetchOptions`
+(`sort_descriptors` on creation date, a `PHPredicate` on media type and creation date, `fetch_limit`), `PHFetchResult`
+(`count`, `object_at`), `PHAsset` (`local_identifier`, `media_type`, `pixel_width`, `pixel_height`, `creation_date`,
+`is_favorite`) and `PHImageManager` (`request_image_data` for the file, `image_from_bytes` for a thumbnail that fits or
+covers the target size, built on `image_source`). The app needs the `photos` permission in its manifest; without it the
+status is `denied` and a fetch is an error. The first `request_authorization` of an app with the permission is allowed,
+later ones return the state they hold; limited access shows only the granted ids. A `localIdentifier` hashes the file
+path, so it stays the same across rescans. Models: `bifrost_ui::photo_fetch`, `photo_access`, `photo_media`; shell side
+`springboard/src/shell/services/photos.rs`. Decision: an unauthorized fetch is an error (PhotoKit returns an empty
+result). Gaps: no access sheet, asset creation, collections, change observation or `isFavorite` (the Photos app keeps
+the marks); rows stay partial until a Midget check.

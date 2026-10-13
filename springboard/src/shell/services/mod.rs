@@ -37,6 +37,7 @@ pub mod display_services;
 pub mod window_services;
 pub mod event_services;
 pub mod thumbnails;
+pub mod photos;
 
 /// A named service in the shell.
 pub trait SystemService {
@@ -101,6 +102,7 @@ pub fn all() -> Vec<Box<dyn SystemService>> {
         Box::new(window_services::WindowServices),
         Box::new(event_services::EventServices),
         Box::new(thumbnails::Thumbnails::default()),
+        Box::new(photos::Photos),
     ]
 }
 
