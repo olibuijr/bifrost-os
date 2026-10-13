@@ -81,6 +81,35 @@ impl GlyphSource for FnSource {
     }
 }
 
+/// A source that ignores the font: one width per character, measured up front from a plain measure function, and one
+/// fixed set of vertical metrics. For callers that lay text out in a single font they measure themselves.
+pub struct CharTable {
+    adv: std::collections::HashMap<char, f32>,
+    metrics: FontMetrics,
+}
+
+impl CharTable {
+    /// Measures each distinct character of `text` (and the ellipsis) with `measure`, the width of a string.
+    pub fn measure(text: &str, measure: &dyn Fn(&str) -> f32, metrics: FontMetrics) -> Self {
+        let mut adv = std::collections::HashMap::new();
+        let mut buf = [0u8; 4];
+        for c in text.chars().chain(std::iter::once('\u{2026}')) {
+            adv.entry(c).or_insert_with(|| measure(c.encode_utf8(&mut buf)));
+        }
+        CharTable { adv, metrics }
+    }
+}
+
+impl GlyphSource for CharTable {
+    fn advances(&self, _: &FontSpec, text: &str) -> Vec<f32> {
+        text.chars().map(|c| self.adv.get(&c).copied().unwrap_or(0.0)).collect()
+    }
+
+    fn metrics(&self, _: &FontSpec) -> FontMetrics {
+        self.metrics
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -99,6 +128,12 @@ mod tests {
     fn advances_always_match_the_character_count() {
         assert_eq!(glyph_advances(&Short, &FontSpec::new(10.0), "abc"), vec![1.0, 0.0, 0.0]);
         assert_eq!(glyph_advances(&Short, &FontSpec::new(10.0), ""), Vec::<f32>::new());
+    }
+
+    #[test]
+    fn char_table_measures_each_character_once() {
+        let t = CharTable::measure("aab", &|s| s.chars().count() as f32 * 3.0, FontMetrics::default());
+        assert_eq!(t.advances(&FontSpec::default(), "ab\u{2026}z"), vec![3.0, 3.0, 3.0, 0.0]);
     }
 
     #[test]

@@ -1,5 +1,13 @@
 # BifrOSt changelog
 
+## Unreleased
+
+- SDK: text layout objects (`bifrost_ui::typeset`: typesetter, framesetter, frame, line, run) with Unicode line break and
+  grapheme cluster rules, paragraph styles, tab stops, bidi line reordering, truncated and justified lines. Attributed
+  strings gain font family and size, literal colours, baseline, superscript, kern, tracking, stroke, underline colour and
+  style, paragraph styles and UTF-16 range methods. `RichTextView::draw` goes through the framesetter and draws the
+  selection and caret; it has hit-testing. Removed `textfit` and the line layout manager of `textlayout`.
+
 ## 0.6.4 — 2026-10-12
 
 The audio server stops its devices when asked.

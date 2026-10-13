@@ -173,14 +173,18 @@ fn bench_ui_fuzzy_quicksearch_5k() {
 
 #[test]
 #[ignore]
-fn bench_ui_textfit_wrap() {
+fn bench_ui_typeset_wrap() {
     let text = "The quick brown fox jumps over the lazy dog. ".repeat(200);
     let measure = |s: &str| s.chars().count() as f32 * 7.0;
-    bench("ui_textfit_wrap_9k_chars", 21, || {
-        black_box(crate::textfit::wrap(black_box(&text), 600.0, &measure));
+    bench("ui_typeset_wrap_9k_chars", 21, || {
+        black_box(crate::textview::layout(black_box(&text), 600.0, &measure));
     });
-    bench("ui_textfit_truncate_middle", 101, || {
-        black_box(crate::textfit::truncate(black_box(&text), 600.0, crate::textfit::Truncate::Middle, &measure));
+    let source: std::rc::Rc<dyn crate::textmetrics::GlyphSource> =
+        std::rc::Rc::new(crate::textmetrics::CharTable::measure(&text, &measure, Default::default()));
+    let ts = crate::typeset::Typesetter::new(&text, &[], &[], Default::default(), source);
+    bench("ui_typeset_truncate_middle", 101, || {
+        let line = ts.create_line(0..ts.len());
+        black_box(line.truncated_line(600.0, crate::typeset::Truncation::Middle, None));
     });
 }
 

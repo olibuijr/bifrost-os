@@ -595,7 +595,6 @@ pub mod preview;
 pub mod thumbnail;
 pub mod fileaction;
 pub mod actionrequest;
-pub mod textfit;
 pub mod textbreak;
 pub mod textmetrics;
 pub mod typeset;

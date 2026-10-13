@@ -1,6 +1,6 @@
 //! Paragraph attributes (`NativeParagraphStyle`): alignment, indents, tab stops and line spacing, as geometry for a
 //! container width, a line width and a natural line height. Measuring text stays with the caller's font; line
-//! breaking and truncation are in `textfit`.
+//! breaking and truncation are in `typeset`.
 
 /// Horizontal placement of a line (`NativeTextAlignment`). `Natural` is the leading edge; text runs left to right, so
 /// it places like `Left`.
