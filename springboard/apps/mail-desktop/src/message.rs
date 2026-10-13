@@ -141,6 +141,8 @@ pub struct Draft {
     pub references: Vec<String>,
     /// Files sent with the message (Message > Attach File). With any, the message is `multipart/mixed`.
     pub attachments: Vec<Attachment>,
+    /// The message as HTML, when it has formatting (the Format menu). It is sent next to the plain text as an alternative.
+    pub html: Option<String>,
 }
 
 /// Most files one message carries.
@@ -178,6 +180,12 @@ pub fn rfc2822_date(unix: i64) -> String {
         secs % 3600 / 60,
         secs % 60
     )
+}
+
+/// The time of day in UTC as `09:30:05`, for the activity list.
+pub fn time_of_day(unix: i64) -> String {
+    let secs = unix.rem_euclid(86_400);
+    format!("{:02}:{:02}:{:02}", secs / 3600, secs % 3600 / 60, secs % 60)
 }
 
 /// A Message-ID for a new message: `<unix.seq@domain>`.
@@ -223,16 +231,39 @@ impl Draft {
         }
         out.push_str("MIME-Version: 1.0\r\n");
         let text = crlf_lines(&self.body);
+        let html = self.html.as_deref().map(crlf_lines);
+        // the readable part: plain text, or plain text and HTML as alternatives of each other
+        let alternative = html.as_ref().map(|html| {
+            let boundary = alternative_boundary_for(message_id, &format!("{text}{html}"));
+            (format!("Content-Type: multipart/alternative; boundary=\"{boundary}\"\r\n\r\n"), alternative_body(&boundary, &text, html))
+        });
         if self.attachments.is_empty() {
-            out.push_str("Content-Type: text/plain; charset=UTF-8\r\n");
-            out.push_str("Content-Transfer-Encoding: 8bit\r\n\r\n");
-            out.push_str(&text);
+            match &alternative {
+                Some((head, body)) => {
+                    out.push_str(head);
+                    out.push_str(body);
+                }
+                None => {
+                    out.push_str("Content-Type: text/plain; charset=UTF-8\r\n");
+                    out.push_str("Content-Transfer-Encoding: 8bit\r\n\r\n");
+                    out.push_str(&text);
+                }
+            }
         } else {
-            let boundary = boundary_for(message_id, &text);
+            let boundary = boundary_for(message_id, &format!("{text}{}", html.as_deref().unwrap_or("")));
             out.push_str(&format!("Content-Type: multipart/mixed; boundary=\"{boundary}\"\r\n\r\n"));
             out.push_str("This is a multi-part message in MIME format.\r\n");
-            out.push_str(&format!("--{boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n"));
-            out.push_str(&text);
+            out.push_str(&format!("--{boundary}\r\n"));
+            match &alternative {
+                Some((head, body)) => {
+                    out.push_str(head);
+                    out.push_str(body);
+                }
+                None => {
+                    out.push_str("Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n");
+                    out.push_str(&text);
+                }
+            }
             for file in &self.attachments {
                 out.push_str(&format!("--{boundary}\r\n"));
                 out.push_str(&file_part(file));
@@ -256,6 +287,24 @@ fn crlf_lines(body: &str) -> String {
         out.push_str("\r\n");
     }
     out
+}
+
+/// The parts of a `multipart/alternative` body: the plain text, then the HTML. Both end in CRLF.
+fn alternative_body(boundary: &str, text: &str, html: &str) -> String {
+    format!(
+        "--{boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n{text}--{boundary}\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n{html}--{boundary}--\r\n"
+    )
+}
+
+/// The boundary of the `multipart/alternative` part. It does not start like [`boundary_for`]'s, because a boundary that
+/// begins another boundary would end the outer part where the inner one begins.
+fn alternative_boundary_for(message_id: &str, text: &str) -> String {
+    let id: String = message_id.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
+    let mut boundary = format!("=_alt_{id}");
+    while text.contains(&boundary) {
+        boundary.push('x');
+    }
+    boundary
 }
 
 /// A multipart boundary built from the Message-ID, lengthened until the text does not contain it.
@@ -666,8 +715,48 @@ mod tests {
     }
 
     #[test]
+    fn the_time_of_day_is_read_in_utc() {
+        assert_eq!(time_of_day(0), "00:00:00");
+        assert_eq!(time_of_day(1_000_000_000), "01:46:40");
+        assert_eq!(time_of_day(-1), "23:59:59");
+    }
+
+    #[test]
     fn asctime_matches_the_calendar() {
         assert_eq!(asctime(0), "Thu Jan  1 00:00:00 1970");
         assert_eq!(asctime(1_000_000_000), "Sun Sep  9 01:46:40 2001");
+    }
+
+    #[test]
+    fn a_styled_message_goes_as_plain_text_and_html_alternatives() {
+        let draft = Draft { html: Some("<p>Hi <b>Ana</b></p>".into()), ..draft_with(Vec::new()) };
+        let text = draft.render("<h@x>", 0).unwrap();
+        assert!(text.contains("Content-Type: multipart/alternative; boundary=\"=_alt_hx\"\r\n\r\n--=_alt_hx\r\nContent-Type: text/plain"), "{text}");
+        assert!(text.contains("Content-Type: text/html; charset=UTF-8"));
+        assert!(text.ends_with("<p>Hi <b>Ana</b></p>\r\n--=_alt_hx--\r\n"), "{text}");
+        assert_eq!(crate::body::readable(&text), "See the file", "a reader that shows text gets the plain part");
+        assert!(crate::body::attachments(&text).is_empty());
+    }
+
+    #[test]
+    fn a_styled_message_with_files_nests_the_alternatives_in_the_mixed_message() {
+        let draft = Draft { html: Some("<b>x</b>".into()), ..draft_with(vec![file("a.txt", "text/plain", b"hello")]) };
+        let text = draft.render("<n@x>", 0).unwrap();
+        assert!(text.contains("Content-Type: multipart/mixed; boundary=\"=_bifrost_nx\""), "{text}");
+        assert!(text.contains("--=_bifrost_nx\r\nContent-Type: multipart/alternative; boundary=\"=_alt_nx\""), "{text}");
+        assert!(text.ends_with("--=_bifrost_nx--\r\n"));
+        assert_eq!(crate::body::readable(&text), "See the file");
+        let files = crate::body::attachments(&text);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].bytes, b"hello".to_vec());
+        let stripped = crate::mime::strip_attachments(&text);
+        assert_eq!(stripped.removed, 1);
+        assert!(stripped.raw.contains("<b>x</b>"), "Remove Attachments keeps the HTML part");
+    }
+
+    #[test]
+    fn a_plain_message_has_no_alternative() {
+        let text = draft_with(Vec::new()).render("<p@x>", 0).unwrap();
+        assert!(text.contains("Content-Type: text/plain; charset=UTF-8\r\n") && !text.contains("multipart"));
     }
 }

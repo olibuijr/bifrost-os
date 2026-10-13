@@ -8,6 +8,7 @@ use crate::findbar::FindBar;
 use crate::flags::{Flag, FlagColor, Flags};
 use crate::message::{self, Draft, Priority, Summary, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES};
 use crate::prefs::{self, Prefs, SmartMailbox};
+use crate::richtext::{self, Style, TextColor};
 use crate::rules::{self, Rule};
 use crate::schedule::Queue;
 use crate::search::{Doc, Query};
@@ -15,6 +16,7 @@ use crate::session::Listed;
 use crate::threads::{self, Node};
 use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Security, Server};
 use std::collections::{HashMap, HashSet};
+use std::ops::Range;
 
 pub const INBOX: &str = "INBOX";
 /// Most message texts kept at once. Past this the lowest UID values (the oldest mail) are dropped; a dropped text is
@@ -27,7 +29,12 @@ pub struct Line {
     pub row: Row,
     pub thread: usize,
     pub depth: usize,
+    /// True for the first line of a conversation (and for every line of the flat list): the one that folds the others.
+    pub head: bool,
 }
+
+/// Most lines the activity list keeps.
+pub const MAX_ACTIVITY: usize = 80;
 
 /// The mailbox names Archive and Trash are looked up under, in order (providers name them differently).
 pub const ARCHIVE_NAMES: [&str; 4] = ["Archive", "Archives", "All Mail", "[Gmail]/All Mail"];
@@ -45,10 +52,14 @@ pub enum SortKey {
     From,
     To,
     Subject,
+    /// Flagged messages together (first, when ascending).
+    Flagged,
+    /// Unread messages together (first, when ascending).
+    Unread,
 }
 
 impl SortKey {
-    pub const ALL: [SortKey; 4] = [SortKey::Date, SortKey::From, SortKey::To, SortKey::Subject];
+    pub const ALL: [SortKey; 6] = [SortKey::Date, SortKey::From, SortKey::To, SortKey::Subject, SortKey::Flagged, SortKey::Unread];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -56,6 +67,8 @@ impl SortKey {
             SortKey::From => "From",
             SortKey::To => "To",
             SortKey::Subject => "Subject",
+            SortKey::Flagged => "Flag",
+            SortKey::Unread => "Read Status",
         }
     }
 }
@@ -177,9 +190,160 @@ pub struct Compose {
     pub attachments: Vec<Attachment>,
     /// The signature of the sending account. It is added to the end of the message when the message is sent.
     pub signature: String,
+    /// The style of each character of the message field, in step with its text (see [`crate::richtext`]).
+    pub styles: Vec<Style>,
+    /// The style of the text typed next (the Format menu).
+    pub typing: Style,
+    /// The misspelled words the last spelling check found, as ranges of characters of the message, and the one in view.
+    pub misspelled: Vec<Range<usize>>,
+    pub misspelled_at: usize,
 }
 
 impl Compose {
+    /// A compose sheet around a form. The message starts in plain style.
+    pub fn new(form: Form, in_reply_to: Option<String>, references: Vec<String>, priority: Priority, attachments: Vec<Attachment>, signature: String) -> Compose {
+        let mut compose = Compose {
+            form,
+            in_reply_to,
+            references,
+            priority,
+            attachments,
+            signature,
+            styles: Vec::new(),
+            typing: Style::default(),
+            misspelled: Vec::new(),
+            misspelled_at: 0,
+        };
+        compose.styles = vec![Style::default(); compose.message().chars().count()];
+        compose
+    }
+
+    /// The text of the message field.
+    pub fn message(&self) -> &str {
+        self.form.value("Message")
+    }
+
+    /// Runs an edit of the field that takes typed text. An edit of the message keeps the styles in step: text added gets the
+    /// style being typed in, text taken away takes its styles with it. Any edit clears the spelling marks, which no longer
+    /// fit the text.
+    pub fn edit(&mut self, change: impl FnOnce(&mut Form)) {
+        let in_message = self.form.fields.get(self.form.focus).is_some_and(|f| f.label == "Message");
+        if !in_message {
+            change(&mut self.form);
+            return;
+        }
+        let before = self.message().chars().count();
+        self.styles.resize(before, Style::default());
+        change(&mut self.form);
+        let after = self.message().chars().count();
+        if after > before {
+            let typing = self.typing;
+            self.styles.extend(std::iter::repeat(typing).take(after - before));
+        } else {
+            self.styles.truncate(after);
+        }
+        self.misspelled.clear();
+    }
+
+    /// Replaces the characters `start..end` of the message with `with`, in `style`. The styles of the rest stay.
+    fn splice_message(&mut self, start: usize, end: usize, with: &str, style: Style) {
+        let chars: Vec<char> = self.message().chars().collect();
+        let start = start.min(chars.len());
+        let end = end.clamp(start, chars.len());
+        let mut text: String = chars[..start].iter().collect();
+        text.push_str(with);
+        text.extend(chars[end..].iter());
+        if let Some(field) = self.form.fields.iter_mut().find(|f| f.label == "Message") {
+            field.value = text;
+        }
+        self.styles.resize(chars.len(), Style::default());
+        let added = vec![style; with.chars().count()];
+        drop(self.styles.splice(start..end, added));
+        self.misspelled.clear();
+    }
+
+    /// Format > Bold, Italic and Underline: turn the style of the text typed next on or off.
+    pub fn toggle_bold(&mut self) {
+        self.typing.bold = !self.typing.bold;
+    }
+
+    pub fn toggle_italic(&mut self) {
+        self.typing.italic = !self.typing.italic;
+    }
+
+    pub fn toggle_underline(&mut self) {
+        self.typing.underline = !self.typing.underline;
+    }
+
+    /// Format > Text Color: the colour of the text typed next (None is the ordinary colour).
+    pub fn set_text_color(&mut self, color: Option<TextColor>) {
+        self.typing.color = color;
+    }
+
+    /// Format > Clear Formatting: the whole message goes back to plain style, and so does the text typed next.
+    pub fn clear_formatting(&mut self) {
+        self.styles.iter_mut().for_each(|style| *style = Style::default());
+        self.typing = Style::default();
+    }
+
+    /// Where the last line of the message starts, in characters.
+    fn last_line_start(&self) -> usize {
+        let text = self.message();
+        let at = text.rfind('\n').map_or(0, |i| i + 1);
+        text[..at].chars().count()
+    }
+
+    /// Format > Bulleted List: the last line of the message gets a bullet in front of it, or loses it.
+    pub fn toggle_bullet(&mut self) {
+        let start = self.last_line_start();
+        let bulleted = self.message().chars().skip(start).take(2).collect::<String>() == "\u{2022} ";
+        if bulleted {
+            self.splice_message(start, start + 2, "", Style::default());
+        } else {
+            self.splice_message(start, start, "\u{2022} ", Style::default());
+        }
+    }
+
+    /// Format > Increase Indent and Decrease Indent: four spaces more or fewer in front of the last line.
+    pub fn indent(&mut self, more: bool) {
+        let start = self.last_line_start();
+        if more {
+            self.splice_message(start, start, "    ", Style::default());
+        } else {
+            let spaces = self.message().chars().skip(start).take(4).take_while(|c| *c == ' ').count();
+            self.splice_message(start, start + spaces, "", Style::default());
+        }
+    }
+
+    /// Takes the result of a spelling check: the ranges of misspelled words, as characters of the message.
+    pub fn set_misspelled(&mut self, ranges: Vec<Range<usize>>) {
+        self.misspelled = ranges;
+        self.misspelled_at = 0;
+    }
+
+    /// The misspelled word in view: its characters and the word.
+    pub fn current_misspelling(&self) -> Option<(Range<usize>, String)> {
+        let range = self.misspelled.get(self.misspelled_at)?.clone();
+        let word = self.message().chars().skip(range.start).take(range.end - range.start).collect();
+        Some((range, word))
+    }
+
+    /// Moves to the next misspelled word, wrapping at the end.
+    pub fn next_misspelling(&mut self) {
+        if !self.misspelled.is_empty() {
+            self.misspelled_at = (self.misspelled_at + 1) % self.misspelled.len();
+        }
+    }
+
+    /// Replaces the misspelled word in view with `word`, in the style of its first letter. The spelling marks are cleared
+    /// (the text is checked again to find the rest). Returns false when no word is in view.
+    pub fn correct_misspelling(&mut self, word: &str) -> bool {
+        let Some((range, _)) = self.current_misspelling() else { return false };
+        let style = self.styles.get(range.start).copied().unwrap_or_default();
+        self.splice_message(range.start, range.end, word, style);
+        true
+    }
+
     /// Adds a file to send with the message. Refused past [`MAX_ATTACHMENTS`] files or [`MAX_ATTACHMENT_BYTES`] bytes.
     pub fn attach(&mut self, file: Attachment) -> Result<(), String> {
         if self.attachments.len() >= MAX_ATTACHMENTS {
@@ -262,6 +426,8 @@ pub enum PromptKind {
     EditAccount(String),
     /// Remove Account: the name of the account with this id must be typed.
     RemoveAccount(String),
+    /// Show Activity: what Mail did lately, to read.
+    Activity,
 }
 
 /// A small sheet with a few fields and one action (see [`PromptKind`]).
@@ -323,6 +489,7 @@ impl Sheet {
                 PromptKind::Settings => "Mail Settings",
                 PromptKind::EditAccount(_) => "Account Settings",
                 PromptKind::RemoveAccount(_) => "Remove Account",
+                PromptKind::Activity => "Activity",
             },
         }
     }
@@ -342,6 +509,7 @@ impl Sheet {
                 PromptKind::SmartMailbox | PromptKind::Rule => "Add",
                 PromptKind::Settings | PromptKind::EditAccount(_) => "Save",
                 PromptKind::RemoveAccount(_) => "Remove",
+                PromptKind::Activity => "Done",
             },
         }
     }
@@ -349,7 +517,7 @@ impl Sheet {
 
 /// True for the fields that take several lines of text.
 pub fn is_multiline(label: &str) -> bool {
-    label == "Message" || label == "Signature"
+    label == "Message" || label == "Signature" || label == "Activity"
 }
 
 /// A message that arrived since the last listing of the inbox, for a notification.
@@ -435,6 +603,10 @@ pub struct Mail {
     pub find: Option<FindBar>,
     /// The messages that arrived in an inbox with the last listing, with their account id, for the rules.
     pub arrived: Vec<(String, Row)>,
+    /// What Mail did lately, oldest first: each line starts with the time (Mailbox > Show Activity).
+    pub activity: Vec<String>,
+    /// View > Hide Toolbar.
+    pub show_toolbar: bool,
 }
 
 impl Mail {
@@ -472,7 +644,24 @@ impl Mail {
             smart_active: None,
             find: None,
             arrived: Vec::new(),
+            activity: Vec::new(),
+            show_toolbar: true,
         }
+    }
+
+    /// Adds a line to the activity list, dropping the oldest past [`MAX_ACTIVITY`].
+    pub fn log(&mut self, line: String) {
+        self.activity.push(line);
+        if self.activity.len() > MAX_ACTIVITY {
+            let extra = self.activity.len() - MAX_ACTIVITY;
+            self.activity.drain(..extra);
+        }
+    }
+
+    /// Mailbox > Show Activity: a sheet with the activity list, the newest line last.
+    pub fn open_activity(&mut self) {
+        let text = if self.activity.is_empty() { "Nothing has happened yet".to_string() } else { self.activity.join("\n") };
+        self.open_prompt(PromptKind::Activity, vec![Field::new("Activity", "", &text)]);
     }
 
     /// Takes the saved settings: the optional address fields of new messages come from them too.
@@ -617,7 +806,7 @@ impl Mail {
     /// a reply sits under the message it answers, indented by its depth.
     pub fn visible_lines(&self) -> Vec<Line> {
         if !self.threaded {
-            return self.visible_rows().into_iter().map(|row| Line { row, thread: 1, depth: 0 }).collect();
+            return self.visible_rows().into_iter().map(|row| Line { row, thread: 1, depth: 0, head: true }).collect();
         }
         let mut lines = Vec::new();
         for conversation in self.conversations() {
@@ -647,7 +836,8 @@ impl Mail {
         for group in threads::group(&nodes) {
             let lines: Vec<Line> = threads::arrange(&nodes, &group)
                 .into_iter()
-                .map(|(i, depth)| Line { row: rows[i].clone(), thread: group.len(), depth })
+                .enumerate()
+                .map(|(n, (i, depth))| Line { row: rows[i].clone(), thread: group.len(), depth, head: n == 0 })
                 .collect();
             conversations.push(lines);
         }
@@ -785,14 +975,7 @@ impl Mail {
         let mut form = Form::new(fields);
         form.focus_on(if draft.to.is_empty() { to_at } else { last });
         let signature = self.prefs.signature(&account_id).to_string();
-        self.sheet = Some(Sheet::Compose(Compose {
-            form,
-            in_reply_to: draft.in_reply_to,
-            references: draft.references,
-            priority: draft.priority,
-            attachments: draft.attachments,
-            signature,
-        }));
+        self.sheet = Some(Sheet::Compose(Compose::new(form, draft.in_reply_to, draft.references, draft.priority, draft.attachments, signature)));
     }
 
     /// The addresses the shown account sends from: its own first, then its other addresses.
@@ -931,6 +1114,8 @@ impl Mail {
             SortKey::From => row.summary.from.to_lowercase(),
             SortKey::To => row.summary.to.to_lowercase(),
             SortKey::Subject => row.summary.subject.to_lowercase(),
+            SortKey::Flagged => (if row.flags.contains(Flag::Flagged) { "0" } else { "1" }).to_string(),
+            SortKey::Unread => (if row.flags.contains(Flag::Seen) { "1" } else { "0" }).to_string(),
         };
         rows.sort_by(|a, b| {
             let order = text(a).cmp(&text(b)).then(a.uid.cmp(&b.uid));
@@ -1220,6 +1405,7 @@ impl Mail {
             in_reply_to: compose.in_reply_to.clone(),
             references: compose.references.clone(),
             attachments: compose.attachments.clone(),
+            html: richtext::html_body(compose.message(), &compose.styles, &compose.signature),
         })
     }
 
@@ -1618,11 +1804,11 @@ mod tests {
             Field::new("Subject", "", "Hi"),
             Field::new("Message", "", "Body"),
         ]);
-        let draft = mail.draft_from(&Compose { form, in_reply_to: None, references: vec![], priority: Priority::Normal, attachments: vec![], signature: String::new() }).unwrap();
+        let draft = mail.draft_from(&Compose::new(form, None, vec![], Priority::Normal, vec![], String::new())).unwrap();
         assert_eq!(draft.to, vec!["ana@example.com", "bo@example.com"]);
         assert_eq!(draft.from, "olibuijr@example.com");
         let empty = Form::new(vec![Field::new("To", "", " ")]);
-        assert!(mail.draft_from(&Compose { form: empty, in_reply_to: None, references: vec![], priority: Priority::Normal, attachments: vec![], signature: String::new() }).is_err());
+        assert!(mail.draft_from(&Compose::new(empty, None, vec![], Priority::Normal, vec![], String::new())).is_err());
     }
 
     fn compose_of(mail: &Mail) -> &Compose {
@@ -1709,6 +1895,20 @@ mod tests {
         assert_eq!(uids(&mail), vec![3, 2, 1], "a new key starts A to Z: Ana, Bo, Cy");
         mail.set_ascending(false);
         assert_eq!(uids(&mail), vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn flagged_and_unread_messages_can_be_gathered_by_sorting() {
+        let mut mail = mail_with_mixed_rows();
+        mail.sort_by(SortKey::Flagged);
+        assert_eq!(uids(&mail), vec![2, 1, 3], "flagged first, the rest in the order they were: oldest first when ascending");
+        mail.set_ascending(false);
+        assert_eq!(uids(&mail), vec![3, 1, 2], "flagged last");
+        mail.sort_by(SortKey::Unread);
+        mail.set_ascending(true);
+        assert_eq!(uids(&mail), vec![2, 1, 3], "the unread message first");
+        assert_eq!(SortKey::ALL.len(), 6);
+        assert_eq!(SortKey::Unread.label(), "Read Status");
     }
 
     #[test]
@@ -2087,5 +2287,167 @@ mod tests {
         mail.open_remove_account().unwrap();
         assert_eq!((mail.sheet.as_ref().unwrap().title(), mail.sheet.as_ref().unwrap().action()), ("Remove Account", "Remove"));
         assert!(is_multiline("Message") && is_multiline("Signature") && !is_multiline("Subject"));
+    }
+
+    fn message_compose(text: &str) -> Compose {
+        let form = Form::new(vec![Field::new("To", "", "a@example.com"), Field::new("Message", "", text)]);
+        let mut compose = Compose::new(form, None, vec![], Priority::Normal, vec![], String::new());
+        compose.form.focus_on(1);
+        compose
+    }
+
+    #[test]
+    fn typed_text_takes_the_style_in_force_and_a_deleted_character_takes_its_style_with_it() {
+        let mut compose = message_compose("ab");
+        assert_eq!(compose.styles, vec![Style::default(); 2]);
+        compose.toggle_bold();
+        compose.edit(|form| form.type_text("cd"));
+        compose.toggle_bold();
+        compose.toggle_italic();
+        compose.edit(|form| form.type_text("e"));
+        assert_eq!(compose.message(), "abcde");
+        let looks: Vec<(bool, bool)> = compose.styles.iter().map(|s| (s.bold, s.italic)).collect();
+        assert_eq!(looks, vec![(false, false), (false, false), (true, false), (true, false), (false, true)]);
+        compose.edit(|form| {
+            form.backspace();
+            form.backspace();
+        });
+        assert_eq!(compose.styles.len(), 3);
+        compose.edit(|form| form.type_text("é"));
+        assert_eq!(compose.styles.len(), 4, "styles count characters, not bytes");
+        assert!(!compose.styles[3].bold && compose.styles[3].italic);
+    }
+
+    #[test]
+    fn an_edit_of_another_field_leaves_the_message_styles_alone() {
+        let mut compose = message_compose("ab");
+        compose.toggle_bold();
+        compose.form.focus_on(0);
+        compose.edit(|form| form.type_text("x"));
+        assert_eq!(compose.form.value("To"), "a@example.comx");
+        assert_eq!(compose.styles.len(), 2);
+        assert!(compose.styles.iter().all(|s| s.is_plain()));
+    }
+
+    #[test]
+    fn colour_and_underline_follow_the_typed_text_and_clearing_makes_it_plain_again() {
+        let mut compose = message_compose("");
+        compose.toggle_underline();
+        compose.set_text_color(Some(TextColor::Blue));
+        compose.edit(|form| form.type_text("link"));
+        assert!(compose.styles.iter().all(|s| s.underline && s.color == Some(TextColor::Blue)));
+        compose.clear_formatting();
+        assert!(compose.styles.iter().all(|s| s.is_plain()) && compose.typing.is_plain());
+        compose.set_text_color(None);
+        assert!(compose.typing.is_plain());
+    }
+
+    #[test]
+    fn a_bullet_and_an_indent_go_at_the_start_of_the_last_line_and_come_off_again() {
+        let mut compose = message_compose("first\nsecond");
+        compose.toggle_bullet();
+        assert_eq!(compose.message(), "first\n\u{2022} second");
+        assert_eq!(compose.styles.len(), compose.message().chars().count());
+        compose.indent(true);
+        assert_eq!(compose.message(), "first\n    \u{2022} second");
+        compose.indent(false);
+        compose.toggle_bullet();
+        assert_eq!(compose.message(), "first\nsecond");
+        compose.indent(false);
+        assert_eq!(compose.message(), "first\nsecond", "nothing to take off");
+        let mut single = message_compose("one");
+        single.toggle_bullet();
+        assert_eq!(single.message(), "\u{2022} one");
+    }
+
+    #[test]
+    fn a_bulleted_line_keeps_the_styles_of_its_text() {
+        let mut compose = message_compose("");
+        compose.toggle_bold();
+        compose.edit(|form| form.type_text("bold"));
+        compose.toggle_bullet();
+        assert_eq!(compose.message(), "\u{2022} bold");
+        assert!(compose.styles[0].is_plain() && compose.styles[1].is_plain());
+        assert!(compose.styles[2..].iter().all(|s| s.bold));
+    }
+
+    #[test]
+    fn a_styled_message_gets_an_html_part_in_the_draft_and_a_plain_one_does_not() {
+        let mail = Mail::new(vec![account("work")]);
+        let mut compose = message_compose("");
+        assert_eq!(mail.draft_from(&compose).unwrap().html, None);
+        compose.toggle_bold();
+        compose.edit(|form| form.type_text("hi"));
+        let draft = mail.draft_from(&compose).unwrap();
+        assert!(draft.html.as_deref().is_some_and(|html| html.contains("<span style=\"font-weight: bold\">hi</span>")));
+        assert_eq!(draft.body, "hi");
+    }
+
+    #[test]
+    fn spelling_marks_step_around_and_a_correction_replaces_the_word_in_its_style() {
+        let mut compose = message_compose("");
+        compose.toggle_bold();
+        compose.edit(|form| form.type_text("hello wrold and teh end"));
+        compose.set_misspelled(vec![6..11, 16..19]);
+        assert_eq!(compose.current_misspelling(), Some((6..11, "wrold".to_string())));
+        compose.next_misspelling();
+        assert_eq!(compose.current_misspelling(), Some((16..19, "teh".to_string())));
+        compose.next_misspelling();
+        assert_eq!(compose.misspelled_at, 0, "the marks wrap");
+        assert!(compose.correct_misspelling("world"));
+        assert_eq!(compose.message(), "hello world and teh end");
+        assert!(compose.misspelled.is_empty(), "the text changed, so the marks are cleared");
+        assert_eq!(compose.styles.len(), compose.message().chars().count());
+        assert!(compose.styles.iter().all(|s| s.bold));
+        assert!(!compose.correct_misspelling("x"), "no word in view");
+        compose.set_misspelled(vec![16..19]);
+        compose.edit(|form| form.type_text("!"));
+        assert!(compose.misspelled.is_empty(), "typing clears the marks");
+    }
+
+    #[test]
+    fn a_correction_longer_than_the_word_keeps_the_text_after_it_aligned_with_its_styles() {
+        let mut compose = message_compose("ab cd");
+        compose.styles[3].italic = true;
+        compose.set_misspelled(vec![0..2]);
+        assert!(compose.correct_misspelling("abcdef"));
+        assert_eq!(compose.message(), "abcdef cd");
+        assert_eq!(compose.styles.len(), 9);
+        assert!(compose.styles[7].italic, "the italic 'c' moved to index 7");
+        assert!(!compose.styles[3].italic);
+    }
+
+    #[test]
+    fn the_activity_list_keeps_the_newest_lines_and_opens_as_a_sheet() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.open_activity();
+        assert_eq!(prompt_form(&mail).value("Activity"), "Nothing has happened yet");
+        for n in 0..MAX_ACTIVITY + 5 {
+            mail.log(format!("line {n}"));
+        }
+        assert_eq!(mail.activity.len(), MAX_ACTIVITY);
+        assert_eq!(mail.activity[0], "line 5");
+        mail.open_activity();
+        let text = prompt_form(&mail).value("Activity").to_string();
+        assert!(text.starts_with("line 5\n") && text.ends_with(&format!("line {}", MAX_ACTIVITY + 4)));
+        assert_eq!((mail.sheet.as_ref().unwrap().title(), mail.sheet.as_ref().unwrap().action()), ("Activity", "Done"));
+    }
+
+    #[test]
+    fn only_the_first_line_of_a_conversation_is_its_head() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let rows = vec![
+            Listed { uid: 1, flags: Flags::empty(), header: "Message-ID: <a@x>\r\nSubject: Plan\r\n\r\n".into() },
+            Listed { uid: 2, flags: Flags::empty(), header: "Message-ID: <b@x>\r\nIn-Reply-To: <a@x>\r\nReferences: <a@x>\r\nSubject: Re: Plan\r\n\r\n".into() },
+            Listed { uid: 3, flags: Flags::empty(), header: "Message-ID: <c@x>\r\nSubject: Other\r\n\r\n".into() },
+        ];
+        mail.apply_listing("work", INBOX, vec![], rows);
+        assert!(mail.visible_lines().iter().all(|l| l.head && l.thread == 1), "the flat list has no conversations");
+        mail.threaded = true;
+        let lines = mail.visible_lines();
+        let heads: Vec<(u32, bool)> = lines.iter().map(|l| (l.row.uid, l.head)).collect();
+        let plan: Vec<&(u32, bool)> = heads.iter().filter(|(uid, _)| *uid != 3).collect();
+        assert_eq!(plan.iter().filter(|(_, head)| *head).count(), 1, "one head in the two-message conversation");
+        assert!(heads.contains(&(3, true)));
     }
 }

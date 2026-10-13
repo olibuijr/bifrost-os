@@ -7,10 +7,11 @@ use crate::findbar;
 use crate::flags::{Flag, FlagColor};
 use crate::layout;
 use crate::prefs::Favorite;
-use crate::state::{is_multiline, Mail, Sheet};
+use crate::richtext::{self, Style, TextColor};
+use crate::state::{is_multiline, Compose, Mail, Sheet};
 use crate::window::{MailWindow, Region};
 use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_TITLE1_PT, SEPARATOR_C, SPACE_M, SPACE_S, WHITE};
-use bifrost_app::kit::{colors, rgba, Surface, TextCache, Ui, Weight};
+use bifrost_app::kit::{colors, rgba, Image, Surface, TextCache, Ui, Weight};
 
 pub const TOOLBAR_PT: f32 = 52.0;
 const BUTTON_H_PT: f32 = 28.0;
@@ -29,6 +30,7 @@ const SHEET_PAD_PT: f32 = 16.0;
 const FIELD_PT: f32 = 46.0;
 const MESSAGE_PT: f32 = 170.0;
 const SIGNATURE_PT: f32 = 110.0;
+const ACTIVITY_PT: f32 = 260.0;
 /// The favourites bar under the toolbar, the find bar over the reader, and the rows of the compose sheet's files.
 const FAVORITES_PT: f32 = 30.0;
 const FIND_BAR_PT: f32 = 36.0;
@@ -100,6 +102,8 @@ pub enum Hit {
     Field(usize),
     /// A mailbox on the favourites bar, by its place in the saved list.
     Favorite(usize),
+    /// The disclosure triangle of a conversation: folds or unfolds it. The UID is its first message's.
+    Fold(u32),
     /// A file named in the open message, by its place in the message.
     Attachment(usize),
     /// The Attach button of the compose sheet.
@@ -114,6 +118,15 @@ pub enum Hit {
     None,
 }
 
+/// The height of the toolbar: 0 when it is hidden (View > Hide Toolbar).
+fn toolbar_height(ui: &Ui, mail: &Mail) -> f32 {
+    if mail.show_toolbar {
+        ui.pt(TOOLBAR_PT)
+    } else {
+        0.0
+    }
+}
+
 /// The height of the favourites bar under the toolbar: 0 when it is hidden or has nothing on it.
 fn favorites_height(ui: &Ui, mail: &Mail) -> f32 {
     if mail.prefs.show_favorites && !mail.prefs.favorites.is_empty() {
@@ -125,7 +138,7 @@ fn favorites_height(ui: &Ui, mail: &Mail) -> f32 {
 
 /// The height of the toolbar and the favourites bar together: where the panes start.
 pub fn chrome_height(ui: &Ui, mail: &Mail) -> f32 {
-    ui.pt(TOOLBAR_PT) + favorites_height(ui, mail)
+    toolbar_height(ui, mail) + favorites_height(ui, mail)
 }
 
 /// What a favourite shows: the mailbox, with its account's name when there is more than one account.
@@ -224,6 +237,7 @@ fn field_height(ui: &Ui, label: &str) -> f32 {
     match label {
         "Message" => ui.pt(MESSAGE_PT),
         "Signature" => ui.pt(SIGNATURE_PT),
+        "Activity" => ui.pt(ACTIVITY_PT),
         _ => ui.pt(FIELD_PT),
     }
 }
@@ -337,6 +351,60 @@ pub fn raw_text(raw: &str) -> String {
     raw.replace("\r\n", "\n").chars().filter(|c| *c == '\n' || *c == '\t' || !c.is_control()).collect()
 }
 
+/// A disclosure triangle in a box `size` wide at (`x`, `y`): pointing right when `folded`, down when not.
+fn disclosure(s: &mut Surface, x: f32, y: f32, size: f32, folded: bool, color: u32) {
+    let n = size.max(2.0) as usize;
+    let (x, y) = (px(x), px(y));
+    // the triangle is drawn one stripe at a time: a column for the right-pointing one, a row for the other
+    for i in 0..n / 2 + 1 {
+        let len = n.saturating_sub(2 * i);
+        if len == 0 {
+            break;
+        }
+        if folded {
+            s.fill_rect(x + i, y + i, 1, len, color);
+        } else {
+            s.fill_rect(x + i, y + i, len, 1, color);
+        }
+    }
+}
+
+/// The weight a style's text is drawn in.
+fn style_weight(style: Style) -> Weight {
+    if style.bold {
+        Weight::Bold
+    } else {
+        Weight::Regular
+    }
+}
+
+/// The colour a style's text is drawn in.
+fn style_rgb(style: Style) -> u32 {
+    let pair = match style.color {
+        Some(TextColor::Red) => colors::SYSTEM_RED,
+        Some(TextColor::Orange) => colors::SYSTEM_ORANGE,
+        Some(TextColor::Green) => colors::SYSTEM_GREEN,
+        Some(TextColor::Blue) => colors::SYSTEM_BLUE,
+        Some(TextColor::Purple) => colors::SYSTEM_PURPLE,
+        Some(TextColor::Gray) => colors::SYSTEM_GRAY,
+        None => return LABEL.now(),
+    };
+    pair.now()
+}
+
+/// A copy of a text image leaning to the right: each row is moved over a little more than the row below it. Used for
+/// italic text, because the font has no italic.
+fn slanted(img: &Image) -> Image {
+    let extra = img.h / 4;
+    let w = img.w + extra;
+    let mut px = vec![0u32; w * img.h];
+    for y in 0..img.h {
+        let shift = (img.h - 1 - y) * extra / img.h.max(1);
+        px[y * w + shift..y * w + shift + img.w].copy_from_slice(&img.px[y * img.w..(y + 1) * img.w]);
+    }
+    Image { w, h: img.h, px }
+}
+
 fn display_name(from: &str) -> &str {
     let name = from.split('<').next().unwrap_or("").trim().trim_matches('"').trim();
     if name.is_empty() {
@@ -421,7 +489,7 @@ impl MailWindow {
             }
             return l.fields.iter().position(|r| inside(*r, x, y)).map_or(Hit::None, Hit::Field);
         }
-        let bar = ui.pt(TOOLBAR_PT);
+        let bar = toolbar_height(ui, &self.mail);
         let top = chrome_height(ui, &self.mail);
         if y < bar {
             let open = self.mail.open.is_some();
@@ -439,7 +507,11 @@ impl MailWindow {
             let index = ((y - top + self.list_scroll.offset()) / row).floor();
             let lines = self.mail.visible_lines();
             if index >= 0.0 && (index as usize) < lines.len() {
-                return Hit::Message(lines[index as usize].row.uid);
+                let line = &lines[index as usize];
+                if self.mail.threaded && line.head && line.thread > 1 && x - side < ui.pt(SPACE_M) {
+                    return Hit::Fold(line.row.uid);
+                }
+                return Hit::Message(line.row.uid);
             }
             return Hit::None;
         }
@@ -464,7 +536,7 @@ impl MailWindow {
     pub fn draw(&mut self, s: &mut Surface, ui: &Ui) {
         let (w, h) = (s.w as f32, s.h as f32);
         let [side, list, view] = columns(ui, w, self.mail.show_sidebar);
-        let bar = ui.pt(TOOLBAR_PT);
+        let bar = toolbar_height(ui, &self.mail);
         let top = chrome_height(ui, &self.mail);
         let rule = (ui.pt(1.0) as usize).max(1);
         s.fill_rect(0, 0, s.w, s.h, CONTENT_BG.now());
@@ -476,7 +548,9 @@ impl MailWindow {
         self.draw_reader(s, ui, side + list, view, top, h);
         s.fill_rect(px(side), px(top), rule, px(h - top), SEPARATOR_C.now());
         s.fill_rect(px(side + list), px(top), rule, px(h - top), SEPARATOR_C.now());
-        self.draw_toolbar(s, ui, w, bar);
+        if bar > 0.0 {
+            self.draw_toolbar(s, ui, w, bar);
+        }
         if top > bar {
             self.draw_favorites(s, ui, bar, top - bar);
         }
@@ -574,6 +648,10 @@ impl MailWindow {
                 s.fill_rrect(x0 + inset, y + inset / 2.0, width - 2.0 * inset, row - inset, ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
             } else if !r.flags.contains(Flag::Seen) {
                 s.fill_rrect(x0 + pad, y + row * 0.3 - dot / 2.0, dot, dot, dot / 2.0, colors::SYSTEM_BLUE.now());
+            }
+            if self.mail.threaded && line.head && line.thread > 1 {
+                let tint = if selected { WHITE } else { LABEL_2.now() };
+                disclosure(s, x0 + ui.pt(3.0), y + row * 0.3 - ui.pt(3.0), ui.pt(7.0), self.mail.collapsed.contains(&r.uid), tint);
             }
             let (c_name, c_sub, c_date) = if selected { (WHITE, WHITE, WHITE) } else { (LABEL.now(), LABEL.now(), LABEL_2.now()) };
             let date = short_date(&r.summary.date);
@@ -776,6 +854,56 @@ impl MailWindow {
         self.laid = Some(Laid { uid, width, lines });
     }
 
+    /// The message field of the compose sheet: the text in its styles, a red line under each misspelled word (thicker under the
+    /// one in view), and the caret after the last character.
+    fn draw_styled_message(&mut self, s: &mut Surface, ui: &Ui, compose: &Compose, r: Rect, focused: bool) {
+        let pad = ui.pt(SPACE_S);
+        let tx = r[0] + pad;
+        let value_y = r[1] + ui.pt(20.0);
+        let line_h = ui.pt(BODY_LINE_PT);
+        let rule = (ui.pt(1.0) as usize).max(1);
+        let caret = ui.pt(1.0).max(1.0);
+        let measure = |text: &str, style: Style| ui.measure(text, MAC_BODY_PT, style_weight(style));
+        let lines = richtext::layout(compose.message(), &compose.styles, r[2] - 2.0 * pad, &measure);
+        let room = ((r[1] + r[3] - value_y - ui.pt(4.0)) / line_h).floor().max(1.0) as usize;
+        let first = lines.len().saturating_sub(room);
+        let current = compose.misspelled.get(compose.misspelled_at);
+        let mut end_x = tx;
+        for (k, line) in lines[first..].iter().enumerate() {
+            let y = value_y + k as f32 * line_h;
+            let mut x = tx;
+            for run in line {
+                let wide = measure(&run.text, run.style);
+                let color = style_rgb(run.style);
+                let img = self.labels.get(ui, &run.text, MAC_BODY_PT, style_weight(run.style), color);
+                if run.style.italic {
+                    s.blit(&slanted(img), x as i32, y as i32, 255, 255);
+                } else {
+                    s.blit(img, x as i32, y as i32, 255, 255);
+                }
+                if run.style.underline {
+                    s.fill_rect(px(x), px(y + ui.pt(MAC_BODY_PT) + ui.pt(1.0)), px(wide), rule, color);
+                }
+                let chars: Vec<char> = run.text.chars().collect();
+                for mark in &compose.misspelled {
+                    let (a, b) = (mark.start.max(run.start), mark.end.min(run.start + chars.len()));
+                    if a < b {
+                        let before: String = chars[..a - run.start].iter().collect();
+                        let word: String = chars[a - run.start..b - run.start].iter().collect();
+                        let thick = if current == Some(mark) { 2 * rule } else { rule };
+                        s.fill_rect(px(x + measure(&before, run.style)), px(y + line_h - ui.pt(2.0)), px(measure(&word, run.style)), thick, colors::SYSTEM_RED.now());
+                    }
+                }
+                x += wide;
+            }
+            end_x = x;
+        }
+        if focused {
+            let cy = value_y + (lines.len() - first).saturating_sub(1) as f32 * line_h;
+            s.fill_rect(px(end_x), px(cy), px(caret), px(ui.pt(MAC_BODY_PT)), colors::SYSTEM_BLUE.now());
+        }
+    }
+
     fn draw_sheet(&mut self, s: &mut Surface, ui: &Ui, sheet: &Sheet, w: f32, h: f32) {
         let l = sheet_layout(ui, w, h, sheet);
         let [px_, py, pw, ph] = l.panel;
@@ -805,6 +933,10 @@ impl MailWindow {
                 put(s, &mut self.labels, ui, hint, MAC_FOOTNOTE_PT, Weight::Regular, LABEL_3.now(), r[0] + r[2] - hint_w - pad, r[1] + ui.pt(5.0));
             }
             if is_multiline(field.label) {
+                if let (true, Sheet::Compose(compose)) = (field.label == "Message", sheet) {
+                    self.draw_styled_message(s, ui, compose, r, focused);
+                    continue;
+                }
                 let text_w = r[2] - 2.0 * pad;
                 let line_h = ui.pt(BODY_LINE_PT);
                 if field.value.is_empty() {

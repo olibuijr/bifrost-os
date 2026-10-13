@@ -15,9 +15,11 @@ use crate::migrate;
 use crate::mime;
 use crate::people::{self, Person};
 use crate::prefs;
+use crate::richtext::TextColor;
 use crate::rules::{self, Action};
 use crate::schedule::{self, Queued, Reminder};
 use crate::search::Query;
+use crate::spelling;
 use crate::state::{is_multiline, Compose, Filter, Mail, Notice, Prompt, PromptKind, Sheet, SortKey, ARCHIVE_NAMES, INBOX, JUNK_NAMES, TRASH_NAMES};
 use crate::sync::{self, Change, Event};
 use crate::transport;
@@ -26,6 +28,7 @@ use bifrost_app::controls::internet_accounts::Account;
 use bifrost_app::keychain::{self, Error as LegacyError, Reply as KeyReply};
 use bifrost_app::kit::{clipboard, Scroller, TextCache, Ui};
 use bifrost_app::passwords::{self, Error as KeyError};
+use bifrost_app::text_services;
 use bifrost_app::usernotif::{self, Request};
 use bifrost_app::{AppMenu, AppMenuItem, Ctx, DocumentEvent, KeyInput, OpenOptions, TouchKind};
 use bifrost_app::proto::{DocErrorCode, DocMode, CHORD_CTRL, CHORD_META};
@@ -100,6 +103,19 @@ pub const MENU_FAVORITE: u32 = 59;
 pub const MENU_SHOW_FAVORITES: u32 = 60;
 pub const MENU_SEND_QUEUED: u32 = 61;
 pub const MENU_ALL_CATEGORIES: u32 = 62;
+pub const MENU_BOLD: u32 = 63;
+pub const MENU_ITALIC: u32 = 64;
+pub const MENU_UNDERLINE: u32 = 65;
+pub const MENU_BULLET: u32 = 66;
+pub const MENU_INDENT: u32 = 67;
+pub const MENU_OUTDENT: u32 = 68;
+pub const MENU_CLEAR_FORMATTING: u32 = 69;
+pub const MENU_CHECK_SPELLING: u32 = 70;
+pub const MENU_NEXT_MISSPELLING: u32 = 71;
+pub const MENU_CORRECT_SPELLING: u32 = 72;
+pub const MENU_ACTIVITY: u32 = 73;
+pub const MENU_CHECK_CONNECTION: u32 = 74;
+pub const MENU_SHOW_TOOLBAR: u32 = 75;
 /// Menu ids that run from a base: the nth entry of a list (mailboxes, sort keys, filters, priorities) is `base + n`.
 pub const MENU_MOVE_BASE: u32 = 100;
 pub const MENU_COPY_BASE: u32 = 200;
@@ -109,6 +125,8 @@ pub const MENU_PRIORITY_BASE: u32 = 500;
 pub const MENU_COLOR_BASE: u32 = 600;
 pub const MENU_CATEGORY_BASE: u32 = 700;
 pub const MENU_RULE_BASE: u32 = 800;
+/// Format > Text Color: the first entry is the ordinary colour, the next ones are [`TextColor::ALL`].
+pub const MENU_TEXT_COLOR_BASE: u32 = 900;
 /// The room each id range has.
 pub const MENU_TARGET_LIMIT: usize = 99;
 /// Most mailboxes a Move To or Copy To submenu lists. An app menu holds 48 items, and the Move menu has two such
@@ -152,6 +170,8 @@ enum Pending {
     ContactSave(Person),
     /// A password item being deleted. Nothing follows its answer.
     Forget,
+    /// A question to the spelling checker about `text`, the message as it was asked.
+    Spelling { text: String, step: SpellStep },
     /// An account moved from the 0.3.0 file: its password is read from the old keychain item `legacy`.
     Migrate { account: Account, legacy: String },
     /// A password read from the old keychain item `legacy` is being saved in Passwords.
@@ -165,6 +185,16 @@ impl Pending {
     fn from_keychain(&self) -> bool {
         matches!(self, Pending::Migrate { .. } | Pending::Discard)
     }
+}
+
+/// What a spelling question is for.
+enum SpellStep {
+    /// Which words are misspelled.
+    Check,
+    /// The suggestions for this misspelled word.
+    Guesses(String),
+    /// The best correction of the word in view.
+    Correct,
 }
 
 /// What a file panel was opened for.
@@ -256,6 +286,208 @@ fn wake_pair() -> Option<(UnixStream, UnixStream)> {
 
 fn now_unix() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64)
+}
+
+/// True when the open message's text has arrived (Forward quotes it).
+fn open_body_loaded(mail: &Mail) -> bool {
+    mail.open.is_some_and(|uid| mail.bodies.contains_key(&uid))
+}
+
+/// True when the open message carries files.
+fn open_has_files(mail: &Mail) -> bool {
+    mail.open.and_then(|uid| mail.attachments.get(&uid)).is_some_and(|files| !files.is_empty())
+}
+
+/// The menus of the window, for the state in `mail`. `undo_pending` is true while a sent message can still be taken back.
+/// An app menu holds at most 48 items and an app has at most 8 menus (the tests keep to that).
+pub fn menus(mail: &Mail, undo_pending: bool) -> Vec<AppMenu> {
+    let compose_open = matches!(mail.sheet, Some(Sheet::Compose(_)));
+    let open = mail.open.is_some();
+    let loaded = open && open_body_loaded(mail);
+    let targets = mail.move_targets();
+    let shown_targets = &targets[..targets.len().min(MENU_TARGETS_SHOWN)];
+    let mut message = vec![
+        AppMenuItem::new(MENU_NEW, "New Message").key("cmd+n"),
+        AppMenuItem::new(MENU_REPLY, "Reply").key("cmd+shift+r").enabled(open),
+        AppMenuItem::new(MENU_REPLY_ALL, "Reply All").key("cmd+alt+r").enabled(open),
+        AppMenuItem::new(MENU_FORWARD, "Forward").key("cmd+shift+f").enabled(loaded),
+        AppMenuItem::new(MENU_FORWARD_ATTACHMENT, "Forward as Attachment").enabled(loaded),
+        AppMenuItem::new(MENU_REDIRECT, "Redirect...").enabled(loaded),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_SEND, "Send").key("cmd+shift+d").enabled(compose_open),
+        AppMenuItem::new(MENU_SEND_LATER, "Send Later").enabled(compose_open).checked(mail.send_later_shown()),
+        AppMenuItem::new(MENU_UNDO_SEND, "Undo Send").enabled(undo_pending),
+        AppMenuItem::submenu("Set Priority").enabled(compose_open),
+    ];
+    let current = match &mail.sheet {
+        Some(Sheet::Compose(c)) => Some(c.priority),
+        _ => None,
+    };
+    for (i, priority) in Priority::ALL.into_iter().enumerate() {
+        message.push(AppMenuItem::new(MENU_PRIORITY_BASE + i as u32, priority.label()).depth(1).checked(current == Some(priority)));
+    }
+    message.extend([
+        AppMenuItem::new(MENU_ATTACH, "Attach Files...").key("cmd+shift+e").enabled(compose_open),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_FLAG, "Flag").key("cmd+shift+l").enabled(open),
+        AppMenuItem::submenu("Flag Color").enabled(open),
+    ]);
+    let flagged = mail.open.and_then(|uid| mail.flags_of(uid)).and_then(|f| f.color());
+    for (i, color) in FlagColor::ALL.into_iter().enumerate() {
+        message.push(AppMenuItem::new(MENU_COLOR_BASE + i as u32, color.label()).depth(1).checked(flagged == Some(color)).enabled(open));
+    }
+    message.push(AppMenuItem::new(MENU_CLEAR_FLAG, "Clear Flag").depth(1).enabled(open && flagged.is_some()));
+    let muted = mail.open.is_some_and(|uid| mail.is_muted(uid));
+    message.extend([
+        AppMenuItem::new(MENU_UNREAD, "Mark as Unread").enabled(open),
+        AppMenuItem::new(MENU_MUTE, if muted { "Unmute" } else { "Mute" }).enabled(open),
+        AppMenuItem::new(MENU_REMIND, "Remind Me...").enabled(open),
+        AppMenuItem::new(MENU_ARCHIVE, "Archive").key("cmd+shift+a").enabled(open),
+        AppMenuItem::new(MENU_TRASH, "Move to Trash").enabled(open),
+        AppMenuItem::new(MENU_JUNK, "Move to Junk").key("cmd+shift+j").enabled(open),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_ADD_TO_CONTACTS, "Add Sender to Contacts").enabled(open),
+        AppMenuItem::new(MENU_REMOVE_ATTACHMENTS, "Remove Attachments").enabled(open_has_files(mail)),
+        AppMenuItem::new(MENU_SAVE, "Save Attachments...").key("cmd+alt+a").enabled(open_has_files(mail)),
+        AppMenuItem::new(MENU_SAVE_AS, "Save As...").key("cmd+shift+s").enabled(loaded),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(open),
+    ]);
+
+    // Move To and Copy To list the account's mailboxes, so they have a menu of their own: one menu holds 48 items
+    let mut moves = vec![AppMenuItem::submenu("Move To").enabled(open)];
+    for (i, name) in shown_targets.iter().enumerate() {
+        moves.push(AppMenuItem::new(MENU_MOVE_BASE + i as u32, name).depth(1));
+    }
+    moves.push(AppMenuItem::submenu("Copy To").enabled(open));
+    for (i, name) in shown_targets.iter().enumerate() {
+        moves.push(AppMenuItem::new(MENU_COPY_BASE + i as u32, name).depth(1));
+    }
+    let again = mail.last_target.as_ref().filter(|t| targets.contains(t));
+    let again_title = again.map_or_else(|| "Move Again".to_string(), |t| format!("Move Again to {t}"));
+    moves.push(AppMenuItem::new(MENU_MOVE_AGAIN, &again_title).enabled(open && again.is_some()));
+
+    let editable = !mail.mailbox.eq_ignore_ascii_case(INBOX);
+    let account_id = mail.current().map(|a| a.id.as_str()).unwrap_or("");
+    let pinned = mail.prefs.is_favorite(account_id, &mail.mailbox);
+    let mut mailbox = vec![
+        AppMenuItem::new(MENU_REFRESH, "Refresh").key("cmd+r"),
+        AppMenuItem::new(MENU_ACTIVITY, "Show Activity"),
+        AppMenuItem::new(MENU_CHECK_CONNECTION, "Check Connection").enabled(!mail.accounts.is_empty()),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_FIND, "Find...").key("cmd+f"),
+        AppMenuItem::new(MENU_SHOW_ALL, "Show All Messages").enabled(!mail.search.is_empty()),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_QUICKLY, "Open Quickly...").key("cmd+shift+o").enabled(!mail.accounts.is_empty()),
+        AppMenuItem::new(MENU_FAVORITE, if pinned { "Remove from Favorites Bar" } else { "Add to Favorites Bar" }).enabled(!mail.accounts.is_empty()),
+        AppMenuItem::new(MENU_NEW_SMART, "New Smart Mailbox...").enabled(!mail.accounts.is_empty()),
+        AppMenuItem::new(MENU_DELETE_SMART, "Delete Smart Mailbox").enabled(mail.smart_active.is_some()),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_NEW_MAILBOX, "New Mailbox...").enabled(!mail.accounts.is_empty()),
+        AppMenuItem::new(MENU_RENAME_MAILBOX, "Rename Mailbox...").enabled(editable),
+        AppMenuItem::new(MENU_DELETE_MAILBOX, "Delete Mailbox").enabled(editable),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_ERASE_TRASH, "Erase Deleted Items").enabled(mail.find_mailbox(&TRASH_NAMES).is_some()),
+        AppMenuItem::new(MENU_ERASE_JUNK, "Erase Junk Mail").enabled(mail.find_mailbox(&JUNK_NAMES).is_some()),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_IMPORT_MBOX, "Import Mailbox...").enabled(!mail.accounts.is_empty()),
+        AppMenuItem::new(MENU_EXPORT_MBOX, "Export Mailbox...").enabled(!mail.accounts.is_empty()),
+        AppMenuItem::separator(),
+        AppMenuItem::submenu("Rules"),
+        AppMenuItem::new(MENU_NEW_RULE, "New Rule...").depth(1).enabled(!mail.accounts.is_empty() && mail.prefs.rules.len() < MAX_RULES),
+        AppMenuItem::new(MENU_APPLY_RULES, "Apply Rules").depth(1).enabled(!mail.prefs.rules.is_empty()),
+    ];
+    for (i, rule) in mail.prefs.rules.iter().enumerate().take(MAX_RULES) {
+        mailbox.push(AppMenuItem::new(MENU_RULE_BASE + i as u32, &format!("Delete Rule: {}", rule.name)).depth(1));
+    }
+    mailbox.extend([
+        AppMenuItem::new(MENU_SEND_QUEUED, "Send Queued Messages Now").enabled(!mail.queue.outbox.is_empty()),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_SETTINGS, "Mail Settings...").enabled(!mail.accounts.is_empty()),
+        AppMenuItem::new(MENU_ACCOUNT_SETTINGS, "Account Settings...").enabled(!mail.accounts.is_empty()),
+        AppMenuItem::new(MENU_REMOVE_ACCOUNT, "Remove Account...").enabled(!mail.accounts.is_empty()),
+        AppMenuItem::new(MENU_ADD, "Add Account..."),
+    ]);
+
+    let mut view = vec![
+        AppMenuItem::new(MENU_SHOW_SIDEBAR, if mail.show_sidebar { "Hide Sidebar" } else { "Show Sidebar" }).key("cmd+ctrl+s"),
+        AppMenuItem::new(MENU_SHOW_TOOLBAR, if mail.show_toolbar { "Hide Toolbar" } else { "Show Toolbar" }),
+        AppMenuItem::new(MENU_SHOW_FAVORITES, if mail.prefs.show_favorites { "Hide Favorites Bar" } else { "Show Favorites Bar" }),
+        AppMenuItem::new(MENU_RAW_SOURCE, "Raw Source").key("cmd+alt+u").checked(mail.show_raw).enabled(open),
+        AppMenuItem::separator(),
+        AppMenuItem::submenu("Sort By"),
+    ];
+    for (i, key) in SortKey::ALL.into_iter().enumerate() {
+        view.push(AppMenuItem::new(MENU_SORT_BASE + i as u32, key.label()).depth(1).checked(mail.sort == key));
+    }
+    view.push(AppMenuItem::new(MENU_SORT_ASC, "Ascending").depth(1).checked(mail.ascending));
+    view.push(AppMenuItem::new(MENU_SORT_DESC, "Descending").depth(1).checked(!mail.ascending));
+    view.push(AppMenuItem::submenu("Filter"));
+    for (i, filter) in Filter::ALL.into_iter().enumerate() {
+        view.push(AppMenuItem::new(MENU_FILTER_BASE + i as u32, filter.label()).depth(1).checked(mail.filter == filter));
+    }
+    view.push(AppMenuItem::submenu("Category"));
+    view.push(AppMenuItem::new(MENU_ALL_CATEGORIES, "All Categories").depth(1).checked(mail.category.is_none()));
+    for (i, category) in Category::ALL.into_iter().enumerate() {
+        view.push(AppMenuItem::new(MENU_CATEGORY_BASE + i as u32, category.label()).depth(1).checked(mail.category == Some(category)));
+    }
+    let fold_title = if mail.threaded && mail.open.is_some_and(|uid| mail.is_folded(uid)) { "Expand Conversation" } else { "Collapse Conversation" };
+    view.extend([
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_THREADS, if mail.threaded { "Hide Threads" } else { "Show Threads" }).key("cmd+shift+t"),
+        AppMenuItem::new(MENU_TOGGLE_CONVERSATION, fold_title).enabled(mail.threaded && open),
+        AppMenuItem::new(MENU_EXPAND_ALL, "Expand All Conversations").enabled(mail.threaded),
+        AppMenuItem::new(MENU_COLLAPSE_ALL, "Collapse All Conversations").enabled(mail.threaded),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_SHOW_CC, "Cc Address Field").checked(mail.show_cc),
+        AppMenuItem::new(MENU_SHOW_BCC, "Bcc Address Field").checked(mail.show_bcc),
+        AppMenuItem::new(MENU_SHOW_REPLY_TO, "Reply-To Address Field").checked(mail.show_reply_to),
+    ]);
+
+    let compose = match &mail.sheet {
+        Some(Sheet::Compose(compose)) => Some(compose),
+        _ => None,
+    };
+    let typing = compose.map(|c| c.typing).unwrap_or_default();
+    let mut format = vec![
+        AppMenuItem::new(MENU_BOLD, "Bold").key("cmd+b").checked(typing.bold).enabled(compose_open),
+        AppMenuItem::new(MENU_ITALIC, "Italic").key("cmd+i").checked(typing.italic).enabled(compose_open),
+        AppMenuItem::new(MENU_UNDERLINE, "Underline").key("cmd+u").checked(typing.underline).enabled(compose_open),
+        AppMenuItem::submenu("Text Color").enabled(compose_open),
+        AppMenuItem::new(MENU_TEXT_COLOR_BASE, "Default").depth(1).checked(typing.color.is_none()),
+    ];
+    for (i, color) in TextColor::ALL.into_iter().enumerate() {
+        format.push(AppMenuItem::new(MENU_TEXT_COLOR_BASE + 1 + i as u32, color.label()).depth(1).checked(typing.color == Some(color)));
+    }
+    format.extend([
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_BULLET, "Bulleted List").enabled(compose_open),
+        AppMenuItem::new(MENU_INDENT, "Increase Indent").key("cmd+]").enabled(compose_open),
+        AppMenuItem::new(MENU_OUTDENT, "Decrease Indent").key("cmd+[").enabled(compose_open),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_CLEAR_FORMATTING, "Clear Formatting").enabled(compose_open),
+    ]);
+    let marked = compose.is_some_and(|c| !c.misspelled.is_empty());
+    let edit = vec![
+        AppMenuItem::new(MENU_PASTE_QUOTE, "Paste as Quotation").key("cmd+alt+v").enabled(compose_open),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_CHECK_SPELLING, "Check Spelling").enabled(compose_open),
+        AppMenuItem::new(MENU_NEXT_MISSPELLING, "Next Misspelling").enabled(marked),
+        AppMenuItem::new(MENU_CORRECT_SPELLING, "Correct Spelling").enabled(marked),
+        AppMenuItem::separator(),
+        AppMenuItem::new(MENU_FIND_IN_MESSAGE, "Find in Message...").key("cmd+alt+f").enabled(open),
+        AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(mail.find.is_some()),
+        AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(mail.find.is_some()),
+    ];
+
+    vec![
+        AppMenu { title: "Message".into(), items: message },
+        AppMenu { title: "Move".into(), items: moves },
+        AppMenu { title: "Mailbox".into(), items: mailbox },
+        AppMenu { title: "View".into(), items: view },
+        AppMenu { title: "Format".into(), items: format },
+        AppMenu { title: "Edit".into(), items: edit },
+    ]
 }
 
 impl MailWindow {
@@ -430,6 +662,7 @@ impl MailWindow {
                 Err(e) => self.mail.status = format!("The password could not be saved in Passwords: {e:?}"),
             },
             Pending::Forget => {}
+            Pending::Spelling { text, step } => self.spelling_reply(ctx, text, step, result),
             Pending::ContactCheck(person) => match result {
                 Ok(body) => {
                     let known = contacts::decode_contacts(body).unwrap_or_default().iter().any(|record| people::has_address(record, &person.address));
@@ -534,15 +767,11 @@ impl MailWindow {
         match k {
             KeyInput::Text(s) => {
                 let text: String = s.chars().filter(|c| !c.is_control() || (*c == '\n' && multiline)).collect();
-                if let Some(form) = self.form_mut().filter(|_| !picker) {
-                    form.type_text(&text);
+                if !picker {
+                    self.edit_form(|form| form.type_text(&text));
                 }
             }
-            KeyInput::Code(KEY_RETURN) if multiline => {
-                if let Some(form) = self.form_mut() {
-                    form.type_text("\n");
-                }
-            }
+            KeyInput::Code(KEY_RETURN) if multiline && !picker => self.edit_form(|form| form.type_text("\n")),
             KeyInput::Code(KEY_RETURN) => self.submit(ctx),
             KeyInput::Code(KEY_TAB) => {
                 if let Some(form) = self.form_mut() {
@@ -550,8 +779,8 @@ impl MailWindow {
                 }
             }
             KeyInput::Code(KEY_BACKSPACE) => {
-                if let Some(form) = self.form_mut().filter(|_| !picker) {
-                    form.backspace();
+                if !picker {
+                    self.edit_form(|form| form.backspace());
                 }
             }
             KeyInput::Code(KEY_ESCAPE) => self.mail.close_sheet(),
@@ -636,171 +865,121 @@ impl MailWindow {
         if self.focus_is_picker() {
             return false;
         }
-        match self.form_mut() {
-            Some(form) => form.type_text(&text),
-            None => return false,
-        }
+        self.edit_form(|form| form.type_text(&text));
         self.dirty = true;
         true
     }
 
-    pub fn menu_items(&self) -> Vec<AppMenu> {
-        let mail = &self.mail;
-        let compose_open = matches!(mail.sheet, Some(Sheet::Compose(_)));
-        let open = mail.open.is_some();
-        let loaded = open && self.open_body_loaded();
-        let targets = mail.move_targets();
-        let shown_targets = &targets[..targets.len().min(MENU_TARGETS_SHOWN)];
-        let mut message = vec![
-            AppMenuItem::new(MENU_NEW, "New Message").key("cmd+n"),
-            AppMenuItem::new(MENU_REPLY, "Reply").key("cmd+shift+r").enabled(open),
-            AppMenuItem::new(MENU_REPLY_ALL, "Reply All").key("cmd+alt+r").enabled(open),
-            AppMenuItem::new(MENU_FORWARD, "Forward").key("cmd+shift+f").enabled(loaded),
-            AppMenuItem::new(MENU_FORWARD_ATTACHMENT, "Forward as Attachment").enabled(loaded),
-            AppMenuItem::new(MENU_REDIRECT, "Redirect...").enabled(loaded),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_SEND, "Send").key("cmd+shift+d").enabled(compose_open),
-            AppMenuItem::new(MENU_SEND_LATER, "Send Later").enabled(compose_open).checked(mail.send_later_shown()),
-            AppMenuItem::new(MENU_UNDO_SEND, "Undo Send").enabled(self.undo_pending()),
-            AppMenuItem::submenu("Set Priority").enabled(compose_open),
-        ];
-        let current = match &mail.sheet {
-            Some(Sheet::Compose(c)) => Some(c.priority),
+    /// Runs an edit on the field that takes typed text. In the compose sheet the styles of the message follow along.
+    fn edit_form(&mut self, change: impl FnOnce(&mut crate::state::Form)) {
+        match self.mail.sheet.as_mut() {
+            Some(Sheet::Compose(compose)) => compose.edit(change),
+            Some(sheet) => change(sheet.form_mut()),
+            None => {}
+        }
+    }
+
+    /// Runs a formatting change on the compose sheet that is open.
+    fn format(&mut self, change: impl FnOnce(&mut Compose)) {
+        if let Some(Sheet::Compose(compose)) = self.mail.sheet.as_mut() {
+            change(compose);
+        }
+    }
+
+    /// The text of the message being written.
+    fn compose_message(&self) -> Option<String> {
+        match &self.mail.sheet {
+            Some(Sheet::Compose(compose)) => Some(compose.message().to_string()),
             _ => None,
+        }
+    }
+
+    /// Edit > Check Spelling: the message goes to the system's spelling checker, and the words it finds are marked.
+    fn check_spelling(&mut self, ctx: &Ctx) {
+        let Some(text) = self.compose_message() else {
+            self.mail.status = "Start a message first".into();
+            return;
         };
-        for (i, priority) in Priority::ALL.into_iter().enumerate() {
-            message.push(AppMenuItem::new(MENU_PRIORITY_BASE + i as u32, priority.label()).depth(1).checked(current == Some(priority)));
+        if text.trim().is_empty() {
+            self.mail.status = "There is nothing to check yet".into();
+            return;
         }
-        message.extend([
-            AppMenuItem::new(MENU_ATTACH, "Attach Files...").key("cmd+shift+e").enabled(compose_open),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_FLAG, "Flag").key("cmd+shift+l").enabled(open),
-            AppMenuItem::submenu("Flag Color").enabled(open),
-        ]);
-        let flagged = mail.open.and_then(|uid| mail.flags_of(uid)).and_then(|f| f.color());
-        for (i, color) in FlagColor::ALL.into_iter().enumerate() {
-            message.push(AppMenuItem::new(MENU_COLOR_BASE + i as u32, color.label()).depth(1).checked(flagged == Some(color)).enabled(open));
-        }
-        message.push(AppMenuItem::new(MENU_CLEAR_FLAG, "Clear Flag").depth(1).enabled(open && flagged.is_some()));
-        let muted = mail.open.is_some_and(|uid| mail.is_muted(uid));
-        message.extend([
-            AppMenuItem::new(MENU_UNREAD, "Mark as Unread").enabled(open),
-            AppMenuItem::new(MENU_MUTE, if muted { "Unmute" } else { "Mute" }).enabled(open),
-            AppMenuItem::new(MENU_REMIND, "Remind Me...").enabled(open),
-            AppMenuItem::new(MENU_ARCHIVE, "Archive").key("cmd+shift+a").enabled(open),
-            AppMenuItem::new(MENU_TRASH, "Move to Trash").enabled(open),
-            AppMenuItem::new(MENU_JUNK, "Move to Junk").key("cmd+shift+j").enabled(open),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_ADD_TO_CONTACTS, "Add Sender to Contacts").enabled(open),
-            AppMenuItem::new(MENU_REMOVE_ATTACHMENTS, "Remove Attachments").enabled(self.open_has_files()),
-            AppMenuItem::new(MENU_SAVE, "Save Attachments...").key("cmd+alt+a").enabled(self.open_has_files()),
-            AppMenuItem::new(MENU_SAVE_AS, "Save As...").key("cmd+shift+s").enabled(loaded),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(open),
-        ]);
+        let request = text_services::check(ctx, &text);
+        self.pending.insert(request, Pending::Spelling { text, step: SpellStep::Check });
+        self.mail.status = "Checking spelling".into();
+    }
 
-        // Move To and Copy To list the account's mailboxes, so they have a menu of their own: one menu holds 48 items
-        let mut moves = vec![AppMenuItem::submenu("Move To").enabled(open)];
-        for (i, name) in shown_targets.iter().enumerate() {
-            moves.push(AppMenuItem::new(MENU_MOVE_BASE + i as u32, name).depth(1));
-        }
-        moves.push(AppMenuItem::submenu("Copy To").enabled(open));
-        for (i, name) in shown_targets.iter().enumerate() {
-            moves.push(AppMenuItem::new(MENU_COPY_BASE + i as u32, name).depth(1));
-        }
-        let again = mail.last_target.as_ref().filter(|t| targets.contains(t));
-        let again_title = again.map_or_else(|| "Move Again".to_string(), |t| format!("Move Again to {t}"));
-        moves.push(AppMenuItem::new(MENU_MOVE_AGAIN, &again_title).enabled(open && again.is_some()));
+    /// Asks the checker for suggestions for the misspelled word in view, to show them in the status line.
+    fn ask_suggestions(&mut self, ctx: &Ctx) {
+        let Some((text, word, bytes)) = self.misspelling_in_view() else { return };
+        let request = text_services::guesses(ctx, &text, bytes);
+        self.pending.insert(request, Pending::Spelling { text, step: SpellStep::Guesses(word) });
+    }
 
-        let editable = !mail.mailbox.eq_ignore_ascii_case(INBOX);
-        let account_id = mail.current().map(|a| a.id.as_str()).unwrap_or("");
-        let pinned = mail.prefs.is_favorite(account_id, &mail.mailbox);
-        let mut mailbox = vec![
-            AppMenuItem::new(MENU_REFRESH, "Refresh").key("cmd+r"),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_FIND, "Find...").key("cmd+f"),
-            AppMenuItem::new(MENU_SHOW_ALL, "Show All Messages").enabled(!mail.search.is_empty()),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_QUICKLY, "Open Quickly...").key("cmd+shift+o").enabled(!mail.accounts.is_empty()),
-            AppMenuItem::new(MENU_FAVORITE, if pinned { "Remove from Favorites Bar" } else { "Add to Favorites Bar" }).enabled(!mail.accounts.is_empty()),
-            AppMenuItem::new(MENU_NEW_SMART, "New Smart Mailbox...").enabled(!mail.accounts.is_empty()),
-            AppMenuItem::new(MENU_DELETE_SMART, "Delete Smart Mailbox").enabled(mail.smart_active.is_some()),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_NEW_MAILBOX, "New Mailbox...").enabled(!mail.accounts.is_empty()),
-            AppMenuItem::new(MENU_RENAME_MAILBOX, "Rename Mailbox...").enabled(editable),
-            AppMenuItem::new(MENU_DELETE_MAILBOX, "Delete Mailbox").enabled(editable),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_ERASE_TRASH, "Erase Deleted Items").enabled(mail.find_mailbox(&TRASH_NAMES).is_some()),
-            AppMenuItem::new(MENU_ERASE_JUNK, "Erase Junk Mail").enabled(mail.find_mailbox(&JUNK_NAMES).is_some()),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_IMPORT_MBOX, "Import Mailbox...").enabled(!mail.accounts.is_empty()),
-            AppMenuItem::new(MENU_EXPORT_MBOX, "Export Mailbox...").enabled(!mail.accounts.is_empty()),
-            AppMenuItem::separator(),
-            AppMenuItem::submenu("Rules"),
-            AppMenuItem::new(MENU_NEW_RULE, "New Rule...").depth(1).enabled(!mail.accounts.is_empty() && mail.prefs.rules.len() < MAX_RULES),
-            AppMenuItem::new(MENU_APPLY_RULES, "Apply Rules").depth(1).enabled(!mail.prefs.rules.is_empty()),
-        ];
-        for (i, rule) in mail.prefs.rules.iter().enumerate().take(MAX_RULES) {
-            mailbox.push(AppMenuItem::new(MENU_RULE_BASE + i as u32, &format!("Delete Rule: {}", rule.name)).depth(1));
-        }
-        mailbox.extend([
-            AppMenuItem::new(MENU_SEND_QUEUED, "Send Queued Messages Now").enabled(!mail.queue.outbox.is_empty()),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_SETTINGS, "Mail Settings...").enabled(!mail.accounts.is_empty()),
-            AppMenuItem::new(MENU_ACCOUNT_SETTINGS, "Account Settings...").enabled(!mail.accounts.is_empty()),
-            AppMenuItem::new(MENU_REMOVE_ACCOUNT, "Remove Account...").enabled(!mail.accounts.is_empty()),
-            AppMenuItem::new(MENU_ADD, "Add Account..."),
-        ]);
+    /// Edit > Correct Spelling: asks the checker for the best correction of the word in view.
+    fn correct_spelling(&mut self, ctx: &Ctx) {
+        let Some((text, _, bytes)) = self.misspelling_in_view() else {
+            self.mail.status = "Check the spelling first".into();
+            return;
+        };
+        let request = text_services::correction(ctx, &text, bytes);
+        self.pending.insert(request, Pending::Spelling { text, step: SpellStep::Correct });
+    }
 
-        let mut view = vec![
-            AppMenuItem::new(MENU_SHOW_SIDEBAR, if mail.show_sidebar { "Hide Sidebar" } else { "Show Sidebar" }).key("cmd+ctrl+s"),
-            AppMenuItem::new(MENU_SHOW_FAVORITES, if mail.prefs.show_favorites { "Hide Favorites Bar" } else { "Show Favorites Bar" }),
-            AppMenuItem::new(MENU_RAW_SOURCE, "Raw Source").key("cmd+alt+u").checked(mail.show_raw).enabled(open),
-            AppMenuItem::separator(),
-            AppMenuItem::submenu("Sort By"),
-        ];
-        for (i, key) in SortKey::ALL.into_iter().enumerate() {
-            view.push(AppMenuItem::new(MENU_SORT_BASE + i as u32, key.label()).depth(1).checked(mail.sort == key));
-        }
-        view.push(AppMenuItem::new(MENU_SORT_ASC, "Ascending").depth(1).checked(mail.ascending));
-        view.push(AppMenuItem::new(MENU_SORT_DESC, "Descending").depth(1).checked(!mail.ascending));
-        view.push(AppMenuItem::submenu("Filter"));
-        for (i, filter) in Filter::ALL.into_iter().enumerate() {
-            view.push(AppMenuItem::new(MENU_FILTER_BASE + i as u32, filter.label()).depth(1).checked(mail.filter == filter));
-        }
-        view.push(AppMenuItem::submenu("Category"));
-        view.push(AppMenuItem::new(MENU_ALL_CATEGORIES, "All Categories").depth(1).checked(mail.category.is_none()));
-        for (i, category) in Category::ALL.into_iter().enumerate() {
-            view.push(AppMenuItem::new(MENU_CATEGORY_BASE + i as u32, category.label()).depth(1).checked(mail.category == Some(category)));
-        }
-        let fold_title = if mail.threaded && mail.open.is_some_and(|uid| mail.is_folded(uid)) { "Expand Conversation" } else { "Collapse Conversation" };
-        view.extend([
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_THREADS, if mail.threaded { "Hide Threads" } else { "Show Threads" }).key("cmd+shift+t"),
-            AppMenuItem::new(MENU_TOGGLE_CONVERSATION, fold_title).enabled(mail.threaded && open),
-            AppMenuItem::new(MENU_EXPAND_ALL, "Expand All Conversations").enabled(mail.threaded),
-            AppMenuItem::new(MENU_COLLAPSE_ALL, "Collapse All Conversations").enabled(mail.threaded),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_SHOW_CC, "Cc Address Field").checked(mail.show_cc),
-            AppMenuItem::new(MENU_SHOW_BCC, "Bcc Address Field").checked(mail.show_bcc),
-            AppMenuItem::new(MENU_SHOW_REPLY_TO, "Reply-To Address Field").checked(mail.show_reply_to),
-        ]);
+    /// The message, the misspelled word in view, and where the word is in the message in bytes.
+    fn misspelling_in_view(&self) -> Option<(String, String, std::ops::Range<usize>)> {
+        let Some(Sheet::Compose(compose)) = &self.mail.sheet else { return None };
+        let (range, word) = compose.current_misspelling()?;
+        let text = compose.message().to_string();
+        let bytes = spelling::byte_range(&text, &range)?;
+        Some((text, word, bytes))
+    }
 
-        let edit = vec![
-            AppMenuItem::new(MENU_PASTE_QUOTE, "Paste as Quotation").key("cmd+alt+v").enabled(compose_open),
-            AppMenuItem::separator(),
-            AppMenuItem::new(MENU_FIND_IN_MESSAGE, "Find in Message...").key("cmd+alt+f").enabled(open),
-            AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(mail.find.is_some()),
-            AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(mail.find.is_some()),
-        ];
+    /// The checker's answer. It counts only while the message is still the text it was asked about.
+    fn spelling_reply(&mut self, ctx: &Ctx, text: String, step: SpellStep, result: &Result<Json, String>) {
+        let reply = match result {
+            Ok(reply) => reply,
+            Err(e) => {
+                self.mail.status = format!("Spelling: {e}");
+                return;
+            }
+        };
+        if self.compose_message().as_deref() != Some(text.as_str()) {
+            self.mail.status = "The message changed. Check the spelling again".into();
+            return;
+        }
+        match step {
+            SpellStep::Check => {
+                let ranges = spelling::char_ranges(&text, &spelling::byte_ranges(reply));
+                let count = ranges.len();
+                self.format(|compose| compose.set_misspelled(ranges));
+                if count == 0 {
+                    self.mail.status = "No spelling mistakes found".into();
+                } else {
+                    self.mail.status = format!("{count} possible misspelling{}. Edit > Next Misspelling steps through them", if count == 1 { "" } else { "s" });
+                    self.ask_suggestions(ctx);
+                }
+            }
+            SpellStep::Guesses(word) => {
+                let guesses = spelling::words(reply);
+                self.mail.status = if guesses.is_empty() { format!("{word}: no suggestions") } else { format!("{word}: {}", guesses.join(", ")) };
+            }
+            SpellStep::Correct => match reply.as_str() {
+                Some(word) => {
+                    let word = word.to_string();
+                    let mut done = false;
+                    self.format(|compose| done = compose.correct_misspelling(&word));
+                    if done {
+                        self.check_spelling(ctx);
+                    }
+                }
+                None => self.mail.status = "No correction found for that word".into(),
+            },
+        }
+    }
 
-        vec![
-            AppMenu { title: "Message".into(), items: message },
-            AppMenu { title: "Move".into(), items: moves },
-            AppMenu { title: "Mailbox".into(), items: mailbox },
-            AppMenu { title: "View".into(), items: view },
-            AppMenu { title: "Edit".into(), items: edit },
-        ]
+    pub fn menu_items(&self) -> Vec<AppMenu> {
+        menus(&self.mail, self.undo_pending())
     }
 
     pub fn menu(&mut self, ctx: &Ctx, id: u32) -> bool {
@@ -854,9 +1033,15 @@ impl MailWindow {
             }
             MENU_EXPAND_ALL => self.mail.expand_all(),
             MENU_COLLAPSE_ALL => self.mail.collapse_all(),
-            MENU_SHOW_CC => self.mail.set_address_field("Cc", !self.mail.show_cc),
-            MENU_SHOW_BCC => self.mail.set_address_field("Bcc", !self.mail.show_bcc),
-            MENU_SHOW_REPLY_TO => self.mail.set_address_field("Reply-To", !self.mail.show_reply_to),
+            MENU_SHOW_CC | MENU_SHOW_BCC | MENU_SHOW_REPLY_TO => {
+                match id {
+                    MENU_SHOW_CC => self.mail.set_address_field("Cc", !self.mail.show_cc),
+                    MENU_SHOW_BCC => self.mail.set_address_field("Bcc", !self.mail.show_bcc),
+                    _ => self.mail.set_address_field("Reply-To", !self.mail.show_reply_to),
+                }
+                // the choice is remembered for the next run
+                self.save_prefs();
+            }
             MENU_PASTE_QUOTE => return self.paste_quoted(),
             MENU_MUTE => self.toggle_mute(),
             MENU_SHOW_SIDEBAR => self.mail.show_sidebar = !self.mail.show_sidebar,
@@ -929,7 +1114,27 @@ impl MailWindow {
                 self.save_prefs();
             }
             MENU_SEND_QUEUED => self.send_queued_now(),
+            MENU_ACTIVITY => {
+                if self.sheet_free() {
+                    self.mail.open_activity();
+                }
+            }
+            MENU_CHECK_CONNECTION => self.check_connection(),
+            MENU_SHOW_TOOLBAR => self.mail.show_toolbar = !self.mail.show_toolbar,
             MENU_ALL_CATEGORIES => self.mail.category = None,
+            MENU_BOLD => self.format(Compose::toggle_bold),
+            MENU_ITALIC => self.format(Compose::toggle_italic),
+            MENU_UNDERLINE => self.format(Compose::toggle_underline),
+            MENU_BULLET => self.format(Compose::toggle_bullet),
+            MENU_INDENT => self.format(|compose| compose.indent(true)),
+            MENU_OUTDENT => self.format(|compose| compose.indent(false)),
+            MENU_CLEAR_FORMATTING => self.format(Compose::clear_formatting),
+            MENU_CHECK_SPELLING => self.check_spelling(ctx),
+            MENU_NEXT_MISSPELLING => {
+                self.format(Compose::next_misspelling);
+                self.ask_suggestions(ctx);
+            }
+            MENU_CORRECT_SPELLING => self.correct_spelling(ctx),
             _ => {
                 if let Some(i) = menu_index(id, MENU_MOVE_BASE) {
                     let target = self.mail.move_targets().get(i).cloned();
@@ -958,6 +1163,14 @@ impl MailWindow {
                         Some(color) => self.set_color_open(Some(*color)),
                         None => return false,
                     }
+                } else if let Some(i) = menu_index(id, MENU_TEXT_COLOR_BASE) {
+                    match i {
+                        0 => self.format(|compose| compose.set_text_color(None)),
+                        _ => match TextColor::ALL.get(i - 1) {
+                            Some(color) => self.format(|compose| compose.set_text_color(Some(*color))),
+                            None => return false,
+                        },
+                    }
                 } else if let Some(i) = menu_index(id, MENU_CATEGORY_BASE) {
                     match Category::ALL.get(i) {
                         Some(category) => self.mail.category = Some(*category),
@@ -985,6 +1198,8 @@ impl MailWindow {
         match event {
             Event::Listed { account, mailbox, result } => match result {
                 Ok(listing) => {
+                    let count = listing.messages.len();
+                    self.note(format!("{}: {mailbox} read, {count} message{}", self.account_name(&account), if count == 1 { "" } else { "s" }));
                     let notices = self.mail.apply_listing(&account, &mailbox, listing.mailboxes, listing.messages);
                     // a message a rule moves or reads raises no notification
                     let quiet = self.apply_rules_to_arrivals();
@@ -997,13 +1212,17 @@ impl MailWindow {
                         self.mail.status.clear();
                     }
                 }
-                Err(e) => self.mail.status = format!("{}: {e}", self.account_name(&account)),
+                Err(e) => {
+                    self.note(format!("{}: {mailbox} could not be read: {e}", self.account_name(&account)));
+                    self.mail.status = format!("{}: {e}", self.account_name(&account));
+                }
             },
             Event::Changed { account, uid, result, .. } => {
                 // the change is shown at once; a refusal brings the listing back from the server. A change to a
                 // whole mailbox (UID 0) is listed again when it is done, which also reloads the mailbox names.
                 match result {
                     Err(e) => {
+                        self.note(format!("{}: a change was refused: {e}", self.account_name(&account)));
                         self.mail.status = format!("{}: {e}", self.account_name(&account));
                         self.refresh_account(&account);
                     }
@@ -1023,13 +1242,26 @@ impl MailWindow {
                 Err(e) => self.mail.status = format!("{}: {e}", self.account_name(&account)),
             },
             Event::Watch { account, live } => {
+                let name = self.account_name(&account);
                 if live {
+                    self.note(format!("{name}: waiting for new mail"));
                     self.live.insert(account);
                 } else {
+                    self.note(format!("{name}: stopped waiting for new mail"));
                     self.live.remove(&account);
                 }
             }
-            Event::Arrived { account } => self.refresh_account(&account),
+            Event::Arrived { account } => {
+                self.note(format!("{}: new mail", self.account_name(&account)));
+                self.refresh_account(&account);
+            }
+            Event::Diagnosed { account, lines } => {
+                let name = self.account_name(&account);
+                for line in lines {
+                    self.note(format!("{name}: {line}"));
+                }
+                self.mail.status = "Connection checked. Mailbox > Show Activity has the details".into();
+            }
             Event::Sent { id, result, .. } => self.sent(id, result),
             Event::Exported { mailbox, result, .. } => match result {
                 Ok(messages) => {
@@ -1047,6 +1279,10 @@ impl MailWindow {
     /// books, and a failed one comes back as the sheet it was written in, or waits for another try.
     fn sent(&mut self, id: u64, result: Result<(), String>) {
         let flight = self.in_flight.remove(&id);
+        match &result {
+            Ok(()) => self.note("A message was sent".to_string()),
+            Err(e) => self.note(format!("A message was not sent: {e}")),
+        }
         match result {
             Ok(()) => {
                 if id == 0 {
@@ -1079,6 +1315,24 @@ impl MailWindow {
                 }
             }
         }
+    }
+
+    /// Adds a line to the activity list, with the time.
+    fn note(&mut self, line: String) {
+        self.mail.log(format!("{}  {line}", message::time_of_day(now_unix())));
+    }
+
+    /// Mailbox > Check Connection: signs in to both servers of the shown account and says what each answered.
+    fn check_connection(&mut self) {
+        let Some(account) = self.mail.current().cloned() else { return };
+        let Some(password) = self.mail.password(&account).map(str::to_string) else {
+            self.mail.status = format!("No password is saved for {}", account.name);
+            return;
+        };
+        self.mail.status = format!("Checking the connection to {}", account.name);
+        let transport = self.transport.clone();
+        self.jobs += 1;
+        sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::diagnose(transport.as_ref(), &account, &password));
     }
 
     fn notify(&self, ctx: &Ctx, notice: &Notice) {
@@ -1456,7 +1710,7 @@ impl MailWindow {
 
     /// True when the open message's text has arrived (Forward quotes it).
     fn open_body_loaded(&self) -> bool {
-        self.mail.open.is_some_and(|uid| self.mail.bodies.contains_key(&uid))
+        open_body_loaded(&self.mail)
     }
 
     /// Edit > Paste as Quotation: the clipboard text goes into the focused compose field with `> ` before each line.
@@ -1465,10 +1719,10 @@ impl MailWindow {
         let multiline = self.focus_is_multiline();
         let quoted = message::quote_text(&text);
         let quoted: String = quoted.chars().filter(|c| !c.is_control() || (*c == '\n' && multiline)).collect();
-        match self.form_mut() {
-            Some(form) => form.type_text(&quoted),
-            None => return false,
+        if self.mail.sheet.is_none() {
+            return false;
         }
+        self.edit_form(|form| form.type_text(&quoted));
         self.dirty = true;
         true
     }
@@ -1492,7 +1746,7 @@ impl MailWindow {
 
     /// True when the open message carries files.
     fn open_has_files(&self) -> bool {
-        self.mail.open.and_then(|uid| self.mail.attachments.get(&uid)).is_some_and(|files| !files.is_empty())
+        open_has_files(&self.mail)
     }
 
     /// Message > Save Attachments: each file of the open message gets its own save panel, one after the other.
@@ -1715,6 +1969,7 @@ impl MailWindow {
                 }
                 Err(e) => self.mail.status = e,
             },
+            PromptKind::Activity => self.mail.close_sheet(),
             PromptKind::EditAccount(id) => self.submit_edit_account(ctx, &id, &prompt.form),
             PromptKind::RemoveAccount(id) => self.submit_remove_account(ctx, &id, &prompt.form),
         }
@@ -2139,12 +2394,9 @@ impl MailWindow {
         self.mail.sheet.as_ref().map(|sheet| sheet.form()).is_some_and(|form| form.fields.get(form.focus).is_some_and(|f| is_multiline(f.label)))
     }
 
-    /// True when the field that takes typed text is the From picker: a tap changes it, typing does not.
+    /// True when the field that takes typed text is not for typing: the From picker (a tap changes it) and the activity list.
     fn focus_is_picker(&self) -> bool {
-        match &self.mail.sheet {
-            Some(Sheet::Compose(c)) => c.form.fields.get(c.form.focus).is_some_and(|f| f.label == "From"),
-            _ => false,
-        }
+        self.mail.sheet.as_ref().map(Sheet::form).is_some_and(|form| form.fields.get(form.focus).is_some_and(|f| f.label == "From" || f.label == "Activity"))
     }
 
     fn form_mut(&mut self) -> Option<&mut crate::state::Form> {
@@ -2199,6 +2451,7 @@ impl MailWindow {
             },
             crate::draw::Hit::Message(uid) => self.open_message(uid),
             crate::draw::Hit::Favorite(index) => self.open_favorite(index),
+            crate::draw::Hit::Fold(uid) => self.mail.toggle_conversation(uid),
             crate::draw::Hit::Attachment(index) => self.save_attachment(ctx, index),
             crate::draw::Hit::Attach => self.pick_files(ctx),
             crate::draw::Hit::RemoveAttachment(index) => {
@@ -2280,5 +2533,113 @@ mod tests {
             Some(Sheet::Compose(c)) => c.clone(),
             _ => unreachable!(),
         }), Err("Add an account first".to_string()));
+    }
+
+    use crate::flags::Flags;
+    use crate::session::Listed;
+    use bifrost_app::controls::internet_accounts::Kind;
+    use bifrost_app::proto::{MAX_APP_MENUS, MAX_APP_MENU_DEPTH, MAX_APP_MENU_ITEMS, MAX_APP_MENU_TITLE};
+
+    /// A mail with everything that makes a menu long: many mailboxes, every rule, a smart mailbox, an open message with a
+    /// file, and (when asked) a message being written.
+    fn busy_mail(compose: bool) -> Mail {
+        let mut mail = Mail::new(vec![Account::new(Kind::Mail, "work", "Work", "me")]);
+        mail.mailboxes = std::iter::once(INBOX.to_string()).chain((0..60).map(|n| format!("Box {n}"))).collect();
+        for n in 0..MAX_RULES {
+            mail.prefs.rules.push(rules::Rule { name: format!("Rule {n}"), from: "x".into(), actions: vec![Action::MarkRead], ..rules::Rule::default() });
+        }
+        mail.prefs.smart.push(prefs::SmartMailbox { name: "Ana".into(), query: "from:ana".into() });
+        mail.smart_active = Some(0);
+        mail.apply_listing("work", INBOX, vec![], vec![Listed { uid: 1, flags: Flags::empty(), header: "Subject: a\r\n\r\n".into() }]);
+        mail.open_message(1);
+        mail.body_arrived("work", INBOX, 1, "Subject: a\r\n\r\nbody".into());
+        mail.attachments.insert(1, vec![Attachment { name: "a.txt".into(), mime: "text/plain".into(), bytes: vec![1] }]);
+        mail.last_target = Some("Box 3".into());
+        mail.threaded = true;
+        mail.find = Some(FindBar::default());
+        if compose {
+            mail.open_compose(None);
+        }
+        mail
+    }
+
+    #[test]
+    fn no_menu_is_longer_than_the_shell_takes() {
+        for compose in [false, true] {
+            let menus = menus(&busy_mail(compose), true);
+            assert!(menus.len() <= MAX_APP_MENUS);
+            for menu in &menus {
+                assert!(menu.items.len() <= MAX_APP_MENU_ITEMS, "{} has {} items", menu.title, menu.items.len());
+                for item in &menu.items {
+                    assert!(item.title.chars().count() <= MAX_APP_MENU_TITLE, "{}", item.title);
+                    assert!(item.depth <= MAX_APP_MENU_DEPTH);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn every_menu_item_has_its_own_id() {
+        let menus = menus(&busy_mail(true), true);
+        let mut seen = HashSet::new();
+        for item in menus.iter().flat_map(|m| &m.items).filter(|i| !i.separator && !i.submenu) {
+            assert_ne!(item.id, 0, "{}", item.title);
+            assert!(seen.insert(item.id), "{} repeats id {}", item.title, item.id);
+        }
+        assert!(seen.contains(&MENU_ATTACH) && seen.contains(&MENU_FIND_IN_MESSAGE) && seen.contains(&(MENU_RULE_BASE + 11)));
+    }
+
+    #[test]
+    fn move_and_copy_list_the_first_mailboxes_only() {
+        let menus = menus(&busy_mail(false), false);
+        let moves = menus.iter().find(|m| m.title == "Move").expect("a Move menu");
+        let count = |base: u32| moves.items.iter().filter(|i| i.id >= base && i.id < base + MENU_TARGET_LIMIT as u32).count();
+        assert_eq!(count(MENU_MOVE_BASE), MENU_TARGETS_SHOWN);
+        assert_eq!(count(MENU_COPY_BASE), MENU_TARGETS_SHOWN);
+        assert!(moves.items.iter().any(|i| i.id == MENU_MOVE_AGAIN && i.enabled && i.title == "Move Again to Box 3"));
+    }
+
+    #[test]
+    fn menu_items_follow_the_state_they_act_on() {
+        let item = |menus: &[AppMenu], id: u32| menus.iter().flat_map(|m| &m.items).find(|i| i.id == id).cloned().expect("item");
+        let editing = menus(&busy_mail(true), true);
+        assert!(item(&editing, MENU_UNDO_SEND).enabled);
+        assert!(item(&editing, MENU_SEND).enabled && item(&editing, MENU_ATTACH).enabled && item(&editing, MENU_SEND_LATER).enabled);
+        assert!(!item(&editing, MENU_SEND_LATER).checked);
+        let reading = menus(&busy_mail(false), false);
+        assert!(!item(&reading, MENU_UNDO_SEND).enabled);
+        assert!(!item(&reading, MENU_SEND).enabled && !item(&reading, MENU_ATTACH).enabled);
+        assert!(item(&reading, MENU_REMOVE_ATTACHMENTS).enabled && item(&reading, MENU_FORWARD_ATTACHMENT).enabled);
+        assert!(item(&reading, MENU_FIND_NEXT).enabled, "the find bar is open");
+        assert!(item(&reading, MENU_DELETE_SMART).enabled);
+        let mut idle = busy_mail(false);
+        idle.open = None;
+        idle.find = None;
+        idle.smart_active = None;
+        let idle = menus(&idle, false);
+        assert!(!item(&idle, MENU_REMOVE_ATTACHMENTS).enabled && !item(&idle, MENU_REMIND).enabled && !item(&idle, MENU_FIND_NEXT).enabled);
+        assert!(!item(&idle, MENU_DELETE_SMART).enabled);
+    }
+
+    #[test]
+    fn a_wait_is_told_in_the_biggest_whole_unit() {
+        assert_eq!(wait_text(0), "1 second");
+        assert_eq!(wait_text(45), "45 seconds");
+        assert_eq!(wait_text(60), "1 minute");
+        assert_eq!(wait_text(7200), "2 hours");
+        assert_eq!(wait_text(3 * 86_400), "3 days");
+    }
+
+    #[test]
+    fn a_file_over_the_limit_is_refused_by_its_size_or_by_what_it_turns_out_to_hold() {
+        let path = std::env::temp_dir().join(format!("bifrost-mail-read-{}", std::process::id()));
+        std::fs::write(&path, b"0123456789").unwrap();
+        let mut file = std::fs::File::open(&path).unwrap();
+        assert_eq!(read_file(&mut file, 10, 100).unwrap(), b"0123456789".to_vec());
+        let mut file = std::fs::File::open(&path).unwrap();
+        assert!(read_file(&mut file, 10, 5).unwrap_err().contains("larger than"));
+        let mut file = std::fs::File::open(&path).unwrap();
+        assert!(read_file(&mut file, 0, 5).is_err(), "a size that was understated is caught while reading");
+        let _ = std::fs::remove_file(&path);
     }
 }

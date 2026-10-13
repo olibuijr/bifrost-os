@@ -62,6 +62,8 @@ pub enum Event {
     Body { account: String, mailbox: String, uid: u32, result: Result<String, String> },
     /// A message was sent. `id` is its place in the outbox, 0 for one sent at once.
     Sent { account: String, id: u64, result: Result<(), String> },
+    /// What Check Connection found, one line for each server.
+    Diagnosed { account: String, lines: Vec<String> },
     /// Every message of a mailbox, for Export Mailbox.
     Exported { account: String, mailbox: String, result: Result<Vec<String>, String> },
     Changed { account: String, mailbox: String, uid: u32, result: Result<(), String> },
@@ -191,6 +193,30 @@ pub fn send(transport: Arc<dyn Transport>, account: Account, password: String, i
     let result = accounts::outgoing(&account)
         .and_then(|server| submit::send(transport.as_ref(), server, &account.username, &password, &from, &recipients, &text));
     Event::Sent { account: account.id, id, result }
+}
+
+/// Mailbox > Check Connection: signs in to the incoming and the outgoing server of `account` in turn and says what each
+/// answered. Nothing is changed or sent.
+pub fn diagnose(transport: &dyn Transport, account: &Account, password: &str) -> Event {
+    let mut lines = Vec::new();
+    lines.push(match accounts::incoming(account).and_then(|server| check_incoming(transport, server, account, password).map(|n| (server, n))) {
+        Ok((server, boxes)) => format!("Incoming {}:{}: signed in, {boxes} mailbox{}", server.host, server.port, if boxes == 1 { "" } else { "es" }),
+        Err(e) => format!("Incoming server: {e}"),
+    });
+    let domain = account.email.rsplit_once('@').map_or("localhost", |(_, d)| d);
+    lines.push(match accounts::outgoing(account).and_then(|server| submit::check(transport, server, &account.username, password, domain).map(|()| server)) {
+        Ok(server) => format!("Outgoing {}:{}: signed in", server.host, server.port),
+        Err(e) => format!("Outgoing server: {e}"),
+    });
+    Event::Diagnosed { account: account.id.clone(), lines }
+}
+
+fn check_incoming(transport: &dyn Transport, server: &bifrost_app::controls::internet_accounts::Server, account: &Account, password: &str) -> Result<usize, String> {
+    let mut session = session::connect(transport, server)?;
+    session.login(&account.username, password)?;
+    let boxes = session.list()?.len();
+    session.logout();
+    Ok(boxes)
 }
 
 /// Reads every message of `mailbox` (the newest [`EXPORT_LIMIT`]), oldest first, for Export Mailbox.
