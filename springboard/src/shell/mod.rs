@@ -2279,7 +2279,7 @@ impl Shell {
             self.take_screenshot(t);
             return vec![];
         }
-        if let Some(fx) = self.dnd_event(ev) {
+        if let Some(fx) = self.dnd_event(ev, t) {
             return fx;
         }
         if let Some(fx) = self.shield_event(ev, t) {

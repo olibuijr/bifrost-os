@@ -799,7 +799,29 @@ impl Broker {
                 let _ = self.grants.release(app_id, &grant);
                 None
             }
+            ToShell::DocGrantPath { request, path } => Some(self.drag_grant(app_id, request, &path)),
             _ => None,
+        }
+    }
+
+    /// A read grant for `path` (absolute, under the home) for a drag `app_id` begins: the file items of the drag carry it,
+    /// and the shell releases it when the drag ends (`dnd`). Paths outside the home are `Denied`, as are symlinks.
+    fn drag_grant(&mut self, app_id: &str, request: u32, path: &str) -> (ToApp, Option<std::fs::File>) {
+        let refuse = |code| (ToApp::DocError { request, code }, None);
+        let Ok(rel) = Path::new(path).strip_prefix(self.opener.home()) else { return refuse(DocErrorCode::Denied) };
+        if rel.as_os_str().is_empty() {
+            return refuse(DocErrorCode::Denied);
+        }
+        let rel = rel.to_path_buf();
+        let f = match self.opener.open_any(&rel, DocMode::Read) {
+            Ok(f) => f,
+            Err(code) => return refuse(code),
+        };
+        let size = f.metadata().map_or(0, |m| m.len());
+        let name = rel.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        match self.grants.add(app_id, &rel, DocMode::Read, &f) {
+            Ok(grant) => (ToApp::DocGranted { request, grant, mode: DocMode::Read, name, size }, Some(f)),
+            Err(_) => refuse(DocErrorCode::Denied),
         }
     }
 
@@ -871,14 +893,14 @@ impl super::Shell {
         Ok((home, files))
     }
 
-    fn doc_broker(&mut self) -> Option<&mut Broker> {
+    pub(super) fn doc_broker(&mut self) -> Option<&mut Broker> {
         self.doc_broker.get_or_insert_with(Broker::installed).as_mut()
     }
 
     /// A `Doc*` request from the app in `slot` (`ext_tick` collects them).
     pub(super) fn doc_request(&mut self, slot: u8, msg: ToShell) {
         let request = match &msg {
-            ToShell::DocOpen { request, .. } | ToShell::DocOpenEx { request, .. } | ToShell::DocSave { request, .. } | ToShell::DocCommit { request } | ToShell::DocAbort { request } | ToShell::DocReopen { request, .. } | ToShell::DocSaveGrant { request, .. } => Some(*request),
+            ToShell::DocOpen { request, .. } | ToShell::DocOpenEx { request, .. } | ToShell::DocSave { request, .. } | ToShell::DocCommit { request } | ToShell::DocAbort { request } | ToShell::DocReopen { request, .. } | ToShell::DocSaveGrant { request, .. } | ToShell::DocGrantPath { request, .. } => Some(*request),
             _ => None,
         };
         let refuse = |sh: &mut Self, code| {
