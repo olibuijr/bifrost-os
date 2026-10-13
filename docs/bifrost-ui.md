@@ -1763,6 +1763,33 @@ Gaps: Gregorian instants only; no names in languages other than English; the Wor
 (`shell/clock/tz.rs`) rather than `TimeZone`; apps have not moved to the SDK type. Tests live in `sdk/src/time_zone.rs`
 and need `/usr/share/zoneinfo`. Not yet checked on Midget.
 
+### Preferences domains, time zones, calendars and more formatters (Core Foundation / Foundation parity)
+
+- `bifrost_app::pref_domains::PrefStore` (CFPreferences, `UserDefaults(suiteName:)`): one file per domain under a shared root
+  (`open`, `open_host`, `suite`). `copy_app_value` reads the app domain then the global domain; `copy_value` reads one
+  domain (`ANY_APPLICATION`, `CURRENT_APPLICATION`, `ANY_USER`/`CURRENT_USER`, `ANY_HOST`/`CURRENT_HOST`); `set_app_value`
+  and `set_value` (None removes) stay in memory until `app_synchronize`, which writes and makes later reads reload the
+  file, so another process's changes show up. `observe` is `UserDefaults.didChangeNotification` (`DID_CHANGE_NOTIFICATION`)
+  and fires only on a real change. Not yet behind `defaults.rs` (`UserDefaults` stays per app).
+- `bifrost_app::time_zone::TimeZone` (see "Time zones" above): one type, reading the shell's TZif reader
+  (`bare::timezone::Zone`). The calendar work added `utc()`, `from_posix_rule(identifier, rule)` (a zone from an `Mm.w.d`
+  POSIX rule, no database file) and `daylight_saving_time_offset(date)` (extra seconds in force, 1800 for Lord Howe).
+  `Calendar` converts its Unix seconds to `coding::Date` for the zone queries.
+- `bifrost_app::calendar_system::Calendar` (identifiers `gregorian`, `buddhist`, `japanese`, `islamic-civil` (tabular),
+  `hebrew`, `iso8601`): `date_components`, `date(&DateComponents)`, `date_by_adding` (months clamp, days keep wall time over
+  DST, hours are elapsed), `range(of:in:for:)` (day/month, day/year, month/year, hour/minute/second), `start_of_day`,
+  `first_weekday`. Hebrew months are numbered Tishri = 1, Adar I = 6 (leap years only). Japanese eras Meiji..Reiwa (232..236).
+  Islamic is the tabular calendar, not Umm al-Qura, so days may differ by one from the observed calendar.
+- `bifrost_app::formatters`: re-exports the `locale` formatters and adds `number` (spell-out English, ordinal, one
+  entry point over the five styles), `relative::named_days` ("yesterday", "today", "tomorrow") and `date_components`
+  (`DateComponentsFormatter`: positional, abbreviated, short, full; English). German (`de`) now uses comma-decimal
+  separators and the "12 %" / "1.234,50 EUR" shapes in `NumberFormatter`.
+
+Gaps: `Locale` has no `region`/`calendar`/`measurementSystem` accessors yet, `DateFormatter` still takes an explicit
+`tz_offset` and a Gregorian calendar, week-of-year and weekday-ordinal components and `DateInterval` are missing, CLDR
+data from `/usr/share` is not read (small built-in table only), and spell-out beyond English is not there. Host tests
+only; not checked on Midget.
+
 ## Login items and menu-bar extras (ServiceManagement and NSStatusItem parity)
 
 Modules `bifrost_app::service_management` and `bifrost_app::status_item`; wire tags `0x1b0..=0x1bf` (`proto/src/extras.rs`);

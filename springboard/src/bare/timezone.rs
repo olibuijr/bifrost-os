@@ -315,6 +315,12 @@ impl Zone {
         Some(Zone { transitions, kinds, types, names, rule })
     }
 
+    /// A zone that follows one POSIX rule such as `EST5EDT,M3.2.0,M11.1.0` and has no transition table.
+    /// None when the rule does not parse (only the `Mm.w.d` form is understood).
+    pub fn from_posix_rule(rule: &str) -> Option<Zone> {
+        Some(Zone { transitions: Vec::new(), kinds: Vec::new(), types: Vec::new(), names: Vec::new(), rule: Some(Rule::parse(rule)?) })
+    }
+
     /// (offset east of UTC in seconds, is daylight time) at a Unix time.
     pub fn at(&self, unix: i64) -> (i32, bool) {
         let (offset, daylight, _) = self.resolve(unix);
