@@ -17,8 +17,10 @@ use super::super::game_controllers_page::{self, Remap};
 use super::super::prefs::Prefs;
 use super::super::AppId;
 use super::{Event, Shell, SystemService};
-use bifrost_core::gamepad::{Capabilities, Controller, Event as PadEvent, Registry};
+use bifrost_core::gamepad::{supports_rumble, Capabilities, Controller, Event as PadEvent, Registry};
 use bifrost_core::json::Json;
+use bifrost_core::rumble::Rumble;
+use crate::bare::pad_rumble::Motor;
 use bifrost_ui::controller_power::{Battery, BatteryState};
 use bifrost_ui::gamepad::{Axis, Button, Change, Gamepad};
 use std::collections::{BTreeSet, HashMap};
@@ -136,6 +138,8 @@ pub struct GamepadService {
     pads: HashMap<u32, Gamepad>,
     /// the sysfs device directory of each controller, read for its battery
     devices: HashMap<u32, PathBuf>,
+    /// the rumble motors of each controller that can rumble, opened when it connects
+    motors: HashMap<u32, Motor>,
     /// the `eventN` names seen by the last scans, controller or not
     seen: BTreeSet<String>,
     last_scan: Option<f64>,
@@ -159,6 +163,7 @@ impl GamepadService {
             registry: Registry::default(),
             pads: HashMap::new(),
             devices: HashMap::new(),
+            motors: HashMap::new(),
             seen: BTreeSet::new(),
             last_scan: None,
             raw_tx,
@@ -190,6 +195,7 @@ impl GamepadService {
             if let Some(PadEvent::Disconnected(c)) = self.registry.disconnected(&node) {
                 self.pads.remove(&c.id);
                 self.devices.remove(&c.id);
+                self.motors.remove(&c.id);
                 out.push(lifecycle("disconnected", &c));
             }
         }
@@ -206,6 +212,11 @@ impl GamepadService {
             if let Some(PadEvent::Connected(c)) = self.registry.connected(&node, &label, &caps) {
                 self.pads.insert(c.id, Gamepad::new());
                 self.devices.insert(c.id, device.clone());
+                if supports_rumble(&parse_bitmap(&read_text(&device.join("capabilities/ff")))) {
+                    if let Ok(motor) = Motor::open(Path::new(&node)) {
+                        self.motors.insert(c.id, motor);
+                    }
+                }
                 spawn_reader(c.id, PathBuf::from(&node), self.raw_tx.clone());
                 out.push(lifecycle("connected", &c));
             }
@@ -261,7 +272,14 @@ impl SystemService for GamepadService {
         "gamepad"
     }
 
-    fn call(&mut self, _shell: &mut Shell, _app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+    fn call(&mut self, shell: &mut Shell, app_id: &str, method: &str, params: &Json, _t: f64) -> Result<Json, String> {
+        if method == "rumble" {
+            // rumble is for the app in front only, the same app that gets the controller's input
+            if front_app(shell).as_deref() != Some(app_id) {
+                return Err("rumble goes to the app in front only".into());
+            }
+            return self.rumble(params);
+        }
         self.answer(method, params)
     }
 
@@ -274,10 +292,12 @@ impl SystemService for GamepadService {
         }
         let changes = self.drain();
         let changed = !changes.is_empty();
+        // the Home button opens the launcher on the shell's side, whatever the app in front does with it
+        if changes.iter().any(|(_, c)| matches!(c, Change::Button { button: Button::Home, pressed: true })) {
+            press_home(shell, t);
+        }
         // input goes to the focused app only; with no SDK app in front the changes are dropped
-        let ids: Vec<String> = apphost::installed().iter().map(|a| a.manifest.id.clone()).collect();
-        let front = shell.desk.as_ref().and_then(|d| d.front()).map(|w| w.app);
-        if let Some(app) = front.and_then(|app| focused_app(app, &ids)) {
+        if let Some(app) = front_app(shell) {
             for (id, change) in changes {
                 // the app receives the output its button is remapped to; the snapshot keeps the physical buttons
                 let remap = self.registry.get(id).map(|c| game_controllers_page::load(&shell.prefs, &c.name)).unwrap_or_default();
@@ -289,6 +309,39 @@ impl SystemService for GamepadService {
             store(self.views(&shell.prefs));
         }
         out
+    }
+}
+
+impl GamepadService {
+    /// `rumble` (`{"id", "strong", "weak", "duration"}`): plays a rumble on controller `id`. Levels are 0 to 1 and the
+    /// duration is in milliseconds (default 500); a duration of 0, or two levels of 0, stops the motors.
+    fn rumble(&mut self, params: &Json) -> Result<Json, String> {
+        let id = params.get("id").and_then(|v| v.as_u64()).ok_or_else(|| "rumble needs an id".to_string())? as u32;
+        let level = |key: &str| params.get(key).and_then(|v| v.number()).unwrap_or(0.0);
+        let duration = params.get("duration").and_then(|v| v.number()).unwrap_or(500.0).max(0.0);
+        let rumble = Rumble::new(level("strong"), level("weak"), duration.min(f64::from(u32::MAX - 1)) as u32);
+        let motor = self.motors.get_mut(&id).ok_or_else(|| format!("controller {id} has no rumble motor"))?;
+        motor.play(rumble).map(|()| Json::Null).map_err(|e| e.to_string())
+    }
+}
+
+/// The id of the installed (SDK) app in front, or `None` when a shell window or nothing is in front.
+pub fn front_app(shell: &Shell) -> Option<String> {
+    let ids: Vec<String> = apphost::installed().iter().map(|a| a.manifest.id.clone()).collect();
+    let front = shell.desk.as_ref().and_then(|d| d.front()).map(|w| w.app)?;
+    focused_app(front, &ids)
+}
+
+/// The controller's Home button: the launcher opens in desktop mode (it stays open if it already is), and the shell
+/// goes to its home screen otherwise. Ignored while the screen is locked.
+fn press_home(shell: &mut Shell, t: f64) {
+    if shell.is_locked() {
+        return;
+    }
+    if shell.desk_active() {
+        shell.appgrid_show(t);
+    } else {
+        let _ = shell.assistive_action(super::super::assistive_touch::Action::Home, t);
     }
 }
 
@@ -584,5 +637,15 @@ mod tests {
         assert!(views[0].pad.is_pressed(Button::South));
         assert_eq!(views[0].remap.target(Button::South), Button::East);
         let _ = std::fs::remove_dir_all(&sysfs);
+    }
+
+    #[test]
+    fn rumble_needs_an_id_and_a_motor_and_stops_on_a_zero_length() {
+        let mut svc = GamepadService::with_roots(Path::new("/nonexistent-sys"), Path::new("/nonexistent-dev"));
+        let no_id = Json::Obj(vec![("strong".into(), Json::Num(1.0))]);
+        assert!(svc.rumble(&no_id).is_err());
+        // a controller with no rumble motor (a pad without the effect, or one not connected) is refused
+        let no_motor = Json::Obj(vec![("id".into(), Json::Num(1.0)), ("strong".into(), Json::Num(1.0))]);
+        assert_eq!(svc.rumble(&no_motor), Err("controller 1 has no rumble motor".to_string()));
     }
 }

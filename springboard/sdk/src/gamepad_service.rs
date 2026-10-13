@@ -13,6 +13,7 @@
 //! }
 //! ```
 //! Controller ids are kept by the shell across unplugs of the same pad, but are never reused for another pad.
+//! `rumble` drives the two motors of a pad that has them; the controller's Home button is the shell's, it opens the launcher.
 //! Connect and disconnect go to every running app; `input` goes to the app in front only.
 use crate::controls::gamepad::{Axis, Button, Change};
 use crate::runtime::Ctx;
@@ -70,6 +71,22 @@ pub fn list(ctx: &Ctx) -> u32 {
 /// Asks for the state of controller `id`. The reply is parsed with [`parse_state`].
 pub fn state(ctx: &Ctx, id: u32) -> u32 {
     service::call(ctx, SERVICE, "state", &Json::Obj(vec![("id".into(), Json::Num(f64::from(id)))]))
+}
+
+/// Rumbles controller `id`: the heavy and light motors, each from 0 to 1, for `duration_ms` (a zero duration or two
+/// zero levels stop it). Only the app in front may rumble; another app gets an error reply.
+pub fn rumble(ctx: &Ctx, id: u32, strong: f32, weak: f32, duration_ms: u32) -> u32 {
+    service::call(ctx, SERVICE, "rumble", &rumble_body(id, strong, weak, duration_ms))
+}
+
+/// The body of a `rumble` call.
+pub fn rumble_body(id: u32, strong: f32, weak: f32, duration_ms: u32) -> Json {
+    Json::Obj(vec![
+        ("id".into(), Json::Num(f64::from(id))),
+        ("strong".into(), Json::Num(f64::from(strong.clamp(0.0, 1.0)))),
+        ("weak".into(), Json::Num(f64::from(weak.clamp(0.0, 1.0)))),
+        ("duration".into(), Json::Num(f64::from(duration_ms))),
+    ])
 }
 
 /// The controllers in a `list` reply. A malformed entry is skipped.
@@ -210,6 +227,15 @@ mod tests {
         assert_eq!(s.axis(Axis::RightX), 0.0);
         assert_eq!(s.dpad, (1, 0));
         assert_eq!(parse_state(&Json::Null), None);
+    }
+
+    #[test]
+    fn a_rumble_call_carries_the_controller_levels_and_duration() {
+        let body = rumble_body(2, 1.5, 0.25, 300);
+        assert_eq!(body.get("id").and_then(|v| v.number()), Some(2.0));
+        assert_eq!(body.get("strong").and_then(|v| v.number()), Some(1.0));
+        assert_eq!(body.get("weak").and_then(|v| v.number()), Some(0.25));
+        assert_eq!(body.get("duration").and_then(|v| v.number()), Some(300.0));
     }
 
     #[test]

@@ -9,6 +9,7 @@ pub mod gpu_comp;
 pub mod heartbeat;
 pub mod jank;
 pub mod input;
+pub mod pad_rumble;
 pub mod pmqos;
 pub mod pointer_finger;
 pub mod pointer_prefs;
