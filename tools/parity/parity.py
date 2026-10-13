@@ -21,6 +21,8 @@ feature rows, filled by agents from the official docs and this repo. This CLI re
                                  semantic search over feature rows (Titan embeddings, then rerank)
   related                        nearest frameworks per framework by embedding -> related.json
   themes [--k N]                 cluster Gap rows across frameworks into work themes -> themes.json
+  verify os-cli plan|run|closures
+                                 assess the os/cli rows and verify each tool on Midget (tools/parity/os_cli.py)
   apply FILE.json [--dry-run]    apply closures [{slug, feature, status, bifrost, note}]: each updates the row it
                                  matches (exact feature, else rerank) or is appended as a new row
   verify plan|run|closures       promote partial rows to parity from Midget test evidence (tools/parity/verify.py):
@@ -655,6 +657,11 @@ def main(argv=None):
     if argv[:1] == ["verify"]:
         import verify
         return verify.main(argv[1:])
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:2] == ["verify", "os-cli"]:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import os_cli
+        return os_cli.main(argv[2:])
     p = argparse.ArgumentParser(prog="bifrost pc parity", description=(__doc__ or "").split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("status")

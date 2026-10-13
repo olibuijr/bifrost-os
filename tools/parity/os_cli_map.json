@@ -1,0 +1,39 @@
+{
+  "comment": "name -> BifrOSt/Linux command for os/cli rows. Unlisted names use their own name. A string value renames, null means no equivalent (gap). A name missing on the machine is a gap at run time.",
+  "commands": {
+    "bsdtar": "tar",
+    "afplay": null,
+    "dscacheutil": null,
+    "dscl": null,
+    "ditto": null,
+    "codesign": null,
+    "spctl": null
+  },
+  "no_exec": {
+    "comment": "present-check only: running these, even with --help, could change machine state",
+    "names": ["reboot", "halt", "shutdown", "poweroff", "init", "telinit", "fsck", "mkfs", "newfs", "dd", "fdisk", "diskutil", "hdiutil", "tmutil", "softwareupdate", "launchctl", "pmset", "networksetup", "scutil", "defaults", "passwd", "su", "sudo", "login", "kill", "killall", "pkill", "rm", "shred", "mount", "umount", "swapon", "swapoff", "sysctl", "caffeinate", "say", "open", "screencapture", "shortcuts", "mdutil", "mdfind"]
+  },
+  "na_names": {
+    "comment": "Apple-only developer or hardware tools with no BifrOSt role",
+    "xcode-toolchain": {
+      "reason": "Xcode toolchain shim under /usr/bin; BifrOSt builds with cargo, there is no Xcode role",
+      "names": ["xcrun", "xcodebuild", "xcode-select", "swift", "swiftc", "swift-build", "swift-package", "lldb", "actool", "ibtool", "instruments", "xctrace", "simctl", "notarytool", "stapler", "altool", "agvtool", "dsymutil", "lipo", "otool", "install_name_tool", "libtool", "codesign_allocate", "metal", "metallib", "devicectl", "DeRez", "Rez", "SetFile", "GetFileInfo", "SplitForks"]
+    },
+    "apple-hardware": {
+      "reason": "Apple boot, firmware, security-chip or Apple-silicon management; BifrOSt runs on PC hardware and has no equivalent role",
+      "names": ["bputil", "csrutil", "firmwarepasswd", "fdesetup", "bless", "kmutil", "kextload", "kextunload", "kextstat", "TouchBarServer", "SidecarRelay", "BTLEServer", "BlueTool", "IOAccelMemory", "IOMFBDiagnose", "asr", "apfs_unlockfv", "diskimagesiod", "efi-dump-logs"]
+    }
+  },
+  "na_patterns": [
+    {
+      "reason": "Apple platform daemon or agent under /usr/libexec; its job is done by BifrOSt springboard services, no command-line role",
+      "path_prefix": "/usr/libexec/",
+      "name_regex": "(d|agent|Agent|Helper|helper|Server|Service|Updater|Migrator)$"
+    },
+    {
+      "reason": "DTrace D script; DTrace is Apple/BSD only and BifrOSt traces with Linux tools",
+      "path_prefix": "/usr/bin/",
+      "name_regex": "\\.d$"
+    }
+  ]
+}
