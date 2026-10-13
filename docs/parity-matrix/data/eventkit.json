@@ -12,7 +12,7 @@
       "apple": "EKEventStore, access requests",
       "bifrost": "springboard/ui/src/calendar_access.rs; springboard/src/shell/services/calendar.rs; springboard/sdk/src/calendar.rs",
       "status": "partial",
-      "note": "Read side: the calendar service answers access (authorized when the manifest declares calendars, else denied) and events in a [start, end) range, from the shared store (springboard/src/shell/calendar/store.rs, appdata/is.olibuijr.calendar.desktop/events.tsv); SDK calendar::access / events / decode_events. Not yet: EKEventStore writes, a permission prompt (the manifest is the grant), recurrence expansion in the service, change notifications, and Midget testing (host unit tests only)"
+      "note": "Read side: the calendar service answers access (authorized when the manifest declares calendars, else denied) and events in a [start, end) range, from the shared store (springboard/src/shell/calendar/store.rs, appdata/is.olibuijr.calendar.desktop/events.tsv); SDK calendar::access / events / decode_events. Not yet: EKEventStore writes, a permission prompt (the manifest is the grant), recurrence expansion in the service, and Midget testing (host unit tests only)"
     },
     {
       "feature": "Events",
@@ -75,7 +75,7 @@
       "apple": "EKEventStoreChanged",
       "bifrost": "springboard/ui/src/calendar_store_changes.rs",
       "status": "partial",
-      "note": "Wave 4 (w4-eventkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. shell polls store generation; no app-facing change notification"
+      "note": "Wave 4 (w4-eventkit, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. shell polls store generation and posts system.calendar.change to apps with the calendars permission when the events file changes"
     },
     {
       "feature": "Fetch by predicate",
@@ -112,7 +112,6 @@
     "Calendar service returns base events only; recurring events are not expanded per date",
     "No attendees, invitations or account sources",
     "No location-based alarms",
-    "No app-facing change notification",
     "No virtual conference extensions"
   ]
 }

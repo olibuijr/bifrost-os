@@ -7,6 +7,7 @@
 //!   `system.` belongs to the shell and is refused.
 //! - `register` `{name, mode?}` makes a token on `name`; replies `{token}`. `mode` `"event"` (the default) pushes a
 //!   `notified` event to the app after each post; `"poll"` keeps the mark for `check`. An app holds at most 64 tokens.
+//!   The store-change names are refused unless the app holds that store's access (see [`may_hear`]).
 //! - `check` `{token}` (poll tokens only) replies `{pending}` and clears the mark.
 //! - `suspend` / `resume` `{token}` reply `{ok}`; `cancel` `{token}` removes the token and replies `{ok}`.
 //! - `valid` `{token}` replies `{valid}`, which is false for a token that is not the caller's.
@@ -19,7 +20,8 @@
 //! System names the shell posts, once per change, after the first tick (which only records the state):
 //! `system.appearance.change` (the scheme went Light or Dark), `system.screen.locked` and `system.screen.unlocked`,
 //! `system.network.change` (the Wi-Fi or wired link went up or down), `system.contacts.change` (the contacts file
-//! changed) and `system.calendar.change` (the events file changed). Each reaches the apps that hold a token on it.
+//! changed) and `system.calendar.change` (the events file changed). Each reaches the apps that hold a token on it and
+//! may read that store: a read grant for contacts, the `calendars` permission for events.
 use super::{Event, Shell, SystemService};
 use bifrost_core::json::Json;
 use bifrost_core::notify_center::NotifyCenter;
@@ -52,12 +54,27 @@ pub const MAX_TOKENS_PER_APP: usize = 64;
 /// Names with this prefix are the shell's.
 const SYSTEM_PREFIX: &str = "system.";
 
+/// Whether `app` may hear `name`. The store-change names say that a person's private data changed, so only an app
+/// with that store's access hears them (Apple sends the contacts and event-store change notices only to apps that can
+/// read the store). Every other name is open to all apps.
+fn may_hear(app: &str, name: &str) -> bool {
+    match name {
+        CONTACTS_CHANGE => super::contacts::reads(app),
+        CALENDAR_CHANGE => super::app_has_permission(app, super::calendar::PERMISSION),
+        _ => true,
+    }
+}
+
 /// Who owns a token, the name it is on, and whether it is pushed (`true`) or polled.
 struct Owner {
     app: String,
     name: String,
     push: bool,
 }
+
+/// A store file's identity: its modification time and its length. Both are kept because `write_atomic` renames a new
+/// file into place, and two saves in one timestamp tick leave the time unchanged, so the length tells them apart.
+type Stamp = (SystemTime, u64);
 
 /// The shell state the bus watches for system names.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -66,10 +83,10 @@ struct Seen {
     locked: bool,
     /// Wi-Fi or a wired link is up.
     reachable: bool,
-    /// The contacts file's modification time, `None` when there is no file.
-    contacts: Option<SystemTime>,
-    /// The events file's modification time, `None` when there is no file.
-    calendar: Option<SystemTime>,
+    /// The contacts file's stamp, `None` when there is no file.
+    contacts: Option<Stamp>,
+    /// The events file's stamp, `None` when there is no file.
+    calendar: Option<Stamp>,
 }
 
 #[derive(Default)]
@@ -79,8 +96,8 @@ pub struct NotifyBus {
     last: Option<Seen>,
     /// The shell time of the last stat of the store files, `None` before the first tick.
     stat_at: Option<f64>,
-    /// The store files' modification times as of `stat_at`: contacts, then calendar.
-    stores: (Option<SystemTime>, Option<SystemTime>),
+    /// The store files' stamps as of `stat_at`: contacts, then calendar.
+    stores: (Option<Stamp>, Option<Stamp>),
 }
 
 impl NotifyBus {
@@ -121,6 +138,9 @@ impl NotifyBus {
             }
             "register" => {
                 let name = name_param(params)?;
+                if !may_hear(app, &name) {
+                    return Err(format!("notify_bus: {name} is only for apps with access to that store"));
+                }
                 let push = match params.str_field("mode").as_deref() {
                     None | Some("event") => true,
                     Some("poll") => false,
@@ -135,10 +155,13 @@ impl NotifyBus {
             }
             "check" => {
                 let token = token_param(params)?;
-                if self.owned(app, token)?.push {
+                let owner = self.owned(app, token)?;
+                if owner.push {
                     return Err("notify_bus: an event token is not polled; wait for the notified event".into());
                 }
-                Ok(obj(vec![("pending", Json::Bool(self.center.check(token)))]))
+                let heard = may_hear(app, &owner.name);
+                let pending = self.center.check(token) && heard;
+                Ok(obj(vec![("pending", Json::Bool(pending))]))
             }
             "suspend" | "resume" => {
                 let token = token_param(params)?;
@@ -174,6 +197,19 @@ impl NotifyBus {
         }
     }
 
+    /// Stats the store files under `data_dir` when the interval since the last stat has passed.
+    fn stat_stores(&mut self, data_dir: &Path, t: f64) {
+        match self.stat_at {
+            Some(at) if t - at < STORE_STAT_INTERVAL => {}
+            _ => {
+                self.stat_at = Some(t);
+                let contacts = crate::shell::contactstore::store_path(data_dir);
+                let calendar = super::calendar::store_path(data_dir);
+                self.stores = (stamp(&contacts), stamp(&calendar));
+            }
+        }
+    }
+
     /// Posts the system name for each change since the last call. The first call only records the state.
     fn system_changes(&mut self, now: Seen) {
         if let Some(prev) = self.last.replace(now) {
@@ -199,7 +235,8 @@ impl NotifyBus {
     fn deliver(&mut self) -> Vec<Event> {
         let mut out = Vec::new();
         for (&token, owner) in self.owners.iter() {
-            if owner.push && self.center.check(token) {
+            // the mark is cleared even when the owner may not hear the name, so a later grant does not replay it
+            if owner.push && self.center.check(token) && may_hear(&owner.app, &owner.name) {
                 let body = obj(vec![("token", Json::Num(token as f64)), ("name", Json::Str(owner.name.clone()))]);
                 out.push(Event { app: Some(owner.app.clone()), event: EVENT.to_string(), body });
             }
@@ -220,15 +257,7 @@ impl SystemService for NotifyBus {
     fn tick(&mut self, shell: &mut Shell, t: f64) -> Vec<Event> {
         let running = |app: &str| crate::shell::apphost::slot_of(app).is_some_and(|slot| shell.ext.get(slot).is_some_and(|h| h.is_some()));
         self.prune(running);
-        match self.stat_at {
-            Some(at) if t - at < STORE_STAT_INTERVAL => {}
-            _ => {
-                self.stat_at = Some(t);
-                let contacts = crate::shell::contactstore::store_path(&shell.data_dir);
-                let calendar = super::calendar::store_path(&shell.data_dir);
-                self.stores = (stamp(&contacts), stamp(&calendar));
-            }
-        }
+        self.stat_stores(&shell.data_dir, t);
         let now = Seen {
             light: bifrost_render::appearance::target_is_light(),
             locked: shell.is_locked(),
@@ -245,9 +274,10 @@ fn is_system(name: &str) -> bool {
     name.starts_with(SYSTEM_PREFIX)
 }
 
-/// The modification time of the file at `path`; `None` when it is missing or unreadable.
-fn stamp(path: &Path) -> Option<SystemTime> {
-    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+/// The stamp of the file at `path`; `None` when it is missing or unreadable.
+fn stamp(path: &Path) -> Option<Stamp> {
+    let meta = std::fs::metadata(path).ok()?;
+    Some((meta.modified().ok()?, meta.len()))
 }
 
 fn obj(fields: Vec<(&str, Json)>) -> Json {
@@ -285,6 +315,8 @@ fn state_param(params: &Json) -> Result<u64, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shell::services::contacts::{answer_prompt, change_by_user};
+    use bifrost_ui::contact_access::Choice;
     use std::time::{Duration, UNIX_EPOCH};
 
     fn params(fields: Vec<(&str, Json)>) -> Json {
@@ -307,10 +339,21 @@ mod tests {
         Seen { light: false, locked: false, reachable: true, contacts: None, calendar: None }
     }
 
+    /// A file last written at `secs` after the epoch, `len` bytes long.
+    fn file(secs: u64, len: u64) -> Option<Stamp> {
+        Some((UNIX_EPOCH + Duration::from_secs(secs), len))
+    }
+
     /// A quiet shell whose store files were last written at the given seconds after the epoch.
     fn stores(contacts: Option<u64>, calendar: Option<u64>) -> Seen {
-        let at = |secs: u64| Some(UNIX_EPOCH + Duration::from_secs(secs));
-        Seen { contacts: contacts.and_then(at), calendar: calendar.and_then(at), ..quiet() }
+        Seen { contacts: contacts.and_then(|secs| file(secs, 0)), calendar: calendar.and_then(|secs| file(secs, 0)), ..quiet() }
+    }
+
+    /// A pushed token for `app` on `name`, put in place without the access gate. The calendar permission comes from an
+    /// installed manifest, which a unit test cannot install, so the delivery tests use this for that name.
+    fn token_past_the_gate(bus: &mut NotifyBus, app: &str, name: &str) {
+        let token = bus.center.register(name);
+        bus.owners.insert(token, Owner { app: app.into(), name: name.into(), push: true });
     }
 
     fn event_names(bus: &mut NotifyBus) -> Vec<(Option<String>, String)> {
@@ -501,8 +544,9 @@ mod tests {
     #[test]
     fn a_store_change_reaches_only_the_apps_on_that_name() {
         let mut bus = NotifyBus::default();
+        answer_prompt("app.a", Choice::All).unwrap();
         bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).unwrap();
-        bus.handle("app.b", "register", &name(CALENDAR_CHANGE)).unwrap();
+        token_past_the_gate(&mut bus, "app.b", CALENDAR_CHANGE);
         bus.system_changes(stores(Some(1), Some(1)));
         assert!(bus.deliver().is_empty(), "the first tick only records the stamps");
         bus.system_changes(stores(Some(2), Some(1)));
@@ -514,8 +558,19 @@ mod tests {
     }
 
     #[test]
+    fn a_second_save_in_the_same_timestamp_tick_is_a_change() {
+        let mut bus = NotifyBus::default();
+        answer_prompt("app.a", Choice::All).unwrap();
+        bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).unwrap();
+        bus.system_changes(Seen { contacts: file(7, 100), ..quiet() });
+        bus.system_changes(Seen { contacts: file(7, 120), ..quiet() });
+        assert_eq!(event_names(&mut bus).len(), 1, "same mtime, new length");
+    }
+
+    #[test]
     fn a_store_file_that_appears_or_goes_is_a_change() {
         let mut bus = NotifyBus::default();
+        answer_prompt("app.a", Choice::All).unwrap();
         bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).unwrap();
         bus.system_changes(stores(None, None));
         bus.system_changes(stores(Some(5), None));
@@ -525,10 +580,74 @@ mod tests {
     }
 
     #[test]
+    fn the_contacts_change_needs_a_contacts_grant_to_be_registered() {
+        let mut bus = NotifyBus::default();
+        assert!(bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).is_err(), "an app with no answer hears nothing");
+        answer_prompt("app.a", Choice::Deny).unwrap();
+        assert!(bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).is_err(), "a denied app hears nothing");
+        answer_prompt("app.b", Choice::All).unwrap();
+        assert!(bus.handle("app.b", "register", &name(CONTACTS_CHANGE)).is_ok());
+    }
+
+    #[test]
+    fn the_calendar_change_needs_the_calendars_permission_to_be_registered() {
+        let mut bus = NotifyBus::default();
+        assert!(bus.handle("app.a", "register", &name(CALENDAR_CHANGE)).is_err());
+    }
+
+    #[test]
+    fn an_app_without_contacts_access_is_not_sent_the_change() {
+        let mut bus = NotifyBus::default();
+        token_past_the_gate(&mut bus, "app.b", CONTACTS_CHANGE);
+        bus.system_changes(stores(Some(1), None));
+        bus.system_changes(stores(Some(2), None));
+        assert!(bus.deliver().is_empty());
+    }
+
+    #[test]
+    fn an_app_that_loses_contacts_access_is_no_longer_sent_the_change() {
+        let mut bus = NotifyBus::default();
+        answer_prompt("app.a", Choice::All).unwrap();
+        bus.handle("app.a", "register", &name(CONTACTS_CHANGE)).unwrap();
+        bus.system_changes(stores(Some(1), None));
+        bus.system_changes(stores(Some(2), None));
+        change_by_user("app.a", Choice::Deny).unwrap();
+        assert!(bus.deliver().is_empty());
+    }
+
+    #[test]
     fn apps_cannot_post_the_store_change_names() {
         let mut bus = NotifyBus::default();
         assert!(bus.handle("app.a", "post", &name(CONTACTS_CHANGE)).is_err());
         assert!(bus.handle("app.a", "post", &name(CALENDAR_CHANGE)).is_err());
+    }
+
+    /// A fresh data directory for one test, under the crate's `target` folder like the other scratch dirs.
+    fn scratch_data_dir(tag: &str) -> std::path::PathBuf {
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/test-notify-bus").join(std::process::id().to_string()).join(tag);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn the_store_files_are_stat_d_at_most_once_a_second_and_a_save_is_seen_after_the_interval() {
+        let data = scratch_data_dir("tick");
+        let contacts = crate::shell::contactstore::store_path(&data);
+        std::fs::create_dir_all(contacts.parent().unwrap()).unwrap();
+        let mut bus = NotifyBus::default();
+        bus.stat_stores(&data, 0.0);
+        assert_eq!(bus.stores.0, None, "no file yet");
+        std::fs::write(&contacts, "first\n").unwrap();
+        bus.stat_stores(&data, 0.5);
+        assert_eq!(bus.stores.0, None, "inside the interval the files are not stat'ed again");
+        bus.stat_stores(&data, 1.0);
+        let first = bus.stores.0.expect("the file is seen once the interval has passed");
+        std::fs::write(&contacts, "second save, longer\n").unwrap();
+        bus.stat_stores(&data, 1.5);
+        assert_eq!(bus.stores.0, Some(first), "a save inside the interval waits for the next stat");
+        bus.stat_stores(&data, 2.0);
+        assert_ne!(bus.stores.0, Some(first), "the save is seen after the interval");
     }
 
     #[test]

@@ -4,7 +4,7 @@
   "macos_since": "10.11",
   "status": "partial",
   "bifrost": "springboard/src/shell/contactstore.rs (local store), springboard/src/shell/services/contacts.rs (contacts service: access, fetch, save), springboard/sdk/src/contacts.rs (SDK), springboard/apps/contacts-desktop (Contacts app), springboard/src/shell/quicksearch.rs (search index), springboard/src/shell/share/mod.rs (vCard export)",
-  "summary": "BifrOSt has a shell-internal local contact store (one flat file, fixed fields, atomic save) that the Contacts app, Search and Share use directly. Apps read and save contacts through the SDK contacts module and the contacts service, behind a per-app access grant. No groups, containers, change history or contacts-changed mechanism exists.",
+  "summary": "BifrOSt has a shell-internal local contact store (one flat file, fixed fields, atomic save) that the Contacts app, Search and Share use directly. Apps read and save contacts through the SDK contacts module and the contacts service, behind a per-app access grant. No groups, containers or change history exists. Apps with a contacts read grant get system.contacts.change when the store file changes.",
   "rea_evidence": "ev_7d7f7f98ebfa979bea510b281e185ad1768b0842b8247a95e914096424ceeb15",
   "features": [
     {
@@ -61,7 +61,7 @@
       "apple": "CNChangeHistoryFetchRequest, CNChangeHistoryEvent family, CNChangeHistoryEventVisitor, Contacts changed notifications",
       "bifrost": "springboard/ui/src/contact_changes.rs, springboard/ui/src/contact_groups.rs, springboard/ui/src/vcard.rs",
       "status": "partial",
-      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No change log and no notification to other apps when contacts change. Search results are rebuilt from the store when the file is loaded."
+      "note": "Wave 1 (parity/integration 0d0412c3): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No change log: the shell posts system.contacts.change to apps with contacts access when the store file changes, not per-record events. Search results are rebuilt from the store when the file is loaded."
     },
     {
       "feature": "Formatting names and addresses",
@@ -115,7 +115,7 @@
   ],
   "gaps": [
     "No groups, containers or subgroups.",
-    "No change history and no contacts-changed notification to apps.",
+    "No per-record change history.",
     "Single-valued fields only: one phone, one email, one address. No birthday, dates, relations, social profiles, instant messages, URLs or photos.",
     "No access sheet or Settings row for contact access; the shell sets grants, and they reset on restart.",
     "No vCard in the SDK: apps cannot parse or build vCards. Import and export live in the Contacts app (springboard/apps/contacts-desktop/src/exchange.rs).",

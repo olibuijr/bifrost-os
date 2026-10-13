@@ -173,6 +173,7 @@ fn read_bounded_line<R: BufRead>(r: &mut R, max: usize) -> io::Result<String> {
     String::from_utf8(buf).map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "line is not UTF-8"))
 }
 
+#[derive(Debug)]
 struct Head {
     method: String,
     path: String,
@@ -290,6 +291,9 @@ fn http_session(s: TcpStream, ctx: Shared, token: &str) {
             return;
         }
         authed = true;
+        // the pre-auth deadline covers the request head only; the body gets the session timeout
+        r.get_mut().deadline = None;
+        let _ = r.get_ref().s.set_read_timeout(Some(SESSION_TIMEOUT));
         if head.len > MAX_BODY {
             let _ = respond(&mut w, 413, "text/plain", b"too large", true);
             return;

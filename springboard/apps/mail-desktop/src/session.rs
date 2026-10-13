@@ -5,7 +5,7 @@
 use bifrost_app::controls::internet_accounts::{Security, Server};
 use crate::flags::{Flag, Flags};
 use crate::imap::{self, Mailbox, Reply, Status, Value};
-use crate::line::Lines;
+use crate::line::{response_after, Lines};
 use crate::transport;
 use springboard::deildu::http::{Stream, Transport};
 use std::io::{self, Read, Write};
@@ -193,7 +193,9 @@ impl<S: Read + Write> Session<S> {
     /// of the response on the next line; the bytes become a quoted string at the marker.
     fn response_line(&mut self) -> Result<String, String> {
         let mut line = self.lines.read_line().map_err(io_text)?;
+        let mut folded = 0;
         while let Some((at, n)) = literal_marker(&line) {
+            folded = response_after(folded, n).map_err(io_text)?;
             let bytes = self.lines.read_bytes(n).map_err(io_text)?;
             line.truncate(at);
             line.push_str(&literal_text(&bytes));
@@ -287,6 +289,7 @@ fn io_text(e: io::Error) -> String {
 mod tests {
     use super::*;
     use crate::line::script::Script;
+    use crate::line::MAX_LITERAL;
 
     fn session(script: &str) -> Session<Script> {
         Session::open(Script::new(&format!("* OK ready\r\n{script}"))).unwrap()
@@ -388,6 +391,39 @@ mod tests {
         let mut s = session("* 1 FETCH (UID 1 BODY[] {999999999999}\r\n");
         let err = s.message(1).unwrap_err();
         assert_eq!(err, "server literal too large");
+    }
+
+    /// A connection whose input is assembled from pieces, so a test can stream literals of any size without holding them.
+    struct Wire(Box<dyn Read>);
+
+    impl Read for Wire {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            self.0.read(buf)
+        }
+    }
+
+    impl Write for Wire {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn literals_that_add_up_past_the_response_cap_are_refused() {
+        // three literals in one response: two of the largest size fill the cap, the third one (1 byte) goes past it
+        let filler = |n: usize| io::repeat(b'x').take(n as u64);
+        let text = |s: String| io::Cursor::new(s.into_bytes());
+        let input = text(format!("* OK ready\r\n* 1 FETCH (A {{{MAX_LITERAL}}}\r\n"))
+            .chain(filler(MAX_LITERAL))
+            .chain(text(format!(" B {{{MAX_LITERAL}}}\r\n")))
+            .chain(filler(MAX_LITERAL))
+            .chain(text(" C {1}\r\n".to_string()))
+            .chain(filler(1));
+        let mut s = Session::open(Wire(Box::new(input))).unwrap();
+        assert_eq!(s.message(1).unwrap_err(), "server response too large");
     }
 
     #[test]

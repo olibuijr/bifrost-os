@@ -10,6 +10,10 @@ pub const MAX_LINE: usize = 64 * 1024;
 /// before a byte of it is buffered, so a broken or hostile server cannot make the app grow its buffer without bound.
 pub const MAX_LITERAL: usize = 64 * 1024 * 1024;
 
+/// Largest total of literal bytes one response line may carry. Each literal is capped by [`MAX_LITERAL`], but a response
+/// can hold several, so without this cap a server could still make the app buffer far more than one literal's worth.
+pub const MAX_RESPONSE: usize = 128 * 1024 * 1024;
+
 pub struct Lines<S: Read + Write> {
     io: S,
     buf: Vec<u8>,
@@ -76,6 +80,15 @@ fn check_literal(n: usize) -> io::Result<()> {
         return Err(io::Error::other("server literal too large"));
     }
     Ok(())
+}
+
+/// The literal bytes a response line holds once one more literal of `n` bytes is folded in; refused past [`MAX_RESPONSE`].
+pub fn response_after(folded: usize, n: usize) -> io::Result<usize> {
+    let total = folded.saturating_add(n);
+    if total > MAX_RESPONSE {
+        return Err(io::Error::other("server response too large"));
+    }
+    Ok(total)
 }
 
 /// A scripted connection for the protocol tests: reads come from `input`, writes are kept in `output`.
@@ -167,6 +180,14 @@ mod tests {
         assert!(check_literal(MAX_LITERAL).is_ok());
         assert!(check_literal(MAX_LITERAL + 1).is_err());
         assert!(check_literal(usize::MAX).is_err());
+    }
+
+    #[test]
+    fn the_literals_of_one_response_are_capped_in_total() {
+        assert_eq!(response_after(0, MAX_LITERAL).unwrap(), MAX_LITERAL);
+        assert_eq!(response_after(MAX_RESPONSE - 1, 1).unwrap(), MAX_RESPONSE);
+        assert_eq!(response_after(MAX_RESPONSE, 1).unwrap_err().to_string(), "server response too large");
+        assert!(response_after(usize::MAX, usize::MAX).is_err());
     }
 
     #[test]
