@@ -1,0 +1,280 @@
+{
+  "app": "Maps",
+  "bifrost_app": "maps-desktop",
+  "evidence": [
+    "ref27/System/Applications/Maps.app/Contents/Info.plist via bifrost pc ref extract (URL schemes maps, map, mapitem, x-maps-mapitemhandles; document type navigation trace file; exported types mkdirectionsrequest and navtrace; NSLocationUsageDescription; dock action New Window; user activity type; category travel)",
+    "ref27/System/Applications/Maps.app/Contents/Resources/coaching-material.materialrecipe (the only resource in the bundle; the UI is in the dyld shared cache and private frameworks, so the feature list also follows the shipped app's documented behaviour)",
+    "springboard/apps/maps-desktop/src/ (a model crate: tiles, source, cache, geocode, view, route; no window)"
+  ],
+  "summary": {
+    "features": 29,
+    "parity": 3,
+    "partial": 7,
+    "gap": 19,
+    "n/a": 0,
+    "coverage_pct": 22.4
+  },
+  "features": [
+    {
+      "feature": "App window and manifest",
+      "area": "app",
+      "apple": "Maps.app with a main window, Dock icon and menu bar",
+      "status": "gap",
+      "bifrost": "springboard/apps/maps-desktop/src/lib.rs:1",
+      "note": "No window: the crate is the model only (lib.rs), it has no manifest.toml, no exec and no entry in the app list.",
+      "wire": "Add springboard/apps/maps-desktop/manifest.toml (id is.olibuijr.maps.desktop, window = \"full-size\", permissions storage and network), src/main.rs with the SDK App trait as in weather-desktop/src/main.rs, a src/window.rs holding MapView, Pins, TileCache and a worker thread for tile and search requests, and add the app to the shell's app list."
+    },
+    {
+      "feature": "Map drawing from tiles",
+      "area": "map",
+      "apple": "Vector map of the world drawn from the map service",
+      "status": "partial",
+      "bifrost": "springboard/apps/maps-desktop/src/tiles.rs:75",
+      "note": "Raster tile maths and the tiles that cover a view exist (Web Mercator); nothing fetches or draws them.",
+      "wire": "Add a tile worker in the window crate that fetches missing TileIds with source::delay_before_request pacing and MAX_IN_FLIGHT, stores bytes through cache::TileCache, decodes PNG and blits the tiles from MapView::tiles (view.rs:101)."
+    },
+    {
+      "feature": "Pan and zoom",
+      "area": "map",
+      "apple": "Drag to pan, pinch, scroll and double-click to zoom, +/- keys",
+      "status": "partial",
+      "bifrost": "springboard/apps/maps-desktop/src/view.rs:63",
+      "note": "MapView has pan, centre_to, zoom_at around an anchor and fractional zoom; no input is wired.",
+      "wire": "Map Input::Touch drags to MapView::pan, scroll and pinch to zoom_at (view.rs:71), double-click to zoom in, and Cmd+plus and Cmd+minus to set_zoom (view.rs:53)."
+    },
+    {
+      "feature": "Tile source and usage policy",
+      "area": "map",
+      "apple": "Map data from the vendor's own service",
+      "status": "parity",
+      "bifrost": "springboard/apps/maps-desktop/src/source.rs:25",
+      "note": "Configurable OpenStreetMap-compatible template, identifying user agent and request pacing.",
+      "wire": ""
+    },
+    {
+      "feature": "Tile cache",
+      "area": "map",
+      "apple": "Maps cache map data on disk",
+      "status": "parity",
+      "bifrost": "springboard/apps/maps-desktop/src/cache.rs:14",
+      "note": "Atomic on-disk cache keyed by source with freshness checks.",
+      "wire": ""
+    },
+    {
+      "feature": "Offline maps",
+      "area": "map",
+      "apple": "Download an area to use without a connection",
+      "status": "gap",
+      "bifrost": "",
+      "note": "Only tiles viewed before are cached.",
+      "wire": "Add cache::prefetch(bounds, zoom_range) in cache.rs enumerating tiles_in_view for a rectangle, a Download Map selection UI and a size estimate before it starts."
+    },
+    {
+      "feature": "Search for places",
+      "area": "search",
+      "apple": "Search field with suggestions for places, addresses, businesses and coordinates",
+      "status": "partial",
+      "bifrost": "springboard/apps/maps-desktop/src/geocode.rs:42",
+      "note": "Nominatim-style request builder and parser, sent only on submit; no suggestions while typing, no businesses, no coordinate input.",
+      "wire": "Add Geocoder::parse_coordinates for lat,lon input, debounce suggestions at one request per second with the same user agent, and render a results list under the search_field kit widget."
+    },
+    {
+      "feature": "Offline place search",
+      "area": "search",
+      "apple": "Recent and saved places stay searchable",
+      "status": "partial",
+      "bifrost": "springboard/apps/maps-desktop/src/route.rs:145",
+      "note": "search_offline filters a local list; no list is stored yet.",
+      "wire": "Persist searched and pinned places to the app data dir and pass them to search_offline as the suggestions source."
+    },
+    {
+      "feature": "Pins and markers",
+      "area": "map",
+      "apple": "Dropped pin, search result marker, Marked Location",
+      "status": "partial",
+      "bifrost": "springboard/apps/maps-desktop/src/view.rs:113",
+      "note": "Pins with labels and visibility culling in the model; no drawing, no drop-by-click.",
+      "wire": "Draw Pins::visible markers over the tiles, add a Drop Pin context menu action calling Pins::add with MapView::to_geo (view.rs:95) and a callout with Directions and Remove."
+    },
+    {
+      "feature": "Place card",
+      "area": "place",
+      "apple": "Place details: address, phone, hours, website, photos, ratings, share",
+      "status": "gap",
+      "bifrost": "",
+      "note": "Places are a name and a coordinate.",
+      "wire": "Extend geocode::Place with the address details Nominatim returns (addressdetails=1, extratags=1) and show a card with address, phone, website and opening hours when present."
+    },
+    {
+      "feature": "Directions by car",
+      "area": "directions",
+      "apple": "Route with distance, time, steps and alternates",
+      "status": "partial",
+      "bifrost": "springboard/apps/maps-desktop/src/route.rs:78",
+      "note": "OSRM-compatible request and parser, distance, duration and steps; one route only; a labelled straight-line estimate without a server.",
+      "wire": "Request alternatives=true in Router::route_url (route.rs:78), parse every route in parse_route (route.rs:103) and offer alternates with their times in a directions panel."
+    },
+    {
+      "feature": "Directions on foot and by bike",
+      "area": "directions",
+      "apple": "Walking and cycling routes",
+      "status": "parity",
+      "bifrost": "springboard/apps/maps-desktop/src/route.rs:13",
+      "note": "Profile covers driving, walking and cycling.",
+      "wire": ""
+    },
+    {
+      "feature": "Transit directions",
+      "area": "directions",
+      "apple": "Public transport routes with lines and departures",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No transit data source.",
+      "wire": "Add a transit provider (GTFS journey planner endpoint) behind a Profile::Transit with a Router-like client and show legs with line, stops and times."
+    },
+    {
+      "feature": "Turn-by-turn navigation",
+      "area": "directions",
+      "apple": "Live navigation with voice guidance and rerouting",
+      "status": "gap",
+      "bifrost": "",
+      "note": "Steps are listed, not followed; no location input.",
+      "wire": "Follow a Route against a position source: advance Step by distance to the next manoeuvre, reroute when off route more than 50 m, speak steps through the speech service; needs the shell location service."
+    },
+    {
+      "feature": "Current location",
+      "area": "location",
+      "apple": "Show your location on the map and route from it (NSLocationUsageDescription)",
+      "status": "gap",
+      "bifrost": "",
+      "note": "The shell has no location service for apps yet.",
+      "wire": "When the shell exposes a location service, add a Locate button that centres MapView (view.rs:57) on it and uses it as the default origin."
+    },
+    {
+      "feature": "Map modes",
+      "area": "map",
+      "apple": "Explore, Driving, Transit and Satellite map types",
+      "status": "gap",
+      "bifrost": "",
+      "note": "One raster style from one template.",
+      "wire": "Add TileSource presets in source.rs for a standard and an imagery layer, keep a MapType setting in the window state and switch the template and cache key (source.rs:65)."
+    },
+    {
+      "feature": "3D and street-level views",
+      "area": "map",
+      "apple": "3D buildings, street-level imagery and aerial tours",
+      "status": "gap",
+      "bifrost": "",
+      "note": "Flat tiles only.",
+      "wire": "Out of reach for a raster source; start with a tilt-free 2D view and skip, or integrate a vector tile style with extruded buildings through the GPU layer."
+    },
+    {
+      "feature": "Traffic and incidents",
+      "area": "map",
+      "apple": "Live traffic colours and incident markers",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No traffic source.",
+      "wire": "Add an optional traffic raster layer URL to TileSource and a Show Traffic toggle drawing it over the base tiles."
+    },
+    {
+      "feature": "Favorites",
+      "area": "library",
+      "apple": "Favorites, Home, Work and Recents in the sidebar",
+      "status": "gap",
+      "bifrost": "",
+      "note": "Pins live only in memory.",
+      "wire": "Persist Pins to the app data dir as JSON (view.rs:113), add Home and Work slots tied to the Contacts address and list them in a source_list sidebar."
+    },
+    {
+      "feature": "Guides and Collections",
+      "area": "library",
+      "apple": "Curated guides and user collections of places",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No collections.",
+      "wire": "Add Collection { name, places } to the persisted store, a New Collection command and drag from a place card into it; skip curated guides, which need an editorial source."
+    },
+    {
+      "feature": "Share a place or route",
+      "area": "share",
+      "apple": "Share sheet, copy link, send to device",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No sharing.",
+      "wire": "Add a Share menu with Copy Link (a maps: style URL with the coordinate), Copy Coordinates and the shell share sheet with the link."
+    },
+    {
+      "feature": "Print",
+      "area": "share",
+      "apple": "Print the map or directions",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No printing.",
+      "wire": "Render the current view and the step list to a PDF through the shell print service from a Print command (Cmd+P)."
+    },
+    {
+      "feature": "Measure distance and scale bar",
+      "area": "map",
+      "apple": "Scale bar and Measure Distance",
+      "status": "partial",
+      "bifrost": "springboard/apps/maps-desktop/src/route.rs:129",
+      "note": "haversine_m exists; no scale bar or measure tool.",
+      "wire": "Draw a scale bar from tiles::world_px at the centre latitude and add a measure mode that sums haversine_m over clicked points."
+    },
+    {
+      "feature": "Units setting",
+      "area": "settings",
+      "apple": "Kilometres or miles in Maps settings",
+      "status": "gap",
+      "bifrost": "",
+      "note": "Distances are metres in the model with no formatting.",
+      "wire": "Add a distance formatter (km or mi) in route.rs and read the system measurement unit; reuse weather insights::scale_text logic."
+    },
+    {
+      "feature": "URL schemes",
+      "area": "system",
+      "apple": "maps:, map:, mapitem: handled by the app",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No URL handler.",
+      "wire": "Register maps: and geo: schemes in the manifest and parse q, ll, daddr and saddr parameters into a search, a centre or a route."
+    },
+    {
+      "feature": "Document types",
+      "area": "system",
+      "apple": "Opens route request files (mkdirectionsrequest) and navigation trace files (navtrace)",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No document types.",
+      "wire": "Declare .gpx as a document type and import it as Pins and a track, since the reference types are private formats."
+    },
+    {
+      "feature": "User activity handoff and Dock New Window",
+      "area": "system",
+      "apple": "Dock menu New Window, user activity for handoff",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No window yet.",
+      "wire": "Add the New Window Dock action once the window exists; the window state lives in one struct so a second window is a second instance."
+    },
+    {
+      "feature": "Automation and widgets",
+      "area": "system",
+      "apple": "Maps actions for shortcuts, driving time widgets",
+      "status": "gap",
+      "bifrost": "",
+      "note": "No control methods.",
+      "wire": "Expose search(query), route(from, to, profile) as app control methods (bifrost-app-control) calling Geocoder and Router."
+    },
+    {
+      "feature": "Map data credit",
+      "area": "legal",
+      "apple": "Attribution of the map data",
+      "status": "gap",
+      "bifrost": "",
+      "note": "The source records its terms in code only.",
+      "wire": "Draw the data credit line the tile source requires (OpenStreetMap contributors) in the map corner."
+    }
+  ]
+}
