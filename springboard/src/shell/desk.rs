@@ -6,6 +6,7 @@
 //! while it draws or takes a touch), drawn into an offscreen buffer and copied in.
 
 use super::ui::{Weight, BLACK, SECONDARY, SYSTEM_GREEN, SYSTEM_RED, SYSTEM_YELLOW, TRAFFIC_INACTIVE_C, WHITE, TRAFFIC_GLYPH, MENU_TINT, MENU_RADIUS_PT, SEPARATOR_C, FIELD_BG, LABEL, MAC_BODY_PT};
+use super::desk_occlusion::{self, grown, opaque_interior, Cover};
 use super::{apphost, apps, window_fx, AppId, Effect, Event, Screen, Shell};
 #[cfg(test)]
 use crate::gfx::pack;
@@ -647,7 +648,7 @@ impl Shell {
         for w in desk.wins.iter().filter(|w|!w.minimized) {
             let Some(id)=apps().iter().position(|a|a.id==w.app).map(|i|i as u32+1) else{return false};
             if !desk.window_cache.contains_key(&id) {return false;}
-            frames.push(crate::bare::wayland::WindowFrame {id,title:apps()[(id-1) as usize].name.into(),x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new(),fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
+            frames.push(crate::bare::wayland::WindowFrame {id,title:apps()[(id-1) as usize].name,x:w.r.x,y:w.r.y,width:w.r.w as usize,height:w.r.h as usize,pixels:None,damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize),maximized:w.maximized,title_height,drag_height:0,no_drag:Vec::new(),fx:bifrost_render::glass::Fx::IDENTITY,opaque:!matches!(w.app,AppId::External(_))});
             let controls=match w.app {AppId::External(slot)=>ext.get(slot as usize).and_then(Option::as_ref).map_or(&[][..],|h|&h.controls[..]),_=>&[][..]};
             let (dh,nd)=drag_zone(w,&m,controls);
             if let Some(f)=frames.last_mut(){f.drag_height=dh;f.no_drag=nd;}
@@ -1501,23 +1502,49 @@ impl Shell {
         s.copy(wp, (self.w - wp.w as i32) / 2, 0);
     }
 
+    /// A minimized window whose minimize effect still runs: it stays drawn until the effect ends.
+    fn minimizing_at(&self, i: usize, now_s: f64) -> bool {
+        let Some(d) = self.desk.as_ref() else { return false };
+        let Some(w) = d.wins.get(i) else { return false };
+        w.minimized && cfg!(feature = "desktop-wayland") && win_id(w.app).is_some_and(|id| d.fx.keeps_visible(id, now_s))
+    }
+
+    /// Each window's cover, back to front, for `desk_occlusion::hidden`. Minimized windows, windows with an effect
+    /// running and external windows neither cover nor get covered (`None`).
+    fn desk_covers(&self, now_s: f64) -> Vec<Option<Cover>> {
+        let Some(d) = self.desk.as_ref() else { return Vec::new() };
+        let reach = self.ui.pt(desk_occlusion::SHADOW_REACH_PT).ceil() as i32;
+        d.wins.iter().map(|w| {
+            let animating = win_id(w.app).is_some_and(|id| d.fx.keeps_visible(id, now_s));
+            if w.minimized || animating || matches!(w.app, AppId::External(_)) {
+                return None;
+            }
+            let radius = if w.maximized { 0 } else { self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS).ceil() as i32 };
+            Some(Cover { shown: grown(w.r, reach), opaque: opaque_interior(w.r, radius) })
+        }).collect()
+    }
+
     /// The wallpaper, the windows back to front, the menu bar and the dock.
     pub(super) fn draw_desk(&mut self, s: &mut Surface, t: f64) {
         let m = self.desk_metrics();
         self.draw_wallpaper_layer(s);
-        let wins: Vec<Win> = self.desk.as_ref().map(|d| d.wins.clone()).unwrap_or_default();
+        // windows are read by index, so a frame copies no window list
+        let count = self.desk.as_ref().map_or(0, |d| d.wins.len());
         // a window that is minimizing stays drawn until its effect ends
         let now_s = t / 1000.0;
-        let fading: Vec<bool> = wins.iter().map(|w| w.minimized && cfg!(feature = "desktop-wayland")
-            && self.desk.as_ref().is_some_and(|d| win_id(w.app).is_some_and(|id| d.fx.keeps_visible(id, now_s)))).collect();
+        let fading: Vec<bool> = (0..count).map(|i| self.minimizing_at(i, now_s)).collect();
+        // a built-in window that a window in front covers completely is not drawn (see `desk_occlusion`)
+        let hidden = desk_occlusion::hidden(&self.desk_covers(now_s));
         #[cfg(feature = "desktop-wayland")]
         {
             let desk = self.desk.as_mut().unwrap();
-            desk.window_cache.retain(|id,_| wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && apps()[(*id-1) as usize].id == w.app));
-            desk.body_cache.retain(|app,_| wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && w.app == *app));
+            desk.window_cache.retain(|id,_| desk.wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && apps()[(*id-1) as usize].id == w.app));
+            desk.body_cache.retain(|app,_| desk.wins.iter().zip(&fading).any(|(w, f)| (!w.minimized || *f) && w.app == *app));
         }
-        let front = wins.iter().rposition(|w| !w.minimized);
-        for (i, w) in wins.iter().enumerate() {
+        let front = self.desk.as_ref().and_then(|d| d.wins.iter().rposition(|w| !w.minimized));
+        for i in 0..count {
+            let Some(win) = self.desk.as_ref().and_then(|d| d.wins.get(i).copied()) else { break };
+            let w = &win;
             if w.minimized && !fading[i] {
                 continue;
             }
@@ -1546,9 +1573,20 @@ impl Shell {
                 let corner=self.ui.pt(bifrost_ui::prefs_layout::m::WINDOW_RADIUS);
                 // shell-drawn content is opaque (no vibrancy, see `take_wayland_materials`); a client's may not be
                 let opaque=!matches!(w.app,AppId::External(_));
+                if hidden[i] {
+                    // a window in front covers it: its surface keeps the last pixels presented, and its cache is
+                    // dropped so that it repaints in full once it is uncovered
+                    self.desk.as_mut().unwrap().frames.push(crate::bare::wayland::WindowFrame {
+                        id, title: apps()[(id-1) as usize].name, x:w.r.x, y:w.r.y,
+                        width:w.r.w as usize, height:w.r.h as usize, pixels:None,
+                        damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, title_height:m.title,
+                        drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque,
+                    });
+                    continue;
+                }
                 if unchanged && quiet {
                     self.desk.as_mut().unwrap().frames.push(crate::bare::wayland::WindowFrame {
-                        id, title: apps()[(id-1) as usize].name.to_string(), x:w.r.x, y:w.r.y,
+                        id, title: apps()[(id-1) as usize].name, x:w.r.x, y:w.r.y,
                         width:w.r.w as usize, height:w.r.h as usize, pixels:None,
                         damage:crate::gfx::Damage::new(w.r.w as usize,w.r.h as usize), maximized:w.maximized, title_height:m.title,
                         drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque,
@@ -1594,7 +1632,7 @@ impl Shell {
                         let desk=self.desk.as_mut().unwrap();
                         desk.body_cache.remove(&w.app);
                         desk.window_cache.insert(id,retained);
-                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:apps()[(id-1) as usize].name.into(),x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque});
+                        desk.frames.push(crate::bare::wayland::WindowFrame{id,title:apps()[(id-1) as usize].name,x:w.r.x,y:w.r.y,width,height,pixels:outgoing,damage,maximized:w.maximized,title_height:m.title,drag_height,no_drag,fx:bifrost_render::glass::Fx::IDENTITY,opaque});
                         continue;
                     }
                 }
@@ -1615,10 +1653,14 @@ impl Shell {
                 let desk = self.desk.as_mut().unwrap();
                 desk.window_buf = image.px;
                 desk.frames.push(crate::bare::wayland::WindowFrame {
-                    id, title: apps()[(id-1) as usize].name.to_string(), x:w.r.x, y:w.r.y,
+                    id, title: apps()[(id-1) as usize].name, x:w.r.x, y:w.r.y,
                     width:w.r.w as usize, height:w.r.h as usize, pixels, damage, maximized:w.maximized, title_height:m.title,
                     drag_height, no_drag, fx:bifrost_render::glass::Fx::IDENTITY, opaque,
                 });
+                continue;
+            }
+            // on the GPU presenter a partial frame redraws only some regions, so a hidden window is skipped only on the CPU
+            if hidden[i] && !bifrost_render::glass::gpu() {
                 continue;
             }
             self.draw_window(s, w, Some(i) == front, &m, t, true);
@@ -1704,12 +1746,12 @@ impl Shell {
         if !w.maximized { window_rim(s, r.x as f32, r.y as f32, r.w as f32, r.h as f32, rad); }
         if !full_size(w.app) { s.fill_rect(r.x.max(0) as usize, (r.y + m.title - 1).max(0) as usize, r.w.max(0) as usize, 1, super::ui::SEPARATOR_C.now()); }
         // traffic lights
-        let doc = match w.app { AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).map_or((String::new(), false), |h| (h.doc_title.clone(), h.doc_edited)), _ => (String::new(), false) };
+        let (doc_title, doc_edited): (&str, bool) = match w.app { AppId::External(slot) => self.ext.get(slot as usize).and_then(Option::as_ref).map_or(("", false), |h| (h.doc_title.as_str(), h.doc_edited)), _ => ("", false) };
         for (i, c) in [SYSTEM_RED, SYSTEM_YELLOW, SYSTEM_GREEN].into_iter().enumerate() {
             let lr = w.light_rect_px(m, i);
             let c = if focused { c } else { TRAFFIC_INACTIVE_C.now() };
             draw_light(s, &lr, c, focused, ui.pt(1.));
-            if i == 0 && doc.1 {
+            if i == 0 && doc_edited {
                 // NativeDocument isDocumentEdited: a dark dot in the close light
                 let d = lr.w as f32 * 0.34;
                 s.fill_rrect(lr.x as f32 + (lr.w as f32 - d) / 2.0, lr.y as f32 + (lr.h as f32 - d) / 2.0, d, d, d / 2.0, TRAFFIC_GLYPH);
@@ -1720,8 +1762,8 @@ impl Shell {
         }
         // title
         if full_size(w.app) { return; }
-        let mut name = if doc.0.is_empty() { apps().iter().find(|a| a.id == w.app).map_or("", |a| a.name).to_string() } else { doc.0.clone() };
-        if doc.1 { name.push_str(" \u{2013} Edited"); }
+        let base: &str = if doc_title.is_empty() { apps().iter().find(|a| a.id == w.app).map_or("", |a| a.name) } else { doc_title };
+        let name: std::borrow::Cow<str> = if doc_edited { format!("{base} \u{2013} Edited").into() } else { base.into() };
         self.label(&name, 13.0, Weight::Semibold, if focused { super::ui::LABEL.now() } else { super::ui::LABEL_2.now() }, |im| s.blit(im, r.x + (r.w - im.w as i32) / 2, r.y + (m.title - im.h as i32) / 2, 255, 255));
     }
 
