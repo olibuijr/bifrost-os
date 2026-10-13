@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.4 — 2026-10-13
+
+- Takes are described by the shared stream format (`StreamFormat`, from `springboard::media::capture::pcm16`) instead of a loose rate and channel count; the WAV header of every save, trim and split is written from it.
+
 ## 1.6.3 — 2026-10-13
 
 - Notes text wraps with the SDK typesetter: line breaks follow the Unicode line breaking rules (after hyphens and

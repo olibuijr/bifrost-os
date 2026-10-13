@@ -131,8 +131,8 @@ impl Core {
             Cmd::RecordStop => {
                 if let Some((r, path)) = self.recorder.take() {
                     let take = r.stop();
-                    let ms = take.samples.len() as u64 / take.channels.max(1) as u64 * 1000 / take.rate.max(1) as u64;
-                    let evt = match std::fs::write(&path, wav_bytes(take.rate, take.channels, &take.samples)) {
+                    let ms = take.samples.len() as u64 / take.format.channels.max(1) as u64 * 1000 / take.format.sample_rate.max(1.0) as u64;
+                    let evt = match std::fs::write(&path, wav_bytes(&take.format, &take.samples)) {
                         Ok(()) => Evt::RecordDone { path: path.to_string_lossy().into_owned(), duration_ms: ms },
                         Err(e) => Evt::Record { active: false, elapsed_ms: ms, level: 0.0, error: Some(e.to_string()) },
                     };

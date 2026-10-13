@@ -1,6 +1,6 @@
 id = "is.olibuijr.voicememos.desktop"
 name = "Voice Memos"
-version = "1.6.3"
+version = "1.6.4"
 exec = "bifrost-voicememos"
 icon = "icon.png"
 min_shell = "0.4.84"

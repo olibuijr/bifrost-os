@@ -286,6 +286,7 @@ version = "0.1.0"
 dependencies = [
  "bifrost-2d",
  "bifrost-audio-engine",
+ "bifrost-audio-types",
  "bifrost-core",
  "bifrost-gpu",
  "bifrost-layers",
@@ -862,7 +863,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-voicememos"
-version = "1.6.3"
+version = "1.6.4"
 dependencies = [
  "bifrost-app",
  "bifrost-core",
