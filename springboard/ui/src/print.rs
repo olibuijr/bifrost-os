@@ -1,10 +1,10 @@
-//! Printing (`NativePrintInfo` / `NativePrintOperation` / `NativePrintPanel`): describe a job, list the printers CUPS knows, and submit
-//! the job with `lp`.
+//! Printing (`NativePrintInfo` / `NativePrintOperation` / `NativePrintPanel`): describe a job and submit it with `lp`.
 //!
 //! [`PrintInfo`] carries paper, orientation, margins, copies and page range. [`PrintOperation::new`] takes the document as
-//! a file (PDF or image; anything `lp` accepts). [`printers`] reads `lpstat -p -d`; [`PrintOperation::run`] submits with the
-//! print info mapped to `lp` options, or, for [`Destination::Pdf`], copies the document to the chosen path (Save as PDF).
-//! Everything shells out, so a machine without CUPS gets [`PrintError::NoCups`] and [`available`] is false.
+//! a file (PDF or image; anything `lp` accepts). [`PrintOperation::run`] submits with the print info mapped to `lp`
+//! options, or, for [`Destination::Pdf`], copies the document to the chosen path (Save as PDF). The printers themselves
+//! come from [`crate::cups`] (`Client::printers`); this module does not list them. Everything shells out, so a machine
+//! without CUPS gets [`PrintError::NoCups`] and [`available`] is false.
 //!
 //! Gap (see docs/bifrost-ui.md "Printing"): the print sheet is not shell-drawn yet, so there is no `run_modal(window)`;
 //! apps pick the printer and options with their own kit controls and call `run`. No shell proto tags are used.
@@ -95,38 +95,6 @@ impl PrintInfo {
         }
         o
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Printer {
-    pub name: String,
-    pub enabled: bool,
-    pub is_default: bool,
-}
-
-/// Parses `lpstat -p -d` output.
-pub fn parse_lpstat(text: &str) -> Vec<Printer> {
-    let mut default = None;
-    let mut out = Vec::new();
-    for line in text.lines() {
-        if let Some(rest) = line.strip_prefix("system default destination:") {
-            default = Some(rest.trim().to_string());
-        } else if let Some(rest) = line.strip_prefix("printer ") {
-            let mut it = rest.splitn(2, ' ');
-            let name = it.next().unwrap_or("").to_string();
-            let tail = it.next().unwrap_or("");
-            out.push(Printer { name, enabled: !tail.contains("disabled"), is_default: false });
-        }
-    }
-    for p in &mut out {
-        p.is_default = default.as_deref() == Some(p.name.as_str());
-    }
-    out
-}
-
-/// The printers CUPS lists; empty when `lpstat` is absent or the scheduler is not running.
-pub fn printers() -> Vec<Printer> {
-    Command::new("lpstat").args(["-p", "-d"]).output().map(|o| parse_lpstat(&String::from_utf8_lossy(&o.stdout))).unwrap_or_default()
 }
 
 /// True when `lp` can be run (CUPS client tools are installed).
@@ -233,16 +201,6 @@ mod tests {
         assert!(o.contains("-o page-left=72"));
         assert!(o.ends_with("-P 3-5"));
         assert!(PrintInfo { copies: 0, ..Default::default() }.lp_options().contains(&"1".to_string()));
-    }
-
-    #[test]
-    fn lpstat_output_lists_printers_and_the_default() {
-        let t = "printer Office is idle.  enabled since Mon\nprinter Spare disabled since Mon -\nsystem default destination: Office\n";
-        let p = parse_lpstat(t);
-        assert_eq!(p.len(), 2);
-        assert!(p[0].is_default && p[0].enabled);
-        assert!(!p[1].is_default && !p[1].enabled);
-        assert!(parse_lpstat("lpstat: No destinations added.").is_empty());
     }
 
     #[test]
