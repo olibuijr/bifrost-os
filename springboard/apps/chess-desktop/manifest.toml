@@ -1,0 +1,11 @@
+id = "is.olibuijr.chess.desktop"
+name = "Chess"
+version = "0.1.0"
+exec = "bifrost-chess"
+icon = "icon.png"
+min_shell = "0.4.84"
+summary = "Chess against the computer at four levels, or with a friend, with the full rules."
+category = "Entertainment"
+architecture = "x86_64-linux"
+permissions = []
+window = "full-size"
