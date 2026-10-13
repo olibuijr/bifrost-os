@@ -38,6 +38,12 @@ const PRINTER_ATTRIBUTES: &[&str] = &[
     "printer-info",
     "device-uri",
     "queued-job-count",
+    "printer-state-reasons",
+    "printer-is-shared",
+    "marker-names",
+    "marker-levels",
+    "marker-colors",
+    "member-names",
 ];
 
 const JOB_ATTRIBUTES: &[&str] = &[
@@ -47,6 +53,11 @@ const JOB_ATTRIBUTES: &[&str] = &[
     "job-name",
     "job-originating-user-name",
     "job-k-octets",
+    "job-state-reasons",
+    "time-at-creation",
+    "job-impressions",
+    "job-impressions-completed",
+    "job-media-progress",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -257,6 +268,42 @@ pub struct Printer {
     pub info: String,
     pub device_uri: String,
     pub queued_jobs: i32,
+    /// `printer-state-reasons` without `none`: keywords such as `media-jam-error` or `toner-low-warning`.
+    pub state_reasons: Vec<String>,
+    /// Ink and toner from the `marker-*` attributes.
+    pub supplies: Vec<Supply>,
+    /// `printer-is-shared`: the queue is offered to other machines.
+    pub shared: bool,
+    /// A printer pool (class): the queue names it spreads jobs over (`member-names`). Empty for a plain printer.
+    pub members: Vec<String>,
+    /// True for a pool, even one without members yet.
+    pub is_class: bool,
+}
+
+/// One ink or toner cartridge.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Supply {
+    pub name: String,
+    /// 0 to 100, or `None` when the printer does not report a level (`marker-levels` below zero).
+    pub level: Option<u8>,
+    /// `#RRGGBB`, or empty when the printer names no colour.
+    pub color: String,
+}
+
+/// The supplies of a printer group: `marker-names`, `marker-levels` and `marker-colors` side by side.
+pub fn supplies_from_group(g: &Group) -> Vec<Supply> {
+    let names = g.texts("marker-names");
+    let levels = g.ints("marker-levels");
+    let colors = g.texts("marker-colors");
+    names
+        .iter()
+        .enumerate()
+        .map(|(i, name)| Supply {
+            name: name.to_string(),
+            level: levels.get(i).copied().filter(|l| (0..=100).contains(l)).map(|l| l as u8),
+            color: colors.get(i).filter(|c| c.starts_with('#')).map_or(String::new(), |c| c.to_string()),
+        })
+        .collect()
 }
 
 impl Printer {
@@ -275,6 +322,11 @@ impl Printer {
             info: g.text("printer-info").unwrap_or("").to_string(),
             device_uri: g.text("device-uri").unwrap_or("").to_string(),
             queued_jobs: g.int("queued-job-count").unwrap_or(0),
+            state_reasons: g.texts("printer-state-reasons").into_iter().filter(|r| *r != "none").map(str::to_string).collect(),
+            supplies: supplies_from_group(g),
+            shared: g.boolean("printer-is-shared").unwrap_or(false),
+            members: g.texts("member-names").into_iter().map(str::to_string).collect(),
+            is_class: false,
         })
     }
 }
@@ -287,6 +339,16 @@ pub struct Job {
     pub name: String,
     pub user: String,
     pub size_kb: i32,
+    /// `job-state-reasons` without `none`: `job-hold-until-specified`, `cups-remote-canceled`...
+    pub reasons: Vec<String>,
+    /// `time-at-creation`: seconds since the Unix epoch, 0 when the scheduler gave none.
+    pub created: i32,
+    /// `job-impressions`: the pages the job will print, 0 when unknown.
+    pub pages: i32,
+    /// `job-impressions-completed`: the pages printed so far.
+    pub pages_done: i32,
+    /// `job-media-progress`: percent printed, `None` when the scheduler reports none.
+    pub progress: Option<u8>,
 }
 
 impl Job {
@@ -299,6 +361,11 @@ impl Job {
             name: g.text("job-name").unwrap_or("").to_string(),
             user: g.text("job-originating-user-name").unwrap_or("").to_string(),
             size_kb: g.int("job-k-octets").unwrap_or(0),
+            reasons: g.texts("job-state-reasons").into_iter().filter(|r| *r != "none").map(str::to_string).collect(),
+            created: g.int("time-at-creation").unwrap_or(0),
+            pages: g.int("job-impressions").unwrap_or(0),
+            pages_done: g.int("job-impressions-completed").unwrap_or(0),
+            progress: g.int("job-media-progress").filter(|p| (0..=100).contains(p)).map(|p| p as u8),
         })
     }
 }
@@ -424,10 +491,59 @@ impl<T: Transport> Client<T> {
         let req = base(op::CUPS_GET_PRINTERS)
             .with(group::OPERATION, "requested-attributes", keywords(PRINTER_ATTRIBUTES));
         let resp = self.exchange(req)?;
-        Ok(resp
+        let mut printers: Vec<Printer> = resp
             .groups_with(group::PRINTER)
             .filter_map(|g| Printer::from_group(g, default.as_deref() == g.text("printer-name")))
-            .collect())
+            .collect();
+        // pools: a scheduler that lists them with the printers already has them; the rest are added here
+        for pool in self.classes(default.as_deref())? {
+            match printers.iter_mut().find(|p| p.name == pool.name) {
+                Some(existing) => *existing = pool,
+                None => printers.push(pool),
+            }
+        }
+        Ok(printers)
+    }
+
+    /// The printer pools (classes) of the scheduler (CUPS-Get-Classes), flagged `is_class`.
+    pub fn classes(&mut self, default: Option<&str>) -> Result<Vec<Printer>, CupsError> {
+        let req = base(op::CUPS_GET_CLASSES)
+            .with(group::OPERATION, "requested-attributes", keywords(PRINTER_ATTRIBUTES));
+        match self.exchange(req) {
+            Ok(resp) => Ok(resp
+                .groups_with(group::PRINTER)
+                .filter_map(|g| Printer::from_group(g, default == g.text("printer-name")))
+                .map(|mut p| {
+                    p.is_class = true;
+                    p
+                })
+                .collect()),
+            // a scheduler without pools answers not-found
+            Err(CupsError::Status(s)) if s == ipp::STATUS_NOT_FOUND => Ok(Vec::new()),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Removes a printer pool (CUPS-Delete-Class); its member printers stay.
+    pub fn delete_class(&mut self, name: &str) -> Result<(), CupsError> {
+        self.printer_op(op::CUPS_DELETE_CLASS, name)
+    }
+
+    /// Sets the description and location a person sees for the queue (CUPS-Add-Modify-Printer).
+    pub fn set_printer_details(&mut self, printer: &str, info: &str, location: &str) -> Result<(), CupsError> {
+        let req = base(op::CUPS_ADD_MODIFY_PRINTER)
+            .with(group::OPERATION, "printer-uri", vec![Value::uri(&target(printer)?)])
+            .with(group::PRINTER, "printer-info", vec![Value::text(info)])
+            .with(group::PRINTER, "printer-location", vec![Value::text(location)]);
+        self.exchange(req).map(|_| ())
+    }
+
+    /// Offers the queue to other machines, or stops offering it (`printer-is-shared`).
+    pub fn set_shared(&mut self, printer: &str, shared: bool) -> Result<(), CupsError> {
+        let req = base(op::CUPS_ADD_MODIFY_PRINTER)
+            .with(group::OPERATION, "printer-uri", vec![Value::uri(&target(printer)?)])
+            .with(group::PRINTER, "printer-is-shared", vec![Value::Boolean(shared)]);
+        self.exchange(req).map(|_| ())
     }
 
     /// Capabilities of one printer (Get-Printer-Attributes): paper list, duplex, colour modes and status.
@@ -605,6 +721,7 @@ mod tests {
         let canned = Canned::new(vec![
             default_reply(1, "Office"),
             reply(0, 2, vec![printer_group("Office", 3, true), printer_group("Lab", 5, false)]),
+            reply(ipp::STATUS_NOT_FOUND, 3, vec![]),
         ]);
         let mut client = Client::new(canned);
         let printers = client.printers().unwrap();
@@ -741,12 +858,13 @@ mod tests {
         let canned = Canned::new(vec![
             default_reply(1, "HP"),
             reply(0, 2, vec![printer_group("HP", 3, true)]),
-            reply(0, 3, vec![]),
+            reply(ipp::STATUS_NOT_FOUND, 3, vec![]),
+            reply(0, 4, vec![]),
         ]);
         let mut client = Client::new(canned);
         let name = add_device(&mut client, "  usb://HP/LaserJet  ").unwrap();
         assert_eq!(name, "HP-2");
-        let sent = &client.transport.sent[2];
+        let sent = &client.transport.sent[3];
         assert!(find(sent, b"usb://HP/LaserJet").is_some(), "the trimmed address is sent");
         assert!(find(sent, b"HP-2").is_some());
     }
@@ -756,6 +874,77 @@ mod tests {
         let mut client = Client::new(Canned::new(vec![]));
         assert_eq!(add_device(&mut client, "ftp://x"), Err(CupsError::BadDeviceUri("ftp://x".into())));
         assert!(client.transport.sent.is_empty());
+    }
+
+    #[test]
+    fn supplies_pair_names_levels_and_colours() {
+        let g = Group {
+            tag: group::PRINTER,
+            attributes: vec![
+                Attribute { name: "marker-names".into(), values: vec![Value::name("Black"), Value::name("Cyan"), Value::name("Waste")] },
+                Attribute { name: "marker-levels".into(), values: vec![Value::Integer(80), Value::Integer(-1), Value::Integer(100)] },
+                Attribute { name: "marker-colors".into(), values: vec![Value::name("#000000"), Value::name("#00FFFF"), Value::name("none")] },
+            ],
+        };
+        let s = supplies_from_group(&g);
+        assert_eq!(s.len(), 3);
+        assert_eq!((s[0].name.as_str(), s[0].level, s[0].color.as_str()), ("Black", Some(80), "#000000"));
+        assert_eq!(s[1].level, None, "a negative level is unknown");
+        assert_eq!(s[2].color, "");
+    }
+
+    #[test]
+    fn printer_reasons_and_job_progress_are_read() {
+        let mut g = printer_group("Lab", 3, true);
+        g.attributes.push(Attribute { name: "printer-state-reasons".into(), values: vec![Value::keyword("media-jam-error"), Value::keyword("none")] });
+        g.attributes.push(attr("printer-is-shared", Value::Boolean(true)));
+        let p = Printer::from_group(&g, false).unwrap();
+        assert_eq!(p.state_reasons, vec!["media-jam-error".to_string()]);
+        assert!(p.shared);
+        assert!(!p.is_class);
+        let j = Group {
+            tag: group::JOB,
+            attributes: vec![
+                attr("job-id", Value::Integer(2)),
+                attr("time-at-creation", Value::Integer(1_700_000_000)),
+                attr("job-impressions", Value::Integer(10)),
+                attr("job-impressions-completed", Value::Integer(4)),
+                attr("job-media-progress", Value::Integer(40)),
+                attr("job-state-reasons", Value::keyword("job-hold-until-specified")),
+            ],
+        };
+        let job = Job::from_group(&j).unwrap();
+        assert_eq!((job.created, job.pages, job.pages_done, job.progress), (1_700_000_000, 10, 4, Some(40)));
+        assert_eq!(job.reasons, vec!["job-hold-until-specified".to_string()]);
+    }
+
+    #[test]
+    fn classes_are_flagged_and_replace_the_same_named_printer() {
+        let mut pool = printer_group("Floor", 3, true);
+        pool.attributes.push(Attribute { name: "member-names".into(), values: vec![Value::name("Office"), Value::name("Lab")] });
+        let canned = Canned::new(vec![
+            default_reply(1, "Office"),
+            reply(0, 2, vec![printer_group("Office", 3, true), printer_group("Floor", 3, true)]),
+            reply(0, 3, vec![pool]),
+        ]);
+        let printers = Client::new(canned).printers().unwrap();
+        assert_eq!(printers.len(), 2);
+        let floor = printers.iter().find(|p| p.name == "Floor").unwrap();
+        assert!(floor.is_class);
+        assert_eq!(floor.members, vec!["Office".to_string(), "Lab".to_string()]);
+        assert!(!printers.iter().find(|p| p.name == "Office").unwrap().is_class);
+    }
+
+    #[test]
+    fn details_and_sharing_send_their_attributes() {
+        let mut client = Client::new(Canned::new(vec![reply(0, 1, vec![]), reply(0, 2, vec![]), reply(0, 3, vec![])]));
+        client.set_printer_details("Office", "Front desk", "Floor 2").unwrap();
+        client.set_shared("Office", false).unwrap();
+        client.delete_class("Floor").unwrap();
+        let sent = &client.transport.sent;
+        assert!(find(&sent[0], b"printer-location").is_some() && find(&sent[0], b"Floor 2").is_some());
+        assert!(find(&sent[1], b"printer-is-shared").is_some());
+        assert_eq!(&sent[2][2..4], &op::CUPS_DELETE_CLASS.to_be_bytes());
     }
 
     #[test]

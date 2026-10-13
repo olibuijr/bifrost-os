@@ -2,17 +2,17 @@
 //! rectangles are `PrintCenter`'s geometry, which the taps share, so a tap lands on what is drawn. Colours are the kit's
 //! semantic tokens, resolved with `now()`, so Light and Dark follow the appearance.
 
-use crate::model::{job_state_name, printer_detail, printer_summary, size_text};
-use crate::window::{PrintCenter, COLS_PT, JOB_ROW_PT, PAD_PT, ROW_PT, SIDE_PT};
+use crate::model::{created_text, info_lines, job_progress, job_status_text, pages_text, printer_detail, problem_line, row_summary, size_text, supply_rgb, supply_text, Level};
+use crate::window::{Field, PrintCenter, COLS_PT, JOB_ROW_PT, PAD_PT, ROW_PT, SIDE_PT};
 use bifrost_app::controls::{Node, Rect, Role};
-use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, SELECTION, SEPARATOR_C, WHITE};
-use bifrost_app::kit::{Surface, TextCache, Ui, Weight};
+use bifrost_app::kit::ui::{CARD_BG, CONTENT_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_CALLOUT_PT, MAC_FOOTNOTE_PT, MAC_HEADLINE_PT, SELECTION, SEPARATOR_C, SYSTEM_ORANGE, SYSTEM_RED, TINT, WHITE};
+use bifrost_app::kit::{pack, Surface, TextCache, Ui, Weight};
 use bifrost_app::widgets;
 
 /// Corner radius of a selection plate (points), as the sidebar selections.
 const SEL_R: f32 = 9.0;
 /// The column headings, in order.
-const HEADINGS: [&str; 5] = ["Job", "Document", "Owner", "Size", "Status"];
+const HEADINGS: [&str; 7] = ["Job", "Document", "Owner", "Pages", "Size", "Created", "Status"];
 
 /// A filled rounded rectangle in points.
 fn fill(s: &mut Surface, ui: &Ui, r: Rect, radius: f32, color: u32) {
@@ -35,7 +35,7 @@ fn text_mid(labels: &mut TextCache, s: &mut Surface, ui: &Ui, label: &str, pt: f
 }
 
 /// The width of queue column `i` in points: up to the next column (or `right`), less a gutter.
-fn column_width(cols: &[f32; 5], i: usize, right: f32) -> f32 {
+fn column_width(cols: &[f32; 7], i: usize, right: f32) -> f32 {
     let end = cols.get(i + 1).copied().unwrap_or(right);
     (end - cols[i] - 8.0).max(0.0)
 }
@@ -66,13 +66,41 @@ fn paint_printers(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
     for (i, printer) in printers.iter().enumerate() {
         let r = p.printer_row(i);
         let on = selected.as_deref() == Some(printer.name.as_str());
+        let offline = p.model.is_offline(&printer.name);
         if on {
             fill(s, ui, Rect { x: r.x + 8.0, y: r.y + 2.0, w: r.w - 16.0, h: r.h - 4.0 }, SEL_R, SELECTION.now());
         }
-        let (name_color, sub_color) = if on { (WHITE, WHITE) } else { (LABEL.now(), LABEL_2.now()) };
+        // an unreachable printer is dimmed, as the reference app greys it out
+        let (name_color, sub_color) = if on {
+            (WHITE, WHITE)
+        } else if offline {
+            (LABEL_2.now(), LABEL_2.now())
+        } else {
+            (LABEL.now(), LABEL_2.now())
+        };
         text_mid(&mut p.labels, s, ui, &printer.name, MAC_BODY_PT, Weight::Regular, name_color, r.x + 18.0, r.y + ROW_PT * 0.36, r.w - 36.0);
-        text_mid(&mut p.labels, s, ui, &printer_summary(printer), MAC_FOOTNOTE_PT, Weight::Regular, sub_color, r.x + 18.0, r.y + ROW_PT * 0.74, r.w - 36.0);
+        let mid = r.y + ROW_PT * 0.74;
+        match problem_line(printer) {
+            // a problem replaces the summary: a warning mark, then the sentence
+            Some((level, text)) => {
+                let mark = if on { WHITE } else if level == Level::Error { SYSTEM_RED } else { SYSTEM_ORANGE };
+                warning_mark(&mut p.labels, s, ui, r.x + 18.0, mid, mark, on);
+                text_mid(&mut p.labels, s, ui, &text, MAC_FOOTNOTE_PT, Weight::Regular, mark, r.x + 34.0, mid, r.w - 52.0);
+            }
+            None => {
+                text_mid(&mut p.labels, s, ui, &row_summary(printer, offline), MAC_FOOTNOTE_PT, Weight::Regular, sub_color, r.x + 18.0, mid, r.w - 36.0);
+            }
+        }
     }
+}
+
+/// The warning glyph: a round plate with an exclamation mark, centred on `mid`.
+fn warning_mark(labels: &mut TextCache, s: &mut Surface, ui: &Ui, x: f32, mid: f32, color: u32, on_plate: bool) {
+    let size = 12.0;
+    fill(s, ui, Rect { x, y: mid - size / 2.0, w: size, h: size }, size / 2.0, color);
+    let ink = if on_plate { SELECTION.now() } else { WHITE };
+    let img = labels.get(ui, "!", MAC_FOOTNOTE_PT, Weight::Semibold, ink);
+    s.blit(img, (ui.pt(x + size / 2.0) - img.w as f32 / 2.0) as i32, (ui.pt(mid) - img.h as f32 / 2.0) as i32, 255, 255);
 }
 
 /// The queue pane: the selected printer's name and detail, the column headings and its jobs.
@@ -88,6 +116,10 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
     text_mid(&mut p.labels, s, ui, &printer.name, MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), x0, d.y + 24.0, w);
     text_mid(&mut p.labels, s, ui, &printer_detail(&printer), MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x0, d.y + 50.0, w);
 
+    if p.model.show_info {
+        paint_info(p, s, ui, &printer);
+        return;
+    }
     let cols = p.columns();
     let head_mid = p.queue_top() + COLS_PT / 2.0;
     for (i, (x, label)) in cols.iter().zip(HEADINGS).enumerate() {
@@ -101,20 +133,75 @@ fn paint_queue(p: &mut PrintCenter, s: &mut Surface, ui: &Ui) {
         text_mid(&mut p.labels, s, ui, "No jobs in the queue", MAC_CALLOUT_PT, Weight::Regular, LABEL_2.now(), x0 + 8.0, top, w);
         return;
     }
-    let selected_job = p.model.selected_job;
     for (i, job) in jobs.iter().enumerate() {
         let r = p.job_row(i);
-        let on = selected_job == Some(job.id);
+        let on = p.model.selected_jobs.contains(&job.id);
         if on {
             fill(s, ui, r, SEL_R, SELECTION.now());
         }
         let (name_color, state_color) = if on { (WHITE, WHITE) } else { (LABEL.now(), LABEL_2.now()) };
-        let cells = [job.id.to_string(), job.name.clone(), job.user.clone(), size_text(job.size_kb), job_state_name(job.state).to_string()];
+        let cells = [
+            job.id.to_string(),
+            job.name.clone(),
+            job.user.clone(),
+            pages_text(job),
+            size_text(job.size_kb),
+            created_text(job.created, p.tz_offset, p.now_secs),
+            job_status_text(job),
+        ];
         let mid = r.y + JOB_ROW_PT / 2.0;
         for (k, text) in cells.iter().enumerate() {
-            let color = if k == 4 { state_color } else { name_color };
+            let color = if k >= 3 { state_color } else { name_color };
             text_mid(&mut p.labels, s, ui, text, MAC_BODY_PT, Weight::Regular, color, cols[k], mid, column_width(&cols, k, x0 + w));
         }
+        // a printing job shows how far it is under its status
+        if let Some(done) = job_progress(job) {
+            let width = column_width(&cols, 6, x0 + w).min(110.0);
+            let bar = Rect { x: cols[6], y: r.y + JOB_ROW_PT - 7.0, w: width, h: 3.0 };
+            let (track, fill_color) = if on { (pack(255, 255, 255, 90), WHITE) } else { (SEPARATOR_C.now(), TINT) };
+            fill(s, ui, bar, 0.0, track);
+            fill(s, ui, Rect { w: bar.w * done, ..bar }, 0.0, fill_color);
+        }
+    }
+}
+
+/// The info pane: the editable description and location, what the scheduler reports and the supply levels.
+fn paint_info(p: &mut PrintCenter, s: &mut Surface, ui: &Ui, printer: &bifrost_app::controls::cups::Printer) {
+    let d = p.detail_rect();
+    let x0 = d.x + PAD_PT;
+    let w = (d.w - 2.0 * PAD_PT).max(0.0);
+    if p.fields_shown() {
+        for (field, label) in [(Field::Description, "Description"), (Field::Location, "Location")] {
+            let r = p.field_rect(field);
+            text_mid(&mut p.labels, s, ui, label, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x0, r.y + r.h / 2.0, 100.0);
+            widgets::text_field(s, ui, if field == Field::Description { &p.description } else { &p.location }, r, label, p.focus == Some(field));
+        }
+        let save = p.save_rect();
+        fill(s, ui, save, 6.0, TINT);
+        text_mid(&mut p.labels, s, ui, "Save", MAC_BODY_PT, Weight::Semibold, WHITE, save.x + 26.0, save.y + save.h / 2.0, save.w - 30.0);
+    }
+    let mut y = p.info_lines_top();
+    let offline = p.model.is_offline(&printer.name);
+    for (label, value) in info_lines(printer, offline) {
+        text_mid(&mut p.labels, s, ui, &label, MAC_BODY_PT, Weight::Regular, LABEL_2.now(), x0, y + 11.0, 100.0);
+        text_mid(&mut p.labels, s, ui, &value, MAC_BODY_PT, Weight::Regular, LABEL.now(), x0 + 110.0, y + 11.0, w - 110.0);
+        y += 22.0;
+    }
+    if printer.supplies.is_empty() {
+        return;
+    }
+    y += 10.0;
+    text_mid(&mut p.labels, s, ui, "Supplies", MAC_HEADLINE_PT, Weight::Semibold, LABEL.now(), x0, y + 11.0, w);
+    y += 30.0;
+    for supply in &printer.supplies {
+        text_mid(&mut p.labels, s, ui, &supply_text(supply), MAC_BODY_PT, Weight::Regular, LABEL.now(), x0, y + 9.0, 200.0);
+        let bar = Rect { x: x0 + 220.0, y: y + 5.0, w: (w - 220.0).clamp(0.0, 220.0), h: 8.0 };
+        fill(s, ui, bar, 3.0, SEPARATOR_C.now());
+        if let Some(level) = supply.level {
+            let color = supply_rgb(&supply.color).map_or(TINT, |(r, g, b)| pack(r, g, b, 255));
+            fill(s, ui, Rect { w: bar.w * f32::from(level) / 100.0, ..bar }, 3.0, color);
+        }
+        y += 22.0;
     }
 }
 
