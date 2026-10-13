@@ -11,8 +11,9 @@ pub mod albums;
 pub mod dupes;
 pub mod edit;
 pub mod entry;
-mod extras;
 pub mod exif;
+mod extras;
+pub mod export;
 pub mod grid;
 pub mod import;
 pub mod library;
@@ -203,6 +204,20 @@ pub enum Target {
     /// the Info sheet's Edit Details row, and a row of the Details sheet
     InfoDetails,
     Detail(DetailRow),
+    /// the share sheet's Export row, and a row of the export sheet
+    SheetExport,
+    Export(ExportRow),
+}
+
+/// The rows of the export sheet.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExportRow {
+    Kind,
+    Quality,
+    Size,
+    Details,
+    /// writes the file
+    Go,
 }
 
 /// The rows of the Details sheet.
@@ -381,6 +396,8 @@ enum Sheet {
     Info,
     /// title, caption, keywords, place and capture time, opened from Info
     Details,
+    /// kind, quality, size and details of an exported copy, opened from the share sheet
+    Export,
 }
 
 /// A touch that began on the text card.
@@ -413,6 +430,8 @@ enum Done {
     Scan { gen: u64, all: Vec<Photo>, trash: Vec<Photo>, dupes: Vec<Vec<PathBuf>> },
     /// an import finished: what it copied, or why it could not run
     Imported { report: Result<import::Report, String> },
+    /// an export finished: the file it wrote in Files, or why it could not
+    Exported { name: String, result: Result<PathBuf, String> },
     Thumb { key: String, image: Option<Image> },
     /// a thumbnail job that found its cell off screen and did nothing
     ThumbSkipped { key: String },
@@ -465,6 +484,8 @@ pub struct Photos {
     stack: Stack,
     /// the edit copied in the editor, for Paste Edits
     edit_clip: Option<Edit>,
+    /// what the export sheet has chosen
+    export: export::Options,
     /// the picker's second page is open
     more_menu: bool,
     /// the Keyword Manager is open, with its rows and scroll
@@ -580,6 +601,7 @@ impl Photos {
             duplicates: vec![],
             stack: Stack::default(),
             edit_clip: None,
+            export: export::Options::default(),
             more_menu: false,
             keywords_open: false,
             keywords: vec![],
@@ -625,6 +647,7 @@ impl Photos {
             data,
         };
         p.newest_first = p.prefs.get("sort") == Some("newest");
+        p.export = export::Options::load(&p.prefs);
         if let Some(c) = p.prefs.get_parsed::<usize>("cols").filter(|c| ZOOMS.contains(c)) {
             p.cols = c;
         }
@@ -1305,6 +1328,13 @@ impl Photos {
                     self.note = Some((text, self.now + NOTE_MS));
                     self.rescan();
                 }
+                Done::Exported { name, result } => {
+                    let text = match result {
+                        Ok(path) => format!("Exported {} to Files.", path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()),
+                        Err(e) => format!("Could not export {name}: {e}"),
+                    };
+                    self.note = Some((text, self.now + NOTE_MS));
+                }
                 Done::Wallpaper { id, ok } => {
                     if ok {
                         self.effects.push(Effect::Wallpaper(id));
@@ -1420,11 +1450,16 @@ impl Photos {
             Sheet::Share => Target::Share,
             Sheet::Delete => Target::Delete,
             Sheet::Info | Sheet::Details => Target::Info,
+            Sheet::Export => Target::Share,
         };
         let cx = self.bar_buttons().iter().find(|(t, _)| *t == anchor).map_or(self.w as f32 / 2.0, |(_, x)| *x);
         let rows = sheet_rows(sheet) as f32;
-        if matches!(sheet, Sheet::Info | Sheet::Details) {
-            let (iw, ih) = if sheet == Sheet::Info { self.info_size(ui) } else { self.details_size(ui) };
+        if matches!(sheet, Sheet::Info | Sheet::Details | Sheet::Export) {
+            let (iw, ih) = match sheet {
+                Sheet::Info => self.info_size(ui),
+                Sheet::Details => self.details_size(ui),
+                _ => self.export_size(ui),
+            };
             return ((self.w as f32 - iw) / 2.0, self.bar_top(ui) - ih - ui.pt(12.0), iw, ih);
         }
         let (sw, sh) = (ui.pt(SHEET_W_PT), ui.pt(SHEET_ROW_PT * rows));
@@ -1503,6 +1538,9 @@ impl Photos {
             if sheet == Sheet::Details {
                 return Some(self.details_hit(ui, x, y));
             }
+            if sheet == Sheet::Export {
+                return Some(self.export_hit(ui, x, y));
+            }
             if sheet == Sheet::Info {
                 let rated = 2 * usize::from(self.info_has_rating());
                 if self.info_has_rating() {
@@ -1539,7 +1577,8 @@ impl Photos {
                 (Sheet::Share, 2) => Target::SheetFiles,
                 (Sheet::Share, 3) => Target::SheetNearby,
                 (Sheet::Share, 4) => Target::SheetDuplicate,
-                (Sheet::Share, 5) | (Sheet::Delete, 0) => Target::SheetAction,
+                (Sheet::Share, 5) => Target::SheetExport,
+                (Sheet::Share, 6) | (Sheet::Delete, 0) => Target::SheetAction,
                 _ => Target::SheetCancel,
             });
         }
@@ -1717,6 +1756,8 @@ impl Photos {
                 }
             }
             Target::InfoDetails => self.sheet = Some(Sheet::Details),
+            Target::SheetExport => self.sheet = Some(Sheet::Export),
+            Target::Export(row) => self.activate_export(row),
             Target::Detail(row) => self.activate_detail(ui, row, t),
             Target::InfoHide => {
                 if let Some(p) = self.viewing().cloned() {
@@ -1973,7 +2014,7 @@ impl Photos {
                     match sheet {
                         Some(Sheet::Share) => self.set_wallpaper(&photo),
                         Some(Sheet::Delete) => self.delete(ui, &photo),
-                        Some(Sheet::Info | Sheet::Details) | None => {}
+                        Some(Sheet::Info | Sheet::Details | Sheet::Export) | None => {}
                     }
                 }
             }
@@ -2884,6 +2925,9 @@ impl Photos {
         if sheet == Sheet::Details {
             return self.draw_details(s, ui);
         }
+        if sheet == Sheet::Export {
+            return self.draw_export(s, ui);
+        }
         let (x, y, w, h) = self.sheet_rect(ui, sheet);
         let r = ui.pt(13.0);
         s.fill_rrect(x, y, w, h, r, SHEET);
@@ -2894,7 +2938,7 @@ impl Photos {
         let (action, color) = match (sheet, self.album) {
             (Sheet::Share, _) => ("Set as Wallpaper", BLUE),
             (Sheet::Delete, Album::Trash) => ("Delete Permanently", RED),
-            (Sheet::Delete | Sheet::Info | Sheet::Details, _) => ("Delete Photo", RED),
+            (Sheet::Delete | Sheet::Info | Sheet::Details | Sheet::Export, _) => ("Delete Photo", RED),
         };
         let pressed = self.pressed;
         let dim = |c: u32, t: Target| if pressed == Some(t) { crate::gfx::scale(c, 140) } else { c };
@@ -2902,7 +2946,7 @@ impl Photos {
         let row = h / rows as f32;
         let mut at = y + row / 2.0;
         if sheet == Sheet::Share {
-            for (text, t) in [("Slideshow", Target::SheetSlideshow), ("Copy", Target::SheetCopy), ("Save to Files", Target::SheetFiles), ("Send Nearby", Target::SheetNearby), ("Duplicate", Target::SheetDuplicate)] {
+            for (text, t) in [("Slideshow", Target::SheetSlideshow), ("Copy", Target::SheetCopy), ("Save to Files", Target::SheetFiles), ("Send Nearby", Target::SheetNearby), ("Duplicate", Target::SheetDuplicate), ("Export Copy", Target::SheetExport)] {
                 self.label(s, ui, text, 20.0, Weight::Regular, dim(BLUE, t), cx, at);
                 at += row;
             }
@@ -2937,10 +2981,10 @@ pub fn histogram_columns(bins: &[u32; edit::HISTOGRAM_BINS], columns: usize) -> 
 }
 
 /// Rows in a sheet: the share sheet lists Slideshow, Copy, Save to Files,
-/// Send Nearby, Duplicate, Set as Wallpaper and Cancel.
+/// Send Nearby, Duplicate, Export Copy, Set as Wallpaper and Cancel.
 fn sheet_rows(sheet: Sheet) -> usize {
     if sheet == Sheet::Share {
-        7
+        8
     } else {
         2
     }
@@ -3322,7 +3366,7 @@ mod tests {
         assert_eq!(p.sheet, Some(Sheet::Share));
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 5.5 / 7.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 6.5 / 8.0, 1100.0);
         pump_until(&mut p, &ui, |p| !p.effects.is_empty());
         assert_eq!(p.take_effects(), vec![Effect::Wallpaper("custom-1".into())]);
         let raw = std::fs::read(dir.join("wallpapers/custom-1.raw")).unwrap();
@@ -3346,7 +3390,7 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 4.5 / 7.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 4.5 / 8.0, 1100.0);
         assert_eq!(p.sheet, None);
         pump_until(&mut p, &ui, |p| !p.scanning && p.all.len() == 2);
         let copy = dir.join("Pictures/IMG_0000 2.png");
@@ -3416,7 +3460,7 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 3.5 / 7.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 3.5 / 8.0, 1100.0);
         assert_eq!(p.sheet, None);
         assert_eq!(p.take_share(), p.photos().first().map(|q| q.path.clone()));
         assert_eq!(p.take_share(), None);
@@ -3431,7 +3475,7 @@ mod tests {
         tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
         frame(&mut p, &ui);
         let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
-        tap(&mut p, &ui, sx + sw / 2.0, sy + sh / 14.0, 1100.0);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh / 16.0, 1100.0);
         assert!(p.slideshow.is_some());
         p.activate(&ui, Target::ShowPlay, 1200.0);
         assert!(p.slideshow.as_ref().unwrap().paused);

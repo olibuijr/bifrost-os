@@ -490,6 +490,73 @@ impl Photos {
         }
     }
 
+    // --- export ---
+
+    /// The rows of the export sheet: what they set, their label and what they hold now.
+    pub(super) fn export_rows(&self) -> Vec<(ExportRow, &'static str, String)> {
+        let o = &self.export;
+        vec![
+            (ExportRow::Kind, "Format", o.kind.label().to_string()),
+            (ExportRow::Quality, "Quality", if o.kind == export::Kind::Png { "Lossless".to_string() } else { o.quality.label().to_string() }),
+            (ExportRow::Size, "Size", o.size.label().to_string()),
+            (ExportRow::Details, "Include Details", if o.details { "On" } else { "Off" }.to_string()),
+            (ExportRow::Go, "Export to Files", String::new()),
+        ]
+    }
+
+    /// The export sheet's size in px: a title row and a row for each choice.
+    pub(super) fn export_size(&self, ui: &Ui) -> (f32, f32) {
+        (ui.pt(INFO_W_PT).min(self.w as f32 - 2.0 * ui.pt(MARGIN_PT)), ui.pt(INFO_ROW_PT) * (1 + self.export_rows().len()) as f32)
+    }
+
+    /// What a touch at (`x`, `y`) lands on in the export sheet.
+    pub(super) fn export_hit(&self, ui: &Ui, x: f32, y: f32) -> Target {
+        let rect = self.sheet_rect(ui, Sheet::Export);
+        if !within(x, y, rect) {
+            return Target::SheetCancel;
+        }
+        let k = ((y - rect.1) / ui.pt(INFO_ROW_PT)) as usize;
+        k.checked_sub(1).and_then(|i| self.export_rows().get(i).map(|r| Target::Export(r.0))).unwrap_or(Target::SheetCancel)
+    }
+
+    /// A tap on a row of the export sheet: the choice steps to its next value, Export writes the file.
+    pub(super) fn activate_export(&mut self, row: ExportRow) {
+        match row {
+            ExportRow::Kind => self.export.kind = self.export.kind.next(),
+            ExportRow::Quality if self.export.kind == export::Kind::Jpeg => self.export.quality = self.export.quality.next(),
+            ExportRow::Quality => {}
+            ExportRow::Size => self.export.size = self.export.size.next(),
+            ExportRow::Details => self.export.details = !self.export.details,
+            ExportRow::Go => {
+                self.sheet = None;
+                self.start_export();
+            }
+        }
+        let writes = self.export.writes();
+        self.write_prefs(&writes);
+    }
+
+    /// Writes the open photo, with its edit applied, as a copy in Files under the choices of the export sheet. The
+    /// work runs on a worker thread; a note says how it went.
+    fn start_export(&mut self) {
+        let Some(photo) = self.viewing().cloned() else { return };
+        let (path, name, recipe) = (photo.path.clone(), photo.name(), self.recipe(&photo));
+        let (options, details, dir) = (self.export, meta::details(&self.prefs, &photo.path), self.data.join("Files"));
+        self.note = Some((format!("Exporting {name}\u{2026}"), self.now + NOTE_MS * 20.0));
+        self.pool.spawn(move || {
+            let result = (|| -> Result<PathBuf, String> {
+                let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+                let image = decode_edited(&bytes, recipe).ok_or("the picture could not be read")?;
+                let data = export::encode(&image, &options, &details).ok_or("the picture could not be written")?;
+                std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+                let (out, mut file) = crate::net::share::create_unique(&dir, &export::file_name(&name, options.kind)).map_err(|e| e.to_string())?;
+                std::io::Write::write_all(&mut file, &data).map_err(|e| e.to_string())?;
+                Ok(out)
+            })();
+            Done::Exported { name, result }
+        });
+    }
+
     // --- Keyword Manager ---
 
     /// Opens the Keyword Manager over the grid.
@@ -746,6 +813,27 @@ impl Photos {
         }
     }
 
+    /// The export sheet: a title row, then each choice with its value, and Export.
+    pub(super) fn draw_export(&mut self, s: &mut Surface, ui: &Ui) {
+        let (x, y, w, h) = self.sheet_rect(ui, Sheet::Export);
+        s.fill_rrect(x, y, w, h, flat(ui), SHEET);
+        let row = ui.pt(INFO_ROW_PT);
+        self.label(s, ui, "Export", 17.0, Weight::Semibold, WHITE, x + w / 2.0, y + row / 2.0);
+        let pressed = self.pressed;
+        for (i, (kind, label, value)) in self.export_rows().into_iter().enumerate() {
+            let cy = y + row * (i + 1) as f32 + row / 2.0;
+            s.fill_rect((x + ui.pt(14.0)) as usize, (cy - row / 2.0) as usize, (w - ui.pt(28.0)) as usize, 1, SEPARATOR);
+            let dim = |c: u32| if pressed == Some(Target::Export(kind)) { crate::gfx::scale(c, 140) } else { c };
+            if kind == ExportRow::Go {
+                self.label(s, ui, label, 15.0, Weight::Semibold, dim(BLUE), x + w / 2.0, cy);
+                continue;
+            }
+            self.label_left(s, ui, label, 14.0, Weight::Regular, SECONDARY, x + ui.pt(16.0), cy);
+            let color = if kind == ExportRow::Quality && self.export.kind == export::Kind::Png { SECONDARY } else { dim(BLUE) };
+            self.label_right(s, ui, &value, 15.0, Weight::Regular, color, x + w - ui.pt(16.0), cy);
+        }
+    }
+
     /// The Details sheet: a title row, then each detail with its value.
     pub(super) fn draw_details(&mut self, s: &mut Surface, ui: &Ui) {
         let (x, y, w, h) = self.sheet_rect(ui, Sheet::Details);
@@ -826,6 +914,55 @@ mod tests {
         let (x, y, w, _) = p.sheet_rect(ui, Sheet::Details);
         let h = ui.pt(INFO_ROW_PT);
         tap(p, ui, x + w / 2.0, y + h * (i + 1) as f32 + h / 2.0, t);
+    }
+
+    fn export_tap(p: &mut Photos, ui: &Ui, row: ExportRow, t: f64) {
+        let i = p.export_rows().iter().position(|r| r.0 == row).unwrap();
+        let (x, y, w, _) = p.sheet_rect(ui, Sheet::Export);
+        let h = ui.pt(INFO_ROW_PT);
+        tap(p, ui, x + w / 2.0, y + h * (i + 1) as f32 + h / 2.0, t);
+    }
+
+    #[test]
+    fn the_share_sheet_exports_a_copy_with_the_chosen_format_and_details() {
+        let (mut p, dir, ui) = photos("export", 1);
+        p.open_viewer(0);
+        let photo = p.photos()[0].clone();
+        assert!(p.write_many("Details", vec![meta::field_write(&photo.path, meta::Field::Title, "Harbour")]));
+        let cy = p.bar_top(&ui) + ui.pt(BAR_PT) / 2.0;
+        tap(&mut p, &ui, 1200.0 * 0.12, cy, 1000.0);
+        assert_eq!(p.sheet, Some(Sheet::Share));
+        frame(&mut p, &ui);
+        let (sx, sy, sw, sh) = p.sheet_rect(&ui, Sheet::Share);
+        tap(&mut p, &ui, sx + sw / 2.0, sy + sh * 5.5 / 8.0, 1100.0);
+        assert_eq!(p.sheet, Some(Sheet::Export));
+        frame(&mut p, &ui);
+        // each tap steps a choice; quality means nothing for a PNG
+        export_tap(&mut p, &ui, ExportRow::Kind, 1200.0);
+        assert_eq!(p.export.kind, export::Kind::Png);
+        export_tap(&mut p, &ui, ExportRow::Quality, 1250.0);
+        assert_eq!(p.export.quality, export::Quality::High);
+        export_tap(&mut p, &ui, ExportRow::Details, 1300.0);
+        assert!(!p.export.details);
+        export_tap(&mut p, &ui, ExportRow::Details, 1350.0);
+        assert!(p.export.details);
+        assert_eq!(export::Options::load(&Prefs::load(dir.join(PREFS_FILE))), p.export, "the choices are kept");
+        // Export writes the file in Files and says so
+        export_tap(&mut p, &ui, ExportRow::Go, 1400.0);
+        assert_eq!(p.sheet, None);
+        pump_until(&mut p, &ui, |p| p.note.as_ref().is_some_and(|(t, _)| t.starts_with("Exported")));
+        assert_eq!(p.note.as_ref().map(|(t, _)| t.as_str()), Some("Exported IMG_0000.png to Files."));
+        let out = dir.join("Files/IMG_0000.png");
+        let bytes = std::fs::read(&out).expect("the copy is in Files");
+        assert_eq!(crate::cg::imageio::pixel_size(&bytes), Some((4, 4)));
+        assert!(bytes.windows(7).any(|w| w == b"Harbour"), "the title is in the file");
+        assert!(photo.path.exists(), "the original stays");
+        // a second export does not overwrite the first
+        p.activate(&ui, Target::SheetExport, 1500.0);
+        export_tap(&mut p, &ui, ExportRow::Go, 1600.0);
+        pump_until(&mut p, &ui, |p| p.note.as_ref().is_some_and(|(t, _)| t.starts_with("Exported IMG_0000 2")));
+        assert!(dir.join("Files/IMG_0000 2.png").exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
