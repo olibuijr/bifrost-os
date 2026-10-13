@@ -30,6 +30,7 @@ pub mod stage;
 pub mod state;
 pub mod sync;
 pub mod tiling;
+pub mod touch;
 pub mod wm;
 #[cfg(feature = "xwayland")]
 pub mod xwayland;
