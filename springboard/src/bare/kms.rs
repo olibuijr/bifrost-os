@@ -800,7 +800,7 @@ impl Display {
         display.rates = std::process::Command::new("wlr-randr").output().ok()
             .map(|o| wlr_randr_rates(&String::from_utf8_lossy(&o.stdout))).unwrap_or_default();
         display.wayland = Some(backend);
-        // No shell copy of the boot frame under labwc: its surface can be scaled, so a frame drawn here would not
+        // No shell copy of the boot frame under bifrost-wm: its surface can be scaled, so a frame drawn here would not
         // match the loader's mark box in panel pixels. Bootweave's frame stays up until the first present.
         Ok(display)
     }

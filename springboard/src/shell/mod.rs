@@ -2,7 +2,6 @@
 //! built-in apps, driven by plain touch/key events and drawn into a Surface.
 
 pub mod pasteboard;
-pub mod labwc_theme;
 pub mod battery;
 pub mod browser;
 pub mod accessibility;
@@ -2819,7 +2818,6 @@ impl Shell {
         keyboard::pump();
         self.appearance_tick(t);
         self.terminal_follow_scheme();
-        labwc_theme::follow_scheme();
         self.dock_tick(t);
         self.fx_tick(t);
         self.metrics_tick(t);
