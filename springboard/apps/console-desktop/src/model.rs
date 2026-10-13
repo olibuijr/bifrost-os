@@ -95,7 +95,19 @@ pub fn parse_journal_line_in(line: &str, registry: &[bifrost_core::log::Spec]) -
         return None;
     }
     let text = |key: &str| obj.get(key).and_then(field_text);
-    Some(LogEntry {
+    Some(entry_from_fields_in(&text, registry))
+}
+
+/// The entry for a journal record given as a field lookup (`MESSAGE`, `PRIORITY`, `_PID` ...): a journal export
+/// record yields one as well as a JSON line.
+pub fn entry_from_fields(text: &dyn Fn(&str) -> Option<String>) -> LogEntry {
+    static REGISTRY: std::sync::OnceLock<Vec<bifrost_core::log::Spec>> = std::sync::OnceLock::new();
+    entry_from_fields_in(text, REGISTRY.get_or_init(bifrost_core::log::read_registry))
+}
+
+/// As `entry_from_fields`, checking subsystem claims against `registry`.
+pub fn entry_from_fields_in(text: &dyn Fn(&str) -> Option<String>, registry: &[bifrost_core::log::Spec]) -> LogEntry {
+    let mut e = LogEntry {
         date: text("__REALTIME_TIMESTAMP").and_then(|t| t.parse().ok()).unwrap_or(0),
         process: text("SYSLOG_IDENTIFIER").or_else(|| text("_COMM")).unwrap_or_default(),
         pid: text("_PID").and_then(|p| p.parse().ok()).unwrap_or(0),
@@ -103,15 +115,13 @@ pub fn parse_journal_line_in(line: &str, registry: &[bifrost_core::log::Spec]) -
         category: text("BIFROST_CATEGORY").unwrap_or_default(),
         level: Level::from_priority(text("PRIORITY").and_then(|p| p.parse().ok())),
         message: text("MESSAGE").unwrap_or_default(),
-    })
-    .map(|mut e| {
-        if !e.subsystem.is_empty() && !bifrost_core::log::may_log_as(registry, text("_EXE").as_deref(), &e.subsystem) {
-            e.message = format!("[claimed subsystem {}] {}", e.subsystem, e.message);
-            e.subsystem.clear();
-            e.category.clear();
-        }
-        e
-    })
+    };
+    if !e.subsystem.is_empty() && !bifrost_core::log::may_log_as(registry, text("_EXE").as_deref(), &e.subsystem) {
+        e.message = format!("[claimed subsystem {}] {}", e.subsystem, e.message);
+        e.subsystem.clear();
+        e.category.clear();
+    }
+    e
 }
 
 /// The name of a Unix signal number, as the shell prints it.

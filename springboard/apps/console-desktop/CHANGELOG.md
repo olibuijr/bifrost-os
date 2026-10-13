@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.6.0 — 2026-10-13
+
+- View menu: Reload (Cmd+R) reads the current view again. Show Sidebar and Show Details hide and show those panes.
+  Visible Columns chooses which columns the table shows; PID is new and starts off. Expand Message shows the selected
+  message whole in the table, Collapse All Messages undoes every expansion.
+- Edit menu: Find Next (Cmd+G) and Find Previous (Shift+Cmd+G) move the selection to the next or previous message that
+  matches, wrapping at the ends, without filtering the table. The match is the find text, or the search field when
+  there is none. Use Selection for Find (Cmd+E) takes the selected message's first line as the find text.
+- File menu: Open reads a log file, a gzip-compressed log or a saved archive and lists it under Opened Files in the
+  sidebar; Open Recent switches between the ones opened in this session. Capture Archive saves this boot's journal in
+  the journal export format to a place chosen in the save panel and opens it. Reveal in Files and Move to Trash work
+  on an opened or captured file.
+- Save Messages now asks where to save in the save panel. A shell without the panel gets the old file in
+  Documents/Console.
+- Reports has a Kernel Reports row: the crash records the kernel keeps in the persistent store across a reboot, and the
+  previous boot's kernel warnings and errors. Selecting a record shows its text.
+- Not in this version: bzip2 and xz files, opening from the command line or by double-click, a list of other devices,
+  toolbar customization, and Reveal or Trash for the files in /var/log and for crash reports, which the app holds no
+  grant for.
+
 ## 1.5.0 — 2026-10-13
 
 - Save Messages (Log menu): writes the selected message, or every message the window shows when none is selected, to a new
