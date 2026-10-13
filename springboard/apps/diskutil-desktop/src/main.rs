@@ -28,6 +28,7 @@ const MENU_VOLUMES_ONLY: u32 = 6;
 const MENU_ALL_DEVICES: u32 = 7;
 const MENU_ERASE: u32 = 8;
 const MENU_FIRST_AID: u32 = 9;
+const MENU_SHOW_IN_FILES: u32 = 10;
 const MENU_FS_EXT4: u32 = 20;
 const MENU_FS_EXFAT: u32 = 21;
 const MENU_FS_FAT32: u32 = 22;
@@ -71,6 +72,8 @@ impl App for DiskUtility {
                     AppMenuItem::new(MENU_MOUNT, "Mount").key("cmd+m").enabled(mountable),
                     AppMenuItem::new(MENU_UNMOUNT, "Unmount").key("cmd+u").enabled(mounted),
                     AppMenuItem::new(MENU_EJECT, "Eject").key("cmd+e").enabled(ejectable),
+                    AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_SHOW_IN_FILES, "Show in Files").key("cmd+shift+r").enabled(mounted),
                 ],
             },
             AppMenu {
@@ -85,8 +88,15 @@ impl App for DiskUtility {
         ]
     }
 
-    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+    fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         match id {
+            MENU_SHOW_IN_FILES => match self.selected_node().and_then(|n| n.mount_point.as_deref()).and_then(actions::mount_url) {
+                Some(url) => {
+                    ctx.open_url(&url);
+                    true
+                }
+                None => false,
+            },
             MENU_DETACH => {
                 let t = self.now;
                 self.activate(Target::Toolbar(B_DETACH), t)

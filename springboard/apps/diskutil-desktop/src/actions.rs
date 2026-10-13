@@ -52,6 +52,22 @@ fn is_loop_name(name: &str) -> bool {
     name.strip_prefix("loop").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
+/// The `file://` URL that opens a mount point in the file manager. Bytes outside the URL-safe set are percent-encoded.
+pub fn mount_url(mount_point: &str) -> Option<String> {
+    if !mount_point.starts_with('/') {
+        return None;
+    }
+    let mut url = String::from("file://");
+    for b in mount_point.bytes() {
+        if b.is_ascii_alphanumeric() || b"/-_.~".contains(&b) {
+            url.push(b as char);
+        } else {
+            url.push_str(&format!("%{b:02X}"));
+        }
+    }
+    Some(url)
+}
+
 /// The disks the session should know about: every disk and partition the window shows.
 pub fn disks_of(nodes: &[Node]) -> Vec<Disk> {
     nodes.iter().map(to_disk).collect()
@@ -186,6 +202,12 @@ mod tests {
 
     fn plan_detach_refusal() -> Option<Refusal> {
         plan(Action::Detach, &[], "sdb", &[]).err()
+    }
+
+    #[test]
+    fn a_mount_point_becomes_an_encoded_file_url() {
+        assert_eq!(mount_url("/run/media/me/USB DISK").as_deref(), Some("file:///run/media/me/USB%20DISK"));
+        assert_eq!(mount_url("relative"), None);
     }
 
     #[test]
