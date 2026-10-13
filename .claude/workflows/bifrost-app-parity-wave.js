@@ -7,7 +7,8 @@ export const meta = {
   ],
 }
 
-const APPS = [
+// args.apps overrides the list: [[name, slug, dir], ...]; args.wave names the branches
+const APPS = (args && args.apps) || [
   ['Preview', 'preview', 'springboard/apps/preview-desktop'],
   ['Dictionary', 'dictionary', 'springboard/apps/dictionary-desktop'],
   ['Stickies', 'stickies', 'springboard/apps/stickies-desktop'],
@@ -38,7 +39,7 @@ phase('Apps')
 const apps = parallel(APPS.map(([name, slug, dir]) => () => agent(
 `${RULES}
 
-TASK: raise feature parity of BifrOSt's ${name} app (${dir}) with the reference ${name} app. Branch: apps/${slug}-parity.
+TASK: raise feature parity of BifrOSt's ${name} app (${dir}) with the reference ${name} app. Branch: apps/${slug}-parity${args && args.wave ? '-w' + args.wave : ''}.
 Your detailed spec is docs/parity-matrix/apps/${slug}.json: every row with status "gap" or "partial" has an "apple" field (where it lives in the reference app), a "note", and a "wire" field saying exactly what to implement and where to wire it in the BifrOSt app. Read the whole file first, then the app's source end to end (main.rs, its modules, manifest.toml, CHANGELOG.md) so you know its architecture and the SDK kit it uses.
 Do, in daily-use order (menus and commands people hit first, then settings, then view modes, then the rest):
 1. Implement every gap/partial row you can complete properly: the model/logic (tested), the UI (menu bar items with shortcuts through the app's main menu, toolbar buttons, settings window, sheets/panels) and the wiring so it is reachable and works end to end.
