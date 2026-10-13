@@ -34,6 +34,7 @@ pub const MENU_ARCHIVE: u32 = 8;
 pub const MENU_TRASH: u32 = 9;
 pub const MENU_FIND: u32 = 10;
 pub const MENU_SHOW_ALL: u32 = 11;
+pub const MENU_THREADS: u32 = 12;
 
 /// How often the inbox of every account is checked for new mail, in milliseconds.
 pub const POLL_MS: f64 = 60_000.0;
@@ -335,6 +336,7 @@ impl MailWindow {
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_FIND, "Find...").key("cmd+f"),
                     AppMenuItem::new(MENU_SHOW_ALL, "Show All Messages").enabled(!self.mail.search.is_empty()),
+                    AppMenuItem::new(MENU_THREADS, if self.mail.threaded { "Hide Threads" } else { "Show Threads" }).key("cmd+shift+t"),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_ADD, "Add Account..."),
                 ],
@@ -355,6 +357,10 @@ impl MailWindow {
             MENU_TRASH => self.move_open(&TRASH_NAMES, "Trash"),
             MENU_FIND => self.mail.open_search(),
             MENU_SHOW_ALL => self.mail.apply_search(""),
+            MENU_THREADS => {
+                self.mail.threaded = !self.mail.threaded;
+                self.list_scroll = Scroller::new();
+            }
             _ => return false,
         }
         self.dirty = true;

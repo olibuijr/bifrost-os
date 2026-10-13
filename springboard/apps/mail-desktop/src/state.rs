@@ -6,10 +6,18 @@ use crate::flags::{Flag, Flags};
 use crate::message::{self, Draft, Summary};
 use crate::search::{Doc, Query};
 use crate::session::Listed;
+use crate::threads::{self, Node};
 use bifrost_app::controls::internet_accounts::{self as shared, Account, Kind, Security, Server};
 use std::collections::HashMap;
 
 pub const INBOX: &str = "INBOX";
+/// One line of the list: a message, and in the threaded view how many messages its conversation holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Line {
+    pub row: Row,
+    pub thread: usize,
+}
+
 /// The mailbox names Archive and Trash are looked up under, in order (providers name them differently).
 pub const ARCHIVE_NAMES: [&str; 4] = ["Archive", "Archives", "All Mail", "[Gmail]/All Mail"];
 pub const TRASH_NAMES: [&str; 4] = ["Trash", "Deleted Items", "Deleted Messages", "[Gmail]/Trash"];
@@ -137,6 +145,8 @@ pub struct Mail {
     pub status: String,
     /// The search text as applied. Empty shows every message.
     pub search: String,
+    /// The threaded view: the list groups conversations together.
+    pub threaded: bool,
 }
 
 impl Mail {
@@ -154,6 +164,7 @@ impl Mail {
             sheet: None,
             status: String::new(),
             search: String::new(),
+            threaded: false,
         }
     }
 
@@ -242,6 +253,31 @@ impl Mail {
         if self.open == Some(uid) {
             self.open = None;
         }
+    }
+
+    /// The lines the list shows. Threaded, the matching messages are grouped by conversation (`threads::group`): each
+    /// conversation is listed together, the newest conversation first, the newest message first inside it.
+    pub fn visible_lines(&self) -> Vec<Line> {
+        let rows = self.visible_rows();
+        if !self.threaded {
+            return rows.into_iter().map(|row| Line { row, thread: 1 }).collect();
+        }
+        let nodes: Vec<Node> = rows
+            .iter()
+            .map(|r| Node {
+                message_id: r.summary.message_id.clone(),
+                in_reply_to: r.summary.in_reply_to.clone(),
+                references: r.summary.references.clone(),
+                subject: r.summary.subject.clone(),
+            })
+            .collect();
+        let mut lines = Vec::with_capacity(rows.len());
+        for group in threads::group(&nodes) {
+            for &i in &group {
+                lines.push(Line { row: rows[i].clone(), thread: group.len() });
+            }
+        }
+        lines
     }
 
     /// The first of `candidates` the account has as a mailbox (names match without case), for Archive and Trash.
@@ -519,6 +555,22 @@ mod tests {
         assert_eq!(mail.visible_rows().iter().map(|r| r.uid).collect::<Vec<_>>(), vec![4]);
         mail.apply_search("");
         assert_eq!(mail.visible_rows().len(), 2);
+    }
+
+    #[test]
+    fn the_threaded_view_lists_each_conversation_together() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let reply = "Message-ID: <b@x>\r\nIn-Reply-To: <a@x>\r\nSubject: Re: Plan\r\nFrom: Ana <ana@example.com>\r\n\r\n";
+        let plan = "Message-ID: <a@x>\r\nSubject: Plan\r\nFrom: Ana <ana@example.com>\r\n\r\n";
+        let lone = "Message-ID: <c@x>\r\nSubject: Lunch\r\nFrom: Bo <bo@example.com>\r\n\r\n";
+        let listed_threaded = |uid, header: &str| Listed { uid, flags: Flags::empty(), header: header.to_string() };
+        mail.apply_listing("work", INBOX, vec![], vec![listed_threaded(1, plan), listed_threaded(2, lone), listed_threaded(3, reply)]);
+        assert_eq!(mail.visible_lines().iter().map(|l| l.row.uid).collect::<Vec<_>>(), vec![3, 2, 1], "flat, newest first");
+        assert!(mail.visible_lines().iter().all(|l| l.thread == 1));
+        mail.threaded = true;
+        let lines = mail.visible_lines();
+        assert_eq!(lines.iter().map(|l| l.row.uid).collect::<Vec<_>>(), vec![3, 1, 2]);
+        assert_eq!(lines.iter().map(|l| l.thread).collect::<Vec<_>>(), vec![2, 2, 1]);
     }
 
     #[test]
