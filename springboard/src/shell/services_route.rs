@@ -60,21 +60,9 @@ impl Shell {
         let Some(sel) = selection() else { return Vec::new() };
         let Some(route) = menu::route(service, &sel) else { return Vec::new() };
         match route {
-            Route::Intent { app, intent, param, text } => {
-                if !self.desktop_open_app(app, t) {
-                    eprintln!("services: {app} is not installed");
-                    return Vec::new();
-                }
-                std::thread::spawn(move || {
-                    if let Err(e) = super::intents::run_with(app, intent, &[(param, text.as_str())], INTENT_WAIT) {
-                        eprintln!("services: {app} {intent}: {e}");
-                    }
-                });
-            }
-            Route::Search(text) => {
-                self.quicksearch_show(t);
-                self.quicksearch.field_mut().set_text(&self.ui, &text);
-            }
+            Route::Intent { app, intent, param, text } => self.run_intent(app, intent, param, &text, t),
+            Route::LookUp(term) => self.open_look_up(term),
+            Route::Search(text) => self.search_for(&text, t),
             Route::OpenUrl(url) => {
                 if let Err(e) = self.desktop_open_url(&url, t) {
                     eprintln!("services: {e}");
@@ -88,6 +76,27 @@ impl Shell {
             }
         }
         Vec::new()
+    }
+
+    /// Opens `app` and runs its `intent` with one string parameter over its control socket, on a worker thread.
+    /// Shared by the Services routes and the Look Up popover's Open in Dictionary row.
+    pub(super) fn run_intent(&mut self, app: &'static str, intent: &'static str, param: &'static str, text: &str, t: f64) {
+        if !self.desktop_open_app(app, t) {
+            eprintln!("services: {app} is not installed");
+            return;
+        }
+        let text = text.to_string();
+        std::thread::spawn(move || {
+            if let Err(e) = super::intents::run_with(app, intent, &[(param, text.as_str())], INTENT_WAIT) {
+                eprintln!("services: {app} {intent}: {e}");
+            }
+        });
+    }
+
+    /// Opens Quick Search with `text` in its field.
+    pub(super) fn search_for(&mut self, text: &str, t: f64) {
+        self.quicksearch_show(t);
+        self.quicksearch.field_mut().set_text(&self.ui, text);
     }
 }
 

@@ -11,7 +11,9 @@
   Look Up in Dictionary, New Note With Selection, Make New Sticky Note, Open URL, Search With Quick Search and Show in Files.
   `bifrost_ui::services_menu` models which service takes what and where it goes; `shell/services_route.rs` carries it out
   (Dictionary's `look-up` and Notes' `create-note` intents over their control sockets, links in the browser, Files, Search).
-  Ctrl+Cmd+D runs Look Up on the selection. `bifrost_ui::look_up` is the Look Up popover model; its drawing is not built yet.
+  Ctrl+Cmd+D and Services > Look Up open the Look Up popover under the menu bar: the first installed definition, Quick Search
+  results, Search and Open in Dictionary. Escape or a tap outside closes it (`shell/look_up_popover.rs`, model `bifrost_ui::look_up`).
+  The StarDict reader moved to `bifrost_ui::stardict`, shared by the shell and Dictionary 0.1.1.
   Intents can take string parameters: `intents::run_with` and `request_line_with`.
 - Dock: an app sets its own items in the Dock's menu (`dock` service `menu`, SDK `dock_tile::set_menu`). Items show under the
   app's Open, Keep in Dock and Quit rows; choosing one sends the app its id as `ContextAction`. Up to eight items.

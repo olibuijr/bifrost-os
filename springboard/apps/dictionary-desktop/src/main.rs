@@ -2,8 +2,6 @@
 //! system's `/usr/share/stardict` folder. Type a word to see its suggestions, Return to look it up, or Look Up
 //! Clipboard. The `look-up` intent returns a definition to other callers.
 
-mod dict;
-
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::kit::canvas::{Canvas, RectF};
@@ -12,17 +10,13 @@ use bifrost_app::kit::{Damage, Scroller};
 use bifrost_app::widgets;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
-use dict::{Hit, Library};
-use std::path::{Path, PathBuf};
+use bifrost_ui::stardict::{load_library, Hit, Library};
+use std::path::Path;
 
 const MENU_LOOK_UP_CLIPBOARD: u32 = 1;
 const MENU_COPY_DEFINITION: u32 = 2;
 const MENU_CLEAR: u32 = 3;
 
-/// Where the system's own dictionaries live, read alongside the app's folder.
-const SYSTEM_DICTIONARIES: &str = "/usr/share/stardict";
-/// The system word list: a spelling answer when no dictionary defines a word.
-const WORD_LIST: &str = "/usr/share/dict/words";
 /// Most suggestions listed under the search field.
 const SUGGESTIONS: usize = 12;
 
@@ -36,15 +30,6 @@ const FOOTER_H: f32 = 28.0;
 const ROW_H: f32 = 28.0;
 /// Line advance of wrapped text, as a multiple of its size.
 const LEADING: f32 = 1.35;
-
-/// The dictionaries a lookup reads: the app's own folder, then the system's.
-fn dictionary_dirs(data_dir: &Path) -> Vec<PathBuf> {
-    vec![data_dir.join("dictionaries"), PathBuf::from(SYSTEM_DICTIONARIES)]
-}
-
-fn load_library(data_dir: &Path) -> Library {
-    Library::load(&dictionary_dirs(data_dir), Path::new(WORD_LIST))
-}
 
 /// The lookup on screen: the word and what each dictionary says about it.
 struct Shown {

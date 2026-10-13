@@ -35,6 +35,7 @@ pub mod books;
 pub mod cache;
 pub mod clipboard;
 mod services_route;
+mod look_up_popover;
 pub mod chord;
 pub mod clock;
 pub mod control_center;
@@ -632,6 +633,7 @@ pub struct Shell {
     share: Option<share::Sheet>,
     share_svc: Option<crate::net::share::Service>,
     share_prompt: Option<share::prompt::Prompt>,
+    look_up: Option<look_up_popover::Popover>,
     /// transfer rows the progress card showed at the last poll
     share_rows: usize,
     /// the "Low Battery" alert on screen
@@ -899,6 +901,7 @@ impl Shell {
             share: None,
             share_svc: None,
             share_prompt: None,
+            look_up: None,
             share_rows: 0,
             low_alert: None,
             permission_sheet: None,
@@ -2328,6 +2331,9 @@ impl Shell {
         if let Some(fx) = self.shield_event(ev, t) {
             return fx;
         }
+        if let Some(fx) = self.look_up_event(ev, t) {
+            return fx;
+        }
         if let Some(fx) = self.modal_event(ev) {
             return fx;
         }
@@ -3279,7 +3285,7 @@ impl Shell {
             self.drawn = Drawn::Nothing;
             m.draw(s, &self.ui);
         }
-        if self.share.is_some() || self.share_prompt.is_some() {
+        if self.share.is_some() || self.share_prompt.is_some() || self.look_up.is_some() {
             damage.all();
             self.drawn = Drawn::Nothing;
         }
@@ -3318,6 +3324,7 @@ impl Shell {
             }
         }
         self.draw_share(s);
+        self.draw_look_up(s);
         self.draw_assistive(s, t);
         self.damage = damage;
         self.rows = rows;
@@ -3333,7 +3340,7 @@ impl Shell {
         let quiet = self.multi.is_none() && self.home_gesture.is_none() && self.transition.is_none() && !self.letterboxed(AppId::Terminal)
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
             && !self.hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
-            && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
+            && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
             && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
@@ -3354,7 +3361,7 @@ impl Shell {
         let quiet = self.multi.is_none() && self.home_gesture.is_none() && self.transition.is_none() && !self.letterboxed(AppId::Settings)
             && !self.kb_touch && !self.fullscreen
             && !self.hud.visible(t) && !self.hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
-            && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none()
+            && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
             && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
             return None;
