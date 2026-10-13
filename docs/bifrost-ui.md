@@ -2066,3 +2066,17 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## Local Authentication (`bifrost_app::local_auth`, the `local_auth` service)
+
+`LAContext` mirrors Apple's type: `can_evaluate_policy` (canEvaluatePolicy), `evaluate_policy` (evaluatePolicy with a
+reason), `invalidate`, `localized_fallback_title`, `localized_cancel_title`, `touch_id_authentication_allowable_reuse_duration`
+(a success inside the window skips the next prompt) and `biometry_type` (always `None`). `LAPolicy` has
+`DeviceOwnerAuthentication` and `DeviceOwnerAuthenticationWithBiometrics`; `LAError` carries `AuthenticationFailed`,
+`UserCancel`, `UserFallback`, `SystemCancel`, `PasscodeNotSet`, `BiometryNotAvailable`, `BiometryNotEnrolled`,
+`BiometryLockout`, `AppCancel`, `InvalidContext` and `NotInteractive`. The shell service
+(`springboard/src/shell/services/local_auth.rs`) has `can_evaluate` and `evaluate`; it checks the account password with
+the login backend (read-only) and locks an app out after five failures. Gaps: the password sheet is not drawn, so
+`evaluate` without a `password` returns `not_interactive` with `prompt: true`; no biometry (the biometrics policy is
+`biometry_not_available`); the fallback and cancel titles are held by the context but not yet shown; grants and the
+failure count reset on shell restart. Rows stay partial until a Midget check.

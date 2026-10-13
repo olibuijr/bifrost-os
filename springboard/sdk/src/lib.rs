@@ -189,6 +189,7 @@ pub mod net_diagnostic;
 pub mod stream;
 pub mod websocket;
 pub mod service_discovery;
+pub mod local_auth;
 pub mod privacy_permissions;
 pub mod screen_sample;
 pub mod external_accessory;
