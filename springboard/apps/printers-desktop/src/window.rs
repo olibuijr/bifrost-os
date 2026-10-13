@@ -5,11 +5,11 @@
 use crate::model::{self, Action, Model, Reply};
 use crate::worker::{Link, Request};
 use bifrost_app::controls::nav::{Toolbar, ToolbarItem, ToolbarLayout};
-use bifrost_app::controls::Rect;
+use bifrost_app::controls::{Rect, TextField};
 use bifrost_app::kit::{TextCache, Ui};
 use bifrost_app::layout::UNIFIED_BAR_PT;
 use bifrost_app::proto::ContextItem;
-use bifrost_app::{widgets, AppMenu, AppMenuItem, TouchKind};
+use bifrost_app::{widgets, AppMenu, AppMenuItem, Command, TouchKind};
 use std::io::Read;
 
 /// The printer list's width (points).
@@ -46,6 +46,15 @@ pub const B_SHARE: u32 = 10;
 pub const B_SELECT_ALL: u32 = 11;
 /// Menu only: asks for a document to print.
 pub const B_PRINT_FILE: u32 = 12;
+/// Info pane: saves the description and location.
+pub const B_SAVE: u32 = 13;
+
+/// A text field of the info pane.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Field {
+    Description,
+    Location,
+}
 
 /// The largest document the window reads to print (bytes).
 const MAX_DOCUMENT: u64 = 64 * 1024 * 1024;
@@ -59,6 +68,10 @@ pub enum Target {
     Printer(usize),
     /// The job at this index of the selected printer's queue.
     Job(usize),
+    /// A text field of the info pane.
+    Field(Field),
+    /// The Save button of the info pane.
+    Save,
 }
 
 pub struct PrintCenter {
@@ -81,6 +94,12 @@ pub struct PrintCenter {
     badge: String,
     /// The open panel asked for a document to print.
     pub open_request: Option<u32>,
+    /// The info pane's fields and which one has the keyboard.
+    pub description: TextField,
+    pub location: TextField,
+    pub focus: Option<Field>,
+    /// The printer the fields were filled from, so a listing never overwrites what is being typed.
+    loaded_for: Option<String>,
 }
 
 impl PrintCenter {
@@ -101,6 +120,10 @@ impl PrintCenter {
             tz_offset: 0,
             badge: String::new(),
             open_request: None,
+            description: TextField::new(),
+            location: TextField::new(),
+            focus: None,
+            loaded_for: None,
         }
     }
 
@@ -109,6 +132,108 @@ impl PrintCenter {
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs() as i64);
         self.now_secs = now;
         self.tz_offset = bifrost_app::time_zone::TimeZone::current().seconds_from_gmt(bifrost_app::coding::Date(now as f64));
+    }
+
+    /// A window with no scheduler behind it, for tests of the code that drives it.
+    #[cfg(test)]
+    pub fn detached() -> PrintCenter {
+        PrintCenter::with_link(Link::detached())
+    }
+
+    /// How many requests were sent whose replies have not come back.
+    #[cfg(test)]
+    pub fn requests_sent(&self) -> usize {
+        self.in_flight
+    }
+
+    /// Performs `action` on the named printer (a control method, not the selection).
+    pub fn request(&mut self, printer: String, action: Action) {
+        self.send(Request::Act { printer, action });
+    }
+
+    /// Fills the info fields from the selected printer.
+    fn load_fields(&mut self) {
+        let (info, location, name) = match self.model.selected_printer() {
+            Some(p) => (p.info.clone(), p.location.clone(), Some(p.name.clone())),
+            None => (String::new(), String::new(), None),
+        };
+        self.description.clear();
+        self.description.push_str(&info);
+        self.location.clear();
+        self.location.push_str(&location);
+        self.loaded_for = name;
+        self.focus = None;
+    }
+
+    /// Fills the fields again when the info pane shows another printer than they were filled from.
+    fn sync_fields(&mut self) {
+        if self.model.show_info && self.loaded_for != self.model.selected {
+            self.load_fields();
+        }
+    }
+
+    /// Sends the edited description and location of the selected printer.
+    fn save_details(&mut self) {
+        if self.model.selected_printer().is_some_and(|p| !p.is_class) {
+            let info = self.description.to_string().trim().to_string();
+            let location = self.location.to_string().trim().to_string();
+            self.act(Action::SetDetails { info, location });
+        }
+    }
+
+    /// True when the info pane offers the fields: a printer that is not a pool.
+    pub fn fields_shown(&self) -> bool {
+        self.model.show_info && self.model.selected_printer().is_some_and(|p| !p.is_class)
+    }
+
+    fn field_mut(&mut self) -> Option<&mut TextField> {
+        match self.focus? {
+            Field::Description => Some(&mut self.description),
+            Field::Location => Some(&mut self.location),
+        }
+    }
+
+    /// Typed text goes to the focused field. True when a frame is needed.
+    pub fn text(&mut self, text: &str) -> bool {
+        match self.field_mut() {
+            Some(f) => {
+                f.push_str(text);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Editing keys (shell key codes) for the focused field: backspace, delete, arrows, home, end, tab, return and escape.
+    pub fn key(&mut self, code: u32) -> bool {
+        let Some(focus) = self.focus else { return false };
+        match code {
+            13 => self.save_details(),
+            9 => self.focus = Some(if focus == Field::Description { Field::Location } else { Field::Description }),
+            27 | 1 => self.focus = None,
+            8 | 46 | 37 | 39 | 36 | 35 => {
+                let Some(f) = self.field_mut() else { return false };
+                match code {
+                    8 => f.pop(),
+                    46 => f.delete(),
+                    37 | 39 => f.move_caret(code == 39),
+                    36 => f.home(),
+                    _ => f.end(),
+                }
+            }
+            _ => return false,
+        }
+        true
+    }
+
+    /// A copy, cut, paste or select command for the focused field. True when it was taken.
+    pub fn command(&mut self, command: Command) -> bool {
+        let clipboard = bifrost_app::kit::clipboard::text().unwrap_or_default();
+        let Some(f) = self.field_mut() else { return false };
+        if let Some(text) = f.command(command, &clipboard) {
+            bifrost_app::kit::clipboard::set_text(&text);
+        }
+        true
     }
 
     /// The announcements for new printer problems, each returned once: a title and a body.
@@ -216,6 +341,7 @@ impl PrintCenter {
                 self.list();
             }
         }
+        self.sync_fields();
         true
     }
 
@@ -279,6 +405,29 @@ impl PrintCenter {
     pub fn job_row(&self, i: usize) -> Rect {
         let d = self.detail_rect();
         Rect { x: d.x + 8.0, y: self.job_row_top() + i as f32 * JOB_ROW_PT, w: (d.w - 16.0).max(0.0), h: JOB_ROW_PT }
+    }
+
+    /// The left edge of the info pane's values (points).
+    fn info_x(&self) -> f32 {
+        self.detail_rect().x + PAD_PT + 110.0
+    }
+
+    /// The info pane's text field.
+    pub fn field_rect(&self, field: Field) -> Rect {
+        let d = self.detail_rect();
+        let w = (d.w - 2.0 * PAD_PT - 110.0).clamp(0.0, 320.0);
+        let row = if field == Field::Description { 0.0 } else { 1.0 };
+        Rect { x: self.info_x(), y: self.queue_top() + 8.0 + row * 36.0, w, h: 26.0 }
+    }
+
+    /// The info pane's Save button.
+    pub fn save_rect(&self) -> Rect {
+        Rect { x: self.info_x(), y: self.queue_top() + 80.0, w: 80.0, h: 26.0 }
+    }
+
+    /// The top of the info pane's read-only lines: under the fields when there are fields.
+    pub fn info_lines_top(&self) -> f32 {
+        self.queue_top() + if self.fields_shown() { 124.0 } else { 8.0 }
     }
 
     /// The left edges of the queue's columns: job, document, owner, pages, size, created and status.
@@ -349,6 +498,16 @@ impl PrintCenter {
             }
             return Target::Nothing;
         }
+        if self.fields_shown() {
+            for field in [Field::Description, Field::Location] {
+                if self.field_rect(field).contains(x, y) {
+                    return Target::Field(field);
+                }
+            }
+            if self.save_rect().contains(x, y) {
+                return Target::Save;
+            }
+        }
         if y >= self.job_row_top() && !self.model.show_info {
             let i = ((y - self.job_row_top()) / JOB_ROW_PT) as usize;
             if i < self.model.jobs.len() {
@@ -379,6 +538,11 @@ impl PrintCenter {
             TouchKind::Up => {
                 let released = self.hit(ui, x, y);
                 let pressed = std::mem::replace(&mut self.press, Target::Nothing);
+                if let (Target::Job(a), Target::Job(b)) = (pressed, released) {
+                    if a != b {
+                        return self.select_job_range(a, b);
+                    }
+                }
                 if released != pressed {
                     return false;
                 }
@@ -391,6 +555,17 @@ impl PrintCenter {
         }
     }
 
+    /// Chooses the jobs from row `a` to row `b`, both included, in either order (a drag over the rows).
+    pub fn select_job_range(&mut self, a: usize, b: usize) -> bool {
+        let (lo, hi) = (a.min(b), a.max(b));
+        let ids: Vec<i32> = self.model.jobs.iter().enumerate().filter(|(i, _)| (lo..=hi).contains(i)).map(|(_, j)| j.id).collect();
+        if ids.is_empty() {
+            return false;
+        }
+        self.model.selected_jobs = ids.into_iter().collect();
+        true
+    }
+
     /// Performs what a target asks for. True when the window should redraw.
     pub fn activate(&mut self, target: Target) -> bool {
         match target {
@@ -401,7 +576,16 @@ impl PrintCenter {
             Target::Printer(i) => {
                 let Some(name) = self.model.printers.get(i).map(|p| p.name.clone()) else { return false };
                 self.model.select_printer(name);
+                self.sync_fields();
                 self.list();
+                true
+            }
+            Target::Field(f) => {
+                self.focus = Some(f);
+                true
+            }
+            Target::Save => {
+                self.save_details();
                 true
             }
             Target::Job(i) => {
@@ -448,7 +632,14 @@ impl PrintCenter {
             B_REFRESH => self.list(),
             B_ADD => self.add_from_clipboard(),
             B_DELETE => self.delete_selected(),
-            B_INFO => self.model.show_info = !self.model.show_info,
+            B_INFO => {
+                self.model.show_info = !self.model.show_info;
+                if self.model.show_info {
+                    self.load_fields();
+                }
+                self.focus = None;
+            }
+            B_SAVE => self.save_details(),
             B_SHARE => {
                 let shared = self.model.selected_printer().filter(|p| !p.is_class).map(|p| !p.shared);
                 if let Some(shared) = shared {
@@ -498,7 +689,7 @@ impl PrintCenter {
                 items.push(item(B_DELETE, if pool { "Remove Printer Pool…" } else { "Remove Printer…" }, true));
                 items
             }
-            Target::Toolbar(_) | Target::Nothing => Vec::new(),
+            Target::Toolbar(_) | Target::Nothing | Target::Field(_) | Target::Save => Vec::new(),
         }
     }
 
@@ -794,6 +985,70 @@ mod tests {
         w.model.apply(Reply::Listed { printers: vec![jam], printer: None, jobs: vec![], offline: vec![] });
         assert_eq!(w.take_alerts(), vec![("Lab needs attention".to_string(), "Paper jam".to_string())]);
         assert!(w.take_alerts().is_empty());
+    }
+
+    #[test]
+    fn dragging_over_job_rows_chooses_the_range() {
+        let mut w = window();
+        w.model.jobs = vec![job(1, JobState::Pending), job(2, JobState::Pending), job(3, JobState::Pending)];
+        assert!(w.select_job_range(2, 0));
+        assert_eq!(w.model.selected_jobs.iter().copied().collect::<Vec<_>>(), vec![1, 2, 3]);
+        assert!(w.select_job_range(1, 1));
+        assert_eq!(w.model.selected_jobs.len(), 1);
+        w.model.jobs.clear();
+        assert!(!w.select_job_range(0, 1));
+    }
+
+    #[test]
+    fn the_info_fields_load_edit_and_save_the_details() {
+        let mut w = window();
+        w.model.printers[0].info = "Front desk".into();
+        w.model.printers[0].location = "Floor 2".into();
+        w.toolbar_action(B_INFO);
+        assert_eq!(w.description.to_string(), "Front desk");
+        assert_eq!(w.location.to_string(), "Floor 2");
+        assert!(!w.text("x"), "no field has the keyboard yet");
+        let r = w.field_rect(Field::Location);
+        assert_eq!(w.hit_body(r.x + 4.0, r.y + 4.0), Target::Field(Field::Location));
+        assert!(w.activate(Target::Field(Field::Location)));
+        assert!(w.text(" B"));
+        assert_eq!(w.location.to_string(), "Floor 2 B");
+        assert!(w.key(8));
+        assert_eq!(w.location.to_string(), "Floor 2 ");
+        assert!(w.key(9), "tab moves to the other field");
+        assert_eq!(w.focus, Some(Field::Description));
+        let s = w.save_rect();
+        assert_eq!(w.hit_body(s.x + 4.0, s.y + 4.0), Target::Save);
+        assert!(w.activate(Target::Save));
+        assert_eq!(w.in_flight, 1);
+        assert!(w.key(27));
+        assert_eq!(w.focus, None);
+        assert!(!w.key(8));
+    }
+
+    #[test]
+    fn a_pool_has_no_fields_and_saves_nothing() {
+        let mut w = window();
+        w.model.printers[0].is_class = true;
+        w.toolbar_action(B_INFO);
+        assert!(!w.fields_shown());
+        let r = w.field_rect(Field::Description);
+        assert_eq!(w.hit_body(r.x + 4.0, r.y + 4.0), Target::Nothing);
+        w.toolbar_action(B_SAVE);
+        assert_eq!(w.in_flight, 0);
+    }
+
+    #[test]
+    fn the_fields_follow_the_selected_printer_but_keep_an_edit_across_listings() {
+        let mut w = window();
+        w.model.printers[1].info = "Lab printer".into();
+        w.toolbar_action(B_INFO);
+        w.activate(Target::Field(Field::Description));
+        w.text("!");
+        w.sync_fields();
+        assert!(w.description.to_string().ends_with('!'), "a listing does not overwrite the edit");
+        w.activate(Target::Printer(1));
+        assert_eq!(w.description.to_string(), "Lab printer");
     }
 
     #[test]

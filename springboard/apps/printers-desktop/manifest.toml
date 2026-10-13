@@ -1,12 +1,12 @@
 id = "is.olibuijr.printers.desktop"
 name = "Print Center"
-version = "0.2.0"
+version = "0.3.0"
 exec = "bifrost-printers"
 icon = "icon.png"
 min_shell = "0.6.5"
-summary = "Lists the printers and their queues, pauses and resumes a printer, holds, releases or cancels a job, sets the default printer, adds a printer from a copied address and deletes one."
+summary = "Lists the printers, pools and their queues with state, supplies and problems, pauses and resumes a printer, holds, releases or cancels several jobs at once, prints dropped documents, edits a printer's details and shares or removes it."
 category = "Utilities"
 architecture = "x86_64-linux"
 kind = "system-app"
-permissions = []
+permissions = ["notifications", "documents"]
 window = "full-size"
