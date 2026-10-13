@@ -2168,8 +2168,8 @@ impl Shell {
     /// The display came on: inside the grace the screen returns as it was, after it the screen is locked.
     fn screen_woke(&mut self, t: f64) {
         let Some((off, before)) = self.grace_from.take() else { return };
-        let grace_ms = self.options().lock_grace_s as f64 * 1000.0;
-        self.screen = if t - off <= grace_ms { before } else { Screen::Lock };
+        let grace_s = self.options().lock_grace_s;
+        self.screen = if options::grace_lapsed(off, t, grace_s) { Screen::Lock } else { before };
     }
 
     /// Puts both pagers back on their first page and resets the Today View.

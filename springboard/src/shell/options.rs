@@ -27,6 +27,12 @@ pub const TRACKPAD_SECONDARY: [&str; 2] = ["Click in Bottom-Right Corner", "Clic
 pub const ALERT_SOUNDS: [&str; 4] = ["Bell", "Chime", "Pulse", "Tick"];
 
 /// The slider's 0..1 position for a speed multiplier.
+/// True once the display has been off for longer than the Require Password grace (`grace_s` seconds), at `now_ms`
+/// against the time it went off (both shell milliseconds).
+pub fn grace_lapsed(off_ms: f64, now_ms: f64, grace_s: u32) -> bool {
+    now_ms - off_ms > f64::from(grace_s) * 1000.0
+}
+
 pub fn speed_slider(speed: f32) -> f32 {
     ((speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN)).clamp(0.0, 1.0)
 }
@@ -274,6 +280,13 @@ impl Options {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_grace_lapses_after_its_seconds_and_at_once_for_immediately() {
+        assert!(grace_lapsed(1_000.0, 1_001.0, 0), "Immediately lapses on the next instant");
+        assert!(!grace_lapsed(1_000.0, 60_999.0, 60), "a minute is not over yet");
+        assert!(grace_lapsed(1_000.0, 61_001.0, 60), "a minute is over");
+    }
 
     #[test]
     fn defaults_and_round_trip() {
