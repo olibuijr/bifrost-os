@@ -17,7 +17,7 @@
 
 use crate::cups::{self, Client, CupsError};
 use crate::ipp::{tag, Value};
-use bifrost_render::cg::pdf::writer;
+use bifrost_render::cg::pdf::writer::{self, text_literal};
 use std::net::{SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -142,11 +142,83 @@ pub enum PrintError {
     Failed(String),
 }
 
-/// What a job prints: a file the app already has, or pages the app built (written as a PDF when the job runs).
+/// What a job prints: a file the app already has, pages the app built (written as a PDF when the job runs), or plain text
+/// laid out to the job's page (see [`text_pages`]).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Source {
     File(PathBuf),
     Pages { pages: Vec<PdfPage>, fonts: Vec<&'static str> },
+    Text(String),
+}
+
+/// The size plain text prints at, in points.
+pub const TEXT_SIZE: f32 = 11.0;
+
+/// Helvetica advance widths for the printable ASCII characters 32 to 126, in thousandths of an em (the standard face's
+/// metrics).
+const HELVETICA: [u16; 95] = [
+    278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, //
+    556, 556, 556, 556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, //
+    667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667,
+    667, 611, 278, 278, 278, 469, 556, 333, //
+    556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500,
+    500, 500, 334, 260, 334, 584,
+];
+
+/// The advance of a character in points at `size`. Characters outside printable ASCII count as a digit's width.
+fn advance(ch: char, size: f32) -> f32 {
+    let units = match ch {
+        ' '..='~' => HELVETICA[ch as usize - 32] as f32,
+        _ => 556.0,
+    };
+    units * size / 1000.0
+}
+
+/// One paragraph word-wrapped to `width` points. A word wider than a line is not broken: it runs past the edge.
+fn wrap(paragraph: &str, size: f32, width: f32) -> Vec<String> {
+    let space = advance(' ', size);
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    let mut line_w = 0.0;
+    for word in paragraph.split(' ') {
+        let word_w: f32 = word.chars().map(|c| advance(c, size)).sum();
+        if !line.is_empty() && line_w + space + word_w > width {
+            lines.push(std::mem::take(&mut line));
+            line_w = 0.0;
+        }
+        if !line.is_empty() {
+            line.push(' ');
+            line_w += space;
+        }
+        line.push_str(word);
+        line_w += word_w;
+    }
+    lines.push(line);
+    lines
+}
+
+/// Plain text laid out for `info`: Helvetica at `size` points, one line per line of `text` wrapped to the printable width,
+/// and pages of as many lines as the printable height holds. Tabs print as four spaces; line feeds start a new line.
+pub fn text_pages(text: &str, size: f32, info: &PrintInfo) -> Vec<PdfPage> {
+    let (left, top, width, height) = info.imageable();
+    let (w, h) = info.paper_size();
+    let leading = size * 1.25;
+    let per_page = ((height / leading).floor() as usize).max(1);
+    let normalized = text.replace('\t', "    ").replace('\r', "");
+    let lines: Vec<String> = normalized.split('\n').flat_map(|p| wrap(p, size, width)).collect();
+    lines
+        .chunks(per_page)
+        .map(|page| {
+            let mut content = Vec::new();
+            for (i, line) in page.iter().enumerate() {
+                let y = h - top - (i as f32 + 1.0) * leading;
+                content.extend(format!("BT /F0 {size} Tf {left:.2} {y:.2} Td ").into_bytes());
+                text_literal(line, &mut content);
+                content.extend(b" Tj ET\n");
+            }
+            PdfPage { width: w as f64, height: h as f64, content, images: Vec::new() }
+        })
+        .collect()
 }
 
 /// `NativePrintOperation`.
@@ -184,6 +256,16 @@ impl PrintOperation {
             options: Vec::new(),
         }
     }
+    /// A job that prints `text` in Helvetica, laid out for the job's page info when it runs (see [`text_pages`]).
+    pub fn text(job_name: impl Into<String>, text: impl Into<String>) -> Self {
+        PrintOperation {
+            source: Source::Text(text.into()),
+            info: PrintInfo::default(),
+            destination: Destination::Printer(None),
+            job_name: job_name.into(),
+            options: Vec::new(),
+        }
+    }
     pub fn with_info(mut self, info: PrintInfo) -> Self {
         self.info = info;
         self
@@ -205,6 +287,10 @@ impl PrintOperation {
                 Ok((document_format(path), data))
             }
             Source::Pages { pages, fonts } => Ok(("application/pdf", writer::write(pages, fonts))),
+            Source::Text(text) => {
+                let pages = text_pages(text, TEXT_SIZE, &self.info);
+                Ok(("application/pdf", writer::write(&pages, &["Helvetica"])))
+            }
         }
     }
     /// Runs the job. Returns the request id (`printer-job`) for a printer, or the saved path for Save as PDF.
@@ -346,5 +432,46 @@ mod tests {
         assert!(bytes.starts_with(b"%PDF-1.4"));
         assert!(String::from_utf8_lossy(&bytes).contains("/Count 2"));
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn helvetica_widths_cover_printable_ascii() {
+        assert_eq!(HELVETICA.len(), 95);
+        assert_eq!(advance('a', 1000.0), 556.0, "1000 pt makes one unit a point");
+        assert_eq!(advance('W', 1000.0), 944.0);
+        assert_eq!(advance('\u{e9}', 1000.0), 556.0, "outside ASCII counts as a digit");
+    }
+
+    #[test]
+    fn wrap_breaks_at_spaces_and_keeps_empty_paragraphs() {
+        // at 1000 pt a 'W' is 944 pt and a space 278 pt: "WW WW" does not fit on one 1000 pt line
+        assert_eq!(wrap("WW WW", 1000.0, 1000.0), vec!["WW".to_string(), "WW".to_string()]);
+        assert_eq!(wrap("a b", 11.0, 500.0), vec!["a b".to_string()]);
+        assert_eq!(wrap("", 11.0, 500.0), vec![String::new()]);
+    }
+
+    #[test]
+    fn text_pages_fill_pages_by_the_printable_height() {
+        let info = PrintInfo::default();
+        let (_, _, _, h) = info.imageable();
+        let per_page = (h / (TEXT_SIZE * 1.25)).floor() as usize;
+        let text = (0..per_page + 2).map(|i| format!("line {i}")).collect::<Vec<_>>().join("\n");
+        let pages = text_pages(&text, TEXT_SIZE, &info);
+        assert_eq!(pages.len(), 2);
+        assert_eq!((pages[0].width, pages[0].height), (595.0, 842.0));
+        let first = String::from_utf8_lossy(&pages[0].content).into_owned();
+        assert!(first.starts_with("BT /F0 11 Tf 72.00 "), "the first baseline sits inside the top margin");
+        assert!(first.contains("(line 0) Tj"));
+        assert!(String::from_utf8_lossy(&pages[1].content).contains("(line 51) Tj"), "the overflow lines start page 2");
+    }
+
+    #[test]
+    fn a_text_job_lays_out_for_its_page_info_when_it_runs() {
+        let op = PrintOperation::text("Notes", "hello").with_info(PrintInfo { orientation: Orientation::Landscape, ..Default::default() });
+        let (format, bytes) = op.document().unwrap();
+        assert_eq!(format, "application/pdf");
+        let text = String::from_utf8_lossy(&bytes).into_owned();
+        assert!(text.contains("/MediaBox [0 0 842 595]"));
+        assert!(text.contains("(hello) Tj"));
     }
 }
