@@ -302,6 +302,7 @@ pub mod compression;
 pub mod video_compression;
 pub mod pixel_buffer;
 pub mod display_link;
+pub mod texture_cache;
 pub use bifrost_ui::frame_clock;
 pub mod gpu_layer;
 pub mod offscreen;
