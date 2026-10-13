@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.7.0 — 2026-10-13
+
+- Edit menu: Undo (Cmd+Z), Redo (Cmd+Shift+Z), Copy, Paste, Duplicate and Delete; Paste reads the strokes Copy left on the pasteboard.
+- Arrange menu: Bring to Front, Send to Back and Arrange in Row.
+- The board is saved to the app's data folder a moment after each edit and loaded at the next launch.
+
 ## 1.6.4 — 2026-10-13
 
 - Shapes, transforms and fills use the shared path and scan converter; shape fills are antialiased.

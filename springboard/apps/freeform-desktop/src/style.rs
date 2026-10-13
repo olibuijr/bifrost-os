@@ -49,6 +49,46 @@ impl Default for Style {
     }
 }
 
+/// One style per line, for the saved board: `fill c1 c2 dashed shadow opacity shape` (fill is `none`, `solid` or
+/// `gradient`; colours are 8 hex digits).
+pub fn styles_to_text(styles: &[Style]) -> String {
+    let mut out = String::new();
+    for st in styles {
+        let (kind, a, b) = match st.fill {
+            Fill::None => ("none", 0, 0),
+            Fill::Solid(c) => ("solid", c, 0),
+            Fill::Gradient(c, d) => ("gradient", c, d),
+        };
+        out.push_str(&format!("{kind} {a:08x} {b:08x} {} {} {} {}\n", st.dashed as u8, st.shadow as u8, st.opacity, st.shape as u8));
+    }
+    out
+}
+
+/// Reads `styles_to_text` back. A malformed line gives the default look, so the styles stay in step with the strokes.
+pub fn styles_from_text(text: &str) -> Vec<Style> {
+    text.lines().map(|l| parse_style(l).unwrap_or_default()).collect()
+}
+
+fn parse_style(line: &str) -> Option<Style> {
+    let f: Vec<&str> = line.split_whitespace().collect();
+    if f.len() != 7 {
+        return None;
+    }
+    let a = u32::from_str_radix(f[1], 16).ok()?;
+    let b = u32::from_str_radix(f[2], 16).ok()?;
+    let fill = match f[0] {
+        "none" => Fill::None,
+        "solid" => Fill::Solid(a),
+        "gradient" => Fill::Gradient(a, b),
+        _ => return None,
+    };
+    let opacity: f32 = f[5].parse().ok()?;
+    if !opacity.is_finite() {
+        return None;
+    }
+    Some(Style { fill, dashed: f[3] == "1", shadow: f[4] == "1", opacity: opacity.clamp(0.0, 1.0), shape: f[6] == "1" })
+}
+
 /// A packed 0xAARRGGBB colour as the opaque pixel the canvas stores.
 fn opaque(c: u32) -> u32 {
     c | 0xFF00_0000
@@ -276,6 +316,22 @@ mod tests {
         paint_with_blur(&mut soft, cw, ch, &stroke, &st, 1.0, 3.0);
         assert_ne!(soft[37 * cw + 15], WHITE, "the blur spreads the shadow to the ring");
         assert!(soft[37 * cw + 15] & 255 > 200, "the spread is faint: one ninth of the shadow's opacity");
+    }
+
+    #[test]
+    fn styles_survive_a_text_round_trip() {
+        let looks = vec![
+            Style::default(),
+            Style { fill: Fill::Gradient(0xFF11_2233, 0xFF44_5566), dashed: true, shadow: true, opacity: 0.5, shape: true },
+            Style { fill: Fill::Solid(BLACK), ..Style::default() },
+        ];
+        assert_eq!(styles_from_text(&styles_to_text(&looks)), looks);
+    }
+
+    #[test]
+    fn a_bad_style_line_reads_as_the_default_look() {
+        let got = styles_from_text("garbage\n");
+        assert_eq!(got, vec![Style::default()]);
     }
 
     #[test]

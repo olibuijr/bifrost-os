@@ -191,6 +191,8 @@ pub struct Freeform {
     cw: usize,
     ch: usize,
     undo: Vec<Snapshot>,
+    /// What redo puts back: filled by undo, emptied by every new edit.
+    redo: Vec<Snapshot>,
     tool: Tool,
     color: usize,
     last: Option<(f32, f32)>,
@@ -229,7 +231,18 @@ pub struct Freeform {
     styles: Vec<Style>,
     /// The shape inspector panel is shown on the right of the board.
     inspector: bool,
+    /// Where the board is kept between runs (`board.txt` and `board.styles` in this folder), if anywhere.
+    store: Option<PathBuf>,
+    /// The board changed since it was last written.
+    unsaved: bool,
+    /// When (ms) the changed board is written: a moment after the last edit, so a stroke is not saved per point.
+    save_at: Option<f64>,
 }
+
+/// Milliseconds after the last edit that the board is written.
+const SAVE_DELAY_MS: f64 = 1000.0;
+/// How far a duplicate or a paste lands from the original, in points.
+const PASTE_OFFSET_PT: f32 = 16.0;
 
 /// Width of the ink a tool draws, in points.
 fn ink_width(tool: Tool) -> f32 {
@@ -292,6 +305,7 @@ impl Freeform {
             cw: 0,
             ch: 0,
             undo: Vec::new(),
+            redo: Vec::new(),
             tool: Tool::Pen,
             color: 0,
             last: None,
@@ -316,7 +330,185 @@ impl Freeform {
             tip_marked: false,
             styles: Vec::new(),
             inspector: false,
+            store: None,
+            unsaved: false,
+            save_at: None,
         }
+    }
+
+    /// Keeps the board in `dir` between runs and loads what an earlier run left there.
+    pub fn with_store(mut self, dir: PathBuf) -> Self {
+        if let Ok(text) = std::fs::read_to_string(dir.join("board.txt")) {
+            if let Ok(model) = Drawing::from_text(&text) {
+                let looks = std::fs::read_to_string(dir.join("board.styles")).map(|t| style::styles_from_text(&t)).unwrap_or_default();
+                self.model = model;
+                self.styles = looks;
+                self.sync_styles();
+            }
+        }
+        self.store = Some(dir);
+        self
+    }
+
+    /// Writes the board to the store folder. A board with no strokes removes the files.
+    fn write_board(&self) -> std::io::Result<()> {
+        let Some(dir) = &self.store else { return Ok(()) };
+        std::fs::create_dir_all(dir)?;
+        if self.model.is_empty() {
+            let _ = std::fs::remove_file(dir.join("board.txt"));
+            let _ = std::fs::remove_file(dir.join("board.styles"));
+            return Ok(());
+        }
+        let mut looks = self.styles.clone();
+        looks.resize(self.model.strokes().len(), Style::default());
+        springboard::shell::fsutil::write_atomic(&dir.join("board.styles"), style::styles_to_text(&looks).into_bytes())?;
+        springboard::shell::fsutil::write_atomic(&dir.join("board.txt"), self.model.to_text().into_bytes())
+    }
+
+    /// Notes an edit: the board is written `SAVE_DELAY_MS` after the last one.
+    fn mark_changed(&mut self) {
+        if self.store.is_some() {
+            self.unsaved = true;
+            self.save_at = Some(self.now + SAVE_DELAY_MS);
+        }
+    }
+
+    /// Writes a changed board at once (the app is quitting or leaving the foreground).
+    pub fn flush(&mut self) {
+        if self.unsaved {
+            self.unsaved = false;
+            self.save_at = None;
+            let _ = self.write_board();
+        }
+    }
+
+    pub fn can_undo(&self) -> bool {
+        !self.undo.is_empty()
+    }
+
+    pub fn can_redo(&self) -> bool {
+        !self.redo.is_empty()
+    }
+
+    pub fn has_selection(&self) -> bool {
+        self.selection.as_ref().is_some_and(|s| !s.is_empty())
+    }
+
+    /// Edit > Undo: the board goes back one step, and the step it left is kept for Redo.
+    pub fn undo_step(&mut self) {
+        let Some((canvas, model, looks)) = self.undo.pop() else { return };
+        self.sync_styles();
+        self.redo.push((std::mem::replace(&mut self.canvas, canvas), std::mem::replace(&mut self.model, model), std::mem::replace(&mut self.styles, looks)));
+        self.selection = None;
+        self.dirty = true;
+        self.mark_changed();
+    }
+
+    /// Edit > Redo: the step Undo took back is made again.
+    pub fn redo_step(&mut self) {
+        let Some((canvas, model, looks)) = self.redo.pop() else { return };
+        self.sync_styles();
+        self.undo.push((std::mem::replace(&mut self.canvas, canvas), std::mem::replace(&mut self.model, model), std::mem::replace(&mut self.styles, looks)));
+        self.selection = None;
+        self.dirty = true;
+        self.mark_changed();
+    }
+
+    /// Puts `copies` on the board as new strokes, moved by one paste offset, and selects them (one undo step).
+    fn add_copies(&mut self, ui: &Ui, copies: Vec<(Stroke, Style)>) {
+        if copies.is_empty() {
+            return;
+        }
+        self.push_undo();
+        self.sync_styles();
+        let base = self.model.strokes().len();
+        let n = copies.len();
+        let off = Affine::translate(ui.pt(PASTE_OFFSET_PT), ui.pt(PASTE_OFFSET_PT));
+        for (stroke, _) in copies.iter() {
+            let mut moved = stroke.clone();
+            moved.transform(off);
+            self.model.push(moved);
+        }
+        self.sync_styles();
+        for (i, (_, look)) in copies.iter().enumerate() {
+            self.styles[base + i] = *look;
+        }
+        self.selection = Some(Selection::from_indices((base..base + n).collect()));
+        self.tool = Tool::Lasso;
+        self.repaint(ui, None);
+        self.mark_changed();
+    }
+
+    /// Edit > Duplicate: a copy of the selected strokes, offset a little and selected.
+    pub fn duplicate_selection(&mut self, ui: &Ui) {
+        let Some(sel) = self.selection.clone() else { return };
+        self.sync_styles();
+        let copies: Vec<(Stroke, Style)> = self
+            .model
+            .strokes()
+            .iter()
+            .zip(self.styles.iter())
+            .enumerate()
+            .filter(|(i, _)| sel.contains_stroke(*i))
+            .map(|(_, (s, st))| (s.clone(), *st))
+            .collect();
+        self.add_copies(ui, copies);
+    }
+
+    /// Edit > Paste: strokes read from the pasteboard land on the board, selected.
+    pub fn paste_strokes(&mut self, ui: &Ui, strokes: &Drawing) {
+        let copies = strokes.strokes().iter().map(|s| (s.clone(), Style::default())).collect();
+        self.add_copies(ui, copies);
+    }
+
+    /// Arrange > Bring to Front / Send to Back: the selected strokes move to the top or the bottom of the drawing
+    /// order, keeping their own order. One undo step; nothing happens when they are there already.
+    pub fn reorder_selection(&mut self, ui: &Ui, front: bool) {
+        let Some(sel) = self.selection.clone() else { return };
+        self.sync_styles();
+        let total = self.model.strokes().len();
+        let (mut kept, mut moved): (Vec<(Stroke, Style)>, Vec<(Stroke, Style)>) = (Vec::new(), Vec::new());
+        for (i, (stroke, look)) in self.model.strokes().iter().zip(self.styles.iter()).enumerate() {
+            if sel.contains_stroke(i) {
+                moved.push((stroke.clone(), *look));
+            } else {
+                kept.push((stroke.clone(), *look));
+            }
+        }
+        let m = moved.len();
+        if m == 0 {
+            return;
+        }
+        let target: Vec<usize> = if front { (total - m..total).collect() } else { (0..m).collect() };
+        if sel.indices() == target.as_slice() {
+            return;
+        }
+        let ordered: Vec<(Stroke, Style)> = if front { kept.into_iter().chain(moved).collect() } else { moved.into_iter().chain(kept).collect() };
+        self.push_undo();
+        let (strokes, looks): (Vec<Stroke>, Vec<Style>) = ordered.into_iter().unzip();
+        self.model = Drawing::from_strokes(strokes);
+        self.styles = looks;
+        self.selection = Some(Selection::from_indices(target));
+        self.repaint(ui, None);
+        self.mark_changed();
+    }
+
+    /// Arrange > Arrange in Row, from the menu.
+    pub fn arrange_in_row(&mut self, ui: &Ui) {
+        self.arrange_selection(ui);
+        self.mark_changed();
+    }
+
+    /// Edit > Delete from the menu.
+    pub fn delete_selected(&mut self, ui: &Ui) {
+        self.delete_selection(ui);
+        self.mark_changed();
+    }
+
+    /// Edit > Copy from the menu.
+    pub fn copy_selected(&mut self) {
+        self.copy_selection();
+        self.dirty = true;
     }
 
     /// Whether the board has any strokes to export.
@@ -547,7 +739,8 @@ impl Freeform {
         if nw == self.cw && nh == self.ch && !self.canvas.is_empty() {
             return;
         }
-        let resized = !self.canvas.is_empty();
+        // a board loaded from the store has strokes but no picture yet: it is painted at the first allocation too
+        let resized = !self.canvas.is_empty() || !self.model.is_empty();
         let remap = |old: &Vec<u32>, ow: usize, oh: usize| {
             let mut px = vec![PAPER; nw * nh];
             for y in 0..oh.min(nh) {
@@ -562,7 +755,7 @@ impl Freeform {
         } else {
             self.canvas = remap(&self.canvas, self.cw, self.ch);
             let (ow, oh) = (self.cw, self.ch);
-            for snap in &mut self.undo {
+            for snap in self.undo.iter_mut().chain(self.redo.iter_mut()) {
                 snap.0 = remap(&snap.0, ow, oh);
             }
         }
@@ -584,6 +777,7 @@ impl Freeform {
             self.undo.remove(0);
         }
         self.undo.push((self.canvas.clone(), self.model.clone(), self.styles.clone()));
+        self.redo.clear();
     }
 
     /// Stamps a filled disc at canvas coordinates (x, y), in the live tool's ink.
@@ -892,14 +1086,7 @@ impl Freeform {
                     self.tool = Tool::Pen;
                 }
             }
-            Target::Undo => {
-                if let Some((canvas, model, looks)) = self.undo.pop() {
-                    self.canvas = canvas;
-                    self.model = model;
-                    self.styles = looks;
-                    self.selection = None;
-                }
-            }
+            Target::Undo => self.undo_step(),
             Target::Clear => {
                 self.push_undo();
                 self.canvas.iter_mut().for_each(|p| *p = PAPER);
@@ -919,6 +1106,9 @@ impl Freeform {
                 };
                 self.toast = Some((msg, self.now + 2500.0));
             }
+        }
+        if !matches!(t, Target::Inspector | Target::Copy | Target::Save | Target::Tool(_) | Target::Color(_)) {
+            self.mark_changed();
         }
         self.dirty = true;
     }
@@ -1017,6 +1207,9 @@ impl Freeform {
                 }
             }
             Event::Up(x, y) => {
+                if self.drawing || self.gesture_active() {
+                    self.mark_changed();
+                }
                 if self.drawing {
                     self.drawing = false;
                     self.last = None;
@@ -1035,6 +1228,9 @@ impl Freeform {
 
     pub fn tick(&mut self, _ui: &Ui, t: f64) -> bool {
         self.now = t;
+        if self.unsaved && !self.drawing && !self.gesture_active() && self.save_at.is_some_and(|at| t >= at) {
+            self.flush();
+        }
         if matches!(&self.toast, Some((_, until)) if t >= *until) {
             self.toast = None;
             self.dirty = true;
@@ -1043,7 +1239,11 @@ impl Freeform {
     }
 
     pub fn next_wake(&self, _t: f64) -> Option<f64> {
-        self.toast.as_ref().map(|(_, until)| *until)
+        let save = if self.unsaved { self.save_at } else { None };
+        match (self.toast.as_ref().map(|(_, until)| *until), save) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
     }
 
     /// The state line the tests compare (the SDK `App` trait has no describe hook).
@@ -1556,5 +1756,101 @@ mod model_tests {
         assert_eq!(&png[1..4], b"PNG");
         assert_eq!(u32::from_be_bytes([png[16], png[17], png[18], png[19]]) as usize, app.cw * 2);
         assert_eq!(u32::from_be_bytes([png[20], png[21], png[22], png[23]]) as usize, app.ch * 2);
+    }
+
+    #[test]
+    fn redo_makes_an_undone_step_again_and_a_new_edit_forgets_it() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        let top = app.canvas_top(&ui) as f32;
+        app.tool = Tool::Rectangle;
+        app.canvas_down(&ui, 10.0, top + 10.0);
+        app.canvas_up(&ui, 60.0, top + 40.0);
+        assert_eq!(app.model.strokes().len(), 1);
+        assert!(!app.can_redo());
+        app.push_undo();
+        app.model = Drawing::new();
+        app.undo_step();
+        assert!(app.can_redo(), "undo keeps the step it left");
+        app.redo_step();
+        assert!(app.model.is_empty(), "redo returns to the state undo left");
+        assert!(!app.can_redo());
+        app.undo_step();
+        app.push_undo();
+        assert!(!app.can_redo(), "a new edit clears redo");
+    }
+
+    #[test]
+    fn duplicate_adds_offset_copies_with_their_looks_and_selects_them() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.model = two_lines();
+        app.styles = vec![Style { dashed: true, ..Style::default() }, Style::default()];
+        app.selection = Some(Selection::from_indices(vec![0]));
+        app.duplicate_selection(&ui);
+        assert_eq!(app.model.strokes().len(), 3);
+        assert_eq!(app.model.strokes()[2].points[0].x, 5.0 + ui.pt(PASTE_OFFSET_PT));
+        assert!(app.styles[2].dashed, "the copy keeps the original's look");
+        assert_eq!(app.selection.as_ref().unwrap().indices(), &[2]);
+        app.undo_step();
+        assert_eq!(app.model.strokes().len(), 2, "one undo step");
+    }
+
+    #[test]
+    fn paste_puts_the_strokes_on_the_board_selected() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.paste_strokes(&ui, &two_lines());
+        assert_eq!(app.model.strokes().len(), 2);
+        assert_eq!(app.selection.as_ref().unwrap().indices(), &[0, 1]);
+        assert_eq!(app.tool, Tool::Lasso);
+    }
+
+    #[test]
+    fn bring_to_front_and_send_to_back_reorder_the_selection() {
+        let ui = test_ui();
+        let mut app = board(&ui);
+        app.model = two_lines();
+        app.styles = vec![Style { shadow: true, ..Style::default() }, Style::default()];
+        app.selection = Some(Selection::from_indices(vec![0]));
+        app.reorder_selection(&ui, true);
+        assert_eq!(app.model.strokes()[1].points[0].x, 5.0, "the first stroke is now on top");
+        assert!(app.styles[1].shadow, "its look went with it");
+        assert_eq!(app.selection.as_ref().unwrap().indices(), &[1]);
+        let undo = app.undo.len();
+        app.reorder_selection(&ui, true);
+        assert_eq!(app.undo.len(), undo, "already on top: nothing happens");
+        app.reorder_selection(&ui, false);
+        assert_eq!(app.model.strokes()[0].points[0].x, 5.0);
+        assert_eq!(app.selection.as_ref().unwrap().indices(), &[0]);
+    }
+
+    #[test]
+    fn the_board_is_written_after_an_edit_and_loaded_by_the_next_run() {
+        let ui = test_ui();
+        let dir = std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/target/test-freeform-board"));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut app = Freeform::new(&ui, 200, 200).with_store(dir.clone());
+        app.ensure_canvas(&ui);
+        app.model = two_lines();
+        app.styles = vec![Style { dashed: true, ..Style::default() }, Style::default()];
+        app.now = 0.0;
+        app.mark_changed();
+        assert_eq!(app.next_wake(0.0), Some(SAVE_DELAY_MS), "the save is scheduled");
+        assert!(!dir.join("board.txt").exists(), "not written before the delay");
+        app.tick(&ui, SAVE_DELAY_MS);
+        assert!(dir.join("board.txt").exists());
+
+        let mut again = Freeform::new(&ui, 200, 200).with_store(dir.clone());
+        again.ensure_canvas(&ui);
+        assert_eq!(again.model.strokes().len(), 2);
+        assert!(again.styles[0].dashed);
+        assert!(again.canvas.iter().any(|&p| p != PAPER), "the loaded strokes are painted");
+
+        again.model = Drawing::new();
+        again.mark_changed();
+        again.flush();
+        assert!(!dir.join("board.txt").exists(), "an empty board leaves no file");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

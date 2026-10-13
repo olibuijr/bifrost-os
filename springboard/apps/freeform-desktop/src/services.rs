@@ -25,6 +25,7 @@ const MAX_PENDING: usize = 64;
 enum Req {
     Cursor,
     Copy,
+    Paste,
     Screens,
 }
 
@@ -39,6 +40,8 @@ pub struct Services {
     asked_scale: f32,
     /// The main display's backing scale, once the shell has said.
     backing: Option<f32>,
+    /// The strokes a Paste read from the pasteboard, waiting for the app (`take_pasted`).
+    pasted: Option<Drawing>,
 }
 
 impl Services {
@@ -94,6 +97,17 @@ impl Services {
         self.track(id, Req::Copy);
     }
 
+    /// Paste: asks the general board for the app's own stroke text. The strokes arrive with the reply (`take_pasted`).
+    pub fn paste(&mut self, ctx: &Ctx) {
+        let id = Board::general().data(ctx, STROKES_UTI);
+        self.track(id, Req::Paste);
+    }
+
+    /// The strokes a Paste read, once.
+    pub fn take_pasted(&mut self) -> Option<Drawing> {
+        self.pasted.take()
+    }
+
     /// The reply to one of our calls. True when the call was ours, so the app takes it.
     pub fn reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
         let Some(at) = self.pending.iter().position(|(id, _)| *id == request) else { return false };
@@ -107,6 +121,13 @@ impl Services {
                 if let Err(e) = result {
                     ctx.log(&format!("freeform: pasteboard: {e}"));
                 }
+            }
+            Req::Paste => {
+                // a board without our stroke type (an error or an empty reply) pastes nothing
+                self.pasted = pb::decode_data(result)
+                    .and_then(|bytes| String::from_utf8(bytes).ok())
+                    .and_then(|text| Drawing::from_text(&text).ok())
+                    .filter(|d| !d.is_empty());
             }
             Req::Cursor => {
                 if let Err(e) = result {
@@ -242,6 +263,35 @@ mod tests {
         assert!(body.contains("\"general\""), "the shared clipboard board");
         assert!(body.contains("public.png"), "a PNG representation");
         assert!(body.contains(STROKES_UTI), "the app's own representation");
+    }
+
+    fn hex(bytes: &[u8]) -> String {
+        bytes.iter().map(|b| format!("{b:02x}")).collect()
+    }
+
+    #[test]
+    fn paste_asks_for_the_stroke_type_and_a_reply_with_strokes_is_kept_once() {
+        let ctx = test_ctx(1.0);
+        let mut s = Services::default();
+        s.paste(&ctx);
+        let (id, service, method, body) = calls(&ctx).remove(0);
+        assert_eq!((service.as_str(), method.as_str()), ("pasteboard", "data"));
+        assert!(body.contains(STROKES_UTI));
+        let text = one_stroke().to_text();
+        assert!(s.reply(&ctx, id, &Ok(Json::Str(hex(text.as_bytes())))));
+        let got = s.take_pasted().expect("the strokes were read");
+        assert_eq!(got.strokes().len(), 1);
+        assert!(s.take_pasted().is_none(), "taken once");
+    }
+
+    #[test]
+    fn a_paste_with_no_strokes_on_the_board_pastes_nothing() {
+        let ctx = test_ctx(1.0);
+        let mut s = Services::default();
+        s.paste(&ctx);
+        let (id, ..) = calls(&ctx).remove(0);
+        assert!(s.reply(&ctx, id, &Ok(Json::Null)));
+        assert!(s.take_pasted().is_none());
     }
 
     #[test]
