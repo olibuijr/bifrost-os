@@ -1,5 +1,18 @@
 # BifrOSt desktop improvement review — 2026-10-08
 
+> Status 2026-10-13 (shell 0.7.25): this review is history, written against shell 0.4.13 with labwc as the compositor.
+> - Ranks 1 to 6 had first implementations by 0.4.15 (see the follow-up below) and the idle work continued through the
+>   Snow Leopard rounds (`docs/snow-leopard.md`: shell idle CPU 0.03 % to 0.1 %, about 1 to 2 wakeups/s). An idle `draw()`
+>   still costs a dirty frame (`docs/handoff-backlog.md`).
+> - Rank 3 (pixel pipeline): the GPU presenter and the Rust window server `bifrost-wm` replaced the labwc path
+>   (`docs/window-server.md`, `docs/gpu-first.md`, `docs/zero-copy-scanout.md`).
+> - Rank 5: the tablet-style status bar is gone; the desktop has a menu bar, Control Center and dock.
+> - Rank 7: `shell/mod.rs` is 4,610 lines, `settings.rs` 3,774 and `desk.rs` 2,599 (2026-10-13), so the files grew. The
+>   plan to split the shell is `docs/shell-decomposition.md`.
+> - Rank 8: Browser 0.2.1 moved the font out of the HTML and replaced Stop with Reload; later versions made the reload
+>   button a Stop button while a page loads (Browser changelog 0.13.x). The app is at 0.14.1.
+> - File names such as `bin/shell.rs` and `shell/desk.rs` are relative to `springboard/src/`.
+
 Read-only code/runtime review on Midget, shell 0.4.13. No release or runtime configuration change performed for this review.
 
 ## Current evidence
