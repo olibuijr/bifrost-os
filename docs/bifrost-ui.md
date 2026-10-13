@@ -2461,7 +2461,37 @@ Apple reference: `AVAudioSession` (`setCategory(_:mode:options:)`, `setActive(_:
   the other modes and options (`interruptSpokenAudioAndMixWithOthers`, `allowBluetooth`) are not modelled. Rows stay
   partial until a Midget check.
 
+Routes, inputs and service resets (added in sprint 11):
+
+- `current_route(client)` returns a `RouteDescription` (`inputs`, `outputs` of `PortDescription` with `port_type`,
+  `port_name`, `uid`). The output follows the hub route unless the client forced the speaker.
+- `available_inputs`, `set_available_inputs`, `set_preferred_input(Some(uid))` and `preferred_input`. A preferred
+  input must be listed; it is cleared when the device goes away.
+- `override_output_port(client, PortOverride::Speaker)` posts an `Override` route change to that client only;
+  `PortOverride::None` posts `RouteConfigurationChange`. Repeating the same override is not a change.
+- `media_services_were_reset` posts `SessionEvent::MediaServicesWereReset` to every client and deactivates all
+  sessions; apps rebuild their audio objects and activate again.
+- `RouteChange` still carries the previous `Route` only, not a full previous `RouteDescription`.
+
 Tests: unit tests in `sdk/src/audio_session.rs` (not run in this round).
+
+## AVFAudio: recorder and per-source mixing (`bifrost_ui::audio_recorder`, `bifrost_ui::playback_arbiter`)
+
+Apple reference: `AVAudioRecorder` and `AVAudioMixing`. `AudioRecorder` takes `Settings` (`AVFormatIDKey` linear PCM
+only, `AVSampleRateKey`, `AVNumberOfChannelsKey`) and is fed capture blocks with `push`. Its device clock advances with
+the input, so `record_at(time)` starts mid-block when the clock reaches `time`, and `record_for(seconds)` stops and
+truncates at the duration. `pause` drops blocks until `record` resumes; `wav_bytes` always returns one continuous
+16-bit WAV. Input is converted with `pcm_convert` (channel remap, linear resampler). Metering
+(`set_metering_enabled`, `average_power`, `peak_power`) is per output channel over the latest block, in decibels with
+0 at full scale and -160 for silence.
+
+`Arbiter` keeps `volume` (0 to 1) and `pan` (-1 to 1) per participant and `mix` sums stereo sources with an
+equal-power pan that is unity at the centre, then clamps to -1..1. Players already have rate, pan and fade
+(`audio_player`).
+
+Not done: no capture device feeds the recorder, the arbiter mix is not in `audiod`, the shell does not call
+`set_route` or `media_services_were_reset`, and the engine output node is not tied to the real output path. Rows stay
+partial until a Midget check. Tests: unit tests in both files (not run in this round).
 
 ## Image analysis: subject lifting and Visual Look Up (`bifrost_app::image_analysis`)
 

@@ -77,12 +77,55 @@ pub enum SessionEvent {
     Interruption { kind: InterruptionType, should_resume: bool },
     /// `routeChangeNotification` with the route before the change.
     RouteChange { reason: RouteChangeReason, previous: Route },
+    /// `mediaServicesWereResetNotification`: the audio service restarted; the app must rebuild its audio objects and
+    /// activate its session again.
+    MediaServicesWereReset,
+}
+
+/// `AVAudioSession.Port` (the kinds of port modelled).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PortType {
+    BuiltInMic,
+    HeadsetMic,
+    BuiltInSpeaker,
+    Headphones,
+    UsbAudio,
+}
+
+/// `AVAudioSessionPortDescription`: one input or output port.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PortDescription {
+    pub port_type: PortType,
+    pub port_name: String,
+    pub uid: String,
+}
+
+impl PortDescription {
+    pub fn new(port_type: PortType, port_name: &str, uid: &str) -> Self {
+        PortDescription { port_type, port_name: port_name.to_string(), uid: uid.to_string() }
+    }
+}
+
+/// `AVAudioSessionRouteDescription`: the active input and output ports.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct RouteDescription {
+    pub inputs: Vec<PortDescription>,
+    pub outputs: Vec<PortDescription>,
+}
+
+/// `AVAudioSession.PortOverride`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PortOverride {
+    None,
+    Speaker,
 }
 
 /// Why a call was refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SessionError {
     UnknownClient,
+    /// `setPreferredInput` named a port that is not in `availableInputs`.
+    UnknownPort,
 }
 
 #[derive(Clone, Debug)]
@@ -94,6 +137,7 @@ struct Session {
     ducked: bool,
     /// The client whose activation interrupted this session, while it is interrupted.
     interrupted_by: Option<String>,
+    output_override: PortOverride,
     events: Vec<SessionEvent>,
 }
 
@@ -108,11 +152,18 @@ impl Session {
 pub struct SessionHub {
     sessions: BTreeMap<String, Session>,
     route: Route,
+    inputs: Vec<PortDescription>,
+    preferred_input: Option<String>,
 }
 
 impl SessionHub {
     pub fn new() -> Self {
-        SessionHub { sessions: BTreeMap::new(), route: Route::Speaker }
+        SessionHub {
+            sessions: BTreeMap::new(),
+            route: Route::Speaker,
+            inputs: vec![PortDescription::new(PortType::BuiltInMic, "Microphone", "builtin-mic")],
+            preferred_input: None,
+        }
     }
 
     /// Registers a client with `SoloAmbient`, the default mode and no options, inactive.
@@ -124,6 +175,7 @@ impl SessionHub {
             active: false,
             ducked: false,
             interrupted_by: None,
+            output_override: PortOverride::None,
             events: Vec::new(),
         });
     }
@@ -253,6 +305,78 @@ impl SessionHub {
         self.route = route;
         for s in self.sessions.values_mut() {
             s.events.push(SessionEvent::RouteChange { reason, previous });
+        }
+    }
+
+    /// `availableInputs`.
+    pub fn available_inputs(&self) -> &[PortDescription] {
+        &self.inputs
+    }
+
+    /// Replaces the input ports (a device was plugged or unplugged). A preferred input that disappeared is cleared.
+    pub fn set_available_inputs(&mut self, inputs: Vec<PortDescription>) {
+        self.inputs = inputs;
+        if let Some(uid) = &self.preferred_input {
+            if !self.inputs.iter().any(|p| &p.uid == uid) {
+                self.preferred_input = None;
+            }
+        }
+    }
+
+    /// `setPreferredInput(_:)`. `None` returns to the default input. The port must be in `availableInputs`.
+    pub fn set_preferred_input(&mut self, uid: Option<&str>) -> Result<(), SessionError> {
+        if let Some(uid) = uid {
+            if !self.inputs.iter().any(|p| p.uid == uid) {
+                return Err(SessionError::UnknownPort);
+            }
+        }
+        self.preferred_input = uid.map(str::to_string);
+        Ok(())
+    }
+
+    /// `preferredInput`.
+    pub fn preferred_input(&self) -> Option<&PortDescription> {
+        let uid = self.preferred_input.as_deref()?;
+        self.inputs.iter().find(|p| p.uid == uid)
+    }
+
+    /// `overrideOutputAudioPort(_:)`. Forcing the speaker posts an `Override` route change to the client; clearing the
+    /// override posts `RouteConfigurationChange`.
+    pub fn override_output_port(&mut self, client: &str, port: PortOverride) -> Result<(), SessionError> {
+        let previous = self.effective_route(client)?;
+        let s = self.sessions.get_mut(client).ok_or(SessionError::UnknownClient)?;
+        if s.output_override == port {
+            return Ok(());
+        }
+        s.output_override = port;
+        let reason = if port == PortOverride::Speaker { RouteChangeReason::Override } else { RouteChangeReason::RouteConfigurationChange };
+        s.events.push(SessionEvent::RouteChange { reason, previous });
+        Ok(())
+    }
+
+    fn effective_route(&self, client: &str) -> Result<Route, SessionError> {
+        let s = self.sessions.get(client).ok_or(SessionError::UnknownClient)?;
+        Ok(if s.output_override == PortOverride::Speaker { Route::Speaker } else { self.route })
+    }
+
+    /// `currentRoute` for a client: the output follows the hub route unless the client forced the speaker; the input is
+    /// the preferred input when set, else the first available one.
+    pub fn current_route(&self, client: &str) -> Result<RouteDescription, SessionError> {
+        let output = match self.effective_route(client)? {
+            Route::Speaker => PortDescription::new(PortType::BuiltInSpeaker, "Speaker", "builtin-speaker"),
+            Route::Headphones => PortDescription::new(PortType::Headphones, "Headphones", "headphones"),
+        };
+        let input = self.preferred_input().or_else(|| self.inputs.first()).cloned();
+        Ok(RouteDescription { inputs: input.into_iter().collect(), outputs: vec![output] })
+    }
+
+    /// The audio service restarted: every client is told to rebuild its audio state, and every session becomes inactive.
+    pub fn media_services_were_reset(&mut self) {
+        for s in self.sessions.values_mut() {
+            s.active = false;
+            s.ducked = false;
+            s.interrupted_by = None;
+            s.events.push(SessionEvent::MediaServicesWereReset);
         }
     }
 
@@ -470,5 +594,62 @@ mod tests {
     fn route_change_raw_values_match_the_framework() {
         assert_eq!(RouteChangeReason::NewDeviceAvailable as u8, 1);
         assert_eq!(RouteChangeReason::NoSuitableRouteForCategory as u8, 7);
+    }
+
+    #[test]
+    fn current_route_follows_the_hub_route() {
+        let mut h = hub(&["a"]);
+        assert_eq!(h.current_route("a").unwrap().outputs[0].port_type, PortType::BuiltInSpeaker);
+        h.set_route(Route::Headphones);
+        let r = h.current_route("a").unwrap();
+        assert_eq!(r.outputs[0].port_type, PortType::Headphones);
+        assert_eq!(r.inputs[0].port_type, PortType::BuiltInMic);
+        assert_eq!(h.current_route("x"), Err(SessionError::UnknownClient));
+    }
+
+    #[test]
+    fn preferred_input_must_be_available_and_is_dropped_when_it_goes() {
+        let mut h = hub(&["a"]);
+        let usb = PortDescription::new(PortType::UsbAudio, "USB", "usb-1");
+        assert_eq!(h.set_preferred_input(Some("usb-1")), Err(SessionError::UnknownPort));
+        let mic = h.available_inputs()[0].clone();
+        h.set_available_inputs(vec![mic.clone(), usb.clone()]);
+        h.set_preferred_input(Some("usb-1")).unwrap();
+        assert_eq!(h.preferred_input(), Some(&usb));
+        assert_eq!(h.current_route("a").unwrap().inputs, vec![usb]);
+        h.set_available_inputs(vec![mic]);
+        assert_eq!(h.preferred_input(), None);
+        h.set_preferred_input(None).unwrap();
+    }
+
+    #[test]
+    fn overriding_to_the_speaker_posts_an_override_event_for_that_client_only() {
+        let mut h = hub(&["a", "b"]);
+        h.set_route(Route::Headphones);
+        h.take_events("a");
+        h.take_events("b");
+        h.override_output_port("a", PortOverride::Speaker).unwrap();
+        assert_eq!(h.current_route("a").unwrap().outputs[0].port_type, PortType::BuiltInSpeaker);
+        assert_eq!(h.current_route("b").unwrap().outputs[0].port_type, PortType::Headphones);
+        assert_eq!(
+            h.take_events("a"),
+            vec![SessionEvent::RouteChange { reason: RouteChangeReason::Override, previous: Route::Headphones }]
+        );
+        assert!(h.take_events("b").is_empty());
+        h.override_output_port("a", PortOverride::Speaker).unwrap();
+        assert!(h.take_events("a").is_empty(), "repeating the override is not a change");
+        h.override_output_port("a", PortOverride::None).unwrap();
+        assert_eq!(h.current_route("a").unwrap().outputs[0].port_type, PortType::Headphones);
+    }
+
+    #[test]
+    fn media_services_reset_notifies_everyone_and_deactivates() {
+        let mut h = hub(&["a", "b"]);
+        playback(&mut h, "a");
+        h.set_active("a", true).unwrap();
+        h.media_services_were_reset();
+        assert!(!h.is_active("a"));
+        assert_eq!(h.take_events("a").last(), Some(&SessionEvent::MediaServicesWereReset));
+        assert_eq!(h.take_events("b"), vec![SessionEvent::MediaServicesWereReset]);
     }
 }
