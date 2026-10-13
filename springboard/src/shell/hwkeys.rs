@@ -506,6 +506,11 @@ impl Shell {
                     c.key(out);
                 }
             }
+            AppId::Photos => {
+                if let Some(p) = self.photos.as_mut() {
+                    p.key(&self.ui, out, t);
+                }
+            }
             _ => {}
         }
         vec![]
@@ -538,6 +543,10 @@ impl Shell {
                 let stepped = match app {
                     AppId::Settings => self.settings.as_mut().is_some_and(|s| s.back_page(t)),
                     AppId::Files => self.files.as_mut().is_some_and(|f| f.hw_back(t)),
+                    AppId::Photos => match self.photos.as_mut() {
+                        Some(p) => p.hw_back(&self.ui, t),
+                        None => false,
+                    },
                     AppId::Browser => match self.browser.as_mut() {
                         Some(b) if b.keyboard_shown() => {
                             b.key(&self.ui, Out::Hide, t);
