@@ -1,7 +1,8 @@
-//! The Print Center's model: what the scheduler reported, which printer and job are selected, which toolbar actions
+//! The Print Center's model: what the scheduler reported, which printer and jobs are selected, which toolbar actions
 //! apply to them, and the words for their states. Pure: `worker.rs` talks to the scheduler and `window.rs` draws.
 
-use bifrost_app::controls::cups::{Job, JobState, Printer, PrinterState};
+use bifrost_app::controls::cups::{Job, JobState, Printer, PrinterState, Supply};
+use std::collections::BTreeSet;
 
 /// A change the person asks for. Each one maps to one scheduler operation in `worker.rs`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -11,6 +12,12 @@ pub enum Action {
     SetDefault,
     /// Removes the queue. The window asks twice before it sends this.
     Delete,
+    /// Removes a printer pool; the printers in it stay.
+    DeletePool,
+    /// Offers the queue to other machines (`true`) or stops offering it (`false`).
+    SetShared(bool),
+    /// Changes the description and the location people see for the queue.
+    SetDetails { info: String, location: String },
     CancelJob(i32),
     HoldJob(i32),
     ReleaseJob(i32),
@@ -24,6 +31,10 @@ impl Action {
             Action::Resume => "Printer resumed",
             Action::SetDefault => "Default printer changed",
             Action::Delete => "Printer deleted",
+            Action::DeletePool => "Printer pool removed",
+            Action::SetShared(true) => "Printer shared",
+            Action::SetShared(false) => "Sharing stopped",
+            Action::SetDetails { .. } => "Printer details saved",
             Action::CancelJob(_) => "Job canceled",
             Action::HoldJob(_) => "Job held",
             Action::ReleaseJob(_) => "Job released",
@@ -34,27 +45,39 @@ impl Action {
 /// What the worker sends back for one request.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Reply {
-    /// The printers, and the queue of `printer` when the request named one.
-    Listed { printers: Vec<Printer>, printer: Option<String>, jobs: Vec<Job> },
+    /// The printers, the queue of `printer` when the request named one, and the names of the printers that did not
+    /// answer a connection to their device address.
+    Listed { printers: Vec<Printer>, printer: Option<String>, jobs: Vec<Job>, offline: Vec<String> },
     /// An action was accepted.
     Done(&'static str),
     /// A printer was added under this queue name.
     Added(String),
+    /// A document was sent to the printer; this is its name.
+    Printed(String),
     /// The scheduler could not be reached or refused the request.
     Failed(String),
 }
 
-/// The window's data: the printers, the selected printer and its queue, and the selected job.
+/// The window's data: the printers, the selected printer and its queue, and the selected jobs.
 #[derive(Default, Debug)]
 pub struct Model {
     pub printers: Vec<Printer>,
     pub selected: Option<String>,
     pub jobs: Vec<Job>,
-    pub selected_job: Option<i32>,
+    /// The jobs chosen in the queue; the job actions apply to all of them.
+    pub selected_jobs: BTreeSet<i32>,
     /// The last result, shown in the footer.
     pub status: String,
     /// The printer whose removal the person has asked for once; a second request removes it.
     pub confirm_delete: Option<String>,
+    /// Printers whose device did not answer the last probe.
+    pub offline: BTreeSet<String>,
+    /// The info pane replaces the queue.
+    pub show_info: bool,
+    /// `printer|problem` pairs already announced, so a problem is announced once until it clears.
+    alerted: BTreeSet<String>,
+    /// Announcements not yet posted: (printer, problem).
+    alerts: Vec<(String, String)>,
 }
 
 impl Model {
@@ -62,14 +85,15 @@ impl Model {
     /// queue that is selected now (a selection made while the request was in flight asks again).
     pub fn apply(&mut self, reply: Reply) {
         match reply {
-            Reply::Listed { printers, printer, jobs } => {
+            Reply::Listed { printers, printer, jobs, offline } => {
                 self.printers = printers;
+                self.offline = offline.into_iter().collect();
+                self.collect_alerts();
                 self.selected = pick_selection(&self.printers, self.selected.as_deref());
                 if printer == self.selected {
                     self.jobs = jobs;
-                    if self.selected_job.is_some_and(|id| !self.jobs.iter().any(|j| j.id == id)) {
-                        self.selected_job = None;
-                    }
+                    let ids: BTreeSet<i32> = self.jobs.iter().map(|j| j.id).collect();
+                    self.selected_jobs.retain(|id| ids.contains(id));
                 }
             }
             Reply::Done(text) => self.status = text.to_string(),
@@ -77,20 +101,58 @@ impl Model {
                 self.status = format!("Added printer \"{name}\"");
                 self.select_printer(name);
             }
+            Reply::Printed(name) => self.status = format!("Sent \"{name}\" to the printer"),
             Reply::Failed(text) => self.status = text,
         }
+    }
+
+    /// Notes the error-level problems that were not announced yet, and forgets the ones that cleared.
+    fn collect_alerts(&mut self) {
+        let mut live = BTreeSet::new();
+        for p in &self.printers {
+            for problem in printer_problems(p) {
+                if problem.level != Level::Error {
+                    continue;
+                }
+                let key = format!("{}|{}", p.name, problem.text);
+                if !self.alerted.contains(&key) {
+                    self.alerts.push((p.name.clone(), problem.text.clone()));
+                }
+                live.insert(key);
+            }
+        }
+        self.alerted = live;
+    }
+
+    /// The announcements to post now: a printer name and what is wrong. Each is returned once.
+    pub fn take_alerts(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.alerts)
     }
 
     /// Selects a printer. Its queue is empty until the next listing.
     pub fn select_printer(&mut self, name: String) {
         self.selected = Some(name);
         self.jobs.clear();
-        self.selected_job = None;
+        self.selected_jobs.clear();
         self.confirm_delete = None;
     }
 
+    /// Chooses this job alone.
     pub fn select_job(&mut self, id: i32) {
-        self.selected_job = Some(id);
+        self.selected_jobs.clear();
+        self.selected_jobs.insert(id);
+    }
+
+    /// Adds the job to the choice, or takes it out when it is in.
+    pub fn toggle_job(&mut self, id: i32) {
+        if !self.selected_jobs.remove(&id) {
+            self.selected_jobs.insert(id);
+        }
+    }
+
+    /// Chooses every job of the queue.
+    pub fn select_all_jobs(&mut self) {
+        self.selected_jobs = self.jobs.iter().map(|j| j.id).collect();
     }
 
     pub fn selected_printer(&self) -> Option<&Printer> {
@@ -98,9 +160,18 @@ impl Model {
         self.printers.iter().find(|p| p.name == name)
     }
 
-    pub fn selected_job(&self) -> Option<&Job> {
-        let id = self.selected_job?;
-        self.jobs.iter().find(|j| j.id == id)
+    /// The chosen jobs, in queue order.
+    pub fn chosen_jobs(&self) -> Vec<&Job> {
+        self.jobs.iter().filter(|j| self.selected_jobs.contains(&j.id)).collect()
+    }
+
+    /// The ids of the chosen jobs the rule `allows`.
+    pub fn chosen_ids(&self, allows: fn(&Job) -> bool) -> Vec<i32> {
+        self.chosen_jobs().into_iter().filter(|j| allows(j)).map(|j| j.id).collect()
+    }
+
+    pub fn is_offline(&self, name: &str) -> bool {
+        self.offline.contains(name)
     }
 }
 
@@ -171,9 +242,86 @@ pub fn job_state_name(state: JobState) -> &'static str {
     }
 }
 
-/// The second line of a printer row: its state, then whether it is the default, then how many jobs wait.
-pub fn printer_summary(p: &Printer) -> String {
-    let mut parts = vec![printer_state_name(p.state).to_string()];
+/// How serious a printer problem is, from `printer-state-reasons`: a `-report` keyword informs, a `-warning` asks for
+/// attention soon, an `-error` stops the printer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Level {
+    Report,
+    Warning,
+    Error,
+}
+
+/// One problem in plain words.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Problem {
+    pub level: Level,
+    pub text: String,
+}
+
+/// The sentence for one `printer-state-reasons` keyword, or `None` for a keyword that carries nothing a person can act on.
+pub fn reason_problem(keyword: &str) -> Option<Problem> {
+    let (base, level) = if let Some(b) = keyword.strip_suffix("-error") {
+        (b, Level::Error)
+    } else if let Some(b) = keyword.strip_suffix("-warning") {
+        (b, Level::Warning)
+    } else if let Some(b) = keyword.strip_suffix("-report") {
+        (b, Level::Report)
+    } else {
+        (keyword, Level::Report)
+    };
+    let text = match base {
+        "media-jam" => "Paper jam",
+        "media-empty" => "Out of paper",
+        "media-needed" => "Paper needed",
+        "media-low" => "Paper is running low",
+        "toner-low" => "Toner is running low",
+        "toner-empty" => "Out of toner",
+        "marker-supply-low" => "Ink or toner is running low",
+        "marker-supply-empty" => "Out of ink or toner",
+        "marker-waste-almost-full" => "Waste container is almost full",
+        "marker-waste-full" => "Waste container is full",
+        "door-open" | "cover-open" => "A door or cover is open",
+        "input-tray-missing" => "Paper tray is missing",
+        "output-tray-missing" => "Output tray is missing",
+        "output-area-full" => "Output tray is full",
+        "offline" => "Printer is offline",
+        "timed-out" => "Printer is not responding",
+        "connecting-to-device" => "Connecting to the printer",
+        "spool-area-full" => "Print queue is full",
+        "shutdown" => "Printer is shutting down",
+        _ if level == Level::Error => {
+            return Some(Problem { level, text: format!("Needs attention: {}", base.replace('-', " ")) });
+        }
+        _ => return None,
+    };
+    Some(Problem { level, text: text.to_string() })
+}
+
+/// The problems of a printer, most serious first, each sentence once.
+pub fn printer_problems(p: &Printer) -> Vec<Problem> {
+    let mut problems: Vec<Problem> = p.state_reasons.iter().filter_map(|r| reason_problem(r)).collect();
+    problems.sort_by(|a, b| b.level.cmp(&a.level));
+    let mut seen = BTreeSet::new();
+    problems.retain(|p| seen.insert(p.text.clone()));
+    problems
+}
+
+/// The line under a printer's name when something is wrong: the sentences joined, with the worst level.
+pub fn problem_line(p: &Printer) -> Option<(Level, String)> {
+    let problems = printer_problems(p);
+    let level = problems.first()?.level;
+    Some((level, problems.iter().map(|p| p.text.as_str()).collect::<Vec<_>>().join(", ")))
+}
+
+/// The second line of a printer row: its state (or Offline), whether it is a pool, shared or the default, then how many
+/// jobs wait.
+pub fn row_summary(p: &Printer, offline: bool) -> String {
+    let mut parts = vec![if offline { "Offline".to_string() } else { printer_state_name(p.state).to_string() }];
+    if p.is_class {
+        parts.push(format!("Pool of {}", p.members.len()));
+    } else if p.shared {
+        parts.push("Shared".into());
+    }
     if p.is_default {
         parts.push("Default".into());
     }
@@ -183,14 +331,91 @@ pub fn printer_summary(p: &Printer) -> String {
     parts.join(", ")
 }
 
-/// The line under the printer's name in the detail pane: make and model, location and the scheduler's message.
+/// The summary of a printer that answers.
+pub fn printer_summary(p: &Printer) -> String {
+    row_summary(p, false)
+}
+
+/// The line under the printer's name in the detail pane: the members of a pool, make and model, location and the
+/// scheduler's message.
 pub fn printer_detail(p: &Printer) -> String {
-    [p.make_and_model.as_str(), p.location.as_str(), p.state_message.as_str()]
+    let members = if p.is_class && !p.members.is_empty() { format!("Members: {}", p.members.join(", ")) } else { String::new() };
+    [members.as_str(), p.make_and_model.as_str(), p.location.as_str(), p.state_message.as_str()]
         .iter()
         .filter(|s| !s.is_empty())
         .copied()
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+/// The label and value pairs of the info pane: what the person can read about the queue.
+pub fn info_lines(p: &Printer, offline: bool) -> Vec<(String, String)> {
+    let mut lines = vec![("Status".to_string(), if offline { "Offline".to_string() } else { printer_state_name(p.state).to_string() })];
+    if let Some((_, problem)) = problem_line(p) {
+        lines.push(("Needs attention".into(), problem));
+    }
+    let mut add = |label: &str, value: &str| {
+        if !value.is_empty() {
+            lines.push((label.to_string(), value.to_string()));
+        }
+    };
+    add("Description", &p.info);
+    add("Location", &p.location);
+    add("Model", &p.make_and_model);
+    add("Address", &p.device_uri);
+    if p.is_class {
+        add("Members", &p.members.join(", "));
+    } else {
+        add("Sharing", if p.shared { "Shared with other computers" } else { "Not shared" });
+    }
+    add("Default", if p.is_default { "Yes" } else { "No" });
+    lines
+}
+
+/// The words beside a supply bar: its name and level.
+pub fn supply_text(s: &Supply) -> String {
+    match s.level {
+        Some(l) => format!("{} {l}%", s.name),
+        None => s.name.clone(),
+    }
+}
+
+/// The colour of a supply as red, green and blue, from `#RRGGBB`.
+pub fn supply_rgb(color: &str) -> Option<(u8, u8, u8)> {
+    let hex = color.strip_prefix('#')?;
+    if hex.len() != 6 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let part = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
+    Some((part(0)?, part(2)?, part(4)?))
+}
+
+/// The host and port to try a connection to for a device address, or `None` for an address that names no network host
+/// (USB, a local socket, a service name that is looked up by the scheduler).
+pub fn probe_target(device_uri: &str) -> Option<(String, u16)> {
+    let (scheme, rest) = device_uri.split_once("://")?;
+    let default_port: u16 = match scheme {
+        "ipp" | "ipps" => 631,
+        "socket" => 9100,
+        "http" => 80,
+        "https" => 443,
+        "lpd" => 515,
+        _ => return None,
+    };
+    let authority = rest.split(['/', '?']).next()?;
+    let authority = authority.rsplit('@').next()?;
+    let (host, port) = if let Some(inner) = authority.strip_prefix('[') {
+        let (h, tail) = inner.split_once(']')?;
+        (h, tail.strip_prefix(':').and_then(|p| p.parse().ok()).unwrap_or(default_port))
+    } else if let Some((h, p)) = authority.rsplit_once(':') {
+        (h, p.parse().ok()?)
+    } else {
+        (authority, default_port)
+    };
+    if host.is_empty() {
+        return None;
+    }
+    Some((host.to_string(), port))
 }
 
 /// A job's size for its column: kilobytes, or "" when the scheduler did not report one.
@@ -199,6 +424,104 @@ pub fn size_text(kb: i32) -> String {
         format!("{kb} KB")
     } else {
         String::new()
+    }
+}
+
+/// A job's page count for its column, or "" when the scheduler does not know it yet.
+pub fn pages_text(j: &Job) -> String {
+    if j.pages > 0 {
+        j.pages.to_string()
+    } else {
+        String::new()
+    }
+}
+
+/// The sentence for one `job-state-reasons` keyword, `None` when the state word already says it.
+pub fn job_reason_text(keyword: &str) -> Option<&'static str> {
+    Some(match keyword {
+        "cups-remote-canceled" => "Canceled on server",
+        "cups-remote-stopped" => "Paused on server",
+        "cups-remote-aborted" => "Failed on server",
+        "cups-held-for-authentication" | "job-hold-until-authentication" => "Held for authentication",
+        "job-canceled-by-user" => "Canceled by user",
+        "job-canceled-at-device" => "Canceled at the printer",
+        "aborted-by-system" => "Stopped by the system",
+        "printer-stopped" => "Printer is paused",
+        "document-format-error" => "Unsupported document",
+        "job-completed-with-errors" => "Completed with errors",
+        "resources-are-not-ready" => "Waiting for paper or supplies",
+        _ => return None,
+    })
+}
+
+/// The words of a job's Status column: the page being printed, a reason such as "Canceled on server", else the state.
+pub fn job_status_text(j: &Job) -> String {
+    if j.state == JobState::Processing && j.pages > 0 {
+        return format!("Printing {} of {}", (j.pages_done + 1).min(j.pages), j.pages);
+    }
+    j.reasons.iter().find_map(|r| job_reason_text(r)).map_or_else(|| job_state_name(j.state).to_string(), str::to_string)
+}
+
+/// How far a printing job is, from 0 to 1: the scheduler's percent, else the pages done. `None` for a job that is not
+/// printing.
+pub fn job_progress(j: &Job) -> Option<f32> {
+    if !matches!(j.state, JobState::Processing | JobState::ProcessingStopped) {
+        return None;
+    }
+    if let Some(p) = j.progress {
+        return Some(f32::from(p) / 100.0);
+    }
+    (j.pages > 0).then(|| (j.pages_done as f32 / j.pages as f32).clamp(0.0, 1.0))
+}
+
+const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/// When a job was submitted, for its column: the time today, else the date. `created` and `now` are Unix seconds and
+/// `offset` is the zone's offset from UTC in seconds. "" when the scheduler gave no time.
+pub fn created_text(created: i32, offset: i32, now: i64) -> String {
+    if created <= 0 {
+        return String::new();
+    }
+    let local = i64::from(created) + i64::from(offset);
+    let days = local.div_euclid(86_400);
+    let secs = local.rem_euclid(86_400);
+    let (hour, minute) = (secs / 3600, secs % 3600 / 60);
+    let today = (now + i64::from(offset)).div_euclid(86_400);
+    if days == today {
+        return format!("{hour:02}:{minute:02}");
+    }
+    let (year, month, day) = bifrost_app::calendar_system::civil_from_days(days);
+    let (this_year, _, _) = bifrost_app::calendar_system::civil_from_days(today);
+    let name = MONTHS[(month.clamp(1, 12) - 1) as usize];
+    if year == this_year {
+        format!("{name} {day}, {hour:02}:{minute:02}")
+    } else {
+        format!("{name} {day}, {year}")
+    }
+}
+
+/// The Dock badge: the jobs waiting on all printers, or "" for none. Pools are left out, their jobs sit on a member.
+pub fn badge_text(printers: &[Printer]) -> String {
+    let total: i32 = printers.iter().filter(|p| !p.is_class).map(|p| p.queued_jobs.max(0)).sum();
+    if total > 0 {
+        total.to_string()
+    } else {
+        String::new()
+    }
+}
+
+/// The document type to send a file as, from its extension. A type the scheduler detects itself goes as octet-stream.
+pub fn mime_for(name: &str) -> &'static str {
+    let ext = name.rsplit_once('.').map_or("", |(_, e)| e).to_ascii_lowercase();
+    match ext.as_str() {
+        "pdf" => "application/pdf",
+        "ps" => "application/postscript",
+        "txt" | "log" | "md" | "text" => "text/plain",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "tif" | "tiff" => "image/tiff",
+        _ => "application/octet-stream",
     }
 }
 
@@ -219,11 +542,20 @@ mod tests {
             info: String::new(),
             device_uri: String::new(),
             queued_jobs: queued,
+            state_reasons: Vec::new(),
+            supplies: Vec::new(),
+            shared: false,
+            members: Vec::new(),
+            is_class: false,
         }
     }
 
     fn job(id: i32, state: JobState) -> Job {
-        Job { id, uri: String::new(), state, name: format!("doc{id}"), user: "olibuijr".into(), size_kb: 12 }
+        Job { id, uri: String::new(), state, name: format!("doc{id}"), user: "olibuijr".into(), size_kb: 12, reasons: Vec::new(), created: 0, pages: 0, pages_done: 0, progress: None }
+    }
+
+    fn listed(printers: Vec<Printer>, printer: Option<&str>, jobs: Vec<Job>) -> Reply {
+        Reply::Listed { printers, printer: printer.map(str::to_string), jobs, offline: vec![] }
     }
 
     #[test]
@@ -267,35 +599,45 @@ mod tests {
     #[test]
     fn a_listing_keeps_the_selected_printer_and_its_queue() {
         let mut m = Model::default();
-        m.apply(Reply::Listed {
-            printers: vec![printer("Office", true, PrinterState::Idle, 1), printer("Lab", false, PrinterState::Idle, 0)],
-            printer: None,
-            jobs: vec![],
-        });
+        m.apply(listed(vec![printer("Office", true, PrinterState::Idle, 1), printer("Lab", false, PrinterState::Idle, 0)], None, vec![]));
         assert_eq!(m.selected.as_deref(), Some("Office"));
-        m.apply(Reply::Listed {
-            printers: vec![printer("Office", true, PrinterState::Idle, 2)],
-            printer: Some("Office".into()),
-            jobs: vec![job(4, JobState::Pending), job(5, JobState::PendingHeld)],
-        });
+        m.apply(listed(vec![printer("Office", true, PrinterState::Idle, 2)], Some("Office"), vec![job(4, JobState::Pending), job(5, JobState::PendingHeld)]));
         assert_eq!(m.jobs.len(), 2);
         m.select_job(5);
-        assert_eq!(m.selected_job().map(|j| j.name.as_str()), Some("doc5"));
+        assert_eq!(m.chosen_jobs().first().map(|j| j.name.as_str()), Some("doc5"));
         // the job is released from the queue: the next listing clears the selection
-        m.apply(Reply::Listed {
-            printers: vec![printer("Office", true, PrinterState::Idle, 1)],
-            printer: Some("Office".into()),
-            jobs: vec![job(4, JobState::Pending)],
-        });
-        assert_eq!(m.selected_job, None);
+        m.apply(listed(vec![printer("Office", true, PrinterState::Idle, 1)], Some("Office"), vec![job(4, JobState::Pending)]));
+        assert!(m.selected_jobs.is_empty());
+    }
+
+    #[test]
+    fn several_jobs_can_be_chosen_and_the_actions_apply_to_each_that_allows_them() {
+        let mut m = Model::default();
+        m.apply(listed(
+            vec![printer("Office", true, PrinterState::Idle, 3)],
+            Some("Office"),
+            vec![job(1, JobState::Pending), job(2, JobState::Pending), job(3, JobState::PendingHeld)],
+        ));
+        m.select_all_jobs();
+        assert_eq!(m.selected_jobs.len(), 3);
+        assert_eq!(m.chosen_ids(can_hold), vec![1, 2]);
+        assert_eq!(m.chosen_ids(can_release), vec![3]);
+        assert_eq!(m.chosen_ids(can_cancel), vec![1, 2, 3]);
+        m.toggle_job(2);
+        assert_eq!(m.chosen_ids(can_hold), vec![1]);
+        m.toggle_job(2);
+        assert!(m.selected_jobs.contains(&2));
+        m.select_job(3);
+        assert_eq!(m.selected_jobs.len(), 1, "choosing one job drops the others");
     }
 
     #[test]
     fn a_queue_listed_for_another_printer_is_ignored() {
         let mut m = Model::default();
-        m.apply(Reply::Listed { printers: vec![printer("Office", true, PrinterState::Idle, 0), printer("Lab", false, PrinterState::Idle, 0)], printer: None, jobs: vec![] });
+        let two = || vec![printer("Office", true, PrinterState::Idle, 0), printer("Lab", false, PrinterState::Idle, 0)];
+        m.apply(listed(two(), None, vec![]));
         m.select_printer("Lab".into());
-        m.apply(Reply::Listed { printers: vec![printer("Office", true, PrinterState::Idle, 0), printer("Lab", false, PrinterState::Idle, 0)], printer: Some("Office".into()), jobs: vec![job(1, JobState::Pending)] });
+        m.apply(listed(two(), Some("Office"), vec![job(1, JobState::Pending)]));
         assert!(m.jobs.is_empty());
         assert_eq!(m.selected.as_deref(), Some("Lab"));
     }
@@ -321,7 +663,164 @@ mod tests {
         let mut m = Model::default();
         m.apply(Reply::Done(Action::HoldJob(3).done()));
         assert_eq!(m.status, "Job held");
+        m.apply(Reply::Printed("a.pdf".into()));
+        assert_eq!(m.status, "Sent \"a.pdf\" to the printer");
         m.apply(Reply::Failed("printing service unreachable".into()));
         assert_eq!(m.status, "printing service unreachable");
+    }
+
+    #[test]
+    fn reasons_become_sentences_with_a_level() {
+        assert_eq!(reason_problem("media-jam-error"), Some(Problem { level: Level::Error, text: "Paper jam".into() }));
+        assert_eq!(reason_problem("toner-low-warning").map(|p| p.level), Some(Level::Warning));
+        assert_eq!(reason_problem("offline-report").map(|p| p.text), Some("Printer is offline".into()));
+        assert_eq!(reason_problem("media-empty-error").map(|p| p.text), Some("Out of paper".into()));
+        assert_eq!(reason_problem("door-open-error").map(|p| p.text), Some("A door or cover is open".into()));
+        assert_eq!(reason_problem("cups-ipp-conformance-failure-report"), None);
+        assert_eq!(reason_problem("odd-thing-error").map(|p| p.text), Some("Needs attention: odd thing".into()));
+    }
+
+    #[test]
+    fn problems_are_sorted_worst_first_and_joined_for_the_line() {
+        let mut p = printer("Lab", false, PrinterState::Idle, 0);
+        assert_eq!(problem_line(&p), None);
+        p.state_reasons = vec!["toner-low-warning".into(), "media-jam-error".into(), "media-jam-error".into(), "nothing-to-say-report".into()];
+        let problems = printer_problems(&p);
+        assert_eq!(problems.len(), 2);
+        assert_eq!(problems[0].text, "Paper jam");
+        assert_eq!(problem_line(&p), Some((Level::Error, "Paper jam, Toner is running low".into())));
+    }
+
+    #[test]
+    fn an_error_is_announced_once_until_it_clears() {
+        let mut m = Model::default();
+        let mut jammed = printer("Lab", false, PrinterState::Stopped, 0);
+        jammed.state_reasons = vec!["media-jam-error".into(), "toner-low-warning".into()];
+        m.apply(listed(vec![jammed.clone()], None, vec![]));
+        assert_eq!(m.take_alerts(), vec![("Lab".to_string(), "Paper jam".to_string())], "warnings are not announced");
+        m.apply(listed(vec![jammed.clone()], None, vec![]));
+        assert!(m.take_alerts().is_empty());
+        m.apply(listed(vec![printer("Lab", false, PrinterState::Idle, 0)], None, vec![]));
+        m.apply(listed(vec![jammed], None, vec![]));
+        assert_eq!(m.take_alerts().len(), 1, "a jam that returns is announced again");
+    }
+
+    #[test]
+    fn rows_say_offline_pool_and_shared() {
+        let mut p = printer("Lab", true, PrinterState::Idle, 1);
+        assert_eq!(row_summary(&p, true), "Offline, Default, 1 in queue");
+        p.shared = true;
+        assert_eq!(row_summary(&p, false), "Idle, Shared, Default, 1 in queue");
+        p.is_class = true;
+        p.members = vec!["a".into(), "b".into()];
+        assert_eq!(row_summary(&p, false), "Idle, Pool of 2, Default, 1 in queue");
+        assert_eq!(printer_detail(&p), "Members: a, b");
+        let mut m = Model::default();
+        m.apply(Reply::Listed { printers: vec![p], printer: None, jobs: vec![], offline: vec!["Lab".into()] });
+        assert!(m.is_offline("Lab"));
+        assert!(!m.is_offline("Other"));
+    }
+
+    #[test]
+    fn supplies_read_as_text_and_colour() {
+        let black = Supply { name: "Black".into(), level: Some(80), color: "#000000".into() };
+        assert_eq!(supply_text(&black), "Black 80%");
+        assert_eq!(supply_text(&Supply { name: "Cyan".into(), level: None, color: String::new() }), "Cyan");
+        assert_eq!(supply_rgb("#00FFFF"), Some((0, 255, 255)));
+        assert_eq!(supply_rgb("00FFFF"), None);
+        assert_eq!(supply_rgb("#00FF"), None);
+        assert_eq!(supply_rgb("#00FFGG"), None);
+    }
+
+    #[test]
+    fn the_info_pane_lists_what_is_known() {
+        let mut p = printer("Lab", true, PrinterState::Idle, 0);
+        p.make_and_model = "HP LaserJet".into();
+        p.location = "Floor 2".into();
+        p.shared = true;
+        p.state_reasons = vec!["media-empty-error".into()];
+        let lines = info_lines(&p, false);
+        let get = |k: &str| lines.iter().find(|(l, _)| l == k).map(|(_, v)| v.as_str());
+        assert_eq!(get("Status"), Some("Idle"));
+        assert_eq!(get("Needs attention"), Some("Out of paper"));
+        assert_eq!(get("Model"), Some("HP LaserJet"));
+        assert_eq!(get("Sharing"), Some("Shared with other computers"));
+        assert_eq!(get("Description"), None, "empty values are left out");
+        assert_eq!(info_lines(&p, true)[0].1, "Offline");
+    }
+
+    #[test]
+    fn device_addresses_give_a_host_and_port_to_probe() {
+        assert_eq!(probe_target("ipp://printer.local/ipp/print"), Some(("printer.local".into(), 631)));
+        assert_eq!(probe_target("socket://192.168.1.20:9100"), Some(("192.168.1.20".into(), 9100)));
+        assert_eq!(probe_target("socket://192.168.1.20"), Some(("192.168.1.20".into(), 9100)));
+        assert_eq!(probe_target("ipps://user@host:8631/x"), Some(("host".into(), 8631)));
+        assert_eq!(probe_target("ipp://[fe80::1]:632/ipp"), Some(("fe80::1".into(), 632)));
+        assert_eq!(probe_target("usb://HP/LaserJet"), None);
+        assert_eq!(probe_target("dnssd://Printer._ipp._tcp.local/"), None);
+        assert_eq!(probe_target("ipp:///x"), None);
+        assert_eq!(probe_target("ipp://host:bad/x"), None);
+        assert_eq!(probe_target(""), None);
+    }
+
+    #[test]
+    fn a_job_status_names_the_page_or_the_reason() {
+        let mut j = job(1, JobState::Processing);
+        assert_eq!(job_status_text(&j), "Printing");
+        j.pages = 10;
+        j.pages_done = 3;
+        assert_eq!(job_status_text(&j), "Printing 4 of 10");
+        j.pages_done = 10;
+        assert_eq!(job_status_text(&j), "Printing 10 of 10");
+        let mut c = job(2, JobState::Canceled);
+        c.reasons = vec!["cups-remote-canceled".into()];
+        assert_eq!(job_status_text(&c), "Canceled on server");
+        let mut h = job(3, JobState::PendingHeld);
+        h.reasons = vec!["job-hold-until-specified".into()];
+        assert_eq!(job_status_text(&h), "Held");
+        h.reasons = vec!["cups-held-for-authentication".into()];
+        assert_eq!(job_status_text(&h), "Held for authentication");
+    }
+
+    #[test]
+    fn progress_comes_from_the_percent_or_the_pages() {
+        let mut j = job(1, JobState::Processing);
+        assert_eq!(job_progress(&j), None);
+        j.pages = 4;
+        j.pages_done = 1;
+        assert_eq!(job_progress(&j), Some(0.25));
+        j.progress = Some(60);
+        assert_eq!(job_progress(&j), Some(0.6));
+        assert_eq!(job_progress(&job(2, JobState::Pending)), None);
+        assert_eq!(pages_text(&j), "4");
+        assert_eq!(pages_text(&job(3, JobState::Pending)), "");
+    }
+
+    #[test]
+    fn submitted_times_show_the_clock_today_and_the_date_before() {
+        // 2026-10-13 12:00:00 UTC
+        let now = 1_791_892_800_i64;
+        assert_eq!(created_text(0, 0, now), "");
+        assert_eq!(created_text((now - 3600) as i32, 0, now), "11:00");
+        assert_eq!(created_text((now - 3600) as i32, 3600, now), "12:00", "the zone offset moves the clock");
+        assert_eq!(created_text((now - 86_400) as i32, 0, now), "Oct 12, 12:00");
+        assert_eq!(created_text((now - 400 * 86_400) as i32, 0, now), "Sep 8, 2025");
+    }
+
+    #[test]
+    fn the_badge_counts_the_waiting_jobs_but_not_those_of_pools() {
+        let mut pool = printer("Floor", false, PrinterState::Idle, 5);
+        pool.is_class = true;
+        assert_eq!(badge_text(&[printer("a", false, PrinterState::Idle, 2), printer("b", false, PrinterState::Idle, 1), pool]), "3");
+        assert_eq!(badge_text(&[printer("a", false, PrinterState::Idle, 0)]), "");
+    }
+
+    #[test]
+    fn documents_are_sent_with_a_type_from_their_extension() {
+        assert_eq!(mime_for("Report.PDF"), "application/pdf");
+        assert_eq!(mime_for("notes.txt"), "text/plain");
+        assert_eq!(mime_for("photo.jpeg"), "image/jpeg");
+        assert_eq!(mime_for("archive.xyz"), "application/octet-stream");
+        assert_eq!(mime_for("noext"), "application/octet-stream");
     }
 }

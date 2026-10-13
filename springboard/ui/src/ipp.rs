@@ -23,7 +23,9 @@ pub mod op {
     pub const CUPS_GET_PRINTERS: u16 = 0x4002;
     pub const CUPS_ADD_MODIFY_PRINTER: u16 = 0x4003;
     pub const CUPS_DELETE_PRINTER: u16 = 0x4004;
-    pub const CUPS_SET_DEFAULT: u16 = 0x4005;
+    pub const CUPS_GET_CLASSES: u16 = 0x4005;
+    pub const CUPS_DELETE_CLASS: u16 = 0x4007;
+    pub const CUPS_SET_DEFAULT: u16 = 0x400A;
 }
 
 /// Group delimiter tags (RFC 8010 section 3.5.1).
@@ -197,6 +199,16 @@ impl Group {
 
     pub fn boolean(&self, name: &str) -> Option<bool> {
         self.value(name).and_then(Value::as_bool)
+    }
+
+    /// Every text value of a multi-valued attribute (`printer-state-reasons`, `marker-names`).
+    pub fn texts(&self, name: &str) -> Vec<&str> {
+        self.attribute(name).map_or_else(Vec::new, |a| a.values.iter().filter_map(Value::as_str).collect())
+    }
+
+    /// Every integer value of a multi-valued attribute (`marker-levels`).
+    pub fn ints(&self, name: &str) -> Vec<i32> {
+        self.attribute(name).map_or_else(Vec::new, |a| a.values.iter().filter_map(Value::as_int).collect())
     }
 }
 

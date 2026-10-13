@@ -510,6 +510,11 @@ mod tests {
             info: String::new(),
             device_uri: String::new(),
             queued_jobs: 0,
+            state_reasons: Vec::new(),
+            supplies: Vec::new(),
+            shared: false,
+            members: Vec::new(),
+            is_class: false,
         }
     }
 
