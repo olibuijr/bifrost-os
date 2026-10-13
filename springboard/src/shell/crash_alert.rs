@@ -20,9 +20,14 @@ pub const REPORT_LINES: usize = 8;
 /// The file in the data dir that Report writes the report to.
 pub const REPORT_FILE: &str = "last_crash_report.txt";
 
-/// Whether an exit status (see `apphost::Status::Exited`) is a failure: any code but 0.
+/// Whether an exit status (see `apphost::Status::Exited`) is a failure: any code but 0, except the signals something
+/// outside sends to stop an app (SIGHUP, SIGINT, SIGKILL, SIGTERM: a quit, a force quit, the memory killer), which the
+/// reference platform does not report as "quit unexpectedly" either.
 pub fn is_crash(code: i32) -> bool {
-    code != 0
+    match signal_of(code) {
+        Some(sig) => !matches!(sig, 1 | 2 | 9 | 15),
+        None => code != 0,
+    }
 }
 
 /// The signal a status stands for: `128 + n` for the signal numbers 1 to 64.
@@ -189,6 +194,9 @@ mod tests {
         assert!(is_crash(139), "a segfault");
         assert!(is_crash(134), "an abort");
         assert!(!is_crash(0), "a clean exit is not a crash");
+        assert!(is_crash(1), "a failing exit code is");
+        assert!(!is_crash(143), "SIGTERM is a quit from outside, not a crash");
+        assert!(!is_crash(137), "SIGKILL (force quit, the memory killer) is not a crash");
         assert_eq!(signal_of(139), Some(11));
         assert_eq!(signal_of(1), None, "an ordinary exit code is not a signal");
         assert_eq!(reason(139), "signal 11 (SIGSEGV)");

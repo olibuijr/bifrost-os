@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.22 — 2026-10-13
+
+- An app stopped from outside (SIGHUP, SIGINT, SIGKILL, SIGTERM) no longer gets the "quit unexpectedly" alert. On the desktop that alert sat under the app windows, unseen, and forced a full-screen CPU repaint every frame: Browser scrolling at 165 Hz dropped to 17-29 ms frames after any app was closed that way.
+
 ## 0.7.21 — 2026-10-13
 
 - Suspend attempts run on a short-lived thread each, so an idle shell holds no suspend thread (17 threads at idle).
