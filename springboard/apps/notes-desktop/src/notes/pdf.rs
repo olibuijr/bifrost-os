@@ -147,7 +147,8 @@ mod tests {
     /// The byte offsets listed in the cross-reference table, in object order.
     fn xref_offsets(pdf: &[u8]) -> Vec<usize> {
         let text = String::from_utf8_lossy(pdf);
-        let start = text.rfind("xref\n").unwrap();
+        // "\nxref\n" not "xref\n": the trailer's "startxref\n" also ends in "xref\n"
+        let start = text.rfind("\nxref\n").unwrap() + 1;
         text[start..].lines().skip(3).take_while(|l| l.ends_with(" n ")).map(|l| l[..10].parse().unwrap()).collect()
     }
 
