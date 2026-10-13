@@ -6,7 +6,7 @@ component is written against; when code and this document disagree, fix one of t
 
 ## Why the desktop feels slow today
 
-Measured from the code (0.5.44):
+Measured from the code at 0.5.44 (the cause of the rebuild; the shared-memory path described here is now the fallback):
 
 1. An SDK app rasterises its whole window on the CPU (`bifrost_render::Surface`) into a `memfd` buffer.
 2. It sends the buffer to the shell over `SOCK_SEQPACKET` (`docs/apps.md`, "Frames").
@@ -144,9 +144,11 @@ Smithay handles protocols, the DRM/KMS backend, libinput and libseat; rendering 
   applied at frame start, `Tree::presentation(t)` composited, events sent.
 - `input.rs`: libinput configuration (acceleration, natural scrolling, tap), gestures (pinch, swipe, hold), kinetic
   scrolling, key repeat; input goes straight to the focused surface.
-- Session features: foreign-toplevel list, screencopy, cursor shapes, xdg-activation, output management,
-  idle/power, session lock, keybindings (tiling, Super+Space, Alt+Tab), server-side decorations for third-party
-  apps, XWayland.
+- Session features (done, `docs/window-server.md`): foreign-toplevel list, screencopy and ext-image-copy-capture (GLES
+  readback for DRM and headless, none on the Vulkan scanout), cursor shapes, xdg-activation, idle/power, session lock,
+  compositor key bindings (`keybindings.rs`: Super+Space, Super+A, Alt+Tab, Alt+F4, Ctrl+Super+arrows), server-side
+  decorations for third-party apps, XWayland, material recipes (`bifrost_material_v1`). Output management is open: one
+  connector is driven today.
 
 ### SDK (`springboard/sdk`)
 
@@ -170,7 +172,9 @@ Every component adds its timings to `tools/bench.py --midget` and `docs/perf-his
 
 ## Switch-over
 
-Main stays releasable. The new path is selected by `/etc/bifrost/compositor = bifrost-wm` and `BIFROST_DIRECT=1`
-until the acceptance list (`docs/wayland-desktop.md`) and the budgets above pass on Midget; then the session starts
-`bifrost-wm` only (labwc is removed), the shell's per-app toplevels are removed, and the shared-memory frame path stays only
-as a fallback for machines without Vulkan. The fallback is `bifrost-wm` safe mode (GLES, no direct apps, no chrome clients) after three quick exits, then the recovery flow.
+Done: the session starts `bifrost-wm` only (labwc is removed). In normal mode `session-policy` sets `BIFROST_DIRECT=1`
+(direct apps); the Vulkan render server (`/etc/bifrost/renderer = vulkan`) and the separate chrome clients
+(`BIFROST_CHROME=1`) are still opt-in until the acceptance list (`docs/wayland-desktop.md`) and the budgets above pass on
+Midget. Then the shell's per-app toplevels are removed, and the shared-memory frame path stays only as a fallback for
+machines without Vulkan. The fallback is `bifrost-wm` safe mode (GLES, no direct apps, no chrome clients) after three
+quick exits, then the recovery flow.
