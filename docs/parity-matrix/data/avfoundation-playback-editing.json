@@ -110,7 +110,7 @@
    "apple": "AVMovie, AVMutableMovie",
    "bifrost": "springboard/src/media/movie.rs (read-only summary over springboard/src/media/mp4.rs)",
    "status": "partial",
-   "note": "built on parity/team-a-10; not yet verified on Midget. Read-only movie summary: duration, and each track with id, kind, codec and duration, built from the demuxer. No movie editing and no writer; editing needs the composition model and an export path."
+   "note": "built on parity/team-a-10; not yet verified on Midget. Read-only movie summary: duration, and each track with id, kind, codec and duration, built from the demuxer. No code calls it yet, and it is not an SDK API. No movie editing and no writer; editing needs the composition model and an export path."
   },
   {
    "feature": "Video effects and compositing",
