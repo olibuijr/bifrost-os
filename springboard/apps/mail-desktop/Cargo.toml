@@ -1,6 +1,6 @@
 [package]
 name = "bifrost-mail"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 
 [lib]
@@ -12,3 +12,7 @@ name = "bifrost-mail"
 path = "src/main.rs"
 
 [dependencies]
+bifrost-app = { path = "../../sdk" }
+bifrost-core = { path = "../../core" }
+# the shell's TLS transport (rustls + graviola, webpki roots): IMAP and SMTP connections reuse it
+springboard = { path = "../.." }
