@@ -99,6 +99,8 @@ pub mod session;
 pub mod prefs;
 pub mod markup;
 pub mod screenshot;
+/// The screenshot toolbar's capture session: Shift-Cmd-5 and `screencapture -i -w` (see `capture.rs`).
+pub mod capture;
 pub mod screentime;
 pub mod login;
 pub mod passcode;
@@ -575,6 +577,8 @@ pub struct Shell {
     markup: Option<markup::Markup>,
     /// a touch that started on the screenshot thumbnail
     shot_tap: bool,
+    /// The screenshot toolbar's capture session, open while it is on screen.
+    capture: Option<capture::Session>,
     /// the Files browser, alive in the background once opened
     files: Option<Files>,
     /// the roots Files offers (tests point them at a temp dir)
@@ -838,6 +842,7 @@ impl Shell {
             shot: None,
             markup: None,
             shot_tap: false,
+            capture: None,
             files: None,
             files_locations: files::fs::locations(),
             audio: crate::svc::audio::Client::for_root(&apphost::root()),
@@ -1476,6 +1481,11 @@ impl Shell {
             }
         }
         if let Some(w) = self.shot.as_ref().filter(|_| self.screen_on).and_then(|o| o.next_wake(t)) {
+            due = Some(due.map_or(w, |d| d.min(w)));
+        }
+        // a running countdown redraws once a second and captures when it ends
+        if let Some((_, cd)) = self.capture.as_ref().and_then(|c| c.pending) {
+            let w = if cd.done(t) { t } else { (t + 1.0).min(cd.end()) };
             due = Some(due.map_or(w, |d| d.min(w)));
         }
         if self.screen_on && self.screen == Screen::App(AppId::Files) {
@@ -2286,6 +2296,9 @@ impl Shell {
                 return response.action.map_or_else(Vec::new, |action| self.assistive_action(action, t));
             }
         }
+        if self.capture.is_some() && matches!(ev, Event::Down(..) | Event::Move(..) | Event::Up(..)) {
+            return self.capture_touch(ev, t);
+        }
         if self.markup_touch(ev, t) {
             return vec![];
         }
@@ -2781,6 +2794,12 @@ impl Shell {
                 self.dirty = true;
             }
         }
+        if self.capture.as_ref().is_some_and(|c| c.due(t)) {
+            self.finish_capture(t);
+        }
+        if self.capture.is_some() {
+            self.dirty = true;
+        }
         if self.screen == Screen::App(AppId::Files) {
             match &mut self.files {
                 Some(f) => self.dirty |= f.tick(&self.ui, t),
@@ -3184,6 +3203,11 @@ impl Shell {
         if let Some(o) = &self.shot {
             damage.all();
             o.draw(s, t);
+        }
+        if let Some(c) = &self.capture {
+            damage.all();
+            let frames = self.capture_frames();
+            c.draw(s, &self.ui, &frames, self.w as i32, self.h as i32, t);
         }
         if let Some(m) = &self.markup {
             damage.all();
@@ -4048,8 +4072,29 @@ impl Shell {
     }
 
     fn take_screenshot(&mut self, t: f64) {
+        let whole = crate::layout::Rect { x: 0, y: 0, w: self.w as i32, h: self.h as i32 };
+        self.take_capture(whole, None, t);
+    }
+
+    /// Captures `region` of the screen (the whole screen when it is all of it), draws the pointer into it when `pointer`
+    /// names where it is, and saves it with the capture animation. The frame is drawn without the toolbar or the old
+    /// thumbnail.
+    fn take_capture(&mut self, region: crate::layout::Rect, pointer: Option<(f32, f32)>, t: f64) {
         self.shot = None;
-        let img = self.capture_frame(t);
+        // the toolbar is set aside while the frame is drawn, so it stays out of the picture
+        let open = self.capture.take();
+        let full = self.capture_frame(t);
+        self.capture = open;
+        let whole = region.x == 0 && region.y == 0 && region.w as usize == full.w && region.h as usize == full.h;
+        let mut img = if whole { full } else { full.crop(region.x as usize, region.y as usize, region.w as usize, region.h as usize) };
+        if let Some((x, y)) = pointer {
+            capture::draw_pointer(&mut img, x - region.x as f32, y - region.y as f32, self.ui.s);
+        }
+        self.save_capture(img, t);
+    }
+
+    /// Saves a captured picture to Photos and starts the thumbnail's animation over it.
+    fn save_capture(&mut self, img: Image, t: f64) {
         let (unix, offset) = self.wall_now(t);
         let name = screenshot::file_name(&photos::library::civil(unix, offset));
         let dir = self.photo_dirs.first().cloned().unwrap_or_else(|| self.data_dir.join("Pictures"));
@@ -4071,17 +4116,101 @@ impl Shell {
         self.shot = Some(Overlay::new(img, path, self.ui.s, t));
     }
 
-    /// A touch on the screenshot thumbnail; true when it was consumed. A tap
-    /// opens the capture in Photos (not from the lock screen).
+    /// The windows on the desk that a window capture can pick, back to front, as layout rectangles.
+    fn capture_frames(&self) -> Vec<crate::layout::Rect> {
+        self.desk.as_ref().map_or_else(Vec::new, |d| {
+            d.wins.iter().filter(|w| !w.minimized).map(|w| crate::layout::Rect { x: w.r.x, y: w.r.y, w: w.r.w, h: w.r.h }).collect()
+        })
+    }
+
+    /// Opens the toolbar's capture session with `mode` (`select`, `window` or `screen`): `screencapture -i`, `-w`, or the
+    /// whole screen, from the control port. The capture is saved to Photos when the user finishes the selection.
+    pub fn capture_request(&mut self, mode: &str) -> Result<(), String> {
+        if !self.screen_on || self.is_locked() {
+            return Err("locked".into());
+        }
+        let pick = match mode {
+            "select" => capture::Pick::Region,
+            "window" => capture::Pick::Window,
+            "screen" => capture::Pick::Screen,
+            other => return Err(format!("no capture mode {other}")),
+        };
+        let mut session = capture::Session::new();
+        session.pick = pick;
+        self.capture = Some(session);
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// A touch while the toolbar's session is open: its buttons, or else the screen, where a press starts a selection
+    /// (or picks a window or the screen) and a release takes the capture, after its timer.
+    fn capture_touch(&mut self, ev: Event, t: f64) -> Vec<Effect> {
+        let (w, h, s) = (self.w as i32, self.h as i32, self.ui.s);
+        let frames = self.capture_frames();
+        let Some(sess) = self.capture.as_mut() else { return vec![] };
+        if sess.pending.is_some() {
+            // the countdown runs; the screen waits for it
+            return vec![];
+        }
+        match ev {
+            Event::Down(x, y) => match sess.tool_at(&self.ui, w, h, x, y) {
+                Some(tool) => sess.pressed = Some(tool),
+                None => sess.press(x, y),
+            },
+            Event::Move(x, y) => sess.moved(x, y),
+            Event::Up(x, y) => {
+                if let Some(pressed) = sess.pressed.take() {
+                    if sess.tool_at(&self.ui, w, h, x, y) == Some(pressed) && sess.apply(pressed) {
+                        self.capture = None;
+                    }
+                    return vec![];
+                }
+                if sess.on_toolbar(&self.ui, w, h, x, y) {
+                    return vec![];
+                }
+                if let Some(r) = sess.release(x, y, &frames, w, h, s) {
+                    sess.pending = Some((r, capture::Countdown::new(t, sess.timer)));
+                    if sess.due(t) {
+                        self.finish_capture(t);
+                    }
+                }
+            }
+            _ => {}
+        }
+        vec![]
+    }
+
+    /// Ends the toolbar's session and takes its chosen capture (its countdown has run out).
+    fn finish_capture(&mut self, t: f64) {
+        let Some(sess) = self.capture.take() else { return };
+        let Some((region, _)) = sess.pending else { return };
+        let pointer = sess.pointer.then_some(sess.at);
+        self.take_capture(region, pointer, t);
+    }
+
+    /// A touch on the screenshot thumbnail; true when it was consumed. A tap opens the capture in Photos (not from the
+    /// lock screen); a drag moves the thumbnail and is not a tap.
     fn shot_touch(&mut self, ev: Event, t: f64) -> bool {
         match ev {
             Event::Down(x, y) if self.shot.as_ref().is_some_and(|o| o.hit(x, y, t)) => {
                 self.shot_tap = true;
+                if let Some(o) = self.shot.as_mut() {
+                    o.grab(x, y);
+                }
                 true
             }
-            Event::Move(..) if self.shot_tap => true,
+            Event::Move(x, y) if self.shot_tap => {
+                if let Some(o) = self.shot.as_mut() {
+                    o.drag_to(x, y);
+                }
+                true
+            }
             Event::Up(x, y) if self.shot_tap => {
                 self.shot_tap = false;
+                if self.shot.as_mut().is_some_and(|o| o.release()) {
+                    self.dirty = true;
+                    return true;
+                }
                 if let Some(o) = self.shot.take().filter(|o| o.hit(x, y, t)) {
                     if matches!(self.screen, Screen::Lock | Screen::Switcher) {
                         return true;
