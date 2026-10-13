@@ -18,6 +18,7 @@
 - Lock Screen > Require Password: the screen stays as it was for the chosen time (immediately, 5 seconds, 1 minute, 5 minutes, 15 minutes, 1 hour) after the display goes off, and a password is asked only after that. Login window: Login Options > Name and Password shows a name field and refuses another account name before the password is checked.
 - Notification Center: Focus lets the apps you allow (Settings > Notifications > App > Allow During Focus) show banners and wake the screen; the Lock Screen, Notification Centre and Badges switches on each app now take effect.
 
+- Disk images: one image model in `bifrost_core::disk_image` (the ui copy is gone). `hdiutil` (create, attach, detach, info, verify, convert) in the `cmd` crate; attach and detach go through privd `disk.loop_attach` and `disk.loop_detach` and the shell's `image-attach` and `image-detach` control lines. Files mounts an `.iso` or `.img` on double-click; Disk Utility shows loop devices that hold an image and detaches them (Image menu). See `docs/parity/disk-images.md`.
 - SDK: text layout objects (`bifrost_ui::typeset`: typesetter, framesetter, frame, line, run) with Unicode line break and
   grapheme cluster rules, paragraph styles, tab stops, bidi line reordering, truncated and justified lines. Attributed
   strings gain font family and size, literal colours, baseline, superscript, kern, tracking, stroke, underline colour and

@@ -1002,7 +1002,7 @@ pub mod token_registration;
 pub mod certificate_panel;
 pub mod identity_chooser;
 pub mod screensaver;
-pub mod disk_image;
+pub use bifrost_core::disk_image;
 
 // Media analysis: keyframe, highlight and face grouping models (parity wave 3)
 pub mod keyframe_pick;

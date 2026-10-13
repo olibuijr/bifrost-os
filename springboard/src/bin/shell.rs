@@ -610,6 +610,14 @@ fn run() -> std::io::Result<()> {
                         effects.extend(shell.lock_screen());
                         b"ok\n".to_vec()
                     }
+                    Ok(Request::ImageAttach { read_only, path }) => match springboard::shell::disk_image::attach(&path, read_only) {
+                        Ok(a) => format!("ok {} {}\n", a.device, a.mount_point).into_bytes(),
+                        Err(e) => format!("error: {e}\n").into_bytes(),
+                    },
+                    Ok(Request::ImageDetach(target)) => match springboard::shell::disk_image::detach(&target) {
+                        Ok(device) => format!("ok {device}\n").into_bytes(),
+                        Err(e) => format!("error: {e}\n").into_bytes(),
+                    },
                     Ok(Request::Term(verb, args)) => match shell.term_control(&verb, &args, t) {
                         Ok(body) => body.into_bytes(),
                         Err(e) => format!("error: {e}\n").into_bytes(),

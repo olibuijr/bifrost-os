@@ -19,6 +19,8 @@ pub enum Action {
     Mount,
     Unmount,
     Eject,
+    /// Unmounts a disk image and releases its loop device (`hdiutil detach`).
+    Detach,
 }
 
 impl Action {
@@ -28,8 +30,14 @@ impl Action {
             Action::Mount => "Mounting",
             Action::Unmount => "Unmounting",
             Action::Eject => "Ejecting",
+            Action::Detach => "Detaching",
         }
     }
+}
+
+/// A loop device name: `loop` and then digits.
+fn is_loop_name(name: &str) -> bool {
+    name.strip_prefix("loop").is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// The disks the session should know about: every disk and partition the window shows.
@@ -55,6 +63,13 @@ pub fn plan(action: Action, disks: &[Disk], name: &str, mounted_partitions: &[St
             }
             commands.extend(session.eject(name, OWNER)?);
             Ok(commands)
+        }
+        Action::Detach => {
+            if !is_loop_name(name) {
+                return Err(Refusal::InvalidDevice(name.to_string()));
+            }
+            // the image tool unmounts the device and releases the loop device, the same command the desktop's control line uses
+            Ok(vec![Command { program: "hdiutil", args: vec!["detach".to_string(), format!("/dev/{name}")] }])
         }
     }
 }
@@ -125,6 +140,17 @@ mod tests {
             tools(&plan),
             vec![("udisksctl", "unmount -b /dev/sdb1".to_string()), ("udisksctl", "power-off -b /dev/sdb".to_string())]
         );
+    }
+
+    #[test]
+    fn detach_releases_a_loop_device_through_the_image_tool() {
+        let plan = plan(Action::Detach, &[], "loop3", &[]).unwrap();
+        assert_eq!(tools(&plan), vec![("hdiutil", "detach /dev/loop3".to_string())]);
+        assert!(matches!(plan_detach_refusal(), Some(Refusal::InvalidDevice(_))));
+    }
+
+    fn plan_detach_refusal() -> Option<Refusal> {
+        plan(Action::Detach, &[], "sdb", &[]).err()
     }
 
     #[test]

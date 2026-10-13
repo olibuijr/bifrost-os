@@ -323,6 +323,10 @@ impl Files {
             }
         }
     }
+    /// A disk image file (`.iso` or `.img`, any case): opening it mounts it read-only.
+    pub(crate) fn is_disk_image(entry: &Entry) -> bool {
+        !entry.is_dir && matches!(entry.path.extension().and_then(|x| x.to_str()).map(str::to_ascii_lowercase).as_deref(), Some("iso" | "img"))
+    }
     pub(crate) fn is_archive(entry: &Entry) -> bool {
         !entry.is_dir && archive::is_archive(&entry.name)
     }

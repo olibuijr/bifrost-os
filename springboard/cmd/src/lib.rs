@@ -10,6 +10,7 @@ pub mod diskutil;
 pub mod launchctl;
 pub mod mdfind;
 pub mod mdutil;
+pub mod hdiutil;
 pub mod open;
 pub mod plutil;
 pub mod pasteboard;

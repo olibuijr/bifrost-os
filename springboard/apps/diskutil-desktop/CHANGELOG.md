@@ -1,7 +1,8 @@
 # Changelog
 
-## 0.1.1
+## 0.2.0
 
+- Disk images: a loop device that holds an .iso or .img shows in the sidebar as a disk image, with its image file in the info pane. Detach (toolbar, or Image > Detach Disk Image) unmounts it and releases the loop device through `hdiutil detach`.
 - Refusal sentences come from the disk session (`Refusal::sentence`), shared with the `diskutil` command line tool; the app's own copy is removed.
 
 ## 0.1.0

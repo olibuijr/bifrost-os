@@ -12,12 +12,30 @@ mod window;
 
 use bifrost_app::controls::Node;
 use bifrost_app::kit::{Damage, Surface};
-use bifrost_app::{App, Ctx, Input, TouchKind};
-use window::{DiskUtility, Target, REFRESH_S};
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, TouchKind};
+use window::{DiskUtility, Target, B_DETACH, REFRESH_S};
+
+/// The Image menu's detach item.
+const MENU_DETACH: u32 = 1;
 
 impl App for DiskUtility {
     fn id(&self) -> &str {
         "is.olibuijr.diskutil.desktop"
+    }
+
+    /// The Image menu: detaching works on the selected disk image, the same action as the toolbar's Detach.
+    fn main_menu(&self, _ctx: &Ctx) -> Vec<AppMenu> {
+        vec![AppMenu { title: "Image".into(), items: vec![AppMenuItem::new(MENU_DETACH, "Detach Disk Image").enabled(self.selected_image())] }]
+    }
+
+    fn menu_action(&mut self, _ctx: &Ctx, id: u32) -> bool {
+        match id {
+            MENU_DETACH => {
+                let t = self.now;
+                self.activate(Target::Toolbar(B_DETACH), t)
+            }
+            _ => false,
+        }
     }
 
     fn configure(&mut self, ctx: &Ctx) {

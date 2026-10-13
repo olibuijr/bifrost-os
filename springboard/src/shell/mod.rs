@@ -123,6 +123,7 @@ pub mod splitview;
 mod desk;
 pub mod window_fx;
 pub mod desktop_network;
+pub mod disk_image;
 mod desktop_bar;
 #[cfg(feature = "desktop-wayland")]
 pub mod docpanel;
