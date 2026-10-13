@@ -743,6 +743,7 @@ pub mod offer;
 pub mod download;
 pub mod nav_policy;
 pub mod translation;
+pub mod translation_popover;
 pub mod timeline;
 pub mod relevance;
 pub mod guardrail;

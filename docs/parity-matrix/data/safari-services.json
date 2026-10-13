@@ -3,8 +3,8 @@
   "doc": "https://developer.apple.com/documentation/safariservices",
   "macos_since": "10.12",
   "status": "partial",
-  "bifrost": "bifrost_app::webview (springboard/sdk/src/webview.rs), bifrost_app::webview_dev (springboard/sdk/src/webview_dev.rs), springboard/apps/browser/ (Browser app)",
-  "summary": "BifrOSt has a WebKit-style web view for SDK apps (WebProcessPool over the Servo engine) and a full Browser app with tabs, history, bookmarks, reader mode and private windows. It has no Safari extension, content blocker, Reading List, authentication session, universal link, or standard in-app Safari sheet API.",
+  "bifrost": "bifrost_app::webview (springboard/sdk/src/webview.rs), bifrost_app::webview_dev (springboard/sdk/src/webview_dev.rs), springboard/apps/browser/ (Browser app), springboard/ui/src/web_auth.rs (shared-login session model)",
+  "summary": "BifrOSt has a WebKit-style web view for SDK apps (WebProcessPool over the Servo engine) and a full Browser app with tabs, history, bookmarks, reader mode and private windows. It has a shared-login session model that no shell code drives yet, but no Safari extension, content blocker, Reading List, universal link, or standard in-app Safari sheet API.",
   "rea_evidence": "ev_db48755bdd049ac960cdd61e81535120a7dc9a2c45e56e809f496825a5b51dc8",
   "features": [
     {
@@ -45,9 +45,9 @@
     {
       "feature": "Authentication sessions (shared Safari login)",
       "apple": "SFAuthenticationSession (deprecated) and its completion handler, SFAuthenticationError",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "Nothing shares a one-time login between the browser and apps. The Apple successor (ASWebAuthenticationSession) is not in this framework."
+      "bifrost": "springboard/ui/src/web_auth.rs, springboard/sdk/src/web_auth.rs, springboard/ui/src/webauth_session.rs",
+      "status": "partial",
+      "note": "built on parity/team-a-05; not yet verified on Midget. Pure model of the session lifecycle and the single completion, with host unit tests; the shell opens the page and reports the redirect. Not wired into the browser or apps yet, so no login is shared between them."
     },
     {
       "feature": "Universal links and associated domains",
@@ -98,7 +98,7 @@
     "No Safari Reading List (SSReadingList) or Reading List share target",
     "No web extension host, Safari page or tab proxies, or extension messaging",
     "No universal links or associated-domain lookup for apps",
-    "No shared authentication session between the browser and apps",
+    "No shared login between the browser and apps: the session model exists but the shell does not drive it yet",
     "Browser preferences (SFSafariSettings) are private to the Browser app, with no system-wide object",
     "Safari bookmark and password import",
     "Web view input and rendering gaps: no hover, drag selection, context menus, select or file panels, or load cancel (docs/bifrost-ui.md 'Web view')"
