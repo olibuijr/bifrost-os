@@ -61,6 +61,7 @@ pub mod privd_wire;
 pub mod txt_record;
 pub mod dnssd;
 pub mod dnssd_ref;
+pub mod ref_assets;
 pub mod oid;
 pub mod codereq;
 pub mod codesign_events;

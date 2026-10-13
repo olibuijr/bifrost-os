@@ -2066,3 +2066,20 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## Reference asset layer (`bifrost_core::ref_assets`)
+
+Personal-use reference assets (alert sounds, system sounds, cursors, wallpapers, app and system icons, symbols,
+fonts) live in the gitignored `bifrost-ref/assets/` folder and are never committed. `tools/pc-publish.py`
+(`ref_asset_files`) and `packaging/arch/package-files.sh` install what exists, already converted to wav/png/ttf,
+into `/usr/share/bifrost/ref/{sounds/alerts,sounds/system,cursors,wallpapers,icons/apps,icons/system,symbols,fonts}`
+plus `INDEX.tsv`; both skip cleanly when the folder is absent. `INDEX.tsv` holds `kind<TAB>name<TAB>file` lines
+(file relative to the kind folder), so name mappings are data, not code.
+
+- `Resolver::standard(bundled)` searches `$BIFROST_REF_ROOT`, `/usr/share/bifrost/ref`, then `bundled`.
+  `resolve(Kind, name)` normalises case and extension (`Basso.aiff` finds `basso.wav`), caches the answer and
+  returns `None` when absent; `list(Kind)` feeds pickers such as the wallpaper list.
+- `SystemSounds::create_named(resolver, name)` (NSSound `named:`): alert names first, then system sounds; `None` keeps the built-in sound.
+- Not done yet: cursor and icon adoption (`cursor_service`, `cursor_art`, workspace icons) and a shell-side resolver;
+  they will call `resolve` and keep their current art as the fallback. The assets folder was empty when this landed,
+  so the os/assets sound, wallpaper and font rows are `partial` (loader and fallback only, no Midget check).

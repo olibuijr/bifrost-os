@@ -121,4 +121,11 @@ package_bifrost_files() {
   for f in "$here/wayland/themes/light/labwc/"*; do
     install -Dm644 "$f" "$pkgdir/usr/share/themes/BifrOSt/labwc/${f##*/}"
   done
+  # Personal-use reference assets (gitignored bifrost-ref/assets, already converted to wav/png): skipped when absent.
+  local refsrc="${PC_REFASSETS:-$here/../../bifrost-ref/assets}"
+  if [ -d "$refsrc" ]; then
+    (cd "$refsrc" && find INDEX.tsv sounds cursors wallpapers icons symbols fonts -type f 2>/dev/null) | while IFS= read -r f; do
+      install -Dm644 "$refsrc/$f" "$pkgdir/usr/share/bifrost/ref/$f"
+    done
+  fi
 }
