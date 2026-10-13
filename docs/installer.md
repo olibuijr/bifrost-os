@@ -11,19 +11,21 @@ A native Rust installer on the live ISO. It replaces the earlier bash+YAD, web-U
 | Main loop on KMS + evdev | `springboard/src/bin/installer.rs` (`bifrost-installer`) |
 | Keyboard layouts | `tools/gen_keymaps.py` → `keymaps_data.rs` (xkeyboard-config via libxkbcommon) |
 | BifrOSt boot application (UEFI) | `springboard/bootweave/efi` (Rust, `x86_64-unknown-uefi`) → `tools/build-efi-boot.sh` → ISO and recovery payloads |
-| Plymouth theme | `packaging/archiso/airootfs/usr/share/plymouth/themes/bifrost` |
+| Unattended lab reinstall | `springboard/src/installer/unattended.rs` |
+| First-frame caches for the installed panel | `springboard/src/first_frame_cache.rs` (written into the target before unmount) |
 | Logo assets | `tools/bifrost_brand.py` |
 | ISO profile overlay | `packaging/archiso/airootfs`, applied by `tools/apply-archiso-profile.py` |
 | ISO build | `tools/build-iso.sh`, `tools/prepare-mkarchiso.py` (adds the `uefi.bifrost` boot mode) |
 
 ## Boot path
 
-UEFI runs `EFI/BOOT/BOOTx64.efi` (the BifrOSt Rust boot application). It draws the logo, reads
-`\EFI\BIFROST\boot.cfg` first and then the removable-media compatibility paths, and loads
-`vmlinuz-linux` from the directory of the `initrd=` file and starts it; the EFI stub loads the initramfs, so the
-logo stays up while it is read. Plymouth takes over, then `bifrost-installer.service` launches the native Rust
-installer directly on DRM/KMS (the installed desktop uses the Wayland session separately). On an installed disk the
-same loader boots the kernel from the ESP (`/boot`), command line from the installer-written `cmdline.txt`.
+UEFI runs `EFI/BOOT/BOOTx64.efi` (the BifrOSt Rust boot application, Bootweave). It draws the boot frame (the mark alone),
+reads `\EFI\BIFROST\boot.cfg` first and then the removable-media compatibility paths, and starts the kernel from the
+directory of the `initrd=` file (the kernel name follows the initramfs name); the EFI stub loads the initramfs, so the
+frame stays up while it is read. There is no Plymouth: `bifrost-installer.service` launches the native Rust
+installer directly on DRM/KMS and redraws the same frame first (the installed desktop uses the `bifrost-wm` session
+separately). On an installed disk the same loader boots the unified kernel image or the kernel from the ESP (`/boot`),
+command line from the installer-written `boot.cfg`.
 
 ## Installing
 
@@ -33,7 +35,14 @@ confirmation first. The installer copies the files it needs from the live medium
 disk, creates a locked-root system with one wheel user (password via `chpasswd` on stdin), writes locale,
 console keymap and X11 keyboard from the chosen layout, enables SpringBoard, NetworkManager and sshd.
 
-Network is required (pacstrap pulls the bundle from the mirrors).
+Network is required (pacstrap pulls the bundle from the mirrors). A lab install with the `mirror` config field set makes pacstrap use only
+the lab's offline mirror (`offline_pacman_conf`, `http://10.99.0.1:8078/mirror/`, built by `tools/lab-mirror.sh`). The
+installed system keeps the stock configuration plus the `[bifrost]` update repo.
+
+The installed kernel is `linux-rt` (stock `linux` for NVIDIA or when the package source lacks `linux-rt`). After mkinitcpio the
+installer runs `bifrost-update-guard uki` to build the unified kernel image `EFI/BIFROST/bifrost.efi`; a failure keeps the
+kernel-plus-initramfs boot line. The installer also writes the chosen look into `settings.ini` and builds the first-frame
+caches for the panel.
 
 ## Developing
 
@@ -53,7 +62,18 @@ name; never overwrite an image a machine is booted from (it causes I/O errors mi
 ## Netboot lab
 
 iVentoy (`out/iventoy`, bound to titan's `eno2` only) serves ISOs by PXE; target machines boot them as a virtual CD.
-The lab cable network is 10.99.0.0/24; titan NATs it out through `enp6s0`.
+The lab cable network is 10.99.0.0/24; `tools/lab-up.sh` (run after a titan reboot) sets the lab NIC address, enables
+IPv4 forwarding and adds an nft table `bifrost_nat` that masquerades 10.99.0.0/24 out through `enp6s0` (`lab-up.sh down` removes it).
+Titan also serves the lab pacman repo and its package mirror on :8079 (see below).
+
+## Package mirror (:8079)
+
+`bifrost pc publish` (`tools/pc-publish.py`) publishes `springboard-shell` into `out/pc-repo/bifrost/x86_64` and then runs
+`tools/pc_mirror.py`. The mirror (`out/pc-repo/mirror/$repo/os/$arch`, same :8079 server) holds the core and extra databases and every
+package file BifrOSt systems install, resolved from the package set of `tools/lab-mirror.sh --list`, so a guarded `pacman -Su`
+on Midget never meets a 404. It is incremental: only missing files are fetched, and a database is replaced only after every
+file it lists is present. `pc_mirror.py --sync|--check` run it by hand; `--skip-mirror-sync` on publish only checks.
+The upstream is `BIFROST_UPSTREAM_MIRROR` (default `https://geo.mirror.pkgbuild.com`).
 
 ## Faster iteration
 

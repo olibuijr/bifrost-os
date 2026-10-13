@@ -1,7 +1,7 @@
 # BifrOSt PC: installer, boot, tools and endpoints
 
 Source of truth for how a BifrOSt PC is installed, booted, updated and driven from the lab.
-Verified against the code on 2026-10-10 (springboard 0.4.85). Update this file when a path,
+Verified against the code on 2026-10-13 (springboard 0.7.25). Update this file when a path,
 port, unit or tool changes.
 
 ## 1. Who installs what
@@ -11,9 +11,9 @@ port, unit or tool changes.
 | Live medium (ISO) | `tools/build-iso.sh` (`--lab`, `--debug`, `--release`) | `out/iso-*` and the iVentoy folder | Rebuild only for boot-path changes |
 | Installer binary `bifrost-installer` | `springboard/src/bin/installer.rs` | live ISO `/usr/bin/bifrost-installer` | `tools/lab-push.sh` (lab hosts fetch it at boot) |
 | Shell `springboard` | `springboard/src/bin/shell.rs` | installed by pacstrap from `springboard-shell` | `tools/pc-publish.py` into the lab repo |
-| Boot loader `bootweave.efi` | `packaging/arch/recovery/bootweave.efi` | ESP `\EFI\BOOT\BOOTx64.efi` | copied from the live medium by the installer |
-| Plymouth theme | `packaging/archiso/airootfs/usr/share/plymouth/themes/bifrost` | installed `/usr/share/plymouth/themes/bifrost` | `springboard-shell` package |
-| Handoff unit and script | `packaging/arch/bifrost-splash-handoff.service`, `packaging/arch/wayland/splash-handoff` | installed `/usr/lib/systemd/system`, `/usr/lib/bifrost` | `springboard-shell` package |
+| Boot loader `bootweave.efi` | built from `springboard/bootweave/efi` by `tools/build-efi-boot.sh` (the committed `packaging/arch/recovery/bootweave.efi` is a build output) | ESP `\EFI\BIFROST\BOOTx64.efi` and the `\EFI\BOOT\BOOTx64.efi` fallback | copied from the live medium by the installer |
+| Early-userspace supervisor `bifrost-bootweave` | `springboard/bootweave/supervisor.rs` | `/usr/bin/bifrost-bootweave`, run by `springboard.service` | `springboard-shell` package |
+| Window server `bifrost-wm`, chrome clients | `springboard/wm`, `springboard/chrome` | `/usr/bin/bifrost-wm` | `springboard-shell` package (built by `pc-publish.py`) |
 
 The `springboard-shell` package is built with `packaging/arch/fast/PKGBUILD` and
 `packaging/arch/package-files.sh`. It has no assets: `/usr/share/springboard/assets` and the
@@ -23,7 +23,7 @@ installer media (`/usr/share/bifrost/installer`, `video`) come from the live med
 
 Entry: `bifrost-installer.service` (live medium, tty1). It runs the Rust
 `/usr/bin/bifrost-installer` directly on DRM/KMS. The installed desktop uses
-the separate Wayland session until the native BifrOSt compositor is complete.
+the separate `bifrost-wm` Wayland session.
 
 Environment switches (`springboard/src/bin/installer.rs`, `plan.rs`):
 
@@ -49,19 +49,19 @@ Install order (`plan::install`):
    A lab medium (`/etc/bifrost/lab.token` present) copies the lab root key and sets
    `PermitRootLogin prohibit-password`.
 6. Update channel: `/etc/pacman.conf` gets `[bifrost]`. Lab: `http://192.168.1.12:8079/bifrost/$arch` (Titan home LAN, served by the `bifrost-repo` unit).
-   Release: `https://bifrost.olibuijr.com/arch/$arch`.
+   Release: `https://bifrost.olibuijr.com/arch/$arch`. The lab server also serves the package mirror on :8079, synced by `bifrost pc publish` (`tools/pc_mirror.py`, `docs/installer.md`).
 7. Copy the media (assets, `/usr/share/bifrost`) from the stage, then `pacman -Sy --noconfirm springboard-shell`
    (the package is installed last so it wins any overlap).
-8. Plymouth config (`/etc/plymouth/plymouthd.conf`, `Theme=bifrost`), drop-in
-   `springboard.service.d/plymouth.conf` (`After=plymouth-start.service`).
+8. Look: the look chosen in the installer goes into `/var/lib/springboard/settings.ini`.
 9. Browser: `springboard --install-store-app is.olibuijr.browser.desktop` in the chroot.
 10. Account: `useradd -m -G wheel,audio,video,input,storage`, sudo for wheel, root locked,
     `/var/lib/springboard/account` (read by `session` for the local account name).
-11. Boot: `bootweave.efi` → `\EFI\BOOT\BOOTx64.efi`, `cmdline.txt` (below), `efibootmgr -c -L BifrOSt`,
-    mkinitcpio preset `linux-rt` (`linux` when the fallback below applied).
-12. Services (chroot): mask `getty@tty1`, `plymouth-quit`, `plymouth-quit-wait`; enable
-    `bifrost-update-guard`, `springboard`, `bifrost-splash-handoff`, `NetworkManager`, `sshd`, `seatd`,
-    `power-profiles-daemon`.
+11. Boot: `bootweave.efi` → `\EFI\BIFROST\BOOTx64.efi` and `\EFI\BOOT\BOOTx64.efi`, `boot.cfg` and `cmdline.txt` (below),
+    `efibootmgr -c -L BifrOSt -l \EFI\BIFROST\BOOTx64.efi`, mkinitcpio preset `linux-rt` (`linux` when the fallback below
+    applied), then `bifrost-update-guard uki` builds `EFI/BIFROST/bifrost.efi` and the first-frame caches are written.
+12. Services (chroot): mask `getty@tty1`; enable `bifrost-update-guard`, `springboard`, `NetworkManager`, `sshd`, `seatd`,
+    `power-profiles-daemon`, `bifrost-irq-priority`, `bifrost-mcp`; default target `graphical`. Runtime and reboot
+    watchdogs are set to 60 s and 120 s.
 13. Browser store app, then the summary screen. Progress stages: `Preparing the disk`,
     `Installing the system`, `Setting up your account and apps`, `Finishing`.
 
@@ -71,10 +71,11 @@ fix (copy assets before pacman) is in `plan.rs` but not yet verified on hardware
 
 ## 3. Boot chain (installed PC)
 
-1. UEFI runs `\EFI\BOOT\BOOTx64.efi` (`bootweave.efi`). The NVRAM entry is `BifrOSt`.
-2. `cmdline.txt` (`plan::cmdline_txt`):
-   `initrd=\initramfs-linux-rt.img root=UUID=<root> rootflags=subvol=@system rw quiet splash loglevel=3 rd.udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false vt.global_cursor_default=0 i915.enable_fbc=0 i915.enable_psr=0 plymouth.use-simpledrm`
-   (the i915 flags stop Skylake framebuffer-compression stripes).
+1. UEFI runs `\EFI\BIFROST\BOOTx64.efi` (`bootweave.efi`; `\EFI\BOOT\BOOTx64.efi` is the fallback copy). The NVRAM entry is `BifrOSt`.
+2. `boot.cfg` (`plan::cmdline_txt`):
+   `initrd=\initramfs-linux-rt.img root=UUID=<root> rootflags=subvol=@system rw quiet loglevel=3 rd.udev.log_level=3 udev.log_level=3 rd.systemd.show_status=false systemd.show_status=false systemd.log_target=journal rd.luks=0 rd.lvm=0 rd.md=0 rd.dm=0 vt.global_cursor_default=0 fbcon=map:9 systemd.tty.rows.console= i915.enable_fbc=0 i915.enable_psr=0 panic=10 threadirqs`
+   (the i915 flags stop Skylake framebuffer-compression stripes; `fbcon=map:9` keeps the console off the display, so recovery
+   uses ssh or serial; `threadirqs` is for the audio IRQ threads; an audio core adds `isolcpus`, `nohz_full`, `rcu_nocbs`). When the UKI exists the loader starts it directly.
 3. initramfs (mkinitcpio `linux-rt` preset) mounts `@system` and switches root.
    The installed kernel is `linux-rt` (Arch PREEMPT_RT, default since 2026-10-12, `docs/audio-latency.md` "Kernel"):
    `/boot/vmlinuz-linux-rt`, `/boot/initramfs-linux-rt.img`. Machines with an NVIDIA GPU get the stock `linux` (`kernel_for`: `nvidia-open` modules match only it, and NVIDIA modules
@@ -83,21 +84,19 @@ fix (copy assets before pacman) is in `plan.rs` but not yet verified on hardware
    name (`initramfs-linux-rt.img` -> `vmlinuz-linux-rt`, anything else -> `vmlinuz-linux`), and the update guard
    (`packaging/arch/recovery/system.rs`) picks the kernel files, preset and UKI inputs by which image is in `/boot`,
    so older stock-kernel installs keep working. The live ISO keeps the stock `linux` kernel.
-4. Plymouth starts with theme `bifrost` (`bifrost.script`: logo and bar fade in; `Quit` fades them out).
-5. `bifrost-installer.service` retains the splash frame until the native installer is ready, then releases DRM and owns the card directly.
-6. `springboard.service` (after `plymouth-start`, `seatd`, `systemd-user-sessions`; `Conflicts=getty@tty1`)
-   runs `/usr/lib/bifrost/session`:
+4. No Plymouth. The EFI frame stays in simpledrm; the live medium's `bifrost-installer.service` redraws it and owns the card directly.
+5. `springboard.service` (no default dependencies; after udev and `seatd`; `Conflicts=getty@tty1`) runs `/usr/bin/bifrost-bootweave run`,
+   which supervises `/usr/lib/bifrost/session` (and shows the start-failed screen after three quick failures):
    - reads the account from `/var/lib/springboard/account`, cleans `/run/bifrost/user/{wayland-*,session.json,shell-ready}`;
-   - starts `seatd`; starts `bifrost-wm` as the account (the only window server; after three quick exits it restarts in safe mode: GLES, no direct apps, no chrome clients, then the recovery flow);
+   - starts `seatd`; starts `bifrost-wm` as the account (the only window server; after three quick exits it restarts in safe mode: GLES, no direct apps, no chrome clients, then the recovery flow); the environment words (`BIFROST_DIRECT`, `BIFROST_WM_RENDERER`, `BIFROST_CHROME`) come from `wayland/session-policy`;
    - waits up to 10 s for `wayland-0` and `session.json`; then starts `/usr/bin/springboard`.
-7. The shell writes `shell-ready` after its first committed Wayland frame (`springboard/src/bare/wayland.rs`,
-   `mark_first_frame`).
-8. `bifrost-splash-handoff.service` (oneshot, after `springboard.service`) waits up to 60 s for `shell-ready`,
-   then `plymouth quit --retain-splash`. It exits 0 when the session already released the splash.
+6. The shell writes `shell-ready` after its first committed Wayland frame (`springboard/src/bare/wayland.rs`,
+   `mark_first_frame`). `bifrost-wm` holds the boot frame until the desktop is ready and then fades once (`docs/boot-architecture.md`).
+   `bifrost-desktop-ready.service` starts `bifrost-after-desktop.target` after the `desktop-ready` mark (6 s ceiling).
 
-Boot timing: `session` and the handoff append `<uptime-seconds> <mark>` lines to `/var/log/bifrost-boot-timing.log`
-(`session-start`, `splash-released`, `compositor-ready`, `shell-launch`, `shell-ready-seen`, `handoff-start`,
-`splash-already-gone`). Measured on Midget (0.4.37): firmware 9.4 s, loader 0.6 s, kernel 0.9 s, initrd 3.3 s,
+Boot timing: the boot marks (`bootweave-start`, `compositor-ready`, `desktop-first-frame`, `desktop-ready`, `desktop-first-ui`,
+`desktop-faded`, ...) go to `/run/bifrost/boot-marks`; `tools/boot-bench.py` reads them. The older `/var/log/bifrost-boot-timing.log`
+was for the removed Plymouth handoff. Measured on Midget (0.4.37): firmware 9.4 s, loader 0.6 s, kernel 0.9 s, initrd 3.3 s,
 userspace 5.0 s, `graphical.target` at 4.98 s. The tty/serial/tpm device units at the top of `systemd-analyze blame`
 (~4 s) are not on the critical chain to `graphical.target` (`NetworkManager` -> `systemd-user-sessions` ->
 `springboard.service`), so masking them gains nothing. The window server picks the mode itself; it needs no mode config.
@@ -138,6 +137,7 @@ Coordinates are original panel pixels. `tools/midget.py` sends each line over SS
 |---|---|---|
 | `10.99.0.1:8078` | lab sync (installer and shell for lab hosts) | `tools/lab-push.sh` |
 | `192.168.1.12:8079/bifrost/x86_64` | lab pacman repo (`springboard-shell`) | `tools/pc-publish.py` |
+| `192.168.1.12:8079/mirror/$repo/os/$arch` | package mirror (core, extra) for guarded updates | `tools/pc_mirror.py`, run by `pc-publish.py` |
 | `10.99.0.1` `eno2` | iVentoy PXE/netboot (ISO folder) | titan |
 | `192.168.20.140:22` | Midget sshd (lab key on lab installs only) | installed system |
 | `192.168.20.140:8651` | `bifrost-lab` API (lab ISO only) | live medium |
@@ -154,7 +154,9 @@ Coordinates are original panel pixels. `tools/midget.py` sends each line over SS
 | `tools/midget-wipe.py` | Guarded erase and reinstall | Preflight: MAC `00:23:24:dc:c8:40`, exactly one erasable disk equal to `--disk`, root must not be that disk, exact token. Steps: PXE to live medium, `BIFROST_AUTO` install, BootNext to disk, verify ssh and `springboard`. Logs in `out/lab/wipes/<stamp>/`. |
 | `tools/build-iso.sh [--lab|--debug|--release] [--deploy]` | Build the live medium | Needs sudo. Only for boot-path changes. |
 | `tools/lab-push.sh` | Push installer and shell to lab hosts | No ISO rebuild. |
-| `tools/pc-publish.py [--release] [--skip-build]` | Build and publish `springboard-shell` | Fast profile. `bifrost pc publish` is the same. Version is `Cargo.toml` plus a timestamp. |
+| `tools/pc-publish.py [--release] [--skip-build] [--skip-mirror-sync]` | Build and publish `springboard-shell`, then sync and check the :8079 mirror | Fast profile. `bifrost pc publish` is the same. Version is `Cargo.toml` plus a timestamp. Builds `bifrost-wm`, the chrome clients and `bifrost-log` too. |
+| `tools/pc_mirror.py [--sync] [--check]` | The :8079 package mirror alone | `test_pc_mirror.py` has the tests. |
+| `tools/lab-up.sh [down]` | Lab NIC, nft NAT table `bifrost_nat` for 10.99.0.0/24, iVentoy | Run after a titan reboot. |
 | `tools/pc-app.py`, `pc-app-smoke.py` | Desktop app build and publish | See `docs/bifrost-pc-workflow.md`. |
 | `tools/vm-install.sh`, `vm-cycle.py` | VM install loop | `vm-cycle` wipes by simulated keystrokes (fragile). |
 | `tools/iventoy-prune.sh` | Prune old ISOs in iVentoy | Keeps the newest 2 and anything under 4 h old. Never delete an ISO a machine booted from. |
@@ -166,16 +168,15 @@ Coordinates are original panel pixels. `tools/midget.py` sends each line over SS
 rejected on DP-2, a stale DRM holder) counts toward the crash guard. Three of them latch the desktop off until the counter
 is cleared. Diagnose with `journalctl -b -u springboard`, then run the shell as root against a live `bifrost-wm`, since the
 session starts it as root and its data lives in `/var/lib/springboard`. Running it as the account reads the wrong data dir.
-Intel Skylake stripes on the splash came from i915 framebuffer compression. The installed kernel command line now sets
-`i915.enable_fbc=0 i915.enable_psr=0 plymouth.use-simpledrm`.
+Intel Skylake stripes on the splash came from i915 framebuffer compression. The installed kernel command line sets
+`i915.enable_fbc=0 i915.enable_psr=0`.
 
 **Ship a shell or desktop change (no ISO):** bump `springboard/Cargo.toml` and `CHANGELOG.md`,
 `tools/pc-publish.py`, then Midget picks it up through Software Update.
 
 **Ship an installer change:** `tools/lab-push.sh`. The next netboot of a lab host runs it.
 
-**Change boot-time files (splash, handoff, theme, cmdline, initramfs):** the package carries the theme and
-handoff unit, but the boot loader and cmdline come from the live medium. That needs `tools/build-iso.sh --lab`
+**Change boot-time files (loader, cmdline, initramfs):** the loader and cmdline come from the live medium. That needs `tools/build-iso.sh --lab`
 and a new ISO in iVentoy. Confirm with the user first.
 
 **Wipe Midget:** `tools/midget.py wipe --disk /dev/nvme0n1 --confirm "WIPE 10.99.0.200 /dev/nvme0n1" --dry-run`,
