@@ -1,5 +1,5 @@
 //! Colour adjustments and effects on single pixels: exposure, saturation, contrast, hue rotation,
-//! temperature and tint, sepia, invert, posterize and vignette. Colours are unpremultiplied RGB with
+//! temperature and tint, gamma, sepia, invert, posterize, threshold and vignette. Colours are unpremultiplied RGB with
 //! each channel in 0..=1. Every function is pure; the Photos edit and app filters map their pixel
 //! buffers through them with `map_pixel`.
 
@@ -94,6 +94,19 @@ pub fn sepia(c: Rgb, amount: f32) -> Rgb {
 /// Each channel reversed around 1.
 pub fn invert(c: Rgb) -> Rgb {
     c.map(|v| 1.0 - v)
+}
+
+/// Raises each channel to `power` (a gamma curve). 1 leaves the colour unchanged; above 1 darkens the mid tones, below 1
+/// lifts them. A non-positive power is treated as 1 so the curve stays defined.
+pub fn gamma(c: Rgb, power: f32) -> Rgb {
+    let p = if power > 0.0 { power } else { 1.0 };
+    c.map(|v| v.clamp(0.0, 1.0).powf(p)).clamped()
+}
+
+/// Black or white by luma: white where the Rec. 601 luma reaches `threshold`, black below it.
+pub fn threshold(c: Rgb, threshold: f32) -> Rgb {
+    let v = if c.luma() >= threshold { 1.0 } else { 0.0 };
+    Rgb::new(v, v, v)
 }
 
 /// Quantises each channel to `levels` evenly spaced steps. Fewer than 2 levels is treated as 2.

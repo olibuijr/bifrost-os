@@ -13,24 +13,28 @@ enum Kind {
     Exposure,
     Saturation,
     Contrast,
+    Gamma,
     HueRotate,
     TemperatureTint,
     Sepia,
     Invert,
     Posterize,
+    Threshold,
     Vignette,
 }
 
 /// The names a filter can be made from, with their effect.
-const NAMES: [(&str, Kind); 9] = [
+const NAMES: [(&str, Kind); 11] = [
     ("exposure", Kind::Exposure),
     ("saturation", Kind::Saturation),
     ("contrast", Kind::Contrast),
+    ("gamma", Kind::Gamma),
     ("hueRotate", Kind::HueRotate),
     ("temperatureTint", Kind::TemperatureTint),
     ("sepia", Kind::Sepia),
     ("invert", Kind::Invert),
     ("posterize", Kind::Posterize),
+    ("threshold", Kind::Threshold),
     ("vignette", Kind::Vignette),
 ];
 
@@ -40,11 +44,13 @@ fn defaults(kind: Kind) -> Vec<(&'static str, f32)> {
         Kind::Exposure => vec![("ev", 0.0)],
         Kind::Saturation => vec![("amount", 1.0)],
         Kind::Contrast => vec![("amount", 1.0)],
+        Kind::Gamma => vec![("power", 1.0)],
         Kind::HueRotate => vec![("degrees", 0.0)],
         Kind::TemperatureTint => vec![("temperature", 0.0), ("tint", 0.0)],
         Kind::Sepia => vec![("amount", 1.0)],
         Kind::Invert => Vec::new(),
         Kind::Posterize => vec![("levels", 6.0)],
+        Kind::Threshold => vec![("threshold", 0.5)],
         Kind::Vignette => vec![("strength", 0.5)],
     }
 }
@@ -77,21 +83,23 @@ fn ranges(kind: Kind) -> Vec<(&'static str, f32, f32)> {
         Kind::Exposure => vec![("ev", -10.0, 10.0)],
         Kind::Saturation => vec![("amount", 0.0, 2.0)],
         Kind::Contrast => vec![("amount", 0.0, 4.0)],
+        Kind::Gamma => vec![("power", 0.1, 3.0)],
         Kind::HueRotate => vec![("degrees", -180.0, 180.0)],
         Kind::TemperatureTint => vec![("temperature", -100.0, 100.0), ("tint", -100.0, 100.0)],
         Kind::Sepia => vec![("amount", 0.0, 1.0)],
         Kind::Invert => Vec::new(),
         Kind::Posterize => vec![("levels", 2.0, 32.0)],
+        Kind::Threshold => vec![("threshold", 0.0, 1.0)],
         Kind::Vignette => vec![("strength", 0.0, 1.0)],
     }
 }
 
 fn category_of(kind: Kind) -> Category {
     match kind {
-        Kind::Exposure | Kind::Saturation | Kind::Contrast | Kind::HueRotate | Kind::TemperatureTint => {
+        Kind::Exposure | Kind::Saturation | Kind::Contrast | Kind::Gamma | Kind::HueRotate | Kind::TemperatureTint => {
             Category::ColorAdjustment
         }
-        Kind::Sepia | Kind::Invert | Kind::Posterize => Category::ColorEffect,
+        Kind::Sepia | Kind::Invert | Kind::Posterize | Kind::Threshold => Category::ColorEffect,
         Kind::Vignette => Category::Stylize,
     }
 }
@@ -176,6 +184,14 @@ impl Filter {
             Kind::Contrast => {
                 let amount = input("amount");
                 colorfx::map_pixel(px, |c| colorfx::contrast(c, amount))
+            }
+            Kind::Gamma => {
+                let power = input("power");
+                colorfx::map_pixel(px, |c| colorfx::gamma(c, power))
+            }
+            Kind::Threshold => {
+                let t = input("threshold");
+                colorfx::map_pixel(px, |c| colorfx::threshold(c, t))
             }
             Kind::HueRotate => {
                 let degrees = input("degrees");
@@ -344,6 +360,34 @@ mod tests {
     }
 
     #[test]
+    fn gamma_of_two_squares_mid_grey_and_keeps_black_and_white() {
+        // 128 is 0.502 in 0..=1; squared it is about 0.252, which packs to 64. Black and white stay put.
+        let mut f = Filter::named("gamma").unwrap();
+        f.set("power", 2.0);
+        let mut chain = Chain::new();
+        chain.push(f);
+        let out = chain.apply(&[0xff80_8080, 0xff00_0000, 0xffff_ffff], 3, 1).unwrap();
+        assert_eq!(out, vec![0xff40_4040, 0xff00_0000, 0xffff_ffff]);
+    }
+
+    #[test]
+    fn gamma_default_is_the_identity() {
+        let px = vec![0xff32_64c8, 0xff80_8080];
+        let mut chain = Chain::new();
+        chain.push(Filter::named("gamma").unwrap());
+        assert_eq!(chain.apply(&px, 2, 1).unwrap(), px);
+    }
+
+    #[test]
+    fn threshold_turns_each_pixel_black_or_white_by_luma() {
+        // Pure green has luma 0.587, above the default 0.5, so it becomes white. Dark grey 40 stays black.
+        let mut chain = Chain::new();
+        chain.push(Filter::named("threshold").unwrap());
+        let out = chain.apply(&[0xff00_ff00, 0xff28_2828], 2, 1).unwrap();
+        assert_eq!(out, vec![0xffff_ffff, 0xff00_0000]);
+    }
+
+    #[test]
     fn set_clamped_limits_the_value_to_the_input_range() {
         // Exposure accepts -10 to 10 stops. Values outside are clamped; NaN is refused and leaves the input alone.
         let mut f = Filter::named("exposure").unwrap();
@@ -384,7 +428,7 @@ mod tests {
         assert_eq!(Filter::named("exposure").unwrap().category(), Category::ColorAdjustment);
         assert_eq!(Filter::named("invert").unwrap().category(), Category::ColorEffect);
         assert_eq!(Filter::named("vignette").unwrap().category(), Category::Stylize);
-        assert_eq!(filters_in(Category::ColorEffect), vec!["sepia", "invert", "posterize"]);
+        assert_eq!(filters_in(Category::ColorEffect), vec!["sepia", "invert", "posterize", "threshold"]);
         assert_eq!(filters_in(Category::Stylize), vec!["vignette"]);
     }
 
@@ -392,8 +436,8 @@ mod tests {
     fn search_matches_names_ignoring_case_and_blank_matches_all() {
         assert_eq!(search("TINT"), vec!["temperatureTint"]);
         assert_eq!(search("  "), filter_names());
-        // Names with an "o": exposure, saturation, contrast, hueRotate and posterize.
-        assert_eq!(search("o"), vec!["exposure", "saturation", "contrast", "hueRotate", "posterize"]);
+        // Names with an "o": exposure, saturation, contrast, hueRotate, posterize and threshold.
+        assert_eq!(search("o"), vec!["exposure", "saturation", "contrast", "hueRotate", "posterize", "threshold"]);
         assert!(search("zzz").is_empty());
     }
 }
