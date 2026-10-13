@@ -99,7 +99,7 @@ pub fn answer(app_id: &str, method: &str, params: &Json, contacts: &[Contact]) -
     let access = access_of(app_id);
     match method {
         "access" => {
-            let picked = access.picked().iter().map(|id| Json::Num(*id as f64)).collect();
+            let picked: Vec<Json> = access.picked().iter().map(|id| Json::Num(*id as f64)).collect();
             Ok(Json::Obj(vec![
                 ("status".into(), Json::Str(access.status().name().into())),
                 ("picked".into(), Json::Arr(picked)),
@@ -115,7 +115,7 @@ pub fn answer(app_id: &str, method: &str, params: &Json, contacts: &[Contact]) -
             let mut pool: Vec<Contact> = contacts.iter().filter(|c| access.can_read(c.id)).cloned().collect();
             contactstore::sort(&mut pool);
             let hits = contactstore::search(&pool, query);
-            let rows = hits
+            let rows: Vec<Json> = hits
                 .into_iter()
                 .map(|i| partial_json(&project(&record_of(&pool[i]), &keys)))
                 .collect();
