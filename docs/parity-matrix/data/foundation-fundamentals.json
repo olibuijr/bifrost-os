@@ -10,9 +10,9 @@
     {
       "feature": "Numbers, Data, and Basic Values",
       "apple": "NSNumber, Data, Decimal, UUID, NSValue, CGRect-like geometry (https://developer.apple.com/documentation/foundation/numbers-data-and-basic-values)",
-      "bifrost": "springboard/ui/src/geometry.rs (Rect, EdgeInsets); Rust std types for numbers, bytes and ids",
+      "bifrost": "springboard/ui/src/geometry.rs (Rect, EdgeInsets); springboard/sdk/src/value_types.rs (Uuid: uuidString, FromStr, Ord/Hash, Codable); springboard/sdk/src/decimal.rs (Decimal, RoundingMode); Rust std types for numbers and bytes",
       "status": "partial",
-      "note": "geometry types exist; no NSNumber, Decimal or NSValue wrappers, and no UUID type in the SDK"
+      "note": "geometry, UUID and Decimal (exact arithmetic, NSDecimalRound modes, locale parsing, Codable) exist; no NSNumber or NSValue wrappers and no NSDecimalNumber object; needs a Midget check for parity"
     },
     {
       "feature": "Strings and Text",

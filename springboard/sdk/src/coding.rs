@@ -85,6 +85,33 @@ impl Decodable for String {
         if let Value::Str(s) = v { Ok(s.clone()) } else { err("expected string") }
     }
 }
+impl Encodable for crate::value_types::Uuid {
+    fn encode(&self) -> Value {
+        Value::Str(self.uuid_string())
+    }
+}
+impl Decodable for crate::value_types::Uuid {
+    fn decode(v: &Value) -> Result<Self, CodingError> {
+        match v {
+            Value::Str(s) => crate::value_types::Uuid::parse(s).ok_or_else(|| CodingError("bad UUID string".into())),
+            _ => err("expected UUID string"),
+        }
+    }
+}
+impl Encodable for crate::decimal::Decimal {
+    fn encode(&self) -> Value {
+        Value::Str(self.to_string())
+    }
+}
+impl Decodable for crate::decimal::Decimal {
+    fn decode(v: &Value) -> Result<Self, CodingError> {
+        match v {
+            Value::Str(s) => crate::decimal::Decimal::parse(s).ok_or_else(|| CodingError("bad decimal string".into())),
+            Value::Int(i) => Ok(crate::decimal::Decimal::from_i64(*i)),
+            _ => err("expected decimal string"),
+        }
+    }
+}
 impl Encodable for Date {
     fn encode(&self) -> Value {
         Value::Date(self.0)
@@ -547,5 +574,29 @@ mod binary_tests {
         b.extend(0u64.to_be_bytes());
         b.extend(15u64.to_be_bytes());
         assert!(PropertyListDecoder::new().decode_bytes::<HashMap<String, String>>(&b).is_err());
+    }
+}
+
+#[cfg(test)]
+mod uuid_decimal_tests {
+    use super::*;
+    use crate::decimal::Decimal;
+    use crate::value_types::Uuid;
+
+    #[test]
+    fn uuid_round_trips_as_a_json_string() {
+        let u = Uuid::version4([9; 16]);
+        let text = JSONEncoder::new().encode(&u);
+        assert_eq!(text, format!("\"{u}\""));
+        assert_eq!(JSONDecoder::new().decode::<Uuid>(&text).unwrap(), u);
+        assert!(JSONDecoder::new().decode::<Uuid>("\"nope\"").is_err());
+    }
+
+    #[test]
+    fn decimal_round_trips_as_a_json_string() {
+        let d = Decimal::parse("12.50").unwrap();
+        let text = JSONEncoder::new().encode(&d);
+        assert_eq!(text, "\"12.5\"");
+        assert_eq!(JSONDecoder::new().decode::<Decimal>(&text).unwrap(), d);
     }
 }

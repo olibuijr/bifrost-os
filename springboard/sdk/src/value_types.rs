@@ -7,7 +7,7 @@
 //! * `Uuid` is the 128-bit identifier, printed in upper case with hyphens. Random identifiers come from the system
 //!   entropy source (`entropy`); the version and variant bits are set as RFC 4122 requires.
 //!
-//! Gaps: no number, value or decimal wrappers, no key-value coding on these types, and no serialisation trait
+//! `Decimal` lives in `decimal`. Gaps: no number or value wrappers, no key-value coding on these types, and no serialisation trait
 //! (apps encode them as text with `Display` and `Uuid::parse`).
 use crate::entropy;
 use std::collections::{HashMap, HashSet};
@@ -168,6 +168,10 @@ impl Uuid {
         a.copy_from_slice(&b);
         Ok(Uuid::version4(a))
     }
+    /// `uuidString`: the 36-character upper-case hyphenated form.
+    pub fn uuid_string(self) -> String {
+        self.to_string()
+    }
     /// The version number stored in the identifier.
     pub fn version(self) -> u8 {
         self.0[6] >> 4
@@ -198,6 +202,25 @@ impl Uuid {
         Some(Uuid(out))
     }
 }
+
+impl std::str::FromStr for Uuid {
+    type Err = ParseUuidError;
+    fn from_str(text: &str) -> Result<Uuid, ParseUuidError> {
+        Uuid::parse(text).ok_or(ParseUuidError)
+    }
+}
+
+/// The text given to `Uuid::from_str` is not a 36-character hyphenated identifier.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ParseUuidError;
+
+impl fmt::Display for ParseUuidError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("invalid UUID string")
+    }
+}
+
+impl std::error::Error for ParseUuidError {}
 
 fn is_hyphen_position(i: usize) -> bool {
     matches!(i, 8 | 13 | 18 | 23)
@@ -301,6 +324,26 @@ mod tests {
         assert_eq!(Uuid::parse("6BA7B8109DAD11D180B400C04FD430C8"), None);
         assert_eq!(Uuid::parse("6BA7B810-9DAD-11D1-80B4-00C04FD430C"), None);
         assert_eq!(Uuid::parse("6BA7B810-9DAD-11D1-80B4-00C04FD430CG"), None);
+    }
+
+    #[test]
+    fn uuid_string_and_from_str_round_trip() {
+        let u = Uuid::version4([7; 16]);
+        assert_eq!(u.uuid_string(), u.to_string());
+        assert_eq!(u.uuid_string().parse::<Uuid>(), Ok(u));
+        assert_eq!(u.uuid_string().to_lowercase().parse::<Uuid>(), Ok(u));
+        assert_eq!("nope".parse::<Uuid>(), Err(ParseUuidError));
+    }
+
+    #[test]
+    fn uuid_orders_by_bytes_and_hashes() {
+        let a = Uuid::from_bytes([0; 16]);
+        let mut hi = [0u8; 16];
+        hi[0] = 1;
+        let b = Uuid::from_bytes(hi);
+        assert!(a < b);
+        let set: HashSet<Uuid> = [a, b, a].into_iter().collect();
+        assert_eq!(set.len(), 2);
     }
 
     #[test]
