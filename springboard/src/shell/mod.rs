@@ -242,6 +242,8 @@ pub struct Info {
     pub power_profile: String,
     /// the Bluetooth radio: power, scan results, paired and connected devices
     pub bt: crate::bare::bluetooth::Status,
+    /// the sign-in page of the joined network, while it has one (see `net::captive`)
+    pub captive_portal: Option<String>,
 }
 
 /// A saved Wi-Fi network as Known Networks lists it.

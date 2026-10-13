@@ -24,6 +24,8 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the leading system menu (the menu equivalent), drawn as the BifrOSt mark
     System,
     App,File,Edit,View,Window,Help,Network,Power,
+    /// the Bluetooth menu extra: the radio, the paired and connected devices, and the Bluetooth pane
+    Bluetooth,
     /// Control Center menu extra: a press opens the Control Center sheet, it has no rows
     ControlCenter,
     /// CPU and RAM details; no longer placed on the bar (Golden Gate shows no readouts), kept for their rows
@@ -39,7 +41,7 @@ fn status_icon_lift(battery:bool,ethernet:bool)->f32 {if battery{0.}else if ethe
     /// the open or save panel (`docpanel`): drawn and hit-tested by the panel, not as rows
     Document}
 #[cfg(feature = "desktop-wayland")]
-#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),AppMenu(u8,u32),Dock(super::desktop_dock::Change),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,Media(bifrost_ui::media_session::RemoteCommand)}
+#[derive(Clone)] pub(super) enum Action {Foreign(u32),Settings(&'static str),Desktop,Close,Minimize,Zoom,ShowAll,Open(super::AppId),Context(u8,u32),AppMenu(u8,u32),Dock(super::desktop_dock::Change),Shortcut(u16),Command(bifrost_proto::Command),Term(super::hwkeys::TermKey),Wifi(bool),Scan,Select(String),Power(String),Lock,Sleep,Halt(super::power_menu::PowerAction),StatusItem(u8,u32,u32),Tile(super::desk::Tile),RestoreSize,CycleWindow,Print,InputSource(u8),Recent(u8),ClearRecent,Media(bifrost_ui::media_session::RemoteCommand),Bluetooth(crate::bare::bluetooth::Cmd),Portal(String)}
 // Only the desktop-wayland bar reads these fields; other builds never build the menu.
 #[cfg_attr(not(feature = "desktop-wayland"), allow(dead_code))]
 pub(super) struct ContextMenu {pub slot:u8,pub x:f32,pub y:f32,pub items:Vec<bifrost_proto::ContextItem>}
@@ -172,6 +174,8 @@ impl Shell {
         // the input source sits left of Control Center (the extras are placed from the clock leftwards)
         let source=super::kb_layouts::active().short_name();let input=self.ui.measure(source,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);
         let mut extras=vec![(Menu::ControlCenter,self.ui.pt(STATUS_ICON_PT),String::from("control")),(Menu::Input,input,source.to_string()),(Menu::Network,nw,if wired {"ethernet"}else{"wifi"}.into()),(Menu::Power,pw,String::from("power")),(Menu::Memory,mw,memory),(Menu::Cpu,cw,cpu)];
+        // the Bluetooth extra sits left of Wi-Fi, once the radio exists (it stays hidden without a controller)
+        if self.info.bt.state!=crate::bare::bluetooth::State::Unavailable {extras.insert(2,(Menu::Bluetooth,self.ui.pt(STATUS_ICON_PT),String::from("bluetooth")));}
         // the Now Playing extra sits left of the system extras while an app has a session, and right of the app extras
         if let Some(p)=super::now_playing_menu::panel(){let label=self.ui.fit(&p.label,12.,self.ui.pt(160.));let w=self.ui.measure(&label,12.,Weight::Regular)+self.ui.pt(2.*STATUS_PAD_PT);extras.push((Menu::NowPlaying,w,label));}
         // menu extras of running apps (`NativeStatusItem`) sit left of the system extras; an empty title shows the app's initial
@@ -211,7 +215,11 @@ impl Shell {
             if super::sound_page::input_active() {s.fill_rrect(x+6.*p,y-9.*p,5.*p,5.*p,2.5*p,super::ui::SYSTEM_ORANGE);}
             return;
         }
-        if menu==Menu::Power {if self.info.battery_present {s.stroke_rrect(x-9.*p,y-5.*p,17.*p,10.*p,2.*p,p,ink);rect(s,9.,-2.,2.,4.);rect(s,-7.,-3.,13.*self.info.battery as f32/100.,6.);}else{rect(s,-5.,-2.,10.,6.);rect(s,-4.,-7.,2.,5.);rect(s,2.,-7.,2.,5.);rect(s,-1.,4.,2.,5.);}}else if label=="ethernet" {s.stroke_rrect(x-7.*p,y-7.*p,14.*p,10.*p,p,p,ink);rect(s,-1.,3.,2.,4.);rect(s,-9.,6.,18.,2.);for dx in [-9.,-1.,7.] {rect(s,dx,6.,2.,4.);}}else{for i in 0..3 {let w=(16-i*5) as f32;rect(s,-w/2.,-6.+i as f32*4.,w,2.);}rect(s,-1.,6.,2.,2.);}
+        if menu==Menu::Power {if self.info.battery_present {s.stroke_rrect(x-9.*p,y-5.*p,17.*p,10.*p,2.*p,p,ink);rect(s,9.,-2.,2.,4.);rect(s,-7.,-3.,13.*self.info.battery as f32/100.,6.);}else{rect(s,-5.,-2.,10.,6.);rect(s,-4.,-7.,2.,5.);rect(s,2.,-7.,2.,5.);rect(s,-1.,4.,2.,5.);}}else if menu==Menu::Bluetooth {
+            // the Bluetooth rune: a stem and two chevrons, drawn as dots along each stroke
+            let strokes:[((f32,f32),(f32,f32));4]=[((0.,-8.),(0.,8.)),((0.,-8.),(5.,-3.)),((5.,-3.),(-5.,3.)),((-5.,3.),(0.,8.))];
+            for ((ax,ay),(bx,by)) in strokes {for k in 0..=8 {let f=k as f32/8.;rect(s,ax+(bx-ax)*f-1.,ay+(by-ay)*f-1.,2.,2.);}}
+        }else if label=="ethernet" {s.stroke_rrect(x-7.*p,y-7.*p,14.*p,10.*p,p,p,ink);rect(s,-1.,3.,2.,4.);rect(s,-9.,6.,18.,2.);for dx in [-9.,-1.,7.] {rect(s,dx,6.,2.,4.);}}else{for i in 0..3 {let w=(16-i*5) as f32;rect(s,-w/2.,-6.+i as f32*4.,w,2.);}rect(s,-1.,6.,2.,2.);}
     }
     pub(super) fn menu_rows(&self,menu:Menu)->Vec<Row> {
         let mut rows=self.own_menu_rows(menu);
@@ -233,6 +241,8 @@ impl Shell {
             Menu::App=>{let enabled=self.foreign_active().is_some()||self.desk.as_ref().and_then(|d|d.front()).is_some();let name=self.app_menu_name();let quit=format!("Quit {name}");vec![Row::action(format!("About {name}"),Action::Settings("About")),Row::separator(),Row::action("Settings…",Action::Settings("")).symbol(crate::symbols::Symbol::GearOutline).key("cmd+,"),Row::separator(),(if enabled{Row::action(quit,Action::Close)}else{Row::label(quit)}).key("cmd+q")]},
             Menu::System=>{use super::power_menu::PowerAction;let mut rows=vec![Row::action("About This Computer",Action::Settings("About")),Row::separator(),Row::action("System Settings…",Action::Settings("")),Row::action("App Store…",Action::Open(AppId::AppStore)),Row::separator()];rows.push(Row::label("Recent Items"));let recent=self.recent_titles();for (i,title) in recent.iter().enumerate(){rows.push(Row::action(title.clone(),Action::Recent(i as u8)));}rows.push(if recent.is_empty(){Row::label("Clear Menu")}else{Row::action("Clear Menu",Action::ClearRecent)});rows.push(Row::separator());rows.extend(vec![Row::action("Sleep",Action::Sleep),Row::action("Restart…",Action::Halt(PowerAction::Restart)),Row::action("Shut Down…",Action::Halt(PowerAction::Off)),Row::separator(),Row::action("Lock Screen",Action::Lock)]);rows},
             Menu::ControlCenter=>Vec::new(),
+            // the Bluetooth extra: the radio, then each paired or connected device (connect or disconnect), then its pane
+            Menu::Bluetooth=>{let bt=&self.info.bt;let mut rows=vec![Row::action(if bt.on(){"Turn Bluetooth Off"}else{"Turn Bluetooth On"},Action::Bluetooth(crate::bare::bluetooth::Cmd::Enable(!bt.on())))];if bt.on(){rows.push(Row::separator());for d in bt.devices.iter().filter(|d|d.paired||d.connected).take(8) {if bt.busy.as_deref()==Some(d.addr.as_str()){rows.push(Row::label(format!("{}…",d.label())));}else{let cmd=if d.connected{crate::bare::bluetooth::Cmd::Disconnect(d.addr.clone())}else{crate::bare::bluetooth::Cmd::Connect(d.addr.clone())};rows.push(Row::action(format!("{} {}",if d.connected{"✓"}else{" "},d.label()),Action::Bluetooth(cmd)));}}}rows.push(Row::separator());rows.push(Row::action("Bluetooth Settings…",Action::Settings("Bluetooth")));rows},
             // title and position as labels, then the transport: an enabled row sends its remote command to the owner
             Menu::NowPlaying=>super::now_playing_menu::panel().map(|p|{let mut rows=vec![Row::label(p.title),Row::label(p.position),Row::separator()];rows.extend(p.transport.into_iter().map(|(c,text,on)|if on {Row::action(text,Action::Media(c))} else {Row::label(text)}));rows}).unwrap_or_default(),
             // View holds the Dock's display options (also in the Dock menu), as Files and Mail keep theirs in View
@@ -249,7 +259,7 @@ impl Shell {
                     for i in n.interfaces.iter().filter(|i|i.kind=="ethernet") {rows.push(Row::label(format!("{}: {}",i.name,if i.connected(){"Connected"}else{"Disconnected"})));for ip in &i.ipv4 {rows.push(Row::label(ip.clone()));}}
                     if n.wifi_available {rows.push(Row::action(if n.wifi_on{"Turn Wi-Fi Off"}else{"Turn Wi-Fi On"},Action::Wifi(!n.wifi_on)));if n.wifi_on {rows.push(Row::label(n.ssid.clone().unwrap_or_else(||"Not Connected".into())));rows.push(Row::action("Scan for Networks",Action::Scan));for net in n.networks.iter().filter(|net|net.saved&&n.ssid.as_deref()!=Some(net.ssid.as_str())).take(8) {rows.push(Row::action(net.ssid.clone(),Action::Select(net.ssid.clone())));}}}
                     else {rows.push(Row::label("No Wi-Fi adapter"));}
-                }rows.push(Row::action("Network Settings…",Action::Settings("Network")));rows
+                }if let Some(url)=&self.info.captive_portal {rows.push(Row::action(format!("Sign In to {}…",self.info.current_ssid.as_deref().unwrap_or("Network")),Action::Portal(url.clone())));}rows.push(Row::action("Network Settings…",Action::Settings("Network")));rows
             },
             Menu::Cpu=>{let m=&self.desktop_metrics;let mut rows=vec![Row::label(format!("CPU usage: {:.1}%",m.cpu)),Row::label(format!("{} logical processors",m.cores)),Row::label(format!("Load: {}",m.load)),Row::label(format!("Uptime: {}h {}m",m.uptime/3600,m.uptime/60%60))];rows.extend(top_app_rows(&m.apps,"Top apps by CPU time",|a|a.cpu_usec,|v|format!("{:.1} s",v as f64/1e6)));rows},
             Menu::Memory=>{let m=&self.desktop_metrics;let gb=|n:u64|format!("{:.2} GB",n as f64/1073741824.);let mut rows=vec![Row::label(format!("Used: {} ({:.0}%)",gb(m.used),m.memory_percent())),Row::label(format!("Available: {}",gb(m.available))),Row::label(format!("Installed: {}",gb(m.total))),Row::label(format!("Cached: {}",gb(m.cached))),Row::label(format!("Swap: {} / {}",gb(m.swap_total.saturating_sub(m.swap_free)),gb(m.swap_total)))];rows.extend(top_app_rows(&m.apps,"Top apps by memory",|a|a.memory,gb));rows},
@@ -311,7 +321,7 @@ impl Shell {
         self.draw_desktop_bar_items(s,height);
     }
     fn draw_desktop_bar_items(&self,s:&mut Surface,height:usize) {
-        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter) {self.draw_desktop_status_icon(s,menu,&label,x+width/2.,height as f32/2.);continue;}if matches!(menu,Menu::Cpu|Menu::Memory|Menu::Status(_)|Menu::Input|Menu::NowPlaying){self.bar_label(s,&label,12.,Weight::Regular,|im|((x+self.ui.pt(STATUS_PAD_PT)) as i32,(height as i32-im.h as i32)/2));continue;}self.bar_label(s,&label,13.,if menu==Menu::App{Weight::Semibold}else{Weight::Regular},|im|((x+self.ui.pt(12.)) as i32,(height as i32-im.h as i32)/2));}
+        for (menu,x,width,label) in self.menu_buttons() {if self.desktop_menu==Some(menu){let h=height as f32-self.ui.pt(4.);s.fill_rrect(x,self.ui.pt(2.),width,h,h/2.,self.bar_ink().capsule);}if matches!(menu,Menu::System|Menu::Network|Menu::Power|Menu::ControlCenter|Menu::Bluetooth) {self.draw_desktop_status_icon(s,menu,&label,x+width/2.,height as f32/2.);continue;}if matches!(menu,Menu::Cpu|Menu::Memory|Menu::Status(_)|Menu::Input|Menu::NowPlaying){self.bar_label(s,&label,12.,Weight::Regular,|im|((x+self.ui.pt(STATUS_PAD_PT)) as i32,(height as i32-im.h as i32)/2));continue;}self.bar_label(s,&label,13.,if menu==Menu::App{Weight::Semibold}else{Weight::Regular},|im|((x+self.ui.pt(12.)) as i32,(height as i32-im.h as i32)/2));}
         let text=self.clock_text();
         self.bar_label(s,&text,12.,Weight::Medium,|im|(self.w-im.w as i32-self.ui.pt(16.) as i32,(height as i32-im.h as i32)/2));
     }
@@ -465,6 +475,8 @@ impl Shell {
                     Action::Sleep=>{effects.extend(self.sleep_screen());effects.push(super::Effect::SleepSystem)}
                     Action::Halt(power)=>effects.push(Effect::Power(power)),
                     Action::Media(command)=>{super::services::now_playing::send(command);},
+                    Action::Bluetooth(command)=>effects.push(Effect::Bluetooth(command)),
+                    Action::Portal(url)=>{let _=self.desktop_open_url(&url,t);},
                 }effects
     }
     /// Close or minimize the front window (the File menu and Ctrl+W / Ctrl+M).
