@@ -2066,3 +2066,14 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## Speech recognizer (`bifrost_app::speech_recognizer`)
+
+`SFSpeechRecognizer` mirrors Apple's legacy recognizer: `request_authorization` records the person's answer once
+(`NotDetermined`, `Denied`, `Restricted`, `Authorized`), `is_available` asks the backend, and `recognition_task` /
+`recognition_task_url` start a task only when authorized and available. Audio requests take `AnalyzerInput` buffers
+through `append` and `end_audio`; the caller drives the task with `pump`, which delivers partial results (when
+`should_report_partial_results`) and one final `SFSpeechRecognitionResult` with `best_transcription` and timed
+`SFTranscriptionSegment`s. `cancel` reports `Canceled` once. Gaps: no recognition engine ships, so a `RecognitionBackend`
+must be supplied; no alternatives beyond the best transcription; no dictation entry point on the keyboard. Rows stay
+partial until a Midget check.

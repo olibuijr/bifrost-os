@@ -33,14 +33,14 @@
       "apple": "Microphone access for speech input (permission prompt)",
       "bifrost": "springboard/ui/src/mic_consent.rs (SDK: springboard/sdk/src/lib.rs microphone)",
       "status": "partial",
-      "note": "Wave 4 (w4-speech, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service is the one process that opens the microphone; it starts only on an explicit RecordStart. No permission prompt API for apps."
+      "note": "Wave 4 (w4-speech, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. The audio service is the one process that opens the microphone; it starts only on an explicit RecordStart. No permission prompt API for apps. SFSpeechRecognizer.request_authorization gates every task in the app; the shell does not enforce it."
     },
     {
       "feature": "Recognition results (alternatives, confidence, time ranges)",
       "apple": "SpeechModuleResult, AnalyzerInput time codes, SFSpeechRecognitionResult",
       "bifrost": "springboard/ui/src/recognition.rs",
       "status": "partial",
-      "note": "Wave 2 (speech, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No result type with alternatives or confidence."
+      "note": "Wave 2 (speech, parity/integration e52c2fd0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No result type with alternatives or confidence. SDK result types now exist in speech_recognizer.rs (segments with timestamp, duration, confidence); no alternatives beyond the best one."
     },
     {
       "feature": "Custom vocabulary and language models",
@@ -66,9 +66,9 @@
     {
       "feature": "Legacy Objective-C recognizer API",
       "apple": "Speech Recognition in Objective-C (SFSpeechRecognizer and related classes)",
-      "bifrost": "none",
-      "status": "gap",
-      "note": "The shell and apps are Rust. The concept is missing, not the Objective-C binding. Apple's current docs point to SpeechAnalyzer."
+      "bifrost": "springboard/sdk/src/speech_recognizer.rs (SFSpeechRecognizer, SFSpeechAudioBufferRecognitionRequest, SFSpeechURLRecognitionRequest, SFSpeechRecognitionTask, SFSpeechRecognitionResult, SFTranscription, SFTranscriptionSegment)",
+      "status": "partial",
+      "note": "Host unit tests with a fake backend: authorization, availability, partial then final results, segment timing, cancel. No real recognition engine yet (backend trait only); not tested on Midget."
     }
   ],
   "gaps": [
