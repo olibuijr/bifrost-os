@@ -2,6 +2,7 @@
 //! its logic in a module here (`pub mod <tool>;`) so it can be unit tested.
 
 pub mod defaults;
+pub mod ditto;
 pub mod caffeinate;
 pub mod control;
 pub mod network;
