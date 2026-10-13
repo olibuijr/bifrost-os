@@ -21,6 +21,26 @@ pub enum Status {
     Limited,
 }
 
+impl Status {
+    /// The wire name: `not_determined`, `restricted`, `denied`, `authorized` or `limited`.
+    pub fn name(self) -> &'static str {
+        match self {
+            Status::NotDetermined => "not_determined",
+            Status::Restricted => "restricted",
+            Status::Denied => "denied",
+            Status::Authorized => "authorized",
+            Status::Limited => "limited",
+        }
+    }
+
+    /// The status a wire name stands for, or `None` for an unknown name.
+    pub fn from_name(name: &str) -> Option<Status> {
+        [Status::NotDetermined, Status::Restricted, Status::Denied, Status::Authorized, Status::Limited]
+            .into_iter()
+            .find(|status| status.name() == name)
+    }
+}
+
 /// The person's answer, given at the prompt or later in Settings.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Choice {
@@ -194,6 +214,20 @@ mod tests {
         assert_eq!(a.request(Choice::All), Err(Error::Restricted));
         assert_eq!(a.change_in_settings(Choice::All), Err(Error::Restricted));
         assert!(!a.can_read(1));
+    }
+
+    #[test]
+    fn status_wire_names_read_back() {
+        for status in [
+            Status::NotDetermined,
+            Status::Restricted,
+            Status::Denied,
+            Status::Authorized,
+            Status::Limited,
+        ] {
+            assert_eq!(Status::from_name(status.name()), Some(status));
+        }
+        assert_eq!(Status::from_name("all"), None);
     }
 
     #[test]
