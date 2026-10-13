@@ -212,6 +212,7 @@ pub mod passkey_client_data;
 pub mod credential_exchange;
 pub mod web_extension;
 pub mod web_auth;
+pub mod browser_sheet;
 pub mod http_auth;
 pub mod dav_client;
 pub mod dav_sync;
