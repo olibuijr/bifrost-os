@@ -1,10 +1,10 @@
 //! Bounded, escaped, atomically written store. Format v2 keeps lists, list groups, sections, templates and
 //! full reminders; the v1 date-only format still loads (all in one list). A line starts with its kind: `L` list,
-//! `G` group, `S` section, `T` template, `U` template item, `R` reminder. Older files have shorter `L` and `R`
+//! `G` group, `S` section, `T` template, `U` template item, `M` smart list, `R` reminder. Older files have shorter `L` and `R`
 //! lines; the missing fields read as unset.
 use crate::model::{
-    Data, ListDef, ListGroup, Reminder, Section, Template, TemplateItem, MAX_GROUPS, MAX_ITEMS, MAX_LISTS, MAX_NAME, MAX_NOTES,
-    MAX_SECTIONS, MAX_TEMPLATES, MAX_TEMPLATE_ITEMS, MAX_TITLE, MAX_URL,
+    Data, DueRule, FlagRule, ListDef, ListGroup, Reminder, Section, SmartDef, SmartRules, Template, TemplateItem, TimeRule, MAX_GROUPS,
+    MAX_ITEMS, MAX_LISTS, MAX_NAME, MAX_NOTES, MAX_SECTIONS, MAX_SMARTS, MAX_TEMPLATES, MAX_TEMPLATE_ITEMS, MAX_TITLE, MAX_URL,
 };
 use crate::repeat::Repeat;
 use springboard::shell::prefs::{escape_field as escaped, unescape_field};
@@ -140,6 +140,26 @@ fn parse_template_item(fields: &[&str]) -> Option<(u64, TemplateItem)> {
     ))
 }
 
+fn parse_smart(fields: &[&str]) -> Option<SmartDef> {
+    // M id color due time flag priority tag list name
+    if fields.len() != 10 {
+        return None;
+    }
+    Some(SmartDef {
+        id: fields[1].parse().ok()?,
+        color: fields[2].parse().ok()?,
+        rules: SmartRules {
+            due: DueRule::from_code(fields[3].parse().ok()?)?,
+            time: TimeRule::from_code(fields[4].parse().ok()?)?,
+            flagged: FlagRule::from_code(fields[5].parse().ok()?)?,
+            priority: fields[6].parse().ok().filter(|p| *p <= 3)?,
+            tag: opt_num(fields[7]).ok()?,
+            list: opt_num(fields[8]).ok()?,
+        },
+        name: unescape(fields[9], MAX_NAME, false)?,
+    })
+}
+
 pub fn parse(text: &str) -> Data {
     let mut lines = text.lines();
     let v1 = match lines.next() {
@@ -151,6 +171,7 @@ pub fn parse(text: &str) -> Data {
     let mut items: Vec<Reminder> = vec![];
     let mut groups: Vec<ListGroup> = vec![];
     let mut templates: Vec<Template> = vec![];
+    let mut smarts: Vec<SmartDef> = vec![];
     // (section id, list id, name) in file order; attached to their lists once every list is known
     let mut sections: Vec<(u64, u64, String)> = vec![];
     let mut list_ids = HashSet::new();
@@ -196,6 +217,11 @@ pub fn parse(text: &str) -> Data {
                     templates.push(Template { id, name, color, icon, items: vec![] });
                 }
             }
+            Some("M") if smarts.len() < MAX_SMARTS => {
+                if let Some(smart) = parse_smart(&fields).filter(|m| smarts.iter().all(|x| x.id != m.id)) {
+                    smarts.push(smart);
+                }
+            }
             Some("U") => {
                 if let Some((tid, item)) = parse_template_item(&fields) {
                     if let Some(t) = templates.iter_mut().find(|t| t.id == tid).filter(|t| t.items.len() < MAX_TEMPLATE_ITEMS) {
@@ -218,6 +244,12 @@ pub fn parse(text: &str) -> Data {
     // Groups must exist; sections need their list, a unique id and room.
     for l in &mut lists {
         l.group = list_group.get(&l.id).copied().filter(|g| group_ids.contains(g));
+    }
+    // a smart list that names a list that is gone takes every list
+    for m in &mut smarts {
+        if m.rules.list.is_some_and(|l| !list_ids.contains(&l)) {
+            m.rules.list = None;
+        }
     }
     let mut section_ids = HashSet::new();
     for (id, list, name) in sections {
@@ -248,7 +280,7 @@ pub fn parse(text: &str) -> Data {
             }
         }
     }
-    Data { lists, items, groups, templates }
+    Data { lists, items, groups, templates, smarts }
 }
 
 pub fn load_checked(path: &Path) -> std::io::Result<Data> {
@@ -288,7 +320,12 @@ fn valid(data: &Data) -> bool {
     let mut group_ids = HashSet::new();
     let mut section_ids = HashSet::new();
     let mut template_ids = HashSet::new();
+    let mut smart_ids = HashSet::new();
     data.items.len() <= MAX_ITEMS
+        && data.smarts.len() <= MAX_SMARTS
+        && data.smarts.iter().all(|m| {
+            smart_ids.insert(m.id) && name_ok(&m.name) && m.rules.priority <= 3 && m.rules.list.is_none_or(|l| data.lists.iter().any(|x| x.id == l))
+        })
         && !data.lists.is_empty()
         && data.lists.len() <= MAX_LISTS
         && data.groups.len() <= MAX_GROUPS
@@ -370,6 +407,20 @@ pub fn save(path: &Path, data: &Data) -> std::io::Result<()> {
             return Err(invalid("Reminders file too large"));
         }
     }
+    for m in &data.smarts {
+        out.push_str(&format!(
+            "M\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            m.id,
+            m.color,
+            m.rules.due.code(),
+            m.rules.time.code(),
+            m.rules.flagged.code(),
+            m.rules.priority,
+            num(m.rules.tag.map(|k| k.to_string())),
+            num(m.rules.list.map(|l| l.to_string())),
+            escaped(&m.name),
+        ));
+    }
     for r in &data.items {
         out.push_str(&format!(
             "R\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
@@ -423,6 +474,12 @@ mod tests {
         work.sections = vec![Section { id: 9, name: "Cold\nfood".into() }, Section { id: 12, name: "Dry".into() }];
         data.lists.push(work);
         data.groups.push(ListGroup { id: 4, name: "Home\tlife".into() });
+        data.smarts.push(SmartDef {
+            id: 6,
+            name: "Morning\nflags".into(),
+            color: 2,
+            rules: SmartRules { due: DueRule::Next7, time: TimeRule::Morning, flagged: FlagRule::Flagged, priority: 2, tag: Some(u64::MAX), list: Some(2) },
+        });
         data.templates.push(Template {
             id: 3,
             name: "Trip".into(),
@@ -491,6 +548,21 @@ mod tests {
         assert_eq!(data.items[1].section, None, "a section of another list is dropped");
     }
     #[test]
+    fn smart_lists_with_bad_codes_or_lists_are_repaired_or_dropped() {
+        let text = format!(
+            "{HEADER}\nL\t1\t0\t0\tOne\n\
+             M\t1\t0\t2\t1\t1\t2\t-\t1\tGood\nM\t1\t0\t0\t0\t0\t0\t-\t-\tDuplicate id\n\
+             M\t2\t0\t9\t0\t0\t0\t-\t-\tBad due code\nM\t3\t0\t0\t0\t0\t7\t-\t-\tBad priority\n\
+             M\t4\t0\t0\t0\t0\t0\t-\t55\tGone list\nM\t5\t0\t0\t0\t0\t0\t-\t-\t \nM\t6\tx\t0\t0\t0\t0\t-\t-\tBad color\n"
+        );
+        let data = parse(&text);
+        let names: Vec<&str> = data.smarts.iter().map(|m| m.name.as_str()).collect();
+        assert_eq!(names, ["Good", "Gone list"]);
+        assert_eq!(data.smarts[0].rules.due, DueRule::Today);
+        assert_eq!(data.smarts[0].rules.list, Some(1));
+        assert_eq!(data.smarts[1].rules.list, None, "a list that does not exist is dropped from the rule");
+    }
+    #[test]
     fn save_rejects_dangling_references_and_over_limit_collections() {
         let path = scratch("dangling");
         let mut data = Data::default();
@@ -510,6 +582,9 @@ mod tests {
         data.lists[0].sections.clear();
         data.templates = vec![Template { id: 1, name: "  ".into(), color: 0, icon: 0, items: vec![] }];
         assert!(save(&path, &data).is_err(), "a blank template name");
+        data.templates.clear();
+        data.smarts = vec![SmartDef { id: 1, name: "S".into(), color: 0, rules: SmartRules { list: Some(9), ..SmartRules::default() } }];
+        assert!(save(&path, &data).is_err(), "a smart list that names a list that does not exist");
         assert!(!path.exists());
     }
     #[test]

@@ -24,6 +24,8 @@ const SIDE_INSET: f32 = 10.0;
 const ADD_LIST_H: f32 = 36.0;
 /// Source-list row ids of My Lists: `LIST_ROW + index`.
 const LIST_ROW: u32 = 1000;
+/// Source-list row ids of the Smart Lists section: `SMART_ROW + index` in `Data::smarts`.
+const SMART_ROW: u32 = 1500;
 /// Source-list row ids of the Tags section: `TAG_ROW + index` in the sorted tag list (`model::tag_counts`).
 const TAG_ROW: u32 = 2000;
 /// Source-list section ids of the list groups: `GROUP_ROW + index` in `Data::groups`.
@@ -132,6 +134,11 @@ impl Reminders {
         matches!(self.view, View::List(_)) && !self.searching
     }
 
+    /// Whether a custom smart list is on screen (its form is reached from the toolbar's Show List Info).
+    fn smart_view(&self) -> bool {
+        matches!(self.view, View::Custom(_)) && !self.searching
+    }
+
     fn search_open(&self) -> bool {
         self.searching && self.screen == Screen::Items
     }
@@ -153,7 +160,7 @@ impl Reminders {
             } else {
                 self.list_edit_title()
             };
-            let can_save = !self.title.text().trim().is_empty();
+            let can_save = !self.title.text().trim().is_empty() || self.settings_open();
             bars.push((
                 Toolbar::new(vec![
                     ToolbarItem::button(B_CANCEL, "Cancel"),
@@ -173,7 +180,7 @@ impl Reminders {
         items.push(ToolbarItem::flexible_space());
         items.push(ToolbarItem::icon(B_EXPORT, "Export List", "square.and.arrow.up").in_group(1).enabled(self.file_export && self.list_view()));
         items.push(ToolbarItem::icon(B_OPTIONS, "View Options", "arrow.up.arrow.down").in_group(1).selected(self.options_open));
-        items.push(ToolbarItem::icon(B_INFO, "Show List Info", "ellipsis").in_group(1).enabled(self.list_view()));
+        items.push(ToolbarItem::icon(B_INFO, "Show List Info", "ellipsis").in_group(1).enabled(self.list_view() || self.smart_view()));
         items.push(ToolbarItem::icon(B_ADD, "New Reminder", "plus").in_group(1));
         // the search field is always in the toolbar (Golden Gate: a visible search field, not a collapsed button)
         let search_w = ((end - start) * 0.35).clamp(SEARCH_MIN_PT, SEARCH_MAX_PT);
@@ -222,6 +229,7 @@ impl Reminders {
             B_OPTIONS => Target::Options,
             B_INFO => match self.view {
                 View::List(l) => Target::ListInfo(l),
+                View::Custom(id) => Target::SmartInfo(id),
                 View::Smart(_) | View::Tag(_) => return None,
             },
             B_ADD => Target::New,
@@ -301,6 +309,15 @@ impl Reminders {
                 items.push(row(i, l));
             }
         }
+        // Smart Lists: a section only when one was made
+        if !self.data.smarts.is_empty() {
+            items.push(SidebarItem::header("Smart Lists"));
+            for (i, m) in self.data.smarts.iter().enumerate() {
+                let colour = view::COLORS[m.color as usize % view::COLORS.len()];
+                let count = self.data.items.iter().filter(|r| m.rules.matches(r, self.today)).count();
+                items.push(SidebarItem::row(SMART_ROW + i as u32, &m.name).with_dot(colour).with_count(count as u32));
+            }
+        }
         // Tags: a section only when some reminder carries a #tag, so the default sidebar is unchanged
         let tags = model::tag_counts(&self.data.items);
         if !tags.is_empty() {
@@ -313,6 +330,7 @@ impl Reminders {
         let open = match self.view {
             View::List(id) if !self.searching => self.data.lists.iter().position(|l| l.id == id).map(|i| LIST_ROW + i as u32),
             View::Tag(key) if !self.searching => tags.iter().position(|(name, _)| model::tag_key(name) == key).map(|i| TAG_ROW + i as u32),
+            View::Custom(id) if !self.searching => self.data.smarts.iter().position(|m| m.id == id).map(|i| SMART_ROW + i as u32),
             _ => None,
         };
         list.set_selected(open);
@@ -341,6 +359,9 @@ impl Reminders {
         if id >= TAG_ROW {
             let tags = model::tag_counts(&self.data.items);
             return tags.get((id - TAG_ROW) as usize).map(|(name, _)| Target::Tag(model::tag_key(name)));
+        }
+        if id >= SMART_ROW {
+            return self.data.smarts.get((id - SMART_ROW) as usize).map(|m| Target::Custom(m.id));
         }
         self.data.lists.get((id - LIST_ROW) as usize).map(|l| Target::List(l.id))
     }

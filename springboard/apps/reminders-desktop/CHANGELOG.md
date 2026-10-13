@@ -9,11 +9,13 @@
 - List groups: List > New List Group makes a collapsible group in the sidebar; the list form has a Group row to put a list in one. Deleting a group keeps its lists.
 - Pinned lists: List > Pin List (or the Pin in Sidebar switch in the list form) adds a tile for the list beside the smart lists. Up to eight lists can be pinned.
 - View > Show Smart List hides or shows each smart list tile in the sidebar. View > Sort By offers the sort orders from the menu bar, and a new Creation Date order lists the oldest reminders first. Reminders now record when they were created.
+- Smart lists you define: File > New Smart List opens a form with a name, a colour and rules for the date (overdue, today, next 7 days, later, no date), time of day, priority, flag, one tag and one list. A smart list collects the open reminders that satisfy every rule you set, shows its count in the sidebar, and is edited or deleted from Show List Info.
+- Settings (Reminder > Settings, Cmd+,): the list new reminders go to, the time an all-day reminder alerts (6:00 to 20:00; it was fixed at 9:00) and a switch for the Dock badge. They apply at once and are kept in `settings.tsv`; Undo does not touch them. The Today widget and the scheduled alerts follow the all-day time.
 - Templates: List > Save List as Template keeps a list's reminders without dates or completion; New List from Template makes an open list from one, and Delete Template removes it.
 - File > Import List reads a Markdown checklist (the Export List format, with subtasks, due days and `## section` headings) into a new list. File > Print List prints the open list. Export List now writes each section as a `## heading`.
 - Quick Reminder: a menu bar extra with New Quick Reminder (opens the new reminder form) and Add Reminder from Clipboard, which reads the copied text as a quick-add line such as "pay rent every month !!" and adds it to the default list.
 - Shortcuts: new Add Quick Reminder, Create List, Open List, Open Smart List and Search Reminders actions next to Add Reminder.
-- The store keeps list groups, sections, templates, pinned lists and creation dates in the same file. Files written by older versions still open; a file saved by this version has extra fields that older versions skip.
+- The store keeps list groups, sections, templates, smart lists, pinned lists and creation dates in the same file. Files written by older versions still open; a file saved by this version has extra fields that older versions skip.
 
 ## 1.13.3 — 2026-10-12
 

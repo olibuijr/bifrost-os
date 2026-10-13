@@ -42,6 +42,8 @@ pub struct AlertState {
     gen: u32,
     /// Zone offset the last plan was computed under.
     offset: i32,
+    /// The all-day alert time the last plan used.
+    all_day: u16,
     /// (request id, due unix) of every request handed to the shell.
     scheduled: Vec<(String, i64)>,
     /// Unix second of the next re-plan.
@@ -53,10 +55,10 @@ fn request_id(id: u64, early: bool) -> String {
 }
 
 /// The alerts after `now` that the shell can take, soonest first, at most [`MAX_SCHEDULED`].
-pub fn plan(items: &[Reminder], now: i64, offset_at: model::OffsetAt) -> Vec<Planned> {
+pub fn plan(items: &[Reminder], all_day_min: u16, now: i64, offset_at: model::OffsetAt) -> Vec<Planned> {
     let mut out = Vec::new();
     for r in items.iter().filter(|r| !r.completed) {
-        let Some(due) = model::due_unix(r, offset_at) else { continue };
+        let Some(due) = model::due_unix(r, all_day_min, offset_at) else { continue };
         let mut push = |early: bool, at: i64| {
             if at > now && at - now <= MAX_DELAY_SECS {
                 out.push(Planned {
@@ -64,7 +66,7 @@ pub fn plan(items: &[Reminder], now: i64, offset_at: model::OffsetAt) -> Vec<Pla
                     at,
                     delay_ms: ((at - now) * 1000) as u32,
                     title: r.title.clone(),
-                    body: model::alert_text(r, early),
+                    body: model::alert_text(r, all_day_min, early),
                 });
             }
         };
@@ -84,21 +86,23 @@ pub fn step(
     state: &mut AlertState,
     now: i64,
     gen: u32,
+    all_day_min: u16,
     load: impl FnOnce() -> Vec<Reminder>,
     offset_at: model::OffsetAt,
 ) -> Option<Change> {
     let offset = offset_at(now);
-    if state.synced && state.gen == gen && state.offset == offset && now < state.next_sync {
+    if state.synced && state.gen == gen && state.offset == offset && state.all_day == all_day_min && now < state.next_sync {
         return None;
     }
     let first = !state.synced;
     state.synced = true;
     state.gen = gen;
     state.offset = offset;
+    state.all_day = all_day_min;
     if first {
         state.scheduled.clear();
     }
-    let planned = plan(&load(), now, offset_at);
+    let planned = plan(&load(), all_day_min, now, offset_at);
     let remove: Vec<String> = state
         .scheduled
         .iter()
@@ -169,6 +173,7 @@ mod tests {
     use crate::model::Reminder;
 
     const BASE: i64 = 20_000 * 86_400;
+    const DAY: u16 = model::DEFAULT_ALERT_MIN;
 
     fn due_at(id: u64, day: i64, min: u16) -> Reminder {
         let mut r = Reminder::new(id, format!("r{id}"));
@@ -183,7 +188,7 @@ mod tests {
         early.early = Some(30);
         let mut done = due_at(4, 20_000, 800);
         done.completed = true;
-        let planned = plan(&[early, done, due_at(5, 20_000, 540)], BASE + 600 * 60, &|_| 0);
+        let planned = plan(&[early, done, due_at(5, 20_000, 540)], DAY, BASE + 600 * 60, &|_| 0);
         let ids: Vec<&str> = planned.iter().map(|p| p.id.as_str()).collect();
         assert_eq!(ids, vec!["reminder-3-early", "reminder-3-due"]);
         assert_eq!(planned[0].at, BASE + 690 * 60);
@@ -195,7 +200,7 @@ mod tests {
     #[test]
     fn plan_keeps_the_soonest_thirty_two() {
         let items: Vec<Reminder> = (1..=40).map(|i| due_at(i, 20_000, 600 + i as u16)).collect();
-        let planned = plan(&items, BASE, &|_| 0);
+        let planned = plan(&items, DAY, BASE, &|_| 0);
         assert_eq!(planned.len(), MAX_SCHEDULED);
         assert_eq!(planned[0].id, "reminder-1-due");
         assert_eq!(planned[MAX_SCHEDULED - 1].id, "reminder-32-due");
@@ -204,7 +209,7 @@ mod tests {
     #[test]
     fn plan_ignores_alerts_beyond_the_trigger_limit() {
         // 60 days ahead is past the 49-day limit of a u32 millisecond delay
-        assert!(plan(&[due_at(1, 20_060, 0)], BASE, &|_| 0).is_empty());
+        assert!(plan(&[due_at(1, 20_060, 0)], DAY, BASE, &|_| 0).is_empty());
     }
 
     #[test]
@@ -213,7 +218,7 @@ mod tests {
         let items = vec![due_at(1, 20_000, 540), due_at(2, 20_000, 660)];
         let mut st = AlertState::default();
         assert_eq!(st.wake(now, 0.0), None);
-        let c = step(&mut st, now, 0, || items.clone(), &|_| 0).unwrap();
+        let c = step(&mut st, now, 0, DAY, || items.clone(), &|_| 0).unwrap();
         assert!(c.reset);
         assert!(c.remove.is_empty());
         assert_eq!(c.add.len(), 1);
@@ -229,9 +234,9 @@ mod tests {
         let now = BASE + 600 * 60;
         let items = vec![due_at(2, 20_000, 660)];
         let mut st = AlertState::default();
-        step(&mut st, now, 0, || items.clone(), &|_| 0);
+        step(&mut st, now, 0, DAY, || items.clone(), &|_| 0);
         let mut loaded = false;
-        let quiet = step(&mut st, now + 60, 0, || { loaded = true; items.clone() }, &|_| 0);
+        let quiet = step(&mut st, now + 60, 0, DAY, || { loaded = true; items.clone() }, &|_| 0);
         assert!(quiet.is_none());
         assert!(!loaded);
     }
@@ -240,8 +245,8 @@ mod tests {
     fn edits_and_deletes_send_only_the_difference() {
         let now = BASE + 600 * 60;
         let mut st = AlertState::default();
-        step(&mut st, now, 0, || vec![due_at(1, 20_000, 660), due_at(2, 20_000, 720)], &|_| 0);
-        let c = step(&mut st, now, 1, || vec![due_at(2, 20_000, 780)], &|_| 0).unwrap();
+        step(&mut st, now, 0, DAY, || vec![due_at(1, 20_000, 660), due_at(2, 20_000, 720)], &|_| 0);
+        let c = step(&mut st, now, 1, DAY, || vec![due_at(2, 20_000, 780)], &|_| 0).unwrap();
         assert!(!c.reset);
         assert_eq!(c.remove, vec!["reminder-1-due".to_string()]);
         assert_eq!(c.add.len(), 1);
@@ -253,11 +258,11 @@ mod tests {
     fn the_earliest_alert_wakes_the_next_sync() {
         let now = BASE + 600 * 60;
         let mut st = AlertState::default();
-        step(&mut st, now, 0, || vec![due_at(1, 20_000, 601)], &|_| 0);
+        step(&mut st, now, 0, DAY, || vec![due_at(1, 20_000, 601)], &|_| 0);
         assert_eq!(st.next_sync, BASE + 601 * 60);
         // once it is due the plan is empty, so the app re-plans after the refresh interval, not at once
         let mut loaded = false;
-        let later = step(&mut st, BASE + 602 * 60, 0, || { loaded = true; vec![] }, &|_| 0);
+        let later = step(&mut st, BASE + 602 * 60, 0, DAY, || { loaded = true; vec![] }, &|_| 0);
         assert!(loaded);
         let c = later.unwrap();
         assert_eq!(c.remove, vec!["reminder-1-due".to_string()]);
@@ -265,11 +270,30 @@ mod tests {
     }
 
     #[test]
+    fn date_only_reminders_alert_at_the_all_day_time_and_a_new_time_forces_a_re_plan() {
+        let mut dated = Reminder::new(1, "r1");
+        dated.due = Some(20_000);
+        let now = BASE + 6 * 3600;
+        let planned = plan(&[dated.clone()], 8 * 60, now, &|_| 0);
+        assert_eq!(planned[0].at, BASE + 8 * 3600);
+        assert_eq!(planned[0].body, "Due 8:00 AM");
+        let mut st = AlertState::default();
+        step(&mut st, now, 0, 8 * 60, || vec![dated.clone()], &|_| 0);
+        let quiet = step(&mut st, now + 10, 0, 8 * 60, || vec![dated.clone()], &|_| 0);
+        assert!(quiet.is_none(), "the same time and data send nothing");
+        let c = step(&mut st, now + 20, 0, 10 * 60, || vec![dated.clone()], &|_| 0).unwrap();
+        assert!(!c.reset);
+        assert_eq!(c.add.len(), 1, "the request is replaced with the later time");
+        assert_eq!(c.add[0].at, BASE + 10 * 3600);
+        assert_eq!(c.add[0].body, "Due 10:00 AM");
+    }
+
+    #[test]
     fn a_zone_change_forces_a_re_plan() {
         let now = BASE + 600 * 60;
         let mut st = AlertState::default();
-        step(&mut st, now, 0, || vec![due_at(1, 20_000, 660)], &|_| 0);
-        let c = step(&mut st, now + 10, 0, || vec![due_at(1, 20_000, 660)], &|_| 3600);
+        step(&mut st, now, 0, DAY, || vec![due_at(1, 20_000, 660)], &|_| 0);
+        let c = step(&mut st, now + 10, 0, DAY, || vec![due_at(1, 20_000, 660)], &|_| 3600);
         assert!(c.is_some(), "a new offset shifts the due moment, so the request is replaced");
     }
 

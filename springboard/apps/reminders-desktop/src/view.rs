@@ -216,6 +216,12 @@ impl Reminders {
         let (title, color) = match self.view {
             View::Smart(sm) => (sm.label().to_string(), BLUE),
             View::Tag(key) => (crate::model::tag_name(&self.data.items, key).map_or(String::new(), |n| format!("#{n}")), BLUE),
+            View::Custom(id) => self
+                .data
+                .smarts
+                .iter()
+                .find(|m| m.id == id)
+                .map_or((String::new(), BLUE), |m| (m.name.clone(), COLORS[m.color as usize % COLORS.len()])),
             View::List(id) => (
                 self.data.lists.iter().find(|l| l.id == id).map_or(String::new(), |l| l.name.clone()),
                 list_color(&self.data, id),
@@ -473,6 +479,38 @@ impl Reminders {
                 self.cell(c, ui, rect);
                 self.center(c, ui, "Duplicate Reminder", MAC_BODY_PT, Weight::Regular, LINK, x + w / 2.0, y + h / 2.0);
             }
+            Target::Rule(row) => {
+                let rules = self.list_edit.as_ref().map(|e| e.rules).unwrap_or_default();
+                let value = match row {
+                    RuleRow::Due => rules.due.label().to_string(),
+                    RuleRow::Time => rules.time.label().to_string(),
+                    RuleRow::Priority => model::priority_rule_label(rules.priority).to_string(),
+                    RuleRow::Flagged => rules.flagged.label().to_string(),
+                    RuleRow::Tag => rules.tag.map_or("Any".to_string(), |key| model::tag_name(&self.data.items, key).map_or("Unused Tag".to_string(), |n| format!("#{n}"))),
+                    RuleRow::List => rules.list.map_or("Any".to_string(), |l| self.data.lists.iter().find(|x| x.id == l).map_or("Unknown List".to_string(), |x| x.name.clone())),
+                };
+                self.value_row(c, ui, rect, row.label(), &value, LABEL_2.now());
+            }
+            Target::Setting(row) => match row {
+                SettingRow::DefaultList => {
+                    let value = self
+                        .settings
+                        .default_list
+                        .and_then(|id| self.data.lists.iter().find(|l| l.id == id))
+                        .map_or("Automatic".to_string(), |l| l.name.clone());
+                    self.value_row(c, ui, rect, "New Reminders Go To", &value, LABEL_2.now());
+                }
+                SettingRow::AllDayAlert => {
+                    let value = model::clock_label(self.settings.all_day_min);
+                    self.value_row(c, ui, rect, "All-Day Reminders Alert At", &value, LABEL_2.now());
+                }
+                SettingRow::Badge => {
+                    self.cell(c, ui, rect);
+                    self.text(c, ui, "Badge Due Reminders on the Dock", MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
+                    let on = self.settings.badge;
+                    self.toggle(c, ui, rect, on);
+                }
+            },
             Target::PinList => {
                 self.cell(c, ui, rect);
                 self.text(c, ui, "Pin in Sidebar", MAC_BODY_PT, Weight::Regular, LABEL.now(), x + ui.pt(SPACE_L), y + ui.pt(SPACE_L));
@@ -490,6 +528,7 @@ impl Reminders {
                     (true, _) => "Delete Reminder",
                     (false, Some(EditMode::Section(_))) => "Delete Section",
                     (false, Some(EditMode::Group)) => "Delete Group",
+                    (false, Some(EditMode::Smart)) => "Delete Smart List",
                     (false, _) => "Delete List",
                 };
                 self.center(c, ui, label, MAC_BODY_PT, Weight::Regular, DESTRUCTIVE, x + w / 2.0, y + h / 2.0);

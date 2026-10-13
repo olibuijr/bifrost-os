@@ -14,7 +14,7 @@ use bifrost_app::kit::ui::{SPACE_HUGE, SPACE_M, SPACE_S, SPACE_XL};
 use springboard::layout::in_rect as within;
 use bifrost_app::kit::ui::{home_zone, Ui};
 use bifrost_app::kit::{Event, TextCache};
-use crate::{model, organize, quick, repeat, store};
+use crate::{model, organize, quick, repeat, settings, store};
 use springboard::deildu::scroll::Scroller;
 use springboard::shell::clock::{
     tz::{civil_from_days, days_from_civil},
@@ -79,6 +79,14 @@ enum Target {
     ListInfo(u64),
     /// A tag in the sidebar's Tags section, by its `model::tag_key`.
     Tag(u64),
+    /// A custom smart list in the sidebar, by id.
+    Custom(u64),
+    /// Show List Info for the open custom smart list.
+    SmartInfo(u64),
+    /// A rule row of the smart list form.
+    Rule(RuleRow),
+    /// A row of the Settings form.
+    Setting(SettingRow),
     /// A section header row of the open list (its row index); choosing it edits the section.
     Section(usize),
     /// A list group's disclosure in the sidebar, by group id.
@@ -142,6 +150,47 @@ enum EditMode {
     List,
     Section(u64),
     Group,
+    /// A custom smart list: a name, a colour and its rules.
+    Smart,
+    /// Reminders > Settings: no name, only the setting rows.
+    Settings,
+}
+
+/// The rows of the Settings form.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SettingRow {
+    DefaultList,
+    AllDayAlert,
+    Badge,
+}
+
+impl SettingRow {
+    const ALL: [Self; 3] = [Self::DefaultList, Self::AllDayAlert, Self::Badge];
+}
+
+/// The rows of the smart list form that choose a rule; each cycles through its choices.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RuleRow {
+    Due,
+    Time,
+    Priority,
+    Flagged,
+    Tag,
+    List,
+}
+
+impl RuleRow {
+    const ALL: [Self; 6] = [Self::Due, Self::Time, Self::Priority, Self::Flagged, Self::Tag, Self::List];
+    fn label(self) -> &'static str {
+        match self {
+            Self::Due => "Date",
+            Self::Time => "Time of Day",
+            Self::Priority => "Priority",
+            Self::Flagged => "Flag",
+            Self::Tag => "Tag",
+            Self::List => "List",
+        }
+    }
 }
 
 /// The list editor's draft. `id` is the list, section or group being changed (`None` while creating one).
@@ -152,6 +201,8 @@ struct ListEdit {
     pinned: bool,
     group: Option<u64>,
     mode: EditMode,
+    /// The smart list's rules while its form is open.
+    rules: model::SmartRules,
 }
 
 struct UndoBar {
@@ -240,6 +291,9 @@ pub struct Reminders {
     /// Safe inset at the top in points (from the shared `Layout`; 0 on the desktop).
     top_pt: f32,
     path: PathBuf,
+    /// Reminders > Settings, kept in `settings.tsv` beside the reminders.
+    settings: settings::Settings,
+    settings_path: PathBuf,
     wall: Wall,
     data: Data,
     screen: Screen,
@@ -363,6 +417,8 @@ impl Reminders {
     pub fn new(ui: &Ui, w: i32, h: i32, path: PathBuf, wall: Wall) -> Self {
         let loaded = store::load_checked(&path);
         let load_error = loaded.is_err();
+        let settings_path = path.with_file_name("settings.tsv");
+        let settings = settings::load(&settings_path);
         let mut app = Self {
             w,
             x0: 0.0,
@@ -372,10 +428,12 @@ impl Reminders {
             top_pt: 0.0,
             data: loaded.unwrap_or_default(),
             path,
+            settings,
+            settings_path,
             wall,
             screen: Screen::Items,
             view: View::Smart(Smart::All),
-            opts: Options::default(),
+            opts: Options { default_list: settings.default_list, ..Options::default() },
             options_open: false,
             file_export: false,
             notice: None,
@@ -690,6 +748,17 @@ impl Reminders {
         saved
     }
 
+    /// File > New Smart List: opens the form for a custom smart list.
+    pub fn new_smart_list(&mut self, ui: &Ui, t: f64) -> bool {
+        if self.data.smarts.len() >= model::MAX_SMARTS {
+            self.notice = Some(format!("Up to {} smart lists can be made", model::MAX_SMARTS));
+            self.dirty = true;
+            return false;
+        }
+        self.open_smart_editor(ui, None, t);
+        true
+    }
+
     /// Lists > New List Group: opens the name form for a group.
     pub fn new_group(&mut self, ui: &Ui, t: f64) {
         self.open_group_editor(ui, None, t);
@@ -994,7 +1063,19 @@ impl Reminders {
             }
             Screen::ListEditor => {
                 let Some(e) = &self.list_edit else { return (v, 0.0) };
+                if e.mode == EditMode::Settings {
+                    for (i, row) in SettingRow::ALL.iter().enumerate() {
+                        add(&mut v, &mut y, Target::Setting(*row), 52.0, if i + 1 == SettingRow::ALL.len() { 20.0 } else { 8.0 });
+                    }
+                    return (v, y);
+                }
                 add(&mut v, &mut y, Target::Field(Field::Title), 56.0, 20.0);
+                if e.mode == EditMode::Smart {
+                    add(&mut v, &mut y, Target::Colors, 64.0, 20.0);
+                    for (i, row) in RuleRow::ALL.iter().enumerate() {
+                        add(&mut v, &mut y, Target::Rule(*row), 52.0, if i + 1 == RuleRow::ALL.len() { 20.0 } else { 8.0 });
+                    }
+                }
                 if e.mode == EditMode::List {
                     add(&mut v, &mut y, Target::Colors, 64.0, 8.0);
                     add(&mut v, &mut y, Target::Icons, 64.0, 20.0);
@@ -1340,7 +1421,7 @@ impl Reminders {
             let mut r = Reminder::new(0, "");
             r.list = match self.view {
                 View::List(l) => l,
-                View::Smart(_) | View::Tag(_) => self
+                View::Smart(_) | View::Tag(_) | View::Custom(_) => self
                     .opts
                     .default_list
                     .filter(|id| self.data.lists.iter().any(|l| l.id == *id))
@@ -1373,7 +1454,7 @@ impl Reminders {
         let (name, color, icon) = found.as_ref().map_or((String::new(), (self.data.lists.len() % view::COLORS.len()) as u8, 0), |l| (l.name.clone(), l.color, l.icon));
         let (pinned, group) = found.as_ref().map_or((false, None), |l| (l.pinned, l.group));
         self.set_title_field(ui, "List Name", model::MAX_NAME, &name);
-        self.list_edit = Some(ListEdit { id: found.map(|l| l.id), color, icon, pinned, group, mode: EditMode::List });
+        self.list_edit = Some(ListEdit { id: found.map(|l| l.id), color, icon, pinned, group, mode: EditMode::List, rules: Default::default() });
         self.screen = Screen::ListEditor;
         self.scroll.jump_top();
         self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
@@ -1386,7 +1467,7 @@ impl Reminders {
             .and_then(|sid| self.data.lists.iter().flat_map(|l| l.sections.iter()).find(|s| s.id == sid))
             .map_or(String::new(), |s| s.name.clone());
         self.set_title_field(ui, "Section Name", model::MAX_NAME, &name);
-        self.list_edit = Some(ListEdit { id, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Section(list) });
+        self.list_edit = Some(ListEdit { id, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Section(list), rules: Default::default() });
         self.screen = Screen::ListEditor;
         self.scroll.jump_top();
         self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
@@ -1396,7 +1477,64 @@ impl Reminders {
     fn open_group_editor(&mut self, ui: &Ui, id: Option<u64>, t: f64) {
         let name = id.and_then(|gid| self.data.groups.iter().find(|g| g.id == gid)).map_or(String::new(), |g| g.name.clone());
         self.set_title_field(ui, "Group Name", model::MAX_NAME, &name);
-        self.list_edit = Some(ListEdit { id, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Group });
+        self.list_edit = Some(ListEdit { id, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Group, rules: Default::default() });
+        self.screen = Screen::ListEditor;
+        self.scroll.jump_top();
+        self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
+        self.dirty = true;
+    }
+    /// Reminders > Settings: the form with the default list, the all-day alert time and the badge switch.
+    pub fn open_settings(&mut self, t: f64) -> bool {
+        if self.has_draft() {
+            return false;
+        }
+        self.list_edit = Some(ListEdit { id: None, color: 0, icon: 0, pinned: false, group: None, mode: EditMode::Settings, rules: Default::default() });
+        self.screen = Screen::ListEditor;
+        self.searching = false;
+        self.options_open = false;
+        self.scroll.jump_top();
+        self.set_focus(None, t);
+        self.dirty = true;
+        true
+    }
+
+    /// Whether the Settings form is open.
+    fn settings_open(&self) -> bool {
+        self.list_edit.as_ref().is_some_and(|e| e.mode == EditMode::Settings)
+    }
+
+    /// Writes the settings and tells the alert planner and the widget that they changed.
+    fn save_settings(&mut self) {
+        if let Err(e) = settings::save(&self.settings_path, &self.settings) {
+            eprintln!("springboard: reminders: settings: {e}");
+            self.notice = Some("Could not save the settings".to_string());
+        }
+        self.gen = self.gen.wrapping_add(1);
+        self.dirty = true;
+    }
+
+    /// The time a reminder with a day and no time alerts, in minutes after midnight (Settings).
+    pub fn all_day_min(&self) -> u16 {
+        self.settings.all_day_min
+    }
+
+    /// The number on the Dock badge: the due reminders, or nothing when Settings turned the badge off.
+    pub fn badge_count(&self) -> usize {
+        if self.settings.badge {
+            self.due_count()
+        } else {
+            0
+        }
+    }
+
+    /// The form for a custom smart list (a new one when `id` is `None`).
+    fn open_smart_editor(&mut self, ui: &Ui, id: Option<u64>, t: f64) {
+        let found = id.and_then(|sid| self.data.smarts.iter().find(|m| m.id == sid)).cloned();
+        let color = found.as_ref().map_or((self.data.smarts.len() % view::COLORS.len()) as u8, |m| m.color);
+        let name = found.as_ref().map_or(String::new(), |m| m.name.clone());
+        let rules = found.as_ref().map_or_else(Default::default, |m| m.rules);
+        self.set_title_field(ui, "Smart List Name", model::MAX_NAME, &name);
+        self.list_edit = Some(ListEdit { id: found.map(|m| m.id), color, icon: 0, pinned: false, group: None, mode: EditMode::Smart, rules });
         self.screen = Screen::ListEditor;
         self.scroll.jump_top();
         self.set_focus(if id.is_none() { Some(Field::Title) } else { None }, t);
@@ -1410,6 +1548,9 @@ impl Reminders {
             Some((EditMode::Section(_), false)) => "New Section",
             Some((EditMode::Group, true)) => "Group",
             Some((EditMode::Group, false)) => "New Group",
+            Some((EditMode::Smart, true)) => "Smart List",
+            Some((EditMode::Smart, false)) => "New Smart List",
+            Some((EditMode::Settings, _)) => "Settings",
             Some((EditMode::List, false)) | None => "New List",
         }
     }
@@ -1609,8 +1750,13 @@ impl Reminders {
     }
     fn save_list(&mut self, ui: &Ui, t: f64) {
         let Some(e) = &self.list_edit else { return };
+        if e.mode == EditMode::Settings {
+            // each setting was saved as it changed; Done closes the form
+            self.close_form(ui, t);
+            return;
+        }
         let Some(name) = organize::clean_name(self.title.text()) else { return };
-        let (id, color, icon, pinned, group, mode) = (e.id, e.color, e.icon, e.pinned, e.group, e.mode);
+        let (id, color, icon, pinned, group, mode, rules) = (e.id, e.color, e.icon, e.pinned, e.group, e.mode, e.rules);
         let label = match (mode, id.is_some()) {
             (EditMode::List, true) => "Edit List",
             (EditMode::List, false) => "New List",
@@ -1618,9 +1764,33 @@ impl Reminders {
             (EditMode::Section(_), false) => "New Section",
             (EditMode::Group, true) => "Rename Group",
             (EditMode::Group, false) => "New List Group",
+            (EditMode::Smart, true) => "Edit Smart List",
+            (EditMode::Smart, false) => "New Smart List",
+            (EditMode::Settings, _) => "Settings",
         };
         let mut next = self.data.clone();
+        let mut opened = None;
         let done = match mode {
+            EditMode::Settings => false,
+            EditMode::Smart => match id {
+                Some(id) => match next.smarts.iter_mut().find(|m| m.id == id) {
+                    Some(m) => {
+                        m.name = name;
+                        m.color = color;
+                        m.rules = rules;
+                        true
+                    }
+                    None => false,
+                },
+                None => match next.next_smart_id() {
+                    Some(sid) if next.smarts.len() < model::MAX_SMARTS => {
+                        next.smarts.push(model::SmartDef { id: sid, name, color, rules });
+                        opened = Some(sid);
+                        true
+                    }
+                    _ => false,
+                },
+            },
             EditMode::List => {
                 // The sidebar has room for a few pinned tiles; a list over the limit saves unpinned.
                 let others = next.lists.iter().filter(|l| l.pinned && Some(l.id) != id).count();
@@ -1671,6 +1841,9 @@ impl Reminders {
             },
         };
         if done && self.commit_named(next, label) {
+            if let Some(sid) = opened {
+                self.view = View::Custom(sid);
+            }
             self.close_form(ui, t);
         }
     }
@@ -1787,10 +1960,46 @@ impl Reminders {
         }
         match target {
             Target::OptExport => self.export_list(),
-            Target::OptDefaultList(id) => self.opts.default_list = id,
+            Target::OptDefaultList(id) => {
+                self.opts.default_list = id;
+                self.settings.default_list = id;
+                self.save_settings();
+            }
+            Target::Setting(row) => {
+                match row {
+                    SettingRow::DefaultList => {
+                        // Automatic, then each list in turn, then Automatic again
+                        let ids: Vec<u64> = self.data.lists.iter().map(|l| l.id).collect();
+                        let next = match self.settings.default_list {
+                            None => ids.first().copied(),
+                            Some(id) => ids.iter().position(|x| *x == id).and_then(|i| ids.get(i + 1)).copied(),
+                        };
+                        self.settings.default_list = next;
+                        self.opts.default_list = next;
+                    }
+                    SettingRow::AllDayAlert => self.settings.all_day_min = settings::next_all_day(self.settings.all_day_min),
+                    SettingRow::Badge => self.settings.badge = !self.settings.badge,
+                }
+                self.save_settings();
+            }
             Target::Smart(s) => self.open_view(ui, View::Smart(s)),
             Target::List(id) => self.open_view(ui, View::List(id)),
             Target::Tag(key) => self.open_view(ui, View::Tag(key)),
+            Target::Custom(id) => self.open_view(ui, View::Custom(id)),
+            Target::SmartInfo(id) => self.open_smart_editor(ui, Some(id), t),
+            Target::Rule(row) => {
+                let (items, lists) = (&self.data.items, &self.data.lists);
+                if let Some(e) = &mut self.list_edit {
+                    match row {
+                        RuleRow::Due => e.rules.due = e.rules.due.next(),
+                        RuleRow::Time => e.rules.time = e.rules.time.next(),
+                        RuleRow::Priority => e.rules.priority = (e.rules.priority + 1) % 4,
+                        RuleRow::Flagged => e.rules.flagged = e.rules.flagged.next(),
+                        RuleRow::Tag => e.rules.tag = model::next_tag(e.rules.tag, items),
+                        RuleRow::List => e.rules.list = model::next_list(e.rules.list, lists),
+                    }
+                }
+            }
             Target::Section(row) => {
                 if let (Some(Row::Section { id, .. }), View::List(list)) = (self.rows.get(row).cloned(), self.view) {
                     self.open_section_editor(ui, list, Some(id), t);
@@ -2004,9 +2213,15 @@ impl Reminders {
                             EditMode::List => (next.delete_list(id), "Delete List"),
                             EditMode::Section(_) => (organize::delete_section(&mut next, id), "Delete Section"),
                             EditMode::Group => (next.delete_group(id), "Delete Group"),
+                            EditMode::Smart => {
+                                let before = next.smarts.len();
+                                next.smarts.retain(|m| m.id != id);
+                                (next.smarts.len() != before, "Delete Smart List")
+                            }
+                            EditMode::Settings => (false, "Settings"),
                         };
                         if done && self.commit_named(next, name) {
-                            if mode == EditMode::List && self.view == View::List(id) {
+                            if (mode == EditMode::List && self.view == View::List(id)) || (mode == EditMode::Smart && self.view == View::Custom(id)) {
                                 self.view = View::Smart(Smart::All);
                             }
                             self.close_form(ui, t);
@@ -2064,6 +2279,8 @@ impl Reminders {
                 | Target::List(_)
                 | Target::Tag(_)
                 | Target::ToggleGroup(_)
+                | Target::Custom(_)
+                | Target::SmartInfo(_)
                 | Target::ListInfo(_)
                 | Target::New
                 | Target::NewList

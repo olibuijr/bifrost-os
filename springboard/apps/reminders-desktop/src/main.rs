@@ -7,6 +7,7 @@ mod model;
 mod organize;
 mod quick;
 mod repeat;
+mod settings;
 mod store;
 mod system;
 
@@ -40,6 +41,8 @@ const MENU_IMPORT: u32 = 14;
 const MENU_PRINT: u32 = 15;
 const MENU_SUBTASKS: u32 = 16;
 const MENU_NO_SECTION: u32 = 17;
+const MENU_NEW_SMART: u32 = 18;
+const MENU_SETTINGS: u32 = 19;
 /// Item ids of the menus that list things: the base plus the position in the list.
 const MENU_MARK_BASE: u32 = 20;
 const MENU_SORT_BASE: u32 = 30;
@@ -170,6 +173,8 @@ impl App for RemindersApp {
         reminder.push(AppMenuItem::new(MENU_OVERDUE, "Mark All Overdue as Today").enabled(on_items && a.has_overdue()));
         reminder.push(AppMenuItem::separator());
         reminder.push(AppMenuItem::new(MENU_FIND, "Find").key("cmd+f").enabled(on_items));
+        reminder.push(AppMenuItem::separator());
+        reminder.push(AppMenuItem::new(MENU_SETTINGS, "Settings...").key("cmd+,").enabled(on_items));
 
         let groups = a.groups();
         let mut edit_group = vec![AppMenuItem::submenu("Edit Group").enabled(!groups.is_empty() && on_items)];
@@ -215,6 +220,7 @@ impl App for RemindersApp {
             AppMenu {
                 title: "File".into(),
                 items: vec![
+                    AppMenuItem::new(MENU_NEW_SMART, "New Smart List...").enabled(on_items),
                     AppMenuItem::new(MENU_IMPORT, "Import List...").key("cmd+o").enabled(on_items),
                     AppMenuItem::new(MENU_PRINT, "Print List...").key("cmd+p").enabled(list),
                 ],
@@ -287,6 +293,8 @@ impl App for RemindersApp {
                 true
             }
             MENU_SAVE_TEMPLATE => a.save_as_template(),
+            MENU_NEW_SMART => a.new_smart_list(ui, t),
+            MENU_SETTINGS => a.open_settings(t),
             MENU_SUBTASKS => {
                 a.toggle_all_subtasks(ui);
                 true
@@ -510,7 +518,7 @@ impl App for RemindersApp {
         self.wall = Wall::sample(t);
         a.set_wall(self.wall);
         let redraw = a.tick(&ctx.ui, t);
-        let due = a.due_count();
+        let due = a.badge_count();
         if self.badge != Some(due) {
             self.badge = Some(due);
             // The Dock badge goes through the `dock` service; the reply falls back to the older message.
@@ -524,7 +532,7 @@ impl App for RemindersApp {
         // The Today widget is sent when the reminders change, and again when the shell asks for a reload.
         if self.widget_gen != Some(a.generation()) {
             self.widget_gen = Some(a.generation());
-            system::reload_today(ctx, a.items(), a.today(), now, &offset_at);
+            system::reload_today(ctx, a.items(), a.today(), now, a.all_day_min(), &offset_at);
         }
         if self.schedule.is_none() && self.probe.is_none() {
             self.probe = Some(notification_schedule::pending(ctx));
@@ -532,7 +540,7 @@ impl App for RemindersApp {
         let path = ctx.data_dir.join("reminders.tsv");
         // Alerts are shell triggers: only the plan changes are sent (see alerts.rs). They wait for the probe.
         if let Some(via_service) = self.schedule {
-            let change = alerts::step(&mut self.alerts, now, a.generation(), || store::load(&path).items, &offset_at);
+            let change = alerts::step(&mut self.alerts, now, a.generation(), a.all_day_min(), || store::load(&path).items, &offset_at);
             if let Some(change) = change {
                 alerts::apply(ctx, &change, via_service);
             }
@@ -578,7 +586,7 @@ impl App for RemindersApp {
         let Some(a) = &self.app else { return false };
         let wall_offset = self.wall.offset;
         let offset_at = |t: i64| springboard::bare::timezone::offset_at(t).unwrap_or(wall_offset);
-        system::reload_today(ctx, a.items(), a.today(), self.wall.unix, &offset_at);
+        system::reload_today(ctx, a.items(), a.today(), self.wall.unix, a.all_day_min(), &offset_at);
         self.widget_gen = Some(a.generation());
         false
     }

@@ -228,6 +228,7 @@ fn export_list_is_a_markdown_checklist_with_subtasks_and_due_days() {
         items: vec![milk, bread, rye, other],
         groups: vec![],
         templates: vec![],
+        smarts: vec![],
     };
     assert_eq!(
         model::export_markdown(&data, 1),
@@ -754,5 +755,135 @@ fn quick_add_reads_the_line_as_a_reminder_in_the_default_list() {
     assert!(app.quick_add(&ui, "   ", 1.0).is_err(), "nothing copied");
     assert!(app.quick_add(&ui, "tomorrow", 2.0).is_ok(), "a date alone stays the title");
     assert_eq!(app.data.items.len(), 2);
+    cleanup(&path);
+}
+
+#[test]
+fn a_custom_smart_list_is_made_from_its_form_shows_in_the_sidebar_and_can_be_edited_and_deleted() {
+    let (mut app, ui, path) = app("smart-list");
+    add(&mut app, &ui, "Milk #home", 0.0);
+    add(&mut app, &ui, "Bread", 10.0);
+    let mut next = app.data.clone();
+    next.items[0].flagged = true;
+    assert!(app.commit(next));
+
+    assert!(app.new_smart_list(&ui, 20.0));
+    assert_eq!(app.screen, Screen::ListEditor);
+    assert_eq!(app.list_edit_title(), "New Smart List");
+    let rows: Vec<Target> = app.form_rows().0.iter().map(|(t, _, _)| *t).collect();
+    assert!(rows.contains(&Target::Colors) && !rows.contains(&Target::Icons) && !rows.contains(&Target::PinList));
+    for rule in RuleRow::ALL {
+        assert!(rows.contains(&Target::Rule(rule)), "{rule:?} is on the form");
+    }
+    assert!(!rows.contains(&Target::Delete), "nothing to delete in a new smart list");
+    app.key(&ui, Out::Text("Home flags".into()), 21.0);
+    app.activate(&ui, Target::Rule(RuleRow::Flagged), 22.0);
+    app.activate(&ui, Target::Rule(RuleRow::Tag), 23.0);
+    render(&mut app, &ui);
+    app.activate(&ui, Target::Save, 24.0);
+
+    assert_eq!(app.data.smarts.len(), 1);
+    let (id, rules) = (app.data.smarts[0].id, app.data.smarts[0].rules);
+    assert_eq!(app.data.smarts[0].name, "Home flags");
+    assert_eq!(rules.flagged, model::FlagRule::Flagged);
+    assert_eq!(rules.tag, Some(model::tag_key("home")));
+    assert_eq!(app.view, View::Custom(id), "the new smart list opens");
+    assert_eq!(shape(&app), ["Milk #home"]);
+    render(&mut app, &ui);
+    // the sidebar announces it as a row, with its count
+    let row = app.controls(&ui).into_iter().find(|n| n.id == 1500).expect("a smart list row");
+    assert_eq!((row.label.as_str(), row.value.as_str()), ("Home flags", "1"));
+
+    app.activate(&ui, Target::Smart(Smart::All), 30.0);
+    app.activate(&ui, Target::Custom(id), 31.0);
+    assert_eq!(app.view, View::Custom(id));
+
+    // the form opens again with the saved rules; the rules cycle and a save keeps them
+    app.activate(&ui, Target::SmartInfo(id), 32.0);
+    assert_eq!(app.title.text(), "Home flags");
+    assert_eq!(app.list_edit_title(), "Smart List");
+    assert!(app.form_rows().0.iter().any(|(t, _, _)| *t == Target::Delete));
+    app.activate(&ui, Target::Rule(RuleRow::Priority), 33.0);
+    app.activate(&ui, Target::Rule(RuleRow::List), 34.0);
+    app.activate(&ui, Target::Rule(RuleRow::Due), 35.0);
+    app.activate(&ui, Target::Save, 36.0);
+    let rules = app.data.smarts[0].rules;
+    assert_eq!((rules.priority, rules.list, rules.due), (1, Some(1), model::DueRule::Overdue));
+    assert_eq!(shape(&app), Vec::<String>::new(), "no reminder is overdue with a priority");
+    assert_eq!(app.edit_titles().0, "Undo Edit Smart List");
+
+    app.activate(&ui, Target::SmartInfo(id), 40.0);
+    app.activate(&ui, Target::Delete, 41.0);
+    assert!(app.data.smarts.is_empty());
+    assert_eq!(app.view, View::Smart(Smart::All), "the deleted smart list is not left open");
+    assert!(app.step_history(&ui, false), "Undo Delete Smart List");
+    assert_eq!(app.data.smarts.len(), 1);
+    cleanup(&path);
+}
+
+#[test]
+fn the_list_rule_cycles_through_the_lists_and_back_to_any() {
+    let (mut app, ui, path) = app("smart-list-cycle");
+    app.data.lists.push(model::ListDef::new(2, "Work", 1, 0));
+    assert!(app.new_smart_list(&ui, 0.0));
+    let list = |app: &Reminders| app.list_edit.as_ref().unwrap().rules.list;
+    assert_eq!(list(&app), None);
+    for expected in [Some(1), Some(2), None] {
+        app.activate(&ui, Target::Rule(RuleRow::List), 1.0);
+        assert_eq!(list(&app), expected);
+    }
+    let tag = |app: &Reminders| app.list_edit.as_ref().unwrap().rules.tag;
+    app.activate(&ui, Target::Rule(RuleRow::Tag), 2.0);
+    assert_eq!(tag(&app), None, "no reminder carries a tag yet");
+    cleanup(&path);
+}
+
+#[test]
+fn settings_apply_at_once_are_saved_beside_the_reminders_and_load_again() {
+    let (mut app, ui, path) = app("settings");
+    app.data.lists.push(model::ListDef::new(2, "Work", 1, 0));
+    add(&mut app, &ui, "Pay rent", 0.0);
+    let today = app.today;
+    let mut next = app.data.clone();
+    next.items[0].due = Some(today);
+    assert!(app.commit(next));
+    assert_eq!((app.all_day_min(), app.badge_count()), (9 * 60, 1), "the defaults");
+
+    assert!(app.open_settings(10.0));
+    assert!(!app.open_settings(11.0), "not while a form is open");
+    assert_eq!(app.screen, Screen::ListEditor);
+    assert_eq!(app.list_edit_title(), "Settings");
+    let rows: Vec<Target> = app.form_rows().0.iter().map(|(t, _, _)| *t).collect();
+    assert_eq!(rows, [Target::Setting(SettingRow::DefaultList), Target::Setting(SettingRow::AllDayAlert), Target::Setting(SettingRow::Badge)]);
+    render(&mut app, &ui);
+
+    let gen = app.generation();
+    app.activate(&ui, Target::Setting(SettingRow::DefaultList), 12.0);
+    assert_eq!((app.settings.default_list, app.opts.default_list), (Some(1), Some(1)));
+    app.activate(&ui, Target::Setting(SettingRow::DefaultList), 13.0);
+    assert_eq!(app.settings.default_list, Some(2));
+    app.activate(&ui, Target::Setting(SettingRow::DefaultList), 14.0);
+    assert_eq!(app.settings.default_list, None, "back to Automatic");
+    app.activate(&ui, Target::Setting(SettingRow::DefaultList), 15.0);
+    app.activate(&ui, Target::Setting(SettingRow::AllDayAlert), 16.0);
+    assert_eq!(app.all_day_min(), 10 * 60);
+    app.activate(&ui, Target::Setting(SettingRow::Badge), 17.0);
+    assert_eq!(app.badge_count(), 0, "the badge is off");
+    assert_eq!(app.due_count(), 1, "the reminders themselves are unchanged");
+    assert!(app.generation() > gen, "the alert planner and the widget are told");
+    render(&mut app, &ui);
+    app.activate(&ui, Target::Save, 18.0);
+    assert_eq!(app.screen, Screen::Items, "Done closes the form");
+
+    // a new run reads them back from settings.tsv, and the default list is in force
+    let again = Reminders::new(&ui, 1200, 1920, path.clone(), Wall { unix: 1_791_073_380, offset: 0, at: 0.0 });
+    assert_eq!((again.settings.default_list, again.all_day_min(), again.settings.badge), (Some(1), 10 * 60, false));
+    assert_eq!(again.opts.default_list, Some(1));
+    // the View Options list chooser writes the same setting
+    app.activate(&ui, Target::OptDefaultList(Some(2)), 20.0);
+    assert_eq!(settings::load(&path.with_file_name("settings.tsv")).default_list, Some(2));
+    // Undo steps through the reminders and leaves the settings alone
+    assert!(app.step_history(&ui, false));
+    assert_eq!(app.settings.default_list, Some(2));
     cleanup(&path);
 }

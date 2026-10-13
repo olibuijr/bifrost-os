@@ -18,6 +18,7 @@ pub const MAX_GROUPS: usize = 50;
 /// Sections one list may hold.
 pub const MAX_SECTIONS: usize = 20;
 pub const MAX_TEMPLATES: usize = 30;
+pub const MAX_SMARTS: usize = 30;
 /// Reminders one template may hold.
 pub const MAX_TEMPLATE_ITEMS: usize = 200;
 /// Alert time of a reminder that has a date but no time of day.
@@ -213,12 +214,202 @@ pub struct Template {
     pub items: Vec<TemplateItem>,
 }
 
+/// Which due days a custom smart list takes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DueRule {
+    #[default]
+    Any,
+    Overdue,
+    Today,
+    /// Today and the six days after it.
+    Next7,
+    /// A week from today or later.
+    Later,
+    NoDate,
+}
+
+impl DueRule {
+    pub const ALL: [Self; 6] = [Self::Any, Self::Overdue, Self::Today, Self::Next7, Self::Later, Self::NoDate];
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Any => "Any Date",
+            Self::Overdue => "Overdue",
+            Self::Today => "Due Today",
+            Self::Next7 => "Next 7 Days",
+            Self::Later => "Later",
+            Self::NoDate => "No Date",
+        }
+    }
+    /// The position in [`DueRule::ALL`], which the store writes.
+    pub fn code(self) -> u8 {
+        Self::ALL.iter().position(|d| *d == self).unwrap_or(0) as u8
+    }
+    pub fn from_code(code: u8) -> Option<Self> {
+        Self::ALL.get(code as usize).copied()
+    }
+    /// The next rule in the list, from the last back to the first.
+    pub fn next(self) -> Self {
+        Self::ALL[(self.code() as usize + 1) % Self::ALL.len()]
+    }
+}
+
+/// Which times of day a custom smart list takes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TimeRule {
+    #[default]
+    Any,
+    /// Before noon.
+    Morning,
+    /// Noon up to 5 pm.
+    Afternoon,
+    /// 5 pm on.
+    Evening,
+    NoTime,
+}
+
+impl TimeRule {
+    pub const ALL: [Self; 5] = [Self::Any, Self::Morning, Self::Afternoon, Self::Evening, Self::NoTime];
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Any => "Any Time",
+            Self::Morning => "Morning",
+            Self::Afternoon => "Afternoon",
+            Self::Evening => "Evening",
+            Self::NoTime => "No Time",
+        }
+    }
+    pub fn code(self) -> u8 {
+        Self::ALL.iter().position(|d| *d == self).unwrap_or(0) as u8
+    }
+    pub fn from_code(code: u8) -> Option<Self> {
+        Self::ALL.get(code as usize).copied()
+    }
+    pub fn next(self) -> Self {
+        Self::ALL[(self.code() as usize + 1) % Self::ALL.len()]
+    }
+}
+
+/// Whether a custom smart list takes flagged reminders, unflagged ones or both.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FlagRule {
+    #[default]
+    Any,
+    Flagged,
+    Unflagged,
+}
+
+impl FlagRule {
+    pub const ALL: [Self; 3] = [Self::Any, Self::Flagged, Self::Unflagged];
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Any => "Any",
+            Self::Flagged => "Flagged",
+            Self::Unflagged => "Not Flagged",
+        }
+    }
+    pub fn code(self) -> u8 {
+        Self::ALL.iter().position(|d| *d == self).unwrap_or(0) as u8
+    }
+    pub fn from_code(code: u8) -> Option<Self> {
+        Self::ALL.get(code as usize).copied()
+    }
+    pub fn next(self) -> Self {
+        Self::ALL[(self.code() as usize + 1) % Self::ALL.len()]
+    }
+}
+
+/// What a custom smart list collects: the open reminders that satisfy every rule that is set.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SmartRules {
+    pub due: DueRule,
+    pub time: TimeRule,
+    pub flagged: FlagRule,
+    /// The lowest priority taken: 0 any, 1 low and up, 2 medium and up, 3 high.
+    pub priority: u8,
+    /// A tag every reminder must carry, by `tag_key`.
+    pub tag: Option<u64>,
+    /// The one list the reminders must be in.
+    pub list: Option<u64>,
+}
+
+impl SmartRules {
+    /// Whether open reminder `r` belongs to the smart list on `today`. A completed reminder never does.
+    pub fn matches(&self, r: &Reminder, today: i64) -> bool {
+        if r.completed {
+            return false;
+        }
+        let due = match self.due {
+            DueRule::Any => true,
+            DueRule::Overdue => r.due.is_some_and(|d| d < today),
+            DueRule::Today => r.due == Some(today),
+            DueRule::Next7 => r.due.is_some_and(|d| (today..today + 7).contains(&d)),
+            DueRule::Later => r.due.is_some_and(|d| d >= today + 7),
+            DueRule::NoDate => r.due.is_none(),
+        };
+        let time = match self.time {
+            TimeRule::Any => true,
+            TimeRule::Morning => r.time.is_some_and(|t| t < 12 * 60),
+            TimeRule::Afternoon => r.time.is_some_and(|t| (12 * 60..17 * 60).contains(&t)),
+            TimeRule::Evening => r.time.is_some_and(|t| t >= 17 * 60),
+            TimeRule::NoTime => r.time.is_none(),
+        };
+        let flagged = match self.flagged {
+            FlagRule::Any => true,
+            FlagRule::Flagged => r.flagged,
+            FlagRule::Unflagged => !r.flagged,
+        };
+        due && time
+            && flagged
+            && r.priority >= self.priority
+            && self.list.is_none_or(|l| r.list == l)
+            && self.tag.is_none_or(|key| r.tags().iter().any(|t| tag_key(t) == key))
+    }
+}
+
+/// A smart list the user defined.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SmartDef {
+    pub id: u64,
+    pub name: String,
+    pub color: u8,
+    pub rules: SmartRules,
+}
+
+/// The label of a minimum priority in the smart list form.
+pub fn priority_rule_label(min: u8) -> &'static str {
+    match min {
+        1 => "Low or Higher",
+        2 => "Medium or Higher",
+        3 => "High",
+        _ => "Any",
+    }
+}
+
+/// The tag after `current` among the tags the reminders carry (by name, without case); none after the last, and none
+/// when `current` is no longer used. From none it is the first tag, if there is one.
+pub fn next_tag(current: Option<u64>, items: &[Reminder]) -> Option<u64> {
+    let keys: Vec<u64> = tag_counts(items).iter().map(|(name, _)| tag_key(name)).collect();
+    match current {
+        None => keys.first().copied(),
+        Some(key) => keys.iter().position(|k| *k == key).and_then(|i| keys.get(i + 1)).copied(),
+    }
+}
+
+/// The list after `current` in `lists`; none after the last or when `current` is gone. From none it is the first list.
+pub fn next_list(current: Option<u64>, lists: &[ListDef]) -> Option<u64> {
+    match current {
+        None => lists.first().map(|l| l.id),
+        Some(id) => lists.iter().position(|l| l.id == id).and_then(|i| lists.get(i + 1)).map(|l| l.id),
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Data {
     pub lists: Vec<ListDef>,
     pub items: Vec<Reminder>,
     pub groups: Vec<ListGroup>,
     pub templates: Vec<Template>,
+    pub smarts: Vec<SmartDef>,
 }
 
 impl Default for Data {
@@ -228,6 +419,7 @@ impl Default for Data {
             items: vec![],
             groups: vec![],
             templates: vec![],
+            smarts: vec![],
         }
     }
 }
@@ -241,6 +433,9 @@ impl Data {
     }
     pub fn next_group_id(&self) -> Option<u64> {
         self.groups.iter().map(|g| g.id).max().unwrap_or(0).checked_add(1)
+    }
+    pub fn next_smart_id(&self) -> Option<u64> {
+        self.smarts.iter().map(|s| s.id).max().unwrap_or(0).checked_add(1)
     }
     pub fn next_template_id(&self) -> Option<u64> {
         self.templates.iter().map(|t| t.id).max().unwrap_or(0).checked_add(1)
@@ -256,6 +451,10 @@ impl Data {
         }
         self.lists.retain(|l| l.id != id);
         self.items.retain(|r| r.list != id);
+        // a smart list that asked for this list takes every list instead
+        for s in self.smarts.iter_mut().filter(|s| s.rules.list == Some(id)) {
+            s.rules.list = None;
+        }
         true
     }
     pub fn move_list(&mut self, id: u64, delta: i32) -> bool {
@@ -333,6 +532,8 @@ pub enum View {
     List(u64),
     /// Every reminder carrying the tag with this key (`tag_key`).
     Tag(u64),
+    /// The custom smart list with this id.
+    Custom(u64),
 }
 
 pub fn list_count(items: &[Reminder], list: u64) -> usize {
@@ -489,6 +690,7 @@ pub fn visible(
             View::Smart(s) => s.matches(r, today) || (opts.show_completed && r.completed && s == Smart::All),
             View::List(l) => r.list == l && (opts.show_completed || !r.completed),
             View::Tag(key) => r.tags().iter().any(|t| tag_key(t) == key) && (opts.show_completed || !r.completed),
+            View::Custom(id) => data.smarts.iter().find(|s| s.id == id).is_some_and(|s| s.rules.matches(r, today)),
         }
     };
     let nested = !searching && matches!(view, View::List(_));
@@ -737,10 +939,11 @@ pub fn export_markdown(data: &Data, list: u64) -> String {
 }
 
 /// Unix seconds of the due moment: the wall time on the due day in the zone
-/// as it is then, not as it is today (daylight saving may differ).
-pub fn due_unix(r: &Reminder, offset_at: OffsetAt) -> Option<i64> {
+/// as it is then, not as it is today (daylight saving may differ). A reminder with a day but no time is due at
+/// `all_day_min` minutes after midnight (the all-day alert time in Settings).
+pub fn due_unix(r: &Reminder, all_day_min: u16, offset_at: OffsetAt) -> Option<i64> {
     let day = r.due?;
-    let min = r.time.unwrap_or(DEFAULT_ALERT_MIN) as i64;
+    let min = r.time.unwrap_or(all_day_min) as i64;
     Some(springboard::shell::clock::alarm::local_to_unix(day, min * 60, offset_at))
 }
 
@@ -751,10 +954,10 @@ pub fn clock_label(min: u16) -> String {
 }
 
 /// Notification body of an alert for `r`.
-pub fn alert_text(r: &Reminder, early: bool) -> String {
+pub fn alert_text(r: &Reminder, all_day_min: u16, early: bool) -> String {
     match (early, r.early) {
         (true, Some(m)) => format!("Due in {}", early_label(m).trim_end_matches(" before")),
-        _ => format!("Due {}", clock_label(r.time.unwrap_or(DEFAULT_ALERT_MIN))),
+        _ => format!("Due {}", clock_label(r.time.unwrap_or(all_day_min))),
     }
 }
 
@@ -1053,6 +1256,111 @@ mod tests {
         assert!(!d.delete_list(1), "the last list stays");
     }
     #[test]
+    fn smart_rules_take_open_reminders_that_satisfy_every_rule() {
+        let mut overdue = r(1, "overdue #home");
+        overdue.due = Some(TODAY - 2);
+        overdue.time = Some(9 * 60);
+        overdue.flagged = true;
+        overdue.priority = 3;
+        let mut tonight = r(2, "tonight");
+        tonight.due = Some(TODAY);
+        tonight.time = Some(19 * 60);
+        tonight.list = 2;
+        let mut later = r(3, "later");
+        later.due = Some(TODAY + 7);
+        later.time = Some(13 * 60);
+        let undated = r(4, "undated");
+        let mut done = r(5, "done");
+        done.due = Some(TODAY);
+        done.completed = true;
+        let items = [overdue, tonight, later, undated, done];
+        let ids = |rules: SmartRules| items.iter().filter(|x| rules.matches(x, TODAY)).map(|x| x.id).collect::<Vec<_>>();
+        let any = SmartRules::default();
+        assert_eq!(ids(any), [1, 2, 3, 4], "no rule takes every open reminder");
+        assert_eq!(ids(SmartRules { due: DueRule::Overdue, ..any }), [1]);
+        assert_eq!(ids(SmartRules { due: DueRule::Today, ..any }), [2]);
+        assert_eq!(ids(SmartRules { due: DueRule::Next7, ..any }), [2], "today up to six days ahead");
+        assert_eq!(ids(SmartRules { due: DueRule::Later, ..any }), [3], "a week from today is later");
+        assert_eq!(ids(SmartRules { due: DueRule::NoDate, ..any }), [4]);
+        assert_eq!(ids(SmartRules { time: TimeRule::Morning, ..any }), [1]);
+        assert_eq!(ids(SmartRules { time: TimeRule::Afternoon, ..any }), [3]);
+        assert_eq!(ids(SmartRules { time: TimeRule::Evening, ..any }), [2]);
+        assert_eq!(ids(SmartRules { time: TimeRule::NoTime, ..any }), [4]);
+        assert_eq!(ids(SmartRules { flagged: FlagRule::Flagged, ..any }), [1]);
+        assert_eq!(ids(SmartRules { flagged: FlagRule::Unflagged, ..any }), [2, 3, 4]);
+        assert_eq!(ids(SmartRules { priority: 1, ..any }), [1]);
+        assert_eq!(ids(SmartRules { priority: 3, ..any }), [1]);
+        assert_eq!(ids(SmartRules { list: Some(2), ..any }), [2]);
+        assert_eq!(ids(SmartRules { tag: Some(tag_key("HOME")), ..any }), [1], "tags match without case");
+        let both = SmartRules { due: DueRule::Overdue, flagged: FlagRule::Flagged, priority: 2, tag: Some(tag_key("home")), ..any };
+        assert_eq!(ids(both), [1]);
+        assert_eq!(ids(SmartRules { due: DueRule::Overdue, list: Some(2), ..any }), Vec::<u64>::new(), "every rule must hold");
+    }
+    #[test]
+    fn smart_rule_choices_cycle_and_round_trip_their_codes() {
+        let mut due = DueRule::Any;
+        let mut seen = vec![];
+        for _ in 0..DueRule::ALL.len() {
+            seen.push(due);
+            due = due.next();
+        }
+        assert_eq!(seen, DueRule::ALL);
+        assert_eq!(due, DueRule::Any, "the last choice wraps to the first");
+        for d in DueRule::ALL {
+            assert_eq!(DueRule::from_code(d.code()), Some(d));
+        }
+        for t in TimeRule::ALL {
+            assert_eq!(TimeRule::from_code(t.code()), Some(t));
+        }
+        for f in FlagRule::ALL {
+            assert_eq!(FlagRule::from_code(f.code()), Some(f));
+        }
+        assert_eq!(DueRule::from_code(DueRule::ALL.len() as u8), None);
+        assert_eq!(TimeRule::NoTime.next(), TimeRule::Any);
+        assert_eq!(FlagRule::Unflagged.next(), FlagRule::Any);
+        assert_eq!(priority_rule_label(0), "Any");
+        assert_eq!(priority_rule_label(3), "High");
+    }
+    #[test]
+    fn the_tag_and_list_choices_walk_what_exists_then_return_to_any() {
+        let items = vec![r(1, "#Work"), r(2, "#home and #Work")];
+        let (home, work) = (tag_key("home"), tag_key("work"));
+        assert_eq!(next_tag(None, &items), Some(home), "tags are in name order");
+        assert_eq!(next_tag(Some(home), &items), Some(work));
+        assert_eq!(next_tag(Some(work), &items), None);
+        assert_eq!(next_tag(Some(tag_key("gone")), &items), None, "a tag nobody uses any more");
+        assert_eq!(next_tag(None, &[]), None);
+        let mut d = Data::default();
+        d.lists.push(ListDef::new(2, "Work", 1, 1));
+        assert_eq!(next_list(None, &d.lists), Some(1));
+        assert_eq!(next_list(Some(1), &d.lists), Some(2));
+        assert_eq!(next_list(Some(2), &d.lists), None);
+        assert_eq!(next_list(Some(9), &d.lists), None);
+    }
+    #[test]
+    fn a_custom_smart_list_view_shows_its_matches_flat() {
+        let mut a = r(1, "a");
+        a.flagged = true;
+        let mut kid = r(2, "kid");
+        kid.parent = Some(1);
+        kid.flagged = true;
+        let mut d = data(vec![a, kid, r(3, "c")]);
+        d.smarts.push(SmartDef { id: 4, name: "Flagged things".into(), color: 0, rules: SmartRules { flagged: FlagRule::Flagged, ..SmartRules::default() } });
+        let rows = visible(&d, View::Custom(4), Options::default(), TODAY, "", &HashSet::new());
+        assert_eq!(ids(&rows, &d.items), vec![(1, 0), (2, 0)], "a subtask is its own row, as in the other smart lists");
+        let missing = visible(&d, View::Custom(9), Options::default(), TODAY, "", &HashSet::new());
+        assert!(missing.is_empty());
+    }
+    #[test]
+    fn deleting_a_list_frees_the_smart_lists_that_asked_for_it() {
+        let mut d = Data::default();
+        d.lists.push(ListDef::new(2, "Work", 1, 1));
+        d.smarts.push(SmartDef { id: 1, name: "Work things".into(), color: 0, rules: SmartRules { list: Some(2), ..SmartRules::default() } });
+        assert_eq!(d.next_smart_id(), Some(2));
+        assert!(d.delete_list(2));
+        assert_eq!(d.smarts[0].rules.list, None);
+    }
+    #[test]
     fn early_presets_cycle() {
         let mut e = None;
         let mut seen = vec![];
@@ -1073,8 +1381,19 @@ mod tests {
         let midnight = 20_000 * 86_400;
         // summer time (+1h) from the day before the due day on
         let zone = |t: i64| if t >= midnight - 86_400 { 3600 } else { 0 };
-        assert_eq!(due_unix(&r, &zone), Some(midnight + 600 * 60 - 3600));
-        assert_eq!(due_unix(&r, &|_| 0), Some(midnight + 600 * 60));
+        assert_eq!(due_unix(&r, DEFAULT_ALERT_MIN, &zone), Some(midnight + 600 * 60 - 3600));
+        assert_eq!(due_unix(&r, DEFAULT_ALERT_MIN, &|_| 0), Some(midnight + 600 * 60));
+    }
+    #[test]
+    fn date_only_reminders_alert_at_the_all_day_time_from_the_settings() {
+        let mut r = Reminder::new(1, "x".to_string());
+        r.due = Some(20_000);
+        let midnight = 20_000 * 86_400;
+        assert_eq!(due_unix(&r, 7 * 60 + 30, &|_| 0), Some(midnight + 7 * 3600 + 1800));
+        assert_eq!(alert_text(&r, 17 * 60, false), "Due 5:00 PM");
+        r.time = Some(600);
+        assert_eq!(due_unix(&r, 7 * 60, &|_| 0), Some(midnight + 600 * 60), "a reminder with a time ignores the all-day time");
+        assert_eq!(alert_text(&r, 17 * 60, false), "Due 10:00 AM");
     }
     #[test]
     fn date_only_reminders_alert_at_nine_and_say_so() {
@@ -1082,10 +1401,10 @@ mod tests {
         let mut r = Reminder::new(1, "x".to_string());
         r.due = Some(20_000);
         let midnight = 20_000 * 86_400;
-        assert_eq!(due_unix(&r, &|_| 0), Some(midnight + 9 * 3600));
-        assert_eq!(alert_text(&r, false), "Due 9:00 AM");
+        assert_eq!(due_unix(&r, DEFAULT_ALERT_MIN, &|_| 0), Some(midnight + 9 * 3600));
+        assert_eq!(alert_text(&r, DEFAULT_ALERT_MIN, false), "Due 9:00 AM");
         r.time = Some(9 * 60 + 30);
-        assert_eq!(due_unix(&r, &|_| 0), Some(midnight + 9 * 3600 + 1800));
+        assert_eq!(due_unix(&r, DEFAULT_ALERT_MIN, &|_| 0), Some(midnight + 9 * 3600 + 1800));
     }
     #[test]
     fn next_alert_and_texts() {
@@ -1096,7 +1415,7 @@ mod tests {
         assert_eq!(clock_label(545), "9:05 AM");
         assert_eq!(clock_label(0), "12:00 AM");
         assert_eq!(clock_label(13 * 60), "1:00 PM");
-        assert_eq!(alert_text(&a, false), "Due 10:00 AM");
-        assert_eq!(alert_text(&a, true), "Due in 30 minutes");
+        assert_eq!(alert_text(&a, DEFAULT_ALERT_MIN, false), "Due 10:00 AM");
+        assert_eq!(alert_text(&a, DEFAULT_ALERT_MIN, true), "Due in 30 minutes");
     }
 }
