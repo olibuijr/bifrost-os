@@ -253,7 +253,8 @@ pub fn add_keyword_writes(prefs: &Prefs, photos: &[Photo], keyword: &str) -> Vec
 /// A search typed in the toolbar field. Plain words must all appear in the file name, an album name, the title,
 /// caption, place, a keyword or the date text. `#beach` or `tag:beach` asks for that keyword, `is:favorite`,
 /// `is:edited` and `is:screenshot` for those photos, `kind:png` for a file type and `rating:3` for at least three
-/// stars. An underscore in a keyword stands for a space (`#sun_set`). A query that is itself a date ("2026-10", "4 October 2026") asks for that day, month or year.
+/// stars. An underscore in a keyword stands for a space (`#sun_set`). A query that is itself a date ("2026-10",
+/// "4 October 2026") asks for that day, month or year.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Query {
     words: Vec<String>,
