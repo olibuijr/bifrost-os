@@ -1,4 +1,8 @@
 # Changelog
+## 0.3.0 — 2026-10-13
+
+- Accounts come from the shared Internet Accounts list (`bifrost_app::controls::internet_accounts`): `mail_accounts` reads the
+  accounts with the Mail service on. The private account module is gone; address checks use the shared `valid_address`.
 ## 0.2.0 — 2026-10-13
 
 - Safe HTML mail: `html` sanitizes bodies (scripts, styles, frames, event handlers and script or relative URLs removed,

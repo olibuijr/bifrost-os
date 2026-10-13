@@ -1,7 +1,7 @@
 //! RFC 5322 messages: the header parser that reads a message's headers for the list and threads, and the
 //! renderer that turns a compose draft into the text SMTP sends.
 
-use crate::account::valid_address;
+use bifrost_app::controls::internet_accounts::valid_address;
 use crate::codec::{decode_words, encode_word};
 
 /// The headers of one message, as the list and the threads need them. Names are matched without case.
