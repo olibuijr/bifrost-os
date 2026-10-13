@@ -27,6 +27,10 @@ const SHEET_PAD_PT: f32 = 16.0;
 const FIELD_PT: f32 = 46.0;
 const MESSAGE_PT: f32 = 170.0;
 const DOT_PT: f32 = 8.0;
+/// The indent of one level of a conversation in the threaded list, and how many levels are indented (deeper replies
+/// stay at the last).
+const INDENT_PT: f32 = 14.0;
+const MAX_INDENT_LEVELS: usize = 6;
 const RADIUS_PT: f32 = 8.0;
 const PANEL_RADIUS_PT: f32 = 12.0;
 
@@ -378,7 +382,6 @@ impl MailWindow {
         self.list_scroll.set_max((lines.len() as f32 * row - area).max(0.0));
         let offset = self.list_scroll.offset();
         s.fill_rect(px(x0), px(top), px(width), px(area), CONTENT_BG.now());
-        let text_x = x0 + pad + dot;
         let right = x0 + width - pad;
         let open = self.mail.open;
         for (i, line) in lines.iter().enumerate() {
@@ -387,6 +390,7 @@ impl MailWindow {
             if y + row < top || y > h {
                 continue;
             }
+            let text_x = x0 + pad + dot + line.depth.min(MAX_INDENT_LEVELS) as f32 * ui.pt(INDENT_PT);
             let selected = open == Some(r.uid);
             if selected {
                 s.fill_rrect(x0 + inset, y + inset / 2.0, width - 2.0 * inset, row - inset, ui.pt(RADIUS_PT), colors::SYSTEM_BLUE.now());
@@ -415,7 +419,9 @@ impl MailWindow {
         if lines.is_empty() {
             let message = if self.mail.accounts.is_empty() {
                 "Add an account to start"
-            } else if !self.mail.search.is_empty() && !self.mail.rows.is_empty() {
+            } else if !self.mail.search.is_empty() && self.busy() {
+                "Searching..."
+            } else if !self.mail.search.is_empty() {
                 "No matching messages"
             } else if self.busy() {
                 "Loading..."
