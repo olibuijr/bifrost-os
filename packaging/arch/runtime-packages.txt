@@ -74,6 +74,7 @@ nano
 ncompress
 net-snmp
 nethogs
+nfs-utils
 openbsd-netcat
 openldap
 patch
