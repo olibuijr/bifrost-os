@@ -1,2 +1,4 @@
+# the fastest refresh at the native size (or the Settings choice) before the shell connects
+/usr/lib/bifrost/display-refresh
 /usr/lib/bifrost/session-env
 /usr/bin/bifrost-portal &

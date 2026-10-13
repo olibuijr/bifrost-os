@@ -493,9 +493,8 @@ fn select_mode(modes: &[ModeInfo], requested: Option<&str>, max_refresh: bool) -
         return modes.iter().find(|m| m.hdisplay as usize == w && m.vdisplay as usize == h && m.vrefresh == hz)
             .copied().ok_or_else(|| io::Error::other(format!("display mode {requested} unavailable")));
     }
-    // The preferred mode is the one the firmware starts in and the compositor picks: keeping it means no modeset
-    // (every mode change makes the monitor retrain its link, a black gap). The fastest refresh at the native size is
-    // opt-in (`refresh=max` in /etc/bifrost/display.conf).
+    // The fastest refresh at the native size is the default (owner, round 75): a faster panel is never left at the
+    // firmware's 60 Hz. `refresh=firmware` in /etc/bifrost/display.conf keeps the preferred mode (no modeset).
     let native = modes.iter().find(|m| m.kind & 8 != 0).or(modes.first()).ok_or_else(|| io::Error::other("no display modes"))?;
     if !max_refresh {
         return Ok(*native);
@@ -504,9 +503,12 @@ fn select_mode(modes: &[ModeInfo], requested: Option<&str>, max_refresh: bool) -
     Ok(*best.unwrap_or(native))
 }
 
-/// `refresh=max` in /etc/bifrost/display.conf (the same switch the session reads): the fastest refresh at native size.
+/// The fastest refresh at native size unless /etc/bifrost/display.conf says `refresh=firmware` (the same switch the
+/// session's video-arg and display-refresh read) or Settings chose `native` (/var/lib/springboard/display-refresh).
 fn refresh_max_requested() -> bool {
-    std::fs::read_to_string("/etc/bifrost/display.conf").is_ok_and(|c| c.split_whitespace().any(|t| t == "refresh=max"))
+    let firmware = std::fs::read_to_string("/etc/bifrost/display.conf").is_ok_and(|c| c.split_whitespace().any(|t| t == "refresh=firmware"));
+    let native = std::fs::read_to_string("/var/lib/springboard/display-refresh").is_ok_and(|c| c.trim() == "native");
+    !firmware && !native
 }
 
 /// The inherited mode stays only when it is the selected size at the selected refresh or faster.

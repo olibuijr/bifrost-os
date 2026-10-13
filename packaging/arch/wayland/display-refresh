@@ -1,0 +1,65 @@
+#!/usr/bin/python3
+"""Put every enabled output in its fastest refresh at its native size as soon as the window server is up, before the
+shell connects (labwc autostart), so the desktop never starts at the firmware's 60 Hz on a faster panel.
+
+The choice is Settings > Displays > Refresh Rate, kept in /var/lib/springboard/display-refresh:
+`max` (the default, also when the file is missing), `native` (the panel's preferred mode as the firmware set it), or a
+rate in Hz (the closest rate at the native size). `refresh=firmware` in /etc/bifrost/display.conf keeps the firmware
+mode for the whole machine, as video-arg does. Only refreshes at the native size are considered: the size never
+changes here. Prints what it did; never fails the session."""
+import json, os, subprocess, sys
+
+CHOICE = os.environ.get('BIFROST_DISPLAY_REFRESH_FILE', '/var/lib/springboard/display-refresh')
+
+
+def choice():
+    try:
+        if 'refresh=firmware' in open('/etc/bifrost/display.conf').read().split():
+            return 'native'
+    except OSError:
+        pass
+    try:
+        return open(CHOICE).read().strip() or 'max'
+    except OSError:
+        return 'max'
+
+
+def pick(modes, want):
+    """The mode for `want` among one output's modes (wlr-randr --json): the native size's fastest, its preferred one,
+    or the rate closest to a number. None when the output lists no preferred mode."""
+    native = next((m for m in modes if m.get('preferred')), None)
+    if native is None:
+        return None
+    same = [m for m in modes if (m['width'], m['height']) == (native['width'], native['height'])]
+    if want == 'native':
+        return native
+    if want == 'max':
+        return max(same, key=lambda m: m['refresh'])
+    try:
+        hz = float(want)
+    except ValueError:
+        return max(same, key=lambda m: m['refresh'])
+    return min(same, key=lambda m: abs(m['refresh'] - hz))
+
+
+def main():
+    want = choice()
+    try:
+        outs = json.loads(subprocess.check_output(['wlr-randr', '--json'], text=True, timeout=10))
+    except (OSError, ValueError, subprocess.SubprocessError) as e:
+        print(f'display-refresh: unchanged ({e})', file=sys.stderr)
+        return
+    for o in outs:
+        if not o.get('enabled', True):
+            continue
+        m = pick(o.get('modes', []), want)
+        cur = next((x for x in o.get('modes', []) if x.get('current')), None)
+        if m is None or (cur and (cur['width'], cur['height'], round(cur['refresh'], 3)) == (m['width'], m['height'], round(m['refresh'], 3))):
+            continue
+        mode = f"{m['width']}x{m['height']}@{m['refresh']:.3f}Hz"
+        r = subprocess.run(['wlr-randr', '--output', o['name'], '--mode', mode], capture_output=True, text=True, timeout=10)
+        print(f"display-refresh: {o['name']} {mode} ({want})" + ('' if r.returncode == 0 else f' failed: {r.stderr.strip()}'), file=sys.stderr)
+
+
+if __name__ == '__main__':
+    main()
