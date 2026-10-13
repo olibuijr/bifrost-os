@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.23 — 2026-10-13
+
+- On the desktop an app crash posts a notification (report saved for Console) instead of the modal card, which the desktop drew under the app windows: unseen, unanswerable, and a full-screen repaint every frame.
+
 ## 0.7.22 — 2026-10-13
 
 - An app stopped from outside (SIGHUP, SIGINT, SIGKILL, SIGTERM) no longer gets the "quit unexpectedly" alert. On the desktop that alert sat under the app windows, unseen, and forced a full-screen CPU repaint every frame: Browser scrolling at 165 Hz dropped to 17-29 ms frames after any app was closed that way.

@@ -156,6 +156,14 @@ impl Shell {
         crate::bare::crashlog::append(&self.data_dir.display().to_string(), &log_line(&id, code));
         let entries = diag::load(&self.data_dir);
         let report = report_text(&name, &id, &why, &app_entries(&entries, &id));
+        if self.desk_active() {
+            // the desktop draws the shell under the app windows, so a modal card there would sit unseen (and
+            // repaint the whole screen every frame) until answered: post a notification and keep the report
+            let _ = std::fs::write(self.data_dir.join(REPORT_FILE), &report);
+            let body = format!("The app stopped because of {why}. The crash report is in Console.");
+            self.notify(super::notify::store::Notification::new(AppId::Settings, title(&name), body, crate::bare::sys::wall_time().0));
+            return;
+        }
         self.crash_alert = Some(Alert::new(&self.ui, slot, &name, &why, report));
         self.dirty = true;
         self.drawn = super::Drawn::Nothing;
