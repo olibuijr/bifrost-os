@@ -36,7 +36,7 @@ pub enum CacheDecision {
 }
 
 /// `CachedURLResponse`.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CachedURLResponse {
     pub response: HTTPURLResponse,
     pub data: Vec<u8>,
@@ -231,7 +231,6 @@ impl URLCache {
             (CachePolicy::ReloadRevalidatingCacheData, Some(c)) => c.validator().map_or(CacheDecision::Load, CacheDecision::Revalidate),
             (CachePolicy::UseProtocolCachePolicy, Some(c)) if c.is_fresh(now) => CacheDecision::UseCache,
             (CachePolicy::UseProtocolCachePolicy, Some(c)) => c.validator().map_or(CacheDecision::Load, CacheDecision::Revalidate),
-            (CachePolicy::ReturnCacheDataElseLoad, None) => CacheDecision::Load,
         }
     }
 }

@@ -303,7 +303,7 @@ pub(crate) fn on_main_or_unset() -> bool {
     main_q::THREAD.get().map_or(true, |t| *t == thread::current().id())
 }
 
-fn on_main_thread() -> bool {
+pub(crate) fn on_main_thread() -> bool {
     main_q::THREAD.get() == Some(&thread::current().id())
 }
 

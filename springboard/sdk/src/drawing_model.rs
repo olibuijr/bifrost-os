@@ -242,16 +242,14 @@ impl BezierPath {
             for i in 0..poly.len() {
                 let (a, b) = (poly[i], poly[(i + 1) % poly.len()]);
                 let side = (b.0 - a.0) * (p.1 - a.1) - (p.0 - a.0) * (b.1 - a.1);
-                if a.1 <= p.1 && b.1 > p.1 {
+                // a ray from p towards +x: an upward edge crosses it when p is left of the edge (side > 0), a downward one
+                // when p is right of it (side < 0); even-odd counts those crossings, nonzero sums their directions
+                if a.1 <= p.1 && b.1 > p.1 && side > 0.0 {
                     crossings += 1;
-                    if side > 0.0 {
-                        wn += 1;
-                    }
-                } else if a.1 > p.1 && b.1 <= p.1 {
+                    wn += 1;
+                } else if a.1 > p.1 && b.1 <= p.1 && side < 0.0 {
                     crossings += 1;
-                    if side < 0.0 {
-                        wn -= 1;
-                    }
+                    wn -= 1;
                 }
             }
         }

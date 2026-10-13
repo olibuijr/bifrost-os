@@ -73,7 +73,12 @@ impl NotificationCenter {
         // main thread's observers get a post from another thread through the main queue
         deliver(&n);
         if !on_main_or_unset() {
-            DispatchQueue::main().async_(move || deliver(&n));
+            // only the main thread's observers: a main queue drained elsewhere (tests) must not deliver twice here
+            DispatchQueue::main().async_(move || {
+                if crate::dispatch::on_main_thread() {
+                    deliver(&n);
+                }
+            });
         }
     }
 
@@ -103,13 +108,10 @@ fn deliver(n: &Notification) {
 
 impl Drop for ObserverToken {
     fn drop(&mut self) {
+        // observers live in the registry of the thread that added them, which is the thread the token belongs to:
+        // removing through the main queue would touch the main thread's registry and leave this one observing
         let id = self.id;
-        let remove = move || REGISTRY.with(|r| r.borrow_mut().observers.retain(|o| o.id != id));
-        if on_main_or_unset() {
-            remove();
-        } else {
-            DispatchQueue::main().async_(remove);
-        }
+        REGISTRY.with(|r| r.borrow_mut().observers.retain(|o| o.id != id));
     }
 }
 
