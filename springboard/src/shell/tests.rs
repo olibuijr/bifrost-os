@@ -122,6 +122,48 @@
         assert_eq!(sh.form(),bifrost_ui::form_factor::FormFactor::Desktop);
     }
 
+    /// A tablet with the desktop up and one window (the Terminal) placed so that its bottom edge runs under the
+    /// on-screen keyboard.
+    fn tablet_desk_with_window_under_keyboard() -> Shell {
+        let mut sh = desktop_shell();
+        sh.form = bifrost_ui::form_factor::FormFactor::Tablet;
+        sh.desk_open(AppId::Terminal, 0.);
+        let m = sh.desk_metrics();
+        sh.desk.as_mut().unwrap().place(&m, 0, desk::Rect { x: 100, y: 1200, w: 800, h: 900 });
+        sh
+    }
+
+    #[test]
+    fn a_tablet_keyboard_lifts_the_front_window_clear_of_it_and_lets_it_back_down() {
+        let mut sh = tablet_desk_with_window_under_keyboard();
+        sh.set_keyboard(true, 1000.);
+        assert!(sh.keyboard.shown(), "a tablet raises the keyboard over the desktop");
+        let lifted = sh.desk.as_ref().unwrap().wins[0].r;
+        assert!(lifted.y < 1200, "the front window moves up");
+        assert!(lifted.y + lifted.h <= sh.kb_top() as i32, "its bottom edge clears the keyboard");
+        sh.set_keyboard(false, 1100.);
+        assert_eq!(sh.desk.as_ref().unwrap().wins[0].r.y, 1200, "it goes back down when the keyboard does");
+        assert!(sh.desk_kb_lift.is_none());
+    }
+
+    #[test]
+    fn a_window_the_user_moved_while_lifted_stays_where_the_user_put_it() {
+        let mut sh = tablet_desk_with_window_under_keyboard();
+        sh.set_keyboard(true, 1000.);
+        sh.desk.as_mut().unwrap().wins[0].r.y = 500;
+        sh.set_keyboard(false, 1100.);
+        assert_eq!(sh.desk.as_ref().unwrap().wins[0].r.y, 500);
+    }
+
+    #[test]
+    fn the_desktop_form_never_lifts_a_window_for_the_keyboard() {
+        let mut sh = tablet_desk_with_window_under_keyboard();
+        sh.form = bifrost_ui::form_factor::FormFactor::Desktop;
+        sh.set_keyboard(true, 1000.);
+        assert!(!sh.keyboard.shown(), "a desktop has a hardware keyboard");
+        assert_eq!(sh.desk.as_ref().unwrap().wins[0].r.y, 1200);
+    }
+
     #[cfg(feature="desktop-wayland")]
     #[test]
     fn shared_ui_desktop_menu_precedes_drawer_and_dispatches_sdk_commands() {

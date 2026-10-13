@@ -643,6 +643,8 @@ pub struct Shell {
     haptics: bool,
     /// a touch that started on the keyboard
     kb_touch: bool,
+    /// the desktop window the on-screen keyboard lifted: (app, y before the lift, y after it)
+    desk_kb_lift: Option<(AppId, i32, i32)>,
     /// touch on the terminal grid: scroll, tap, long-press selection, menu
     term_touch: termtouch::TermTouch,
     last_input: f64,
@@ -935,6 +937,7 @@ impl Shell {
             hw_keyboard: false,
             haptics: false,
             kb_touch: false,
+            desk_kb_lift: None,
             term_touch: termtouch::TermTouch::default(),
             last_input: 0.0,
             settings_changed: 0.0,
@@ -2458,6 +2461,9 @@ impl Shell {
             return fx;
         }
         if self.desk_active() && matches!(self.screen, Screen::Home | Screen::App(_)) {
+            if let Some(fx) = self.desk_keyboard_touch(ev, t) {
+                return fx;
+            }
             if let Some(fx) = self.desk_event(ev, t) {
                 return fx;
             }
@@ -4121,11 +4127,12 @@ impl Shell {
         // caller, matters: bringing an app with a focused text field to the front used to raise it, and its top row
         // showed as grey boxes along the bottom of the window.
         let shown = shown && self.keyboard_allowed();
-        if self.keyboard.shown() == shown {
-            return;
+        if self.keyboard.shown() != shown {
+            self.keyboard.set_shown(shown, t);
+            self.resize_terminals();
         }
-        self.keyboard.set_shown(shown, t);
-        self.resize_terminals();
+        // the desktop's front window follows the keyboard up and back down
+        self.desk_keyboard_lift();
     }
 
     fn terminal_touch(&mut self, ev: Event, t: f64) {
