@@ -69,6 +69,13 @@
       "bifrost": "springboard/ui/src/pane.rs (parse_manifest",
       "status": "partial",
       "note": "Wave 3 (theme-08, parity/integration cf8e852d): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No pane bundle format or plist-based pane registration exists; apps are registered through the app bundle and manifest.toml instead."
+    },
+    {
+      "feature": "Pane links (x-apple.systempreferences URLs)",
+      "apple": "x-apple.systempreferences: URL with a pane identifier and an optional ?anchor (System Settings deep links)",
+      "bifrost": "springboard/ui/src/pane_link.rs (pane_url, parse_pane_url, PaneLink)",
+      "status": "partial",
+      "note": "Pure builder and reader with host unit tests: plain-token identifiers and anchors, split at the first '?'. Not wired: the shell has no link router yet, Settings pages have no identifier table (macOS 27 identifiers are not verified in docs/parity-matrix/os/settings; com.apple.preference.displays appears only as a LaunchAgent name in the daemons inventory), and no link opens the Settings app. Not tested on the VM or Midget."
     }
   ],
   "gaps": [
