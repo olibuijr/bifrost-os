@@ -3,7 +3,6 @@
 //! measures, draws and hit tests them. Opened by the Services menu's Look Up and by Ctrl+Cmd+D; Escape or a tap
 //! outside closes it, and a tap on an action runs it.
 
-use super::apps::AppId;
 use super::quicksearch::{self, Hit};
 use super::{apphost, Drawn, Effect, Event, Shell};
 use crate::gfx::Surface;
@@ -241,6 +240,7 @@ impl Shell {
 
 #[cfg(test)]
 mod tests {
+    use super::super::apps::AppId;
     use super::*;
 
     fn look() -> LookUp {
