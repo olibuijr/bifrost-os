@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.9.0 — 2026-10-13
+
+- Board items: text boxes, sticky notes, tables, links, files and pictures. The toolbar has Text, Note and Connect tools, and the Insert menu adds a text box, sticky note, table, connector, link and Picture or File. Type into an item (double tap one with the lasso, or press Return on it); Tab and Return move between table cells; Add Table Row and Column grow a table.
+- Connectors join two items with an arrow and follow them when they move. Drag the Connect tool from one item to another; Delete removes a picked connector.
+- Pictures and files are kept in the board's own folder, so they stay when the original moves. A double tap on a link opens it.
+- Items move with the lasso, snap to the grid, scale from Arrange > Make Item Larger or Smaller, take the ink colour, and are part of undo, redo, duplicate, delete, the saved board, PNG and PDF export and printing.
+- Paste puts a picture or plain text from the pasteboard on the board when it holds no strokes.
+- Boards > Search Boards finds a board by title; File > Rename Board names the open one.
+- Freeform accepts pictures and text shared from other apps and puts them on a new board.
+
 ## 1.8.0 — 2026-10-13
 
 - Insert menu: Line, Arrow, Triangle and Star shapes. Selection handles resize and rotate. Group, Ungroup, Lock and Unlock; align and distribute.

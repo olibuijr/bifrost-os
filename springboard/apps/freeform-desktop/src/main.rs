@@ -6,15 +6,18 @@ mod arrange;
 mod boards;
 mod freeform;
 mod ink;
+mod items;
 mod pdfout;
 mod services;
 mod style;
 
 use arrange::Align;
 use bifrost_app::kit::{Damage, Event, Surface};
+use freeform::Shared;
 use ink::ShapeKind;
-use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Input, TouchKind};
+use bifrost_app::{App, AppMenu, AppMenuItem, Ctx, Document, DocumentEvent, Input, OpenOptions, TouchKind};
 use bifrost_core::json::Json;
+use std::io::Read;
 use std::path::PathBuf;
 
 /// The File menu's Export as PNG item.
@@ -49,8 +52,20 @@ const MENU_NEXT_BOARD: u32 = 28;
 const MENU_PREV_BOARD: u32 = 29;
 const MENU_GRID: u32 = 30;
 const MENU_SNAP: u32 = 31;
+const MENU_SEARCH: u32 = 32;
+const MENU_RENAME_BOARD: u32 = 33;
 /// Insert menu shapes: `MENU_SHAPE + index` into `SHAPES`.
 const MENU_SHAPE: u32 = 40;
+const MENU_TEXT_BOX: u32 = 50;
+const MENU_NOTE: u32 = 51;
+const MENU_TABLE: u32 = 52;
+const MENU_CONNECTOR: u32 = 53;
+const MENU_LINK: u32 = 54;
+const MENU_FILE: u32 = 55;
+const MENU_TABLE_ROW: u32 = 56;
+const MENU_TABLE_COLUMN: u32 = 57;
+const MENU_LARGER: u32 = 58;
+const MENU_SMALLER: u32 = 59;
 /// The Boards menu: `MENU_BOARD + board id` opens that board.
 const MENU_BOARD: u32 = 1000;
 
@@ -67,6 +82,8 @@ const SHAPES: [(ShapeKind, &str); 6] = [
 struct FreeformApp {
     app: Option<freeform::Freeform>,
     services: services::Services,
+    /// The open panel of Insert > Picture or File, while it is up.
+    insert: Option<u32>,
 }
 
 impl FreeformApp {
@@ -83,6 +100,49 @@ impl FreeformApp {
         if let Some(strokes) = c.take_copy() {
             self.services.copy(ctx, &strokes, ctx.ui.s);
         }
+        if let Some(url) = c.take_open_url() {
+            ctx.open_url(&url);
+        }
+    }
+
+    /// The files an open panel or a share brought, read whole (a file over the board's limit is skipped and logged)
+    /// and released: the board keeps its own copy.
+    fn read_files(ctx: &Ctx, docs: Vec<Document>) -> Vec<(String, Vec<u8>)> {
+        let limit = freeform::MAX_FILE_BYTES;
+        let mut files = Vec::new();
+        for mut doc in docs {
+            let mut bytes = Vec::new();
+            let read = (doc.size as usize) <= limit && (&mut doc.file).take(limit as u64 + 1).read_to_end(&mut bytes).is_ok();
+            ctx.release_document(doc.grant);
+            if read && bytes.len() <= limit {
+                files.push((doc.name, bytes));
+            } else {
+                ctx.log(&format!("freeform: {} was not read (too large or unreadable)", doc.name));
+            }
+        }
+        files
+    }
+
+    /// Files from an open panel go onto the open board; files somebody shared go onto a board of their own.
+    fn take_files(&mut self, ctx: &Ctx, request: u32, docs: Vec<Document>) -> bool {
+        let inbound = bifrost_app::share::is_inbound(request);
+        if !inbound && self.insert != Some(request) {
+            for doc in docs {
+                ctx.release_document(doc.grant);
+            }
+            return false;
+        }
+        if !inbound {
+            self.insert = None;
+        }
+        let files = Self::read_files(ctx, docs);
+        let Some(c) = &mut self.app else { return false };
+        if inbound {
+            c.import_shared(&ctx.ui, files.into_iter().map(|(name, bytes)| Shared::File { name, bytes }).collect());
+        } else {
+            c.insert_files(&ctx.ui, files);
+        }
+        true
     }
 
     /// Gives the board the export factor of the main display, once the shell has said what it is.
@@ -118,6 +178,20 @@ impl App for FreeformApp {
                 Some(c) => (c.activate_id(&ctx.ui, id), None),
                 None => return false,
             },
+            Input::Key(key) => match &mut self.app {
+                Some(c) => (c.key(&ctx.ui, &key), None),
+                None => return false,
+            },
+            Input::Open(url) => {
+                let Some(c) = &mut self.app else { return false };
+                let piece = match bifrost_app::share::text_from_url(&url) {
+                    Some(text) => Shared::Text(text),
+                    None if url.starts_with("http://") || url.starts_with("https://") => Shared::Url(url),
+                    None => return false,
+                };
+                c.import_shared(&ctx.ui, vec![piece]);
+                (true, None)
+            }
             Input::Touch { kind, x, y, t, .. } => {
                 let Some(c) = &mut self.app else { return false };
                 let e = match kind {
@@ -153,8 +227,12 @@ impl App for FreeformApp {
         let two = app.is_some_and(|c| c.has_units(2));
         let three = app.is_some_and(|c| c.has_units(3));
         let tool = app.and_then(|c| c.shape_tool());
+        let picked = app.is_some_and(|c| c.has_pick());
+        let text_tool = app.and_then(|c| c.text_tool());
         let flag = |f: fn(&freeform::Freeform) -> bool| app.is_some_and(f);
         let mut board_items: Vec<AppMenuItem> = vec![
+            AppMenuItem::new(MENU_SEARCH, "Search Boards...").key("cmd+shift+f"),
+            AppMenuItem::separator(),
             AppMenuItem::new(MENU_NEXT_BOARD, "Next Board").key("cmd+shift+]").enabled(boards > 1),
             AppMenuItem::new(MENU_PREV_BOARD, "Previous Board").key("cmd+shift+[").enabled(boards > 1),
             AppMenuItem::separator(),
@@ -164,12 +242,28 @@ impl App for FreeformApp {
                 board_items.push(AppMenuItem::new(MENU_BOARD + id, &title).checked(open));
             }
         }
+        let mut insert_items: Vec<AppMenuItem> =
+            SHAPES.iter().enumerate().map(|(i, (kind, title))| AppMenuItem::new(MENU_SHAPE + i as u32, title).checked(tool == Some(*kind))).collect();
+        insert_items.extend([
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_TEXT_BOX, "Text Box").key("cmd+alt+t").checked(text_tool == Some(items::Kind::Text)),
+            AppMenuItem::new(MENU_NOTE, "Sticky Note").key("cmd+alt+n").checked(text_tool == Some(items::Kind::Sticky)),
+            AppMenuItem::new(MENU_TABLE, "Table"),
+            AppMenuItem::new(MENU_CONNECTOR, "Connector").checked(flag(|c| c.connector_tool())),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_LINK, "Link"),
+            AppMenuItem::new(MENU_FILE, "Picture or File...").key("cmd+alt+i"),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_TABLE_ROW, "Add Table Row").enabled(flag(|c| c.can_add_table_part())),
+            AppMenuItem::new(MENU_TABLE_COLUMN, "Add Table Column").enabled(flag(|c| c.can_add_table_part())),
+        ]);
         vec![
             AppMenu {
                 title: "File".into(),
                 items: vec![
                     AppMenuItem::new(MENU_NEW_BOARD, "New Board").key("cmd+n"),
                     AppMenuItem::new(MENU_DUPLICATE_BOARD, "Duplicate Board"),
+                    AppMenuItem::new(MENU_RENAME_BOARD, "Rename Board..."),
                     AppMenuItem::new(MENU_DELETE_BOARD, "Delete Board").enabled(boards > 1),
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_EXPORT, "Export as PNG...").key("cmd+shift+e").enabled(has),
@@ -186,14 +280,11 @@ impl App for FreeformApp {
                     AppMenuItem::separator(),
                     AppMenuItem::new(MENU_COPY, "Copy").key("cmd+c").enabled(selected),
                     AppMenuItem::new(MENU_PASTE, "Paste").key("cmd+v"),
-                    AppMenuItem::new(MENU_DUPLICATE, "Duplicate").key("cmd+d").enabled(selected),
-                    AppMenuItem::new(MENU_DELETE, "Delete").enabled(selected),
+                    AppMenuItem::new(MENU_DUPLICATE, "Duplicate").key("cmd+d").enabled(selected || picked),
+                    AppMenuItem::new(MENU_DELETE, "Delete").enabled(selected || picked),
                 ],
             },
-            AppMenu {
-                title: "Insert".into(),
-                items: SHAPES.iter().enumerate().map(|(i, (kind, title))| AppMenuItem::new(MENU_SHAPE + i as u32, title).checked(tool == Some(*kind))).collect(),
-            },
+            AppMenu { title: "Insert".into(), items: insert_items },
             AppMenu {
                 title: "Arrange".into(),
                 items: vec![
@@ -214,6 +305,9 @@ impl App for FreeformApp {
                     AppMenuItem::new(MENU_DISTRIBUTE_H, "Distribute Horizontally").enabled(three),
                     AppMenuItem::new(MENU_DISTRIBUTE_V, "Distribute Vertically").enabled(three),
                     AppMenuItem::separator(),
+                    AppMenuItem::new(MENU_LARGER, "Make Item Larger").enabled(flag(|c| c.can_scale_item())),
+                    AppMenuItem::new(MENU_SMALLER, "Make Item Smaller").enabled(flag(|c| c.can_scale_item())),
+                    AppMenuItem::separator(),
                     AppMenuItem::new(MENU_ROW, "Arrange in Row").enabled(selected),
                 ],
             },
@@ -230,6 +324,15 @@ impl App for FreeformApp {
 
     fn menu_action(&mut self, ctx: &Ctx, id: u32) -> bool {
         if id == MENU_PASTE {
+            if let Some(c) = &mut self.app {
+                if c.is_editing() {
+                    // typing into an item or the search: the pasteboard's text goes there, not the board's strokes
+                    if let Some(text) = ctx.pasteboard_string() {
+                        c.paste_text(&ctx.ui, &text);
+                    }
+                    return true;
+                }
+            }
             self.services.paste(ctx);
             return true;
         }
@@ -263,6 +366,21 @@ impl App for FreeformApp {
             MENU_ALIGN_BOTTOM => c.align_selection(&ctx.ui, Align::Bottom),
             MENU_DISTRIBUTE_H => c.distribute_selection(&ctx.ui, true),
             MENU_DISTRIBUTE_V => c.distribute_selection(&ctx.ui, false),
+            MENU_SEARCH => c.open_search(&ctx.ui),
+            MENU_RENAME_BOARD => c.open_rename(&ctx.ui),
+            MENU_TEXT_BOX => c.insert_text_box(&ctx.ui),
+            MENU_NOTE => c.insert_note(&ctx.ui),
+            MENU_TABLE => c.insert_table(&ctx.ui),
+            MENU_CONNECTOR => c.choose_connector(&ctx.ui),
+            MENU_LINK => c.insert_link(&ctx.ui, ctx.pasteboard_string().as_deref()),
+            MENU_FILE => {
+                let options = OpenOptions { title: "Insert".into(), multiple: true, ..OpenOptions::default() };
+                self.insert = Some(ctx.open_panel(&options));
+            }
+            MENU_TABLE_ROW => c.add_table_part(&ctx.ui, true),
+            MENU_TABLE_COLUMN => c.add_table_part(&ctx.ui, false),
+            MENU_LARGER => c.scale_pick(&ctx.ui, 1.25),
+            MENU_SMALLER => c.scale_pick(&ctx.ui, 0.8),
             MENU_GRID => c.toggle_grid(),
             MENU_SNAP => c.toggle_snap(),
             i if (MENU_SHAPE..MENU_SHAPE + SHAPES.len() as u32).contains(&i) => c.choose_shape(SHAPES[(i - MENU_SHAPE) as usize].0),
@@ -297,10 +415,46 @@ impl App for FreeformApp {
         self.services.suspend(ctx);
     }
 
+    fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        match ev {
+            DocumentEvent::Opened(doc) => {
+                let request = doc.request;
+                self.take_files(ctx, request, vec![doc])
+            }
+            DocumentEvent::OpenedMany { request, docs } => self.take_files(ctx, request, docs),
+            DocumentEvent::Failed { request, code } => {
+                if self.insert == Some(request) {
+                    self.insert = None;
+                }
+                if code != bifrost_app::proto::DocErrorCode::Cancelled {
+                    ctx.log(&format!("freeform: document request {request}: {code:?}"));
+                }
+                false
+            }
+            // Freeform never asks to save a document through a panel; refuse one that arrives
+            DocumentEvent::SaveTo(doc) => {
+                ctx.abort_document(doc.request);
+                false
+            }
+            DocumentEvent::Saved(doc) => {
+                ctx.release_document(doc.grant);
+                false
+            }
+        }
+    }
+
     fn service_reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
         let took = self.services.reply(ctx, request, result);
-        if let (Some(c), Some(strokes)) = (&mut self.app, self.services.take_pasted()) {
-            c.paste_strokes(&ctx.ui, &strokes);
+        if let Some(c) = &mut self.app {
+            if let Some(strokes) = self.services.take_pasted() {
+                c.paste_strokes(&ctx.ui, &strokes);
+            }
+            if let Some(picture) = self.services.take_pasted_picture() {
+                c.insert_files(&ctx.ui, vec![("Pasted picture.png".to_string(), picture)]);
+            }
+            if let Some(text) = self.services.take_pasted_text() {
+                c.paste_text_item(&ctx.ui, text);
+            }
         }
         self.sync_export(ctx);
         took
@@ -324,5 +478,5 @@ fn tip_store(home: &std::path::Path) -> bifrost_app::controls::tips::Datastore {
 }
 
 fn main() {
-    bifrost_app::run(FreeformApp { app: None, services: Default::default() })
+    bifrost_app::run(FreeformApp { app: None, services: Default::default(), insert: None })
 }

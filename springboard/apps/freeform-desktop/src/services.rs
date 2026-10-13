@@ -26,6 +26,10 @@ enum Req {
     Cursor,
     Copy,
     Paste,
+    /// Paste found no strokes and asked for a picture.
+    PastePng,
+    /// Paste found no strokes or picture and asked for text.
+    PasteText,
     Screens,
 }
 
@@ -42,6 +46,10 @@ pub struct Services {
     backing: Option<f32>,
     /// The strokes a Paste read from the pasteboard, waiting for the app (`take_pasted`).
     pasted: Option<Drawing>,
+    /// The picture (PNG, JPEG or another readable format) a Paste read when there were no strokes (`take_pasted_picture`).
+    pasted_picture: Option<Vec<u8>>,
+    /// The text a Paste read when there were neither strokes nor a picture (`take_pasted_text`).
+    pasted_text: Option<String>,
 }
 
 impl Services {
@@ -108,6 +116,16 @@ impl Services {
         self.pasted.take()
     }
 
+    /// The picture a Paste read, once.
+    pub fn take_pasted_picture(&mut self) -> Option<Vec<u8>> {
+        self.pasted_picture.take()
+    }
+
+    /// The text a Paste read, once.
+    pub fn take_pasted_text(&mut self) -> Option<String> {
+        self.pasted_text.take()
+    }
+
     /// The reply to one of our calls. True when the call was ours, so the app takes it.
     pub fn reply(&mut self, ctx: &Ctx, request: u32, result: &Result<Json, String>) -> bool {
         let Some(at) = self.pending.iter().position(|(id, _)| *id == request) else { return false };
@@ -123,11 +141,25 @@ impl Services {
                 }
             }
             Req::Paste => {
-                // a board without our stroke type (an error or an empty reply) pastes nothing
+                // a board without our stroke type (an error or an empty reply) falls back to a picture
                 self.pasted = pb::decode_data(result)
                     .and_then(|bytes| String::from_utf8(bytes).ok())
                     .and_then(|text| Drawing::from_text(&text).ok())
                     .filter(|d| !d.is_empty());
+                if self.pasted.is_none() {
+                    let next = Board::general().data(ctx, pb::PNG);
+                    self.track(next, Req::PastePng);
+                }
+            }
+            Req::PastePng => {
+                self.pasted_picture = pb::decode_data(result).filter(|bytes| springboard::cg::imageio::is_image(bytes));
+                if self.pasted_picture.is_none() {
+                    let next = Board::general().data(ctx, pb::STRING);
+                    self.track(next, Req::PasteText);
+                }
+            }
+            Req::PasteText => {
+                self.pasted_text = pb::decode_data(result).and_then(|bytes| String::from_utf8(bytes).ok()).filter(|t| !t.trim().is_empty());
             }
             Req::Cursor => {
                 if let Err(e) = result {
@@ -282,6 +314,52 @@ mod tests {
         let got = s.take_pasted().expect("the strokes were read");
         assert_eq!(got.strokes().len(), 1);
         assert!(s.take_pasted().is_none(), "taken once");
+    }
+
+    #[test]
+    fn a_paste_with_no_strokes_asks_for_a_picture_then_for_text() {
+        let ctx = test_ctx(1.0);
+        let mut s = Services::default();
+        s.paste(&ctx);
+        let (id, ..) = calls(&ctx).remove(0);
+        assert!(s.reply(&ctx, id, &Ok(Json::Null)));
+        let (png_id, service, method, body) = calls(&ctx).remove(0);
+        assert_eq!((service.as_str(), method.as_str()), ("pasteboard", "data"));
+        assert!(body.contains("public.png"), "the second ask is for a picture: {body}");
+        // not a picture: the third ask is for text
+        assert!(s.reply(&ctx, png_id, &Ok(Json::Str(hex(b"not a picture")))));
+        assert!(s.take_pasted_picture().is_none());
+        let (text_id, _, _, body) = calls(&ctx).remove(0);
+        assert!(body.contains("public.utf8-plain-text"), "{body}");
+        assert!(s.reply(&ctx, text_id, &Ok(Json::Str(hex(b"hello")))));
+        assert_eq!(s.take_pasted_text().as_deref(), Some("hello"));
+        assert!(s.take_pasted_text().is_none(), "taken once");
+        assert!(s.pending.is_empty());
+    }
+
+    #[test]
+    fn a_pasted_picture_is_kept_once_and_stops_the_chain() {
+        let ctx = test_ctx(1.0);
+        let mut s = Services::default();
+        s.paste(&ctx);
+        let (id, ..) = calls(&ctx).remove(0);
+        s.reply(&ctx, id, &Ok(Json::Null));
+        let (png_id, ..) = calls(&ctx).remove(0);
+        let png = springboard::pngenc::encode_rgb(1, 1, &[0xFF00_00FF]);
+        assert!(s.reply(&ctx, png_id, &Ok(Json::Str(hex(&png)))));
+        assert_eq!(s.take_pasted_picture(), Some(png));
+        assert!(calls(&ctx).is_empty(), "no further ask once a picture was found");
+    }
+
+    #[test]
+    fn strokes_on_the_pasteboard_stop_the_chain_too() {
+        let ctx = test_ctx(1.0);
+        let mut s = Services::default();
+        s.paste(&ctx);
+        let (id, ..) = calls(&ctx).remove(0);
+        s.reply(&ctx, id, &Ok(Json::Str(hex(one_stroke().to_text().as_bytes()))));
+        assert!(s.take_pasted().is_some());
+        assert!(calls(&ctx).is_empty());
     }
 
     #[test]
