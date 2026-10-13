@@ -1,0 +1,11 @@
+id = "is.olibuijr.textedit.desktop"
+name = "Text Editor"
+version = "1.0.0"
+exec = "bifrost-textedit"
+icon = "icon.png"
+min_shell = "0.4.84"
+summary = "Plain and rich text documents with formatting, find and replace, and a word count."
+category = "Productivity"
+architecture = "x86_64-linux"
+permissions = ["documents"]
+window = "full-size"
