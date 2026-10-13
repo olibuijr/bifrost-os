@@ -429,6 +429,14 @@ pub fn about(info: &Info) -> Vec<Vec<(&'static str, String)>> {
         ],
         vec![("Capacity", gb(info.storage_total)), ("Available", gb(info.storage_free))],
         vec![("Wi-Fi Address", dash(&info.mac)), ("IP Address", dash(&info.ip)), ("Kernel", dash(&info.kernel)), ("Uptime", uptime(info.uptime_min))],
+        // this machine's own facts (read once from /proc and /sys, see `bifrost_core::sysinfo`)
+        {
+            let this = bifrost_core::sysinfo::Summary::this_machine();
+            vec![
+                ("Graphics", if this.graphics.is_empty() { dash("") } else { this.graphics.join("; ") }),
+                ("Operating System", dash(&format!("{} {}", this.os_name, this.os_version))),
+            ]
+        },
     ]
 }
 
