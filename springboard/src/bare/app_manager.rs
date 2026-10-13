@@ -28,12 +28,11 @@ fn stats(text: &str) -> String {
 }
 const ROOT: &str = "/sys/fs/cgroup/bifrost-apps";
 static GROUPS: Mutex<Vec<String>> = Mutex::new(Vec::new());
-static START: OnceLock<()> = OnceLock::new();
 /// The resource file is only written while someone reads it (`want_resources`): idle means no 5 s timer.
 static EPOCH: OnceLock<std::time::Instant> = OnceLock::new();
 static LAST_WANT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-static PARKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-static WRITER: OnceLock<std::thread::Thread> = OnceLock::new();
+/// True while the writer thread runs; it exits when nobody wants the file, so an idle shell holds no thread for it.
+static RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 const KEEP_WRITING_SECS: u64 = 15;
 fn now_secs() -> u64 {
     EPOCH.get_or_init(std::time::Instant::now).elapsed().as_secs() + 1
@@ -42,15 +41,42 @@ fn now_secs() -> u64 {
 fn writer_should_park(last_want: u64, now: u64) -> bool {
     now.saturating_sub(last_want) > KEEP_WRITING_SECS
 }
-/// The Cpu/Memory readouts read `/run/bifrost/app-resources.json`: calling this keeps the writer running and wakes it if parked.
+/// The Cpu/Memory readouts read `/run/bifrost/app-resources.json`: calling this keeps the writer running and starts it
+/// if it has stopped.
 pub fn want_resources() {
+    LAST_WANT.store(now_secs(), std::sync::atomic::Ordering::SeqCst);
+    ensure_writer();
+}
+fn ensure_writer() {
     use std::sync::atomic::Ordering::SeqCst;
-    LAST_WANT.store(now_secs(), SeqCst);
-    if PARKED.swap(false, SeqCst) {
-        if let Some(t) = WRITER.get() {
-            t.unpark();
-        }
+    if RUNNING.swap(true, SeqCst) {
+        return;
     }
+    let spawned = std::thread::Builder::new().name("app-resources".into()).spawn(|| loop {
+        write_resources();
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        if writer_should_park(LAST_WANT.load(SeqCst), now_secs()) {
+            RUNNING.store(false, SeqCst);
+            // a want that landed after the check and saw RUNNING still set would be lost: take the writer back
+            if writer_should_park(LAST_WANT.load(SeqCst), now_secs()) || RUNNING.swap(true, SeqCst) {
+                return;
+            }
+        }
+    });
+    if spawned.is_err() {
+        RUNNING.store(false, SeqCst);
+    }
+}
+fn write_resources() {
+    let ids=GROUPS.lock().map(|g|g.clone()).unwrap_or_default();let mut rows=Vec::new();
+    for id in ids {if let Ok(path)=group(&id){
+        let read=|n:&str|fs::read_to_string(path.join(n)).unwrap_or_default();
+        let number=|n:&str|read(n).trim().parse::<u64>().unwrap_or(0);
+        rows.push(format!("{{\"id\":\"{id}\",\"memory_bytes\":{},\"memory_high\":{},\"memory_max\":{},\"memory_events\":{},\"cpu\":{},\"processes\":{}}}",number("memory.current"),number("memory.high"),number("memory.max"),stats(&read("memory.events")),stats(&read("cpu.stat")),number("pids.current")));
+    }}
+    let _=fs::create_dir_all("/run/bifrost");
+    let bytes=format!("[{}]",rows.join(","));
+    if fs::write("/run/bifrost/app-resources.json.tmp",bytes).is_ok(){let _=fs::rename("/run/bifrost/app-resources.json.tmp","/run/bifrost/app-resources.json");}
 }
 #[cfg(test)]
 mod writer_tests {
@@ -148,26 +174,7 @@ pub fn configure(cmd: &mut Command, id: &str) -> io::Result<()> {
         }
     }
     LAST_WANT.store(now_secs(), std::sync::atomic::Ordering::SeqCst);
-    START.get_or_init(||{let h=crate::bare::sys::spawn_named("app-resources", ||loop {
-        let ids=GROUPS.lock().map(|g|g.clone()).unwrap_or_default();let mut rows=Vec::new();
-        for id in ids {if let Ok(path)=group(&id){
-            let read=|n:&str|fs::read_to_string(path.join(n)).unwrap_or_default();
-            let number=|n:&str|read(n).trim().parse::<u64>().unwrap_or(0);
-            rows.push(format!("{{\"id\":\"{id}\",\"memory_bytes\":{},\"memory_high\":{},\"memory_max\":{},\"memory_events\":{},\"cpu\":{},\"processes\":{}}}",number("memory.current"),number("memory.high"),number("memory.max"),stats(&read("memory.events")),stats(&read("cpu.stat")),number("pids.current")));
-        }}
-        let _=fs::create_dir_all("/run/bifrost");
-        let bytes=format!("[{}]",rows.join(","));
-        if fs::write("/run/bifrost/app-resources.json.tmp",bytes).is_ok(){let _=fs::rename("/run/bifrost/app-resources.json.tmp","/run/bifrost/app-resources.json");}
-        std::thread::sleep(std::time::Duration::from_secs(5));
-        use std::sync::atomic::Ordering::SeqCst;
-        if writer_should_park(LAST_WANT.load(SeqCst), now_secs()) {
-            PARKED.store(true, SeqCst);
-            while PARKED.load(SeqCst) && writer_should_park(LAST_WANT.load(SeqCst), now_secs()) {
-                std::thread::park();
-            }
-            PARKED.store(false, SeqCst);
-        }
-    });let _=WRITER.set(h.thread().clone());});
+    ensure_writer();
     Ok(())
 }
 pub fn focus(id: &str, on: bool) {

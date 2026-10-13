@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.19 — 2026-10-13
+
+- The app-resources writer exits when nobody has read its file for 15 s and starts again on demand, instead of parking a thread for the life of the shell.
+
 ## 0.7.18 — 2026-10-13
 
 - Fixes 0.7.17 spinning a core: `sys-watch` polled the PSI trigger files for POLLIN, which a proc file always reports. Each watcher now has its own event mask (PSI waits on POLLPRI only); regression test `a_proc_file_polls_readable_but_not_priority`.
