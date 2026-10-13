@@ -15,6 +15,7 @@
 - Help lists Input Source with Ctrl+Space.
 - On-screen keyboard 1.1.1: its emoji category catalogue now comes from the shared emoji module (no behaviour change).
 
+- Lock Screen > Require Password: the screen stays as it was for the chosen time (immediately, 5 seconds, 1 minute, 5 minutes, 15 minutes, 1 hour) after the display goes off, and a password is asked only after that. Login window: Login Options > Name and Password shows a name field and refuses another account name before the password is checked.
 - SDK: text layout objects (`bifrost_ui::typeset`: typesetter, framesetter, frame, line, run) with Unicode line break and
   grapheme cluster rules, paragraph styles, tab stops, bidi line reordering, truncated and justified lines. Attributed
   strings gain font family and size, literal colours, baseline, superscript, kern, tracking, stroke, underline colour and

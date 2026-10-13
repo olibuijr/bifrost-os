@@ -11,7 +11,7 @@ use super::settings_search::{self, Search};
 use super::night_shift::{NightEdit, NightShift};
 use super::notify_page::{self, NotifyChange, NotifyEdit, NotifyPrefs};
 use super::list::{Hit, ListPage, NavBar, Pane, DETAIL_MARGIN_PT, SIDEBAR_MARGIN_PT, SIDEBAR_PT};
-use super::options::{Options, AUTO_LOCK, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES};
+use super::options::{Options, AUTO_LOCK, REQUIRE_AFTER, SYSTEM_SLEEP, ICON_SIZES, POWER_MODES, TEXT_SIZES};
 use super::pages::{spec, Action, Command, Model, PageId, Pick, Slider, Toggle};
 use super::power_menu::PowerAction;
 use super::passcode::{self, Lock, LockOut, Overlay, OverlayOut};
@@ -1983,6 +1983,13 @@ impl Settings {
                         self.set_parent_value(ui, "Auto-Lock", label);
                         vec![Effect::AutoLock(self.opts.auto_lock_ms)]
                     }
+                    Pick::RequirePassword(k) => {
+                        self.opts.lock_grace_s = REQUIRE_AFTER[k.min(REQUIRE_AFTER.len() - 1)].1;
+                        self.opts.save(prefs);
+                        let label = self.opts.lock_grace_label();
+                        self.set_parent_value(ui, "Require Password", label);
+                        vec![]
+                    }
                     Pick::SystemSleep(k) => {
                         self.opts.system_sleep_min = SYSTEM_SLEEP[k].1;
                         self.opts.save(prefs);
@@ -3279,6 +3286,20 @@ mod tests {
         assert_eq!(d.item(g, i).value, "Never");
         assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Auto-Lock"), vec![]);
         assert_eq!(tap_row(&mut st, &ui, &mut prefs, "30 seconds"), vec![Effect::AutoLock(30_000)]);
+    }
+
+    #[test]
+    fn require_password_picks_persist_and_update_the_lock_screen_row() {
+        let ui = super::super::tests::ui();
+        let (mut st, mut prefs) = settings(&ui, &info());
+        tap_row(&mut st, &ui, &mut prefs, "Lock Screen");
+        tap_row(&mut st, &ui, &mut prefs, "Require Password");
+        assert_eq!(st.page(), PageId::RequirePassword);
+        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "1 minute"), vec![]);
+        assert_eq!(prefs.get("lock_grace_seconds"), Some("60"));
+        assert_eq!(st.options().lock_grace_s, 60);
+        assert_eq!(tap_row(&mut st, &ui, &mut prefs, "Immediately"), vec![]);
+        assert_eq!(prefs.get("lock_grace_seconds"), Some("0"));
     }
 
     #[test]

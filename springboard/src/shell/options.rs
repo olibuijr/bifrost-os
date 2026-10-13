@@ -9,6 +9,9 @@ use super::ui::{TEXT_SCALE_MAX, TEXT_SCALE_MIN};
 /// The Auto-Lock choices as (label, ms); 0 is Never.
 /// Energy "Put the computer to sleep when the display is off": (label, minutes), 0 = never.
 pub const SYSTEM_SLEEP: [(&str, u32); 7] = [("1 minute", 1), ("5 minutes", 5), ("10 minutes", 10), ("15 minutes", 15), ("30 minutes", 30), ("1 hour", 60), ("Never", 0)];
+/// Lock Screen > Require Password: how long after the display goes off the screen may come back without a password,
+/// as (label, seconds). 0 is Immediately.
+pub const REQUIRE_AFTER: [(&str, u32); 6] = [("Immediately", 0), ("5 seconds", 5), ("1 minute", 60), ("5 minutes", 300), ("15 minutes", 900), ("1 hour", 3600)];
 pub const AUTO_LOCK: [(&str, u32); 5] = [("30 seconds", 30_000), ("1 minute", 60_000), ("2 minutes", 120_000), ("5 minutes", 300_000), ("Never", 0)];
 /// The Text Size slider's notches, the bifrost Dynamic Type steps.
 pub const TEXT_SIZES: [f32; 7] = [TEXT_SCALE_MIN, 0.9, 0.95, 1.0, 1.1, 1.2, TEXT_SCALE_MAX];
@@ -54,6 +57,12 @@ pub const TRACKPAD_SECONDARY: [&str; 2] = ["Click in Bottom-Right Corner", "Clic
 pub const ALERT_SOUNDS: [&str; 4] = ["Bell", "Chime", "Pulse", "Tick"];
 
 /// The slider's 0..1 position for a speed multiplier.
+/// True once the display has been off for longer than the Require Password grace (`grace_s` seconds), at `now_ms`
+/// against the time it went off (both shell milliseconds).
+pub fn grace_lapsed(off_ms: f64, now_ms: f64, grace_s: u32) -> bool {
+    now_ms - off_ms > f64::from(grace_s) * 1000.0
+}
+
 pub fn speed_slider(speed: f32) -> f32 {
     ((speed - SPEED_MIN) / (SPEED_MAX - SPEED_MIN)).clamp(0.0, 1.0)
 }
@@ -162,15 +171,17 @@ pub struct Options {
     pub login_name_password: bool,
     /// Users & Groups › Login Options: the login window shows password hints
     pub login_hints: bool,
+    /// Lock Screen > Require Password: seconds the screen may stay off before a password is asked (0 = at once)
+    pub lock_grace_s: u32,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, login_name_password: false, login_hints: false, key_repeat_delay_ms: KeyPrefs::DEFAULT.repeat_delay_ms, key_repeat_rate: KeyPrefs::DEFAULT.repeat_rate, remap_caps_lock: 0, remap_control: 0, remap_option: 0, remap_command: 0, function_standard: false, tab_navigation: true, shortcuts_off: 0 }
+        Options { auto_lock_ms: 0, system_sleep_min: 0, text_scale: 1.0, bold_text: false, auto_caps: true, enable_caps_lock: true, period_shortcut: true, clock_24h: true, keyboard_clicks: true, lock_sound: true, alert_sound: 0, keyboard_haptics: true, dnd: false, assistive_touch: false, icon_size: 0, auto_join: true, volume: 0.7, low_power: false, battery_percent: true, power_profile: Pref::Auto, dock_recents: true, auto_update: true, nearby: 1, handoff: true, pip_auto: true, bg_refresh: true, four_finger: true, corner_swipe: false, backup_before_update: true, menu_extras: MenuExtra::ALL_BITS, screensaver_module: 0, screensaver_minutes: 0, mouse_speed: 1.0, mouse_scroll: 1.0, trackpad_speed: 1.0, natural_scroll: false, tap_to_click: false, trackpad_secondary: 1, swap_buttons: false, login_name_password: false, login_hints: false, key_repeat_delay_ms: KeyPrefs::DEFAULT.repeat_delay_ms, key_repeat_rate: KeyPrefs::DEFAULT.repeat_rate, remap_caps_lock: 0, remap_control: 0, remap_option: 0, remap_command: 0, function_standard: false, tab_navigation: true, shortcuts_off: 0, lock_grace_s: 0 }
     }
 }
 
-const KEYS: [&str; 50] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "login_name_password", "login_hints", "key_repeat_delay_ms", "key_repeat_rate", "remap_caps_lock", "remap_control", "remap_option", "remap_command", "function_standard", "tab_navigation", "shortcuts_off"];
+const KEYS: [&str; 52] = ["auto_lock_ms", "system_sleep_minutes", "text_scale", "bold_text", "auto_caps", "enable_caps_lock", "period_shortcut", "clock_24h", "keyboard_clicks", "lock_sound", "alert_sound", "keyboard_haptics", "dnd", "assistive_touch", "icon_size", "auto_join", "volume", "low_power", "battery_percent", "power_profile", "dock_recents", "auto_update", "nearby", "handoff", "pip_auto", "bg_refresh", "four_finger", "corner_swipe", "backup_before_update", "menu_extras", "screensaver_module", "screensaver_minutes", "mouse_speed", "mouse_scroll_speed", "trackpad_speed", "natural_scroll", "tap_to_click", "trackpad_secondary", "swap_buttons", "login_name_password", "login_hints", "key_repeat_delay_ms", "key_repeat_rate", "remap_caps_lock", "remap_control", "remap_option", "remap_command", "function_standard", "tab_navigation", "shortcuts_off", &str; 42] = ["auto_lock_ms", "lock_grace_seconds"];
 
 impl Options {
     /// Reads every key, keeping the default for a missing or malformed one.
@@ -229,6 +240,7 @@ impl Options {
             function_standard: flag("function_standard", d.function_standard),
             tab_navigation: flag("tab_navigation", d.tab_navigation),
             shortcuts_off: p.get_parsed::<u32>("shortcuts_off").unwrap_or(d.shortcuts_off),
+            lock_grace_s: p.get_parsed("lock_grace_seconds").filter(|s: &u32| REQUIRE_AFTER.iter().any(|(_, v)| v == s)).unwrap_or(d.lock_grace_s),
         }
     }
 
@@ -286,6 +298,7 @@ impl Options {
             flag(self.function_standard).into(),
             flag(self.tab_navigation).into(),
             self.shortcuts_off.to_string(),
+            self.lock_grace_s.to_string(),
         ];
         let pairs: Vec<(&str, &str)> = KEYS.iter().copied().zip(values.iter().map(String::as_str)).collect();
         if let Err(e) = p.set_many(&pairs) {
@@ -319,6 +332,11 @@ impl Options {
         }
     }
 
+    /// The Require Password label for the current choice.
+    pub fn lock_grace_label(&self) -> &'static str {
+        REQUIRE_AFTER.iter().find(|(_, s)| *s == self.lock_grace_s).map_or("Immediately", |(l, _)| l)
+    }
+
     /// The Auto-Lock label for the current choice.
     pub fn system_sleep_label(&self) -> &'static str {
         SYSTEM_SLEEP.iter().find(|(_, m)| *m == self.system_sleep_min).map_or("Never", |(l, _)| l)
@@ -339,13 +357,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_grace_lapses_after_its_seconds_and_at_once_for_immediately() {
+        assert!(grace_lapsed(1_000.0, 1_001.0, 0), "Immediately lapses on the next instant");
+        assert!(!grace_lapsed(1_000.0, 60_999.0, 60), "a minute is not over yet");
+        assert!(grace_lapsed(1_000.0, 61_001.0, 60), "a minute is over");
+    }
+
+    #[test]
     fn defaults_and_round_trip() {
         let mut p = Prefs::memory();
         let d = Options::load(&p);
         assert_eq!(d, Options::default());
         assert_eq!(d.auto_lock_label(), "Never");
         assert_eq!(d.text_size_step(), 3);
-        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, keyboard_clicks: false, lock_sound: false, alert_sound: 2, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, login_name_password: true, login_hints: true, key_repeat_delay_ms: 1200, key_repeat_rate: 5, remap_caps_lock: 2, remap_control: 0, remap_option: 5, remap_command: 6, function_standard: true, tab_navigation: false, shortcuts_off: 0b101 };
+        let o = Options { auto_lock_ms: 0, system_sleep_min: 15, text_scale: 1.2, bold_text: true, auto_caps: false, enable_caps_lock: false, period_shortcut: false, clock_24h: false, keyboard_clicks: false, lock_sound: false, alert_sound: 2, keyboard_haptics: false, dnd: true, assistive_touch: true, icon_size: 1, auto_join: false, volume: 0.25, low_power: true, battery_percent: false, power_profile: Pref::Battery, dock_recents: false, auto_update: false, nearby: 2, handoff: false, pip_auto: false, bg_refresh: false, four_finger: false, corner_swipe: true, backup_before_update: false, menu_extras: 0b101, screensaver_module: 2, screensaver_minutes: 5, mouse_speed: 2.5, mouse_scroll: 0.5, trackpad_speed: 0.25, natural_scroll: true, tap_to_click: true, trackpad_secondary: 0, swap_buttons: true, login_name_password: true, login_hints: true, key_repeat_delay_ms: 1200, key_repeat_rate: 5, remap_caps_lock: 2, remap_control: 0, remap_option: 5, remap_command: 6, function_standard: true, tab_navigation: false, shortcuts_off: 0b101, lock_grace_s: 300 };
         o.save(&mut p);
         assert_eq!(p.get("key_repeat_delay_ms"), Some("1200"));
         assert_eq!(p.get("key_repeat_rate"), Some("5"));
@@ -364,9 +389,11 @@ mod tests {
         assert_eq!(p.get("volume"), Some("0.25"));
         assert_eq!(p.get("low_power"), Some("1"));
         assert_eq!(p.get("power_profile"), Some("battery"));
+        assert_eq!(p.get("lock_grace_seconds"), Some("300"));
         let back = Options::load(&p);
         assert_eq!(back, o);
         assert_eq!(back.auto_lock_label(), "Never");
+        assert_eq!(back.lock_grace_label(), "5 minutes");
         assert_eq!(back.text_size_step(), 5);
     }
 
@@ -393,6 +420,8 @@ mod tests {
         assert_eq!(o.mouse_speed, Options::default().mouse_speed);
         assert_eq!(o.trackpad_speed, SPEED_MAX);
         assert_eq!(o.trackpad_secondary, Options::default().trackpad_secondary);
+        p.set("lock_grace_seconds", "17").unwrap();
+        assert_eq!(Options::load(&p).lock_grace_s, 0, "a choice the list does not offer falls back");
         p.set("alert_sound", "99").unwrap();
         assert_eq!(Options::load(&p).alert_sound, Options::default().alert_sound);
         p.set("key_repeat_delay_ms", "5").unwrap();
