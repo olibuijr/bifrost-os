@@ -106,6 +106,7 @@ pub mod contacts;
 pub mod calendar;
 pub mod core_location;
 pub mod notification_schedule;
+pub mod event_recurrence;
 pub mod messaging;
 pub mod service_management;
 pub mod login_items_approval;

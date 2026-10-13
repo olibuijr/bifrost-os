@@ -45,9 +45,9 @@
   {
    "feature": "Recurrence rules",
    "apple": "EKRecurrenceRule, EKRecurrenceEnd, EKRecurrenceDayOfWeek",
-   "bifrost": "springboard/apps/calendar-desktop/src/calendar/recur.rs",
+   "bifrost": "springboard/sdk/src/event_recurrence.rs (RecurrenceRule, RecurrenceEnd, RecurrenceDayOfWeek, EventStore::events_matching, Occurrence, Span); springboard/apps/calendar-desktop/src/calendar/recur.rs",
    "status": "partial",
-   "note": "RRULE subset FREQ, INTERVAL, COUNT, UNTIL, BYDAY, BYMONTHDAY, BYMONTH, EXDATE; app-internal, not SDK; reminders have own repeat.rs"
+   "note": "SDK pure model with host unit tests: RRULE FREQ, INTERVAL, COUNT, UNTIL, BYDAY (with week numbers), BYMONTHDAY (negative allowed), BYMONTH, BYSETPOS; events(matching:) expands occurrences with occurrenceDate, isDetached, excluded dates and EKSpan removal; floating times keep their wall-clock hour. Not yet wired into the shell calendar store (it keeps the 6 repeat choices, mapped by RecurrenceRule::from_repeat_choice) or the Calendar app, not yet tested on Midget; the app keeps its own recur.rs. reminders have own repeat.rs"
   },
   {
    "feature": "Alarms",

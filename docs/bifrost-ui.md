@@ -2507,3 +2507,22 @@ Mirrors WindowServer global hotkeys and ScreenCaptureKit / `CGWindowListCreateIm
 - `keybindings::action(keysym, Mods) -> Option<Action>` (pure): Super+Space `Spotlight` (sends `spotlight` to the shell control port 127.0.0.1:7777), Super+A `Apps` (starts `/usr/bin/bifrost-apps`), Alt+Tab `NextWindow`, Alt+F4 `CloseWindow` (xdg close request to the focused toplevel), Ctrl+Super+Left/Right/Up/Down `Tile(Arrow)` (half, half, maximize, centre via `tiling.rs`). Modifiers match exactly. `WmState::key` takes these chords before any client sees them; the action runs on the press and the release is swallowed too.
 - Screencopy: `session_protocols::write_shm` now writes into the client's wl_shm buffer. The `capture` hook returns RGBA rows (R, G, B, A in memory); `rgba_to_shm` converts to XRGB8888 (alpha forced to 0xff) or ARGB8888 (B, G, R, A in memory, the fix for swapped red and blue), honouring the buffer stride; `crop_rgba` clips a region out of a full-output frame. Other formats are refused.
 - Not done: no backend sets the `capture` hook yet (the render server readback of the composed output, wallpaper and all layers, still has to be wired), so grim, `bifrost-apps --screenshot` and the MCP screenshot tool still get `failed`. Cursor capture sessions and ScreenCaptureKit streams are not covered.
+
+## Recurring events (EventKit: `EKRecurrenceRule`, `EKEventStore.events(matching:)`)
+
+`bifrost_app::event_recurrence` (`springboard/sdk/src/event_recurrence.rs`) is a pure model with host tests; status
+partial (not wired into the shell calendar store or the Calendar app, not yet checked on Midget).
+
+- `RecurrenceRule` (`frequency`, `interval`, `days_of_the_week: Vec<RecurrenceDayOfWeek>`, `days_of_the_month`,
+  `months_of_the_year`, `set_positions`, `recurrence_end: Option<RecurrenceEnd>`), `parse`/`format` for the RFC 5545
+  RRULE subset FREQ, INTERVAL, COUNT, UNTIL, BYDAY, BYMONTHDAY, BYMONTH, BYSETPOS. `RecurrenceEnd::EndDate(date)` and
+  `OccurrenceCount(n)`. `RecurrenceDayOfWeek { day_of_the_week (Sunday 1), week_number }`.
+- `EventStore::predicate_for_events(start, end, calendars)` and `events_matching(&predicate)` return one `Occurrence`
+  per repeat overlapping the window, with `occurrence_date` (the original start) and `is_detached`.
+- `Event.excluded_dates` skip repeats (they still count toward `OccurrenceCount`); `EventStore::detach` replaces one
+  repeat with its own time, length and title. `EventStore::remove(id, occurrence_date, Span::ThisEvent | FutureEvents)`.
+- Times are floating (`DateTime` = date + minute of day), so a 09:00 event stays at 09:00 across a clock change.
+  Weeks start on Monday. The first occurrence is always the start. `RecurrenceRule::from_repeat_choice` maps the
+  shell store's 6 stored repeat choices.
+- Differences from Apple: no time zones (floating only), no `EKRecurrenceRule` week-of-year or day-of-year parts, the
+  shell store still saves only the six repeat choices.
