@@ -66,7 +66,7 @@
       "area": "printer",
       "apple": "Add Printer menu item opens the printer browser with discovered, nearby and address entries",
       "status": "partial",
-      "bifrost": "springboard/apps/printers-desktop/src/window.rs:369",
+      "bifrost": "springboard/apps/printers-desktop/src/window.rs:366",
       "note": "Add Printer opens a pane of the printers found over mDNS (_ipps._tcp and _ipp._tcp, discover.rs:147) and adds one under its advertised name with model and location (worker.rs:124); the clipboard address stays as a fallback. USB devices are not listed, the app sandbox binds no USB nodes. built on parity/team-d-print-center; not yet verified on Midget.",
       "wire": "List USB devices beside the network printers once the sandbox allows a device listing, and offer a name field before the queue is added."
     },
@@ -246,7 +246,7 @@
       "area": "view",
       "apple": "PKPrinterListChangedNotification, PKJobListNotification, PKJobProgressNotification push changes",
       "status": "partial",
-      "bifrost": "springboard/apps/printers-desktop/src/window.rs:474",
+      "bifrost": "springboard/apps/printers-desktop/src/window.rs:471",
       "note": "Lists every second while a job waits or prints and every five seconds otherwise (model.rs:575). No scheduler event subscription yet. built on parity/team-d-print-center; not yet verified on Midget.",
       "wire": "Subscribe to scheduler events (Create-Printer-Subscriptions and Get-Notifications) in worker.rs and send Reply::Changed so the list refreshes at once."
     },
@@ -273,8 +273,8 @@
       "area": "shell",
       "apple": "PrintCenterWidgetExtension shows printer status on the desktop",
       "status": "partial",
-      "bifrost": "springboard/apps/printers-desktop/src/widget.rs:11",
-      "note": "Timeline entry for the shell's widgets_timeline service, sent when the printer state changes (window.rs:401, main.rs tick); it leads with an error, an offline or paused printer, or the waiting jobs. The shell shows it in Notification Centre as a text row; the app draws no widget layout. built on parity/team-d-print-center; not yet verified on Midget.",
+      "bifrost": "springboard/apps/printers-desktop/src/widget.rs:10",
+      "note": "Timeline entry for the shell's widgets_timeline service, sent when the printer state changes (window.rs:398, main.rs tick); it leads with an error, an offline or paused printer, or the waiting jobs. The shell shows it in Notification Centre as a text row; the app draws no widget layout. built on parity/team-d-print-center; not yet verified on Midget.",
       "wire": "Add a printers widget kind to the shell's widgets host that draws supplies and the queue, reading the same model through the app control socket."
     },
     {
@@ -309,7 +309,7 @@
       "area": "menu",
       "apple": "Print Center Help",
       "status": "partial",
-      "bifrost": "springboard/apps/printers-desktop/src/window.rs:886",
+      "bifrost": "springboard/apps/printers-desktop/src/window.rs:883",
       "note": "Help menu with Print Center Help, which shows the topics (model.rs HELP) in the window. built on parity/team-d-print-center; not yet verified on Midget.",
       "wire": "Publish a Print Center page in the website documentation and open it from the Help item as System Information does; the in-window topics stay as the offline copy."
     }
