@@ -34,6 +34,7 @@ pub const B_MOUNT: u32 = 1;
 pub const B_UNMOUNT: u32 = 2;
 pub const B_EJECT: u32 = 3;
 pub const B_REFRESH: u32 = 4;
+pub const B_DETACH: u32 = 5;
 
 /// Accessibility and sidebar ids: a row's id is `ROW_BASE` plus its index in `DiskUtility::nodes`.
 pub const ROW_BASE: u64 = 100;
@@ -139,6 +140,11 @@ impl DiskUtility {
         self.nodes.iter().find(|n| &n.name == name)
     }
 
+    /// Whether the selected row is a loop device that holds a disk image.
+    pub fn selected_image(&self) -> bool {
+        self.selected_node().is_some_and(|n| n.image_file.is_some())
+    }
+
     fn selected_index(&self) -> Option<usize> {
         let name = self.selected.as_ref()?;
         self.nodes.iter().position(|n| &n.name == name)
@@ -196,6 +202,7 @@ impl DiskUtility {
             Target::Toolbar(B_MOUNT) => self.start(Action::Mount),
             Target::Toolbar(B_UNMOUNT) => self.start(Action::Unmount),
             Target::Toolbar(B_EJECT) => self.start(Action::Eject),
+            Target::Toolbar(B_DETACH) => self.start(Action::Detach),
             Target::Toolbar(B_REFRESH) => {
                 self.smart.clear();
                 self.refresh(t, true);
@@ -224,6 +231,7 @@ impl DiskUtility {
             ToolbarItem::button(B_MOUNT, "Mount").enabled(idle && mountable),
             ToolbarItem::button(B_UNMOUNT, "Unmount").enabled(idle && mounted),
             ToolbarItem::button(B_EJECT, "Eject").enabled(idle && ejectable),
+            ToolbarItem::button(B_DETACH, "Detach").enabled(idle && self.selected_image()),
             ToolbarItem::flexible_space(),
             ToolbarItem::icon(B_REFRESH, "Refresh", "arrow.clockwise"),
         ])

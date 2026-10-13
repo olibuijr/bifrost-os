@@ -37,6 +37,8 @@ pub struct Node {
     pub usage: Option<Usage>,
     /// The SMART overall health, when the drive reports it (`Passed`, `Failing`, or `Not available`).
     pub smart: Option<String>,
+    /// For a loop device that holds a disk image, the path of the image file (from the kernel's `loop/backing_file`).
+    pub image_file: Option<String>,
 }
 
 /// One line of the mount table.
@@ -203,6 +205,7 @@ pub fn info_rows(node: &Node) -> Vec<(&'static str, String)> {
     let kind = match (node.kind, &node.parent) {
         (Kind::Partition, Some(parent)) => format!("Partition of {parent}"),
         (Kind::Partition, None) => "Partition".to_string(),
+        (Kind::Disk, _) if node.image_file.is_some() => "Disk image".to_string(),
         (Kind::Disk, _) if node.removable => "Removable disk".to_string(),
         (Kind::Disk, _) => "Disk".to_string(),
     };
