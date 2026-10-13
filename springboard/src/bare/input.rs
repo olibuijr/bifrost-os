@@ -329,6 +329,13 @@ pub struct Roles {
 const LETTER_KEYS: [std::ops::RangeInclusive<u16>; 3] = [16..=25, 30..=38, 44..=50];
 
 impl Caps {
+    /// A hardware keyboard: it has the letter keys and is neither a touchscreen nor a pointer, so a
+    /// keyboard that also moves the pointer (a remote with a pad, say) is not counted.
+    pub fn is_hardware_keyboard(&self) -> bool {
+        let r = self.roles();
+        r.keyboard && !r.touchscreen && !r.pointer
+    }
+
     fn abs_pair(&self, x: u16, y: u16) -> bool {
         has_bit(&self.abs, x) && has_bit(&self.abs, y)
     }
@@ -562,6 +569,8 @@ struct Slot {
     path: String,
     fd: c_int,
     source: Source,
+    /// a hardware keyboard (`Caps::is_hardware_keyboard`)
+    keyboard: bool,
 }
 
 /// Every input device of a desktop, found by capability and kept current as devices come and go.
@@ -578,6 +587,8 @@ pub struct InputSet {
     pointer: Pointer,
     /// shift keys held on any keyboard, for the wheel
     shift: u8,
+    /// the hardware keyboard state last handed out by `keyboard_change`; None before the first report
+    reported_keyboard: Option<bool>,
 }
 
 fn ioctl_bits(fd: c_int, ev: u16, bytes: usize) -> Vec<u8> {
@@ -612,7 +623,23 @@ impl InputSet {
 
     /// A desktop set for a panel of `w` x `h`; `exclusive` grabs keyboards, pointers and touchscreens.
     pub fn desktop(w: f32, h: f32, exclusive: bool) -> Self {
-        InputSet { panel: (w, h), exclusive, slots: vec![], ignored: vec![], next_scan: 0.0, watch: -1, pointer: Pointer::new(w, h), shift: 0 }
+        InputSet { panel: (w, h), exclusive, slots: vec![], ignored: vec![], next_scan: 0.0, watch: -1, pointer: Pointer::new(w, h), shift: 0, reported_keyboard: None }
+    }
+
+    /// A hardware keyboard is attached (any device passing `Caps::is_hardware_keyboard`).
+    pub fn hardware_keyboard(&self) -> bool {
+        self.slots.iter().any(|s| s.keyboard)
+    }
+
+    /// The hardware keyboard state when it differs from the last one reported: the first call always
+    /// reports (so a start-up with no keyboard still says so), then only changes come back.
+    pub fn keyboard_change(&mut self) -> Option<bool> {
+        let now = self.hardware_keyboard();
+        if self.reported_keyboard == Some(now) {
+            return None;
+        }
+        self.reported_keyboard = Some(now);
+        Some(now)
     }
 
     /// Where the pointer is on the panel, for a cursor to be drawn there.
@@ -720,6 +747,7 @@ impl InputSet {
         let caps = read_caps(fd);
         let roles = caps.roles();
         let map = read_map(fd, &caps, self.panel);
+        let keyboard = caps.is_hardware_keyboard();
         let source = match (roles, map) {
             (r, Some(map)) if r.touchscreen => Source::Touch(Decoder::scaled(map)),
             (r, map) if r.pointer => Source::Pointer(PointerDecoder::new(map, r.touchpad)),
@@ -736,7 +764,7 @@ impl InputSet {
         // stamp events with CLOCK_MONOTONIC, the clock `now_ms` reads
         let mut mono: c_int = 1;
         let _ = unsafe { ioctl_ptr(fd, iow::<c_int>(b'E', 0xa0), &mut mono as *mut c_int as *mut ()) };
-        Some(Slot { path: path.to_string(), fd, source })
+        Some(Slot { path: path.to_string(), fd, source, keyboard })
     }
 
     /// Drains every device into `out`; a device that was unplugged is closed and forgotten.
@@ -894,6 +922,35 @@ mod tests {
         assert!(!Caps { key: bits(96, &some), ..Default::default() }.roles().keyboard);
         // a media-key remote is not a keyboard
         assert!(!Caps { key: bits(96, &[KEY_VOLUMEUP, KEY_VOLUMEDOWN]), ..Default::default() }.roles().keyboard);
+    }
+
+    #[test]
+    fn a_hardware_keyboard_has_letters_and_is_neither_a_touchscreen_nor_a_pointer() {
+        let letters_only = Caps { key: bits(96, &letters()), ..Default::default() };
+        assert!(letters_only.is_hardware_keyboard());
+        // letters plus a mouse button: a pointer, so not counted as a keyboard
+        let with_button = Caps { key: bits(96, &[letters(), vec![BTN_LEFT]].concat()), rel: bits(2, &[REL_X, REL_Y]), ..Default::default() };
+        assert!(!with_button.is_hardware_keyboard());
+        // letters on a direct touch panel: a touchscreen, not a keyboard
+        let touch = Caps { props: bits(4, &[INPUT_PROP_DIRECT]), key: bits(96, &[letters(), vec![BTN_TOUCH]].concat()), abs: bits(8, &[ABS_MT_POSITION_X, ABS_MT_POSITION_Y]), ..Default::default() };
+        assert!(!touch.is_hardware_keyboard());
+        // a power button or a media remote is not a keyboard
+        assert!(!Caps { key: bits(96, &[KEY_POWER]), ..Default::default() }.is_hardware_keyboard());
+        assert!(!Caps { key: bits(96, &[KEY_VOLUMEUP, KEY_VOLUMEDOWN]), ..Default::default() }.is_hardware_keyboard());
+        assert!(!Caps::default().is_hardware_keyboard());
+    }
+
+    #[test]
+    fn keyboard_change_reports_the_start_state_then_only_changes() {
+        let mut set = InputSet::desktop(100.0, 100.0, false);
+        assert_eq!(set.keyboard_change(), Some(false), "the first call always reports");
+        assert_eq!(set.keyboard_change(), None, "an unchanged state is not reported again");
+        set.slots.push(Slot { path: "/dev/input/event-test".into(), fd: -1, source: Source::Keys(Decoder::default()), keyboard: true });
+        assert!(set.hardware_keyboard());
+        assert_eq!(set.keyboard_change(), Some(true));
+        assert_eq!(set.keyboard_change(), None);
+        set.slots.clear();
+        assert_eq!(set.keyboard_change(), Some(false), "a removed keyboard is reported");
     }
 
     #[test]
