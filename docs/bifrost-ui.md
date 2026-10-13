@@ -2066,3 +2066,21 @@ Apps read the person's contacts only after the person allows it. `access` and `r
 query. The access model is `bifrost_ui::contact_access`, the partial records are `bifrost_ui::contact_fetch`, and the
 shell side is `springboard/src/shell/services/contacts.rs`. Gaps: no access sheet or Settings row yet, grants reset on
 restart, no writes, no contact picker for apps. See `docs/parity/sdk-app-services.md`.
+
+## Core Audio: aggregate devices, process objects, process taps (`bifrost_app::audio_aggregate`, `bifrost_app::audio_process`)
+
+Apple reference: `AudioHardwareCreateAggregateDevice` and the `kAudioAggregateDevice*Key` dictionary,
+`kAudioDevicePropertyClockDomain`, `kAudioHardwarePropertyProcessObjectList`, the audio process properties and
+`CATapDescription` with `AudioHardwareCreateProcessTap`. Pure models, tested without hardware:
+
+- `audio_aggregate::AggregateDescription` (name, uid, sub-devices with drift flag, main sub-device, clock device,
+  private, stacked) validates and serialises with Apple's keys (`name`, `uid`, `subdevices`, `master`, `clock`,
+  `private`, `stacked`, per sub-device `uid` and `drift`). `ClockDomain` and `drift_compensation_needed` say which
+  sub-devices sit in another clock domain than the clock source.
+- `audio_process::ProcessObject` (pid, bundle id, running input and output) with `list_request` and
+  `decode_processes`; `TapDescription` has the four `CATapDescription` initialisers, `captures(pid)`, mute behavior
+  (`Unmuted`, `Muted`, `MutedWhenTapped`) and a wire shape.
+
+Gaps, stated honestly: audiod has no command for any of this yet, so nothing creates an aggregate device, reports
+processes or captures audio; drift compensation is a flag only; driver plug-ins and boxes stay gap. Rows in
+`core-audio.json` are partial until a Midget check.

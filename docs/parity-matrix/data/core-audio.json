@@ -24,23 +24,23 @@
     {
       "feature": "Aggregate devices",
       "apple": "AudioHardwareAggregateDevice",
-      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
-      "status": "gap",
-      "note": "The pure model had no caller and was removed. Routing and mixing are delegated to the sound server through libasound's default PCM (springboard/src/media/alsalib.rs). No aggregate device is created or exposed."
+      "bifrost": "springboard/sdk/src/audio_aggregate.rs",
+      "status": "partial",
+      "note": "SDK model: description with Apple's dictionary keys, validation, clock source. Not implemented: audiod creation command, drift compensation resampling. Needs a Midget check."
     },
     {
       "feature": "Process taps (capture a process's output)",
       "apple": "AudioHardwareTap, CATapDescription, Capturing system audio with Core Audio taps",
-      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
-      "status": "gap",
-      "note": "The pure model had no caller and was removed. No per-application or system output capture. Apple taps need an output-side hook that the audio service does not have."
+      "bifrost": "springboard/sdk/src/audio_process.rs",
+      "status": "partial",
+      "note": "SDK model: CATapDescription constructors, mono or stereo mixdown, exclusion, mute behavior, wire shape. Not implemented: the audiod output hook that captures audio. Needs a Midget check."
     },
     {
       "feature": "Process objects (client process list)",
       "apple": "AudioHardwareProcess",
-      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
-      "status": "gap",
-      "note": "The pure model had no caller and was removed. The service knows its clients as sockets, but it does not report audio processes or their IO state to apps."
+      "bifrost": "springboard/sdk/src/audio_process.rs",
+      "status": "partial",
+      "note": "SDK model: ProcessObject (pid, bundle id, running input and output), kAudioHardwarePropertyProcessObjectList request and reply decoding. Not implemented: audiod does not report processes yet. Needs a Midget check."
     },
     {
       "feature": "Speaker playback",
@@ -87,9 +87,9 @@
     {
       "feature": "Hardware clocks and sample-accurate sync",
       "apple": "AudioHardwareClock, kAudioDevicePropertySuggestedReferenceDevice",
-      "bifrost": "none; the unwired kit model was deleted (audit AC-9), the audio server owns this area",
-      "status": "gap",
-      "note": "The pure model had no caller and was removed. The output path has no clock objects or reference-device selection. Sync is handled by the sound server."
+      "bifrost": "springboard/sdk/src/audio_aggregate.rs",
+      "status": "partial",
+      "note": "SDK model: ClockDomain (kAudioDevicePropertyClockDomain) and which sub-devices need drift compensation. Not implemented: real hardware clocks, timestamps and sample-accurate sync. Needs a Midget check."
     },
     {
       "feature": "Channel layouts and data types",
@@ -114,11 +114,8 @@
     }
   ],
   "gaps": [
-    "Per-process audio tap: capture the output of a process or a set of processes (AudioHardwareTap, CATapDescription).",
     "Virtual audio device and driver plug-in (Audio Server Plug-in, AudioHardwarePlugin) or an app-facing loopback device.",
-    "Aggregate devices that combine several inputs and outputs with synchronized clocks (AudioHardwareAggregateDevice).",
     "App-facing device and stream API: enumerate devices, open input and output streams and choose a device (AudioHardwareDevice, AudioHardwareStream).",
-    "Device property listeners for default device, sample rate and volume changes (AudioHardwareObject.addPropertyListener).",
-    "Process object list with per-process audio state (AudioHardwareProcess)."
+    "Device property listeners for default device, sample rate and volume changes (AudioHardwareObject.addPropertyListener)."
   ]
 }

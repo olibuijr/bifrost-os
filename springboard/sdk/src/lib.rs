@@ -223,6 +223,10 @@ pub mod workspace;
 pub mod service;
 pub mod search_ranking;
 pub mod audio_devices;
+/// Aggregate devices (`AudioHardwareCreateAggregateDevice` keys) and clock domains, as a pure model.
+pub mod audio_aggregate;
+/// Process objects and process taps (`CATapDescription`), as pure models with their wire shapes.
+pub mod audio_process;
 /// Stream formats (`StreamFormat`), the voice-take format (`pcm16`) and buffer durations (`audio_format::duration_ms`).
 pub mod audio_format;
 pub mod focus_filter;
