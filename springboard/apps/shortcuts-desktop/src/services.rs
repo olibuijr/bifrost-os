@@ -74,11 +74,11 @@ mod tests {
     }
 
     fn with_time(name: &str, hour: u8, minute: u8) -> Shortcut {
-        Shortcut { name: name.into(), color: 0, actions: Vec::new(), schedule: Some(Daily { hour, minute }) }
+        Shortcut { name: name.into(), color: 0, actions: Vec::new(), schedule: Some(Daily { hour, minute }), ..Shortcut::default() }
     }
 
     fn plain(name: &str) -> Shortcut {
-        Shortcut { name: name.into(), color: 0, actions: Vec::new(), schedule: None }
+        Shortcut { name: name.into(), color: 0, actions: Vec::new(), schedule: None, ..Shortcut::default() }
     }
 
     /// (service, method, body) of each call the ctx sent, in order.

@@ -160,7 +160,7 @@ mod tests {
     }
 
     fn named(name: &str, actions: Vec<Action>) -> Shortcut {
-        Shortcut { name: name.into(), color: 0, actions, schedule: None }
+        Shortcut { name: name.into(), color: 0, actions, schedule: None, ..Shortcut::default() }
     }
 
     fn two() -> Vec<Shortcut> {

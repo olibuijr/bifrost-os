@@ -350,8 +350,8 @@ mod tests {
 
     fn two_saves() -> Vec<Shortcut> {
         vec![
-            Shortcut { name: "Save Battery".into(), color: 3, actions: vec![Action::LowPower(true)], schedule: None },
-            Shortcut { name: "Save Power".into(), color: 2, actions: Vec::new(), schedule: None },
+            Shortcut { name: "Save Battery".into(), color: 3, actions: vec![Action::LowPower(true)], schedule: None, ..Shortcut::default() },
+            Shortcut { name: "Save Power".into(), color: 2, actions: Vec::new(), schedule: None, ..Shortcut::default() },
         ]
     }
 
