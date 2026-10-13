@@ -144,9 +144,9 @@
    "description": "",
    "role": "Symbol, dingbat or math font: ZapfDingbats",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "font family ZapfDingbats: no BifrOSt equivalent (only Noto Sans Symbols 2); needed for documents using dingbats or STIX math; candidate: STIX Two (OFL) for the STIX set",
+   "bifrost": "packaging/arch/runtime-packages.txt",
+   "status": "partial",
+   "note": "open equivalent D050000L (gsfonts), glyph coverage not metric-identical",
    "rea": [],
    "method": "assessed"
   },

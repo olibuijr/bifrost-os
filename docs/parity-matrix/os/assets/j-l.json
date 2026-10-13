@@ -207,9 +207,9 @@
    "description": "",
    "role": "Fallback or utility font: LastResort",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "LastResort: system fallback/utility font (last-resort glyph boxes, invisible glyphs, keyboard glyphs); BifrOSt font fallback (springboard/render/src/fontfallback.rs) has no last-resort glyph font, tofu is drawn by the renderer",
+   "bifrost": "packaging/arch/runtime-packages.txt",
+   "status": "partial",
+   "note": "open equivalent Unifont (unifont), glyph coverage not metric-identical",
    "rea": [],
    "method": "assessed"
   },

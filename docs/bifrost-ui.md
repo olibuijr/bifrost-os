@@ -366,6 +366,17 @@ On macOS an app follows Light/Dark without opting in. Third-party Linux apps fol
   BifrOSt deliberately allows the override because its defaults are lookalikes. Not matched: Font Book (install,
   validate, collections, disable) and live font switching without a restart. `FontPanel` families can come from
   `fontprefs::installed`.
+- **System font library (OS assets, Core Text).** The runtime image carries open equivalents for the reference
+  system fonts: `noto-fonts` and `noto-fonts-extra` (script coverage, so `CTFontCreateForString` /
+  `CTFontCopyDefaultCascadeListForLanguages` fallback finds a face for most scripts), `ttf-liberation` and
+  `ttf-croscore` (metric-compatible sans, serif and mono), `ttf-dejavu` (monospace, symbols), `otf-stix` (math),
+  `gsfonts` (symbol and dingbats), `unifont` (Braille and last-resort glyphs).
+  `packaging/arch/fontconfig/60-bifrost-aliases.conf` maps the compatibility family names (Arial, Helvetica,
+  Times New Roman, Courier New, Menlo, Monaco, Symbol, Zapf Dingbats, STIX, LastResort) to them with
+  `binding="same"`; `springboard/tests/font_packages.rs` guards the package list, the alias targets and the
+  installer. The matching `docs/parity-matrix/os/assets` rows are `partial` ("open equivalent X, glyph coverage not
+  metric-identical") until a Midget check. Not matched: Latin display, SF variant and CJK decorative families
+  (substitution task), and Apple's exact glyph shapes outside the Liberation/Croscore metrics.
 
 ### Family substitution (Core Text descriptor matching, `bifrost_app::font_substitution`)
 

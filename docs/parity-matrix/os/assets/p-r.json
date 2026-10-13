@@ -249,9 +249,9 @@
    "description": "",
    "role": "Monospaced font: PTMono",
    "doc": "",
-   "bifrost": "",
-   "status": "gap",
-   "note": "font family PTMono: no BifrOSt equivalent; BifrOSt mono set is JetBrains Mono, Geist Mono, Fira Code, Source Code Pro. Needed for documents and Terminal themes that name it; candidate: Liberation Mono or Cousine (OFL/Apache)",
+   "bifrost": "packaging/arch/runtime-packages.txt",
+   "status": "partial",
+   "note": "open equivalent DejaVu Sans Mono (ttf-dejavu), glyph coverage not metric-identical",
    "rea": [],
    "method": "assessed"
   },

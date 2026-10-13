@@ -108,6 +108,8 @@ package_bifrost_files() {
     install -d "$pkgdir/etc/systemd/system"
     ln -sfn /dev/null "$pkgdir/etc/systemd/system/$unit"
   done
+  # open equivalents for compat family names (Arial, Times New Roman, Courier New, Menlo, Symbol, ...)
+  install -Dm644 "$here/fontconfig/60-bifrost-aliases.conf" "$pkgdir/etc/fonts/conf.d/60-bifrost-aliases.conf"
   install -Dm755 "$here/wayland/apps" "$pkgdir/usr/bin/bifrost-apps"
   for file in environment autostart rc.xml; do
     install -Dm644 "$here/wayland/$file" "$pkgdir/usr/share/bifrost/wayland/$file"
