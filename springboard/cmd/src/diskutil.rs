@@ -1,28 +1,23 @@
-//! `diskutil`: lists disks and their volumes, shows one device's details, and mounts, unmounts or ejects it. Reads are
-//! from the kernel's device tree (`/sys/block`) and the mount table (`/proc/mounts`); changes go through the disk
-//! session in `bifrost-core` (`disk_session`, `disk_commands`), the same claims and approval gates the desktop's Disk
-//! Utility uses, and the commands it plans run here on the command line.
-//! Gap: there is no erase, partition or rename, and the list has no file system or label column yet (the desktop app
-//! reads them from the udev database, which this tool does not).
+//! `diskutil`: lists disks and their volumes, shows one device's details, mounts, unmounts or ejects it, and runs the
+//! privileged requests: `eraseDisk`, `eraseVolume`, `partitionDisk`, `verifyVolume` and `repairVolume`. Reads are from
+//! the kernel's device tree (`bifrost_core::disk_scan`); mount, unmount and eject go through the disk session in
+//! `bifrost-core` (the same claims and approval gates the desktop's Disk Utility uses). The privileged requests are the
+//! ones the desktop sends too (`bifrost_core::disk_request`), and the helper plans and runs them as root, so they need
+//! root here.
+//! Gap: the list has no file system or label column yet (the desktop app reads them from the udev database, which this
+//! tool does not).
 
 use bifrost_core::disk_claims::Claims;
 use bifrost_core::disk_commands::{self, Command, MountOptions, Refusal};
 use bifrost_core::disk_events::{Approvals, Disk};
+use bifrost_core::disk_format::{PartitionSpec, Personality};
+use bifrost_core::disk_request::DiskRequest;
+use bifrost_core::disk_scan::Entry;
 use bifrost_core::disk_session::Session;
-use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
 
-pub const USAGE: &str = "usage: diskutil [list | info <device> | mount <device> | unmount <device> | eject <device>]";
+pub const USAGE: &str = "usage: diskutil [list | info <device> | mount <device> | unmount <device> | eject <device>\n       | eraseDisk <device> <fs> [label] | eraseVolume <device> <fs> [label]\n       | partitionDisk <device> <fs[:size_mib[:label]]>... | verifyVolume <device> | repairVolume <device>]\n       fs is ext4, exfat or fat32; size 0 or none takes the rest of the disk. The erase, partition and check verbs need root.";
 /// The owner name this tool claims devices under.
 pub const OWNER: &str = "is.olibuijr.diskutil.cli";
-
-/// A disk or a partition, and the disk a partition belongs to.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Entry {
-    pub disk: Disk,
-    pub parent: Option<String>,
-}
 
 /// The actions a device can take.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,7 +34,11 @@ pub enum Cmd {
     List,
     Info(String),
     Act(Action, String),
+    /// A privileged request, run by the helper.
+    Request(DiskRequest),
 }
+
+const REQUEST_VERBS: [&str; 5] = ["eraseDisk", "eraseVolume", "partitionDisk", "verifyVolume", "repairVolume"];
 
 /// Reads the arguments.
 pub fn parse(args: &[String]) -> Result<Cmd, String> {
@@ -58,9 +57,37 @@ pub fn parse(args: &[String]) -> Result<Cmd, String> {
         ["mount", name] => Ok(Cmd::Act(Action::Mount, device(name)?)),
         ["unmount", name] => Ok(Cmd::Act(Action::Unmount, device(name)?)),
         ["eject", name] => Ok(Cmd::Act(Action::Eject, device(name)?)),
+        ["eraseDisk", name, fs, rest @ ..] if rest.len() <= 1 => {
+            Ok(Cmd::Request(DiskRequest::EraseDisk { device: device(name)?, fs: fs_arg(fs)?, label: rest.first().unwrap_or(&"").to_string() }))
+        }
+        ["eraseVolume", name, fs, rest @ ..] if rest.len() <= 1 => {
+            Ok(Cmd::Request(DiskRequest::EraseVolume { device: device(name)?, fs: fs_arg(fs)?, label: rest.first().unwrap_or(&"").to_string() }))
+        }
+        ["partitionDisk", name, specs @ ..] if !specs.is_empty() => {
+            let partitions = specs.iter().map(|s| partition_arg(s)).collect::<Result<Vec<PartitionSpec>, String>>()?;
+            Ok(Cmd::Request(DiskRequest::PartitionDisk { device: device(name)?, partitions }))
+        }
+        ["verifyVolume", name] => Ok(Cmd::Request(DiskRequest::VerifyVolume { device: device(name)? })),
+        ["repairVolume", name] => Ok(Cmd::Request(DiskRequest::RepairVolume { device: device(name)? })),
         [verb, ..] if ["info", "mount", "unmount", "eject"].contains(verb) => Err(format!("{verb} needs one device name\n{USAGE}")),
+        [verb, ..] if REQUEST_VERBS.contains(verb) => Err(format!("{verb}: wrong arguments\n{USAGE}")),
         [other, ..] => Err(format!("unknown verb {other}\n{USAGE}")),
     }
+}
+
+fn fs_arg(word: &str) -> Result<Personality, String> {
+    Personality::parse(word).ok_or_else(|| format!("\u{201c}{word}\u{201d} is not a file system: use ext4, exfat or fat32"))
+}
+
+/// One partition of `partitionDisk`: `fs`, `fs:size_mib` or `fs:size_mib:label`.
+pub fn partition_arg(word: &str) -> Result<PartitionSpec, String> {
+    let mut parts = word.splitn(3, ':');
+    let fs = fs_arg(parts.next().unwrap_or(""))?;
+    let size_mib = match parts.next() {
+        None | Some("") => 0,
+        Some(n) => n.parse::<u64>().map_err(|_| format!("\u{201c}{n}\u{201d} is not a size in MiB"))?,
+    };
+    Ok(PartitionSpec { size_mib, fs, label: parts.next().unwrap_or("").to_string() })
 }
 
 /// A byte count in decimal units, as the desktop shows sizes: `512 B`, `1.5 GB`.
@@ -76,84 +103,6 @@ pub fn format_size(bytes: u64) -> String {
         unit += 1;
     }
     format!("{value:.1} {}", UNITS[unit])
-}
-
-/// The mount table as (device path, mount point) pairs. Spaces and other special characters are octal escapes.
-pub fn parse_mounts(text: &str) -> Vec<(String, String)> {
-    text.lines()
-        .filter_map(|line| {
-            let mut fields = line.split_whitespace();
-            let dev = fields.next()?;
-            let point = fields.next()?;
-            Some((dev.to_string(), unescape(point)))
-        })
-        .collect()
-}
-
-/// Decodes the octal escapes the mount table uses (`\040` is a space).
-pub fn unescape(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'\\' && i + 4 <= bytes.len() {
-            if let Some(v) = text.get(i + 1..i + 4).and_then(|o| u8::from_str_radix(o, 8).ok()) {
-                out.push(v);
-                i += 4;
-                continue;
-            }
-        }
-        out.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
-fn read_trim(path: &Path) -> String {
-    fs::read_to_string(path).map(|s| s.trim().to_string()).unwrap_or_default()
-}
-
-/// Devices the list leaves out: loop devices, RAM disks and compressed RAM.
-fn is_hidden(name: &str) -> bool {
-    name.starts_with("loop") || name.starts_with("ram") || name.starts_with("zram")
-}
-
-fn entry(dir: &Path, name: &str, parent: Option<&str>, removable: bool, mounts: &HashMap<String, String>) -> Entry {
-    let size = read_trim(&dir.join("size")).parse::<u64>().unwrap_or(0).saturating_mul(512);
-    let read_only = read_trim(&dir.join("ro")) == "1";
-    let model = if parent.is_some() { String::new() } else { read_trim(&dir.join("device/model")) };
-    let mount_point = mounts.get(&format!("/dev/{name}")).cloned();
-    let removable = if parent.is_some() { removable } else { read_trim(&dir.join("removable")) == "1" };
-    Entry {
-        disk: Disk { bsd_name: name.to_string(), size, removable, read_only, model, mount_point },
-        parent: parent.map(String::from),
-    }
-}
-
-/// Reads every disk under `sys_block` and its partitions after it, sorted by name. `mounts_text` is `/proc/mounts`.
-pub fn scan(sys_block: &Path, mounts_text: &str) -> Vec<Entry> {
-    let mounts: HashMap<String, String> = parse_mounts(mounts_text).into_iter().collect();
-    let Ok(read) = fs::read_dir(sys_block) else { return Vec::new() };
-    let mut names: Vec<String> = read.filter_map(Result::ok).map(|e| e.file_name().to_string_lossy().into_owned()).collect();
-    names.sort();
-    let mut out = Vec::new();
-    for name in names.iter().filter(|n| !is_hidden(n)) {
-        let dir = sys_block.join(name);
-        let removable_disk = read_trim(&dir.join("removable")) == "1";
-        out.push(entry(&dir, name, None, removable_disk, &mounts));
-        let Ok(children) = fs::read_dir(&dir) else { continue };
-        let mut parts: Vec<String> = children
-            .filter_map(Result::ok)
-            .filter(|c| c.path().join("partition").exists())
-            .map(|c| c.file_name().to_string_lossy().into_owned())
-            .filter(|c| c.starts_with(name.as_str()))
-            .collect();
-        parts.sort();
-        for part in parts {
-            out.push(entry(&dir.join(&part), &part, Some(name.as_str()), removable_disk, &mounts));
-        }
-    }
-    out
 }
 
 /// The table `diskutil list` prints: each disk, then its partitions indented under it.
@@ -203,8 +152,8 @@ fn mounted_partitions(entries: &[Entry], name: &str) -> Vec<String> {
     entries.iter().filter(|p| p.parent.as_deref() == Some(name) && p.disk.mount_point.is_some()).map(|p| p.disk.bsd_name.clone()).collect()
 }
 
-/// Plans an action on `name`. An eject unmounts the mounted partitions first, then powers the disk off. Returns the
-/// commands, or the reason the session refused.
+/// Plans a mount, unmount or eject of `name`. An eject unmounts the mounted partitions first, then powers the disk
+/// off. Returns the commands, or the reason the session refused.
 pub fn plan(action: Action, entries: &[Entry], name: &str) -> Result<Vec<Command>, Refusal> {
     let mut session = Session::new();
     session.observe(entries.iter().map(|e| e.disk.clone()).collect());
@@ -225,19 +174,35 @@ pub fn plan(action: Action, entries: &[Entry], name: &str) -> Result<Vec<Command
     }
 }
 
-/// Runs the commands in order. The first failure stops the run and its stderr text (or a fallback) is returned.
-pub fn run(plan: &[Command]) -> Result<(), String> {
-    for command in plan {
-        let out = std::process::Command::new(command.program)
-            .args(&command.args)
-            .output()
-            .map_err(|e| format!("{} could not run: {e}", command.program))?;
-        if !out.status.success() {
-            let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            return Err(if stderr.is_empty() { format!("{} failed", command.program) } else { stderr });
-        }
+/// Sends a privileged request to the helper and returns the tools that completed. Root only: the helper runs the
+/// request in this process for root, and a user has no session token to send it with.
+pub fn request(req: &DiskRequest) -> Result<Vec<String>, String> {
+    if springboard::privd::server::euid() != 0 {
+        return Err(format!("{} needs root. Run it with sudo.", request_verb(req)));
     }
-    Ok(())
+    springboard::privd_client::connect().disk_request(req).map_err(|e| e.message)
+}
+
+/// The command word of a privileged request, as the user typed it.
+pub fn request_verb(req: &DiskRequest) -> &'static str {
+    match req {
+        DiskRequest::EraseDisk { .. } => "eraseDisk",
+        DiskRequest::EraseVolume { .. } => "eraseVolume",
+        DiskRequest::PartitionDisk { .. } => "partitionDisk",
+        DiskRequest::VerifyVolume { .. } => "verifyVolume",
+        DiskRequest::RepairVolume { .. } => "repairVolume",
+    }
+}
+
+/// The line printed when a privileged request finished.
+pub fn request_done_text(req: &DiskRequest) -> String {
+    let device = req.device();
+    match req {
+        DiskRequest::EraseDisk { .. } | DiskRequest::EraseVolume { .. } => format!("Erased {device}."),
+        DiskRequest::PartitionDisk { .. } => format!("Partitioned {device}."),
+        DiskRequest::VerifyVolume { .. } => format!("Checked {device}."),
+        DiskRequest::RepairVolume { .. } => format!("Repaired {device}."),
+    }
 }
 
 #[cfg(test)]
@@ -270,16 +235,43 @@ mod tests {
     }
 
     #[test]
+    fn erase_and_check_verbs_parse_into_privileged_requests() {
+        assert_eq!(
+            parse(&args(&["eraseDisk", "sdb", "fat32", "STICK"])),
+            Ok(Cmd::Request(DiskRequest::EraseDisk { device: "sdb".into(), fs: Personality::Fat32, label: "STICK".into() }))
+        );
+        assert_eq!(
+            parse(&args(&["eraseVolume", "sdb1", "ext4"])),
+            Ok(Cmd::Request(DiskRequest::EraseVolume { device: "sdb1".into(), fs: Personality::Ext4, label: String::new() }))
+        );
+        assert_eq!(parse(&args(&["verifyVolume", "sdb1"])), Ok(Cmd::Request(DiskRequest::VerifyVolume { device: "sdb1".into() })));
+        assert_eq!(parse(&args(&["repairVolume", "sdb1"])), Ok(Cmd::Request(DiskRequest::RepairVolume { device: "sdb1".into() })));
+    }
+
+    #[test]
+    fn a_partition_list_parses_size_and_label_per_partition() {
+        let got = parse(&args(&["partitionDisk", "sdb", "fat32:512:BOOT", "ext4::", "ext4"])).unwrap();
+        let expected = vec![
+            PartitionSpec { size_mib: 512, fs: Personality::Fat32, label: "BOOT".into() },
+            PartitionSpec { size_mib: 0, fs: Personality::Ext4, label: String::new() },
+            PartitionSpec { size_mib: 0, fs: Personality::Ext4, label: String::new() },
+        ];
+        assert_eq!(got, Cmd::Request(DiskRequest::PartitionDisk { device: "sdb".into(), partitions: expected }));
+    }
+
+    #[test]
+    fn bad_file_systems_sizes_and_arity_are_refused_with_usage() {
+        assert!(parse(&args(&["eraseDisk", "sdb", "ntfs"])).unwrap_err().contains("not a file system"));
+        assert!(parse(&args(&["partitionDisk", "sdb", "ext4:big"])).unwrap_err().contains("not a size"));
+        assert!(parse(&args(&["eraseDisk", "sdb"])).unwrap_err().contains("wrong arguments"));
+        assert!(parse(&args(&["verifyVolume"])).unwrap_err().contains("wrong arguments"));
+    }
+
+    #[test]
     fn sizes_use_decimal_units() {
         assert_eq!(format_size(512), "512 B");
         assert_eq!(format_size(1_500_000_000), "1.5 GB");
         assert_eq!(format_size(2_000_000_000_000), "2.0 TB");
-    }
-
-    #[test]
-    fn mount_table_lines_unescape_spaces() {
-        let parsed = parse_mounts("/dev/sdb1 /mnt/my\\040stick vfat rw 0 0\nshort\n");
-        assert_eq!(parsed, vec![("/dev/sdb1".to_string(), "/mnt/my stick".to_string())]);
     }
 
     #[test]
@@ -312,29 +304,11 @@ mod tests {
     }
 
     #[test]
-    fn scan_reads_disks_and_partitions_from_a_device_tree() {
-        let root = std::env::temp_dir().join(format!("bifrost-diskutil-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&root);
-        let disk_dir = root.join("sdb");
-        fs::create_dir_all(disk_dir.join("device")).unwrap();
-        fs::create_dir_all(disk_dir.join("sdb1")).unwrap();
-        fs::create_dir_all(root.join("loop0")).unwrap();
-        fs::write(disk_dir.join("size"), "4000\n").unwrap();
-        fs::write(disk_dir.join("removable"), "1\n").unwrap();
-        fs::write(disk_dir.join("ro"), "0\n").unwrap();
-        fs::write(disk_dir.join("device/model"), "USB Stick  \n").unwrap();
-        fs::write(disk_dir.join("sdb1/partition"), "1\n").unwrap();
-        fs::write(disk_dir.join("sdb1/size"), "2000\n").unwrap();
-        fs::write(disk_dir.join("sdb1/ro"), "0\n").unwrap();
-        let entries = scan(&root, "/dev/sdb1 /mnt/usb vfat rw 0 0\n");
-        let _ = fs::remove_dir_all(&root);
-        assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].disk.bsd_name, "sdb");
-        assert_eq!(entries[0].disk.size, 4000 * 512);
-        assert!(entries[0].disk.removable);
-        assert_eq!(entries[0].disk.model, "USB Stick");
-        assert_eq!(entries[1].parent.as_deref(), Some("sdb"));
-        assert_eq!(entries[1].disk.mount_point.as_deref(), Some("/mnt/usb"));
-        assert!(entries[1].disk.removable, "a partition takes its disk's removable flag");
+    fn a_user_is_told_the_request_needs_root_and_the_done_lines_name_the_device() {
+        // `request` is not called here: as root it would run the real helper.
+        let req = DiskRequest::VerifyVolume { device: "sdb1".into() };
+        assert_eq!(request_verb(&req), "verifyVolume");
+        assert_eq!(request_done_text(&req), "Checked sdb1.");
+        assert_eq!(request_done_text(&DiskRequest::EraseDisk { device: "sdb".into(), fs: Personality::Ext4, label: String::new() }), "Erased sdb.");
     }
 }
