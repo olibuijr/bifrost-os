@@ -13,6 +13,7 @@ pub mod imap;
 pub mod layout;
 pub mod line;
 pub mod message;
+pub mod migrate;
 pub mod search;
 pub mod session;
 pub mod smtp;

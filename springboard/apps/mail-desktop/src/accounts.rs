@@ -31,6 +31,16 @@ pub fn add(account: Account) -> Result<(), String> {
     shared::save(&path, &all).map_err(|e| format!("{}: {e}", shared::STORE_FILE))
 }
 
+/// Adds several accounts to the shared list in one write (the first-run import). Returns how many were added.
+pub fn import(new: Vec<Account>) -> Result<usize, String> {
+    let path: PathBuf = shared::store_path().ok_or("There is no data directory for accounts")?;
+    let mut all = load_all()?;
+    let added = new.len();
+    all.extend(new);
+    shared::save(&path, &all).map_err(|e| format!("{}: {e}", shared::STORE_FILE))?;
+    Ok(added)
+}
+
 /// The incoming (IMAP) server of a mail account. Accounts from the list always have one.
 pub fn incoming(account: &Account) -> Result<&Server, String> {
     account.imap.as_ref().ok_or_else(|| format!("{} has no incoming mail server", account.name))
