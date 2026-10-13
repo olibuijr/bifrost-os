@@ -233,7 +233,7 @@ const KEY_C: u32 = 46;
 impl NotesApp {
     /// File > Import to Notes (Cmd+O): the open panel answers in `document`.
     fn open_import(&mut self, ctx: &Ctx) {
-        self.import = Some(ctx.open_document(DocMode::Read, "Import to Notes", &["public.text"]));
+        self.import = Some(ctx.open_document(DocMode::Read, "Import to Notes", &["public.text", "public.html", "public.rtf"]));
     }
 
     /// Share on the PC is Export (`NativeSavePanel`): the note goes to a file the user names, as Markdown.
@@ -571,7 +571,9 @@ impl App for NotesApp {
                     return false;
                 }
                 let Some(n) = &mut self.notes else { return false };
-                n.import_note(&ctx.ui, &String::from_utf8_lossy(&bytes), bifrost_app::proto::sys::now_ms());
+                // HTML and RTF documents become Markdown; text and Markdown come in as they are
+                let text = notes::import::convert(&doc.name, &bytes);
+                n.import_note(&ctx.ui, &text, bifrost_app::proto::sys::now_ms());
                 // one import is one use of the file: the app keeps no grant to it
                 ctx.release_document(doc.grant);
                 true

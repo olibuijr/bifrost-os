@@ -17,6 +17,7 @@ pub mod icon;
 pub mod rpc;
 pub mod sketch;
 pub mod smart;
+pub mod import;
 pub mod math;
 pub mod outline;
 pub mod table;
