@@ -483,7 +483,7 @@ decodes; `bifrost pc ref extract REGEX...` streams it through liblzraven and `~/
 and writes only matching paths under `~/Projects/macos-ref/extract/ref27` (outside the repo). `bifrost pc ref index`
 writes the full file index (`ref27-index.tsv`, 484,002 entries), and `bifrost pc os-inventory` turns it into
 `docs/parity-matrix/os/`. Clean-room: values and behaviour are measured with REA and recorded in our own words
-(for example `docs/reference/materials-macos27.md`); reference files never enter the repo.
+(for example `docs/reference/materials-recipes.md`); reference files never enter the repo.
 
 ## Reinstall Midget autonomously
 

@@ -12,3 +12,6 @@ springboard/Cargo.toml:\.\./\.\./iOSTerm:external filesystem path outside this r
 springboard/apps/remote/assets/novnc/*:.:vendored third-party noVNC source (comments and browser feature detection)
 springboard/Cargo.toml:ipad-deildu-rust:external sibling checkout path outside this repo
 tools/parity/*:.:parity matrix tooling reads the reference vendor's official documentation; its framework names are the data being compared
+springboard/apps/mail-desktop/src/html.rs:applet:HTML element name (<applet>) in the sanitizer denied tag list
+tools/bifrost.py:macos-ref:local checkout path of the reference OS image on the build host (external directory, not a product name in code)
+tools/bifrost.py:26A434__MacOS:build-id directory name inside that local reference checkout

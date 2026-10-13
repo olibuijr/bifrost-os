@@ -7,8 +7,8 @@
   bifrost pc names | browser-smoke                                name guard; Browser smoke on Midget via the MCP
   bifrost pc smoke|adoption|gallery                              host app previews and Golden Gate SDK adoption (docs/golden-gate-sdk-adoption.md)
   bifrost pc parity status|coverage|show|gaps|check|build|...     reference SDK vs BifrOSt parity matrix (docs/parity-matrix/)
-  bifrost pc os-inventory [--index TSV]                           OS layer of the matrix from the macOS 27 file index (parity os-status)
-  bifrost pc ref extract REGEX... [--out DIR] | ref index         stream files out of the LZRAVEN macOS 27 reference (clean-room reading)
+  bifrost pc os-inventory [--index TSV]                           OS layer of the matrix from the reference OS 27 file index (parity os-status)
+  bifrost pc ref extract REGEX... [--out DIR] | ref index         stream files out of the LZRAVEN reference OS 27 reference (clean-room reading)
   bifrost pc shot|tap|rtap|swipe|key|type|wait-change            computer use on the headed x86 VM
   bifrost site build|check|doctest|shot|ship                      bifrost.olibuijr.com (~/Projects/bifrost-site/tools/site.py)
   bifrost e2e [--list] [scenario ...]                            end-to-end scenarios on the x86 VM
@@ -140,12 +140,12 @@ def cmd_pc(a):
         sys.exit(subprocess.run([sys.executable, os.path.join(here, "parity", "parity.py")] + rest).returncode)
     if op == "os-inventory":
         # the OS layer of the parity matrix from the reference file index: os-inventory [--index TSV] (default: the
-        # macOS 27 index ~/Projects/macos-ref/extract/ref27-index.tsv); writes docs/parity-matrix/os/<category>/*.json
+        # reference OS 27 index ~/Projects/macos-ref/extract/ref27-index.tsv); writes docs/parity-matrix/os/<category>/*.json
         index = os.path.expanduser("~/Projects/macos-ref/extract/ref27-index.tsv")
         args = rest if "--index" in rest else ["--index", index] + rest
         sys.exit(subprocess.run([sys.executable, os.path.join(here, "parity", "os_inventory.py")] + args).returncode)
     if op == "ref":
-        # the macOS 27 reference (LZRAVEN OTA payload, decoded with liblzraven): ref extract REGEX... [--out DIR]
+        # the reference OS 27 reference (LZRAVEN OTA payload, decoded with liblzraven): ref extract REGEX... [--out DIR]
         # streams the payload and writes only matching paths (default out: ~/Projects/macos-ref/extract/ref27),
         # ref index rebuilds the file index; clean-room: read and measure, never copy into the repo
         refdir = os.path.expanduser("~/Projects/macos-ref")

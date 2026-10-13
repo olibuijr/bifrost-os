@@ -9,7 +9,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-spec = importlib.util.spec_from_file_location("os_inventory", HERE / "parity" / "os_inventory.py")
+spec = importlib.util.spec_from_file_location("os_inventory", HERE / "os_inventory.py")
 oi = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(oi)
 
