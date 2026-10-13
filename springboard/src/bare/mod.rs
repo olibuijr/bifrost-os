@@ -11,6 +11,7 @@ pub mod jank;
 pub mod input;
 pub mod pmqos;
 pub mod pointer_finger;
+pub mod pointer_prefs;
 pub mod kms;
 pub mod nl80211;
 pub mod platform;
