@@ -266,7 +266,7 @@ dependencies = [
 
 [[package]]
 name = "bifrost-activity"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bifrost-app",
 ]
@@ -491,6 +491,14 @@ dependencies = [
  "bifrost-core",
  "bifrost-proto",
  "springboard",
+]
+
+[[package]]
+name = "bifrost-cmd"
+version = "0.1.0"
+dependencies = [
+ "bifrost-core",
+ "bifrost-ui",
 ]
 
 [[package]]
