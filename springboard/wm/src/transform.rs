@@ -122,6 +122,12 @@ pub fn normalized_to_logical(n: (f64, f64), t: Transform, physical: (i32, i32)) 
     physical_to_logical((n.0 * physical.0 as f64, n.1 * physical.1 as f64), t, physical)
 }
 
+/// A position given as a fraction of the panel, as a fraction of the desktop (0..1 on each desktop axis): the same
+/// mapping as `normalized_to_logical` for a caller that scales to the output's geometry itself.
+pub fn normalized_to_desktop_fraction(n: (f64, f64), t: Transform) -> (f64, f64) {
+    map_point(n, to_desktop(t), (1.0, 1.0))
+}
+
 /// A rectangle of the desktop on the panel (damage, a capture region, a window frame).
 pub fn logical_rect_to_physical(r: Rect, t: Transform, physical: (i32, i32)) -> Rect {
     let (lw, lh) = logical_size(physical, t);
@@ -266,6 +272,21 @@ mod tests {
     fn a_normalized_touch_position_scales_to_the_panel_and_then_the_desktop() {
         assert_eq!(normalized_to_logical((0.5, 0.25), Transform::_90, PANEL), (1440.0, 600.0));
         assert_eq!(normalized_to_logical((0.5, 0.5), Transform::Normal, PANEL), (600.0, 960.0));
+    }
+
+    #[test]
+    fn a_panel_fraction_becomes_a_desktop_fraction_that_agrees_with_the_pixel_mapping() {
+        for t in ALL {
+            let (lw, lh) = logical_size(PANEL, t);
+            for n in [(0.0, 0.0), (1.0, 1.0), (0.5, 0.25), (0.125, 0.875)] {
+                let f = normalized_to_desktop_fraction(n, t);
+                assert!((0.0..=1.0).contains(&f.0) && (0.0..=1.0).contains(&f.1), "{t:?} {n:?} -> {f:?}");
+                let px = normalized_to_logical(n, t, PANEL);
+                assert!((f.0 * lw as f64 - px.0).abs() < 1e-9 && (f.1 * lh as f64 - px.1).abs() < 1e-9, "{t:?} {n:?}");
+            }
+        }
+        assert_eq!(normalized_to_desktop_fraction((0.0, 0.0), Transform::_90), (1.0, 0.0));
+        assert_eq!(normalized_to_desktop_fraction((0.25, 0.5), Transform::Normal), (0.25, 0.5));
     }
 
     #[test]
