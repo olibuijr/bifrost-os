@@ -49,14 +49,18 @@ fn collect_attachments(raw: &str, out: &mut Vec<Attachment>) {
         }
         return;
     }
-    let disposition = headers.iter().find(|(n, _)| n == "content-disposition").map(|(_, v)| v.to_ascii_lowercase()).unwrap_or_default();
-    let name = file_name(&headers);
-    if !disposition.trim_start().starts_with("attachment") && name.is_none() {
+    if !is_file_part(&headers) {
         return;
     }
-    let name = name.unwrap_or_else(|| format!("attachment-{}", out.len() + 1));
+    let name = file_name(&headers).unwrap_or_else(|| format!("attachment-{}", out.len() + 1));
     let mime = if kind.is_empty() { "application/octet-stream".to_string() } else { kind };
     out.push(Attachment { name, mime, bytes: part_bytes(&headers, body) });
+}
+
+/// True when a (non-multipart) part is a file: it has an attachment disposition or a file name.
+pub(crate) fn is_file_part(headers: &[(String, String)]) -> bool {
+    let disposition = headers.iter().find(|(n, _)| n == "content-disposition").map(|(_, v)| v.to_ascii_lowercase()).unwrap_or_default();
+    disposition.trim_start().starts_with("attachment") || file_name(headers).is_some()
 }
 
 /// The file name of a part: the `filename` of its Content-Disposition, else the `name` of its Content-Type. Encoded
@@ -110,7 +114,7 @@ fn text_part(raw: &str) -> Option<Part> {
 }
 
 /// The header block and the body. The split is the first empty line; a message with no empty line is all header.
-fn split_head(raw: &str) -> (&str, &str) {
+pub(crate) fn split_head(raw: &str) -> (&str, &str) {
     let crlf = raw.find("\r\n\r\n").map(|i| (i, 4));
     let lf = raw.find("\n\n").map(|i| (i, 2));
     match [crlf, lf].into_iter().flatten().min_by_key(|(i, _)| *i) {
@@ -120,7 +124,7 @@ fn split_head(raw: &str) -> (&str, &str) {
 }
 
 /// The media type in lower case (`text/plain`), or empty when the message names none.
-fn content_type(headers: &[(String, String)]) -> String {
+pub(crate) fn content_type(headers: &[(String, String)]) -> String {
     let value = headers.iter().find(|(n, _)| n == "content-type").map(|(_, v)| v.as_str()).unwrap_or("");
     value.split(';').next().unwrap_or("").trim().to_ascii_lowercase()
 }
@@ -134,12 +138,12 @@ fn param(headers: &[(String, String)], name: &str) -> Option<String> {
     })
 }
 
-fn boundary(headers: &[(String, String)]) -> Option<String> {
+pub(crate) fn boundary(headers: &[(String, String)]) -> Option<String> {
     param(headers, "boundary").filter(|b| !b.is_empty())
 }
 
 /// The entities between the boundary lines. The preamble and epilogue are dropped.
-fn split_parts<'a>(body: &'a str, boundary: &str) -> Vec<&'a str> {
+pub(crate) fn split_parts<'a>(body: &'a str, boundary: &str) -> Vec<&'a str> {
     let delimiter = format!("--{boundary}");
     let mut parts = Vec::new();
     let mut rest = body;

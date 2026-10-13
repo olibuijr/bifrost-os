@@ -3,8 +3,13 @@
 //! network, the passwords or the window; `window.rs` runs the jobs and feeds their results in.
 
 use crate::body::Attachment;
+use crate::category::{self, Category};
+use crate::findbar::FindBar;
 use crate::flags::{Flag, FlagColor, Flags};
-use crate::message::{self, Draft, Priority, Summary};
+use crate::message::{self, Draft, Priority, Summary, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES};
+use crate::prefs::{self, Prefs, SmartMailbox};
+use crate::rules::{self, Rule};
+use crate::schedule::Queue;
 use crate::search::{Doc, Query};
 use crate::session::Listed;
 use crate::threads::{self, Node};
@@ -29,8 +34,9 @@ pub const ARCHIVE_NAMES: [&str; 4] = ["Archive", "Archives", "All Mail", "[Gmail
 pub const TRASH_NAMES: [&str; 4] = ["Trash", "Deleted Items", "Deleted Messages", "[Gmail]/Trash"];
 pub const JUNK_NAMES: [&str; 5] = ["Junk", "Junk E-mail", "Junk Email", "Spam", "[Gmail]/Spam"];
 
-/// The compose fields in the order they are shown. Cc, Bcc and Reply-To are optional (View menu).
-const COMPOSE_ORDER: [&str; 6] = ["To", "Cc", "Bcc", "Reply-To", "Subject", "Message"];
+/// The compose fields in the order they are shown. From shows when the account has other addresses; Cc, Bcc and Reply-To
+/// are optional (View menu), and so is Send in (Message > Send Later).
+const COMPOSE_ORDER: [&str; 8] = ["From", "To", "Cc", "Bcc", "Reply-To", "Subject", "Send in", "Message"];
 
 /// What the message list is ordered by (View > Sort By). Date is the order the messages arrived in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -62,10 +68,12 @@ pub enum Filter {
     Unread,
     Flagged,
     Replied,
+    /// Messages that carry files: loaded ones by their files, the others by the type of the message.
+    Attachments,
 }
 
 impl Filter {
-    pub const ALL: [Filter; 4] = [Filter::All, Filter::Unread, Filter::Flagged, Filter::Replied];
+    pub const ALL: [Filter; 5] = [Filter::All, Filter::Unread, Filter::Flagged, Filter::Replied, Filter::Attachments];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -73,15 +81,19 @@ impl Filter {
             Filter::Unread => "Unread",
             Filter::Flagged => "Flagged",
             Filter::Replied => "Replied",
+            Filter::Attachments => "With Attachments",
         }
     }
 
-    pub fn matches(self, flags: Flags) -> bool {
+    /// True when a row passes the filter. `loaded_files` is how many files the row's message is known to carry (0 when its
+    /// text is not loaded).
+    pub fn matches(self, row: &Row, loaded_files: usize) -> bool {
         match self {
             Filter::All => true,
-            Filter::Unread => !flags.contains(Flag::Seen),
-            Filter::Flagged => flags.contains(Flag::Flagged),
-            Filter::Replied => flags.contains(Flag::Answered),
+            Filter::Unread => !row.flags.contains(Flag::Seen),
+            Filter::Flagged => row.flags.contains(Flag::Flagged),
+            Filter::Replied => row.flags.contains(Flag::Answered),
+            Filter::Attachments => loaded_files > 0 || row.summary.may_have_files(),
         }
     }
 }
@@ -161,9 +173,42 @@ pub struct Compose {
     pub in_reply_to: Option<String>,
     pub references: Vec<String>,
     pub priority: Priority,
+    /// Files to send with the message (Message > Attach Files).
+    pub attachments: Vec<Attachment>,
+    /// The signature of the sending account. It is added to the end of the message when the message is sent.
+    pub signature: String,
 }
 
 impl Compose {
+    /// Adds a file to send with the message. Refused past [`MAX_ATTACHMENTS`] files or [`MAX_ATTACHMENT_BYTES`] bytes.
+    pub fn attach(&mut self, file: Attachment) -> Result<(), String> {
+        if self.attachments.len() >= MAX_ATTACHMENTS {
+            return Err(format!("A message carries at most {MAX_ATTACHMENTS} files"));
+        }
+        let total: usize = self.attachments.iter().map(|a| a.bytes.len()).sum::<usize>() + file.bytes.len();
+        if total > MAX_ATTACHMENT_BYTES {
+            return Err(format!("The files are over the {} MB a message may carry", MAX_ATTACHMENT_BYTES / (1024 * 1024)));
+        }
+        self.attachments.push(file);
+        Ok(())
+    }
+
+    /// Takes the file at `index` off the message.
+    pub fn detach(&mut self, index: usize) {
+        if index < self.attachments.len() {
+            self.attachments.remove(index);
+        }
+    }
+
+    /// Moves the From field to the next address of `choices`, wrapping at the end. The first address is the account's own.
+    pub fn cycle_from(&mut self, choices: &[String]) {
+        let Some(field) = self.form.fields.iter_mut().find(|f| f.label == "From") else { return };
+        let next = choices.iter().position(|c| c.eq_ignore_ascii_case(field.value.trim())).map_or(0, |at| (at + 1) % choices.len().max(1));
+        if let Some(choice) = choices.get(next) {
+            field.value = choice.clone();
+        }
+    }
+
     /// Shows or hides one of the optional address fields (Cc, Bcc, Reply-To), keeping the others and the typed text.
     pub fn set_field(&mut self, label: &'static str, hint: &'static str, shown: bool) {
         let at = self.form.fields.iter().position(|f| f.label == label);
@@ -200,6 +245,32 @@ pub struct MailboxSheet {
     pub rename_from: Option<String>,
 }
 
+/// What a [`Prompt`] asks for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PromptKind {
+    /// Remind Me: how long until the message comes back.
+    Remind,
+    /// Redirect: the new recipients.
+    Redirect,
+    /// New Smart Mailbox: a name and a search.
+    SmartMailbox,
+    /// New Rule.
+    Rule,
+    /// Signature, other addresses and undo-send delay of the shown account.
+    Settings,
+    /// Account Settings: the setup form of the account with this id.
+    EditAccount(String),
+    /// Remove Account: the name of the account with this id must be typed.
+    RemoveAccount(String),
+}
+
+/// A small sheet with a few fields and one action (see [`PromptKind`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Prompt {
+    pub kind: PromptKind,
+    pub form: Form,
+}
+
 /// The sheet over the window, if one is open.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Sheet {
@@ -211,6 +282,74 @@ pub enum Sheet {
     Mailbox(MailboxSheet),
     /// Open Quickly: one field; Return opens the first mailbox whose name contains the text.
     Quickly(Form),
+    Prompt(Prompt),
+}
+
+impl Sheet {
+    /// The fields the sheet shows.
+    pub fn form(&self) -> &Form {
+        match self {
+            Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) => form,
+            Sheet::Compose(compose) => &compose.form,
+            Sheet::Mailbox(sheet) => &sheet.form,
+            Sheet::Prompt(prompt) => &prompt.form,
+        }
+    }
+
+    pub fn form_mut(&mut self) -> &mut Form {
+        match self {
+            Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) => form,
+            Sheet::Compose(compose) => &mut compose.form,
+            Sheet::Mailbox(sheet) => &mut sheet.form,
+            Sheet::Prompt(prompt) => &mut prompt.form,
+        }
+    }
+
+    /// The title at the top of the sheet.
+    pub fn title(&self) -> &'static str {
+        match self {
+            Sheet::Search(_) => "Find",
+            Sheet::Quickly(_) => "Open Quickly",
+            Sheet::Setup(_) => "Add Account",
+            Sheet::Compose(compose) if compose.in_reply_to.is_some() => "Reply",
+            Sheet::Compose(_) => "New Message",
+            Sheet::Mailbox(sheet) if sheet.rename_from.is_some() => "Rename Mailbox",
+            Sheet::Mailbox(_) => "New Mailbox",
+            Sheet::Prompt(prompt) => match prompt.kind {
+                PromptKind::Remind => "Remind Me",
+                PromptKind::Redirect => "Redirect",
+                PromptKind::SmartMailbox => "New Smart Mailbox",
+                PromptKind::Rule => "New Rule",
+                PromptKind::Settings => "Mail Settings",
+                PromptKind::EditAccount(_) => "Account Settings",
+                PromptKind::RemoveAccount(_) => "Remove Account",
+            },
+        }
+    }
+
+    /// The label of the primary button.
+    pub fn action(&self) -> &'static str {
+        match self {
+            Sheet::Search(_) => "Search",
+            Sheet::Quickly(_) => "Go",
+            Sheet::Setup(_) => "Add Account",
+            Sheet::Compose(_) => "Send",
+            Sheet::Mailbox(sheet) if sheet.rename_from.is_some() => "Rename",
+            Sheet::Mailbox(_) => "Create",
+            Sheet::Prompt(prompt) => match prompt.kind {
+                PromptKind::Remind => "Remind Me",
+                PromptKind::Redirect => "Redirect",
+                PromptKind::SmartMailbox | PromptKind::Rule => "Add",
+                PromptKind::Settings | PromptKind::EditAccount(_) => "Save",
+                PromptKind::RemoveAccount(_) => "Remove",
+            },
+        }
+    }
+}
+
+/// True for the fields that take several lines of text.
+pub fn is_multiline(label: &str) -> bool {
+    label == "Message" || label == "Signature"
 }
 
 /// A message that arrived since the last listing of the inbox, for a notification.
@@ -284,6 +423,18 @@ pub struct Mail {
     pub show_sidebar: bool,
     /// View > Raw Source: the reader shows the message as the server holds it, headers and all.
     pub show_raw: bool,
+    /// What Mail remembers between runs (see [`crate::prefs`]).
+    pub prefs: Prefs,
+    /// Messages waiting to be sent and reminders (see [`crate::schedule`]).
+    pub queue: Queue,
+    /// View > Category: the list shows only this category of message.
+    pub category: Option<Category>,
+    /// The smart mailbox whose search is applied (an index into `prefs.smart`).
+    pub smart_active: Option<usize>,
+    /// The find bar over the reader (Edit > Find in Message), when it is open.
+    pub find: Option<FindBar>,
+    /// The messages that arrived in an inbox with the last listing, with their account id, for the rules.
+    pub arrived: Vec<(String, Row)>,
 }
 
 impl Mail {
@@ -315,7 +466,29 @@ impl Mail {
             muted: HashSet::new(),
             show_sidebar: true,
             show_raw: false,
+            prefs: Prefs::default(),
+            queue: Queue::default(),
+            category: None,
+            smart_active: None,
+            find: None,
+            arrived: Vec::new(),
         }
+    }
+
+    /// Takes the saved settings: the optional address fields of new messages come from them too.
+    pub fn use_prefs(&mut self, prefs: Prefs) {
+        self.show_cc = prefs.show_cc;
+        self.show_bcc = prefs.show_bcc;
+        self.show_reply_to = prefs.show_reply_to;
+        self.prefs = prefs;
+    }
+
+    /// The settings to save: the optional address fields are copied in first.
+    pub fn prefs_to_save(&mut self) -> &Prefs {
+        self.prefs.show_cc = self.show_cc;
+        self.prefs.show_bcc = self.show_bcc;
+        self.prefs.show_reply_to = self.show_reply_to;
+        &self.prefs
     }
 
     pub fn current(&self) -> Option<&Account> {
@@ -350,10 +523,12 @@ impl Mail {
     /// is for the shown account and mailbox.
     pub fn apply_listing(&mut self, account_id: &str, mailbox: &str, mailboxes: Vec<String>, messages: Vec<Listed>) -> Vec<Notice> {
         let mut notices = Vec::new();
+        self.arrived.clear();
         if mailbox.eq_ignore_ascii_case(INBOX) {
             let seen = self.baseline.get(account_id).copied();
             for m in arrivals(seen, &messages) {
                 let summary = Summary::from_headers(&m.header);
+                self.arrived.push((account_id.to_string(), Row { uid: m.uid, flags: m.flags, summary: summary.clone() }));
                 if self.muted.contains(&crate::mute::key(&summary)) {
                     continue;
                 }
@@ -587,7 +762,14 @@ impl Mail {
     /// when the draft already has addresses there. The cursor goes to the recipient field when there is none yet,
     /// otherwise to the message body.
     pub fn open_draft(&mut self, draft: Draft) {
-        let mut fields = vec![Field::new("To", "name@example.com, other@example.com", &draft.to.join(", "))];
+        let (account_id, own) = self.current().map(|a| (a.id.clone(), a.email.clone())).unwrap_or_default();
+        let mut fields = Vec::new();
+        if !self.prefs.aliases_of(&account_id).is_empty() {
+            let shown = if draft.from.is_empty() { own } else { draft.from.clone() };
+            fields.push(Field::new("From", "", &shown));
+        }
+        let to_at = fields.len();
+        fields.push(Field::new("To", "name@example.com, other@example.com", &draft.to.join(", ")));
         if self.show_cc || !draft.cc.is_empty() {
             fields.push(Field::new("Cc", "", &draft.cc.join(", ")));
         }
@@ -601,8 +783,36 @@ impl Mail {
         fields.push(Field::new("Message", "", &draft.body));
         let last = fields.len() - 1;
         let mut form = Form::new(fields);
-        form.focus_on(if draft.to.is_empty() { 0 } else { last });
-        self.sheet = Some(Sheet::Compose(Compose { form, in_reply_to: draft.in_reply_to, references: draft.references, priority: draft.priority }));
+        form.focus_on(if draft.to.is_empty() { to_at } else { last });
+        let signature = self.prefs.signature(&account_id).to_string();
+        self.sheet = Some(Sheet::Compose(Compose {
+            form,
+            in_reply_to: draft.in_reply_to,
+            references: draft.references,
+            priority: draft.priority,
+            attachments: draft.attachments,
+            signature,
+        }));
+    }
+
+    /// The addresses the shown account sends from: its own first, then its other addresses.
+    pub fn from_choices(&self) -> Vec<String> {
+        let Some(account) = self.current() else { return Vec::new() };
+        let mut choices = vec![account.email.clone()];
+        choices.extend(self.prefs.aliases_of(&account.id).iter().cloned());
+        choices
+    }
+
+    /// Message > Send Later: shows or hides the "Send in" field of the open compose sheet.
+    pub fn set_send_later(&mut self, shown: bool) {
+        if let Some(Sheet::Compose(compose)) = &mut self.sheet {
+            compose.set_field("Send in", "30m, 2h, 1d", shown);
+        }
+    }
+
+    /// True when the open compose sheet has its "Send in" field.
+    pub fn send_later_shown(&self) -> bool {
+        matches!(&self.sheet, Some(Sheet::Compose(c)) if c.form.fields.iter().any(|f| f.label == "Send in"))
     }
 
     /// Shows or hides an optional address field of new messages and of the compose sheet that is open.
@@ -696,6 +906,15 @@ impl Mail {
     pub fn apply_search(&mut self, text: &str) {
         self.search = text.trim().to_string();
         self.found = None;
+        self.smart_active = None;
+    }
+
+    /// Shows a smart mailbox: its saved search is applied to the shown mailbox. Returns false for an index past the list.
+    pub fn apply_smart(&mut self, index: usize) -> bool {
+        let Some(query) = self.prefs.smart.get(index).map(|s| s.query.clone()) else { return false };
+        self.apply_search(&query);
+        self.smart_active = Some(index);
+        true
     }
 
     /// The rows the list shows. With a search applied and the server's answer in, that answer (the server searched
@@ -703,7 +922,10 @@ impl Mail {
     /// when they are loaded, and a message whose body is not loaded matches on its headers only.
     pub fn visible_rows(&self) -> Vec<Row> {
         let mut rows = self.matching_rows();
-        rows.retain(|row| self.filter.matches(row.flags));
+        rows.retain(|row| self.filter.matches(row, self.attachments.get(&row.uid).map_or(0, Vec::len)));
+        if let Some(wanted) = self.category {
+            rows.retain(|row| category::classify(&row.summary) == wanted);
+        }
         let text = |row: &Row| match self.sort {
             SortKey::Date => String::new(),
             SortKey::From => row.summary.from.to_lowercase(),
@@ -747,6 +969,171 @@ impl Mail {
         self.sheet = None;
     }
 
+    /// True when a new sheet may replace what is on screen: not while a message is being written.
+    pub fn sheet_is_free(&self) -> bool {
+        !matches!(self.sheet, Some(Sheet::Compose(_)))
+    }
+
+    fn open_prompt(&mut self, kind: PromptKind, fields: Vec<Field>) {
+        self.sheet = Some(Sheet::Prompt(Prompt { kind, form: Form::new(fields) }));
+    }
+
+    /// Message > Remind Me: asks when the open message should come back. The message needs a Message-ID, which is what
+    /// finds it again.
+    pub fn open_remind(&mut self) -> Result<(), String> {
+        let uid = self.open.ok_or("Open a message first")?;
+        let row = self.row(uid).ok_or("Open a message first")?;
+        if row.summary.message_id.is_none() {
+            return Err("This message has no Message-ID, so it cannot be found again".into());
+        }
+        self.open_prompt(PromptKind::Remind, vec![Field::new("Remind me in", "30m, 2h, 1d, 1w", "")]);
+        Ok(())
+    }
+
+    /// Message > Redirect: asks who should get the open message.
+    pub fn open_redirect(&mut self) {
+        self.open_prompt(PromptKind::Redirect, vec![Field::new("To", "name@example.com, other@example.com", "")]);
+    }
+
+    /// Mailbox > New Smart Mailbox: a name and a search, which starts as the search applied now.
+    pub fn open_smart_mailbox(&mut self) {
+        let search = self.search.clone();
+        self.open_prompt(
+            PromptKind::SmartMailbox,
+            vec![Field::new("Name", "Unread from Ana", ""), Field::new("Search", "from:ana subject:fundur \"exact phrase\"", &search)],
+        );
+    }
+
+    /// Mailbox > Rules > New Rule.
+    pub fn open_rule(&mut self) {
+        self.open_prompt(
+            PromptKind::Rule,
+            vec![
+                Field::new("Name", "Receipts", ""),
+                Field::new("From contains", "shop.example", ""),
+                Field::new("To contains", "", ""),
+                Field::new("Subject contains", "receipt", ""),
+                Field::new("Move to mailbox", "Receipts", ""),
+                Field::new("Mark as read", "yes", ""),
+                Field::new("Flag colour", "red, orange, yellow, green, blue, purple, gray", ""),
+            ],
+        );
+    }
+
+    /// Mailbox > Mail Settings: the signature, the other addresses and the undo-send delay of the shown account.
+    pub fn open_settings(&mut self) -> Result<(), String> {
+        let id = self.current().map(|a| a.id.clone()).ok_or("Add an account first")?;
+        let signature = self.prefs.signature(&id).to_string();
+        let aliases = self.prefs.aliases_of(&id).join(", ");
+        let delay = if self.prefs.undo_delay == 0 { String::new() } else { self.prefs.undo_delay.to_string() };
+        self.open_prompt(
+            PromptKind::Settings,
+            vec![
+                Field::new("Signature", "Added to the end of new messages", &signature),
+                Field::new("Other addresses", "info@example.com, ana@example.org", &aliases),
+                Field::new("Undo send (seconds)", "0 sends at once", &delay),
+            ],
+        );
+        Ok(())
+    }
+
+    /// Mailbox > Account Settings: the setup form filled with the shown account. The password stays as it is when left
+    /// empty.
+    pub fn open_edit_account(&mut self) -> Result<(), String> {
+        let account = self.current().cloned().ok_or("Add an account first")?;
+        let (imap, smtp) = (accounts_server(&account.imap), accounts_server(&account.smtp));
+        self.open_prompt(
+            PromptKind::EditAccount(account.id.clone()),
+            vec![
+                Field::new("Name", "Shown in the sidebar", &account.name),
+                Field::new("Email", "name@example.com", &account.email),
+                Field::new("User name", "Same as the email when empty", &account.username),
+                Field { secret: true, ..Field::new("Password", "Leave empty to keep the saved password", "") },
+                Field::new("Incoming server", "", &imap.0),
+                Field::new("Incoming port", "", &imap.1),
+                Field::new("Outgoing server", "", &smtp.0),
+                Field::new("Outgoing port", "", &smtp.1),
+            ],
+        );
+        Ok(())
+    }
+
+    /// Mailbox > Remove Account: asks for the account's name before it goes.
+    pub fn open_remove_account(&mut self) -> Result<(), String> {
+        let account = self.current().cloned().ok_or("Add an account first")?;
+        self.open_prompt(PromptKind::RemoveAccount(account.id), vec![Field::new("Account name", "Type the name of the account to remove it", "")]);
+        Ok(())
+    }
+
+    /// The rule a New Rule form describes. The mailbox to move to must exist in the shown account.
+    pub fn rule_from_form(&self, form: &Form) -> Result<Rule, String> {
+        let name = form.value("Name").trim().to_string();
+        if name.is_empty() {
+            return Err("Name the rule".into());
+        }
+        let (from, to, subject) =
+            (form.value("From contains").trim().to_string(), form.value("To contains").trim().to_string(), form.value("Subject contains").trim().to_string());
+        if from.is_empty() && to.is_empty() && subject.is_empty() {
+            return Err("Give the rule something to look for: a sender, a recipient or a subject".into());
+        }
+        let target = form.value("Move to mailbox").trim();
+        let target = if target.is_empty() {
+            String::new()
+        } else {
+            self.mailboxes.iter().find(|m| m.eq_ignore_ascii_case(target)).cloned().ok_or_else(|| format!("There is no mailbox named {target}"))?
+        };
+        let actions = rules::actions_from(&target, form.value("Mark as read"), form.value("Flag colour"))?;
+        if self.prefs.rules.iter().any(|r| r.name.eq_ignore_ascii_case(&name)) {
+            return Err(format!("There is already a rule named {name}"));
+        }
+        Ok(Rule { name, from, to, subject, actions })
+    }
+
+    /// The smart mailbox a New Smart Mailbox form describes.
+    pub fn smart_from_form(&self, form: &Form) -> Result<SmartMailbox, String> {
+        let name = form.value("Name").trim().to_string();
+        let query = form.value("Search").trim().to_string();
+        if name.is_empty() {
+            return Err("Name the smart mailbox".into());
+        }
+        if Query::parse(&query).terms.is_empty() {
+            return Err("Enter what the smart mailbox searches for".into());
+        }
+        if self.prefs.smart.iter().any(|s| s.name.eq_ignore_ascii_case(&name)) {
+            return Err(format!("There is already a smart mailbox named {name}"));
+        }
+        if self.prefs.smart.len() >= prefs::MAX_ENTRIES {
+            return Err("There are too many smart mailboxes".into());
+        }
+        Ok(SmartMailbox { name, query })
+    }
+
+    /// Applies the Mail Settings form to the shown account and the shared undo-send delay.
+    pub fn apply_settings(&mut self, form: &Form) -> Result<(), String> {
+        let id = self.current().map(|a| a.id.clone()).ok_or("Add an account first")?;
+        let mut aliases = Vec::new();
+        for entry in message::split_addresses(form.value("Other addresses")) {
+            let address = message::address_of(&entry).to_string();
+            if !shared::valid_address(&address) {
+                return Err(format!("{entry} is not an email address"));
+            }
+            if !aliases.iter().any(|a: &String| a.eq_ignore_ascii_case(&address)) {
+                aliases.push(address);
+            }
+        }
+        let delay = match form.value("Undo send (seconds)").trim() {
+            "" => 0,
+            text => text.parse::<u32>().map_err(|_| "Undo send takes a number of seconds".to_string())?,
+        };
+        if delay > prefs::MAX_UNDO_DELAY {
+            return Err(format!("Undo send takes at most {} seconds", prefs::MAX_UNDO_DELAY));
+        }
+        self.prefs.set_signature(&id, form.value("Signature"));
+        self.prefs.set_aliases(&id, aliases);
+        self.prefs.undo_delay = delay;
+        Ok(())
+    }
+
     /// Checks the setup form and builds the mail account it describes, with its password. Hosts and ports fall back to
     /// the domain's `imap.` and `smtp.` names and the standard ports. `taken` is the whole shared list, so the new id
     /// is unique among every account.
@@ -755,34 +1142,68 @@ impl Mail {
         if !shared::valid_address(&email) {
             return Err("Enter an email address, for example name@example.com".into());
         }
-        let domain = email.rsplit_once('@').map_or("", |(_, d)| d).to_string();
         let password = form.value("Password").to_string();
         if password.is_empty() {
             return Err("Enter the password for this account".into());
         }
-        let name = match form.value("Name").trim() {
-            "" => email.clone(),
-            name => name.to_string(),
-        };
-        let username = match form.value("User name").trim() {
-            "" => email.clone(),
-            user => user.to_string(),
-        };
-        let imap_port = port(form.value("Incoming port"), IMAP_TLS_PORT)?;
-        let smtp_port = port(form.value("Outgoing port"), 587)?;
-        let imap_host = host(form.value("Incoming server"), &format!("imap.{domain}"));
-        let smtp_host = host(form.value("Outgoing server"), &format!("smtp.{domain}"));
-        let mut account = Account::new(Kind::Mail, &account_id(&email, taken), &name, &username);
-        account.email = email;
-        account.imap = Some(Server { host: imap_host, port: imap_port, security: security(imap_port, IMAP_TLS_PORT) });
-        account.smtp = Some(Server { host: smtp_host, port: smtp_port, security: security(smtp_port, SMTP_TLS_PORT) });
-        account.validate().map_err(|e| e.to_string())?;
+        let account = build_account(form, &account_id(&email, taken))?;
         Ok((account, password))
+    }
+
+    /// Checks the Account Settings form and builds the account `old` becomes: the same id and services, the new names and
+    /// servers. The password is returned when one was typed; it is required when the user name or the incoming server
+    /// changed, because Passwords keeps it under those.
+    pub fn edited_account(&self, form: &Form, old: &Account) -> Result<(Account, Option<String>), String> {
+        let mut account = build_account(form, &old.id)?;
+        account.services = old.services.clone();
+        let password = form.value("Password").to_string();
+        let moved = account.password_site() != old.password_site() || account.username != old.username;
+        if moved && password.is_empty() {
+            return Err("Enter the password again: the user name or the incoming server changed".into());
+        }
+        Ok((account, (!password.is_empty()).then_some(password)))
+    }
+
+    /// Puts an edited account in the list in place of the one with its id, with its new password if there is one.
+    pub fn replace_account(&mut self, account: Account, password: Option<String>) {
+        if let Some(at) = self.accounts.iter().position(|a| a.id == account.id) {
+            if let Some(password) = password {
+                self.passwords.insert(account.id.clone(), password);
+            }
+            self.accounts[at] = account;
+        }
+    }
+
+    /// Takes an account away with everything Mail kept for it: the password in memory, the new-mail baseline, the
+    /// signature, the other addresses and the favourites. Another account becomes the shown one.
+    pub fn forget_account(&mut self, id: &str) {
+        let Some(index) = self.accounts.iter().position(|a| a.id == id) else { return };
+        self.accounts.remove(index);
+        self.passwords.remove(id);
+        self.baseline.remove(id);
+        self.prefs.signatures.remove(id);
+        self.prefs.aliases.remove(id);
+        self.prefs.favorites.retain(|f| f.account != id);
+        self.account = self.account.min(self.accounts.len().saturating_sub(1));
+        self.mailboxes = vec![INBOX.to_string()];
+        let shown = self.account;
+        if self.accounts.is_empty() {
+            self.show_mailbox(INBOX);
+        } else {
+            self.show_account(shown);
+        }
     }
 
     /// The draft a compose sheet describes, from the shown account. Recipients are split on commas and semicolons.
     pub fn draft_from(&self, compose: &Compose) -> Result<Draft, String> {
-        let from = self.current().map(|a| a.email.clone()).ok_or("Add an account first")?;
+        let mut from = self.current().map(|a| a.email.clone()).ok_or("Add an account first")?;
+        let chosen = compose.form.value("From").trim();
+        if !chosen.is_empty() {
+            if !self.from_choices().iter().any(|c| c.eq_ignore_ascii_case(chosen)) {
+                return Err(format!("{chosen} is not one of this account's addresses. Click the From field to choose another"));
+            }
+            from = chosen.to_string();
+        }
         let to = message::split_addresses(compose.form.value("To"));
         if to.is_empty() {
             return Err("Add at least one recipient".into());
@@ -795,9 +1216,10 @@ impl Mail {
             reply_to: message::split_addresses(compose.form.value("Reply-To")),
             priority: compose.priority,
             subject: compose.form.value("Subject").to_string(),
-            body: compose.form.value("Message").to_string(),
+            body: with_signature(compose.form.value("Message"), &compose.signature),
             in_reply_to: compose.in_reply_to.clone(),
             references: compose.references.clone(),
+            attachments: compose.attachments.clone(),
         })
     }
 
@@ -808,6 +1230,54 @@ impl Mail {
         self.accounts.push(account);
         self.show_account(self.accounts.len() - 1);
     }
+}
+
+/// Builds the mail account a setup form describes, with `id`. Hosts and ports fall back to the domain's `imap.` and `smtp.`
+/// names and the standard ports.
+fn build_account(form: &Form, id: &str) -> Result<Account, String> {
+    let email = form.value("Email").trim().to_string();
+    if !shared::valid_address(&email) {
+        return Err("Enter an email address, for example name@example.com".into());
+    }
+    let domain = email.rsplit_once('@').map_or("", |(_, d)| d).to_string();
+    let name = match form.value("Name").trim() {
+        "" => email.clone(),
+        name => name.to_string(),
+    };
+    let username = match form.value("User name").trim() {
+        "" => email.clone(),
+        user => user.to_string(),
+    };
+    let imap_port = port(form.value("Incoming port"), IMAP_TLS_PORT)?;
+    let smtp_port = port(form.value("Outgoing port"), 587)?;
+    let imap_host = host(form.value("Incoming server"), &format!("imap.{domain}"));
+    let smtp_host = host(form.value("Outgoing server"), &format!("smtp.{domain}"));
+    let mut account = Account::new(Kind::Mail, id, &name, &username);
+    account.email = email;
+    account.imap = Some(Server { host: imap_host, port: imap_port, security: security(imap_port, IMAP_TLS_PORT) });
+    account.smtp = Some(Server { host: smtp_host, port: smtp_port, security: security(smtp_port, SMTP_TLS_PORT) });
+    account.validate().map_err(|e| e.to_string())?;
+    Ok(account)
+}
+
+/// The message with the account's signature after it, set off by the `-- ` line mail programs recognise. No signature
+/// leaves the text as it is.
+pub fn with_signature(body: &str, signature: &str) -> String {
+    let signature = signature.trim_end();
+    if signature.trim().is_empty() {
+        return body.to_string();
+    }
+    let body = body.trim_end();
+    if body.is_empty() {
+        format!("\n\n-- \n{signature}")
+    } else {
+        format!("{body}\n\n-- \n{signature}")
+    }
+}
+
+/// A server as the setup form shows it: its host and its port.
+fn accounts_server(server: &Option<Server>) -> (String, String) {
+    server.as_ref().map_or_else(|| (String::new(), String::new()), |s| (s.host.clone(), s.port.to_string()))
 }
 
 fn security(port: u16, tls_port: u16) -> Security {
@@ -1148,11 +1618,11 @@ mod tests {
             Field::new("Subject", "", "Hi"),
             Field::new("Message", "", "Body"),
         ]);
-        let draft = mail.draft_from(&Compose { form, in_reply_to: None, references: vec![], priority: Priority::Normal }).unwrap();
+        let draft = mail.draft_from(&Compose { form, in_reply_to: None, references: vec![], priority: Priority::Normal, attachments: vec![], signature: String::new() }).unwrap();
         assert_eq!(draft.to, vec!["ana@example.com", "bo@example.com"]);
         assert_eq!(draft.from, "olibuijr@example.com");
         let empty = Form::new(vec![Field::new("To", "", " ")]);
-        assert!(mail.draft_from(&Compose { form: empty, in_reply_to: None, references: vec![], priority: Priority::Normal }).is_err());
+        assert!(mail.draft_from(&Compose { form: empty, in_reply_to: None, references: vec![], priority: Priority::Normal, attachments: vec![], signature: String::new() }).is_err());
     }
 
     fn compose_of(mail: &Mail) -> &Compose {
@@ -1330,5 +1800,292 @@ mod tests {
         assert_eq!(form.value("B"), "x");
         form.next_field();
         assert_eq!(form.focus, 0);
+    }
+
+    fn file(name: &str, size: usize) -> Attachment {
+        Attachment { name: name.into(), mime: "application/octet-stream".into(), bytes: vec![1; size] }
+    }
+
+    fn prompt_form(mail: &Mail) -> &Form {
+        match &mail.sheet {
+            Some(Sheet::Prompt(prompt)) => &prompt.form,
+            other => panic!("expected a prompt, got {other:?}"),
+        }
+    }
+
+    fn filled(mut form: Form, values: &[(&str, &str)]) -> Form {
+        for (label, value) in values {
+            form.fields.iter_mut().find(|f| f.label == *label).unwrap().value = value.to_string();
+        }
+        form
+    }
+
+    #[test]
+    fn a_message_takes_a_limited_number_of_files_and_bytes() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.open_compose(None);
+        let Some(Sheet::Compose(compose)) = &mut mail.sheet else { panic!("no compose sheet") };
+        for n in 0..MAX_ATTACHMENTS {
+            compose.attach(file(&format!("f{n}"), 10)).unwrap();
+        }
+        assert_eq!(compose.attach(file("one more", 10)).unwrap_err(), format!("A message carries at most {MAX_ATTACHMENTS} files"));
+        compose.detach(0);
+        compose.detach(99);
+        assert_eq!(compose.attachments.len(), MAX_ATTACHMENTS - 1);
+        compose.attachments.clear();
+        assert!(compose.attach(file("big", MAX_ATTACHMENT_BYTES)).is_ok());
+        assert!(compose.attach(file("too much", 1)).unwrap_err().contains("MB a message may carry"));
+    }
+
+    #[test]
+    fn the_signature_follows_the_message_and_stays_out_of_the_text_field() {
+        assert_eq!(with_signature("Hello", "Ana\nOlafsson"), "Hello\n\n-- \nAna\nOlafsson");
+        assert_eq!(with_signature("Hello\n\n", "Ana\n"), "Hello\n\n-- \nAna");
+        assert_eq!(with_signature("", "Ana"), "\n\n-- \nAna");
+        assert_eq!(with_signature("Hello", "  \n"), "Hello");
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.prefs.set_signature("work", "Ana");
+        mail.open_compose(None);
+        assert_eq!(compose_of(&mail).form.value("Message"), "", "the text field starts empty");
+        let mut compose = compose_of(&mail).clone();
+        compose.form.fields.iter_mut().find(|f| f.label == "To").unwrap().value = "bo@example.com".into();
+        compose.form.fields.iter_mut().find(|f| f.label == "Message").unwrap().value = "Hi".into();
+        assert_eq!(mail.draft_from(&compose).unwrap().body, "Hi\n\n-- \nAna");
+    }
+
+    #[test]
+    fn other_addresses_add_a_from_field_that_must_name_one_of_them() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.prefs.set_aliases("work", vec!["info@example.com".into()]);
+        mail.open_compose(None);
+        assert_eq!(labels(compose_of(&mail))[..2], ["From", "To"]);
+        assert_eq!(compose_of(&mail).form.value("From"), "olibuijr@example.com");
+        assert_eq!(compose_of(&mail).form.focus, 1, "the cursor starts at the recipient");
+        assert_eq!(mail.from_choices(), vec!["olibuijr@example.com", "info@example.com"]);
+        let Some(Sheet::Compose(compose)) = &mut mail.sheet else { panic!("no compose sheet") };
+        compose.form.fields.iter_mut().find(|f| f.label == "To").unwrap().value = "bo@example.com".into();
+        let choices = vec!["olibuijr@example.com".to_string(), "info@example.com".to_string()];
+        compose.cycle_from(&choices);
+        assert_eq!(compose.form.value("From"), "info@example.com");
+        compose.cycle_from(&choices);
+        assert_eq!(compose.form.value("From"), "olibuijr@example.com", "the choices wrap");
+        compose.cycle_from(&choices);
+        let chosen = compose.clone();
+        assert_eq!(mail.draft_from(&chosen).unwrap().from, "info@example.com");
+        let mut other = chosen;
+        other.form.fields.iter_mut().find(|f| f.label == "From").unwrap().value = "someone@else.example".into();
+        assert!(mail.draft_from(&other).unwrap_err().contains("is not one of this account's addresses"));
+    }
+
+    #[test]
+    fn send_later_adds_and_removes_its_field_without_losing_the_text() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.open_compose(None);
+        mail.set_send_later(true);
+        assert!(mail.send_later_shown());
+        assert_eq!(labels(compose_of(&mail)), vec!["To", "Cc", "Subject", "Send in", "Message"]);
+        if let Some(Sheet::Compose(c)) = &mut mail.sheet {
+            c.form.focus_on(3);
+            c.form.type_text("2h");
+        }
+        mail.set_send_later(false);
+        assert!(!mail.send_later_shown());
+        assert_eq!(labels(compose_of(&mail)), vec!["To", "Cc", "Subject", "Message"]);
+    }
+
+    #[test]
+    fn a_new_sheet_may_not_replace_a_message_being_written() {
+        let mut mail = Mail::new(vec![account("work")]);
+        assert!(mail.sheet_is_free());
+        mail.open_compose(None);
+        assert!(!mail.sheet_is_free());
+        mail.close_sheet();
+        mail.open_search();
+        assert!(mail.sheet_is_free());
+    }
+
+    #[test]
+    fn the_attachments_filter_uses_loaded_files_and_the_message_type() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let rows = vec![
+            Listed { uid: 1, flags: Flags::empty(), header: "Subject: a\r\nContent-Type: multipart/mixed; boundary=x\r\n\r\n".into() },
+            Listed { uid: 2, flags: Flags::empty(), header: "Subject: b\r\nContent-Type: text/plain\r\n\r\n".into() },
+            Listed { uid: 3, flags: Flags::empty(), header: "Subject: c\r\n\r\n".into() },
+        ];
+        mail.apply_listing("work", INBOX, vec![], rows);
+        mail.filter = Filter::Attachments;
+        assert_eq!(uids(&mail), vec![1]);
+        mail.attachments.insert(3, vec![file("late.pdf", 3)]);
+        assert_eq!(uids(&mail), vec![3, 1], "a loaded message is judged by its files");
+    }
+
+    #[test]
+    fn the_category_keeps_only_that_kind_of_mail() {
+        let mut mail = Mail::new(vec![account("work")]);
+        let rows = vec![
+            Listed { uid: 1, flags: Flags::empty(), header: "Subject: Lunch?\r\nFrom: Ana <ana@example.com>\r\n\r\n".into() },
+            Listed { uid: 2, flags: Flags::empty(), header: "Subject: Your receipt\r\nFrom: shop@store.example\r\n\r\n".into() },
+            Listed { uid: 3, flags: Flags::empty(), header: "Subject: Hello\r\nFrom: news@store.example\r\nList-Unsubscribe: <mailto:u@store.example>\r\n\r\n".into() },
+        ];
+        mail.apply_listing("work", INBOX, vec![], rows);
+        assert_eq!(uids(&mail).len(), 3);
+        mail.category = Some(Category::Primary);
+        assert_eq!(uids(&mail), vec![1]);
+        mail.category = Some(Category::Transactions);
+        assert_eq!(uids(&mail), vec![2]);
+        mail.category = Some(Category::Promotions);
+        assert_eq!(uids(&mail), vec![3]);
+        mail.category = Some(Category::Updates);
+        assert!(uids(&mail).is_empty());
+    }
+
+    #[test]
+    fn a_smart_mailbox_applies_its_search_and_a_new_search_leaves_it() {
+        let mut mail = mail_with_mixed_rows();
+        mail.prefs.smart.push(SmartMailbox { name: "From Ana".into(), query: "from:ana".into() });
+        assert!(mail.apply_smart(0));
+        assert_eq!(mail.smart_active, Some(0));
+        assert_eq!(uids(&mail), vec![3]);
+        assert!(!mail.apply_smart(5));
+        mail.apply_search("bo");
+        assert_eq!(mail.smart_active, None);
+    }
+
+    #[test]
+    fn the_listing_remembers_which_messages_just_arrived_for_the_rules() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(9, "old")]);
+        assert!(mail.arrived.is_empty());
+        mail.apply_listing("work", INBOX, vec![], vec![listed(9, "old"), listed(12, "Fundur"), listed(13, "Annað")]);
+        let arrived: Vec<(&str, u32)> = mail.arrived.iter().map(|(a, r)| (a.as_str(), r.uid)).collect();
+        assert_eq!(arrived, vec![("work", 12), ("work", 13)]);
+        mail.apply_listing("work", INBOX, vec![], vec![listed(9, "old"), listed(12, "Fundur"), listed(13, "Annað")]);
+        assert!(mail.arrived.is_empty(), "only the newest listing's arrivals are kept");
+    }
+
+    #[test]
+    fn the_rule_form_checks_its_name_criteria_actions_and_mailbox() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.mailboxes = vec![INBOX.into(), "Receipts".into()];
+        mail.open_rule();
+        let form = prompt_form(&mail).clone();
+        assert_eq!(mail.rule_from_form(&form).unwrap_err(), "Name the rule");
+        let form = filled(form, &[("Name", "Shops")]);
+        assert!(mail.rule_from_form(&form).unwrap_err().contains("something to look for"));
+        let form = filled(form, &[("From contains", "shop.example")]);
+        assert!(mail.rule_from_form(&form).unwrap_err().contains("Choose what the rule does"));
+        let form = filled(form, &[("Move to mailbox", "receipts"), ("Mark as read", "yes")]);
+        let rule = mail.rule_from_form(&form).unwrap();
+        assert_eq!(rule.actions, vec![rules::Action::MoveTo("Receipts".into()), rules::Action::MarkRead], "the mailbox is spelled as the account has it");
+        let missing = filled(form.clone(), &[("Move to mailbox", "Nowhere")]);
+        assert_eq!(mail.rule_from_form(&missing).unwrap_err(), "There is no mailbox named Nowhere");
+        mail.prefs.rules.push(rule);
+        assert!(mail.rule_from_form(&form).unwrap_err().contains("already a rule named Shops"));
+    }
+
+    #[test]
+    fn the_smart_mailbox_form_needs_a_name_and_a_search() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.apply_search("from:ana");
+        mail.open_smart_mailbox();
+        let form = prompt_form(&mail).clone();
+        assert_eq!(form.value("Search"), "from:ana", "it starts from the search applied now");
+        assert_eq!(mail.smart_from_form(&form).unwrap_err(), "Name the smart mailbox");
+        let named = filled(form.clone(), &[("Name", "Ana")]);
+        assert_eq!(mail.smart_from_form(&named).unwrap(), SmartMailbox { name: "Ana".into(), query: "from:ana".into() });
+        assert!(mail.smart_from_form(&filled(named.clone(), &[("Search", "  ")])).unwrap_err().contains("searches for"));
+        mail.prefs.smart.push(SmartMailbox { name: "ana".into(), query: "x".into() });
+        assert!(mail.smart_from_form(&named).unwrap_err().contains("already a smart mailbox"));
+    }
+
+    #[test]
+    fn mail_settings_set_the_signature_other_addresses_and_undo_delay() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.open_settings().unwrap();
+        let form = prompt_form(&mail).clone();
+        let set = filled(form.clone(), &[("Signature", "Ana\nOlafsson"), ("Other addresses", "Info <info@example.com>, info@example.com, ana@example.org"), ("Undo send (seconds)", "10")]);
+        mail.apply_settings(&set).unwrap();
+        assert_eq!(mail.prefs.signature("work"), "Ana\nOlafsson");
+        assert_eq!(mail.prefs.aliases_of("work"), ["info@example.com", "ana@example.org"], "bare addresses, each once");
+        assert_eq!(mail.prefs.undo_delay, 10);
+        mail.open_settings().unwrap();
+        assert_eq!(prompt_form(&mail).value("Other addresses"), "info@example.com, ana@example.org");
+        assert_eq!(prompt_form(&mail).value("Undo send (seconds)"), "10");
+        assert!(mail.apply_settings(&filled(form.clone(), &[("Other addresses", "not an address")])).is_err());
+        assert!(mail.apply_settings(&filled(form.clone(), &[("Undo send (seconds)", "soon")])).unwrap_err().contains("number of seconds"));
+        assert!(mail.apply_settings(&filled(form, &[("Undo send (seconds)", "31")])).unwrap_err().contains("at most 30"));
+        assert!(Mail::new(vec![]).open_settings().is_err());
+    }
+
+    #[test]
+    fn editing_an_account_keeps_its_id_and_asks_for_the_password_only_when_it_moves() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.open_edit_account().unwrap();
+        let form = prompt_form(&mail).clone();
+        assert_eq!(form.value("Incoming server"), "imap.example.com");
+        assert_eq!(form.value("Outgoing port"), "587");
+        let old = mail.accounts[0].clone();
+        let renamed = filled(form.clone(), &[("Name", "Office"), ("Outgoing server", "smtp.office.example")]);
+        let (edited, password) = mail.edited_account(&renamed, &old).unwrap();
+        assert_eq!((edited.id.as_str(), edited.name.as_str(), password), ("work", "Office", None));
+        assert_eq!(edited.smtp.as_ref().map(|s| s.host.as_str()), Some("smtp.office.example"));
+        assert_eq!(edited.services, old.services);
+        let moved = filled(form.clone(), &[("Incoming server", "imap.other.example")]);
+        assert!(mail.edited_account(&moved, &old).unwrap_err().contains("Enter the password again"));
+        let (_, password) = mail.edited_account(&filled(moved, &[("Password", "new")]), &old).unwrap();
+        assert_eq!(password.as_deref(), Some("new"));
+        mail.replace_account(edited, Some("kept".into()));
+        assert_eq!(mail.accounts[0].name, "Office");
+        assert_eq!(mail.passwords.get("work").map(String::as_str), Some("kept"));
+    }
+
+    #[test]
+    fn removing_an_account_forgets_everything_kept_for_it() {
+        let mut mail = Mail::new(vec![account("work"), account("home")]);
+        mail.passwords.insert("work".into(), "pw".into());
+        mail.baseline.insert("work".into(), 5);
+        mail.prefs.set_signature("work", "Ana");
+        mail.prefs.toggle_favorite("work", "INBOX");
+        mail.prefs.toggle_favorite("home", "INBOX");
+        mail.forget_account("work");
+        assert_eq!(mail.accounts.len(), 1);
+        assert_eq!(mail.accounts[0].id, "home");
+        assert!(mail.passwords.is_empty() && mail.baseline.is_empty());
+        assert_eq!(mail.prefs.signature("work"), "");
+        assert_eq!(mail.prefs.favorites.len(), 1);
+        assert_eq!(mail.account, 0);
+        mail.forget_account("home");
+        assert!(mail.accounts.is_empty());
+        mail.forget_account("nobody");
+    }
+
+    #[test]
+    fn remind_me_needs_an_open_message_with_an_id() {
+        let mut mail = Mail::new(vec![account("work")]);
+        assert_eq!(mail.open_remind().unwrap_err(), "Open a message first");
+        let rows = vec![
+            Listed { uid: 1, flags: Flags::empty(), header: "Message-ID: <a@x>\r\nSubject: with\r\n\r\n".into() },
+            Listed { uid: 2, flags: Flags::empty(), header: "Subject: without\r\n\r\n".into() },
+        ];
+        mail.apply_listing("work", INBOX, vec![], rows);
+        mail.open_message(2);
+        assert!(mail.open_remind().unwrap_err().contains("no Message-ID"));
+        mail.open_message(1);
+        mail.open_remind().unwrap();
+        assert_eq!(mail.sheet.as_ref().map(Sheet::title), Some("Remind Me"));
+    }
+
+    #[test]
+    fn every_sheet_has_a_title_and_an_action() {
+        let mut mail = Mail::new(vec![account("work")]);
+        mail.open_setup();
+        assert_eq!((mail.sheet.as_ref().unwrap().title(), mail.sheet.as_ref().unwrap().action()), ("Add Account", "Add Account"));
+        mail.open_compose(None);
+        assert_eq!((mail.sheet.as_ref().unwrap().title(), mail.sheet.as_ref().unwrap().action()), ("New Message", "Send"));
+        mail.open_redirect();
+        assert_eq!((mail.sheet.as_ref().unwrap().title(), mail.sheet.as_ref().unwrap().action()), ("Redirect", "Redirect"));
+        mail.open_remove_account().unwrap();
+        assert_eq!((mail.sheet.as_ref().unwrap().title(), mail.sheet.as_ref().unwrap().action()), ("Remove Account", "Remove"));
+        assert!(is_multiline("Message") && is_multiline("Signature") && !is_multiline("Subject"));
     }
 }

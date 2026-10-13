@@ -4,24 +4,35 @@
 
 use crate::accounts;
 use crate::attachments;
+use crate::body::Attachment;
+use crate::category::Category;
+use crate::draw::Rect;
+use crate::findbar::{self, FindBar};
 use crate::flags::{Flag, FlagColor};
-use crate::message::{self, Priority};
+use crate::mbox;
+use crate::message::{self, Priority, MAX_ATTACHMENT_BYTES};
 use crate::migrate;
+use crate::mime;
+use crate::people::{self, Person};
+use crate::prefs;
+use crate::rules::{self, Action};
+use crate::schedule::{self, Queued, Reminder};
 use crate::search::Query;
-use crate::state::{Filter, Mail, Notice, Sheet, SortKey, ARCHIVE_NAMES, INBOX, JUNK_NAMES, TRASH_NAMES};
+use crate::state::{is_multiline, Compose, Filter, Mail, Notice, Prompt, PromptKind, Sheet, SortKey, ARCHIVE_NAMES, INBOX, JUNK_NAMES, TRASH_NAMES};
 use crate::sync::{self, Change, Event};
 use crate::transport;
+use bifrost_app::contacts::{self, Key as ContactKey, SaveRequest};
 use bifrost_app::controls::internet_accounts::Account;
 use bifrost_app::keychain::{self, Error as LegacyError, Reply as KeyReply};
 use bifrost_app::kit::{clipboard, Scroller, TextCache, Ui};
 use bifrost_app::passwords::{self, Error as KeyError};
 use bifrost_app::usernotif::{self, Request};
-use bifrost_app::{AppMenu, AppMenuItem, Ctx, KeyInput, TouchKind};
-use bifrost_app::proto::{CHORD_CTRL, CHORD_META};
+use bifrost_app::{AppMenu, AppMenuItem, Ctx, DocumentEvent, KeyInput, OpenOptions, TouchKind};
+use bifrost_app::proto::{DocErrorCode, DocMode, CHORD_CTRL, CHORD_META};
 use bifrost_core::json::Json;
 use springboard::deildu::http::Transport;
-use std::collections::{HashMap, HashSet};
-use std::io::Read;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::io::{Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -65,6 +76,30 @@ pub const MENU_RAW_SOURCE: u32 = 35;
 pub const MENU_SAVE_AS: u32 = 36;
 pub const MENU_QUICKLY: u32 = 37;
 pub const MENU_CLEAR_FLAG: u32 = 38;
+pub const MENU_ATTACH: u32 = 39;
+pub const MENU_REMOVE_ATTACHMENTS: u32 = 40;
+pub const MENU_ADD_TO_CONTACTS: u32 = 41;
+pub const MENU_FORWARD_ATTACHMENT: u32 = 42;
+pub const MENU_REDIRECT: u32 = 43;
+pub const MENU_SEND_LATER: u32 = 44;
+pub const MENU_UNDO_SEND: u32 = 45;
+pub const MENU_REMIND: u32 = 46;
+pub const MENU_FIND_IN_MESSAGE: u32 = 47;
+pub const MENU_FIND_NEXT: u32 = 48;
+pub const MENU_FIND_PREVIOUS: u32 = 49;
+pub const MENU_IMPORT_MBOX: u32 = 50;
+pub const MENU_EXPORT_MBOX: u32 = 51;
+pub const MENU_NEW_SMART: u32 = 52;
+pub const MENU_DELETE_SMART: u32 = 53;
+pub const MENU_NEW_RULE: u32 = 54;
+pub const MENU_APPLY_RULES: u32 = 55;
+pub const MENU_SETTINGS: u32 = 56;
+pub const MENU_ACCOUNT_SETTINGS: u32 = 57;
+pub const MENU_REMOVE_ACCOUNT: u32 = 58;
+pub const MENU_FAVORITE: u32 = 59;
+pub const MENU_SHOW_FAVORITES: u32 = 60;
+pub const MENU_SEND_QUEUED: u32 = 61;
+pub const MENU_ALL_CATEGORIES: u32 = 62;
 /// Menu ids that run from a base: the nth entry of a list (mailboxes, sort keys, filters, priorities) is `base + n`.
 pub const MENU_MOVE_BASE: u32 = 100;
 pub const MENU_COPY_BASE: u32 = 200;
@@ -72,8 +107,17 @@ pub const MENU_SORT_BASE: u32 = 300;
 pub const MENU_FILTER_BASE: u32 = 400;
 pub const MENU_PRIORITY_BASE: u32 = 500;
 pub const MENU_COLOR_BASE: u32 = 600;
-/// Most mailboxes a Move To or Copy To submenu lists (and the room each id range has).
+pub const MENU_CATEGORY_BASE: u32 = 700;
+pub const MENU_RULE_BASE: u32 = 800;
+/// The room each id range has.
 pub const MENU_TARGET_LIMIT: usize = 99;
+/// Most mailboxes a Move To or Copy To submenu lists. An app menu holds 48 items, and the Move menu has two such
+/// submenus besides its own entries.
+pub const MENU_TARGETS_SHOWN: usize = 22;
+/// Most rules Mail keeps: each is listed in the Rules submenu so it can be deleted.
+pub const MAX_RULES: usize = 12;
+/// Largest mailbox file Import Mailbox reads, in bytes.
+pub const IMPORT_LIMIT: usize = 64 * 1024 * 1024;
 
 /// The position of menu id `id` in the list that starts at `base`, when it falls inside the range.
 pub fn menu_index(id: u32, base: u32) -> Option<usize> {
@@ -99,9 +143,15 @@ const KEY_V: u32 = 47;
 enum Pending {
     /// The password of an account, read when the app starts. The id is the account's.
     Load(String),
-    /// A new account's password, being added. `Replace` follows when an item already exists.
-    Add { account: Account, password: String },
-    Replace { account: Account, password: String },
+    /// A new account's password, being added. `Replace` follows when an item already exists. `old` is the account being
+    /// edited, when this is Account Settings and not a new account.
+    Add { account: Account, password: String, old: Option<Account> },
+    Replace { account: Account, password: String, old: Option<Account> },
+    /// Add Sender to Contacts: the address book is asked whether it has the address, and then given the person.
+    ContactCheck(Person),
+    ContactSave(Person),
+    /// A password item being deleted. Nothing follows its answer.
+    Forget,
     /// An account moved from the 0.3.0 file: its password is read from the old keychain item `legacy`.
     Migrate { account: Account, legacy: String },
     /// A password read from the old keychain item `legacy` is being saved in Passwords.
@@ -115,6 +165,16 @@ impl Pending {
     fn from_keychain(&self) -> bool {
         matches!(self, Pending::Migrate { .. } | Pending::Discard)
     }
+}
+
+/// What a file panel was opened for.
+enum DocTask {
+    /// Message > Attach Files: the files chosen go on the message being written.
+    Attach,
+    /// A save panel: the bytes are written to the place chosen. The name is for the status line.
+    Save { name: String, bytes: Vec<u8> },
+    /// Mailbox > Import Mailbox: the file chosen is read as a mailbox file.
+    ImportMbox,
 }
 
 /// Where a press started. Only the two panes scroll; the rest is chrome.
@@ -158,6 +218,27 @@ pub struct MailWindow {
     pub reader_scroll: Scroller,
     /// Where the muted conversations are kept (see [`crate::mute`]).
     muted_path: std::path::PathBuf,
+    /// Where the settings and the outbox are kept (see [`crate::prefs`] and [`crate::schedule`]).
+    prefs_path: std::path::PathBuf,
+    queue_path: std::path::PathBuf,
+    /// The data directory, for the files Mail saves when the file panel is not available.
+    data_dir: std::path::PathBuf,
+    /// File panels that are open, by request.
+    docs: HashMap<u32, DocTask>,
+    /// Files still waiting for their save panel: Save Attachments asks for each file's place in turn.
+    save_queue: VecDeque<(String, Vec<u8>)>,
+    /// The last message sent with an undo-send delay: its place in the outbox and what the sheet held.
+    undo: Option<u64>,
+    drafts: HashMap<u64, Compose>,
+    /// Queued messages out for sending.
+    in_flight: HashMap<u64, Queued>,
+    /// The files named in the open message, where they were drawn last frame, by place in the message.
+    pub attach_rects: Vec<(Rect, usize)>,
+    /// The Previous, Next and Done buttons of the find bar where they were drawn last frame.
+    pub find_hits: Option<[Rect; 3]>,
+    /// Where the open message's text starts in the reader's scrolled content, the height of a line, and the height of the
+    /// reader, as drawn last frame (for scrolling to a match).
+    pub reader_metrics: (f32, f32, f32),
     press: Option<Press>,
     pub labels: TextCache,
     /// The wrapped text of the open message, for the width it was laid out at.
@@ -198,6 +279,10 @@ impl MailWindow {
         let mut mail = Mail::new(mail_accounts);
         let muted_path = ctx.data_dir.join(crate::mute::FILE);
         mail.muted = crate::mute::load(&muted_path);
+        let prefs_path = ctx.data_dir.join(prefs::FILE);
+        let queue_path = ctx.data_dir.join(schedule::FILE);
+        mail.use_prefs(prefs::load(&prefs_path));
+        mail.queue = schedule::load(&queue_path);
         if let Some(e) = load_error.or(import_error) {
             mail.status = e;
         }
@@ -221,6 +306,17 @@ impl MailWindow {
             list_scroll: Scroller::new(),
             reader_scroll: Scroller::new(),
             muted_path,
+            prefs_path,
+            queue_path,
+            data_dir: ctx.data_dir.clone(),
+            docs: HashMap::new(),
+            save_queue: VecDeque::new(),
+            undo: None,
+            drafts: HashMap::new(),
+            in_flight: HashMap::new(),
+            attach_rects: Vec::new(),
+            find_hits: None,
+            reader_metrics: (0.0, 0.0, 0.0),
             press: None,
             labels: TextCache::default(),
             laid: None,
@@ -257,13 +353,17 @@ impl MailWindow {
         self.wake_rx.as_ref().map(AsRawFd::as_raw_fd)
     }
 
-    /// The next time the loop should come back: the next poll, or a frame while a scroll settles.
+    /// The next time the loop should come back: the next poll or the next queued message or reminder, or a frame while a
+    /// scroll settles.
     pub fn next_wake(&self, t: f64) -> Option<f64> {
         if self.list_scroll.animating() || self.reader_scroll.animating() {
-            Some(t + 16.0)
-        } else {
-            Some(self.next_poll)
+            return Some(t + 16.0);
         }
+        let mut wake = self.next_poll;
+        if let Some(due) = self.mail.queue.next_due() {
+            wake = wake.min(t + (due - now_unix()).max(0) as f64 * 1000.0);
+        }
+        Some(wake)
     }
 
     /// Applies what the job threads and the poll timer produced. True when the screen changed.
@@ -283,6 +383,7 @@ impl MailWindow {
             self.next_poll = t + POLL_MS;
             self.poll();
         }
+        self.run_queue(ctx);
         let scrolled = self.list_scroll.tick(t) | self.reader_scroll.tick(t);
         std::mem::take(&mut self.dirty) || scrolled
     }
@@ -316,18 +417,37 @@ impl MailWindow {
                 }
                 Err(e) => self.mail.status = format!("Passwords could not return the password: {e:?}"),
             },
-            Pending::Add { account, password } => match passwords::decode_password(result) {
-                Ok(_) => self.account_saved(account, password),
+            Pending::Add { account, password, old } => match passwords::decode_password(result) {
+                Ok(_) => self.account_saved(ctx, account, Some(password), old),
                 Err(KeyError::DuplicateItem) => {
                     let request = passwords::update(ctx, &account.password_site(), &account.username, &password);
-                    self.pending.insert(request, Pending::Replace { account, password });
+                    self.pending.insert(request, Pending::Replace { account, password, old });
                 }
                 Err(e) => self.mail.status = format!("The password could not be saved in Passwords: {e:?}"),
             },
-            Pending::Replace { account, password } => match passwords::decode_password(result) {
-                Ok(_) => self.account_saved(account, password),
+            Pending::Replace { account, password, old } => match passwords::decode_password(result) {
+                Ok(_) => self.account_saved(ctx, account, Some(password), old),
                 Err(e) => self.mail.status = format!("The password could not be saved in Passwords: {e:?}"),
             },
+            Pending::Forget => {}
+            Pending::ContactCheck(person) => match result {
+                Ok(body) => {
+                    let known = contacts::decode_contacts(body).unwrap_or_default().iter().any(|record| people::has_address(record, &person.address));
+                    if known {
+                        self.mail.status = format!("{} is already in Contacts", person.address);
+                    } else {
+                        let request = contacts::save(ctx, &SaveRequest { add: vec![person.record()], ..SaveRequest::default() });
+                        self.pending.insert(request, Pending::ContactSave(person));
+                    }
+                }
+                Err(e) => self.mail.status = format!("Contacts: {e}"),
+            },
+            Pending::ContactSave(person) => {
+                self.mail.status = match result {
+                    Ok(_) => format!("Added {} to Contacts", person.address),
+                    Err(e) => format!("The contact could not be saved: {e}"),
+                };
+            }
         }
         self.dirty = true;
         true
@@ -407,13 +527,14 @@ impl MailWindow {
             return key == KEY_V && mods & (CHORD_CTRL | CHORD_META) != 0 && self.paste();
         }
         if self.mail.sheet.is_none() {
-            return false;
+            return self.find_key(k);
         }
-        let multiline = self.focus_is_message();
+        let multiline = self.focus_is_multiline();
+        let picker = self.focus_is_picker();
         match k {
             KeyInput::Text(s) => {
                 let text: String = s.chars().filter(|c| !c.is_control() || (*c == '\n' && multiline)).collect();
-                if let Some(form) = self.form_mut() {
+                if let Some(form) = self.form_mut().filter(|_| !picker) {
                     form.type_text(&text);
                 }
             }
@@ -429,7 +550,7 @@ impl MailWindow {
                 }
             }
             KeyInput::Code(KEY_BACKSPACE) => {
-                if let Some(form) = self.form_mut() {
+                if let Some(form) = self.form_mut().filter(|_| !picker) {
                     form.backspace();
                 }
             }
@@ -440,10 +561,81 @@ impl MailWindow {
         true
     }
 
+    /// Keys for the find bar over the reader, when no sheet is open: text goes to the search, Return steps to the next
+    /// match, Escape closes the bar. False when the bar is not open (the key is not Mail's).
+    fn find_key(&mut self, k: KeyInput) -> bool {
+        if self.mail.find.is_none() || self.mail.open.is_none() {
+            return false;
+        }
+        match k {
+            KeyInput::Text(s) => {
+                let text: String = s.chars().filter(|c| !c.is_control()).collect();
+                if let Some(bar) = self.mail.find.as_mut() {
+                    bar.type_text(&text);
+                }
+                self.scroll_to_match();
+            }
+            KeyInput::Code(KEY_BACKSPACE) => {
+                if let Some(bar) = self.mail.find.as_mut() {
+                    bar.backspace();
+                }
+                self.scroll_to_match();
+            }
+            KeyInput::Code(KEY_RETURN) => self.step_match(true),
+            KeyInput::Code(KEY_ESCAPE) => self.mail.find = None,
+            KeyInput::Code(_) => return false,
+        }
+        self.dirty = true;
+        true
+    }
+
+    /// Every match of the find bar's text in the open message as drawn.
+    fn find_matches(&self) -> Vec<findbar::Span> {
+        match (&self.mail.find, &self.laid) {
+            (Some(bar), Some(laid)) if self.mail.open == Some(laid.uid) => findbar::find_all(&laid.lines, &bar.text),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Edit > Find Next and Find Previous, and the bar's buttons.
+    fn step_match(&mut self, forward: bool) {
+        let total = self.find_matches().len();
+        if let Some(bar) = self.mail.find.as_mut() {
+            if forward {
+                bar.next(total);
+            } else {
+                bar.previous(total);
+            }
+        }
+        self.scroll_to_match();
+    }
+
+    /// Scrolls the reader so the current match of the find bar is in view, a third of the way down.
+    fn scroll_to_match(&mut self) {
+        let matches = self.find_matches();
+        let Some(bar) = &self.mail.find else { return };
+        let Some(span) = matches.get(bar.current.min(matches.len().saturating_sub(1))) else { return };
+        let (origin, line_h, area) = self.reader_metrics;
+        let position = origin + span.line as f32 * line_h;
+        self.reader_scroll.jump_to((position - area / 3.0).max(0.0));
+    }
+
     pub fn paste(&mut self) -> bool {
         let Some(text) = clipboard::text() else { return false };
-        let multiline = self.focus_is_message();
+        if self.mail.sheet.is_none() {
+            // pasting into the find bar
+            let Some(bar) = self.mail.find.as_mut().filter(|_| self.mail.open.is_some()) else { return false };
+            let text: String = text.chars().filter(|c| !c.is_control()).collect();
+            bar.type_text(&text);
+            self.scroll_to_match();
+            self.dirty = true;
+            return true;
+        }
+        let multiline = self.focus_is_multiline();
         let text: String = text.chars().filter(|c| !c.is_control() || (*c == '\n' && multiline)).collect();
+        if self.focus_is_picker() {
+            return false;
+        }
         match self.form_mut() {
             Some(form) => form.type_text(&text),
             None => return false,
@@ -456,14 +648,20 @@ impl MailWindow {
         let mail = &self.mail;
         let compose_open = matches!(mail.sheet, Some(Sheet::Compose(_)));
         let open = mail.open.is_some();
+        let loaded = open && self.open_body_loaded();
         let targets = mail.move_targets();
+        let shown_targets = &targets[..targets.len().min(MENU_TARGETS_SHOWN)];
         let mut message = vec![
             AppMenuItem::new(MENU_NEW, "New Message").key("cmd+n"),
             AppMenuItem::new(MENU_REPLY, "Reply").key("cmd+shift+r").enabled(open),
             AppMenuItem::new(MENU_REPLY_ALL, "Reply All").key("cmd+alt+r").enabled(open),
-            AppMenuItem::new(MENU_FORWARD, "Forward").key("cmd+shift+f").enabled(open && self.open_body_loaded()),
+            AppMenuItem::new(MENU_FORWARD, "Forward").key("cmd+shift+f").enabled(loaded),
+            AppMenuItem::new(MENU_FORWARD_ATTACHMENT, "Forward as Attachment").enabled(loaded),
+            AppMenuItem::new(MENU_REDIRECT, "Redirect...").enabled(loaded),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_SEND, "Send").key("cmd+shift+d").enabled(compose_open),
+            AppMenuItem::new(MENU_SEND_LATER, "Send Later").enabled(compose_open).checked(mail.send_later_shown()),
+            AppMenuItem::new(MENU_UNDO_SEND, "Undo Send").enabled(self.undo_pending()),
             AppMenuItem::submenu("Set Priority").enabled(compose_open),
         ];
         let current = match &mail.sheet {
@@ -474,6 +672,7 @@ impl MailWindow {
             message.push(AppMenuItem::new(MENU_PRIORITY_BASE + i as u32, priority.label()).depth(1).checked(current == Some(priority)));
         }
         message.extend([
+            AppMenuItem::new(MENU_ATTACH, "Attach Files...").key("cmd+shift+e").enabled(compose_open),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_FLAG, "Flag").key("cmd+shift+l").enabled(open),
             AppMenuItem::submenu("Flag Color").enabled(open),
@@ -487,37 +686,45 @@ impl MailWindow {
         message.extend([
             AppMenuItem::new(MENU_UNREAD, "Mark as Unread").enabled(open),
             AppMenuItem::new(MENU_MUTE, if muted { "Unmute" } else { "Mute" }).enabled(open),
+            AppMenuItem::new(MENU_REMIND, "Remind Me...").enabled(open),
             AppMenuItem::new(MENU_ARCHIVE, "Archive").key("cmd+shift+a").enabled(open),
             AppMenuItem::new(MENU_TRASH, "Move to Trash").enabled(open),
             AppMenuItem::new(MENU_JUNK, "Move to Junk").key("cmd+shift+j").enabled(open),
-            AppMenuItem::submenu("Move To").enabled(open),
-        ]);
-        for (i, name) in targets.iter().enumerate().take(MENU_TARGET_LIMIT) {
-            message.push(AppMenuItem::new(MENU_MOVE_BASE + i as u32, name).depth(1));
-        }
-        message.push(AppMenuItem::submenu("Copy To").enabled(open));
-        for (i, name) in targets.iter().enumerate().take(MENU_TARGET_LIMIT) {
-            message.push(AppMenuItem::new(MENU_COPY_BASE + i as u32, name).depth(1));
-        }
-        let again = mail.last_target.as_ref().filter(|t| targets.contains(t));
-        let again_title = again.map_or_else(|| "Move Again".to_string(), |t| format!("Move Again to {t}"));
-        message.push(AppMenuItem::new(MENU_MOVE_AGAIN, &again_title).enabled(open && again.is_some()));
-        message.extend([
             AppMenuItem::separator(),
+            AppMenuItem::new(MENU_ADD_TO_CONTACTS, "Add Sender to Contacts").enabled(open),
+            AppMenuItem::new(MENU_REMOVE_ATTACHMENTS, "Remove Attachments").enabled(self.open_has_files()),
             AppMenuItem::new(MENU_SAVE, "Save Attachments...").key("cmd+alt+a").enabled(self.open_has_files()),
-            AppMenuItem::new(MENU_SAVE_AS, "Save As...").key("cmd+shift+s").enabled(open && self.open_body_loaded()),
+            AppMenuItem::new(MENU_SAVE_AS, "Save As...").key("cmd+shift+s").enabled(loaded),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_PRINT, "Print...").key("cmd+p").enabled(open),
         ]);
 
+        // Move To and Copy To list the account's mailboxes, so they have a menu of their own: one menu holds 48 items
+        let mut moves = vec![AppMenuItem::submenu("Move To").enabled(open)];
+        for (i, name) in shown_targets.iter().enumerate() {
+            moves.push(AppMenuItem::new(MENU_MOVE_BASE + i as u32, name).depth(1));
+        }
+        moves.push(AppMenuItem::submenu("Copy To").enabled(open));
+        for (i, name) in shown_targets.iter().enumerate() {
+            moves.push(AppMenuItem::new(MENU_COPY_BASE + i as u32, name).depth(1));
+        }
+        let again = mail.last_target.as_ref().filter(|t| targets.contains(t));
+        let again_title = again.map_or_else(|| "Move Again".to_string(), |t| format!("Move Again to {t}"));
+        moves.push(AppMenuItem::new(MENU_MOVE_AGAIN, &again_title).enabled(open && again.is_some()));
+
         let editable = !mail.mailbox.eq_ignore_ascii_case(INBOX);
-        let mailbox = vec![
+        let account_id = mail.current().map(|a| a.id.as_str()).unwrap_or("");
+        let pinned = mail.prefs.is_favorite(account_id, &mail.mailbox);
+        let mut mailbox = vec![
             AppMenuItem::new(MENU_REFRESH, "Refresh").key("cmd+r"),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_FIND, "Find...").key("cmd+f"),
             AppMenuItem::new(MENU_SHOW_ALL, "Show All Messages").enabled(!mail.search.is_empty()),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_QUICKLY, "Open Quickly...").key("cmd+shift+o").enabled(!mail.accounts.is_empty()),
+            AppMenuItem::new(MENU_FAVORITE, if pinned { "Remove from Favorites Bar" } else { "Add to Favorites Bar" }).enabled(!mail.accounts.is_empty()),
+            AppMenuItem::new(MENU_NEW_SMART, "New Smart Mailbox...").enabled(!mail.accounts.is_empty()),
+            AppMenuItem::new(MENU_DELETE_SMART, "Delete Smart Mailbox").enabled(mail.smart_active.is_some()),
             AppMenuItem::separator(),
             AppMenuItem::new(MENU_NEW_MAILBOX, "New Mailbox...").enabled(!mail.accounts.is_empty()),
             AppMenuItem::new(MENU_RENAME_MAILBOX, "Rename Mailbox...").enabled(editable),
@@ -526,11 +733,28 @@ impl MailWindow {
             AppMenuItem::new(MENU_ERASE_TRASH, "Erase Deleted Items").enabled(mail.find_mailbox(&TRASH_NAMES).is_some()),
             AppMenuItem::new(MENU_ERASE_JUNK, "Erase Junk Mail").enabled(mail.find_mailbox(&JUNK_NAMES).is_some()),
             AppMenuItem::separator(),
-            AppMenuItem::new(MENU_ADD, "Add Account..."),
+            AppMenuItem::new(MENU_IMPORT_MBOX, "Import Mailbox...").enabled(!mail.accounts.is_empty()),
+            AppMenuItem::new(MENU_EXPORT_MBOX, "Export Mailbox...").enabled(!mail.accounts.is_empty()),
+            AppMenuItem::separator(),
+            AppMenuItem::submenu("Rules"),
+            AppMenuItem::new(MENU_NEW_RULE, "New Rule...").depth(1).enabled(!mail.accounts.is_empty() && mail.prefs.rules.len() < MAX_RULES),
+            AppMenuItem::new(MENU_APPLY_RULES, "Apply Rules").depth(1).enabled(!mail.prefs.rules.is_empty()),
         ];
+        for (i, rule) in mail.prefs.rules.iter().enumerate().take(MAX_RULES) {
+            mailbox.push(AppMenuItem::new(MENU_RULE_BASE + i as u32, &format!("Delete Rule: {}", rule.name)).depth(1));
+        }
+        mailbox.extend([
+            AppMenuItem::new(MENU_SEND_QUEUED, "Send Queued Messages Now").enabled(!mail.queue.outbox.is_empty()),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_SETTINGS, "Mail Settings...").enabled(!mail.accounts.is_empty()),
+            AppMenuItem::new(MENU_ACCOUNT_SETTINGS, "Account Settings...").enabled(!mail.accounts.is_empty()),
+            AppMenuItem::new(MENU_REMOVE_ACCOUNT, "Remove Account...").enabled(!mail.accounts.is_empty()),
+            AppMenuItem::new(MENU_ADD, "Add Account..."),
+        ]);
 
         let mut view = vec![
             AppMenuItem::new(MENU_SHOW_SIDEBAR, if mail.show_sidebar { "Hide Sidebar" } else { "Show Sidebar" }).key("cmd+ctrl+s"),
+            AppMenuItem::new(MENU_SHOW_FAVORITES, if mail.prefs.show_favorites { "Hide Favorites Bar" } else { "Show Favorites Bar" }),
             AppMenuItem::new(MENU_RAW_SOURCE, "Raw Source").key("cmd+alt+u").checked(mail.show_raw).enabled(open),
             AppMenuItem::separator(),
             AppMenuItem::submenu("Sort By"),
@@ -543,6 +767,11 @@ impl MailWindow {
         view.push(AppMenuItem::submenu("Filter"));
         for (i, filter) in Filter::ALL.into_iter().enumerate() {
             view.push(AppMenuItem::new(MENU_FILTER_BASE + i as u32, filter.label()).depth(1).checked(mail.filter == filter));
+        }
+        view.push(AppMenuItem::submenu("Category"));
+        view.push(AppMenuItem::new(MENU_ALL_CATEGORIES, "All Categories").depth(1).checked(mail.category.is_none()));
+        for (i, category) in Category::ALL.into_iter().enumerate() {
+            view.push(AppMenuItem::new(MENU_CATEGORY_BASE + i as u32, category.label()).depth(1).checked(mail.category == Some(category)));
         }
         let fold_title = if mail.threaded && mail.open.is_some_and(|uid| mail.is_folded(uid)) { "Expand Conversation" } else { "Collapse Conversation" };
         view.extend([
@@ -557,10 +786,17 @@ impl MailWindow {
             AppMenuItem::new(MENU_SHOW_REPLY_TO, "Reply-To Address Field").checked(mail.show_reply_to),
         ]);
 
-        let edit = vec![AppMenuItem::new(MENU_PASTE_QUOTE, "Paste as Quotation").key("cmd+alt+v").enabled(compose_open)];
+        let edit = vec![
+            AppMenuItem::new(MENU_PASTE_QUOTE, "Paste as Quotation").key("cmd+alt+v").enabled(compose_open),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_FIND_IN_MESSAGE, "Find in Message...").key("cmd+alt+f").enabled(open),
+            AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(mail.find.is_some()),
+            AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(mail.find.is_some()),
+        ];
 
         vec![
             AppMenu { title: "Message".into(), items: message },
+            AppMenu { title: "Move".into(), items: moves },
             AppMenu { title: "Mailbox".into(), items: mailbox },
             AppMenu { title: "View".into(), items: view },
             AppMenu { title: "Edit".into(), items: edit },
@@ -573,14 +809,22 @@ impl MailWindow {
             MENU_REPLY => self.reply(),
             MENU_REPLY_ALL => self.reply_all(),
             MENU_FORWARD => self.forward(),
+            MENU_FORWARD_ATTACHMENT => self.forward_attachment(),
+            MENU_REDIRECT => self.redirect(),
             MENU_SEND => self.submit(ctx),
+            MENU_SEND_LATER => {
+                let shown = self.mail.send_later_shown();
+                self.mail.set_send_later(!shown);
+            }
+            MENU_UNDO_SEND => self.undo_send(),
+            MENU_ATTACH => self.pick_files(ctx),
             MENU_REFRESH => self.refresh_selected(),
             MENU_ADD => self.mail.open_setup(),
             MENU_FLAG => self.toggle_flag(Flag::Flagged),
             MENU_UNREAD => self.toggle_flag(Flag::Seen),
             MENU_ARCHIVE => self.move_open(&ARCHIVE_NAMES, "Archive"),
             MENU_TRASH => self.move_open(&TRASH_NAMES, "Trash"),
-            MENU_JUNK => self.move_open(&JUNK_NAMES, "Junk"),
+            MENU_JUNK => self.junk_open(),
             MENU_MOVE_AGAIN => {
                 if let Some(target) = self.mail.last_target.clone() {
                     self.move_open_to(&target);
@@ -624,6 +868,68 @@ impl MailWindow {
             MENU_SAVE_AS => self.save_open_as(ctx),
             MENU_QUICKLY => self.mail.open_quickly(),
             MENU_CLEAR_FLAG => self.set_color_open(None),
+            MENU_REMOVE_ATTACHMENTS => self.remove_attachments(),
+            MENU_ADD_TO_CONTACTS => self.add_sender_to_contacts(ctx),
+            MENU_REMIND => {
+                if self.sheet_free() {
+                    if let Err(e) = self.mail.open_remind() {
+                        self.mail.status = e;
+                    }
+                }
+            }
+            MENU_FIND_IN_MESSAGE => {
+                if self.mail.open.is_some() {
+                    if self.mail.find.is_none() {
+                        self.mail.find = Some(FindBar::default());
+                    }
+                } else {
+                    self.mail.status = "Open a message to find in it".into();
+                }
+            }
+            MENU_FIND_NEXT => self.step_match(true),
+            MENU_FIND_PREVIOUS => self.step_match(false),
+            MENU_IMPORT_MBOX => self.import_mailbox(ctx),
+            MENU_EXPORT_MBOX => self.export_mailbox(),
+            MENU_NEW_SMART => {
+                if self.sheet_free() {
+                    self.mail.open_smart_mailbox();
+                }
+            }
+            MENU_DELETE_SMART => self.delete_smart(),
+            MENU_NEW_RULE => {
+                if self.sheet_free() {
+                    self.mail.open_rule();
+                }
+            }
+            MENU_APPLY_RULES => self.apply_rules_to_shown(),
+            MENU_SETTINGS => {
+                if self.sheet_free() {
+                    if let Err(e) = self.mail.open_settings() {
+                        self.mail.status = e;
+                    }
+                }
+            }
+            MENU_ACCOUNT_SETTINGS => {
+                if self.sheet_free() {
+                    if let Err(e) = self.mail.open_edit_account() {
+                        self.mail.status = e;
+                    }
+                }
+            }
+            MENU_REMOVE_ACCOUNT => {
+                if self.sheet_free() {
+                    if let Err(e) = self.mail.open_remove_account() {
+                        self.mail.status = e;
+                    }
+                }
+            }
+            MENU_FAVORITE => self.toggle_favorite(),
+            MENU_SHOW_FAVORITES => {
+                self.mail.prefs.show_favorites = !self.mail.prefs.show_favorites;
+                self.save_prefs();
+            }
+            MENU_SEND_QUEUED => self.send_queued_now(),
+            MENU_ALL_CATEGORIES => self.mail.category = None,
             _ => {
                 if let Some(i) = menu_index(id, MENU_MOVE_BASE) {
                     let target = self.mail.move_targets().get(i).cloned();
@@ -652,6 +958,13 @@ impl MailWindow {
                         Some(color) => self.set_color_open(Some(*color)),
                         None => return false,
                     }
+                } else if let Some(i) = menu_index(id, MENU_CATEGORY_BASE) {
+                    match Category::ALL.get(i) {
+                        Some(category) => self.mail.category = Some(*category),
+                        None => return false,
+                    }
+                } else if let Some(i) = menu_index(id, MENU_RULE_BASE) {
+                    self.delete_rule(i);
                 } else if let Some(i) = menu_index(id, MENU_PRIORITY_BASE) {
                     match Priority::ALL.get(i) {
                         Some(priority) => self.mail.set_priority(*priority),
@@ -673,8 +986,12 @@ impl MailWindow {
             Event::Listed { account, mailbox, result } => match result {
                 Ok(listing) => {
                     let notices = self.mail.apply_listing(&account, &mailbox, listing.mailboxes, listing.messages);
+                    // a message a rule moves or reads raises no notification
+                    let quiet = self.apply_rules_to_arrivals();
                     for notice in notices {
-                        self.notify(ctx, &notice);
+                        if !quiet.contains(&(notice.account.clone(), notice.uid)) {
+                            self.notify(ctx, &notice);
+                        }
                     }
                     if self.mail.current().is_some_and(|a| a.id == account) {
                         self.mail.status.clear();
@@ -713,15 +1030,54 @@ impl MailWindow {
                 }
             }
             Event::Arrived { account } => self.refresh_account(&account),
-            Event::Sent { result, .. } => match result {
-                Ok(()) => {
+            Event::Sent { id, result, .. } => self.sent(id, result),
+            Event::Exported { mailbox, result, .. } => match result {
+                Ok(messages) => {
+                    let count = messages.len();
+                    let file = mbox::write(&messages, now_unix());
+                    self.queue_save(ctx, mbox::file_name(&mailbox), file.into_bytes());
+                    self.mail.status = format!("Read {count} message{} of {mailbox}. Choose where to save them", if count == 1 { "" } else { "s" });
+                }
+                Err(e) => self.mail.status = format!("{mailbox} could not be exported: {e}"),
+            },
+        }
+    }
+
+    /// A message went out, or failed. One sent at once (`id` 0) closes the compose sheet; a queued one is taken off the
+    /// books, and a failed one comes back as the sheet it was written in, or waits for another try.
+    fn sent(&mut self, id: u64, result: Result<(), String>) {
+        let flight = self.in_flight.remove(&id);
+        match result {
+            Ok(()) => {
+                if id == 0 {
                     if matches!(self.mail.sheet, Some(Sheet::Compose(_))) {
                         self.mail.close_sheet();
                     }
-                    self.mail.status = "Sent".into();
+                } else {
+                    self.drafts.remove(&id);
+                    if self.undo == Some(id) {
+                        self.undo = None;
+                    }
                 }
-                Err(e) => self.mail.status = format!("The message was not sent: {e}"),
-            },
+                self.mail.status = "Sent".into();
+            }
+            Err(e) if id == 0 => self.mail.status = format!("The message was not sent: {e}"),
+            Err(e) => {
+                if let Some(compose) = self.drafts.remove(&id).filter(|_| self.mail.sheet_is_free()) {
+                    self.mail.sheet = Some(Sheet::Compose(compose));
+                    self.mail.status = format!("The message was not sent: {e}");
+                } else if let Some(mut queued) = flight {
+                    queued.attempts += 1;
+                    if queued.attempts >= schedule::MAX_ATTEMPTS {
+                        self.mail.status = format!("A queued message could not be sent and was dropped: {e}");
+                    } else {
+                        queued.due = now_unix() + schedule::RETRY_SECS;
+                        self.mail.queue.outbox.push(queued);
+                        self.mail.status = format!("A queued message was not sent ({e}). Mail will try again in a few minutes");
+                    }
+                    self.save_queue_file();
+                }
+            }
         }
     }
 
@@ -733,15 +1089,36 @@ impl MailWindow {
         let _ = usernotif::add(ctx, request);
     }
 
-    /// The password is in Passwords: the account goes into the shared list and becomes the shown account.
-    fn account_saved(&mut self, account: Account, password: String) {
-        match accounts::add(account.clone()) {
-            Ok(()) => {
-                self.mail.add_account(account, password);
-                self.mail.close_sheet();
-                self.refresh_selected();
+    /// The password is in Passwords (or, for Account Settings with no new password, nothing needed saving). A new account
+    /// goes into the shared list and becomes the shown account; an edited one replaces its old self in the list, and the
+    /// password item of its old login goes when the login changed.
+    fn account_saved(&mut self, ctx: &Ctx, account: Account, password: Option<String>, old: Option<Account>) {
+        match old {
+            None => {
+                let Some(password) = password else { return };
+                match accounts::add(account.clone()) {
+                    Ok(()) => {
+                        self.mail.add_account(account, password);
+                        self.mail.close_sheet();
+                        self.refresh_selected();
+                    }
+                    Err(e) => self.mail.status = e,
+                }
             }
-            Err(e) => self.mail.status = e,
+            Some(old) => match accounts::update(account.clone()) {
+                Ok(()) => {
+                    if account.password_site() != old.password_site() || account.username != old.username {
+                        let request = passwords::remove(ctx, &old.password_site(), &old.username);
+                        self.pending.insert(request, Pending::Forget);
+                    }
+                    let id = account.id.clone();
+                    self.mail.replace_account(account, password);
+                    self.mail.close_sheet();
+                    self.mail.status = "Account saved".into();
+                    self.refresh_account(&id);
+                }
+                Err(e) => self.mail.status = e,
+            },
         }
     }
 
@@ -831,15 +1208,173 @@ impl MailWindow {
         };
     }
 
-    /// File > Save As: the raw source of the open message is written as an `.eml` file in the app's data directory.
+    /// File > Save As: the raw source of the open message, as an `.eml` file in the place the save panel chooses.
     fn save_open_as(&mut self, ctx: &Ctx) {
         let Some(uid) = self.mail.open else { return };
         let Some(raw) = self.mail.bodies.get(&uid) else { return };
+        let bytes = crate::export::crlf(raw).into_bytes();
         let subject = self.mail.row(uid).map(|r| r.summary.subject.clone()).unwrap_or_default();
-        self.mail.status = match crate::export::save_eml(&ctx.data_dir.join("saved"), &subject, raw) {
-            Ok(path) => format!("Saved {}", path.display()),
-            Err(e) => format!("The message could not be saved: {e}"),
+        self.queue_save(ctx, crate::export::eml_name(&subject), bytes);
+    }
+
+    /// Asks for a place to save `bytes` as `name`. Files wait their turn: the save panel serves one at a time.
+    fn queue_save(&mut self, ctx: &Ctx, name: String, bytes: Vec<u8>) {
+        self.save_queue.push_back((name, bytes));
+        self.start_next_save(ctx);
+    }
+
+    /// Opens the save panel for the next file in line, unless one is open already.
+    fn start_next_save(&mut self, ctx: &Ctx) {
+        if self.docs.values().any(|task| matches!(task, DocTask::Save { .. })) {
+            return;
+        }
+        let Some((name, bytes)) = self.save_queue.pop_front() else { return };
+        let request = ctx.save_document(&attachments::safe_name(&name), &[]);
+        self.docs.insert(request, DocTask::Save { name, bytes });
+    }
+
+    /// The save panel is not available to the app (the shell lacks the feature): the file goes in the app's data directory.
+    fn save_in_data_dir(&mut self, name: &str, bytes: &[u8]) {
+        let dir = self.data_dir.join("saved-files");
+        let file = Attachment { name: name.to_string(), mime: String::new(), bytes: bytes.to_vec() };
+        self.mail.status = match attachments::save_all(&dir, &[file]) {
+            Ok(_) => format!("Saved {name} in {}", dir.display()),
+            Err(e) => format!("{name} could not be saved: {e}"),
         };
+    }
+
+    /// Message > Attach Files: the open panel, for as many files as the message may carry.
+    fn pick_files(&mut self, ctx: &Ctx) {
+        if !matches!(self.mail.sheet, Some(Sheet::Compose(_))) {
+            self.mail.status = "Start a message first".into();
+            return;
+        }
+        let options = OpenOptions { multiple: true, title: "Attach Files".into(), ..OpenOptions::default() };
+        let request = ctx.open_panel(&options);
+        self.docs.insert(request, DocTask::Attach);
+    }
+
+    /// Mailbox > Import Mailbox: the open panel for an mbox file.
+    fn import_mailbox(&mut self, ctx: &Ctx) {
+        let request = ctx.open_document(DocMode::Read, "Import Mailbox", &[]);
+        self.docs.insert(request, DocTask::ImportMbox);
+    }
+
+    /// The answer to a request for a file panel. False when the request was not the window's.
+    pub fn document(&mut self, ctx: &Ctx, ev: DocumentEvent) -> bool {
+        match ev {
+            DocumentEvent::OpenedMany { request, docs } => match self.docs.remove(&request) {
+                Some(DocTask::Attach) => self.attach_documents(ctx, docs),
+                Some(other) => {
+                    self.docs.insert(request, other);
+                    return false;
+                }
+                None => return false,
+            },
+            DocumentEvent::Opened(doc) => match self.docs.remove(&doc.request) {
+                Some(DocTask::Attach) => self.attach_documents(ctx, vec![doc]),
+                Some(DocTask::ImportMbox) => self.import_document(ctx, doc),
+                Some(other) => {
+                    self.docs.insert(doc.request, other);
+                    return false;
+                }
+                None => return false,
+            },
+            DocumentEvent::SaveTo(mut doc) => match self.docs.remove(&doc.request) {
+                Some(DocTask::Save { name, bytes }) => match doc.file.write_all(&bytes) {
+                    Ok(()) => ctx.commit_document(doc.request),
+                    Err(e) => {
+                        self.mail.status = format!("{name} could not be saved: {e}");
+                        ctx.abort_document(doc.request);
+                        self.start_next_save(ctx);
+                    }
+                },
+                Some(other) => {
+                    self.docs.insert(doc.request, other);
+                    return false;
+                }
+                None => return false,
+            },
+            DocumentEvent::Saved(doc) => {
+                ctx.release_document(doc.grant);
+                self.mail.status = format!("Saved {}", doc.name);
+                self.start_next_save(ctx);
+            }
+            DocumentEvent::Failed { request, code } => match self.docs.remove(&request) {
+                Some(DocTask::Save { name, bytes }) if code == DocErrorCode::Unsupported => {
+                    self.save_in_data_dir(&name, &bytes);
+                    self.start_next_save(ctx);
+                }
+                Some(DocTask::Save { .. }) => {
+                    // the user cancelled one file: the ones still waiting are dropped with it
+                    self.save_queue.clear();
+                    if code != DocErrorCode::Cancelled {
+                        self.mail.status = format!("The file could not be saved ({code:?})");
+                    }
+                }
+                Some(_) => {
+                    if code != DocErrorCode::Cancelled {
+                        self.mail.status = format!("The file could not be opened ({code:?})");
+                    }
+                }
+                None => return false,
+            },
+        }
+        self.dirty = true;
+        true
+    }
+
+    /// The files chosen in Attach Files go on the message being written, each read whole.
+    fn attach_documents(&mut self, ctx: &Ctx, docs: Vec<bifrost_app::Document>) {
+        for mut doc in docs {
+            let name = doc.name.clone();
+            let bytes = read_file(&mut doc.file, doc.size, MAX_ATTACHMENT_BYTES);
+            ctx.release_document(doc.grant);
+            let result = bytes.and_then(|bytes| match &mut self.mail.sheet {
+                Some(Sheet::Compose(compose)) => compose.attach(Attachment { mime: attachments::mime_for(&name), name: name.clone(), bytes }),
+                _ => Err("The message is no longer open".to_string()),
+            });
+            if let Err(e) = result {
+                self.mail.status = format!("{name}: {e}");
+            }
+        }
+    }
+
+    /// The file chosen in Import Mailbox: its messages are appended to the mailbox named after the file, which is created
+    /// when the account lacks it.
+    fn import_document(&mut self, ctx: &Ctx, mut doc: bifrost_app::Document) {
+        let name = doc.name.clone();
+        let bytes = read_file(&mut doc.file, doc.size, IMPORT_LIMIT);
+        ctx.release_document(doc.grant);
+        let bytes = match bytes {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                self.mail.status = format!("{name}: {e}");
+                return;
+            }
+        };
+        let messages = mbox::read(&String::from_utf8_lossy(&bytes));
+        if messages.is_empty() {
+            self.mail.status = format!("{name} holds no messages");
+            return;
+        }
+        let target = mbox::mailbox_name(&name);
+        self.mail.status = format!("Importing {} message{} into {target}", messages.len(), if messages.len() == 1 { "" } else { "s" });
+        self.change_mailbox(&target, Change::Import { messages });
+    }
+
+    /// Mailbox > Export Mailbox: reads the shown mailbox; the save panel opens when the messages have arrived.
+    fn export_mailbox(&mut self) {
+        let Some(account) = self.mail.current().cloned() else { return };
+        let Some(password) = self.mail.password(&account).map(str::to_string) else {
+            self.mail.status = format!("No password is saved for {}", account.name);
+            return;
+        };
+        let mailbox = self.mail.mailbox.clone();
+        self.mail.status = format!("Reading {mailbox}");
+        let transport = self.transport.clone();
+        self.jobs += 1;
+        sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::export(transport.as_ref(), &account, &password, &mailbox));
     }
 
     /// Moves the open message to the account's Archive or Trash mailbox. The message leaves the list at once.
@@ -853,12 +1388,26 @@ impl MailWindow {
         self.change_message(uid, Change::Move { to });
     }
 
-    /// Message > Move To and Move Again: moves the open message to `to` and remembers it for Move Again.
+    /// Message > Move To and Move Again: moves the open message to `to` and remembers it for Move Again. A message leaving
+    /// the Junk mailbox loses its junk mark.
     fn move_open_to(&mut self, to: &str) {
         let Some(uid) = self.mail.open else { return };
         self.mail.last_target = Some(to.to_string());
+        let leaving_junk = JUNK_NAMES.iter().any(|name| name.eq_ignore_ascii_case(&self.mail.mailbox)) && !JUNK_NAMES.iter().any(|name| name.eq_ignore_ascii_case(to));
         self.mail.remove_row(uid);
-        self.change_message(uid, Change::Move { to: to.to_string() });
+        let action = if leaving_junk { Change::NotJunk { to: to.to_string() } } else { Change::Move { to: to.to_string() } };
+        self.change_message(uid, action);
+    }
+
+    /// Message > Move to Junk: the message moves to the account's Junk mailbox marked `$Junk`.
+    fn junk_open(&mut self) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(to) = self.mail.find_mailbox(&JUNK_NAMES) else {
+            self.mail.status = "This account has no Junk mailbox".into();
+            return;
+        };
+        self.mail.remove_row(uid);
+        self.change_message(uid, Change::Junk { to });
     }
 
     /// Message > Copy To: the open message stays where it is and a copy goes to `to`.
@@ -913,7 +1462,7 @@ impl MailWindow {
     /// Edit > Paste as Quotation: the clipboard text goes into the focused compose field with `> ` before each line.
     fn paste_quoted(&mut self) -> bool {
         let Some(text) = clipboard::text() else { return false };
-        let multiline = self.focus_is_message();
+        let multiline = self.focus_is_multiline();
         let quoted = message::quote_text(&text);
         let quoted: String = quoted.chars().filter(|c| !c.is_control() || (*c == '\n' && multiline)).collect();
         match self.form_mut() {
@@ -946,31 +1495,75 @@ impl MailWindow {
         self.mail.open.and_then(|uid| self.mail.attachments.get(&uid)).is_some_and(|files| !files.is_empty())
     }
 
-    /// Writes the open message's files into the app's data directory, one folder per message.
+    /// Message > Save Attachments: each file of the open message gets its own save panel, one after the other.
     fn save_attachments(&mut self, ctx: &Ctx) {
         let Some(uid) = self.mail.open else { return };
-        let dir = ctx.data_dir.join("attachments").join(uid.to_string());
-        let result = match self.mail.attachments.get(&uid) {
-            Some(files) if !files.is_empty() => attachments::save_all(&dir, files),
+        let files: Vec<(String, Vec<u8>)> = match self.mail.attachments.get(&uid) {
+            Some(files) if !files.is_empty() => files.iter().map(|a| (a.name.clone(), a.bytes.clone())).collect(),
             _ => {
                 self.mail.status = "This message has no attachments".into();
                 return;
             }
         };
-        self.mail.status = match result {
-            Ok(n) => format!("Saved {n} attachment{} to {}", if n == 1 { "" } else { "s" }, dir.display()),
-            Err(e) => format!("The attachments could not be saved: {e}"),
+        self.save_queue.extend(files);
+        self.start_next_save(ctx);
+    }
+
+    /// A tap on a file named in the open message: the save panel for that file.
+    fn save_attachment(&mut self, ctx: &Ctx, index: usize) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(file) = self.mail.attachments.get(&uid).and_then(|files| files.get(index)).map(|a| (a.name.clone(), a.bytes.clone())) else { return };
+        self.queue_save(ctx, file.0, file.1);
+    }
+
+    /// Message > Remove Attachments: the message is written again without its files and the old one is deleted. The copy
+    /// has a new UID, so the list is read again when the server has done it.
+    fn remove_attachments(&mut self) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(raw) = self.mail.bodies.get(&uid) else {
+            self.mail.status = "Wait for the message to load".into();
+            return;
         };
+        let stripped = mime::strip_attachments(raw);
+        if stripped.removed == 0 {
+            self.mail.status = "This message has no attachments".into();
+            return;
+        }
+        let flags = self.mail.flags_of(uid).unwrap_or_default();
+        self.mail.status = format!("Removing {} attachment{}", stripped.removed, if stripped.removed == 1 { "" } else { "s" });
+        self.mail.remove_row(uid);
+        self.change_message(0, Change::Replace { uid, raw: stripped.raw, flags });
+    }
+
+    /// Message > Add Sender to Contacts: asks the address book whether it has the address, and saves the person if not.
+    fn add_sender_to_contacts(&mut self, ctx: &Ctx) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(from) = self.mail.row(uid).map(|r| r.summary.from.clone()) else { return };
+        let Some(person) = people::person_from(&from) else {
+            self.mail.status = "The sender has no email address".into();
+            return;
+        };
+        let request = contacts::fetch(ctx, &[ContactKey::Emails], Some(person.address.as_str()));
+        self.pending.insert(request, Pending::ContactCheck(person));
+        self.mail.status = "Checking Contacts".into();
     }
 
     /// Runs one change to a message of the shown mailbox on the server.
     fn change_message(&mut self, uid: u32, action: Change) {
-        let Some(account) = self.mail.current().cloned() else { return };
+        let Some(account) = self.mail.current().map(|a| a.id.clone()) else { return };
+        let mailbox = self.mail.mailbox.clone();
+        self.change_in(&account, &mailbox, uid, action);
+    }
+
+    /// Runs one change to a message of `mailbox` of the account with this id. A UID of 0 asks for the mailbox to be listed
+    /// again afterwards.
+    fn change_in(&mut self, account_id: &str, mailbox: &str, uid: u32, action: Change) {
+        let Some(account) = self.mail.accounts.iter().find(|a| a.id == account_id).cloned() else { return };
         let Some(password) = self.mail.password(&account).map(str::to_string) else {
             self.mail.status = format!("No password is saved for {}", account.name);
             return;
         };
-        let mailbox = self.mail.mailbox.clone();
+        let mailbox = mailbox.to_string();
         let transport = self.transport.clone();
         self.jobs += 1;
         sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::change(transport.as_ref(), &account, &password, &mailbox, uid, &action));
@@ -978,6 +1571,9 @@ impl MailWindow {
 
     fn open_message(&mut self, uid: u32) {
         self.reader_scroll = Scroller::new();
+        if let Some(bar) = self.mail.find.as_mut() {
+            bar.current = 0;
+        }
         if !self.mail.open_message(uid) {
             return;
         }
@@ -1039,7 +1635,7 @@ impl MailWindow {
                 match self.mail.account_from_form(&form, &taken) {
                     Ok((account, password)) => {
                         let request = passwords::save(ctx, &account.password_site(), &account.username, &password);
-                        self.pending.insert(request, Pending::Add { account, password });
+                        self.pending.insert(request, Pending::Add { account, password, old: None });
                         self.mail.status = "Saving the password".into();
                     }
                     Err(e) => self.mail.status = e,
@@ -1074,8 +1670,156 @@ impl MailWindow {
                 self.mail.close_sheet();
                 self.search_server();
             }
+            Some(Sheet::Prompt(prompt)) => self.submit_prompt(ctx, prompt),
             None => {}
         }
+    }
+
+    /// The primary action of a small sheet (see [`PromptKind`]).
+    fn submit_prompt(&mut self, ctx: &Ctx, prompt: Prompt) {
+        match prompt.kind {
+            PromptKind::Remind => self.submit_remind(&prompt.form),
+            PromptKind::Redirect => self.submit_redirect(&prompt.form),
+            PromptKind::SmartMailbox => match self.mail.smart_from_form(&prompt.form) {
+                Ok(smart) => {
+                    self.mail.prefs.smart.push(smart);
+                    let index = self.mail.prefs.smart.len() - 1;
+                    self.save_prefs();
+                    self.mail.close_sheet();
+                    self.mail.apply_smart(index);
+                    self.search_server();
+                    self.list_scroll = Scroller::new();
+                }
+                Err(e) => self.mail.status = e,
+            },
+            PromptKind::Rule => {
+                if self.mail.prefs.rules.len() >= MAX_RULES {
+                    self.mail.status = format!("Mail keeps at most {MAX_RULES} rules. Delete one first");
+                    return;
+                }
+                match self.mail.rule_from_form(&prompt.form) {
+                    Ok(rule) => {
+                        self.mail.status = format!("Rule {} added. Mailbox > Rules > Apply Rules runs it on the shown mailbox", rule.name);
+                        self.mail.prefs.rules.push(rule);
+                        self.save_prefs();
+                        self.mail.close_sheet();
+                    }
+                    Err(e) => self.mail.status = e,
+                }
+            }
+            PromptKind::Settings => match self.mail.apply_settings(&prompt.form) {
+                Ok(()) => {
+                    self.save_prefs();
+                    self.mail.close_sheet();
+                    self.mail.status = "Settings saved".into();
+                }
+                Err(e) => self.mail.status = e,
+            },
+            PromptKind::EditAccount(id) => self.submit_edit_account(ctx, &id, &prompt.form),
+            PromptKind::RemoveAccount(id) => self.submit_remove_account(ctx, &id, &prompt.form),
+        }
+    }
+
+    /// Remind Me: the message is noted with the time it should come back.
+    fn submit_remind(&mut self, form: &crate::state::Form) {
+        let seconds = match schedule::parse_delay(form.value("Remind me in")) {
+            Ok(seconds) => seconds,
+            Err(e) => {
+                self.mail.status = e;
+                return;
+            }
+        };
+        let Some(uid) = self.mail.open else { return };
+        let Some(account) = self.mail.current().map(|a| a.id.clone()) else { return };
+        let Some((message_id, subject)) = self.mail.row(uid).and_then(|r| r.summary.message_id.clone().map(|id| (id, r.summary.subject.clone()))) else {
+            self.mail.status = "This message has no Message-ID, so it cannot be found again".into();
+            return;
+        };
+        let mailbox = self.mail.mailbox.clone();
+        self.mail.queue.reminders.push(Reminder { account, mailbox, message_id, subject, due: now_unix() + seconds });
+        self.save_queue_file();
+        self.mail.close_sheet();
+        self.mail.status = format!("The message will come back in {}", wait_text(seconds));
+    }
+
+    /// Redirect: the original message goes to the new recipients with Resent headers in front of it.
+    fn submit_redirect(&mut self, form: &crate::state::Form) {
+        let to: Vec<String> = message::split_addresses(form.value("To")).iter().map(|a| message::address_of(a).to_string()).collect();
+        if to.is_empty() {
+            self.mail.status = "Add at least one recipient".into();
+            return;
+        }
+        if let Some(bad) = to.iter().find(|a| !bifrost_app::controls::internet_accounts::valid_address(a)) {
+            self.mail.status = format!("{bad} is not a valid address");
+            return;
+        }
+        let Some(uid) = self.mail.open else { return };
+        let Some(raw) = self.mail.bodies.get(&uid).cloned() else {
+            self.mail.status = "Wait for the message to load".into();
+            return;
+        };
+        let Some(account) = self.mail.current().cloned() else { return };
+        let Some(password) = self.mail.password(&account).map(str::to_string) else {
+            self.mail.status = format!("No password is saved for {}", account.name);
+            return;
+        };
+        let unix = now_unix();
+        let domain = account.email.rsplit_once('@').map_or("localhost", |(_, d)| d).to_string();
+        self.seq += 1;
+        let id = message::new_message_id(&domain, unix, self.seq);
+        let text = message::redirect_message(&raw, &account.email, &to, &id, unix);
+        let from = account.email.clone();
+        self.mail.close_sheet();
+        self.mail.status = "Redirecting".into();
+        self.jobs += 1;
+        let transport = self.transport.clone();
+        sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::send(transport, account, password, 0, from, to, text));
+    }
+
+    /// Account Settings: the edited account replaces the old one. A new password is saved in Passwords first.
+    fn submit_edit_account(&mut self, ctx: &Ctx, id: &str, form: &crate::state::Form) {
+        let Some(old) = self.mail.accounts.iter().find(|a| a.id == id).cloned() else {
+            self.mail.status = "That account is gone".into();
+            return;
+        };
+        match self.mail.edited_account(form, &old) {
+            Ok((account, Some(password))) => {
+                let request = passwords::save(ctx, &account.password_site(), &account.username, &password);
+                self.pending.insert(request, Pending::Add { account, password, old: Some(old) });
+                self.mail.status = "Saving the password".into();
+            }
+            Ok((account, None)) => self.account_saved(ctx, account, None, Some(old)),
+            Err(e) => self.mail.status = e,
+        }
+    }
+
+    /// Remove Account: the account must be named. It leaves the shared list, its password leaves Passwords, and what Mail
+    /// kept for it goes.
+    fn submit_remove_account(&mut self, ctx: &Ctx, id: &str, form: &crate::state::Form) {
+        let Some(account) = self.mail.accounts.iter().find(|a| a.id == id).cloned() else {
+            self.mail.status = "That account is gone".into();
+            return;
+        };
+        if !form.value("Account name").trim().eq_ignore_ascii_case(account.name.trim()) {
+            self.mail.status = format!("Type {} to remove the account", account.name);
+            return;
+        }
+        if let Err(e) = accounts::remove(id) {
+            self.mail.status = e;
+            return;
+        }
+        let request = passwords::remove(ctx, &account.password_site(), &account.username);
+        self.pending.insert(request, Pending::Forget);
+        self.mail.forget_account(id);
+        self.watching.remove(id);
+        self.live.remove(id);
+        self.mail.queue.outbox.retain(|q| q.account != id);
+        self.mail.queue.reminders.retain(|r| r.account != id);
+        self.save_queue_file();
+        self.save_prefs();
+        self.mail.close_sheet();
+        self.list_scroll = Scroller::new();
+        self.mail.status = format!("Removed {}", account.name);
     }
 
     /// Asks the server to search the shown mailbox for the applied search, so messages beyond the loaded ones match too.
@@ -1091,7 +1835,9 @@ impl MailWindow {
         sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::search(transport.as_ref(), &account, &password, &mailbox, &query, &criteria));
     }
 
-    fn send(&mut self, compose: &crate::state::Compose) {
+    /// Sends the message now, or queues it: Send Later (the "Send in" field) waits as long as it says, and the undo-send
+    /// delay of the settings holds every message back for a few seconds. A queued message goes out from `run_queue`.
+    fn send(&mut self, compose: &Compose) {
         let draft = match self.mail.draft_from(compose) {
             Ok(draft) => draft,
             Err(e) => {
@@ -1103,9 +1849,12 @@ impl MailWindow {
             self.mail.status = "Add an account first".into();
             return;
         };
-        let Some(password) = self.mail.password(&account).map(str::to_string) else {
-            self.mail.status = format!("No password is saved for {}", account.name);
-            return;
+        let wait = match self.send_delay(compose) {
+            Ok(wait) => wait,
+            Err(e) => {
+                self.mail.status = e;
+                return;
+            }
         };
         let unix = now_unix();
         let domain = account.email.rsplit_once('@').map_or("localhost", |(_, d)| d).to_string();
@@ -1118,29 +1867,288 @@ impl MailWindow {
                 return;
             }
         };
+        let recipients: Vec<String> = draft.envelope_recipients().into_iter().map(str::to_string).collect();
+        if let Some((seconds, undoable)) = wait {
+            let queued_id = self.mail.queue.new_id();
+            self.mail.queue.outbox.push(Queued { id: queued_id, due: unix + seconds, account: account.id.clone(), from: draft.from.clone(), recipients, text, attempts: 0 });
+            self.save_queue_file();
+            if undoable {
+                self.undo = Some(queued_id);
+                self.drafts.insert(queued_id, compose.clone());
+                self.mail.status = format!("Sending in {seconds} s. Message > Undo Send takes it back");
+            } else {
+                self.mail.status = format!("The message will be sent in {}", wait_text(seconds));
+            }
+            self.mail.close_sheet();
+            return;
+        }
+        let Some(password) = self.mail.password(&account).map(str::to_string) else {
+            self.mail.status = format!("No password is saved for {}", account.name);
+            return;
+        };
         self.mail.status = "Sending".into();
         self.jobs += 1;
         let transport = self.transport.clone();
-        sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::send(transport, account, password, draft, text));
+        let from = draft.from.clone();
+        sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::send(transport, account, password, 0, from, recipients, text));
+    }
+
+    /// How long a message waits before it is sent: the "Send in" field when the message has one, else the undo-send delay
+    /// of the settings. None sends at once. The flag tells whether Undo Send can still take the message back.
+    fn send_delay(&self, compose: &Compose) -> Result<Option<(i64, bool)>, String> {
+        if compose.form.fields.iter().any(|f| f.label == "Send in") {
+            let text = compose.form.value("Send in").trim();
+            if text.is_empty() {
+                return Err("Enter when to send the message (30m, 2h, 1d), or turn Message > Send Later off".into());
+            }
+            return schedule::parse_delay(text).map(|seconds| Some((seconds, false)));
+        }
+        let delay = self.mail.prefs.undo_delay;
+        Ok((delay > 0).then_some((i64::from(delay), true)))
+    }
+
+    /// True while the message sent last is still held in the outbox, so Undo Send can bring it back.
+    fn undo_pending(&self) -> bool {
+        self.undo.is_some_and(|id| self.mail.queue.outbox.iter().any(|q| q.id == id))
+    }
+
+    /// Message > Undo Send: the held message leaves the outbox and opens again as it was written.
+    fn undo_send(&mut self) {
+        if !self.sheet_free() {
+            return;
+        }
+        let Some(id) = self.undo.take() else { return };
+        if !self.mail.queue.cancel(id) {
+            self.mail.status = "The message has gone already".into();
+            return;
+        }
+        self.save_queue_file();
+        match self.drafts.remove(&id) {
+            Some(compose) => {
+                self.mail.sheet = Some(Sheet::Compose(compose));
+                self.mail.status = "Send undone".into();
+            }
+            None => self.mail.status = "Send undone, but the message could not be opened again".into(),
+        }
+    }
+
+    /// Mailbox > Send Queued Messages Now: everything waiting in the outbox is due at once.
+    fn send_queued_now(&mut self) {
+        let now = now_unix();
+        for queued in &mut self.mail.queue.outbox {
+            queued.due = now;
+        }
+        self.save_queue_file();
+        self.mail.status = "Sending the queued messages".into();
+    }
+
+    /// Sends the queued messages that are due and brings back the messages whose reminders are due. Called on every tick.
+    fn run_queue(&mut self, ctx: &Ctx) {
+        let now = now_unix();
+        if self.mail.queue.next_due().map_or(true, |due| due > now) {
+            return;
+        }
+        for queued in self.mail.queue.take_due_messages(now) {
+            let Some(account) = self.mail.accounts.iter().find(|a| a.id == queued.account).cloned() else {
+                self.mail.status = "A queued message was dropped: its account is gone".into();
+                continue;
+            };
+            let Some(password) = self.mail.password(&account).map(str::to_string) else {
+                // the password is still being read from Passwords; try again in a moment
+                self.mail.queue.outbox.push(Queued { due: now + 10, ..queued });
+                continue;
+            };
+            self.in_flight.insert(queued.id, queued.clone());
+            self.jobs += 1;
+            let transport = self.transport.clone();
+            let Queued { id, from, recipients, text, .. } = queued;
+            sync::spawn(self.tx.clone(), self.wake_clone(), move || sync::send(transport, account, password, id, from, recipients, text));
+        }
+        for reminder in self.mail.queue.take_due_reminders(now) {
+            if !self.mail.accounts.iter().any(|a| a.id == reminder.account) {
+                continue;
+            }
+            if self.mail.passwords.get(&reminder.account).is_none() {
+                self.mail.queue.reminders.push(Reminder { due: now + 10, ..reminder });
+                continue;
+            }
+            self.change_in(&reminder.account, &reminder.mailbox, 0, Change::Remind { message_id: reminder.message_id.clone() });
+            let id = format!("mail-reminder-{}-{}", reminder.account, reminder.due);
+            let request = Request::new(&id, "Mail Reminder").subtitle(&reminder.subject).body("This message is back in your inbox").thread(&reminder.account);
+            let _ = usernotif::add(ctx, request);
+        }
+        self.save_queue_file();
+        self.dirty = true;
+    }
+
+    fn save_queue_file(&mut self) {
+        if let Err(e) = schedule::save(&self.queue_path, &self.mail.queue) {
+            self.mail.status = format!("The outbox could not be saved: {e}");
+        }
+    }
+
+    fn save_prefs(&mut self) {
+        if let Err(e) = prefs::save(&self.prefs_path, self.mail.prefs_to_save()) {
+            self.mail.status = format!("The settings could not be saved: {e}");
+        }
+    }
+
+    /// True when a new sheet may open; otherwise says why not.
+    fn sheet_free(&mut self) -> bool {
+        if self.mail.sheet_is_free() {
+            true
+        } else {
+            self.mail.status = "Send or cancel the message first".into();
+            false
+        }
+    }
+
+    // forward, redirect, rules and the sidebar --------------------------------------------------------------------
+
+    /// Message > Forward as Attachment: the original goes along as a file.
+    fn forward_attachment(&mut self) {
+        let Some(uid) = self.mail.open else { return };
+        let Some(original) = self.mail.row(uid).map(|r| r.summary.clone()) else { return };
+        let Some(raw) = self.mail.bodies.get(&uid) else { return };
+        let own = self.mail.current().map(|a| a.email.clone()).unwrap_or_default();
+        let draft = message::forward_attachment_draft(&original, &own, raw);
+        self.mail.open_draft(draft);
+    }
+
+    /// Message > Redirect: asks who should get the open message.
+    fn redirect(&mut self) {
+        if self.open_body_loaded() && self.sheet_free() {
+            self.mail.open_redirect();
+        }
+    }
+
+    /// Runs the rules over the messages that just arrived in an inbox. Returns the (account, UID) of the messages a rule
+    /// moved or read, which raise no notification.
+    fn apply_rules_to_arrivals(&mut self) -> HashSet<(String, u32)> {
+        let mut quiet = HashSet::new();
+        if self.mail.prefs.rules.is_empty() {
+            return quiet;
+        }
+        for (account, row) in self.mail.arrived.clone() {
+            let actions = rules::outcome(&self.mail.prefs.rules, &row.summary);
+            if actions.iter().any(Action::is_quiet) {
+                quiet.insert((account.clone(), row.uid));
+            }
+            for action in &actions {
+                self.run_action(&account, INBOX, row.uid, action);
+            }
+        }
+        quiet
+    }
+
+    /// Mailbox > Rules > Apply Rules: the rules run over the messages loaded in the shown mailbox.
+    fn apply_rules_to_shown(&mut self) {
+        let Some(account) = self.mail.current().map(|a| a.id.clone()) else { return };
+        let mailbox = self.mail.mailbox.clone();
+        let mut touched = 0;
+        for row in self.mail.rows.clone() {
+            let actions = rules::outcome(&self.mail.prefs.rules, &row.summary);
+            if actions.is_empty() {
+                continue;
+            }
+            touched += 1;
+            for action in &actions {
+                self.run_action(&account, &mailbox, row.uid, action);
+            }
+        }
+        self.mail.status = format!("Rules ran on {touched} message{}", if touched == 1 { "" } else { "s" });
+    }
+
+    /// Does what a rule says to one message. The shown list changes at once; the server is told in the background.
+    fn run_action(&mut self, account_id: &str, mailbox: &str, uid: u32, action: &Action) {
+        let shown = self.mail.current().is_some_and(|a| a.id == account_id) && self.mail.mailbox == mailbox;
+        match action {
+            Action::MarkRead => {
+                if shown {
+                    self.mail.set_flag_locally(uid, Flag::Seen, true);
+                }
+                self.change_in(account_id, mailbox, uid, Change::Flag { flag: Flag::Seen, on: true });
+            }
+            Action::Flag(color) => {
+                if shown {
+                    self.mail.set_color_locally(uid, Some(*color));
+                }
+                self.change_in(account_id, mailbox, uid, Change::Color { color: Some(*color) });
+            }
+            Action::MoveTo(target) => {
+                if shown {
+                    self.mail.remove_row(uid);
+                }
+                self.change_in(account_id, mailbox, uid, Change::Move { to: target.clone() });
+            }
+        }
+    }
+
+    /// Mailbox > Rules > Delete Rule.
+    fn delete_rule(&mut self, index: usize) {
+        if index < self.mail.prefs.rules.len() {
+            let rule = self.mail.prefs.rules.remove(index);
+            self.save_prefs();
+            self.mail.status = format!("Deleted rule {}", rule.name);
+        }
+    }
+
+    /// Mailbox > Delete Smart Mailbox: the smart mailbox on screen is deleted and the full list comes back.
+    fn delete_smart(&mut self) {
+        let Some(index) = self.mail.smart_active else { return };
+        if index < self.mail.prefs.smart.len() {
+            let smart = self.mail.prefs.smart.remove(index);
+            self.mail.status = format!("Deleted smart mailbox {}", smart.name);
+        }
+        self.mail.apply_search("");
+        self.save_prefs();
+    }
+
+    /// Mailbox > Add to Favorites Bar (or Remove): pins the shown mailbox, and shows the bar when something is pinned.
+    fn toggle_favorite(&mut self) {
+        let Some(account) = self.mail.current().map(|a| a.id.clone()) else { return };
+        let mailbox = self.mail.mailbox.clone();
+        if !self.mail.prefs.toggle_favorite(&account, &mailbox) {
+            self.mail.status = "The favorites bar is full".into();
+            return;
+        }
+        if self.mail.prefs.is_favorite(&account, &mailbox) {
+            self.mail.prefs.show_favorites = true;
+        }
+        self.save_prefs();
+    }
+
+    /// A tap on the favourites bar: the mailbox of that account is shown.
+    fn open_favorite(&mut self, index: usize) {
+        let Some(favorite) = self.mail.prefs.favorites.get(index).cloned() else { return };
+        let Some(at) = self.mail.accounts.iter().position(|a| a.id == favorite.account) else { return };
+        if at != self.mail.account {
+            self.mail.show_account(at);
+        }
+        self.mail.show_mailbox(&favorite.mailbox);
+        self.list_scroll = Scroller::new();
+        self.refresh_selected();
     }
 
     fn wake_clone(&self) -> Option<UnixStream> {
         self.wake_tx.as_ref().and_then(|w| w.try_clone().ok())
     }
 
-    fn focus_is_message(&self) -> bool {
+    /// True when the field that takes typed text holds several lines (the message, the signature).
+    fn focus_is_multiline(&self) -> bool {
+        self.mail.sheet.as_ref().map(|sheet| sheet.form()).is_some_and(|form| form.fields.get(form.focus).is_some_and(|f| is_multiline(f.label)))
+    }
+
+    /// True when the field that takes typed text is the From picker: a tap changes it, typing does not.
+    fn focus_is_picker(&self) -> bool {
         match &self.mail.sheet {
-            Some(Sheet::Compose(c)) => c.form.fields.get(c.form.focus).is_some_and(|f| f.label == "Message"),
+            Some(Sheet::Compose(c)) => c.form.fields.get(c.form.focus).is_some_and(|f| f.label == "From"),
             _ => false,
         }
     }
 
     fn form_mut(&mut self) -> Option<&mut crate::state::Form> {
-        match self.mail.sheet.as_mut()? {
-            Sheet::Setup(form) | Sheet::Search(form) | Sheet::Quickly(form) => Some(form),
-            Sheet::Compose(compose) => Some(&mut compose.form),
-            Sheet::Mailbox(sheet) => Some(&mut sheet.form),
-        }
+        self.mail.sheet.as_mut().map(Sheet::form_mut)
     }
 
     /// The pane a point is in. With a sheet open everything is chrome, so presses never scroll the panes behind it.
@@ -1148,7 +2156,7 @@ impl MailWindow {
         if self.mail.sheet.is_some() {
             return Region::Chrome;
         }
-        crate::draw::pane_at(crate::draw::columns(ui, self.w as f32, self.mail.show_sidebar), ui.pt(crate::draw::TOOLBAR_PT), x, y)
+        crate::draw::pane_at(crate::draw::columns(ui, self.w as f32, self.mail.show_sidebar), crate::draw::chrome_height(ui, &self.mail), x, y)
     }
 
     fn scroller(&mut self, region: Region) -> Option<&mut Scroller> {
@@ -1166,6 +2174,7 @@ impl MailWindow {
                 crate::draw::Button::Refresh => self.refresh_selected(),
                 crate::draw::Button::Compose => self.compose(),
                 crate::draw::Button::Reply => self.reply(),
+                crate::draw::Button::ReplyAll => self.reply_all(),
                 crate::draw::Button::Archive => self.move_open(&ARCHIVE_NAMES, "Archive"),
                 crate::draw::Button::Trash => self.move_open(&TRASH_NAMES, "Trash"),
             },
@@ -1179,12 +2188,37 @@ impl MailWindow {
                     self.list_scroll = Scroller::new();
                     self.refresh_selected();
                 }
+                crate::draw::Side::Smart(index) => {
+                    if self.mail.apply_smart(index) {
+                        self.list_scroll = Scroller::new();
+                        self.search_server();
+                    }
+                }
+                crate::draw::Side::Heading(_) => return false,
                 crate::draw::Side::Add => self.mail.open_setup(),
             },
             crate::draw::Hit::Message(uid) => self.open_message(uid),
+            crate::draw::Hit::Favorite(index) => self.open_favorite(index),
+            crate::draw::Hit::Attachment(index) => self.save_attachment(ctx, index),
+            crate::draw::Hit::Attach => self.pick_files(ctx),
+            crate::draw::Hit::RemoveAttachment(index) => {
+                if let Some(Sheet::Compose(compose)) = &mut self.mail.sheet {
+                    compose.detach(index);
+                }
+            }
+            crate::draw::Hit::FindPrevious => self.step_match(false),
+            crate::draw::Hit::FindNext => self.step_match(true),
+            crate::draw::Hit::FindDone => self.mail.find = None,
             crate::draw::Hit::Field(index) => {
+                let from_picker = self.mail.sheet.as_ref().map(Sheet::form).and_then(|form| form.fields.get(index)).is_some_and(|f| f.label == "From");
                 if let Some(form) = self.form_mut() {
                     form.focus_on(index);
+                }
+                if from_picker {
+                    let choices = self.mail.from_choices();
+                    if let Some(Sheet::Compose(compose)) = &mut self.mail.sheet {
+                        compose.cycle_from(&choices);
+                    }
                 }
             }
             crate::draw::Hit::Cancel => self.mail.close_sheet(),
@@ -1194,6 +2228,34 @@ impl MailWindow {
         self.dirty = true;
         true
     }
+}
+
+/// How long a wait of `seconds` is, in words: "2 hours", "1 day", "45 minutes".
+fn wait_text(seconds: i64) -> String {
+    let (amount, unit) = if seconds >= 86_400 {
+        (seconds / 86_400, "day")
+    } else if seconds >= 3600 {
+        (seconds / 3600, "hour")
+    } else if seconds >= 60 {
+        (seconds / 60, "minute")
+    } else {
+        (seconds.max(1), "second")
+    };
+    format!("{amount} {unit}{}", if amount == 1 { "" } else { "s" })
+}
+
+/// Reads a file the user chose, whole, refusing one over `limit` bytes without reading it.
+fn read_file(file: &mut std::fs::File, size: u64, limit: usize) -> Result<Vec<u8>, String> {
+    let too_big = || format!("The file is larger than {} MB", limit / (1024 * 1024));
+    if size > limit as u64 {
+        return Err(too_big());
+    }
+    let mut bytes = Vec::new();
+    (&mut *file).take(limit as u64 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+    if bytes.len() > limit {
+        return Err(too_big());
+    }
+    Ok(bytes)
 }
 
 #[cfg(test)]
