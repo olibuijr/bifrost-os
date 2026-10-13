@@ -51,6 +51,21 @@ pub fn turn_size(w: usize, h: usize, quarters: u8) -> (usize, usize) {
     }
 }
 
+/// The size of a `w` by `h` picture fitted inside a `max_w` by `max_h` box, aspect kept. A picture
+/// already inside the box keeps its size; a zero side gives a box-sized result of at least one pixel.
+pub fn fit_box(w: usize, h: usize, max_w: usize, max_h: usize) -> (usize, usize) {
+    if w == 0 || h == 0 {
+        return (max_w.max(1), max_h.max(1));
+    }
+    if w <= max_w && h <= max_h {
+        return (w, h);
+    }
+    let s = (max_w as f32 / w as f32).min(max_h as f32 / h as f32);
+    let fw = ((w as f32 * s).round() as usize).clamp(1, max_w.max(1));
+    let fh = ((h as f32 * s).round() as usize).clamp(1, max_h.max(1));
+    (fw, fh)
+}
+
 /// Rotates `img` clockwise by `quarters` quarter turns (the count is taken modulo 4).
 pub fn rotate(img: &Image, quarters: u8) -> Image {
     let q = quarters % 4;
@@ -424,6 +439,14 @@ mod tests {
         assert_eq!(z, Zoom::Factor(ZOOM_MIN));
         let z = Zoom::Fit.stepped(100, 100, 50, 50, true);
         assert_eq!(z, Zoom::Factor(0.5 * ZOOM_STEP));
+    }
+
+    #[test]
+    fn fit_box_keeps_aspect_and_never_enlarges() {
+        assert_eq!(fit_box(200, 100, 100, 100), (100, 50));
+        assert_eq!(fit_box(100, 300, 132, 264), (88, 264));
+        assert_eq!(fit_box(50, 20, 132, 264), (50, 20));
+        assert_eq!(fit_box(0, 0, 132, 264), (132, 264));
     }
 
     #[test]
