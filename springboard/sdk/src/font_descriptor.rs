@@ -7,6 +7,8 @@
 use bifrost_render::fontobj::{FontManager, FontObject, FontSpec};
 use bifrost_render::fontprefs::{self, FontRole, Installed};
 
+use crate::font_substitution::{self, SystemDesign};
+
 /// The fonts the user chose for the system and monospaced roles, resolved from the shell's data directory.
 pub struct UserFonts;
 
@@ -55,10 +57,31 @@ impl UserFonts {
     }
 
     /// Every face in the font library that `spec` matches, best first. Names and fixed pitch must hold; weight,
-    /// width, slant and the other traits only rank.
+    /// width, slant and the other traits only rank. When the named family is not in the library, the open
+    /// equivalents of its class (`font_substitution`) are tried in preference order, so a document that names a
+    /// family BifrOSt does not ship still gets a face of the same style.
     pub fn resolve(shell_dir: &str, spec: &FontSpec) -> Vec<Installed> {
         let mut m = FontManager::new();
         m.scan_dir(&fontprefs::library(shell_dir), 2);
+        let direct = Self::installed_for(&m, spec);
+        if !direct.is_empty() {
+            return direct;
+        }
+        font_substitution::candidates(spec).iter().map(|c| Self::installed_for(&m, c)).find(|r| !r.is_empty()).unwrap_or_default()
+    }
+
+    /// `spec` with a system design applied (`.rounded`, `.serif`, `.monospaced`): the descriptor's family becomes the
+    /// design's open equivalent, and `resolve` falls through the class list when that one is not installed.
+    pub fn with_design(spec: FontSpec, design: SystemDesign) -> FontSpec {
+        font_substitution::with_design(spec, design)
+    }
+
+    /// The ordered fallback families for characters a face lacks, for language tags such as `ja`, `zh-Hant`, `ar`.
+    pub fn cascade_list(languages: &[&str]) -> Vec<&'static str> {
+        font_substitution::cascade_list(languages)
+    }
+
+    fn installed_for(m: &FontManager, spec: &FontSpec) -> Vec<Installed> {
         m.matching(spec)
             .into_iter()
             .filter_map(|i| {
@@ -111,6 +134,31 @@ mod tests {
         assert!(f.text_width("Hello") > 0.0);
         assert!(f.with_size(26.0).text_width("Hello") > f.text_width("Hello"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_substitutes_an_installed_equivalent_for_a_missing_family() {
+        let dir = std::env::temp_dir().join(format!("bifrost-font-substitute-{}", std::process::id()));
+        let lib = dir.join("fonts");
+        let _ = std::fs::create_dir_all(&lib);
+        let shell = dir.to_string_lossy().into_owned();
+        std::fs::write(lib.join("SFUI.ttf"), sf_bytes()).unwrap();
+        let own = UserFonts::choices(&shell).first().expect("library face").family.clone();
+        // an installed family resolves to itself
+        assert_eq!(UserFonts::resolve(&shell, &FontSpec::new().family(&own))[0].family, own);
+        // a reference family whose class lists the installed family resolves to it
+        if font_substitution::substitute("Helvetica Neue").contains(&own.as_str()) {
+            assert_eq!(UserFonts::resolve(&shell, &FontSpec::new().family("Helvetica Neue"))[0].family, own);
+        }
+        // a mono request finds no substitute among a lone proportional face
+        assert!(UserFonts::resolve(&shell, &FontSpec::new().family("Menlo").mono()).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn design_and_cascade_helpers_delegate_to_the_substitution_tables() {
+        assert!(UserFonts::with_design(FontSpec::new(), SystemDesign::Monospaced).traits.is_mono());
+        assert_eq!(UserFonts::cascade_list(&["ja"])[0], "Noto Sans CJK JP");
     }
 
     #[test]

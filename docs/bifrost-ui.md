@@ -367,6 +367,24 @@ On macOS an app follows Light/Dark without opting in. Third-party Linux apps fol
   validate, collections, disable) and live font switching without a restart. `FontPanel` families can come from
   `fontprefs::installed`.
 
+### Family substitution (Core Text descriptor matching, `bifrost_app::font_substitution`)
+
+- **Substitution.** `UserFonts::resolve(shell_dir, &FontSpec)` first matches the descriptor against the font library.
+  When nothing matches, the named family is looked up in a static table (`class_of_family`: grotesque, geometric and
+  humanist sans, didone and transitional serif, slab, script, monospaced, rounded, CJK gothic/mincho/kai/rounded) and
+  the open equivalents of that class are tried in order (`substitute`, `candidates`). An unknown name falls back by
+  traits (`class_for_spec`: fixed pitch is monospaced, else the system grotesque sans). Weight, size and the other
+  attributes carry over.
+- **System design.** `UserFonts::with_design(spec, SystemDesign::{Default, Rounded, Serif, Monospaced})` mirrors
+  `withDesign(_:)`: the family becomes the design's first open equivalent, monospaced also sets fixed pitch.
+- **Cascade list.** `UserFonts::cascade_list(&["ja", "zh-Hant", "ar", ...])` mirrors
+  `CTFontCopyDefaultCascadeListForLanguages`: ordered script families per language tag, repeats dropped; feed it to
+  `FontSpec::with_cascade`.
+- **Decided / not matched.** No original face ships, so a substitute is another design of the same class. The listed
+  open families (Inter, Outfit, Noto Serif, Noto Sans CJK, ...) must be in the font library to resolve. Matching
+  returns `Installed` records, not descriptor objects with mandatory-key sets. Parity rows stay partial until a
+  Midget check.
+
 ## One stylesheet for apps
 
 Apps take text sizes from the `MAC_*_PT` and `DISPLAY_*_PT` tokens, spacing from `SPACE_*` (4-pt grid), and the

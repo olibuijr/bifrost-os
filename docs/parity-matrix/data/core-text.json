@@ -111,6 +111,13 @@
       "bifrost": "springboard/ui/src/run_delegate.rs",
       "status": "partial",
       "note": "Wave 4 (theme-24, parity/integration 0925691e): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. No way to place an image or view inside styled text."
+    },
+    {
+      "feature": "Font family substitution, system designs and cascade lists",
+      "apple": "CTFontDescriptorCreateMatchingFontDescriptors, CTFontDescriptorCreateWithNameAndSize, kCTFontCascadeListAttribute, CTFontCopyDefaultCascadeListForLanguages, system design (rounded, serif, monospaced)",
+      "bifrost": "springboard/sdk/src/font_substitution.rs, springboard/sdk/src/font_descriptor.rs (UserFonts::resolve, with_design, cascade_list)",
+      "status": "partial",
+      "note": "A family the library lacks resolves to an open equivalent by class (grotesque, geometric, humanist, serif, slab, script, mono, rounded, CJK gothic/mincho/kai/rounded); unknown names fall back by traits. with_design maps rounded/serif/monospaced; cascade_list orders script families per language tag. Matching returns Installed records, not descriptor objects with mandatory-key sets; equivalents are other designs, and the listed open families must be installed in the font library. Not yet checked on Midget."
     }
   ],
   "gaps": [
