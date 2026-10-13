@@ -430,6 +430,11 @@ pub fn home() -> PathBuf {
     crate::shell::apphost::root().join("Files")
 }
 
+/// The Downloads folder in the user's home: where nearby files and downloads land.
+pub fn downloads() -> PathBuf {
+    user_home().join("Downloads")
+}
+
 /// The user's home directory (`$HOME`), `/` when unset.
 fn user_home() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"))
@@ -457,7 +462,7 @@ pub fn locations() -> Vec<Location> {
     vec![
         Location { name: "On My PC", path: home(), glyph: Glyph::Computer },
         Location { name: "Recents", path: RECENTS.into(), glyph: Glyph::Clock },
-        Location { name: "Downloads", path: u.join("Downloads"), glyph: Glyph::Download },
+        Location { name: "Downloads", path: downloads(), glyph: Glyph::Download },
         Location { name: "Deildu", path: crate::shell::apphost::root().join("deildu/torrents"), glyph: Glyph::Play },
         Location { name: "Pictures", path: u.join("Pictures"), glyph: Glyph::Photo },
         Location { name: "Recently Deleted", path: trash_dir(), glyph: Glyph::Bin },
