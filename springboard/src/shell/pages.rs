@@ -435,7 +435,20 @@ pub struct Model<'a> {
     pub fonts: &'a FontsView,
     /// Settings > Sound: the device lists from the audio object model
     pub sound: &'a super::sound_page::SoundView,
+    /// the Sharing page: the computer name and the service states (read off the UI thread, see `settings_load`)
+    pub sharing: &'a super::sharing_page::View,
+    /// the Print & Scan page: the printers and scanners
+    pub printers: &'a super::print_scan_page::View,
+    /// the Users & Groups pages: the accounts and groups
+    pub users: &'a super::users_page::View,
 }
+
+/// The Sharing page before its first read lands.
+pub static NO_SHARING: super::sharing_page::View = super::sharing_page::View { computer: String::new(), services: Vec::new() };
+/// The Print & Scan page before its first read lands.
+pub static NO_PRINTERS: super::print_scan_page::View = super::print_scan_page::View { printers: Vec::new(), error: None, scanners: Vec::new(), scanner_error: None };
+/// The Users & Groups pages before their first read lands.
+pub static NO_USERS: super::users_page::View = super::users_page::View { users: Vec::new(), groups: Vec::new(), me: String::new() };
 
 /// Settings > Fonts as the page shows it, indexed by `FontRole::index`.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -444,12 +457,14 @@ pub struct FontsView {
     pub defaults: [String; 2],
     /// the font file saved for each role, when it is not the default
     pub overrides: [Option<String>; 2],
+    /// the family name of each saved override, read with it (None when the file has no name)
+    pub names: [Option<String>; 2],
     /// BifrOSt's font library (`fontprefs::library`)
     pub library: Vec<Installed>,
 }
 
 /// A `FontsView` with nothing in it, for models that never show the Fonts pages.
-pub static NO_FONTS: FontsView = FontsView { defaults: [String::new(), String::new()], overrides: [None, None], library: Vec::new() };
+pub static NO_FONTS: FontsView = FontsView { defaults: [String::new(), String::new()], overrides: [None, None], names: [None, None], library: Vec::new() };
 
 /// "117.9 GB" style size.
 pub fn gb(bytes: u64) -> String {
@@ -569,6 +584,75 @@ fn bluetooth_spec(m: &Model, page: impl Fn(&str, bool, Vec<Group>) -> Spec) -> S
         groups[0] = groups[0].clone().footer("Turn on Bluetooth to pair headphones, speakers and keyboards.");
     }
     page("Bluetooth", false, groups)
+}
+
+/// Words a pane or a setting row is also found by, besides its label and the page it sits on (Settings search).
+/// Keys are the labels lowercased.
+const KEYWORDS: &[(&str, &str)] = &[
+    ("network", "internet connection ethernet wifi lan"),
+    ("wi-fi", "wireless wlan wifi internet ssid join network"),
+    ("ethernet", "wired cable lan network"),
+    ("bluetooth", "wireless devices pair headphones speaker mouse keyboard"),
+    ("vpn", "tunnel private network"),
+    ("airplane mode", "flight offline wireless radio"),
+    ("display & brightness", "screen monitor brightness resolution scale night shift text size"),
+    ("displays", "screen monitor brightness resolution scale appearance"),
+    ("appearance", "dark light mode theme accent color"),
+    ("wallpaper", "background desktop picture image"),
+    ("screen saver", "idle screen saver slideshow"),
+    ("sounds", "sound volume alert audio output input speaker microphone"),
+    ("sound", "volume alert audio output input speaker microphone"),
+    ("focus", "do not disturb schedule notifications silence"),
+    ("do not disturb", "focus silence notifications schedule"),
+    ("notifications", "alerts banners badges sounds do not disturb"),
+    ("accessibility", "zoom magnifier voiceover text size contrast reduce motion hearing"),
+    ("assistivetouch", "accessibility touch pointer hold"),
+    ("battery", "power charge energy low power"),
+    ("energy", "power battery sleep display"),
+    ("about", "name version serial model build computer"),
+    ("software update", "update version upgrade install backup rollback"),
+    ("general", "about software update storage date time language fonts"),
+    ("date & time", "clock timezone time zone ntp 24 hour"),
+    ("keyboard", "typing layout input source shortcuts text replacements"),
+    ("language & region", "language region locale format"),
+    ("fonts", "typeface text font family"),
+    ("privacy", "permissions camera microphone location tracking analytics"),
+    ("passcode", "pin password lock unlock"),
+    ("passwords", "logins saved website accounts"),
+    ("users & groups", "accounts user admin password login"),
+    ("trackpad", "touchpad pointer click scroll gestures tap"),
+    ("mouse", "pointer scroll speed buttons"),
+    ("night shift", "warm color temperature schedule evening"),
+    ("print & scan", "printer scanner printing scanning paper"),
+    ("sharing", "computer name hostname file sharing remote"),
+    ("storage", "disk space free used cache"),
+    ("backup", "restore copy save files"),
+    ("screen time", "limits downtime usage apps children"),
+    ("login items", "startup start at login launch background"),
+    ("default apps", "browser mail open files default"),
+    ("desktop & dock", "dock icons hot corners home screen"),
+    ("home screen & dock", "dock icons home screen"),
+    ("hot corners", "screen corners actions"),
+    ("lock screen", "password passcode lock idle"),
+    ("developer", "debug adb root performance hud"),
+    ("graphics", "gpu graphics driver intel nvidia amd"),
+    ("game controllers", "gamepad controller joystick buttons remap"),
+    ("keyboard shortcuts", "keys hotkeys commands"),
+    ("overview", "windows desktops group switch"),
+    ("menu bar", "top bar status items clock"),
+    ("control centre", "control center quick settings"),
+    ("legal", "license regulatory terms"),
+    ("dictionary", "spelling words"),
+    ("text replacements", "shortcut expand autocorrect"),
+    ("modifier keys", "caps lock control option command"),
+    ("interface scale", "size scale zoom display"),
+    ("liquid glass", "transparency clarity glass tint"),
+];
+
+/// The words a row or pane is found by besides its label (`KEYWORDS`); empty when it has none.
+pub fn keywords(label: &str) -> &'static str {
+    let key = label.trim().to_lowercase();
+    KEYWORDS.iter().find(|(k, _)| *k == key).map_or("", |(_, words)| words)
 }
 
 /// The page `id` as the model shows it now.
@@ -807,7 +891,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 .footer("Nearby Share lets you share instantly with devices nearby. You can be discoverable to receive from everyone or only from devices you have already seen nearby.")],
         ),
         PageId::Sharing => {
-            let mut groups = super::sharing_page::groups(&super::sharing_page::View::load());
+            let mut groups = super::sharing_page::groups(m.sharing);
             groups.push(Group::new(vec![
                 Item::new("Nearby Share").glyph(Glyph::Nearby).value(NEARBY_CHOICES.get(o.nearby).copied().unwrap_or(NEARBY_CHOICES[0])).link(PageId::Nearby),
                 Item::new("AirPlay & Handoff").value(if o.handoff { "Handoff On" } else { "Handoff Off" }).link(PageId::AirPlayHandoff),
@@ -815,7 +899,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
             .footer("Choose who can share files with this computer nearby, and whether your other devices can pick up work from it."));
             page("Sharing", false, groups)
         }
-        PageId::PrintScan => super::print_scan_page::spec(&super::print_scan_page::View::load()),
+        PageId::PrintScan => super::print_scan_page::spec(m.printers),
         PageId::LockScreen => page(
             "Lock Screen",
             false,
@@ -927,7 +1011,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
                 Group::new(vec![Item::new("Swap Left and Right Buttons").switch(o.swap_buttons, Action::Toggle(Toggle::SwapButtons))]).footer("The left button becomes the secondary button and the right button the primary one."),
             ],
         ),
-        PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, &super::users_page::View::load(), m.detail, "", o),
+        PageId::Users | PageId::UserDetail | PageId::Groups | PageId::GroupDetail => super::users_page::spec(id, m.users, m.detail, "", o),
         PageId::Fonts => fonts_page(m),
         PageId::FontPick(role) => font_pick_page(m, role),
         PageId::Dictionary => page(
@@ -1440,7 +1524,7 @@ pub fn fonts_page(m: &Model<'_>) -> Spec {
         .into_iter()
         .map(|role| {
             let current = match &f.overrides[role.index()] {
-                Some(path) => bifrost_render::fontprefs::family(path).unwrap_or_else(|| path.rsplit('/').next().unwrap_or(path).to_string()),
+                Some(path) => f.names[role.index()].clone().unwrap_or_else(|| path.rsplit('/').next().unwrap_or(path).to_string()),
                 None => f.defaults[role.index()].clone(),
             };
             Item::new(role.label()).value(current).link(PageId::FontPick(role))
@@ -1600,6 +1684,7 @@ mod tests {
         let fonts = FontsView {
             defaults: ["Inter".into(), "JetBrains Mono".into()],
             overrides: [None, Some("/lib/GeistMono.ttf".into())],
+            names: [None, Some("Geist Mono".into())],
             library: vec![lib("Geist", "/lib/Geist.ttf", false), lib("Geist Mono", "/lib/GeistMono.ttf", true)],
         };
         let m = Model { fonts: &fonts, ..model(&info, &opts) };
@@ -1626,7 +1711,7 @@ mod tests {
     static A11Y_DEFAULT: AccessibilitySettings = AccessibilitySettings::DEFAULT;
 
     fn model<'a>(info: &'a Info, opts: &'a Options) -> Model<'a> {
-        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND }
+        Model { info, opts, a11y: &A11Y_DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: "Lake Day".into(), detail: "WIFI-5G", now: 1_000_000, update_badge: false, dock: DockPrefs::default(), defaults: &[], login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND, sharing: &NO_SHARING, printers: &NO_PRINTERS, users: &NO_USERS }
     }
 
     #[test]

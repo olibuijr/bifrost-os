@@ -317,7 +317,7 @@ mod tests {
         let v = views(&r);
         let info = crate::shell::Info::default();
         let opts = crate::shell::options::Options::default();
-        let m = Model { info: &info, opts: &opts, a11y: &crate::shell::accessibility::AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: String::new(), detail: "", now: 0, update_badge: false, dock: Default::default(), defaults: &v, login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &crate::shell::pages::NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND };
+        let m = Model { info: &info, opts: &opts, a11y: &crate::shell::accessibility::AccessibilitySettings::DEFAULT, airplane: false, haptics: false, wifi_on: true, brightness: 0.5, wallpaper: String::new(), detail: "", now: 0, update_badge: false, dock: Default::default(), defaults: &v, login_items: &[], login_pending: &[], ext: &crate::shell::login_items_page::NO_EXTENSIONS, fonts: &crate::shell::pages::NO_FONTS, sound: &crate::shell::sound_page::NO_SOUND, sharing: &crate::shell::pages::NO_SHARING, printers: &crate::shell::pages::NO_PRINTERS, users: &crate::shell::pages::NO_USERS };
         let s = spec(PageId::DefaultApps, &m);
         assert!(s.groups.len() > CATEGORIES.len(), "a group per category plus the footer");
         let images = &s.groups[1];
