@@ -3013,3 +3013,564 @@ plus `INDEX.tsv`; both skip cleanly when the folder is absent. `INDEX.tsv` holds
 - Not done yet: cursor and icon adoption (`cursor_service`, `cursor_art`, workspace icons) and a shell-side resolver;
   they will call `resolve` and keep their current art as the fallback. The assets folder was empty when this landed,
   so the os/assets sound, wallpaper and font rows are `partial` (loader and fallback only, no Midget check).
+
+## Module index: modules without their own section
+
+Every module below exists in the crate named and had no mention in this document. Each line is the first sentence of the
+module's own doc comment; read the file for the API. Most are pure models with host tests; none counts as `parity` in the matrix
+until checked on Midget (see `python3 tools/bifrost.py pc parity status`). The sections above stay the place for flows and shell
+wiring.
+
+### `bifrost_app` (`springboard/sdk/src`)
+
+- `accessibility_display`: The Dim Flashing Lights setting, for apps, over the shell's `accessibility_display` service
+- `accessory_hotspot`: Accessory hotspot joins for apps
+- `actor`: Actor isolation
+- `app_transaction`: The app transaction (`AppTransaction`)
+- `async_publisher`: `AsyncPublisher` and `AsyncThrowingPublisher`
+- `audio_devices`: Typed client for the `audio-devices` shell service
+- `audio_format`: Audio stream formats for apps
+- `auth_events`: Authorization events
+- `ble_error`: Typed errors for the low energy central role
+- `ble_midi`: MIDI over Bluetooth Low Energy packets, for apps that talk to a BLE MIDI peripheral.
+- `bluetooth_devices`: Remote Bluetooth devices as an app sees them
+- `bluetooth_events`: Bluetooth device events
+- `bluetooth_hid`: Human interface devices (keyboards, pointers and other peripherals) as an app sees them.
+- `bluetooth_inquiry`: Device inquiry (scan) as an app drives it
+- `bluetooth_picker`: Bluetooth accessory picker for apps
+- `bluetooth_service`: The shell's `bluetooth` service as an app uses it
+- `call_stack_tree`: Call stacks captured with a diagnostic report, as a pure model.
+- `central`: Central role for apps
+- `crash_report`: Crash reporter extension (the crash-report hook and the crashed-process view)
+- `csv_writer`: Tabular data CSV writing (`CSVWritingError` and the writer that reports it)
+- `daily_metric_report`: Daily metric reports as a pure model.
+- `data_scanner`: Barcode and QR scanning for apps (`DataScannerViewController`, `RecognizedItem` barcode items, and the
+- `dav_client`: CalDAV and CardDAV client for the apps that sync Internet Accounts (Calendar and Contacts).
+- `dav_sync`: Internet Accounts sync for the apps that read them
+- `device_registry`: Device registry for apps
+- `digest`: Security transforms for apps
+- `dispatch_data`: Dispatch data (`DispatchData`)
+- `dispatch_time`: Dispatch time values
+- `display_link`: Display timing (Core Video's `CVDisplayLink`, `CVTimeStamp` and `CVDisplayLinkGetActualOutputVideoRefreshPeriod`).
+- `distributed`: Distributed parity
+- `dock_tile`: The app's Dock tile through the `dock` system service (`springboard/src/shell/services/dock_tile.rs`)
+- `donations`: Donations and discovery (`IntentDonationManager`, `RelevantIntentManager`, `RelevantIntent`).
+- `encryption_preference`: Encryption preference for a nearby peer session
+- `entropy`: Randomization services (`SecRandomCopyBytes`)
+- `event_client`: Monitoring client lifecycle (parity row "Client creation and teardown").
+- `exception_handler`: Failure monitoring for apps
+- `external_accessory`: Accessory connections for apps
+- `file_provider`: File provider domains, provider errors and enumerator signals (`domain manager`, `provider domain` and
+- `file_stat`: File status records for apps
+- `focus_filter`: Typed client for the `focus_filter` shell service
+- `font_descriptor`: The user's font choice (`UserFonts` is the app-facing side of Settings > Fonts).
+- `ftp`: FTP model for apps
+- `gamepad_service`: Typed client for the `gamepad` shell service
+- `gpu_layer`: The app-facing drawable layer
+- `gss_buffer`: GSS-API buffer management (`gss_buffer_desc`, `gss_buffer_set_desc`, `gss_create_empty_buffer_set`,
+- `gss_context`: GSS-API context services (`gss_init_sec_context`, `gss_accept_sec_context`, `gss_context_time`,
+- `gss_credential`: GSS-API credential management (`gss_acquire_cred`, `gss_inquire_cred`, `GSSCredentialGetLifetime`,
+- `gss_krb5`: The Kerberos 5 settings of the GSS-API (`gss_krb5_ccache_name`, `gss_krb5_set_allowable_enctypes`,
+- `gss_mechanism`: GSS-API security mechanisms (`gss_indicate_mechs`, `gss_indicate_mechs_by_attrs`, `gss_inquire_attrs_for_mech`,
+- `gss_message`: GSS-API message protection (`gss_get_mic`, `gss_verify_mic`, `gss_wrap`, `gss_unwrap`, `gss_wrap_size_limit`)
+- `gss_name`: GSS-API name handling (`GSSCreateName`, `gss_import_name`, `gss_display_name`, `gss_compare_name`,
+- `gss_oid`: GSS-API object identifiers (`gss_OID`, `gss_OID_set`, `gss_oid_to_str`, `gss_oid_equal`,
+- `gss_status`: GSS-API function status (`GSS_S_COMPLETE`, `GSS_S_FAILURE`, `GSS_C_MECH_CODE`, `gss_display_status`,
+- `gss_token`: GSS-API token management (`gss_encapsulate_token`, `gss_decapsulate_token`)
+- `hid_devices`: HID devices for apps
+- `hitch_ratio`: Animation hitch measurement as a pure model.
+- `host_addressing`: Host name addressing
+- `hotspot_configuration`: Hotspot configuration for apps
+- `http_auth`: `URLCredential`, `URLCredentialStorage`, `URLProtectionSpace` and HTTP Basic challenge parity for the URL loading
+- `http_cookies`: `HTTPCookie` and `HTTPCookieStorage` parity for the URL loading system
+- `identity_events`: User and group ID change events
+- `inference`: Typed inference signatures
+- `input_events`: Input events for apps, over the shell's `events` service (`springboard/src/shell/services/event_services.rs`)
+- `intent_resolve`: Parameter resolution for App Intents
+- `launch_services`: Open With and default apps, over the shell's `launch` service (`springboard/src/shell/services/launch_services.rs`).
+- `login_items_approval`: Typed client for the shell's `login-items` service
+- `markup`: Markup canvases for apps (`PaperMarkup`, the insertion menu of `MarkupEditViewController`, `FeatureSet` and
+- `memory_events`: Memory mapping and protection events
+- `messaging`: Communication notifications and messaging requests
+- `multipart`: `addMultipartData(_:withName:type:filename:)` parity
+- `music_understanding`: `MusicUnderstanding` for apps (see `docs/parity/music-understanding.md`)
+- `ndarray`: Multidimensional arrays
+- `nearby_service`: Nearby service type
+- `net_diagnostic`: Connection diagnosis
+- `net_totals`: Network byte totals for apps
+- `network_browser`: Local service discovery parity
+- `network_connection`: Connection and listener parity
+- `network_path`: Network path for apps
+- `notification_queue`: `NotificationQueue` parity
+- `notify_bus`: Named notifications between apps, over the shell's `notify_bus` service (`springboard/src/shell/services/notify_bus.rs`).
+- `now_playing`: Now Playing for apps
+- `object_graph`: Object graph and persistent store
+- `observable_object`: `ObservableObject` parity (Combine)
+- `passkey`: Passkey request inputs
+- `passkey_client_data`: Client data for a passkey ceremony
+- `password_gen`: Password generation rules (a generate-password request for a sign-up form)
+- `peer_identity`: Peer identity
+- `peer_mesh`: Peer mesh
+- `peer_session`: Peer sessions
+- `permission_kit`: Permission requests for apps (the app side of the parent or guardian approval flow).
+- `pixel_buffer`: Pixel buffers and their pool (Core Video's `CVPixelBuffer`, `CVPixelBufferLockBaseAddress`, `CVPixelBufferGetBaseAddress`,
+- `post_delivery`: Suspension behaviours for cross-app broadcast posts
+- `power_service`: Typed client for the shell's `power` service (`springboard/src/shell/services/power_service.rs`).
+- `power_sources`: Power sources for apps
+- `privacy_permissions`: Typed client for the shell's `privacy` service
+- `process_events`: Process event records and the subscription set that filters them
+- `reachability`: Reachability for apps
+- `review`: Review prompts (`RequestReviewAction`)
+- `route_events`: Route events (`AVCustomRoutingEvent` parity, see `docs/parity/w3-theme-30.md`)
+- `save_sync`: Synced save directories (`GameSave` parity)
+- `screen_sample`: Screen pixel sampling for apps that show what is under the pointer (the Color Meter).
+- `screen_saver_defaults`: `ScreenSaverDefaults`
+- `screen_time`: Screen Time configuration for apps
+- `script_export`: Native object export to scripts
+- `script_syntax`: Script syntax check parity
+- `script_value`: Script value parity
+- `search_ranking`: Ranked search over the items this app indexed with Core Search, item expiry, and language identification.
+- `serial_ports`: Serial ports for apps
+- `sign_in`: Sign-in for apps
+- `signpost`: Signposts for apps
+- `synchronization`: Synchronization parity
+- `system_prefs`: System preferences for apps
+- `text_services`: Typed client for the shell's `text` service
+- `timer_source`: Timer dispatch source (`DispatchSourceTimer`) as a pure state model, with its lifecycle (`DispatchSourceProtocol`)
+- `translation`: `TranslationSession` parity
+- `url_components`: `URLComponents` and `URLQueryItem` parity
+- `usb_printer`: USB printers for apps
+- `visual_search`: Visual search for apps
+- `vpn_configuration`: Personal VPN configuration for apps
+- `web_auth`: Shared-login authentication sessions for apps, shaped like the system web-session API.
+- `web_extension`: Browser-style web extensions for apps
+- `widgets_timeline`: Client for the shell's `widgets_timeline` service (`springboard/src/shell/services/widgets_timeline.rs`)
+- `wifi_accessory_browser`: Wi-Fi accessory browser for apps
+- `wifi_secrets`: Wi-Fi network secrets for apps, kept per network name (SSID) and keychain domain
+- `wifi_status`: Wi-Fi connection status for apps
+- `wireless_accessory_browser`: Wi-Fi setup for unconfigured accessories
+- `wlan`: Wireless LAN scan data for apps
+- `wlan_events`: Wi-Fi change events for apps
+- `wlan_keychain`: Wi-Fi secrets for apps, kept as generic keychain items (see `keychain`)
+
+### `bifrost_ui` (`springboard/ui/src`)
+
+- `access_control`: Access control for stored secrets and authorization rights.
+- `accessible_look`: The accessible-appearance decisions an app makes from the user's display settings
+- `acroform`: PDF form fields (widget annotations) as a pure model
+- `actionrequest`: The request behind one chosen file action
+- `advertising`: Advertising data
+- `analyzer_input`: Time-coded audio input for a speech analyzer.
+- `animated_values`: Keyframed values over time (`NativeAnimatedValue`, `NativeAnimatedScalar`, `NativeAnimatedVector3`,
+- `annotation`: Page annotations as data
+- `assetmock`: A local test source for asset packs
+- `assetpack`: Asset packs (`AssetPackManager`, `AssetPackManifest`, `AssetPack`)
+- `audio_render`: Audio render cycle
+- `auth_view`: Authentication view model (task theme-03)
+- `authorization_request`: Authorization requests (parity
+- `ax_audit`: Accessibility audit (the checks of the Accessibility Inspector developer tool)
+- `bidi`: Writing direction and bidirectional text
+- `blit`: Buffer fill and copy passes
+- `bookmark_import`: Reads a bookmark export in the HTML form that browsers write
+- `braille`: Braille translation for a Braille display
+- `browser_settings`: System-wide browser settings
+- `browser_sheet`: A standard in-app browser sheet as a pure model.
+- `bt_chooser`: Device chooser
+- `bt_passkey`: Passkey display
+- `calendar_conference`: Virtual conference rooms for calendar events, as a provider app holds them
+- `calendar_error`: Error codes for calendar and reminder store operations
+- `calendar_participant`: A person, group, room or resource invited to a calendar event
+- `calendar_store_changes`: Change notices for a shared calendar store.
+- `call_directory`: Caller identification and blocking
+- `camera_device`: Camera device model
+- `camera_region`: Stabilised camera region of interest
+- `captions`: Caption preferences
+- `capture_access`: Capture permission for one app
+- `capture_config`: Stream configuration
+- `capture_content`: Shareable content
+- `capture_error`: Stream errors
+- `capture_event`: Capture events from the hardware capture buttons of a device, as pure state.
+- `capture_filter`: Content filters
+- `capture_picker`: System content-sharing picker
+- `capture_shot`: Single-frame screenshot settings
+- `capture_sync`: Synchronized capture
+- `certificate_panel`: Certificate panel
+- `certificate_trust`: Certificate trust editor
+- `channel_layout`: Channel layouts now live in `bifrost-audio-types` (docs/audio-architecture.md)
+- `chart`: Chart geometry for data-driven charts
+- `chart_ax`: Accessible chart semantics
+- `chart_content`: A chart as a list of marks.
+- `chart_marks`: Mark geometry for data charts
+- `chart_scroll`: Scroll targets for charts that scroll along a value axis.
+- `chart_surface`: Surface plots for 3D charts
+- `chart_vector`: Batched plots for large data sets.
+- `clip_buffer`: Rolling clip buffer (`ClipBuffer`)
+- `cnn_layers`: Eager layers for small neural networks
+- `column_summary`: Statistical summaries of one column of a table (the `NumericSummary` and `CategoricalSummary` model)
+- `command_buffer`: The life of a GPU command buffer as a pure state machine
+- `conference`: Participants and virtual conferences of a calendar event.
+- `contact_card`: Contact card model
+- `contact_changes`: Batched saves and change history for a set of records (contacts, or any record type).
+- `contact_display`: Contact display defaults
+- `contact_groups`: Contact groups with subgroups
+- `contact_photo`: Contact pictures
+- `contact_picker`: Contact picker model
+- `content_proposal`: Next-item proposals as pure state
+- `content_rules`: Content-blocking rules
+- `context_element`: What a right click landed on, and which menu to show for it (the reference SDK's context menu element info).
+- `context_window`: Context window budget
+- `controller_motion`: Motion profile of a controller
+- `controller_power`: Battery and light of a game controller
+- `coordinate_space3d`: A tree of 3D coordinate spaces
+- `counter_sample`: A fixed-size buffer of timestamped counter samples, as a pure model for measuring work between two points.
+- `credential_identity`: Credential identities (parity
+- `data_store`: A pluggable record store
+- `default_device`: Default audio devices
+- `device_browser`: Device browser
+- `device_match`: Device matching by capability
+- `directory_node`: Directory sessions and nodes
+- `directory_query`: Directory records and queries
+- `display_info`: Display information
+- `dock_tile`: The app's Dock tile (`NativeDockTile`)
+- `docscan`: Document scanning geometry
+- `dom_snapshot`: A snapshot of a page's document tree
+- `downloadqueue`: Scheduled asset downloads (a download manager queue)
+- `drawable_layer`: A drawable surface an app renders into and presents to the window server.
+- `echo_cancel`: Echo cancellation for voice capture
+- `ecs`: Entities and components
+- `embedding`: Text embeddings
+- `emitter`: Particle emitter model
+- `environment`: Environment values propagated through a view hierarchy (`EnvironmentValues`)
+- `evaluation`: Model-quality evaluation
+- `event_distance`: Distance models and directivity for a sound source
+- `event_envelope`: Envelopes
+- `event_tap`: Low-level input events and event taps.
+- `export_session`: Export session model
+- `face_group`: Face grouping for `FaceGroupAnalyzer`
+- `features`: Typed model inputs and outputs (`MLFeatureValue`, `MLFeatureProvider`, `MLDictionaryFeatureProvider`,
+- `file_provider`: Provided items of a file provider domain (`provided item` parity)
+- `file_sync`: Sync-status state a file provider keeps for the Files app
+- `fileaction`: Actions a provider adds to the context menu of the system document browser
+- `filebadge`: Badges that a file-manager extension puts on files and folders
+- `flashing_lights`: Flashing light detection and dimming as a pure model.
+- `focus_filter`: Focus filters
+- `format_readers`: Runtime registry of media format readers (the registration of professional video workflow readers,
+- `fourier`: Fourier and cosine transforms over `f64` slices
+- `frame_clock`: The frame clock
+- `frame_grab`: Frame grab model
+- `frame_rate`: Frame-rate ranges an app asks for (`CAFrameRateRange`, `CADisplayLink.preferredFrameRateRange`) as a pure model.
+- `fs_maintenance`: Client interaction and maintenance (`maintenance client` parity)
+- `fs_probe`: Containers and probing (`probe and container` parity)
+- `fs_volume`: Volumes and items (`volume and item` parity)
+- `gamepad`: Gamepad input model
+- `gatt`: GATT client model for the central role
+- `gatt_server`: GATT server model for the peripheral role
+- `generation_schema`: Structured output
+- `geo`: Map coordinates on a Web Mercator projection
+- `geofence`: Circular geographic regions and an enter and exit monitor for them.
+- `grid_graph`: Grid navigation
+- `guardrail`: Output guardrail for generated text
+- `hfp`: Hands-free profile session model
+- `hid_match`: HID device matching
+- `hid_report`: HID report descriptors
+- `highlight_rank`: Highlight segments for `HighlightAnalysisRequest`
+- `identity_chooser`: Choose identity panel
+- `imroute`: Where a key or mouse event goes while a text input session is active.
+- `imsession`: A text input session on the provider side
+- `imstate`: The state of an input method as the shell keeps it
+- `index_client`: Index maintenance
+- `indexset`: Sets of integers (`IndexSet`)
+- `indirect_command`: A fixed-size list of reusable GPU commands that are encoded once and executed later, as a pure model.
+- `input_picker`: Audio input picker as pure state
+- `input_switches`: Switch state of an input device
+- `intent_access`: Consent for voice-assistant and directions requests.
+- `intent_resolve`: Parameter resolution for typed actions
+- `intent_vocab`: Custom vocabulary for typed and spoken requests
+- `internet_accounts`: Internet Accounts
+- `ipp`: IPP/2.0 binary codec (RFC 8010 framing, RFC 8011 attributes), the subset the printer client needs.
+- `item_attrs`: Per-item attributes that a file provider can set for an item and the Files app can read back
+- `itemattrs`: Per-item tags and last-used dates that a file-manager extension keeps with each file
+- `jws`: The structure of a signed transaction in JWS Compact Serialization (`VerificationResult`, `VerificationError`)
+- `keychain_save`: Keychain save form
+- `keychain_settings`: Keychain settings
+- `keyframe_pick`: Representative frame selection for `KeyFrameAnalysisRequest`
+- `layer_bridge`: Renders a [`Layer`] tree through the styled-layer rasteriser.
+- `layer_layout`: Layer delegates, layout managers and the constraint layout manager.
+- `layer_render`: CPU rendering of a styled layer
+- `layer_style`: Layer appearance rules
+- `layer_tree`: The retained layer tree
+- `layout_protocol`: Custom layout protocol
+- `lexical_tags`: Lexical tagging of text
+- `linalg`: Vectors, 4x4 matrices and unit quaternions for 3D content (`NativeVector3`, `NativeVector4`, `NativeMatrix4`, `NativeQuaternion`).
+- `linkmeta`: Rich links as pure models
+- `live_activity`: Live activities
+- `location_reminder`: Location-based reminders
+- `lu`: Dense linear systems
+- `map_item`: A place shown in a detail sheet
+- `map_overlay`: Map overlays as pure data
+- `maps_link`: Map links
+- `mapshape`: Map overlays
+- `mapview`: Map camera, zoom levels, scale bar and user-tracking state for a map view.
+- `markup`: Markup documents (`NativeMarkupDocument`, `NativeMarkupOrderedSet`, `NativeMarkupID`, the element kinds and
+- `markup_drawing`: Drawings
+- `match_pattern`: Match patterns
+- `media_artwork`: Artwork for a media item as a pure model
+- `media_block`: Block buffers and a bounded memory pool for media samples.
+- `media_changes`: Change records for a media library
+- `media_content`: Typed now-playing content
+- `media_feedback`: Feedback and rating for the playing item as a pure model.
+- `media_playlist`: Playlists as a pure model
+- `media_query`: Media library queries
+- `media_request`: Media playback requests
+- `media_search`: Media search requests
+- `media_selection`: Language options and accessibility track choice as a pure model.
+- `media_session`: Local Now Playing sessions as a pure model
+- `media_sources`: Media sources and the load options that choose them, as a pure model.
+- `media_time`: Rational media time
+- `media_timebase`: Timebases
+- `media_trim`: Trimming session for a media player view as a pure model.
+- `media_type_names`: Localized names of media types and media subtypes (`MTCopyLocalizedNameForMediaType`,
+- `menu_extras`: System menu extras of the menu bar
+- `mesh_file`: Mesh files as plain data
+- `mesh_primitives`: Built-in 3D shapes as vertex data
+- `mesh_process`: Mesh processing on `PrimitiveMesh` data
+- `mic_consent`: Microphone consent and ownership
+- `midi_ble`: BLE MIDI packets
+- `midi_ble_picker`: Bluetooth MIDI picker and advertiser
+- `midi_events`: MIDI 1.0 channel messages as app-facing events
+- `midi_thru`: MIDI thru connections
+- `ml_model`: A model that runs
+- `ml_state`: Named state buffers that a stateful model keeps from one prediction to the next.
+- `ml_tensor`: Multi-dimensional numeric arrays for model inputs and outputs (`MLTensor`)
+- `ml_update`: On-device model updates
+- `model_assets`: Models that arrive at runtime, tracked as named assets.
+- `model_attachment`: Image attachments for a prompt.
+- `model_history`: Change history with transaction tokens (`HistoryDescriptor`, `HistoryTransaction`, `HistoryChange`).
+- `model_provider`: The model behind a session.
+- `model_schema`: Attribute options for the fields of a model entity
+- `model_session`: A model session with profiles, dynamic instructions and typed session properties.
+- `model_specialization`: A cache of specialized model artifacts, keyed by model name and specialization options.
+- `model_store`: An in-memory record store with a model-context style API
+- `model_tool`: Tools a model may call while it answers.
+- `morph_skin`: Shape morphing and skeletal skinning as pure models (`NativeMorpher`, `NativeSkinner`).
+- `nav_policy`: Navigation policy for web content
+- `nn`: Output sizes of windowed operators (convolution and pooling) and the scale factor of a Fourier transform.
+- `node_constraint`: Node constraints
+- `notifattach`: Notification attachments
+- `notifcomm`: Communication notifications
+- `notifdelivery`: How a notification is presented
+- `notifmedia`: Play and pause on a notification card
+- `notifservice`: Notification content changes before delivery
+- `object_push`: Object push transfer panel
+- `obstacle`: Impassable areas that steering code routes around
+- `one_time_code`: One-time codes (task theme-28)
+- `onscreen_entity`: Onscreen context for app entities
+- `param_view`: Generic parameter view
+- `particle_system3d`: A 3D particle system
+- `passkey_display`: Passkey display for pairing
+- `pcm_convert`: Linear PCM conversion
+- `pdf_access`: PDF access permissions and write options as a pure model.
+- `pdf_overlay`: PDF page overlays and markup mode as a pure model.
+- `pdfannot`: PDF annotations as a pure model
+- `pdfform`: PDF form widgets as a pure model
+- `pdfpage`: PDF page geometry as a pure model
+- `pdfselect`: Text selection and find over the text of a PDF document, as a pure model.
+- `pdfview`: PDF document view layout as a pure model
+- `peripheral`: Peripheral role
+- `permission_question`: Permission questions an app sends to a guardian, and the answers that come back.
+- `photo_caching`: Preparing thumbnails ahead of need.
+- `photo_changes`: Change details for a photo library (the change record a library observer receives).
+- `photo_request`: A batch of changes to a photo library, planned before anything is written
+- `photo_smart_albums`: Smart albums of a photo library
+- `physics`: Rigid-body physics world
+- `physics3d`: Three-dimensional rigid-body world
+- `playback_arbiter`: Playback arbitration between participants
+- `playback_rate`: Playback rate commands
+- `plugin_host`: Plugin host model.
+- `plugin_view`: Plugin view model
+- `poi_filter`: Point of interest categories and the filter that includes or excludes them.
+- `pose`: Rotations, Euler angles, and poses (a position with a rotation, optionally scaled) for 3D content.
+- `postal_address`: Structured postal addresses and their mailing layout.
+- `precipitation`: Precipitation (`Precipitation`)
+- `pressure_trend`: Pressure trend (`PressureTrend`)
+- `primitives3d`: Built-in 3D shapes as plain vertex data
+- `procedural_texture`: Procedural textures for material inputs
+- `quadrature`: Numerical definite integration
+- `quadtree`: Spatial partitioning
+- `racing_wheel`: Racing wheel input model
+- `reading_list`: A reading list
+- `record_asset`: Assets attached to records
+- `record_share`: Record sharing
+- `record_store`: Record database
+- `record_sync`: Sync queue, conflicts and error codes for the record database in `record_store`.
+- `recordsearch`: Record search with compound elements
+- `regex`: Regex parity (`Regex`, `Regex.Match`)
+- `relevance`: Relevance ranking for a stack of glanceable content
+- `remote_command`: Remote command models for the playback rate, rating and feedback commands of the media player framework.
+- `remote_view`: A view that another process draws and the host shows in its own window.
+- `render_loop`: A render loop as a pure model
+- `render_synchronizer`: Render synchronizer model
+- `reverse_lookup`: Nearest-place lookup
+- `route_action`: Custom action items for a route picker.
+- `route_auth`: Per-app authorization of third-party media routes, and the active state of each route.
+- `ruby`: Ruby annotations
+- `rule_system`: Rule systems for game logic
+- `run_delegate`: Run delegates and adaptive images for styled text.
+- `sample_attach`: Per-sample attachments and data-readiness notifications for a run of media samples.
+- `sample_attachments`: Sample attachments
+- `save_sync`: Synced save directories
+- `scan_job`: Scanner device model
+- `scanner`: Scanners over the SANE command line (`scanimage`)
+- `scene2d`: Two-dimensional scenes as a pure model
+- `scene3d`: Scene tree for 3D content
+- `scene_action`: Actions for scene nodes
+- `scene_audio`: Positional audio players for a 3D scene
+- `scene_light`: Light sources for 3D scenes (`NativeLight`, `NativeLightType`, `NativePhysicallyPlausibleLight`).
+- `scene_loop`: The lifecycle and frame cycle of a game scene as a pure model.
+- `scene_material`: Surface materials for 3D objects (`NativeMaterial`, `NativeMaterialProperty`, `NativeMaterialSemantic`,
+- `scene_object`: Object hierarchy for 3D assets (`NativeObjectContainer`, `NativeObject`, `NativeNamed`, `NativeTransform`).
+- `scene_source`: Scene asset import
+- `scene_view`: A view that shows a `Scene` through one of its cameras, as a pure model of the reference framework's scene
+- `scheduled_region`: Scheduled playback on a sample timeline.
+- `screensaver`: Screen saver module model (`ScreenSaverView`) and its utilities (`SSRandomIntBetween`, `SSRandomFloatBetween`,
+- `scripting`: Scripting object model
+- `searchindex`: Named search indexes and their descriptions (`CSSearchableIndex(name:protectionClass:)` and
+- `searchquery`: App-side search queries
+- `services_menu`: The Services menu
+- `shared_list`: Shared file list
+- `skip_interval`: Interval skips
+- `smartcard_slot`: Smart card reader slots
+- `sound_analyzer`: Sound classification requests and the analyzer that runs them over audio input.
+- `sound_classify`: Sound classification
+- `sound_distance`: Distance attenuation and directional emission for sound sources.
+- `sound_envelope`: Breakpoint envelopes for audio parameters over a linear input (time, distance or a game value).
+- `sound_event`: Sound event trees
+- `sound_group`: Sound groups and ducking.
+- `sound_result`: Sound classification results.
+- `sound_room`: Room reverberation and the direct to reverberant balance of a sound.
+- `sound_space`: Sound in a 3D scene
+- `spatial`: Points, sizes, boxes, axes, rays and spherical coordinates in 3D space, built on `linalg::Vector3`.
+- `speech_assets`: Speech model assets
+- `stardict`: Dictionaries for the Dictionary app and the Look Up popover, in the StarDict layout (an `.ifo` description, an `.idx`
+- `state_machine`: Finite state machines for game logic
+- `state_report`: State reporting
+- `store_test`: A store test session for purchase flows, the counterpart of the StoreKit testing harness (`StoreKit Test`).
+- `strategist`: Turn-based game AI as pure search over a game model.
+- `stylus`: Digitizer stylus input as a pure model.
+- `surface_attach`: Attachments
+- `surface_colour`: Colour tagging for a shared buffer
+- `surface_layout`: Pixel formats and plane layout for a shared buffer
+- `surface_lock`: CPU lock state for a shared buffer.
+- `surface_use`: Use counts for a shared buffer.
+- `switch_scan`: Switch Control item scanning (`AccessibilityTechnology.switchControl`)
+- `symbol_effect`: Symbol effects for system symbol images (`SymbolEffect`, `DiscreteSymbolEffect`, `IndefiniteSymbolEffect`,
+- `symbol_layers`: Symbol layers
+- `tensor`: Tensor types for compute graphs
+- `text_classifier`: A text classifier that runs
+- `text_marker`: Text markers and marker ranges over one text element
+- `text_markup`: Text markup for legible media
+- `textbreak`: Text segmentation
+- `textmetrics`: Where text widths come from.
+- `texture_descriptor`: Texture descriptors for GPU resources
+- `thumb_service`: The system thumbnail model
+- `tilemap`: Tile map model
+- `timeline`: Timelines for glanceable content (`Timeline`, `TimelineEntry`, `TimelineReloadPolicy`)
+- `tips`: Contextual tips
+- `token_objects`: Objects a cryptographic token stores (keys, certificates and identities), read as keychain-like items.
+- `token_registration`: Smart card sign-in
+- `token_registry`: Registration of smart cards by token ID, and the policy that says when a card is needed to log in.
+- `token_watch`: Cryptographic tokens
+- `tool_calls`: Tool calls
+- `transcript`: A session transcript
+- `transform3d`: 3D transforms
+- `translation`: `Translation` framework parity models
+- `ubiquitous_store`: Small key-value store that keeps a set of settings in step across a person's devices.
+- `url_filter`: URL filter
+- `utdecl`: App-declared file types
+- `value_query`: The result of an intent value query
+- `vcard`: vCard 3.0 cards for contacts
+- `vector_ops`: Vector arithmetic over slices of `f32`
+- `verification_codes`: One-time codes that arrive in messages and mail.
+- `vertex_descriptor`: Vertex layout
+- `vertical_text`: Vertical text layout
+- `video_device`: Video devices and stream formats
+- `video_property`: Extension properties
+- `video_session`: Video encoder session properties and the catalogue of encoders.
+- `video_settings`: Encoder settings for a video output
+- `video_transition`: Opacity over time for each video track of a composition
+- `view_camera`: Camera for 3D views (`NativeCamera`, `NativeCameraProjection`)
+- `virtual_controller`: Virtual on-screen controller
+- `visual_search`: Visual search model
+- `vm_error`: Error codes for configuring and running a guest virtual machine.
+- `vm_share`: Host directories shared with a guest virtual machine.
+- `vm_state`: Execution state of a guest virtual machine and the lifecycle operations allowed in each state.
+- `voice_activity`: Voice activity detection
+- `voice_commands`: Spoken commands for driving the interface by voice
+- `volume_control`: A device's volume control
+- `voxel_array`: Volumetric voxel grids for 3D objects (`NativeVoxelArray`, `NativeVoxelIndex`, `NativeVoxelIndexExtent`).
+- `weather_alert`: Weather alerts (`WeatherAlert`)
+- `weather_attribution`: Data attribution for weather (`WeatherAttribution`)
+- `weather_model`: Weather models that need no network
+- `weather_stats`: Historical weather statistics
+- `web_auth`: Shared-login authentication session, shaped like the system web-session API
+- `web_extension`: Browser-style web extensions as a pure model
+- `web_history`: Web history per app
+- `web_service_token`: Web service tokens
+- `web_usage`: Web-usage reporting for one webpage.
+- `webauth_session`: Web sign-in sessions
+- `webpage_usage`: Web page usage
+- `widget_action`: What a tap on a widget does
+- `widget_arrange`: The widgets a user placed on a surface (Today view, desktop or lock screen) and the edit mode that changes them
+- `widget_ax`: The spoken description of a widget for assistive technology
+- `widget_config`: The settings a user can give a widget (the user-configurable options of a widget configuration)
+- `widget_date`: Dated text inside a widget that stays current while the app is not running
+- `widget_kind`: The widgets an app offers
+- `widget_link`: The link a widget opens when it is tapped (`widgetURL(_:)` and `Link` in a widget).
+- `widget_list`: The list a Today widget shows its content in (the Notification Center framework's list controller).
+- `widget_search`: The search view of a Today widget (the reference SDK's default search view for a widget, deprecated there in favour
+- `window_list`: Window list
+- `wire_json`: Small helpers shared by the models that cross the shell service wire (displays, windows, input events)
+- `work_stream`: An ordered stream of GPU or CPU work with dependencies derived from the resources each unit reads and writes.
+- `workflow`: An ordered workflow of steps (`NativeWorkflow`) and its controller (`NativeWorkflowController`).
+- `writing_assist`: Writing assistance for a text view
+
+### `bifrost_render` (`springboard/render/src`)
+
+- `bayer`: Bayer colour-filter-array demosaic with white balance, as a pure model (std only).
+- `bezier`: Bezier paths
+- `block_motion`: Block motion estimation between two 8-bit planes, as plain std code.
+- `blur_kernels`: Directional and disc blurs on packed pixels
+- `buffer_attach`: Colour metadata that travels with an image buffer
+- `buffer_pool`: A recyclable pool of buffers.
+- `cff`: CFF outlines for OpenType fonts with a `CFF ` table (OTTO)
+- `colorcube`: A three-dimensional colour lookup table.
+- `colorlab`: CIE L*a*b* colour for sRGB values, the perceptual space that colour conversion and palette matching
+- `colormap`: Colour maps and palettes for packed pixels.
+- `colorspace`: Named RGB working spaces and the matrix conversions between them.
+- `display_list`: `DisplayList`
+- `emitter`: A particle emitter model.
+- `fontfallback`: The process-wide fallback faces
+- `fontinfo`: Font file facts read straight from the sfnt tables
+- `fontobj`: App-facing font objects
+- `frame_interp`: Frame interpolator model for CPU rasters
+- `gamma_fade`: Gamma fade ramp for a screen saver's start and stop (the gradual fade behind `performGammaFade`).
+- `guided`: Edge-preserving guided filter on single-channel `f32` planes (He, Sun and Tang's guided filter).
+- `gvar`: TrueType variations
+- `hdr_frame`: Per-frame HDR metadata for video pictures, as plain std code.
+- `hdr_metadata`: HDR transfer functions and per-frame light metadata, as a pure model (std only).
+- `hdr_transfer`: High dynamic range transfer curves and extended range headroom, as plain f64 math.
+- `icc`: Reads ICC colour profiles and keeps the profile each device uses.
+- `image_tiles`: Tile grids for large pictures.
+- `imgdec`: Scaling helpers that turn decoded pictures into thumbnails and screen-fitted images.
+- `imgtile`: Tiled access to a large picture, as plain std code.
+- `integral`: Summed-area tables and region statistics on 8-bit single-channel planes
+- `lazy_image`: Lazily evaluated images
+- `pixel_format`: Pixel format descriptions for buffers that the system allocates and other code reads
+- `pixel_layout`: Pixel buffer layout descriptors and the byte conversions between the renderer's premultiplied 8-bit pixels
+- `plane_arith`: Element-wise arithmetic and transposition of 8-bit planes.
+- `plane_stats`: Reductions, integral images and region statistics over 8-bit planes.
+- `raw_params`: Processing parameters for a RAW image processor, as a pure model (std only).
+- `replicator`: Replicated instances of one source
+- `shape_ot`: An OpenType text shaper
+- `temporal_upscale`: Temporal upscaler model for CPU rasters
+- `video_transfer`: Pixel transfer and pixel rotation for decoded video pictures, as plain std code.
