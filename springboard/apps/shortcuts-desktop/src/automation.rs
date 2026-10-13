@@ -341,7 +341,7 @@ mod tests {
     }
 
     fn app() -> ShortcutsApp {
-        ShortcutsApp { w: None, reminders: None, asked_login: false, planner: Planner::new() }
+        ShortcutsApp::new()
     }
 
     fn obj(pairs: &[(&str, &str)]) -> Json {

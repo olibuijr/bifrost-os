@@ -37,8 +37,8 @@
    "area": "view",
    "apple": "editor",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:569",
-   "note": "Add and remove with value steppers; no reorder",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:766",
+   "note": "Add and remove with steppers; each row has move up and move down arrows (Shortcut::move_action, springboard/src/shortcuts.rs:901). Drag reordering is not done. Not yet checked on the lab machine.",
    "wire": "Move up/down or drag on editor action rows"
   },
   {
@@ -46,8 +46,8 @@
    "area": "panel",
    "apple": "actions sidebar",
    "status": "partial",
-   "bifrost": "springboard/src/shortcuts.rs:28",
-   "note": "Twelve fixed action kinds with preset choices; no text, input, web or file actions",
+   "bifrost": "springboard/src/shortcuts.rs:94",
+   "note": "Adds Text, Ask for Input, Get Contents of URL, Save File, Show Result, Set Variable and the scripting actions, grouped in the Add Action list. Text, input, variable, file and scripting steps run in the app (evaluate); Save File writes to the app's Saved folder. Get Contents of URL is recorded but the app has no network access, so it reports that it is not available. System actions still cannot run on this device. Not yet checked on the lab machine.",
    "wire": "Extend Action with Text, Ask for Input, Get Contents of URL, Save File, Show Result"
   },
   {
@@ -63,18 +63,18 @@
    "feature": "Variables between actions",
    "area": "view",
    "apple": "editor",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shortcuts.rs:721",
+   "note": "Every step passes its result on as {Previous}; Set Variable names it ({Name}); a text row has an Insert Variable button (tokens: springboard/src/shortcuts.rs:504, Env: springboard/src/shortcuts.rs:537). Variable chips drawn inside the text field are not done: tokens are typed text. Not yet checked on the lab machine.",
    "wire": "Action output passing and a variable token model in springboard/src/shortcuts.rs"
   },
   {
    "feature": "Control flow: If, Repeat, Choose from Menu",
    "area": "view",
    "apple": "scripting actions",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shortcuts.rs:447",
+   "note": "If (has any value, is empty, is, contains) with Otherwise, Repeat 1 to 20 and Choose from Menu with Menu Items, as a flat list with block markers and an End; adding a block adds its End, removing it removes the End; rows are indented by depth; menu questions list their choices in a panel. Blocks are edited as rows, not as nested cards. Not yet checked on the lab machine.",
    "wire": "Block actions with nested children in the model and the editor"
   },
   {
@@ -82,8 +82,8 @@
    "area": "panel",
    "apple": "Details",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:630",
-   "note": "Colour only",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:1383",
+   "note": "A glyph picker of ten symbols beside the colour swatches; the tile shows the chosen symbol. A wider symbol set and a custom colour are not done. Not yet checked on the lab machine.",
    "wire": "Glyph picker beside the swatches"
   },
   {
@@ -91,17 +91,17 @@
    "area": "menu",
    "apple": "File / context menu",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:655",
-   "note": "Delete only",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:1013",
+   "note": "The Name row types a new name (Return saves, Escape cancels); Duplicate Shortcut in the editor and File > Duplicate Shortcut; delete in the editor and Shortcut > Delete Shortcut. A context menu on the tile is not done. Not yet checked on the lab machine.",
    "wire": "Rename field and Duplicate in the editor"
   },
   {
    "feature": "Folders",
    "area": "view",
    "apple": "sidebar folders",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:503",
+   "note": "The Folder row types a folder name; the sidebar lists the folders in use with counts and filters the grid; a new shortcut joins the folder on screen. Moving by drag and nested folders are not done. Not yet checked on the lab machine.",
    "wire": "Folder field and sidebar sections"
   },
   {
@@ -109,8 +109,8 @@
    "area": "view",
    "apple": "Automation",
    "status": "partial",
-   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:648",
-   "note": "Daily time only",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:1414",
+   "note": "The Automation row picks When App Opens or When Battery Is Low with a stepper for the app or level, next to the daily time. The battery trigger runs the shortcut once each time the charge falls below the level (checked every minute, check_triggers springboard/apps/shortcuts-desktop/src/widget.rs:1275); the app-open trigger is stored but nothing tells the app when another app opens, so it does not fire yet. Not yet checked on the lab machine.",
    "wire": "Automations list with time, app-open and battery triggers"
   },
   {
@@ -126,18 +126,18 @@
    "feature": "Keyboard shortcut / menu bar run",
    "area": "settings",
    "apple": "Details > keyboard shortcut",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/main.rs:155",
+   "note": "The Menu Key row gives a shortcut Cmd+1 to Cmd+9 (next_hotkey, springboard/src/shortcuts.rs:952); the app's Shortcut menu lists every shortcut with its key and runs it while the app is in front. A system-wide hotkey needs shell hotkey registration, which is not done. Not yet checked on the lab machine.",
    "wire": "Shell hotkey registration per shortcut"
   },
   {
    "feature": "Import / export shortcut files",
    "area": "document",
    "apple": "File > Import / Export",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/main.rs:262",
+   "note": "File > Import Shortcut... (open panel) and Export Shortcut... (save panel, also a row in the editor) read and write a .shortcut file through the document flow (export_text/import_text, springboard/src/shortcuts.rs:987); an imported name is made unique and its menu key dropped. Not yet checked on the lab machine.",
    "wire": "Serialize a shortcut to a file through the document flow"
   },
   {
@@ -153,9 +153,9 @@
    "feature": "Search shortcuts",
    "area": "toolbar",
    "apple": "search field",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/widget.rs:557",
+   "note": "A search field in the toolbar of the grid filters the tiles by name or folder as you type; View > Find focuses it; Escape clears it. Not yet checked on the lab machine.",
    "wire": "Search field filtering the grid"
   },
   {
@@ -171,18 +171,18 @@
    "feature": "Starter gallery",
    "area": "view",
    "apple": "Gallery",
-   "status": "gap",
-   "bifrost": "",
-   "note": "",
+   "status": "partial",
+   "bifrost": "springboard/src/shortcuts.rs:1005",
+   "note": "A Gallery row in the sidebar lists six starter shortcuts with a line of their steps; tapping one adds a copy. Not yet checked on the lab machine.",
    "wire": "Bundled starter shortcuts"
   },
   {
    "feature": "App menus",
    "area": "menu",
    "apple": "MainMenu",
-   "status": "gap",
-   "bifrost": "",
-   "note": "No main_menu",
+   "status": "partial",
+   "bifrost": "springboard/apps/shortcuts-desktop/src/main.rs:155",
+   "note": "File (New, Duplicate, Import, Export), Shortcut (Run, Delete and one item per shortcut) and View (Find, All Shortcuts, Gallery) with key equivalents; Edit > Paste works while typing. Not yet checked on the lab machine.",
    "wire": "App::main_menu with New Shortcut, Run, Delete"
   },
   {

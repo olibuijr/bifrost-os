@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.8.0 — 2026-10-13
+
+- New action kinds in the Add Action list, in groups: Text, Ask for Input, Set Variable and Show Result (Text and Variables); Get Contents of URL and Save File (Web and Files); If, Otherwise, Repeat, Choose from Menu, Menu Item and End (Scripting). The text, variable and scripting steps run inside the app. Show Result opens the result panel, Ask for Input and Choose from Menu ask their question in a panel before the run, and Save File writes into the app's Saved folder. Get Contents of URL is stored and listed, but the app has no network access yet, so a run says it is not available. System steps still cannot run on this device.
+- Every step passes its result on as {Previous}; Set Variable names it so later steps can use {Name}. While you type into a text row, Insert Variable adds the next variable's token.
+- Blocks: adding an If, Repeat or menu adds its End; removing the opener removes the End; rows inside a block are indented.
+- Each action row has move up and move down arrows.
+- The editor has a Details group: Name (type to rename), Folder, Menu Key, Daily Reminder and Automation. Automation picks When App Opens or When Battery Is Low with a stepper; the battery automation is checked every minute and runs the shortcut once each time the charge falls below the level. The app-open automation is stored only: nothing tells the app when another app opens.
+- A Glyph picker beside the colours; the tile shows the symbol. Duplicate Shortcut and Export Shortcut rows next to Delete.
+- The sidebar gains Gallery (six starter shortcuts, tap to add a copy) and a Folders section with counts; selecting a folder filters the grid. The toolbar has a search field that filters the tiles.
+- Menus: File (New Shortcut, Duplicate Shortcut, Import Shortcut, Export Shortcut), Shortcut (Run Shortcut, Delete Shortcut, and one item per shortcut with its Cmd+1 to Cmd+9 key) and View (Find, All Shortcuts, Gallery). Import and Export use the open and save panels and a .shortcut file. Edit > Paste works while typing.
+- The shortcut file keeps older lines readable: folder, glyph, menu key and automation are extra fields at the end of the line. The SDK glyph set gains chevron.up.
+- Needs system 0.4.84, as before.
+
 ## 1.7.0 — 2026-10-13
 
 - The action library gains four kinds, in the Add Action list after Start Timer: Show Notification (a message from a list), Copy Text (a text from a list, put on the clipboard), Open Folder (a folder in the home directory: Desktop, Documents, Downloads, Pictures or Music) and Run Shell Script (a command from a list). Their values are picked from their lists, so a saved value always has a known meaning.
