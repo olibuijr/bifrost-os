@@ -4,6 +4,7 @@
 //! clipboard or pastes into the shell.
 
 use super::clipboard;
+use super::terminal::profile_table::detect_urls;
 use super::edit::Action;
 use super::editmenu::EditMenu;
 use super::textfield::LONG_PRESS_MS;
@@ -39,11 +40,18 @@ pub struct TermTouch {
     menu_touch: bool,
     /// the last tap: its cell, when it landed and how many taps in a row it is (1..=3)
     last_tap: Option<((usize, usize), f64, u8)>,
+    /// the web link a single tap landed on; the shell opens it with `take_link`
+    link: Option<String>,
 }
 
 impl TermTouch {
     pub fn menu(&self) -> Option<&EditMenu> {
         self.menu.as_ref()
+    }
+
+    /// The web link the last plain tap landed on, once: a tap on a link opens it.
+    pub fn take_link(&mut self) -> Option<String> {
+        self.link.take()
     }
 
     pub fn down(&mut self, ui: &Ui, term: &mut Terminal, x: f32, y: f32, t: f64) {
@@ -55,6 +63,7 @@ impl TermTouch {
             }
         }
         self.menu = None;
+        self.link = None;
         term.select(None);
         self.press = Some(Press { x, y, t, last_y: y, carry: 0.0, moved: false, long: false, cell: term.cell_at(x, y) });
     }
@@ -112,6 +121,7 @@ impl TermTouch {
         };
         self.last_tap = Some((cell, t, count));
         match count {
+            1 => self.link = link_at(term, cell),
             2 => term.select_word(cell),
             3 => term.select_line(cell.1),
             _ => {}
@@ -184,6 +194,14 @@ impl TermTouch {
             m.draw(s, ui);
         }
     }
+}
+
+/// The http(s) link under `cell`, if its row has one there.
+fn link_at(term: &Terminal, (col, row): (usize, usize)) -> Option<String> {
+    detect_urls(&term.row_text(row))
+        .into_iter()
+        .find(|(start, end, url)| (*start..*end).contains(&col) && (url.starts_with("http://") || url.starts_with("https://")))
+        .map(|(_, _, url)| url)
 }
 
 #[cfg(test)]
@@ -318,5 +336,22 @@ mod tests {
         assert!(!tt.up(&ui, &mut term, 600.0, 700.0, 1200.0));
         tt.dismiss();
         assert!(tt.menu().is_none());
+    }
+
+    #[test]
+    fn a_tap_on_a_link_takes_its_url_once() {
+        let ui = ui();
+        let mut term = terminal(&["/bin/sh", "-c", "printf 'see https://a.io/x.\\n'; read x"]);
+        pump_until(&mut term, "https://");
+        let mut tt = TermTouch::default();
+        let (x, y) = centre(&term, 6, 0);
+        tt.down(&ui, &mut term, x, y, 1000.0);
+        assert!(tt.up(&ui, &mut term, x, y, 1200.0), "a tap still brings the keyboard back");
+        assert_eq!(tt.take_link().as_deref(), Some("https://a.io/x"));
+        assert_eq!(tt.take_link(), None, "taken once");
+        let (x, y) = centre(&term, 1, 0);
+        tt.down(&ui, &mut term, x, y, 2000.0);
+        tt.up(&ui, &mut term, x, y, 2200.0);
+        assert_eq!(tt.take_link(), None, "a tap on plain text is no link");
     }
 }

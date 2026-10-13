@@ -490,6 +490,11 @@ impl Terminal {
     pub fn take_clipboard(&mut self) -> Option<String> { self.term.take_clipboard() }
     pub fn cwd(&self) -> Option<String> { self.pty.cwd() }
 
+    /// The visible row `row` as text, trailing blanks dropped (for link detection on a tap).
+    pub fn row_text(&self, row: usize) -> String {
+        self.term.visible_row(row).iter().map(|c| c.ch).collect::<String>().trim_end().to_string()
+    }
+
     /// The last `n` non-blank visible lines, trailing spaces trimmed (for
     /// the Today View widget).
     pub fn tail(&self, n: usize) -> Vec<String> {

@@ -3853,6 +3853,13 @@ impl Shell {
                     Some(term) => self.term_touch.up(&self.ui, term, x, y, self.w as f32),
                     None => false,
                 };
+                if let Some(url) = self.term_touch.take_link() {
+                    self.terminal_ui.message = match self.desktop_open_url(&url, t) {
+                        Ok(()) => "Opened link".into(),
+                        Err(e) => format!("Could not open link: {e}"),
+                    };
+                    self.dirty = true;
+                }
                 if tap {
                     self.set_keyboard(true, t);
                 }
