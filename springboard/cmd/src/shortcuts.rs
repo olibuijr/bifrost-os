@@ -146,6 +146,18 @@ pub fn perform(a: &Action) -> Result<String, String> {
                 Err(format!("{script} exited with {}", out.status))
             }
         }
+        Action::Text(_)
+        | Action::AskInput(_)
+        | Action::GetUrl(_)
+        | Action::SaveFile(_)
+        | Action::ShowResult
+        | Action::SetVariable(_)
+        | Action::If(..)
+        | Action::Otherwise
+        | Action::Repeat(_)
+        | Action::Menu(_)
+        | Action::MenuItem(_)
+        | Action::End => Err(format!("{} runs inside the Shortcuts app, not from the command line", a.title())),
         other => Err(format!("{} needs the shell's services and cannot run from the command line yet", other.title())),
     }
 }
@@ -160,7 +172,7 @@ mod tests {
     }
 
     fn named(name: &str, actions: Vec<Action>) -> Shortcut {
-        Shortcut { name: name.into(), color: 0, actions, schedule: None }
+        Shortcut { name: name.into(), color: 0, actions, schedule: None, ..Shortcut::default() }
     }
 
     fn two() -> Vec<Shortcut> {

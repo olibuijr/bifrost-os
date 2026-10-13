@@ -67,7 +67,7 @@ pub fn polygon_verbs(pts: &[(f32, f32)]) -> Vec<PathVerb> {
 }
 
 /// Every name `glyph` draws, for galleries and tests.
-pub const NAMES: [&str; 59] = [
+pub const NAMES: [&str; 60] = [
     "chevron.left", "chevron.right", "sidebar.left", "square.grid.2x2", "list.bullet", "rectangle.split.3x1",
     "magnifyingglass", "xmark.circle.fill", "folder", "folder.badge.plus", "checkmark.circle", "clock",
     "menubar.dock.rectangle", "doc", "arrow.down.circle", "house", "desktopcomputer", "internaldrive", "trash", "tag",
@@ -76,7 +76,7 @@ pub const NAMES: [&str; 59] = [
     "person", "person.crop.circle", "star", "star.fill", "envelope", "phone", "bookmark", "textformat", "pencil",
     "square.and.pencil", "antenna.radiowaves.left.and.right", "mic", "music.note.list", "opticaldisc", "radio",
     "calculator", "cloud.sun", "ellipsis.circle", "info.circle", "flag", "calendar",
-    "arrow.clockwise", "xmark", "rectangle.grid.1x2",
+    "arrow.clockwise", "xmark", "rectangle.grid.1x2", "chevron.up",
 ];
 
 /// True when `name` has a drawing.
@@ -292,6 +292,7 @@ pub fn glyph(s: &mut dyn Canvas, ui: &Ui, name: &str, bounds: Rect, color: u32) 
             poly(s, &[(0.54, 0.7), (0.68, 0.84), (0.82, 0.7)], false);
         }
         "chevron.down" => poly(s, &[(0.18, 0.36), (0.5, 0.66), (0.82, 0.36)], false),
+        "chevron.up" => poly(s, &[(0.18, 0.64), (0.5, 0.34), (0.82, 0.64)], false),
         "backward.fill" => {
             fill(s, &[(0.5, 0.24), (0.5, 0.76), (0.08, 0.5)]);
             fill(s, &[(0.92, 0.24), (0.92, 0.76), (0.5, 0.5)]);
@@ -604,6 +605,17 @@ mod canvas_tests {
         let mut none = Rec::default();
         assert!(!glyph(&mut none, &u, "no.such.symbol", Rect { x: 0.0, y: 0.0, w: 20.0, h: 20.0 }, 0xffff_ffff));
         assert!(none.ops.is_empty());
+    }
+
+    #[test]
+    fn the_up_chevron_is_the_down_chevron_turned_over() {
+        assert!(has("chevron.up") && has("chevron.down"));
+        let u = ui();
+        let b = Rect { x: 0.0, y: 0.0, w: 20.0, h: 20.0 };
+        let (mut up, mut down) = (Rec::default(), Rec::default());
+        assert!(glyph(&mut up, &u, "chevron.up", b, 0xffff_ffff));
+        assert!(glyph(&mut down, &u, "chevron.down", b, 0xffff_ffff));
+        assert_eq!(up.ops.len(), down.ops.len(), "the same two segments");
     }
 }
 
