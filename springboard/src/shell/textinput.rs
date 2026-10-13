@@ -137,6 +137,33 @@ pub fn named_key(name: &str) -> Option<u32> {
     })
 }
 
+/// The named keys the virtual keyboard sends: evdev code, xkb key name and keysym. Matches `named_key`.
+const VIRTUAL_KEYS: [(u32, &str, &str); 8] = [
+    (KEY_ESC, "ESC", "Escape"),
+    (KEY_BACKSPACE, "BKSP", "BackSpace"),
+    (KEY_TAB, "TAB", "Tab"),
+    (KEY_ENTER, "RTRN", "Return"),
+    (103, "UP", "Up"),
+    (105, "LEFT", "Left"),
+    (106, "RGHT", "Right"),
+    (108, "DOWN", "Down"),
+];
+
+/// The xkb keymap the virtual keyboard is given: the named keys only, since text goes through `commit_string`. An
+/// xkb keycode is the evdev code plus 8.
+pub fn virtual_keymap() -> String {
+    let mut s = String::from("xkb_keymap {\nxkb_keycodes \"bifrost\" {\nminimum = 8;\nmaximum = 255;\n");
+    for (code, name, _) in VIRTUAL_KEYS {
+        s += &format!("<{name}> = {};\n", code + 8);
+    }
+    s += "};\nxkb_types \"bifrost\" { include \"complete\" };\nxkb_compatibility \"bifrost\" { include \"complete\" };\nxkb_symbols \"bifrost\" {\n";
+    for (_, name, sym) in VIRTUAL_KEYS {
+        s += &format!("key <{name}> {{ [ {sym} ] }};\n");
+    }
+    s += "};\n};\n";
+    s
+}
+
 /// A backspace: delete the selection when there is one, else the character before the caret when the field's text
 /// is known, else a real Backspace key (the text is not known, so the byte count would be a guess).
 fn backspace(f: &ImField) -> ImOut {
@@ -279,6 +306,20 @@ mod input_method_tests {
     #[test]
     fn backspace_without_known_text_is_a_key() {
         assert_eq!(outs_for(&field("", 0, 0), &Out::Backspace), vec![ImOut::Key(KEY_BACKSPACE)]);
+    }
+
+    #[test]
+    fn the_virtual_keymap_names_every_key_the_shell_sends() {
+        let map = virtual_keymap();
+        for name in ["Escape", "Tab", "Up", "Down", "Left", "Right"] {
+            let code = named_key(name).expect("a named key");
+            assert!(map.contains(&format!("= {};", code + 8)), "{name} has keycode {}", code + 8);
+        }
+        for code in [KEY_BACKSPACE, KEY_ENTER] {
+            assert!(VIRTUAL_KEYS.iter().any(|&(c, _, _)| c == code), "{code} is in the keymap");
+        }
+        assert!(map.contains("key <RTRN> { [ Return ] };"));
+        assert!(map.starts_with("xkb_keymap {"));
     }
 
     #[test]
