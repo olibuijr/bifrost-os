@@ -212,6 +212,38 @@ pub fn scan(root: &Path) -> Vec<Installed> {
 /// Shared snapshots keep running launches valid while package metadata changes.
 static INSTALLED: std::sync::RwLock<Option<std::sync::Arc<[Installed]>>> = std::sync::RwLock::new(None);
 static ROOT: OnceLock<PathBuf> = OnceLock::new();
+
+/// How long an app whose socket closed may take to exit before it is SIGKILLed (a core dump runs in that time).
+const LATE_REAP_MS: u64 = 3000;
+/// (app id, exit status) of apps that crashed after their socket had closed; the shell posts them (`late_crashes`).
+static LATE_CRASHES: std::sync::Mutex<Vec<(String, i32)>> = std::sync::Mutex::new(Vec::new());
+
+fn late_reap(mut c: Child, id: String) {
+    let _ = std::thread::Builder::new().name("app-reap".into()).spawn(move || {
+        let status = |st: std::process::ExitStatus| st.code().unwrap_or_else(|| 128 + st.signal().unwrap_or(0));
+        let mut code = None;
+        for _ in 0..LATE_REAP_MS / 20 {
+            if let Ok(Some(st)) = c.try_wait() {
+                code = Some(status(st));
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let code = code.unwrap_or_else(|| {
+            let _ = c.kill();
+            c.wait().ok().map_or(137, status)
+        });
+        bifrost_core::log::shell_logger("apphost").notice(format!("app {id} exited {code} after its socket closed"));
+        if super::crash_alert::is_crash(code) {
+            LATE_CRASHES.lock().unwrap_or_else(|e| e.into_inner()).push((id, code));
+        }
+    });
+}
+
+/// Crashes `late_reap` saw since the last call.
+pub fn late_crashes() -> Vec<(String, i32)> {
+    std::mem::take(&mut *LATE_CRASHES.lock().unwrap_or_else(|e| e.into_inner()))
+}
 pub fn register(root: &Path) {
     let _ = ROOT.set(root.to_path_buf());
     if let Ok(mut g) = INSTALLED.write() { *g = Some(scan(root).into()); }
@@ -859,10 +891,14 @@ impl AppHost {
             None => 0,
             Some(c) => match c.try_wait() {
                 Ok(Some(st)) => st.code().unwrap_or_else(|| 128 + st.signal().unwrap_or(0)),
-                // the socket is gone but the process still runs: SIGKILL it rather than wait for it on the shell thread
+                // the socket is gone but the process still runs: it may be finishing a crash (a core dump takes a
+                // moment) or a slow quit. A short-lived thread waits for its real status (SIGKILL after LATE_REAP_MS)
+                // so a crash still reaches `late_crashes`; the shell goes on at once and counts this exit as clean.
                 _ => {
-                    let _ = c.kill();
-                    c.wait().ok().map_or(137, |st| st.code().unwrap_or_else(|| 128 + st.signal().unwrap_or(0)))
+                    if let Some(c) = self.child.take() {
+                        late_reap(c, self.id.clone());
+                    }
+                    0
                 }
             },
         };
@@ -1524,6 +1560,7 @@ impl Shell {
         for &slot in &died { self.dnd_app_gone(slot); self.extras_app_gone(slot); self.workspace_app_event(bifrost_proto::WorkspaceEventKind::DidTerminateApplication, slot); }
         // a failed exit gets the "quit unexpectedly" alert (read before the host is dropped); the shell keeps running
         for &slot in &died { self.app_crashed(slot as usize); }
+        for (id, code) in late_crashes() { self.app_crashed_late(&id, code); }
         // a window whose app has exited must not keep its last frame on screen
         for slot in died { self.desk_close_app(super::AppId::External(slot)); }
         for slot in failed { self.launch_failed(slot); }

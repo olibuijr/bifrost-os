@@ -169,6 +169,19 @@ impl Shell {
         self.drawn = super::Drawn::Nothing;
     }
 
+    /// A crash `apphost::late_crashes` found after the app's window had already gone: logged, reported and posted as
+    /// a notification (there is no window or slot left for the card).
+    pub(super) fn app_crashed_late(&mut self, id: &str, code: i32) {
+        let name = apphost::installed().iter().find(|a| a.manifest.id == id).map_or_else(|| id.to_string(), |a| a.manifest.name.clone());
+        let why = reason(code);
+        crate::bare::crashlog::append(&self.data_dir.display().to_string(), &log_line(id, code));
+        let entries = diag::load(&self.data_dir);
+        let _ = std::fs::write(self.data_dir.join(REPORT_FILE), report_text(&name, id, &why, &app_entries(&entries, id)));
+        let body = format!("The app stopped because of {why}. The crash report is in Console.");
+        self.notify(super::notify::store::Notification::new(AppId::Settings, title(&name), body, crate::bare::sys::wall_time().0));
+        self.dirty = true;
+    }
+
     /// A tap while the alert is on screen: one of its buttons answers it. Taps elsewhere are ignored.
     pub(super) fn crash_alert_touch(&mut self, x: f32, y: f32) {
         let Some(button) = self.crash_alert.as_ref().and_then(|a| a.hit(&self.ui, self.w, self.h, x, y)) else { return };

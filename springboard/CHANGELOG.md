@@ -1,5 +1,9 @@
 # BifrOSt changelog
 
+## 0.7.24 — 2026-10-13
+
+- An app whose socket closes before its process exits (a crash writing its core dump, or a slow quit) is reaped on a short-lived thread (up to 3 s, then SIGKILL) instead of being SIGKILLed at once, so a real crash keeps its status: SIGABRT in Files now logs, saves the report and posts the notification, where 0.7.22-0.7.23 saw only SIGKILL.
+
 ## 0.7.23 — 2026-10-13
 
 - On the desktop an app crash posts a notification (report saved for Console) instead of the modal card, which the desktop drew under the app windows: unseen, unanswerable, and a full-screen repaint every frame.
