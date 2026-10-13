@@ -772,6 +772,8 @@ pub mod model_history;
 pub mod shape;
 pub mod stroke_style;
 pub mod layer_style;
+pub mod layer_tree;
+pub mod layer_layout;
 pub mod assetpack;
 pub mod assetmock;
 pub mod downloadqueue;
