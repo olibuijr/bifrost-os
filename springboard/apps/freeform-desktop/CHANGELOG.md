@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.4 — 2026-10-13
+
+- Gradient fills use the shared paint kit (`cg::paint`); the old per-app gradient model is gone. The look is unchanged.
+
 ## 1.6.3 — 2026-10-12
 
 - Rebuilt on the BifrOSt 0.6.4 SDK: the shared shell/app wire codec, frame and list caps, and the window materials API.
