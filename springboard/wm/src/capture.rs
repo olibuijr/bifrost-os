@@ -24,7 +24,7 @@ use smithay::{
 use crate::{
     glass::Glass,
     scene::SceneElement,
-    session_protocols::{capture_size, clamp_region, CaptureSpec},
+    session_protocols::{clamp_region, CaptureSpec},
     state::WmState,
     wm::Rect,
 };
@@ -47,8 +47,7 @@ pub fn capture_scene(
     clear: [f32; 4],
     spec: &CaptureSpec,
 ) -> Result<Vec<u8>, Box<dyn Error>> {
-    let mode = output.current_mode().ok_or("output has no mode")?;
-    let size = capture_size((mode.size.w, mode.size.h), output.current_transform());
+    let size = crate::transform::output_size(output).ok_or("output has no mode")?;
     let (x, y, w, h) = read_rect(size, spec.region.clone()).ok_or("empty capture region")?;
     if (w, h) != (spec.region.w, spec.region.h) {
         return Err("capture region leaves the output".into());
