@@ -995,9 +995,11 @@ fn run() -> std::io::Result<()> {
             if wayland {
                 let network=springboard::shell::desktop_network::snapshot();
                 info.wifi_on=network.wifi_on;
-                info.wifi=if !network.wifi_available {"No adapter".into()} else if !network.wifi_on {"Off".into()} else {network.ssid.clone().unwrap_or_else(||"Not Connected".into())};
+                // a joined link without an address or a DNS answer shows that in the menu bar, not the bare name
+                let problem=network.problem.map(springboard::shell::desktop_network::LinkProblem::label);
+                info.wifi=if !network.wifi_available {"No adapter".into()} else if !network.wifi_on {"Off".into()} else {problem.map(str::to_string).or(network.ssid.clone()).unwrap_or_else(||"Not Connected".into())};
                 info.current_ssid=network.ssid.clone();info.networks=network.networks.clone();info.saved=network.saved.clone();
-                info.wifi_notice=network.error.clone();
+                info.wifi_notice=network.error.clone().or(problem.map(str::to_string));
                 // the link kinds decide the glyph: a wired cable never shows as Wi-Fi
                 info.online=network.interfaces.iter().any(|i|i.kind=="wifi"&&i.connected());
                 info.wired=network.interfaces.iter().any(|i|i.kind=="ethernet"&&i.connected());
@@ -1010,8 +1012,11 @@ fn run() -> std::io::Result<()> {
                 Ok(mut cap) => {
                     if let Some(key) = cap.begin(link) {
                         let shared = captive.clone();
+                        // the probe address is read per probe, so a change in Settings applies to the next joined link
+                        let settings = format!("{dir}/settings.ini");
                         springboard::bare::sys::spawn_named("captive", move || {
-                            let verdict = springboard::net::captive::probe(springboard::net::captive::PROBE_URL, springboard::net::captive::TIMEOUT);
+                            let saved = springboard::shell::prefs::Prefs::load(settings).get(springboard::net::captive::SETTING).map(str::to_string);
+                            let verdict = springboard::net::captive::probe(&springboard::net::captive::probe_url(saved.as_deref()), springboard::net::captive::TIMEOUT);
                             if let Ok(mut c) = shared.lock() {
                                 c.finish(&key, verdict);
                             }

@@ -16,7 +16,7 @@ use std::collections::{HashMap, HashSet};
 use std::net::Ipv4Addr;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 pub const IFACE: &str = "wlan0";
 const IDLE_KICK: Duration = Duration::from_secs(8);
@@ -30,6 +30,12 @@ const DESKTOP_CTRL_DIR: &str = "/run/wpa_supplicant";
 const PROBE_EVERY: Duration = Duration::from_secs(5);
 /// How often the wired link is read.
 const ETH_EVERY: Duration = Duration::from_secs(2);
+/// The wall clock runs through a suspend and the monotonic clock does not: a gap this much larger than
+/// the tick between two readings is a sleep.
+const SLEEP_GAP: Duration = Duration::from_secs(5);
+/// Down this long after a network we had joined: ask the supplicant to reconnect, then again at this pace.
+const RECONNECT_AFTER: Duration = Duration::from_secs(10);
+const RECONNECT_EVERY: Duration = Duration::from_secs(20);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum State {
@@ -177,11 +183,20 @@ struct Manager {
     host_ip: bool,
     next_probe: Option<Instant>,
     next_eth: Option<Instant>,
+    /// the network the link last reached, and since when it has been down
+    connected_to: Option<String>,
+    lost_since: Option<Instant>,
+    last_reconnect: Option<Instant>,
+    /// a DHCP renewal is due now (after a sleep), whatever the lease's age
+    renew_due: bool,
+    /// the clocks at the last desktop tick, to tell a sleep from a slow tick
+    last_wall: SystemTime,
+    last_mono: Instant,
 }
 
 impl Manager {
     fn new(dir: String, status: Arc<Mutex<Status>>) -> Self {
-        Manager { iface: IFACE.to_string(), host_ip: false, next_probe: None, next_eth: None, dir, status, ctrl: None, lease: None, enabled: true, last_scan: None, idle_since: None, nets: Vec::new(), events: None, attempt: None, manual: None, pending_off: HashSet::new(), next_dhcp: None }
+        Manager { iface: IFACE.to_string(), host_ip: false, next_probe: None, next_eth: None, dir, status, ctrl: None, lease: None, enabled: true, last_scan: None, idle_since: None, nets: Vec::new(), events: None, attempt: None, manual: None, pending_off: HashSet::new(), next_dhcp: None, connected_to: None, lost_since: None, last_reconnect: None, renew_due: false, last_wall: SystemTime::now(), last_mono: Instant::now() }
     }
 
     fn set(&self, f: impl FnOnce(&mut Status)) {
@@ -344,6 +359,12 @@ impl Manager {
             self.idle_since = None;
         }
         if state != "COMPLETED" {
+            // a network we had joined dropped (signal loss, a roam): ask for it back, not more often than RECONNECT_EVERY
+            let down = self.lost_since.get_or_insert_with(Instant::now).elapsed();
+            if self.connected_to.is_some() && should_reconnect(down, self.last_reconnect.map(|t| t.elapsed())) {
+                c.ok("RECONNECT")?;
+                self.last_reconnect = Some(Instant::now());
+            }
             if self.lease.is_some() {
                 self.drop_lease();
             }
@@ -364,6 +385,8 @@ impl Manager {
             return Ok(());
         }
         self.manual = None;
+        self.lost_since = None;
+        self.connected_to = ssid.clone();
         if let Some(n) = ssid.as_ref().and_then(|s| self.nets.iter().find(|n| &n.ssid == s)) {
             if !n.auto_join {
                 self.pending_off.insert(n.ssid.clone());
@@ -383,7 +406,7 @@ impl Manager {
             });
             return Ok(());
         }
-        let renew = self.lease.as_ref().is_none_or(|(l, at)| at.elapsed() > Duration::from_secs(l.seconds as u64 / 2));
+        let renew = self.renew_due || self.lease.as_ref().is_none_or(|(l, at)| at.elapsed() > Duration::from_secs(l.seconds as u64 / 2));
         if renew {
             if self.next_dhcp.is_some_and(|t| Instant::now() < t) {
                 return Ok(());
@@ -410,6 +433,7 @@ impl Manager {
             };
             self.apply(&lease)?;
             self.next_dhcp = None;
+            self.renew_due = false;
             self.attempt = None;
             self.set(|s| {
                 s.state = State::Connected;
@@ -602,6 +626,12 @@ impl Manager {
 
     /// One desktop pass: reattach when the adapter or supplicant appears, poll it, read the wired link.
     fn desktop_tick(&mut self) {
+        let (wall, mono) = (SystemTime::now(), Instant::now());
+        let asleep = slept(wall.duration_since(self.last_wall).unwrap_or_default(), mono.duration_since(self.last_mono));
+        (self.last_wall, self.last_mono) = (wall, mono);
+        if asleep && self.enabled {
+            self.resumed();
+        }
         if self.next_eth.is_none_or(|t| Instant::now() >= t) {
             self.next_eth = Some(Instant::now() + ETH_EVERY);
             let eth = ethernet(std::path::Path::new("/sys/class/net"));
@@ -626,6 +656,16 @@ impl Manager {
             self.events = None;
             self.set(|s| s.error = Some(e.to_string()));
         }
+    }
+
+    /// The machine woke from a sleep: the lease may be stale and the supplicant may sit idle, so ask for both now.
+    fn resumed(&mut self) {
+        let Some(c) = self.ctrl.as_ref() else { return };
+        let _ = c.ok("RECONNECT");
+        self.renew_due = true;
+        self.next_dhcp = None;
+        self.idle_since = None;
+        self.last_reconnect = Some(Instant::now());
     }
 
     /// Adapter present but not ours to drive: show link and address from sysfs.
@@ -655,6 +695,17 @@ impl Manager {
             let _ = write_native_dns(std::path::Path::new("/run/a8-wifi/resolv.conf"), &[]);
         }
     }
+}
+
+/// Whether the gap between two readings of the wall clock and of the monotonic clock is a sleep.
+pub fn slept(wall: Duration, mono: Duration) -> bool {
+    wall.saturating_sub(mono) > SLEEP_GAP
+}
+
+/// Whether to ask the supplicant to reconnect: the link has been down for `RECONNECT_AFTER`, and the last ask
+/// (if any) was at least `RECONNECT_EVERY` ago.
+pub fn should_reconnect(down: Duration, since_last: Option<Duration>) -> bool {
+    down >= RECONNECT_AFTER && since_last.is_none_or(|s| s >= RECONNECT_EVERY)
 }
 
 /// Pause between desktop ticks: quick while something is changing (a scan, an attempt, a lease),
@@ -771,6 +822,22 @@ pub fn processes_with_arg(needle: &str) -> Vec<i32> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_sleep_is_a_wall_clock_gap_the_monotonic_clock_did_not_see() {
+        assert!(!slept(Duration::from_secs(10), Duration::from_secs(10)), "a normal slow tick");
+        assert!(!slept(Duration::from_secs(14), Duration::from_secs(10)), "under the gap");
+        assert!(slept(Duration::from_secs(120), Duration::from_secs(10)), "suspended for about two minutes");
+        assert!(!slept(Duration::from_secs(3), Duration::from_secs(10)), "the monotonic clock ran ahead");
+    }
+
+    #[test]
+    fn a_lost_link_is_asked_back_after_a_pause_and_not_too_often() {
+        assert!(!should_reconnect(Duration::from_secs(9), None), "a short dip is the supplicant's to fix");
+        assert!(should_reconnect(Duration::from_secs(10), None));
+        assert!(!should_reconnect(Duration::from_secs(30), Some(Duration::from_secs(5))), "asked a moment ago");
+        assert!(should_reconnect(Duration::from_secs(30), Some(Duration::from_secs(20))));
+    }
+
     #[test]
     fn tick_interval_backs_off_when_settled() {
         assert_eq!(tick_interval(State::Connected, false, true), Duration::from_secs(10));

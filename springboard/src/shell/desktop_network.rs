@@ -5,8 +5,59 @@ use bifrost_core::tunnel::{VpnProfile, VpnProtocol};
 use std::{
     process::Command,
     sync::{mpsc, Arc, Mutex, OnceLock},
-    time::Duration,
+    time::{Duration, Instant},
 };
+
+/// The host every DNS check looks up: a generic, always-on name (the same family as the captive probe).
+const DNS_CHECK_HOST: &str = "connectivitycheck.gstatic.com";
+/// How long a DNS answer is kept: a lookup can wait a long time on a dead server, so it is not asked per read.
+const DNS_TTL: Duration = Duration::from_secs(30);
+
+/// Why a connected Wi-Fi link does not reach the internet yet, as the menu bar names it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LinkProblem {
+    /// associated, but DHCP gave no IPv4 address
+    NoAddress,
+    /// an address, but no DNS server was given or the check name does not resolve
+    NoDns,
+}
+
+impl LinkProblem {
+    pub fn label(self) -> &'static str {
+        match self {
+            LinkProblem::NoAddress => "No IP Address",
+            LinkProblem::NoDns => "DNS Not Responding",
+        }
+    }
+}
+
+/// The problem with `link`, if it is connected but not usable. `resolves` is asked only once an address
+/// and a DNS server are there, so a link without either never waits on a lookup.
+pub fn link_problem(link: Option<&Interface>, resolves: impl FnOnce() -> bool) -> Option<LinkProblem> {
+    let link = link.filter(|i| i.connected())?;
+    if link.ipv4.is_empty() {
+        return Some(LinkProblem::NoAddress);
+    }
+    if link.dns.is_empty() || !resolves() {
+        return Some(LinkProblem::NoDns);
+    }
+    None
+}
+
+/// Whether the check host resolves, asked at most once per `DNS_TTL`.
+fn dns_resolves() -> bool {
+    static CACHE: Mutex<Option<(Instant, bool)>> = Mutex::new(None);
+    use std::net::ToSocketAddrs;
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((at, ok)) = *cache {
+        if at.elapsed() < DNS_TTL {
+            return ok;
+        }
+    }
+    let ok = (DNS_CHECK_HOST, 80).to_socket_addrs().is_ok_and(|mut a| a.next().is_some());
+    *cache = Some((Instant::now(), ok));
+    ok
+}
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Interface {
     pub name: String,
@@ -37,6 +88,8 @@ pub struct Snapshot {
     pub power_profiles: Vec<String>,
     pub power: String,
     pub error: Option<String>,
+    /// the Wi-Fi link is up but not usable (no address, no DNS); None when it is fine or not connected
+    pub problem: Option<LinkProblem>,
 }
 pub enum Request {
     Wifi(WifiAction),
@@ -84,19 +137,28 @@ fn service() -> &'static Service {
             let mut error = None;
             // consecutive signal-driven reads that found nothing new: the debounce grows (1 s up to 8 s)
             let mut quiet: u32 = 0;
+            // when the debounced read is due; until then requests are still served at once
+            let mut due: Option<Instant> = None;
             loop {
                 let mut value = read();
                 value.error = error.clone();
                 if let Ok(mut s) = out.lock() {
                     if *s != value { *s = value; let _=notify.send(&[1]); quiet = 0; } else { quiet = (quiet + 1).min(3); }
                 }
-                match rx.recv() {
+                let next = match due {
+                    Some(at) => rx.recv_timeout(at.saturating_duration_since(Instant::now())),
+                    None => rx.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected),
+                };
+                match next {
                     Ok(WorkerMessage::Request(request)) => { error = apply(request).err(); }
                     Ok(WorkerMessage::Changed) => {
-                        std::thread::sleep(Duration::from_millis(1000u64 << quiet));
+                        due.get_or_insert_with(|| Instant::now() + Duration::from_millis(1000u64 << quiet));
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        due = None;
                         queued.store(false,std::sync::atomic::Ordering::Release);
                     }
-                    Err(_) => break,
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 }
             }
         });
@@ -182,6 +244,8 @@ fn read() -> Snapshot {
         }
     }
     s.wifi_available = s.interfaces.iter().any(|i| i.kind == "wifi");
+    let wifi_link = s.interfaces.iter().find(|i| i.kind == "wifi");
+    s.problem = link_problem(wifi_link, dns_resolves);
     if s.wifi_available {
         s.wifi_on = output("nmcli", &["radio", "wifi"]).is_ok_and(|v| v.trim() == "enabled");
         if let Ok(text) = output(
@@ -393,6 +457,19 @@ mod tests {
         assert_eq!(vpn_summary(&office), "IKEv2, vpn.example.com:500", "the server is trimmed and lower-cased, port 500 by default");
         let tunnel = VpnProfile::new("Tun", "h.example", VpnProtocol::Tunnel);
         assert_eq!(vpn_summary(&tunnel), "Tunnel, h.example:443");
+    }
+
+    #[test]
+    fn a_link_problem_names_the_missing_address_or_dns() {
+        let up = |ipv4: &[&str], dns: &[&str]| Interface { status: "100 (connected)".into(), ipv4: ipv4.iter().map(|s| s.to_string()).collect(), dns: dns.iter().map(|s| s.to_string()).collect(), ..Interface::default() };
+        let never = || -> bool { panic!("no lookup without an address and a server") };
+        assert_eq!(link_problem(None, never), None, "no Wi-Fi link");
+        assert_eq!(link_problem(Some(&Interface { status: "30 (disconnected)".into(), ..Interface::default() }), never), None, "not connected is not a problem here");
+        assert_eq!(link_problem(Some(&up(&[], &["1.1.1.1"])), never), Some(LinkProblem::NoAddress));
+        assert_eq!(link_problem(Some(&up(&["10.0.0.5/24"], &[])), never), Some(LinkProblem::NoDns));
+        assert_eq!(link_problem(Some(&up(&["10.0.0.5/24"], &["10.0.0.1"])), || false), Some(LinkProblem::NoDns), "the check name does not resolve");
+        assert_eq!(link_problem(Some(&up(&["10.0.0.5/24"], &["10.0.0.1"])), || true), None);
+        assert_eq!(LinkProblem::NoDns.label(), "DNS Not Responding");
     }
 
     #[test]
