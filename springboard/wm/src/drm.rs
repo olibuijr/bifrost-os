@@ -39,7 +39,7 @@ use smithay::{
     utils::{DeviceFd, Transform},
 };
 
-use crate::{scene::SceneElement, session_protocols::ModeInfo, state::WmState};
+use crate::{scene::SceneElement, session_protocols::{CaptureSpec, ModeInfo}, state::WmState};
 
 pub(crate) const CLEAR: [f32; 4] = [0.06, 0.06, 0.08, 1.0];
 const SUPPORTED: &[Fourcc] = &[Fourcc::Argb8888, Fourcc::Xrgb8888, Fourcc::Abgr8888, Fourcc::Xbgr8888];
@@ -136,6 +136,8 @@ pub fn run(socket: Option<&str>, command: &[String]) -> Result<(), Box<dyn Error
     let b = Rc::new(std::cell::RefCell::new(drm));
     let hook = b.clone();
     state.session.hooks.set_mode = Some(Box::new(move |name: &str, mode: ModeInfo| hook.borrow_mut().set_mode(name, mode)));
+    let hook = b.clone();
+    state.session.hooks.capture = Some(Box::new(move |state, spec| hook.borrow_mut().capture(state, spec)));
     let backend = b;
 
     // input
@@ -401,6 +403,28 @@ impl Drm {
             v.forget_buffers(&gone);
         }
         self.render(state);
+    }
+
+    /// A capture (`SessionHooks::capture`): the scene as RGBA rows, with the pointer when asked. Not served on the Vulkan
+    /// scanout (its target is not readable here), which leaves the copy to fail.
+    fn capture(&mut self, state: &WmState, spec: &CaptureSpec) -> Option<Vec<u8>> {
+        if spec.output != self.output.name().as_str() || self.vulkan.is_some() {
+            return None;
+        }
+        let mut top = Vec::new();
+        if spec.cursor {
+            let pos = state.pointer_location();
+            if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(&mut self.renderer, (pos.x, pos.y), &self.pointer, None, None, None, Kind::Cursor) {
+                top.push(SceneElement::Memory(e));
+            }
+        }
+        match crate::capture::capture_scene(&mut self.renderer, &mut self.glass, state, &self.output, top, CLEAR, spec) {
+            Ok(px) => Some(px),
+            Err(e) => {
+                eprintln!("bifrost-wm: capture: {e}");
+                None
+            }
+        }
     }
 
     fn render(&mut self, state: &mut WmState) {

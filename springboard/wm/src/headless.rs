@@ -38,6 +38,7 @@ use crate::{
         compose::{DamageRects, SceneNode},
         server::Server,
     },
+    session_protocols::CaptureSpec,
     state::WmState,
 };
 
@@ -104,6 +105,21 @@ impl Headless {
 
     pub fn size(&self) -> (i32, i32) { self.size }
 
+    /// A capture (`SessionHooks::capture`): the region as RGBA rows over `clear`, `None` for another output or a failure.
+    pub fn capture(&mut self, state: &WmState, spec: &CaptureSpec, clear: [f32; 4]) -> Option<Vec<u8>> {
+        if spec.output != self.output.name() {
+            return None;
+        }
+        // the headless output has no pointer image, so `spec.cursor` paints nothing
+        match crate::capture::capture_scene(&mut self.renderer, &mut self.glass, state, &self.output, Vec::new(), clear, spec) {
+            Ok(px) => Some(px),
+            Err(e) => {
+                eprintln!("bifrost-wm: capture: {e}");
+                None
+            }
+        }
+    }
+
     pub fn screenshot(&mut self, path: &Path) -> Result<(), Box<dyn Error>> {
         let (w, h) = self.size;
         let px = self.pixels()?;
@@ -136,6 +152,8 @@ impl Compositor {
                 let display: Display<WmState> = Display::new()?;
                 let mut state = WmState::new(&mut event_loop, display, Some(&name));
                 let backend = std::rc::Rc::new(std::cell::RefCell::new(Headless::new(&mut state, w, h)?));
+                let b = backend.clone();
+                state.session.hooks.capture = Some(Box::new(move |state, spec| b.borrow_mut().capture(state, spec, CLEAR)));
                 let b = backend.clone();
                 event_loop.handle().insert_source(rx, move |event, _, state| {
                     if let ChannelEvent::Msg(cmd) = event {

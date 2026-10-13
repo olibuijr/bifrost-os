@@ -39,7 +39,7 @@ would make a root process the server for every untrusted app, so it stays out.
 | Activation | `xdg_activation_v1` | phase 3 |
 | Window list | `zwlr_foreign_toplevel_manager_v1` (dock, app switcher) | phase 3 |
 | Output modes | `wlr-output-management` via `wlr-randr` (`video-arg`, `session-env`) | phase 3; the compositor picks the fastest native mode itself |
-| Screenshots | `wlr-screencopy` via `grim` (`bifrost-apps --screenshot`) | phase 3 |
+| Screenshots | `wlr-screencopy` via `grim` (`bifrost-apps --screenshot`) | readback in `wm/src/capture.rs` (see Screen capture) |
 | Keys | Super+Space (Spotlight via control port), Super+A (apps), Alt+Tab, Alt+F4 | phase 3 |
 | X11 apps | XWayland | phase 4 |
 | Backend | DRM/KMS, libinput, libseat | phase 3 (phase 1 runs nested for development) |
@@ -203,3 +203,22 @@ Reduce Transparency, Increase Contrast or Button Shapes. Format: `key=0|1` lines
 `increase_contrast`, `differentiate_without_color`. Increase Contrast implies Reduce Transparency (the reader applies it).
 A missing file means all off. Read it with `bifrost_render::appearance::DisplayOptions::read_from(DISPLAY_FILE)` (poll
 it, or watch the directory with inotify) and turn glass off (opaque material tints, no blur) while `reduce_transparency` is set.
+
+## Screen capture
+
+`wlr-screencopy` (`grim`, `bifrost-apps --screenshot`, the MCP screenshot tool) and `ext-image-copy-capture` ask the
+backend through `SessionHooks::capture(&mut WmState, &CaptureSpec) -> Option<Vec<u8>>` (`session_protocols.rs`). The
+hook returns RGBA rows (R, G, B, A in memory) of the requested region; `write_shm` converts them to the client's
+XRGB8888 or ARGB8888 buffer. Without a hook the request is answered `failed`.
+
+- The DRM and headless backends set the hook (`wm/src/capture.rs`, `capture_scene`). A capture renders the scene again
+  with `scene::build` (the element list the output uses: wallpaper layer, windows, layer surfaces, glass) into an
+  Abgr8888 `GlesTexture` through `OutputDamageTracker`, then `ExportMem::copy_framebuffer` reads the region. Abgr8888
+  is R, G, B, A in memory, so the order needs no swap. This runs only for a pending request, never per frame.
+- Region and size are in the displayed orientation: `capture_size` turns the mode by the output transform, and the
+  capture texture is rendered in that orientation (output transform Normal), so rotated outputs need no row shuffle.
+  Regions are clipped to it with `clamp_region`.
+- `overlay_cursor` paints the pointer on DRM; the headless output has no pointer image. ext-image-copy-capture cursor
+  options are not read yet.
+- The Vulkan scanout (`BIFROST_WM_RENDERER=vulkan`) has no GLES readback here, so captures fail there.
+- Tests: `capture_size`/`clamp_region` unit tests, and `tests/capture.rs` (headless, red scene reads back `[255,0,0,255]`).

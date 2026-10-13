@@ -9,7 +9,7 @@
 //! that the backend sets (`capture`, `set_mode`, `set_power`); without a hook the request is refused, never faked.
 //!
 //! A captured frame is written into the client's wl_shm buffer by `write_shm` (one audited write; the pixel format
-//! conversion is [`rgba_to_shm`]). Still open: no backend sets the `capture` hook yet, so every copy is answered with
+//! conversion is [`rgba_to_shm`]). The DRM and headless backends set the `capture` hook (`capture.rs`); a copy is answered with
 //! `failed` until the render server's readback is wired to it. See `docs/graphics/g2-wm-session.md`.
 
 use std::{
@@ -67,7 +67,7 @@ use smithay::{
             Client, DataInit, Dispatch, DisplayHandle, GlobalDispatch, New, Resource, WEnum,
         },
     },
-    utils::{Transform, SERIAL_COUNTER},
+    utils::{Physical, Size, Transform, SERIAL_COUNTER},
     wayland::{
         compositor::with_states,
         cursor_shape::CursorShapeManagerState,
@@ -186,6 +186,18 @@ pub fn clamp_region(output: (i32, i32), req: Rect) -> Option<Rect> {
     (x1 > x0 && y1 > y0).then(|| Rect::new(x0, y0, x1 - x0, y1 - y0))
 }
 
+/// The size of an output as clients see it, in pixels: the mode turned by the output transform (a panel rotated by 90
+/// degrees shows a portrait image). Captures, their regions and their buffers are in this orientation.
+pub fn capture_size(mode: (i32, i32), transform: Transform) -> (i32, i32) {
+    let s = transform.transform_size(Size::<i32, Physical>::from(mode));
+    (s.w, s.h)
+}
+
+/// `capture_size` of an output; `None` before it has a mode.
+fn output_capture_size(out: &Output) -> Option<(i32, i32)> {
+    out.current_mode().map(|m| capture_size((m.size.w, m.size.h), out.current_transform()))
+}
+
 /// Bytes per row of a 32-bit shm buffer (XRGB8888 or ARGB8888).
 pub fn shm_stride(width: i32) -> i32 { width * 4 }
 
@@ -211,7 +223,7 @@ pub struct SessionHooks {
     /// Reads the pixels of a capture region as RGBA rows (R, G, B, A in memory) of `region.w * 4` bytes, wallpaper and
     /// every layer composed; `write_shm` converts them to the client's format. The Vulkan server reads them
     /// back from the output target; the headless backend from its texture.
-    pub capture: Option<Box<dyn FnMut(&CaptureSpec) -> Option<Vec<u8>>>>,
+    pub capture: Option<Box<dyn FnMut(&mut WmState, &CaptureSpec) -> Option<Vec<u8>>>>,
     /// Switches an output to a mode (a DRM modeset). Returns whether it took.
     pub set_mode: Option<Box<dyn FnMut(&str, ModeInfo) -> bool>>,
     /// Turns an output on or off (DPMS). Returns whether it took.
@@ -222,8 +234,10 @@ pub struct SessionHooks {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CaptureSpec {
     pub output: String,
-    /// Output-local pixels; the buffer is `region.w` by `region.h`.
+    /// Output-local pixels in the output's displayed orientation (`capture_size`); the buffer is `region.w` by `region.h`.
     pub region: Rect,
+    /// Whether the pointer is painted into the capture (`overlay_cursor`).
+    pub cursor: bool,
 }
 
 /// What a capture frame reads: an output and a region of it.
@@ -231,6 +245,7 @@ pub struct CaptureSpec {
 pub struct CaptureTarget {
     pub output: String,
     pub region: Rect,
+    pub cursor: bool,
 }
 
 /// A capture frame's target, and for ext-image-copy-capture the buffer attached before `capture`.
@@ -478,9 +493,11 @@ impl WmState {
         if !buffer_fits(size, stride, (spec.region.w, spec.region.h)) {
             return Err("buffer does not match the capture");
         }
-        let hook = self.session.hooks.capture.as_mut().ok_or("no capture backend")?;
-        let pixels = hook(spec).ok_or("capture failed")?;
-        write_shm(buffer, &pixels)
+        // the hook renders the scene from `self`, so it is taken out of the session for the call
+        let mut hook = self.session.hooks.capture.take().ok_or("no capture backend")?;
+        let pixels = hook(self, spec);
+        self.session.hooks.capture = Some(hook);
+        write_shm(buffer, &pixels.ok_or("capture failed")?)
     }
 }
 
@@ -851,15 +868,15 @@ impl GlobalDispatch<ZwlrScreencopyManagerV1, ()> for WmState {
 impl Dispatch<ZwlrScreencopyManagerV1, ()> for WmState {
     fn request(state: &mut Self, _client: &Client, _resource: &ZwlrScreencopyManagerV1, request: zwlr_screencopy_manager_v1::Request, _data: &(), _dh: &DisplayHandle, data_init: &mut DataInit<'_, Self>) {
         use zwlr_screencopy_manager_v1::Request as R;
-        let (frame, output, region) = match request {
-            R::CaptureOutput { frame, output, .. } => (frame, output, None),
-            R::CaptureOutputRegion { frame, output, x, y, width, height, .. } => (frame, output, Some(Rect::new(x, y, width, height))),
+        let (frame, output, region, cursor) = match request {
+            R::CaptureOutput { frame, output, overlay_cursor, .. } => (frame, output, None, overlay_cursor != 0),
+            R::CaptureOutputRegion { frame, output, overlay_cursor, x, y, width, height, .. } => (frame, output, Some(Rect::new(x, y, width, height)), overlay_cursor != 0),
             _ => return,
         };
         let target = Output::from_resource(&output).and_then(|out| {
-            let size = out.current_mode().map(|m| (m.size.w, m.size.h))?;
+            let size = output_capture_size(&out)?;
             let req = region.unwrap_or(Rect::new(0, 0, size.0, size.1));
-            Some(CaptureTarget { output: out.name(), region: clamp_region(size, req)? })
+            Some(CaptureTarget { output: out.name(), region: clamp_region(size, req)?, cursor })
         });
         match target {
             Some(target) => {
@@ -887,7 +904,7 @@ impl Dispatch<ZwlrScreencopyFrameV1, FrameData> for WmState {
     fn request(state: &mut Self, _client: &Client, resource: &ZwlrScreencopyFrameV1, request: zwlr_screencopy_frame_v1::Request, data: &FrameData, _dh: &DisplayHandle, _data_init: &mut DataInit<'_, Self>) {
         use zwlr_screencopy_frame_v1::Request as R;
         let (R::Copy { buffer } | R::CopyWithDamage { buffer }) = request else { return };
-        let spec = CaptureSpec { output: data.target.output.clone(), region: data.target.region.clone() };
+        let spec = CaptureSpec { output: data.target.output.clone(), region: data.target.region.clone(), cursor: data.target.cursor };
         match state.capture_into(&spec, &buffer) {
             Ok(()) => {
                 resource.flags(zwlr_screencopy_frame_v1::Flags::empty());
@@ -934,10 +951,10 @@ impl Dispatch<ExtImageCopyCaptureManagerV1, ()> for WmState {
         match request {
             R::CreateSession { session, source, .. } => {
                 let name = source.data::<String>().cloned().unwrap_or_default();
-                let size = state.output_named(&name).and_then(|o| o.current_mode());
+                let size = state.output_named(&name).and_then(|o| output_capture_size(&o));
                 match size {
-                    Some(mode) => {
-                        let target = CaptureTarget { output: name, region: Rect::new(0, 0, mode.size.w, mode.size.h) };
+                    Some(size) => {
+                        let target = CaptureTarget { output: name, region: Rect::new(0, 0, size.0, size.1), cursor: false };
                         let s = data_init.init(session, target.clone());
                         s.buffer_size(target.region.w as u32, target.region.h as u32);
                         s.shm_format(wl_shm::Format::Xrgb8888);
@@ -983,7 +1000,7 @@ impl Dispatch<ExtImageCopyCaptureFrameV1, FrameData> for WmState {
                     resource.failed(FailureReason::BufferConstraints);
                     return;
                 };
-                let spec = CaptureSpec { output: data.target.output.clone(), region: data.target.region.clone() };
+                let spec = CaptureSpec { output: data.target.output.clone(), region: data.target.region.clone(), cursor: data.target.cursor };
                 match state.capture_into(&spec, &buffer) {
                     Ok(()) => {
                         resource.transform(wl_output::Transform::Normal);
@@ -1130,6 +1147,17 @@ mod tests {
         assert_eq!(clamp_region(out, Rect::new(-100, 1000, 300, 300)), Some(Rect::new(0, 1000, 200, 80)));
         assert_eq!(clamp_region(out, Rect::new(2000, 0, 10, 10)), None);
         assert_eq!(clamp_region(out, Rect::new(0, 0, 0, 10)), None);
+    }
+
+    #[test]
+    fn a_rotated_output_is_captured_in_its_displayed_orientation() {
+        assert_eq!(capture_size((1920, 1080), Transform::Normal), (1920, 1080));
+        assert_eq!(capture_size((1920, 1080), Transform::_180), (1920, 1080));
+        assert_eq!(capture_size((1920, 1080), Transform::_90), (1080, 1920));
+        assert_eq!(capture_size((1920, 1080), Transform::Flipped270), (1080, 1920));
+        // a region past the displayed width is clipped to it, not to the panel's native width
+        let shown = capture_size((1920, 1080), Transform::_90);
+        assert_eq!(clamp_region(shown, Rect::new(1000, 0, 500, 500)), Some(Rect::new(1000, 0, 80, 500)));
     }
 
     #[test]
