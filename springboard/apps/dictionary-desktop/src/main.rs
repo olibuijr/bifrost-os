@@ -5,17 +5,32 @@
 use bifrost_app::intents::{self, Intent, IntentResult, Param, ParamType};
 use bifrost_app::control::{RpcError, INVALID_PARAMS};
 use bifrost_app::kit::canvas::{Canvas, RectF};
-use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT};
+use bifrost_app::kit::ui::{Ui, Weight, CONTENT_BG, FIELD_BG, LABEL, LABEL_2, LABEL_3, LINK, MAC_BODY_PT, MAC_FOOTNOTE_PT, MAC_SUBHEAD_PT, MATERIAL_SELECTION, ROW_PRESSED, SEGMENT_ON};
 use bifrost_app::kit::{Damage, Scroller};
 use bifrost_app::widgets;
 use bifrost_app::{App, AppMenu, AppMenuItem, Command, Ctx, Input, KeyInput, TouchKind};
 use bifrost_core::json::Json;
 use bifrost_ui::stardict::{load_library, Hit, Library};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+mod model;
+use model::{History, Prefs};
 
 const MENU_LOOK_UP_CLIPBOARD: u32 = 1;
 const MENU_COPY_DEFINITION: u32 = 2;
 const MENU_CLEAR: u32 = 3;
+const MENU_FIND: u32 = 4;
+const MENU_FIND_NEXT: u32 = 5;
+const MENU_FIND_PREVIOUS: u32 = 6;
+const MENU_SETTINGS: u32 = 7;
+const MENU_BACK: u32 = 8;
+const MENU_FORWARD: u32 = 9;
+const MENU_NEXT_DICTIONARY: u32 = 10;
+const MENU_PREVIOUS_DICTIONARY: u32 = 11;
+const MENU_CLEAR_HISTORY: u32 = 12;
+const MENU_BIGGER: u32 = 13;
+const MENU_SMALLER: u32 = 14;
+const MENU_ACTUAL_SIZE: u32 = 15;
 
 /// Most suggestions listed under the search field.
 const SUGGESTIONS: usize = 12;
@@ -30,6 +45,46 @@ const FOOTER_H: f32 = 28.0;
 const ROW_H: f32 = 28.0;
 /// Line advance of wrapped text, as a multiple of its size.
 const LEADING: f32 = 1.35;
+/// Height of the scope bar under the search field, and the width of a toolbar button, in points.
+const SCOPE_H: f32 = 28.0;
+const BTN_W: f32 = 28.0;
+/// Height of a row in the settings page.
+const SETTINGS_ROW_H: f32 = 32.0;
+
+/// What a clickable region does.
+#[derive(Clone, Debug, PartialEq)]
+enum Act {
+    Back,
+    Forward,
+    Smaller,
+    Bigger,
+    Scope(Option<String>),
+    Toggle(usize),
+    Up(usize),
+    Down(usize),
+    Rename(usize),
+    Done,
+}
+
+/// A clickable region of the last frame, in points.
+struct Hot {
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    act: Act,
+}
+
+/// Find in the definition on screen.
+struct Find {
+    query: String,
+    /// Lines that match, counted in the last frame.
+    count: usize,
+    /// Position in the matches of the highlighted one.
+    cur: Option<usize>,
+    /// Scroll the highlighted match into view in the next frame.
+    scroll_to: bool,
+}
 
 /// The lookup on screen: the word and what each dictionary says about it.
 struct Shown {
@@ -55,6 +110,17 @@ struct DictionaryApp {
     shown: Option<Shown>,
     suggestions: Vec<String>,
     scroll: Scroller,
+    prefs: Prefs,
+    prefs_path: PathBuf,
+    history: History,
+    /// The dictionary the scope bar shows; `None` is All.
+    scope: Option<String>,
+    find: Option<Find>,
+    /// The settings page replaces the lookup while it is open.
+    settings: bool,
+    /// The dictionary being renamed in the settings page, with the text typed so far.
+    rename: Option<(usize, String)>,
+    hot: Vec<Hot>,
 }
 
 /// Pointer position in points: input is in pixels, and the layout is in points.
@@ -72,7 +138,134 @@ impl DictionaryApp {
             shown: None,
             suggestions: Vec::new(),
             scroll: Scroller::new(),
+            prefs: Prefs::default(),
+            prefs_path: PathBuf::new(),
+            history: History::default(),
+            scope: None,
+            find: None,
+            settings: false,
+            rename: None,
+            hot: Vec::new(),
         }
+    }
+
+    fn save_prefs(&self) {
+        if !self.prefs_path.as_os_str().is_empty() {
+            let _ = std::fs::write(&self.prefs_path, self.prefs.serialize());
+        }
+    }
+
+    /// The hits of the shown lookup that the scope bar lets through.
+    fn visible_hits(&self) -> Vec<Hit> {
+        self.shown.as_ref().map(|s| model::in_scope(&s.hits, &self.scope)).unwrap_or_default()
+    }
+
+    fn scope_names(&self) -> Vec<String> {
+        self.shown.as_ref().map(|s| model::scope_names(&s.hits)).unwrap_or_default()
+    }
+
+    fn show_scope_bar(&self) -> bool {
+        self.scope_names().len() >= 2
+    }
+
+    /// Shows the same word again, for example after the dictionary choices changed.
+    fn refresh(&mut self) -> bool {
+        match self.shown.as_ref().map(|s| s.word.clone()) {
+            Some(w) => self.show(&w, false),
+            None => true,
+        }
+    }
+
+    fn go_back(&mut self) -> bool {
+        match self.history.back() {
+            Some(w) => self.show(&w, false),
+            None => false,
+        }
+    }
+
+    fn go_forward(&mut self) -> bool {
+        match self.history.forward() {
+            Some(w) => self.show(&w, false),
+            None => false,
+        }
+    }
+
+    fn step_scope(&mut self, delta: i32) -> bool {
+        let names = self.scope_names();
+        if names.len() < 2 {
+            return false;
+        }
+        self.scope = model::cycle_scope(&self.scope, &names, delta);
+        self.scroll.jump_top();
+        true
+    }
+
+    fn step_find(&mut self, delta: i32) -> bool {
+        let Some(f) = &mut self.find else { return false };
+        let all: Vec<usize> = (0..f.count).collect();
+        f.cur = model::step_match(&all, f.cur, delta);
+        f.scroll_to = true;
+        true
+    }
+
+    fn start_find(&mut self) -> bool {
+        if self.shown.is_none() {
+            return false;
+        }
+        self.find = Some(Find { query: String::new(), count: 0, cur: None, scroll_to: false });
+        true
+    }
+
+    /// A click on one of the regions of the last frame.
+    fn perform(&mut self, act: Act) -> bool {
+        match act {
+            Act::Back => self.go_back(),
+            Act::Forward => self.go_forward(),
+            Act::Smaller => {
+                self.prefs.smaller();
+                self.save_prefs();
+                true
+            }
+            Act::Bigger => {
+                self.prefs.bigger();
+                self.save_prefs();
+                true
+            }
+            Act::Scope(s) => {
+                self.scope = s;
+                self.scroll.jump_top();
+                true
+            }
+            Act::Toggle(i) => {
+                self.prefs.toggle(i);
+                self.save_prefs();
+                self.refresh()
+            }
+            Act::Up(i) => {
+                self.prefs.move_dict(i, -1);
+                self.save_prefs();
+                self.refresh()
+            }
+            Act::Down(i) => {
+                self.prefs.move_dict(i, 1);
+                self.save_prefs();
+                self.refresh()
+            }
+            Act::Rename(i) => {
+                let label = self.prefs.dicts.get(i).map(|d| d.label.clone()).unwrap_or_default();
+                self.rename = Some((i, label));
+                true
+            }
+            Act::Done => {
+                self.settings = false;
+                self.rename = None;
+                true
+            }
+        }
+    }
+
+    fn hit_test(&self, px: f32, py: f32) -> Option<Act> {
+        self.hot.iter().find(|h| px >= h.x && px < h.x + h.w && py >= h.y && py < h.y + h.h).map(|h| h.act.clone())
     }
 
     /// The query changed: drop the lookup on screen and list the words that start with what is typed.
@@ -85,14 +278,31 @@ impl DictionaryApp {
 
     /// Looks `word` up and shows the answer. Returns true when the screen needs a frame.
     fn look_up(&mut self, word: &str) -> bool {
+        self.show(word, true)
+    }
+
+    /// Looks `word` up with the stored dictionary choices. `record` adds it to the history; Back and Forward do not.
+    fn show(&mut self, word: &str, record: bool) -> bool {
         let word = word.trim();
         if word.is_empty() {
             return false;
         }
-        let hits = self.library.as_ref().map(|l| l.lookup(word)).unwrap_or_default();
+        let raw = self.library.as_ref().map(|l| l.lookup(word)).unwrap_or_default();
+        let hits = self.prefs.arrange(raw);
+        if record {
+            self.history.visit(word);
+        }
+        if let Some(s) = &self.scope {
+            if !hits.iter().any(|h| &h.dictionary == s) {
+                self.scope = None;
+            }
+        }
         self.query = word.to_string();
         self.suggestions.clear();
         self.shown = Some(Shown { word: word.to_string(), hits });
+        if let Some(f) = &mut self.find {
+            f.cur = None;
+        }
         self.scroll.jump_top();
         true
     }
@@ -106,8 +316,10 @@ impl DictionaryApp {
 
     /// Copies the definitions on screen as plain text.
     fn copy_definition(&self, ctx: &Ctx) {
-        let Some(shown) = &self.shown else { return };
-        let text = shown.hits.iter().map(|h| format!("{}\n{}", h.dictionary, h.text)).collect::<Vec<_>>().join("\n\n");
+        if self.shown.is_none() {
+            return;
+        }
+        let text = self.visible_hits().iter().map(|h| format!("{}\n{}", h.dictionary, h.text)).collect::<Vec<_>>().join("\n\n");
         ctx.set_pasteboard_string(&text);
     }
 
@@ -126,32 +338,34 @@ impl DictionaryApp {
     /// The lines of the list under the search field, in order, for a `width` points wide list.
     fn lines(&self, ui: &Ui, width: f32) -> Vec<Line> {
         let mut out = Vec::new();
-        let body = |text: String, colour: u32| Line { text, pt: MAC_BODY_PT, weight: Weight::Regular, colour, h: MAC_BODY_PT * LEADING };
+        let size = self.prefs.scaled(MAC_BODY_PT);
+        let body = |text: String, colour: u32| Line { text, pt: size, weight: Weight::Regular, colour, h: size * LEADING };
         let message = |out: &mut Vec<Line>, text: &str, colour: u32| {
-            for line in ui.wrap(text, MAC_BODY_PT, Weight::Regular, ui.pt(width - 2.0 * PAD)) {
+            for line in ui.wrap(text, size, Weight::Regular, ui.pt(width - 2.0 * PAD)) {
                 out.push(body(line, colour));
             }
         };
         if let Some(shown) = &self.shown {
-            if shown.hits.is_empty() {
+            let hits = self.visible_hits();
+            if hits.is_empty() {
                 message(&mut out, &self.no_answer(&shown.word), LABEL_2.now());
             }
-            for hit in &shown.hits {
+            for hit in &hits {
                 out.push(Line { text: hit.dictionary.clone(), pt: MAC_SUBHEAD_PT, weight: Weight::Semibold, colour: LABEL_2.now(), h: 24.0 });
                 for paragraph in hit.text.split('\n') {
                     if paragraph.is_empty() {
-                        out.push(Line { text: String::new(), pt: MAC_BODY_PT, weight: Weight::Regular, colour: LABEL.now(), h: 8.0 });
+                        out.push(Line { text: String::new(), pt: size, weight: Weight::Regular, colour: LABEL.now(), h: 8.0 });
                         continue;
                     }
-                    for line in ui.wrap(paragraph, MAC_BODY_PT, Weight::Regular, ui.pt(width - 2.0 * PAD)) {
+                    for line in ui.wrap(paragraph, size, Weight::Regular, ui.pt(width - 2.0 * PAD)) {
                         out.push(body(line, LABEL.now()));
                     }
                 }
-                out.push(Line { text: String::new(), pt: MAC_BODY_PT, weight: Weight::Regular, colour: LABEL.now(), h: 18.0 });
+                out.push(Line { text: String::new(), pt: size, weight: Weight::Regular, colour: LABEL.now(), h: 18.0 });
             }
         } else if !self.suggestions.is_empty() {
             for word in &self.suggestions {
-                out.push(Line { text: word.clone(), pt: MAC_BODY_PT, weight: Weight::Regular, colour: LABEL.now(), h: ROW_H });
+                out.push(Line { text: word.clone(), pt: size, weight: Weight::Regular, colour: LABEL.now(), h: ROW_H });
             }
         } else if self.query.trim().is_empty() {
             message(&mut out, "Type a word to look it up.", LABEL_2.now());
@@ -162,7 +376,7 @@ impl DictionaryApp {
     }
 
     fn touch(&mut self, ctx: &Ctx, kind: TouchKind, x: f32, y: f32, t: f64) -> bool {
-        let (_, py) = to_points(ctx, x, y);
+        let (px, py) = to_points(ctx, x, y);
         match kind {
             TouchKind::Down => {
                 self.scroll.down(py, t);
@@ -175,6 +389,9 @@ impl DictionaryApp {
             // Scroller::up reports a tap (no drag): a suggestion row looks its word up
             TouchKind::Up => {
                 if self.scroll.up(py, t) {
+                    if let Some(act) = self.hit_test(px, py) {
+                        return self.perform(act);
+                    }
                     self.tap_row(py)
                 } else {
                     true
@@ -189,7 +406,7 @@ impl DictionaryApp {
 
     /// A tap at `py` (points) on the suggestion list looks that word up.
     fn tap_row(&mut self, py: f32) -> bool {
-        if self.shown.is_some() || py < LIST_TOP {
+        if self.shown.is_some() || self.settings || py < LIST_TOP {
             return true;
         }
         let row = ((py - LIST_TOP + self.scroll.offset()) / ROW_H).floor();
@@ -203,6 +420,49 @@ impl DictionaryApp {
     }
 
     fn key(&mut self, key: &KeyInput) -> bool {
+        if let Some((i, buf)) = &mut self.rename {
+            match key {
+                KeyInput::Text(text) => buf.extend(text.chars().filter(|c| !c.is_control())),
+                KeyInput::Code(8) => {
+                    buf.pop();
+                }
+                KeyInput::Code(13) => {
+                    let (i, label) = (*i, buf.clone());
+                    self.prefs.set_label(i, &label);
+                    self.rename = None;
+                    self.save_prefs();
+                    return self.refresh();
+                }
+                KeyInput::Code(27) => self.rename = None,
+                _ => return false,
+            }
+            return true;
+        }
+        if self.settings {
+            return match key {
+                KeyInput::Code(27) => {
+                    self.settings = false;
+                    true
+                }
+                _ => false,
+            };
+        }
+        if let Some(f) = &mut self.find {
+            match key {
+                KeyInput::Text(text) => {
+                    f.query.extend(text.chars().filter(|c| !c.is_control()));
+                    f.cur = None;
+                }
+                KeyInput::Code(8) => {
+                    f.query.pop();
+                    f.cur = None;
+                }
+                KeyInput::Code(13) => return self.step_find(1),
+                KeyInput::Code(27) => self.find = None,
+                _ => return false,
+            }
+            return true;
+        }
         match key {
             KeyInput::Text(text) => {
                 for c in text.chars().filter(|c| !c.is_control()) {
@@ -233,13 +493,38 @@ impl DictionaryApp {
 
     fn menu(&self) -> Vec<AppMenu> {
         let has_answer = self.shown.as_ref().is_some_and(|s| !s.hits.is_empty());
-        let items = vec![
+        let finding = self.find.as_ref().is_some_and(|f| f.count > 0);
+        let dictionary = vec![
             AppMenuItem::new(MENU_LOOK_UP_CLIPBOARD, "Look Up Clipboard").key("cmd+l"),
             AppMenuItem::new(MENU_COPY_DEFINITION, "Copy Definition").enabled(has_answer),
             AppMenuItem::separator(),
+            AppMenuItem::new(MENU_FIND, "Find in Definition").key("cmd+f").enabled(self.shown.is_some() && !self.settings),
+            AppMenuItem::new(MENU_FIND_NEXT, "Find Next").key("cmd+g").enabled(finding),
+            AppMenuItem::new(MENU_FIND_PREVIOUS, "Find Previous").key("cmd+shift+g").enabled(finding),
+            AppMenuItem::separator(),
             AppMenuItem::new(MENU_CLEAR, "Clear Search").enabled(!self.query.is_empty() || self.shown.is_some()),
+            AppMenuItem::new(MENU_SETTINGS, "Settings...").key("cmd+,").checked(self.settings),
         ];
-        vec![AppMenu { title: "Dictionary".into(), items }]
+        let multi = self.show_scope_bar();
+        let go = vec![
+            AppMenuItem::new(MENU_BACK, "Back").key("cmd+[").enabled(self.history.can_back()),
+            AppMenuItem::new(MENU_FORWARD, "Forward").key("cmd+]").enabled(self.history.can_forward()),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_NEXT_DICTIONARY, "Select Next Dictionary").key("cmd+alt+right").enabled(multi),
+            AppMenuItem::new(MENU_PREVIOUS_DICTIONARY, "Select Previous Dictionary").key("cmd+alt+left").enabled(multi),
+            AppMenuItem::separator(),
+            AppMenuItem::new(MENU_CLEAR_HISTORY, "Clear History").enabled(!self.history.is_empty()),
+        ];
+        let view = vec![
+            AppMenuItem::new(MENU_BIGGER, "Bigger Text").key("cmd+=").enabled(self.prefs.step < model::MAX_STEP),
+            AppMenuItem::new(MENU_SMALLER, "Smaller Text").key("cmd+-").enabled(self.prefs.step > model::MIN_STEP),
+            AppMenuItem::new(MENU_ACTUAL_SIZE, "Actual Size").key("cmd+0").enabled(self.prefs.step != 0),
+        ];
+        vec![
+            AppMenu { title: "Dictionary".into(), items: dictionary },
+            AppMenu { title: "Go".into(), items: go },
+            AppMenu { title: "View".into(), items: view },
+        ]
     }
 }
 
@@ -251,7 +536,14 @@ impl App for DictionaryApp {
     fn configure(&mut self, ctx: &Ctx) {
         if self.library.is_none() {
             self.folder = ctx.data_dir.join("dictionaries").display().to_string();
-            self.library = Some(load_library(&ctx.data_dir));
+            let library = load_library(&ctx.data_dir);
+            self.prefs_path = ctx.data_dir.join("prefs.txt");
+            self.prefs = std::fs::read_to_string(&self.prefs_path).map(|t| Prefs::parse(&t)).unwrap_or_default();
+            let names: Vec<String> = library.dictionaries.iter().map(|d| d.info.name.clone()).collect();
+            if self.prefs.sync(&names) {
+                self.save_prefs();
+            }
+            self.library = Some(library);
         }
     }
 
@@ -259,6 +551,13 @@ impl App for DictionaryApp {
         match ev {
             Input::Touch { kind, x, y, t, .. } => self.touch(ctx, kind, x, y, t),
             Input::Key(key) => self.key(&key),
+            Input::Open(url) => match model::word_from_url(&url) {
+                Some(word) => {
+                    self.settings = false;
+                    self.look_up(&word)
+                }
+                None => false,
+            },
             Input::Command(Command::Copy) => {
                 self.copy_definition(ctx);
                 false
@@ -287,6 +586,29 @@ impl App for DictionaryApp {
             MENU_CLEAR => {
                 self.query.clear();
                 self.edited()
+            }
+            MENU_FIND => self.start_find(),
+            MENU_FIND_NEXT => self.step_find(1),
+            MENU_FIND_PREVIOUS => self.step_find(-1),
+            MENU_SETTINGS => {
+                self.settings = !self.settings;
+                self.rename = None;
+                true
+            }
+            MENU_BACK => self.go_back(),
+            MENU_FORWARD => self.go_forward(),
+            MENU_NEXT_DICTIONARY => self.step_scope(1),
+            MENU_PREVIOUS_DICTIONARY => self.step_scope(-1),
+            MENU_CLEAR_HISTORY => {
+                self.history.clear();
+                true
+            }
+            MENU_BIGGER => self.perform(Act::Bigger),
+            MENU_SMALLER => self.perform(Act::Smaller),
+            MENU_ACTUAL_SIZE => {
+                self.prefs.actual_size();
+                self.save_prefs();
+                true
             }
             _ => false,
         }
