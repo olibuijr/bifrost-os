@@ -44,6 +44,7 @@ pub mod widgets;
 pub mod view_style;
 pub mod widgets_timeline;
 pub mod glyphs;
+pub mod glyph_draw;
 pub mod dock_tile;
 pub mod cursor_service;
 pub mod text_services;

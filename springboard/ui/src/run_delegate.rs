@@ -97,6 +97,145 @@ pub fn fit_size(natural: (f32, f32), max: (f32, f32)) -> (f32, f32) {
     (nw * s, nh * s)
 }
 
+/// A run delegate: the callbacks that give an embedded object its metrics. A line layout asks the delegate for the
+/// ascent, descent and width in place of glyph metrics.
+pub trait RunDelegate {
+    fn ascent(&self) -> f32;
+    fn descent(&self) -> f32;
+    fn width(&self) -> f32;
+}
+
+/// A delegate built from three closures, for apps that compute the metrics on demand.
+pub struct CallbackDelegate {
+    pub ascent: Box<dyn Fn() -> f32>,
+    pub descent: Box<dyn Fn() -> f32>,
+    pub width: Box<dyn Fn() -> f32>,
+}
+
+impl RunDelegate for CallbackDelegate {
+    fn ascent(&self) -> f32 {
+        (self.ascent)()
+    }
+    fn descent(&self) -> f32 {
+        (self.descent)()
+    }
+    fn width(&self) -> f32 {
+        (self.width)()
+    }
+}
+
+impl RunDelegate for RunMetrics {
+    fn ascent(&self) -> f32 {
+        self.ascent
+    }
+    fn descent(&self) -> f32 {
+        self.descent
+    }
+    fn width(&self) -> f32 {
+        self.width
+    }
+}
+
+/// The metrics a delegate reports, clamped to non-negative and with NaN counted as zero.
+pub fn metrics_of(d: &dyn RunDelegate) -> RunMetrics {
+    let c = |v: f32| if v.is_nan() { 0.0 } else { v };
+    RunMetrics::new(c(d.ascent()), c(d.descent()), c(d.width()))
+}
+
+/// An image placed in a line of text, with the variants an adaptive image offers.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ImageAttachment {
+    pub id: u64,
+    pub variants: Vec<ImageVariant>,
+    /// Natural size in points.
+    pub natural: (f32, f32),
+    /// Offset of the image bottom above the baseline (negative to drop below it).
+    pub baseline_shift: f32,
+}
+
+impl ImageAttachment {
+    pub fn new(id: u64, natural: (f32, f32)) -> Self {
+        Self { id, variants: Vec::new(), natural, baseline_shift: 0.0 }
+    }
+
+    /// The variant to draw for a display scale and appearance.
+    pub fn variant(&self, scale: u32, dark: bool) -> Option<&ImageVariant> {
+        pick_variant(&self.variants, scale, dark)
+    }
+
+    /// The size it takes when the line offers `max` (the width left and the line height). The image keeps its aspect.
+    pub fn size(&self, max: (f32, f32)) -> (f32, f32) {
+        fit_size(self.natural, max)
+    }
+
+    /// The piece for the line layout: the image sits on the baseline shifted by `baseline_shift`.
+    pub fn piece(&self, max: (f32, f32)) -> Piece {
+        let (w, h) = self.size(max);
+        let shift = if self.baseline_shift.is_nan() { 0.0 } else { self.baseline_shift };
+        Piece::Attachment { id: self.id, metrics: RunMetrics::new(h + shift, (-shift).max(0.0), w) }
+    }
+}
+
+/// A placed attachment: its id and its box in line coordinates (`x` from the line start, `y` down from the line top).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Placement {
+    pub id: u64,
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+/// Where each attachment of a line is drawn. `baseline` is the distance from the line top to the baseline (normally
+/// the line's maximum ascent). The box spans from ascent above the baseline to descent below it.
+pub fn placements(pieces: &[Piece], baseline: f32) -> Vec<Placement> {
+    let mut x = 0.0_f32;
+    let mut out = Vec::new();
+    for p in pieces {
+        let m = p.metrics();
+        if let Piece::Attachment { id, .. } = p {
+            out.push(Placement { id: *id, x, y: baseline - m.ascent, width: m.width, height: m.ascent + m.descent });
+        }
+        x += m.width;
+    }
+    out
+}
+
+#[cfg(test)]
+mod attachment_tests {
+    use super::*;
+
+    #[test]
+    fn callback_delegate_reports_clamped_metrics() {
+        let d = CallbackDelegate { ascent: Box::new(|| 10.0), descent: Box::new(|| -2.0), width: Box::new(|| f32::NAN) };
+        assert_eq!(metrics_of(&d), RunMetrics::new(10.0, 0.0, 0.0));
+        assert_eq!(metrics_of(&RunMetrics::new(1.0, 2.0, 3.0)).width, 3.0);
+    }
+
+    #[test]
+    fn image_attachment_fits_and_sits_on_the_baseline() {
+        let mut a = ImageAttachment::new(7, (40.0, 20.0));
+        a.variants.push(ImageVariant { scale: 1, dark: false, name: "a".into() });
+        a.variants.push(ImageVariant { scale: 2, dark: false, name: "a2".into() });
+        assert_eq!(a.variant(2, false).map(|v| v.name.as_str()), Some("a2"));
+        let p = a.piece((20.0, 20.0));
+        assert_eq!(p.metrics(), RunMetrics::new(10.0, 0.0, 20.0));
+        a.baseline_shift = -3.0;
+        let m = a.piece((40.0, 20.0)).metrics();
+        assert_eq!((m.ascent, m.descent), (17.0, 3.0));
+    }
+
+    #[test]
+    fn placements_follow_the_pieces() {
+        let pieces = [
+            Piece::Text(RunMetrics::new(12.0, 4.0, 30.0)),
+            Piece::Attachment { id: 3, metrics: RunMetrics::new(8.0, 2.0, 10.0) },
+        ];
+        let pl = placements(&pieces, 12.0);
+        assert_eq!(pl, vec![Placement { id: 3, x: 30.0, y: 4.0, width: 10.0, height: 10.0 }]);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
