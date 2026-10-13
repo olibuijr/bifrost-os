@@ -60,6 +60,8 @@ fn file() -> std::path::PathBuf {
 /// Bit mask of enabled layouts (Icelandic alone by default) and the active one.
 static ENABLED: AtomicU8 = AtomicU8::new(1);
 static ACTIVE: AtomicU8 = AtomicU8::new(0);
+/// Remember the source for each app: each app gets back the source it had when it was last in front (off by default).
+static REMEMBER: AtomicBool = AtomicBool::new(false);
 static LOADED: std::sync::Once = std::sync::Once::new();
 /// The keyboard app has no access to the shell's data: the shell owns the choice and sends it (`apply`).
 static REMOTE: AtomicBool = AtomicBool::new(false);
@@ -108,6 +110,7 @@ fn load() {
         let mut active = None;
         for line in text.lines() {
             match line.split_once('=') {
+                Some(("remember", v)) => REMEMBER.store(v.trim() == "1", Relaxed),
                 Some(("enabled", v)) => {
                     for l in Layout::ALL {
                         if v.split(',').any(|p| p.trim() == l.id()) {
@@ -132,7 +135,7 @@ fn save() {
         return;
     }
     let list: Vec<&str> = enabled().iter().map(|l| l.id()).collect();
-    let text = format!("enabled={}\nactive={}\n", list.join(","), active().id());
+    let text = format!("enabled={}\nactive={}\nremember={}\n", list.join(","), active().id(), u8::from(remembers()));
     let tmp = format!("{}.tmp", file().display());
     if let Some(dir) = file().parent().map(|p| p.to_path_buf()) {
         let _ = std::fs::create_dir_all(dir);
@@ -172,6 +175,20 @@ pub fn toggle(l: Layout) -> bool {
     }
     save();
     new & l.bit() != 0
+}
+
+/// Whether each app keeps its own input source (Settings > Keyboard > Keyboards).
+pub fn remembers() -> bool {
+    load();
+    REMEMBER.load(Relaxed)
+}
+
+/// Turns the per-app source memory on or off and saves it. Returns the new state.
+pub fn set_remember(on: bool) -> bool {
+    load();
+    REMEMBER.store(on, Relaxed);
+    save();
+    on
 }
 
 pub fn set_active(l: Layout) {

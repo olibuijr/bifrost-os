@@ -785,6 +785,7 @@ fn run() -> std::io::Result<()> {
                         seen_source = source;
                         bifrost_ui::compose_method::set_japanese_source(source == springboard::shell::kb_layouts::Layout::Japanese);
                         hw_keys.set_layout(springboard::installer::keymaps::layout_index(source.keymap()).unwrap_or(0));
+                        springboard::shell::fcitx_bridge::follow(source);
                     }
                     let typed = if down { hw_keys.typed(code) } else { None };
                     if let Some(out) = typed {

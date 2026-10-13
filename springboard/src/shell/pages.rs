@@ -152,6 +152,8 @@ pub enum Toggle {
     AutoCaps,
     /// enables or removes a keyboard layout (index into `kb_layouts::Layout::ALL`)
     Layout(usize),
+    /// each app gets back the input source it had when it was last in front (`kb_layouts::set_remember`)
+    RememberInputSource,
     EnableCapsLock,
     PeriodShortcut,
     BoldText,
@@ -1010,7 +1012,7 @@ pub fn spec(id: PageId, m: &Model) -> Spec {
         PageId::Keyboards => page(
             "Keyboards",
             false,
-            vec![Group::new(super::kb_layouts::Layout::ALL.iter().enumerate().map(|(i, l)| Item::new(l.name()).switch(super::kb_layouts::is_enabled(*l), Action::Toggle(Toggle::Layout(i)))).collect()).footer("The globe key switches between enabled keyboards; touch and hold it to choose one.")]),
+            vec![Group::new(super::kb_layouts::Layout::ALL.iter().enumerate().map(|(i, l)| Item::new(l.name()).switch(super::kb_layouts::is_enabled(*l), Action::Toggle(Toggle::Layout(i)))).collect()).footer("The globe key switches between enabled keyboards; touch and hold it to choose one."), Group::new(vec![Item::new("Remember Input Source for Each App").switch(super::kb_layouts::remembers(), Action::Toggle(Toggle::RememberInputSource))]).footer("Each app gets back the keyboard it had when it was last in front.")]),
         PageId::TextReplacements => {
             let mut items: Vec<Item> = super::services::text_services::replacement_rows()
                 .iter()

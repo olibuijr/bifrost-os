@@ -142,6 +142,9 @@ mod desktop_metrics;
 mod desktop_dock;
 pub mod defaultapps;
 pub mod volume_hud;
+pub mod input_source_hud;
+pub mod input_memory;
+pub mod fcitx_bridge;
 pub mod sound_page;
 pub mod datetime_page;
 pub mod diag;
@@ -188,6 +191,7 @@ use ui::{centred, home_indicator, home_zone, Ui, Weight, BLACK, WHITE};
 use crate::media::route::Route;
 use crate::media::volume::Volume;
 use volume_hud::VolumeHud;
+use input_source_hud::SourceHud;
 use wallpaper_page::Wallpaper;
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -510,6 +514,11 @@ pub struct Shell {
     /// the volume-key HUD; `hud_drawn` says the last frame had it
     hud: VolumeHud,
     hud_drawn: bool,
+    /// the input source HUD; `input_hud_drawn` says the last frame had it
+    input_hud: SourceHud,
+    input_hud_drawn: bool,
+    /// the source each app keeps (Settings > Keyboard > Keyboards, "Remember Input Source for Each App")
+    input_memory: input_memory::InputMemory,
     /// Developer › Performance HUD; `perf_drawn` says the last frame had it
     perf: diag::PerfHud,
     perf_drawn: bool,
@@ -834,6 +843,9 @@ impl Shell {
             cc: ControlCenter::default(),
             hud: VolumeHud::default(),
             hud_drawn: false,
+            input_hud: SourceHud::default(),
+            input_hud_drawn: false,
+            input_memory: input_memory::InputMemory::default(),
             perf: diag::PerfHud::default(),
             perf_drawn: false,
             switcher: Switcher::default(),
@@ -1516,6 +1528,9 @@ impl Shell {
         if let Some(w) = self.hud.next_wake(t).filter(|_| self.screen_on) {
             due.add(Some(w));
         }
+        if let Some(w) = self.input_hud.next_wake(t).filter(|_| self.screen_on) {
+            due = Some(due.map_or(w, |d| d.min(w)));
+        }
         let app_wake = if self.screen_on {
             match self.screen {
                 // the app's socket is in the poll set (`ext_fds`): its frames wake the loop themselves
@@ -1644,6 +1659,10 @@ impl Shell {
         }
         if self.hud.visible(t) || self.hud_drawn {
             let (x, y, w, h) = VolumeHud::damage_rect(&self.ui, self.w);
+            damage.add(x.floor() as i32, y.floor() as i32, w.ceil() as i32 + 1, h.ceil() as i32 + 1);
+        }
+        if self.input_hud.visible(t) || self.input_hud_drawn {
+            let (x, y, w, h) = SourceHud::rect(&self.ui, self.w);
             damage.add(x.floor() as i32, y.floor() as i32, w.ceil() as i32 + 1, h.ceil() as i32 + 1);
         }
     }
@@ -2792,6 +2811,7 @@ impl Shell {
             self.chrome_gen += 1;
             self.dirty = true;
         }
+        self.input_memory_tick();
         self.split_tick();
         self.markup_tick();
         self.ota_tick(t);
@@ -2828,6 +2848,9 @@ impl Shell {
         let cc_fx = self.cc_tick(t);
         self.switcher_tick(t);
         if self.hud.tick(t) {
+            self.dirty = true;
+        }
+        if self.input_hud.tick(t) {
             self.dirty = true;
         }
         let perf_changed = self.perf.roll(t);
@@ -3289,6 +3312,10 @@ impl Shell {
         if self.hud_drawn {
             self.hud.draw(s, &self.ui, self.w, t);
         }
+        self.input_hud_drawn = self.input_hud.visible(t);
+        if self.input_hud_drawn {
+            self.input_hud.draw(s, &self.ui, self.w, t);
+        }
         if let Some(o) = &self.shot {
             damage.all();
             o.draw(s, t);
@@ -3357,7 +3384,7 @@ impl Shell {
         let term = self.term.as_ref()?;
         let quiet = self.multi.is_none() && self.home_gesture.is_none() && self.transition.is_none() && !self.letterboxed(AppId::Terminal)
             && !self.keyboard.animating() && !self.kb_touch && self.term_touch.menu().is_none() && term.plain()
-            && !self.hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
+            && !self.hud.visible(t) && !self.input_hud.visible(t) && !self.perf.enabled && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
             && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {
@@ -3378,7 +3405,7 @@ impl Shell {
     fn settings_key(&self, t: f64) -> Option<(u64, i32)> {
         let quiet = self.multi.is_none() && self.home_gesture.is_none() && self.transition.is_none() && !self.letterboxed(AppId::Settings)
             && !self.kb_touch && !self.fullscreen
-            && !self.hud.visible(t) && !self.hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
+            && !self.hud.visible(t) && !self.hud_drawn && !self.input_hud.visible(t) && !self.input_hud_drawn && !self.perf.enabled && !self.perf_drawn && !self.assistive_visible() && self.drawn != Drawn::Nothing
             && self.clock.alert().is_none() && self.shot.is_none() && self.markup.is_none() && self.share.is_none() && self.share_prompt.is_none() && self.look_up.is_none()
             && self.low_alert.is_none() && self.power_menu.is_none() && self.permission_sheet.is_none() && self.crash_alert.is_none() && self.notify.ask.is_none() && !self.print_showing() && self.char_viewer.is_none() && self.keyboard_viewer.is_none() && !self.notify_damage_all() && !self.announce_damage() && !self.reader_damage();
         if !quiet {

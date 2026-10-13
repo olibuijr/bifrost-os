@@ -2382,6 +2382,7 @@ impl Settings {
             Toggle::ClockDate => flip(&mut self.opts.clock_date),
             Toggle::ClockDay => flip(&mut self.opts.clock_day),
             Toggle::Layout(i) => super::kb_layouts::toggle(super::kb_layouts::Layout::ALL[i.min(super::kb_layouts::Layout::ALL.len() - 1)]),
+            Toggle::RememberInputSource => super::kb_layouts::set_remember(!super::kb_layouts::remembers()),
             Toggle::AutoCaps => flip(&mut self.opts.auto_caps),
             Toggle::EnableCapsLock => flip(&mut self.opts.enable_caps_lock),
             Toggle::PeriodShortcut => flip(&mut self.opts.period_shortcut),
