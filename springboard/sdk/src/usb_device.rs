@@ -1,4 +1,4 @@
-//! USB devices for apps: the claim planning of `IOUSBHostDevice` and `IOUSBHostInterface` (the configuration and
+//! USB devices for apps: the claim planning of the device and interface classes (the configuration and
 //! alternate-setting requests in order, and the pipes the claimed interface opens) from `bifrost_core::usb_claim`,
 //! with the descriptor and setup-packet types an app needs to read them.
 //!

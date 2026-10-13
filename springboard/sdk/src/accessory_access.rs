@@ -1,4 +1,4 @@
-//! Accessory Access for apps: listeners that match USB accessories by device and interface criteria, receive attach and
+//! Accessory listeners for apps: listeners that match USB accessories by device and interface criteria, receive attach and
 //! detach events, and open an accessory with one owner at a time.
 //!
 //! The rules live in `bifrost_core::accessory_manager` and `bifrost_core::usb_descriptors`. This module gives apps the

@@ -1,7 +1,7 @@
 //! Claiming a USB interface: the control requests that select a configuration and an alternate setting, and the pipes
 //! the claimed interface then opens.
 //!
-//! This is the planning half of `IOUSBHostDevice` and `IOUSBHostInterface`. The model is pure: it reads the descriptors
+//! This is the planning half of the device and interface classes of the USB host layer. The model is pure: it reads the descriptors
 //! the caller already parsed and returns the setup packets to send, in order, and the pipes that become usable. Sending
 //! the packets and opening the endpoints need a transport, and none is wired to apps yet (the app sandbox binds no USB
 //! device nodes). A claim plan is checked before any request is sent, so a bad descriptor fails here, not on the bus.
