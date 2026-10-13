@@ -12,6 +12,7 @@ pub mod mdfind;
 pub mod mdutil;
 pub mod hdiutil;
 pub mod open;
+pub mod plistbuddy;
 pub mod plutil;
 pub mod pasteboard;
 pub mod pmset;
