@@ -10,30 +10,30 @@
     {
       "feature": "URL Loading: sessions, requests, data and download tasks",
       "apple": "URLSession, URLRequest, URLSessionDataTask, URLSessionDownloadTask",
-      "bifrost": "springboard/sdk/src/url.rs; springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section)",
+      "bifrost": "springboard/sdk/src/url.rs; springboard/sdk/tests/url.rs; docs/bifrost-ui.md (URLSession section); springboard/sdk/src/url_background.rs (URLSessionConfiguration, ConfiguredSession, BackgroundSession, URLSessionTaskMetrics); springboard/sdk/tests/url_session.rs",
       "status": "partial",
-      "note": "shared session, data_task, download_task with progress, streaming bytes, redirects up to 5; no upload tasks, background sessions, delegates or configurations"
+      "note": "shared session, data_task, download_task with progress, streaming bytes, redirects up to 5; default/ephemeral/background configurations, task delegate challenges, task metrics, persisted background download queue. No upload tasks or OS-level background transfer. Host tests only; verify on Midget for parity."
     },
     {
       "feature": "URL Loading: caching",
       "apple": "URLCache, CachePolicy",
-      "bifrost": "springboard/sdk/src/url.rs (URLCache); wired: springboard/apps/news-desktop/src/feed_cache.rs (plan, stored_from, max_age_of, validators_of, Conditional)",
+      "bifrost": "springboard/sdk/src/url.rs (URLCache); wired: springboard/apps/news-desktop/src/feed_cache.rs (plan, stored_from, max_age_of, validators_of, Conditional); springboard/sdk/src/url_cache.rs (disk URLCache, CachedURLResponse, CachePolicy)",
       "status": "partial",
-      "note": "memory cache honouring Cache-Control and ETag; no disk cache or per-request cache policies Wired into the UI in wiring wave 5 (0.5.43); verify on Midget for parity."
+      "note": "memory cache plus a disk URLCache with memory/disk capacity, Cache-Control/ETag/304 revalidation, oldest-first eviction and per-request CachePolicy, wired into ConfiguredSession. Host tests only; verify on Midget for parity."
     },
     {
       "feature": "URL Loading: cookies, credentials, authentication challenges",
       "apple": "HTTPCookieStorage, URLCredentialStorage, URLAuthenticationChallenge",
-      "bifrost": "springboard/sdk/src/http_auth.rs (AuthChallenge",
+      "bifrost": "springboard/sdk/src/http_auth.rs; springboard/sdk/src/http_cookies.rs; springboard/sdk/src/url_background.rs (ConfiguredSession wires jar, credential storage and delegate)",
       "status": "partial",
-      "note": "Wave 5 (theme-06, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. cookie jar is internal to the shell HTTP client, not exposed through URLSession"
+      "note": "cookie jar (accept policy Always/Never) and credential storage are used by ConfiguredSession; a 401 Basic challenge goes to the delegate and is retried once. Digest, client-certificate and server-trust challenges, and AcceptPolicy.onlyFromMainDocumentDomain are not done. Host tests only; verify on Midget for parity."
     },
     {
       "feature": "URL Loading: WebSocket and streaming tasks",
       "apple": "URLSessionWebSocketTask, URLSessionStreamTask",
-      "bifrost": "springboard/sdk/src/websocket.rs, springboard/core/src/websocket.rs",
+      "bifrost": "springboard/sdk/src/websocket.rs (URLSessionWebSocketTask); springboard/sdk/src/url_stream_task.rs; springboard/core/src/websocket.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-foundation-networking-lowlevel, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no WebSocket client in the SDK"
+      "note": "ws:// client task: send/receive text and binary, sendPing, cancel(with:reason:), auto-pong; plain TCP stream task with line and data reads. No wss:// or StartSecureConnection. Host tests only; verify on Midget for parity."
     },
     {
       "feature": "URL Loading: custom protocols and proxies, URL components",
@@ -45,9 +45,9 @@
     {
       "feature": "Bonjour: advertise and browse services",
       "apple": "NetService, NetServiceBrowser",
-      "bifrost": "springboard/sdk/src/service_discovery.rs, springboard/core/src/dnssd.rs; wired: springboard/core/src/dns_browse.rs via springboard/src/shell/services/network_path.rs (browse only; no advertise)",
+      "bifrost": "springboard/sdk/src/net_service.rs (NetService, NetServiceBrowser) over springboard/sdk/src/dns_service.rs; springboard/core/src/dns_browse.rs",
       "status": "partial",
-      "note": "Wave 5 (w5-foundation-networking-lowlevel, parity/integration 93f283b0): pure model with host unit tests; not wired into apps or the shell, not yet tested on the VM or Midget. no mDNS/DNS-SD code in springboard or the SDK Wired into the UI in wiring wave 2 (0.5.38); verify on Midget for parity."
+      "note": "publish/stop state, TXT records and a browser with didFind/didRemove delegate; the multicast transport feeds service_appeared/service_disappeared. No mDNS responder wired for advertise; verify on Midget for parity."
     },
     {
       "feature": "XPC: interprocess communication",
@@ -93,10 +93,10 @@
     }
   ],
   "gaps": [
-    "Bonjour/mDNS discovery and advertising",
-    "WebSocket and stream tasks",
-    "Cookie storage, credentials and auth challenges in URLSession",
-    "Upload tasks, background sessions, disk URLCache",
+    "Bonjour mDNS responder (advertise on the wire)",
+    "wss:// WebSocket and StartSecureConnection on stream tasks",
+    "Digest, client-certificate and server-trust authentication challenges",
+    "Upload tasks; OS-level background transfers",
     "General XPC-style service connections",
     "OperationQueue, RunLoop and Timer-style scheduling",
     "Stream and Port abstractions"
