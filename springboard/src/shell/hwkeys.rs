@@ -282,6 +282,10 @@ impl HwKeys {
         if self.ctrl > 0 || self.meta > 0 || self.alt > self.altgr {
             return None;
         }
+        // F1 to F12 type their standard keys only when Settings asks for it
+        if let Some(name) = super::kb_input::function_key(code) {
+            return super::kb_input::get().function_standard.then_some(Out::Named(name));
+        }
         Some(match self.text.press(code, self.shift > 0, self.altgr > 0)? {
             Typed::Char(c) => Out::Text(c.to_string()),
             Typed::Backspace => Out::Backspace,
@@ -296,20 +300,34 @@ impl HwKeys {
     }
 }
 
-/// Key auto-repeat: after `REPEAT_DELAY_MS` held, the last typed key repeats at 30 Hz. A pure state
-/// machine (the evdev decoder drops the kernel's own repeats), cancelled by a release or another key.
-#[derive(Default)]
+/// Key auto-repeat: after the delay (Settings > Keyboard > Key Repeat; 400 ms and 30 Hz by default) held, the last
+/// typed key repeats. A pure state machine (the evdev decoder drops the kernel's own repeats), cancelled by a
+/// release or another key.
 pub struct KeyRepeat {
     held: Option<(u16, Out, f64)>,
+    delay_ms: f64,
+    period_ms: f64,
 }
 
 pub const REPEAT_DELAY_MS: f64 = 400.0;
 const REPEAT_PERIOD_MS: f64 = 1000.0 / 30.0;
 
+impl Default for KeyRepeat {
+    fn default() -> Self {
+        KeyRepeat { held: None, delay_ms: REPEAT_DELAY_MS, period_ms: REPEAT_PERIOD_MS }
+    }
+}
+
 impl KeyRepeat {
+    /// The timing Settings chose: the hold time in ms and the repeats per second. Applies from the next press.
+    pub fn set_timing(&mut self, delay_ms: f64, rate: u32) {
+        self.delay_ms = delay_ms;
+        self.period_ms = 1000.0 / f64::from(rate.max(1));
+    }
+
     /// A key went down; `out` is what it types (None for keys that do not repeat, which still cancel).
     pub fn press(&mut self, code: u16, out: Option<Out>, t: f64) {
-        self.held = out.filter(|o| *o != Out::Named("Escape")).map(|o| (code, o, t + REPEAT_DELAY_MS));
+        self.held = out.filter(|o| *o != Out::Named("Escape")).map(|o| (code, o, t + self.delay_ms));
     }
 
     pub fn release(&mut self, code: u16) {
@@ -347,14 +365,15 @@ impl KeyRepeat {
 
     /// The repeats due by `t` (at most a few, so a stalled loop does not flood a field).
     pub fn due(&mut self, t: f64) -> Vec<Out> {
+        let period = self.period_ms;
         let Some((_, out, next)) = self.held.as_mut() else { return vec![] };
         let mut v = vec![];
         while t >= *next && v.len() < 4 {
             v.push(out.clone());
-            *next += REPEAT_PERIOD_MS;
+            *next += period;
         }
         if t >= *next {
-            *next = t + REPEAT_PERIOD_MS;
+            *next = t + period;
         }
         v
     }
@@ -397,6 +416,10 @@ impl Shell {
 
     pub fn hw_type(&mut self, out: Out, t: f64) -> Vec<Effect> {
         if !self.screen_on {
+            return vec![];
+        }
+        // Keyboard Navigation off: Tab does not move focus, though a terminal still gets it for completion
+        if matches!(out, Out::Named("Tab")) && !super::kb_input::get().tab_navigation && !matches!(self.screen, Screen::App(AppId::Terminal | AppId::External(_))) {
             return vec![];
         }
         // with a panel open, typing goes to its name field and nowhere else
@@ -504,6 +527,11 @@ impl Shell {
             Screen::Home | Screen::Lock => {}
         }
         vec![]
+    }
+
+    /// True while a text field of an app on screen takes typing, so a text replacement may be typed (not in a terminal).
+    pub fn replacements_apply(&self) -> bool {
+        self.screen_on && !self.is_locked() && matches!(self.screen, Screen::App(app) if !matches!(app, AppId::Terminal | AppId::External(_)))
     }
 
     /// Runs a shortcut. Search, the switcher, Back and Home are the shell's own; the terminal

@@ -84,6 +84,11 @@ pub fn replacements_summary() -> String {
     }
 }
 
+/// The phrase the whole word `word` expands to, for a hardware keyboard's typing (None when it is not a replacement).
+pub fn expand_word(word: &str) -> Option<String> {
+    with(|s| s.replacements.expand(word).map(str::to_string))
+}
+
 /// Removes the replacement for `shortcut` and saves the list. False when there was none.
 pub fn remove_replacement(prefs: &mut Prefs, shortcut: &str) -> bool {
     with(|s| {
