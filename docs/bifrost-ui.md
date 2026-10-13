@@ -1333,7 +1333,14 @@ use `codable!(Name { field: Type, .. })` (macro_rules, no proc-macro). serde is 
 crates, so it is not used: the SDK stays lean and offline-buildable. `Option` fields are omitted when `None` and
 decode as `None` when missing. The Assistant's `model.rs` uses it. Gaps: no `CodingKeys` renaming (hand-write the impl,
 see `Message` in the Assistant), no binary plist, no key/date/data strategies beyond those above, `Data` unsupported.
-Tests: `sdk/tests/foundation.rs`.
+Tests: `sdk/tests/foundation.rs`. `Uuid` and `Decimal` encode as JSON strings.
+
+### UUID and Decimal (Foundation parity)
+
+`value_types::Uuid`: `new_random`, `parse`/`FromStr` (either case), `uuid_string` (upper case), `bytes`, `from_bytes`, `version`, `Ord`/`Hash`.
+`decimal::Decimal` (`i128` mantissa and base-10 exponent): `parse`, `from_string(text, &locale)`, `adding`/`subtracting`/`multiplying`/`dividing`
+(checked: `DecimalError::Overflow`/`DivideByZero`; `+ - *` operators panic on overflow), `rounded(scale, RoundingMode::{Plain, Down, Up, Bankers})`
+(`NSDecimalRound`), `Display` (`description`). 0.1 + 0.2 == 0.3. Division keeps 18 fractional digits. Gaps: no `NSDecimalNumber` object, no `power`, no NaN.
 
 ## NotificationCenter (Foundation parity)
 
