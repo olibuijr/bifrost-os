@@ -13,11 +13,14 @@ pub enum Lang {
     Is,
 }
 
-/// `Locale`: a language plus an optional region (`en_US`, `is_IS`).
+/// `Locale`: a language plus an optional region (`en_US`, `is_IS`), and the Settings overrides for the
+/// first day of the week and the currency (None: the region's).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Locale {
     pub language: String,
     pub region: Option<String>,
+    pub first_weekday: Option<u32>,
+    pub currency: Option<String>,
 }
 
 impl Locale {
@@ -27,17 +30,36 @@ impl Locale {
         let language = it.next().unwrap_or("").to_ascii_lowercase();
         let region = it.next().filter(|r| !r.is_empty()).map(|r| r.to_ascii_uppercase());
         if language.is_empty() || language == "c" || language == "posix" {
-            return Locale { language: "en".into(), region: Some("US".into()) };
+            return Locale { language: "en".into(), region: Some("US".into()), first_weekday: None, currency: None };
         }
-        Locale { language, region }
+        Locale { language, region, first_weekday: None, currency: None }
     }
 
-    /// `Locale.current`: `LC_ALL`, `LC_MESSAGES`, `LANG` in that order; the shell's region preference
-    /// (`BIFROST_REGION`) replaces the region.
+    /// `Locale.current`: the choice in Settings > Language & Region (the shell's `settings.ini`) when there is
+    /// one; otherwise `LC_ALL`, `LC_MESSAGES`, `LANG` in that order. `BIFROST_REGION` replaces the region.
     pub fn current() -> Self {
         let get = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
-        let id = get("LC_ALL").or_else(|| get("LC_MESSAGES")).or_else(|| get("LANG")).unwrap_or_default();
-        Self::from_env(&id, get("BIFROST_REGION").as_deref())
+        let mut l = match saved_region() {
+            Some(r) => Locale {
+                language: r.language().to_string(),
+                region: Some(r.region_code()),
+                first_weekday: Some(r.first_weekday()),
+                currency: Some(r.currency()),
+            },
+            None => {
+                let id = get("LC_ALL").or_else(|| get("LC_MESSAGES")).or_else(|| get("LANG")).unwrap_or_default();
+                Self::from_env(&id, None)
+            }
+        };
+        if let Some(r) = get("BIFROST_REGION") {
+            l.region = Some(r.to_ascii_uppercase());
+        }
+        l
+    }
+
+    /// The first day of the week, 0 = Sunday .. 6 = Saturday (`firstWeekday`, as Calendar numbers it).
+    pub fn first_weekday(&self) -> u32 {
+        self.first_weekday.unwrap_or_else(|| bifrost_ui::region::default_first_weekday(self.region.as_deref().unwrap_or("")))
     }
 
     pub fn from_env(id: &str, region_pref: Option<&str>) -> Self {
@@ -72,13 +94,11 @@ impl Locale {
         self.region.as_deref() != Some("US")
     }
 
-    /// Default currency for the region.
-    pub fn currency_code(&self) -> &'static str {
-        match self.region.as_deref() {
-            Some("IS") => "ISK",
-            Some("GB") => "GBP",
-            Some("DE" | "FR" | "ES" | "IT" | "NL" | "FI" | "IE" | "AT") => "EUR",
-            _ => if self.lang() == Lang::Is { "ISK" } else { "USD" },
+    /// The currency code: the Settings choice, else the region's default.
+    pub fn currency_code(&self) -> String {
+        match &self.currency {
+            Some(c) => c.clone(),
+            None => bifrost_ui::region::default_currency(self.region.as_deref().unwrap_or(""), &self.language).to_string(),
         }
     }
 
@@ -91,6 +111,18 @@ impl Default for Locale {
     fn default() -> Self {
         Locale::current()
     }
+}
+
+/// The Language & Region choice the shell saved in its `settings.ini` (`BIFROST_SHELL_DIR`, else the
+/// shell's default directory), read once per process; None when the file is missing or unreadable.
+fn saved_region() -> Option<bifrost_ui::region::Region> {
+    static SAVED: std::sync::OnceLock<Option<bifrost_ui::region::Region>> = std::sync::OnceLock::new();
+    SAVED
+        .get_or_init(|| {
+            let dir = std::env::var("BIFROST_SHELL_DIR").unwrap_or_else(|_| "/var/lib/springboard".into());
+            std::fs::read_to_string(format!("{dir}/settings.ini")).ok().map(|t| bifrost_ui::region::Region::from_settings_text(&t))
+        })
+        .clone()
 }
 
 // ---------------------------------------------------------------- NumberFormatter
@@ -721,6 +753,17 @@ mod tests {
         assert_eq!(Locale::from_env("C", None).identifier(), "en_US");
         assert_eq!(Locale::from_env("is_IS.UTF-8", Some("de")).identifier(), "is_DE");
         assert!(!en().uses_metric_system() && is().uses_metric_system());
+    }
+
+    #[test]
+    fn the_first_weekday_and_currency_follow_the_region_unless_set() {
+        assert_eq!((en().first_weekday(), is().first_weekday()), (0, 1));
+        assert_eq!((en().currency_code().as_str(), is().currency_code().as_str()), ("USD", "ISK"));
+        let mut de = Locale::new("de_DE");
+        assert_eq!((de.first_weekday(), de.currency_code().as_str()), (1, "EUR"));
+        de.first_weekday = Some(0);
+        de.currency = Some("CHF".into());
+        assert_eq!((de.first_weekday(), de.currency_code().as_str()), (0, "CHF"));
     }
 
     #[test]
