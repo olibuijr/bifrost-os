@@ -29,6 +29,8 @@ const SEG_RADIUS_PT: f32 = m::ICON_RADIUS;
 
 /// Entries kept per tab; the oldest are dropped first.
 pub const MAX_ENTRIES: usize = 5000;
+/// Most console input lines kept for Up and Down recall.
+pub const MAX_INPUT_HISTORY: usize = 500;
 /// evdev keys I, J, C and N (Cmd+Option+key).
 const KEY_I: u32 = 23;
 const KEY_J: u32 = 36;
@@ -176,6 +178,15 @@ fn level_matches(filter: usize, level: &str) -> bool {
         2 => level == "warn",
         3 => !matches!(level, "error" | "warn"),
         _ => true,
+    }
+}
+
+/// Appends a console line to the recall history, dropping the oldest past [`MAX_INPUT_HISTORY`].
+fn remember_input(history: &mut Vec<String>, src: String) {
+    history.push(src);
+    if history.len() > MAX_INPUT_HISTORY {
+        let excess = history.len() - MAX_INPUT_HISTORY;
+        history.drain(..excess);
     }
 }
 
@@ -1139,7 +1150,7 @@ impl Inspector {
             return;
         }
         if let (Some(p), Some(v)) = (pool, view) {
-            self.history.push(src.clone());
+            remember_input(&mut self.history, src.clone());
             self.hist_at = self.history.len();
             self.record(v, "input", src.clone(), String::new(), 0);
             p.eval(v, &one_line(&src));
@@ -1370,6 +1381,17 @@ fn draw_cells(s: &mut Surface, ui: &Ui, row: &Row, list: Rect, cy: f32, top: f32
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_input_history_keeps_only_the_newest_lines() {
+        let mut history = Vec::new();
+        for i in 0..(MAX_INPUT_HISTORY + 25) {
+            remember_input(&mut history, format!("x{i}"));
+        }
+        assert_eq!(history.len(), MAX_INPUT_HISTORY);
+        assert_eq!(history[0], "x25");
+        assert_eq!(history.last().map(String::as_str), Some(format!("x{}", MAX_INPUT_HISTORY + 24).as_str()));
+    }
 
     fn console(i: &mut Inspector, id: u32, level: &str, text: &str) {
         i.on_event(&WebViewEvent::Console { id, level: level.into(), text: text.into(), source: String::new(), line: 0 });
