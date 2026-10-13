@@ -112,14 +112,51 @@ pub fn created(note: &Note) -> i64 {
 
 /// Orders notes by `key` (newest or A-Z), pinned ones first.
 pub fn sort_by_key(notes: &mut [Note], key: SortKey, pinned: &HashSet<String>) {
+    sort_ordered(notes, key, false, pinned);
+}
+
+/// Orders notes by `key` inside the pinned and the other section. The dates run newest first, or oldest first
+/// with `oldest_first`; the title always runs A to Z.
+pub fn sort_ordered(notes: &mut [Note], key: SortKey, oldest_first: bool, pinned: &HashSet<String>) {
     notes.sort_by(|a, b| {
         let order = match key {
             SortKey::DateEdited => b.modified.cmp(&a.modified),
             SortKey::DateCreated => created(b).cmp(&created(a)),
             SortKey::Title => a.title().to_lowercase().cmp(&b.title().to_lowercase()),
         };
+        let order = if oldest_first && key != SortKey::Title { order.reverse() } else { order };
         pinned.contains(&b.id).cmp(&pinned.contains(&a.id)).then(order).then_with(|| b.id.cmp(&a.id))
     });
+}
+
+/// The tags written in `text`, lowercase, each once, in order of appearance. A tag is a `#` that starts a word,
+/// followed by letters, digits, `_` or `-` (not only digits): `#groceries`, not `# Heading`, `C#` or a link anchor.
+pub fn tags(text: &str) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out: Vec<String> = vec![];
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '#' && (i == 0 || chars[i - 1].is_whitespace()) {
+            let mut j = i + 1;
+            while j < chars.len() && (chars[j].is_alphanumeric() || chars[j] == '_' || chars[j] == '-') {
+                j += 1;
+            }
+            let word: String = chars[i + 1..j].iter().collect::<String>().trim_end_matches('-').to_lowercase();
+            if !word.is_empty() && !word.chars().all(|c| c.is_ascii_digit()) && !out.contains(&word) {
+                out.push(word);
+            }
+            i = j.max(i + 1);
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Whether `text` carries `tag` (any case, without the `#`).
+pub fn has_tag(text: &str, tag: &str) -> bool {
+    let tag = tag.trim_start_matches('#').to_lowercase();
+    tags(text).iter().any(|t| *t == tag)
 }
 
 /// Char ranges of every case-insensitive occurrence of `query` in `text`.
@@ -188,11 +225,17 @@ pub struct Prefs {
     pub sort: SortKey,
     /// move a checklist item to the bottom of its list when ticked
     pub checked_to_bottom: bool,
+    /// the date sorts run oldest first (the title always runs A to Z)
+    pub oldest_first: bool,
+    /// Math Results: a line ending with `=` after a calculation gets its answer as it is typed
+    pub math_results: bool,
+    /// New Quick Note reopens the last quick note instead of starting another
+    pub resume_quick: bool,
 }
 
 impl Default for Prefs {
     fn default() -> Self {
-        Prefs { sort: SortKey::DateEdited, checked_to_bottom: false }
+        Prefs { sort: SortKey::DateEdited, checked_to_bottom: false, oldest_first: false, math_results: false, resume_quick: false }
     }
 }
 
@@ -204,6 +247,9 @@ pub fn load_prefs(dir: &Path) -> Prefs {
         match line.split_once('=') {
             Some(("sort", v)) => p.sort = SortKey::parse(v.trim()).unwrap_or_default(),
             Some(("checked_to_bottom", v)) => p.checked_to_bottom = v.trim() == "1",
+            Some(("oldest_first", v)) => p.oldest_first = v.trim() == "1",
+            Some(("math_results", v)) => p.math_results = v.trim() == "1",
+            Some(("resume_quick", v)) => p.resume_quick = v.trim() == "1",
             _ => {}
         }
     }
@@ -211,7 +257,28 @@ pub fn load_prefs(dir: &Path) -> Prefs {
 }
 
 pub fn save_prefs(dir: &Path, p: Prefs) -> io::Result<()> {
-    springboard::shell::fsutil::write_atomic(&dir.join(PREFS_FILE), format!("sort={}\nchecked_to_bottom={}\n", p.sort.name(), p.checked_to_bottom as u8))
+    let text = format!(
+        "sort={}\nchecked_to_bottom={}\noldest_first={}\nmath_results={}\nresume_quick={}\n",
+        p.sort.name(),
+        p.checked_to_bottom as u8,
+        p.oldest_first as u8,
+        p.math_results as u8,
+        p.resume_quick as u8
+    );
+    springboard::shell::fsutil::write_atomic(&dir.join(PREFS_FILE), text)
+}
+
+const QUICK_FILE: &str = ".springboard-notes-quick";
+
+/// The id of the note New Quick Note made last, if one was recorded.
+pub fn load_quick(dir: &Path) -> Option<String> {
+    let id = std::fs::read_to_string(dir.join(QUICK_FILE)).ok()?;
+    Some(id.trim().to_string()).filter(|id| !id.is_empty())
+}
+
+/// Records the note New Quick Note made, so "resume" can find it again.
+pub fn save_quick(dir: &Path, id: &str) -> io::Result<()> {
+    springboard::shell::fsutil::write_atomic(&dir.join(QUICK_FILE), id)
 }
 
 /// Writes the note as `<title>.md` under `<dir>/.export` for sharing and
@@ -591,8 +658,9 @@ mod tests {
     fn prefs_round_trip_and_tolerate_garbage() {
         let dir = scratch("prefs");
         assert_eq!(load_prefs(&dir), Prefs::default());
-        save_prefs(&dir, Prefs { sort: SortKey::Title, checked_to_bottom: true }).unwrap();
-        assert_eq!(load_prefs(&dir), Prefs { sort: SortKey::Title, checked_to_bottom: true });
+        let set = Prefs { sort: SortKey::Title, checked_to_bottom: true, oldest_first: true, math_results: true, resume_quick: true };
+        save_prefs(&dir, set).unwrap();
+        assert_eq!(load_prefs(&dir), set);
         std::fs::write(dir.join(".springboard-notes-prefs"), "sort=nonsense\nzzz\nchecked_to_bottom=0\n").unwrap();
         assert_eq!(load_prefs(&dir), Prefs::default());
         let _ = std::fs::remove_dir_all(&dir);
@@ -623,6 +691,43 @@ mod tests {
         assert!(set_pinned(&dir, &n.id, false).is_err());
         assert_eq!(std::fs::read_to_string(marker).unwrap(), "future format");
         assert_eq!(load(&dir)[0].text, n.text);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn date_sorts_can_run_oldest_first_but_the_title_stays_a_to_z() {
+        let mut v = vec![note("1700000000000", "Banana", 500), note("1800000000000", "apricot", 100), note("1600000000000", "Cherry", 900)];
+        let pins: HashSet<String> = ["1700000000000".to_string()].into_iter().collect();
+        sort_ordered(&mut v, SortKey::DateEdited, true, &HashSet::new());
+        assert_eq!(v.iter().map(|n| n.title()).collect::<Vec<_>>(), ["apricot", "Banana", "Cherry"]);
+        sort_ordered(&mut v, SortKey::DateCreated, true, &HashSet::new());
+        assert_eq!(v.iter().map(|n| n.title()).collect::<Vec<_>>(), ["Cherry", "Banana", "apricot"]);
+        sort_ordered(&mut v, SortKey::Title, true, &HashSet::new());
+        assert_eq!(v.iter().map(|n| n.title()).collect::<Vec<_>>(), ["apricot", "Banana", "Cherry"], "direction does not reverse the title");
+        sort_ordered(&mut v, SortKey::DateEdited, true, &pins);
+        assert_eq!(v[0].title(), "Banana", "pinned notes still come first");
+        assert_eq!(v[1].title(), "apricot");
+    }
+
+    #[test]
+    fn tags_are_hash_words_that_start_a_word() {
+        assert_eq!(tags("Trip\nbuy #Milk and #eggs, #milk again\n#to-do"), vec!["milk", "eggs", "to-do"]);
+        assert!(tags("# Heading\n## Second\nC# code\nsee page#anchor\n#123 and ##x").is_empty());
+        assert_eq!(tags("#a_b-c- end"), vec!["a_b-c"]);
+        assert_eq!(tags("(#paren) #caf\u{e9}"), vec!["caf\u{e9}"], "a bracket in front means no tag; letters with accents count");
+        assert!(tags("").is_empty());
+        assert!(has_tag("x #Home", "home") && has_tag("x #home", "#HOME"));
+        assert!(!has_tag("x #homework", "home"));
+    }
+
+    #[test]
+    fn the_last_quick_note_is_remembered() {
+        let dir = scratch("quick");
+        assert_eq!(load_quick(&dir), None);
+        save_quick(&dir, "1700000000123").unwrap();
+        assert_eq!(load_quick(&dir), Some("1700000000123".to_string()));
+        std::fs::write(dir.join(".springboard-notes-quick"), "\n").unwrap();
+        assert_eq!(load_quick(&dir), None, "an empty record is no record");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
