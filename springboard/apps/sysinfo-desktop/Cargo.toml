@@ -1,9 +1,10 @@
 [package]
 name = "bifrost-sysinfo"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 
 [dependencies]
 bifrost-app = { path = "../../sdk" }
 bifrost-core = { path = "../../core" }
+bifrost-render = { path = "../../render" }
 springboard = { path = "../.." }
